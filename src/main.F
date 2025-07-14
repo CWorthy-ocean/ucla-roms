@@ -10,7 +10,9 @@
       use tracers, only: init_tracers
       use mpi
       use sponge_tune
-
+#ifdef PIO
+      use pio_roms
+#endif
 
       implicit none                                        ! with single parallel region using
       integer :: ierr                                      ! explicit barrier synchronization.
@@ -27,6 +29,9 @@ C$    ierr=0
       if (ierr == 1) call MPI_Init(ierr)
 
       call mpi_setup(ierr)
+#ifdef PIO
+      call pio_initialize
+#endif
       tstart=MPI_Wtime()
       if (ierr == 0) then
 # endif

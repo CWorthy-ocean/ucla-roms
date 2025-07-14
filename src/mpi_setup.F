@@ -16,6 +16,9 @@ C$    end
       use hidden_mpi_vars
       use mpi
       use roms_read_write
+#ifdef PIO
+      use pio_roms
+#endif
       implicit none
       integer ierr
 
@@ -30,6 +33,11 @@ C$    integer nthrds
       ocean_grid_comm=MPI_COMM_WORLD
       call MPI_Comm_size(ocean_grid_comm, nsize,  ierr)
       call MPI_Comm_rank(ocean_grid_comm, mynode, ierr)
+
+#ifdef PIO
+      pio_myRank = mynode
+      pio_ntasks = nsize
+#endif
 
       exc_call_count=0
                                          ! Determine number of threads
@@ -175,6 +183,36 @@ C$    endif
            eta_v=eta_rho
          endif
 # endif
+
+#ifdef PIO
+        pio_xi_rho = xi_rho
+        pio_xi_u = xi_u
+        pio_eta_rho = eta_rho
+        pio_eta_v = eta_v
+
+        if (inode == 0) then
+          pio_xi_rho_start = iSW_corn+iwest
+          pio_xi_u_start   = iSW_corn+iwest
+        else
+          pio_xi_rho_start= iSW_corn+iwest+1
+          pio_xi_u_start   = iSW_corn+iwest
+        endif
+
+        if (jnode == 0) then
+          pio_eta_rho_start= jSW_corn+jsouth
+          pio_eta_v_start  = jSW_corn+jsouth
+        else
+          pio_eta_rho_start= jSW_corn+jsouth+1
+          pio_eta_v_start  = jSW_corn+jsouth
+        endif
+        pio_s_start = 1
+
+        pio_west_exchng = west_exchng
+        pio_east_exchng = east_exchng
+        pio_north_exchng = north_exchng
+        pio_south_exchng = south_exchng
+#endif
+
 ! Print hostnames for each rank = 0 to NNODES-1 in the sequence.
 # ifdef PRINT_HOSTNAME
         call MPI_Barrier(ocean_grid_comm, ierr)

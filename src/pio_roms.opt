@@ -1,0 +1,9 @@
+
+      ! ****************************************************************
+      ! user inputs
+
+      integer, parameter        :: pio_stride=1         ! Stride in the mpi rank between io tasks.
+                                                        ! It appears that this can't be greater than
+                                                        ! the number of MPI tasks, or ROMS will crash
+      ! end user inputs
+      ! ****************************************************************

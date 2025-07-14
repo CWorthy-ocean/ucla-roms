@@ -8,6 +8,10 @@
       use roms_read_write
       use mpi_exchanges
       use grid
+#ifdef PIO
+      use pio_roms
+      use mpi
+#endif
 
       implicit none
 
@@ -263,7 +267,7 @@
       integer,dimension(3) :: start
       character(len=100) :: info
       character(len=300) :: frcstr
-
+      character(len=256) fname
 
       found_rec = 0                                        ! set found variable flag to not found
       var_file_indx = 1                                    ! forcing file index number
@@ -300,6 +304,17 @@
         start(3) = itide
 
         if (bry_tides) then
+#ifdef PIO
+          fname = "INPUT/PARTED/roms_tides.nc"  ! frcfile(var_file_indx)
+          call pio_ncread2(fname, 'ssh_Re', ztide_r(i0:i1,j0:j1,itide), '2D_r', itide)
+          call pio_ncread2(fname, 'ssh_Im', ztide_i(i0:i1,j0:j1,itide), '2D_r', itide)
+
+          call pio_ncread2(fname, 'u_Re', utide_r(1:i1,j0:j1,itide), '2D_u', itide)
+          call pio_ncread2(fname, 'u_Im', utide_i(1:i1,j0:j1,itide), '2D_u', itide)
+
+          call pio_ncread2(fname, 'v_Re', vtide_r(i0:i1,1:j1,itide), '2D_v', itide)
+          call pio_ncread2(fname, 'v_Im', vtide_i(i0:i1,1:j1,itide), '2D_v', itide)
+#else
           call ncread(ncid,'ssh_Re',ztide_r(i0:i1,j0:j1,itide),start)   ! read tidal elevations
           call ncread(ncid,'ssh_Im',ztide_i(i0:i1,j0:j1,itide),start)
 !         call exchange_xxx(ztide_r(:,:,itide),ztide_i(:,:,itide))
@@ -311,12 +326,18 @@
           call ncread(ncid,'v_Re',  vtide_r(i0:i1,1:j1,itide),start)
           call ncread(ncid,'v_Im',  vtide_i(i0:i1,1:j1,itide),start)
 !         call exchange_xxx(vtide_r(:,:,itide),vtide_i(:,:,itide))
+#endif
         endif
 
         if (pot_tides) then
+#ifdef PIO
+          call pio_ncread2(fname, 'pot_Re', ptide_r(i0:i1,j0:j1,itide), '2D_r', itide)
+          call pio_ncread2(fname, 'pot_Im', ptide_i(i0:i1,j0:j1,itide), '2D_r', itide)
+#else
           call ncread(ncid,'pot_Re',ptide_r(i0:i1,j0:j1,itide),start)
           call ncread(ncid,'pot_Im',ptide_i(i0:i1,j0:j1,itide),start)
 !         call exchange_xxx(ptide_r(:,:,itide),ptide_i(:,:,itide))
+#endif
         endif
 
       end do ! <-- itide=1,ntides
