@@ -425,8 +425,9 @@ c-->    elseif (keyword(1:kwlen) == 'nudg_cof') then
           read(input,'(A)',err=95) fname
           lstr=lenstr(fname)
 # if defined MPI && defined PARALLEL_FILES
+#ifndef PIO
           call insert_node(fname, lstr, mynode, NNODES, ierr)
-!         call insert_nodes(fname)
+#endif
 # endif
           open(testunit,file=fname(1:lstr), status='old', err=97)
           close(testunit)
@@ -448,7 +449,9 @@ c-->    elseif (keyword(1:kwlen) == 'nudg_cof') then
             read(input,'(A)',err=95) fname
             lstr=lenstr(fname)
 #if defined MPI && defined PARALLEL_FILES
+# ifndef PIO
             call insert_node(fname, lstr, mynode, NNODES, ierr)
+# endif
 #endif
             ininame=fname(1:lstr)
             mpi_master_only write(*,'(1x,A,I3,2x,3A)')

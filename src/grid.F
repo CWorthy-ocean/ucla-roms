@@ -16,6 +16,10 @@
       use pipe_frc
       use scalars
       use mpi_exchanges
+#ifdef PIO
+      use pio_roms
+      use mpi
+#endif
       implicit none
 
 !
@@ -412,7 +416,7 @@
       implicit none
 
       character*1 char1
-      integer :: ierr, ncid, varid, lstr, checkdims
+      integer :: ierr, ierr_bcast, ncid, varid, lstr, checkdims
       integer,dimension(4) :: start
 
 
@@ -425,8 +429,10 @@
 
       ierr=nf90_open(grdname, nf90_nowrite, ncid)
       if (ierr == nf90_noerr) then
+#ifndef PIO ! skip checkdims if we are using only one input file
         ierr=checkdims (ncid, grdname, varid)
         if (ierr. ne. nf90_noerr) goto 99
+#endif
       else
         write(*,'(/1x,4A/12x,A)')  '### ERROR: get_grid :: Cannot ',
      &          'open input NetCDF file ''', trim(grdname), '''.',
@@ -485,10 +491,57 @@
           goto 99                                        !--> ERROR
         endif
       endif
+#ifdef PIO
+      ierr=nf90_close(ncid)
+      ! Broadcast ierr status to other MPI ranks so that they all exit cleanly
+      ! in case of an error
+      call MPI_Bcast(ierr,1,MPI_INTEGER,0,ocean_grid_comm,ierr_bcast)
+#endif
 
 ! Read in grid arrays.
 !===== == ==== =======
+#ifdef PIO
+      ! The i0,i1,j0,j1 indices are needed because the netcdf files do
+      ! include 1 more row/column for subdomains at the physical boundary
+      call pio_ncread2(grdname, 'h', h(i0:i1,j0:j1), '2D_r')
+      call exchange_xxx(h)                         ! (2,.true.)
 
+! Coordinate transformation metrics (m,n) associated with
+! differential distances in XI- and ETA-directions.
+      call pio_ncread2(grdname, 'pm', pm(i0:i1,j0:j1), '2D_r')
+      call pio_ncread2(grdname, 'pn', pn(i0:i1,j0:j1), '2D_r')
+      call exchange_xxx(pm,pn)
+
+# ifdef SPHERICAL
+      ! Coordinates (lon,lat [degrees]) or (x,y [meters]) at RHO-points.
+      call pio_ncread2(grdname, 'lon_rho', lonr(i0:i1,j0:j1), '2D_r')
+      call pio_ncread2(grdname, 'lat_rho', latr(i0:i1,j0:j1), '2D_r')
+      call exchange_xxx(lonr,latr)
+# else
+      ! check this with analytical filament example
+      call pio_ncread2(grdname, 'x_rho', xr(i0:i1,j0:j1), '2D_r')
+      call pio_ncread2(grdname, 'y_rho', yr(i0:i1,j0:j1), '2D_r')
+
+      ! Only use if non-spherical grid, otherwise computed in  setup_grid1
+      call pio_ncread2(grdname, 'f', f(i0:i1,j0:j1), '2D_r')
+      call exchange_xxx(xr,yr,f)
+
+# endif
+# ifdef CURVGRID
+      ! grid angle is used to compute non-traditional coriolis components
+      ! and for in-place rotation for data extraction
+      ! Also used in wec for the moment
+      ! Angle (radians) between XI-axis and EAST at RHO-points.
+      call pio_ncread2(grdname, 'angle', angler(i0:i1,j0:j1), '2D_r')
+      call exchange_xxx(angler)
+# endif
+# ifdef MASKING
+      ! Mask at RHO-points.
+      call pio_ncread2(grdname, 'mask_rho', rmask(i0:i1,j0:j1), '2D_r')
+      call exchange_xxx(rmask)
+# endif
+
+#else /* PIO */
       start=1; start(3)=0      ! starting indices in netcdf file. Might not be needed here
 
       ! The i0,i1,j0,j1 indices are needed because the netcdf files do
@@ -531,6 +584,7 @@
       call exchange_xxx(rmask)
 # endif
       ierr=nf90_close(ncid)
+# endif /* PIO */
       if (ierr==nf90_noerr) then
 #ifdef MPI_SILENT_MODE
         if (mynode==0) then

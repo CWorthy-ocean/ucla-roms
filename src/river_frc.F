@@ -14,6 +14,10 @@
       use nc_read_write
       use scalars                                                    ! for FIRST_STEP
       use grid
+#ifdef PIO
+      use pio_roms
+      use mpi
+#endif
 
       implicit none
 
@@ -168,7 +172,12 @@
      &              ',  in grid (' // trim(grdname)//
      &              ') file.')
             else
+
+#ifdef PIO
+               call pio_ncread2(grdname, riv_flx_name, rflx(i0:i1,j0:j1), '2D_r')
+#else
                call ncread(ncid, riv_flx_name, rflx(i0:i1,j0:j1))
+#endif
                ierr = nf90_close(ncid)
                where (rflx(i0:i1, j0:j1) > 0)
                   ridx(i0:i1, j0:j1) = floor(rflx(i0:i1, j0:j1) - 1e-5)

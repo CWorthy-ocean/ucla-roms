@@ -24,6 +24,10 @@
       use nc_read_write, only: handle_ierr, ncread
       use roms_read_write
       use dimensions
+#ifdef PIO
+      use pio_roms
+      use mpi
+#endif
 
       implicit none
 
@@ -75,7 +79,11 @@ c--#define VERBOSE
       init_type=0
       ierr=nf90_open(ininame, nf90_nowrite, ncid)
       if (ierr == nf90_noerr) then
+#ifndef PIO ! skip checkdims if we are using only one input file
         ierr=checkdims (ncid, ininame, max_rec)
+#else
+        max_rec=0
+#endif
         if (ierr == nf90_noerr) then
           if (max_rec > 0) then
             if (req_rec > 0) then
@@ -317,15 +325,27 @@ c--#define VERBOSE
 
       start=1; start(3)=record                                       ! 2D vars
 
+#ifdef PIO
+      call pio_ncread2(ininame, 'zeta', zeta(i0:i1,j0:j1,1), '2D_r', record)
+#else
       call ncread(ncid,'zeta',zeta(i0:i1,j0:j1,1),start)
+#endif
       zeta(i0:i1,j0:j1,1)=zeta(i0:i1,j0:j1,1)*rmask(i0:i1,j0:j1)
       call exchange_xxx(zeta(:,:,1))
 
+#ifdef PIO
+      call pio_ncread2(ininame, 'ubar', ubar(1:i1,j0:j1,1), '2D_u', record)
+#else
       call ncread(ncid,'ubar',ubar( 1:i1,j0:j1,1),start)
+#endif
       ubar(1:i1,j0:j1,1) = ubar(1:i1,j0:j1,1)*umask(1:i1,j0:j1)
       call exchange_xxx(ubar(:,:,1))
 
+#ifdef PIO
+      call pio_ncread2(ininame, 'vbar', vbar(i0:i1,1:j1,1), '2D_v', record)
+#else
       call ncread(ncid,'vbar',vbar(i0:i1, 1:j1,1),start)
+#endif
       vbar(i0:i1,1:j1,1) = vbar(i0:i1,1:j1,1)*vmask(i0:i1,1:j1)
       call exchange_xxx(vbar(:,:,1))
 
@@ -354,12 +374,21 @@ c--#define VERBOSE
       if (ierr /= nf90_noerr) exact_succes = .false.
 
       if (exact_succes) then
+#ifdef PIO
+        call pio_ncread2(ininame, 'DU_avg1', DU_avg1(1:i1,j0:j1), '2D_u', record)
+        call pio_ncread2(ininame, 'DV_avg1', DV_avg1(i0:i1,1:j1), '2D_v', record)
+        call pio_ncread2(ininame, 'DU_avg2', DU_avg2(1:i1,j0:j1), '2D_u', record)
+        call pio_ncread2(ininame, 'DV_avg2', DV_avg2(i0:i1,1:j1), '2D_v', record)
+        call pio_ncread2(ininame, 'DU_avg_bak', DU_avg_bak(1:i1,j0:j1), '2D_u', record)
+        call pio_ncread2(ininame, 'DV_avg_bak', DV_avg_bak(i0:i1,1:j1), '2D_v', record)
+#else
         call ncread(ncid,'DU_avg1',   DU_avg1( 1:i1,j0:j1),start)
         call ncread(ncid,'DV_avg1',   DV_avg1(i0:i1, 1:j1),start)
         call ncread(ncid,'DU_avg2',   DU_avg2( 1:i1,j0:j1),start)
         call ncread(ncid,'DV_avg2',   DV_avg2(i0:i1, 1:j1),start)
         call ncread(ncid,'DU_avg_bak',DU_avg_bak( 1:i1,j0:j1),start)
         call ncread(ncid,'DV_avg_bak',DV_avg_bak(i0:i1, 1:j1),start)
+#endif
       else
         forw_start=ntstart    !--> cancel exact restart
         iic = 0 ! set back to zero
@@ -370,9 +399,13 @@ c--#define VERBOSE
       if (ierr == nf90_noerr) then
         ierr=nf90_inq_varid(ncid,  'rvfrc_bak', varid)
         if (ierr == nf90_noerr) then
-
+#ifdef PIO
+          call pio_ncread2(ininame, 'rufrc_bak', rufrc_bak(1:i1,j0:j1,tindx), '2D_u', record)
+          call pio_ncread2(ininame, 'rvfrc_bak', rvfrc_bak(i0:i1,1:j1,tindx), '2D_v', record)
+#else
           call ncread(ncid,'rufrc_bak', rufrc_bak( 1:i1,j0:j1,tindx),start)    ! DevinD this update was untested
           call ncread(ncid,'rvfrc_bak', rvfrc_bak(i0:i1, 1:j1,tindx),start)
+#endif
           if (ierr /= nf90_noerr) goto 99                     !--> ERROR
 
         else
@@ -388,13 +421,21 @@ c--#define VERBOSE
 
       start=1; start(4)=record                                       ! 3D vars
 
+#ifdef PIO
+      call pio_ncread3(ininame, vname(1,indxU), u(1:i1,j0:j1,:,tindx), '3D_u', record)
+#else
       call ncread(ncid,vname(1,indxU), u(1:i1,j0:j1,:,tindx),start)
+#endif
       do k=1,nz
         u(1:i1,j0:j1,k,tindx) = u(1:i1,j0:j1,k,tindx)*umask(1:i1,j0:j1)
       enddo
       call exchange_xxx(u(:,:,:,tindx) )
 
+#ifdef PIO
+      call pio_ncread3(ininame, vname(1,indxV), v(i0:i1,1:j1,:,tindx), '3D_v', record)
+#else
       call ncread(ncid,vname(1,indxV), v(i0:i1, 1:j1,:,tindx),start)           ! v requires masking and
+#endif
        do k=1,nz
          v(i0:i1,1:j1,k,tindx) = v(i0:i1,1:j1,k,tindx)*vmask(i0:i1,1:j1)
        enddo
@@ -425,7 +466,11 @@ c--#define VERBOSE
 
         ierr=nf90_inq_varid(ncid, t_vname(itrc), varid)
         if (ierr == nf90_noerr) then
+#ifdef PIO
+          call pio_ncread3(ininame, t_vname(itrc), t(i0:i1,j0:j1,:,tindx,itrc), '3D_r', record)
+#else
           call ncread(ncid, t_vname(itrc), t(i0:i1,j0:j1,:,tindx,itrc), start)
+#endif
           do k=1,N
             t(i0:i1,j0:j1,k,tindx,itrc)=t(i0:i1,j0:j1,k,tindx,itrc)*rmask(i0:i1,j0:j1)
           enddo
@@ -451,7 +496,11 @@ c--#define VERBOSE
 # ifdef LMD_KPP
       ierr=nf90_inq_varid(ncid, vname(1,indxHbls), varid)
       if (ierr == nf90_noerr) then
+#ifdef PIO
+      call pio_ncread2(ininame,vname(1,indxHbls), hbls(i0:i1,j0:j1), '2D_r', record)
+#else
         call ncread(ncid,vname(1,indxHbls),hbls(i0:i1,j0:j1),start)      ! mask doesn't change answer but makes
+#endif
         hbls(i0:i1,j0:j1)=hbls(i0:i1,j0:j1)*rmask(i0:i1,j0:j1)     ! output mask 0, rather than random numbers
         call exchange_xxx(hbls(:,:) )
       else
@@ -464,7 +513,11 @@ c--#define VERBOSE
 # ifdef LMD_BKPP
       ierr=nf90_inq_varid(ncid, vname(1,indxHbbl), varid)
       if (ierr == nf90_noerr) then
+#ifdef PIO
+      call pio_ncread2(ininame,vname(1,indxHbbl), hbbl(i0:i1,j0:j1), '2D_r', record)
+#else
         call ncread(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start)      ! mask doesn't change answer but makes
+#endif
         hbbl(i0:i1,j0:j1)=hbbl(i0:i1,j0:j1)*rmask(i0:i1,j0:j1)     ! output mask 0, rather than random numbers
         call exchange_xxx(hbbl(:,:) )            ! confirmed needs an exchange, not sure why
       else

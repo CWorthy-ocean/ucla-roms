@@ -17,6 +17,10 @@
       use roms_read_write
       use nc_read_write
       use scalars
+#ifdef PIO
+      use pio_roms
+      use mpi
+#endif
 
       implicit none
 
@@ -101,18 +105,21 @@
       ! local
       integer :: ierr,ncid,v_id,i,j
 
-
       if (p_analytical) then
 
         ! pipe_flx is defined in ana_pipe_frc.h
 
       else
 
+#ifdef PIO
         ! Read 'pipe_flux' from grid file (Pipe_idx & pipe_fraction in one value)
+        call pio_ncread2(grdname, pipe_flx_name, pipe_fraction(i0:i1,j0:j1), '2D_r')
+#else
         ierr=nf90_open(grdname, nf90_nowrite, ncid)
         ! Temporarily store as pipe_fraction to avoid extra array,
         ! but value still pipe_idx + pipe_fraction
         call ncread(ncid,pipe_flx_name, pipe_fraction(i0:i1,j0:j1))
+#endif
         if(ierr/=0)
      &      call handle_ierr(ierr,'init_pipe_frc:: pipe not in file!')
 
