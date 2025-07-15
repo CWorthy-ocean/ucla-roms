@@ -11,6 +11,12 @@
       use dimensions
       use hidden_mpi_vars
       use mpi_exchanges
+!#ifdef PIO
+! For some reason even when PIO is defined the compiler was not including this block,
+! so I commented out the ifdef for now
+      use pio_roms
+      use mpi
+!#endif
 
       implicit none
 
@@ -272,29 +278,30 @@
 
       end subroutine init_coarse !]
 ! ----------------------------------------------------------------------
-      subroutine set_frc_data_1d(nc,var1d,obry)  ![
+      subroutine set_frc_data_1d(nc,var1d,report,obry)  ![
       implicit none
 
       ! input/outputs
       type(ncforce),    intent(inout) :: nc    ! derived type containing all neccesary supporting data
       real,dimension(:),intent(out)   :: var1d ! time interpolated forcing data
-      integer,optional, intent(in)    :: obry  ! bry=1, suppress terminal info, bry=2 display boundary
+      integer,optional, intent(in)    :: report  ! report=1, suppress terminal info, report=2 display boundary
+      character(len=4),optional, intent(in)    :: obry  ! Optional argument for PIO
 
       ! local
       real    :: cff1,cff2  ! for time interpolations
       real    :: modtime    ! model time
       logical :: d1
-      integer :: bry
+      integer :: rpt
 
       integer           :: it1,it2
       real,dimension(2) :: vtimes
 
       d1 = .true.
 
-      if (present(obry)) then
-        bry = obry
+      if (present(report)) then
+        rpt = report
       else
-        bry = 0
+        rpt = 0
       endif
 
       modtime = tdays + 0.5*dt*sec2day    ! input data times in days. Interpolated time is based on 1/2 step time
@@ -305,13 +312,13 @@
       if (nc%times(it2) < modtime) then  ! need to refresh data
 
         if (nc%ifile == 0) then   ! the first time, we need to fill both slots
-          call fill_frc_slice(nc,modtime,it1,d1,bry)
+          call fill_frc_slice(nc,modtime,it1,d1,obry,rpt)
         else ! cycle it1,it2 between 1 and 2
           it1 = mod(it1,2) + 1
           it2 = mod(it2,2) + 1
         endif
 
-        call fill_frc_slice(nc,modtime,it2,d1,bry)
+        call fill_frc_slice(nc,modtime,it2,d1,obry,rpt)
       endif
 
       nc%it1 = it1
@@ -333,29 +340,30 @@
 
       end subroutine set_frc_data_1d  !]
 ! ----------------------------------------------------------------------
-      subroutine set_frc_data_2d(nc,var2d,obry)  ![
+      subroutine set_frc_data_2d(nc,var2d,report,obry)  ![
       implicit none
 
       ! input/outputs
       type(ncforce),      intent(inout) :: nc    ! derived type containing all neccesary supporting data
       real,dimension(:,:),intent(out)   :: var2d ! time interpolated forcing data
-      integer,optional,   intent(in)    :: obry  ! bry=1, suppress terminal info, bry=2 display boundary
+      integer,optional,intent(in)    :: report  ! report=1, suppress terminal info, report=2 display boundary
+      character(len=4),optional,intent(in)     :: obry  ! Optional argument for PIO
 
       ! local
       real    :: cff1,cff2  ! for time interpolations
       real    :: modtime    ! model time
       logical :: d1
-      integer :: bry
+      integer :: rpt
 
       integer           :: it1,it2
       real,dimension(2) :: vtimes
 
       d1 = .false.
 
-      if (present(obry)) then
-        bry = obry
+      if (present(report)) then
+        rpt = report
       else
-        bry = 0
+        rpt = 0
       endif
 
       modtime = tdays + 0.5*dt*sec2day    ! input data times in days. Interpolated time is based on 1/2 step time
@@ -366,13 +374,13 @@
       if (nc%times(it2) < modtime) then  ! need to refresh data
 
         if (nc%ifile == 0) then   ! the first time, we need to fill both slots
-          call fill_frc_slice(nc,modtime,it1,d1,bry)
+          call fill_frc_slice(nc,modtime,it1,d1,obry,rpt)
         else ! cycle it1,it2 between 1 and 2
           it1 = mod(it1,2) + 1
           it2 = mod(it2,2) + 1
         endif
 
-        call fill_frc_slice(nc,modtime,it2,d1,bry)
+        call fill_frc_slice(nc,modtime,it2,d1,obry,rpt)
       endif
 
       nc%it1 = it1
@@ -640,7 +648,7 @@
 
       end subroutine find_new_record_cycle !]
 ! ----------------------------------------------------------------------
-      subroutine fill_frc_slice_aux(nc,modtime,it,d1,bry) ![
+      subroutine fill_frc_slice_aux(nc,modtime,it,d1,obry,report) ![
       ! Fill a time slice of forcing data, not surface forcing
       implicit none
 
@@ -649,7 +657,8 @@
       real               ,intent(in)    :: modtime ! current time of the model
       integer            ,intent(in)    :: it      ! index (1 or 2) of the forcing data
       logical            ,intent(in)    :: d1      ! 1 or 2 dimensional forcing data
-      integer            ,intent(in)    :: bry     ! suppress terminal output of boundary
+      character(len=4),optional,intent(in)     :: obry  ! ('ns','ew') + ('r','u','v','1')
+      integer,optional,intent(in)       :: report     ! suppress terminal output of boundary
 
       ! local
       integer :: ierr,ncid
@@ -668,15 +677,26 @@
       call find_new_record(vname,tname,modtime,ifile,irec,
      &                         nc%times(it) )
 
+#ifndef PIO
       ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+#endif
       ! The size of vdata must match the size of the data in the
       ! file. Ensure this in the allocation of vdata
       ! This is in contrast with the _surf version of fill_frc_slice
       if (d1) then
+#ifdef PIO
+        call pio_ncread1(frcfile(ifile), vname, nc%vdata(:,1,it), obry, irec)
+#else
         call ncread(ncid,vname,nc%vdata(:,1,it),(/1,irec/))
+#endif
       else
+#ifdef PIO
+        call pio_ncread2(frcfile(ifile), vname, nc%vdata(:,:,it), obry, irec)
+#else
         call ncread(ncid,vname,nc%vdata(:,:,it),(/1,1,irec/))
+#endif
       endif
+#ifndef PIO
       ! add force file info to output nc
       if (mynode == 0) then
         ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
@@ -692,13 +712,14 @@
         endif
       endif
       ierr = nf90_close(ncid)
+#endif
 
-      if (bry==0) then
+      if (report==0) then
         if (mynode==0)
      &    call display_read_time_to_log(vname,nc%times(it),irec )
-      elseif (bry==1) then
+      elseif (report==1) then
         ! do nothing (suppress terminal output)
-      elseif (bry==2) then
+      elseif (report==2) then
         if (mynode==0 .or. mynode==nnodes-1)                         ! 2 nodes catch e/w/s/n boundaries
      &    call display_read_time_to_log(vname,nc%times(it),irec )
       else
@@ -737,6 +758,7 @@
       call find_new_record(vname,tname,modtime,ifile,irec,
      &                         nc%times(it) )
 
+#ifndef PIO
       ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
       if (nc%coarse>0) then
         if (.not.allocated(cdata)) then
@@ -752,13 +774,27 @@
         call exchange_xxx(cdata,array_bf=cbf)
         call coarse2fine(cdata,nc%vdata(:,:,it),gtype)
       else
+#endif
         if (gtype=='u') then
+#ifdef PIO
+          call pio_ncread2(frcfile(ifile), vname, nc%vdata(1:i1,j0:j1,it), '2D_u', irec)
+#else
           call ncread(ncid,vname,nc%vdata(1:i1,j0:j1,it),(/1,1,irec/))
+#endif
         elseif (gtype=='v') then
+#ifdef PIO
+          call pio_ncread2(frcfile(ifile), vname, nc%vdata(i0:i1,1:j1,it), '2D_v', irec)
+#else
           call ncread(ncid,vname,nc%vdata(i0:i1,1:j1,it),(/1,1,irec/))
+#endif
         else    ! rho-grid
+#ifdef PIO
+          call pio_ncread2(frcfile(ifile), vname, nc%vdata(i0:i1,j0:j1,it), '2D_r', irec)
+#else
           call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,it),(/1,1,irec/))
+#endif
         endif
+#ifndef PIO
       endif
       ! add force file info to output nc
       if (mynode == 0) then
@@ -774,7 +810,7 @@
         endif
       endif
       ierr = nf90_close(ncid)
-
+#endif
       call exchange_xxx(nc%vdata(:,:,it))
 
       if (mynode==0) then

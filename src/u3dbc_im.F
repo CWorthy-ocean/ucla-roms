@@ -13,6 +13,7 @@
       use ocean_vars
       use scalars
       use sponge_tune
+      use hidden_mpi_vars
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k

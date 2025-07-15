@@ -267,7 +267,6 @@
       integer,dimension(3) :: start
       character(len=100) :: info
       character(len=300) :: frcstr
-      character(len=256) fname
 
       found_rec = 0                                        ! set found variable flag to not found
       var_file_indx = 1                                    ! forcing file index number
@@ -305,15 +304,14 @@
 
         if (bry_tides) then
 #ifdef PIO
-          fname = "INPUT/PARTED/roms_tides.nc"  ! frcfile(var_file_indx)
-          call pio_ncread2(fname, 'ssh_Re', ztide_r(i0:i1,j0:j1,itide), '2D_r', itide)
-          call pio_ncread2(fname, 'ssh_Im', ztide_i(i0:i1,j0:j1,itide), '2D_r', itide)
+          call pio_ncread2(frcfile(var_file_indx), 'ssh_Re', ztide_r(i0:i1,j0:j1,itide), '2D_r', itide)
+          call pio_ncread2(frcfile(var_file_indx), 'ssh_Im', ztide_i(i0:i1,j0:j1,itide), '2D_r', itide)
 
-          call pio_ncread2(fname, 'u_Re', utide_r(1:i1,j0:j1,itide), '2D_u', itide)
-          call pio_ncread2(fname, 'u_Im', utide_i(1:i1,j0:j1,itide), '2D_u', itide)
+          call pio_ncread2(frcfile(var_file_indx), 'u_Re', utide_r(1:i1,j0:j1,itide), '2D_u', itide)
+          call pio_ncread2(frcfile(var_file_indx), 'u_Im', utide_i(1:i1,j0:j1,itide), '2D_u', itide)
 
-          call pio_ncread2(fname, 'v_Re', vtide_r(i0:i1,1:j1,itide), '2D_v', itide)
-          call pio_ncread2(fname, 'v_Im', vtide_i(i0:i1,1:j1,itide), '2D_v', itide)
+          call pio_ncread2(frcfile(var_file_indx), 'v_Re', vtide_r(i0:i1,1:j1,itide), '2D_v', itide)
+          call pio_ncread2(frcfile(var_file_indx), 'v_Im', vtide_i(i0:i1,1:j1,itide), '2D_v', itide)
 #else
           call ncread(ncid,'ssh_Re',ztide_r(i0:i1,j0:j1,itide),start)   ! read tidal elevations
           call ncread(ncid,'ssh_Im',ztide_i(i0:i1,j0:j1,itide),start)
@@ -331,8 +329,8 @@
 
         if (pot_tides) then
 #ifdef PIO
-          call pio_ncread2(fname, 'pot_Re', ptide_r(i0:i1,j0:j1,itide), '2D_r', itide)
-          call pio_ncread2(fname, 'pot_Im', ptide_i(i0:i1,j0:j1,itide), '2D_r', itide)
+          call pio_ncread2(frcfile(var_file_indx), 'pot_Re', ptide_r(i0:i1,j0:j1,itide), '2D_r', itide)
+          call pio_ncread2(frcfile(var_file_indx), 'pot_Im', ptide_i(i0:i1,j0:j1,itide), '2D_r', itide)
 #else
           call ncread(ncid,'pot_Re',ptide_r(i0:i1,j0:j1,itide),start)
           call ncread(ncid,'pot_Im',ptide_i(i0:i1,j0:j1,itide),start)
