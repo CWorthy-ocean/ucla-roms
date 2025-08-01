@@ -96,9 +96,11 @@ else ifeq ($(BUILD_MODE),grof)
    KEEP_PPSRC=true
 endif
 
-#Check whether we're compiling with MARBL:
+#Check whether we're compiling with MARBL or NHMG:
 ifeq ($(wildcard cppdefs.opt),cppdefs.opt)
 	USEMARBL := $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*MARBL' cppdefs.opt && echo true || echo false )
+	USENHMG :=  $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*NHMG' cppdefs.opt && echo true || echo false )
+
 endif
 
 # C-preprocessor (cpp):
@@ -115,10 +117,6 @@ else
 	CPPFLAGS =  -traditional -D__IFC -I${MPIHOME}/include -I${NETCDFHOME}/include
 endif
 
-ifeq ($(USEMARBL),true)
-	CPPFLAGS+= -I${MARBL_ROOT}/include
-endif
-
 #   Since we no longer keep preprocessed files after compilation, if you want to still
 #   see them to confirm what code is left after c-pre-processing (CPPFLAGS
 #   removed) or for runtime debug line numbers, use the following
@@ -129,7 +127,7 @@ endif
 # Path names (non-hydrostatic & NetCDF libraries):
 	NHMG_ROOT = $(ROMS_ROOT)/NHMG
 	NHMG_LIB  = -L$(NHMG_ROOT)/lib -lnhmg
-	NHMG_INC  = $(NHMG_ROOT)/include
+	NHMG_INC  = -I$(NHMG_ROOT)/include
 
 	VPATH = ${MPIHOME}/include:${NHMG_INC}
 	CPATH = ${MPIHOME}/include:${NHMG_INC}
@@ -204,13 +202,19 @@ ifeq ($(COMPILER),gnu)
 endif
 
 # Options to link to libraries & modules (NetCDF, etc):
-        LCDF = $(NHMG_LIB) $(NETCDFF_LIB) $(NETCDFC_LIB)
+        LCDF =  $(NETCDFF_LIB) $(NETCDFC_LIB)
 ifeq ($(USEMARBL),true)
 	LCDF += $(MARBL_LIB)
+endif
+ifeq ($(USENHMG),true)
+	LCDF += $(NHMG_LIB)
 endif
 	LCDF +=$(NETCDFF_INC) $(NETCDFC_INC)
 ifeq ($(USEMARBL),true)
 	LCDF += $(MARBL_INC)
+endif
+ifeq ($(USENHMG),true)
+	LCDF += $(NHMG_INC)
 endif
 
 
