@@ -49,6 +49,7 @@
       ! misc from porting ETH code:
       character(len=40) tclm_name(NT) ! Taken from ETH code ncvars
 
+      public bgc_idx, t_idx
       public set_bgc_surf_frc
       public init_arrays_bgc_frc
       public init_scalars_bec2
@@ -57,6 +58,22 @@
 
       contains
 
+      integer function bgc_idx(t_idx)
+      ! Takes a tracer array tracer index t(:,:,:,:,t_idx) and returns
+      ! the corresponding bgc tracer index.
+      ! Were previously harcoded individually as, e.g.
+      ! po4_ind_t     = iPO4-iTandS-nt_passive
+      integer, intent(in) :: t_idx
+      bgc_idx = t_idx-iTandS-nt_passive
+
+      end function bgc_idx
+
+      real function t_idx(b_idx)
+      ! Takes a bgc tracer index (e.g. dtracer_module(:,:,:,b_idx)) and
+      ! returns the corresponding tracer array index t(:,:,:,:,t_idx)
+      integer, intent(in) ::b_idx
+      t_idx = b_idx+iTandS+nt_passive
+      end function t_idx
 ! ----------------------------------------------------------------------
       subroutine set_bgc_surf_frc(istr,iend,jstr,jend)  ![
 
@@ -599,39 +616,6 @@
 #endif /* BEC2_DIA */
 
 #ifdef SOLVE3D
-
-! set the bgc tracer index for the bgc routines
-      po4_ind_t     = iPO4-iTandS-nt_passive
-      no3_ind_t     = iNO3-iTandS-nt_passive
-      sio3_ind_t    = iSIO3-iTandS-nt_passive
-      nh4_ind_t     = iNH4-iTandS-nt_passive
-      fe_ind_t      = iFE-iTandS-nt_passive
-      o2_ind_t      = iO2-iTandS-nt_passive
-      dic_ind_t     = iDIC-iTandS-nt_passive
-      alk_ind_t     = iALK-iTandS-nt_passive
-      doc_ind_t     = iDOC-iTandS-nt_passive
-      don_ind_t     = iDon-iTandS-nt_passive
-      dofe_ind_t    = iDofe-iTandS-nt_passive
-      dop_ind_t     = iDop-iTandS-nt_passive
-      dopr_ind_t    = iDopr-iTandS-nt_passive
-      donr_ind_t    = iDonr-iTandS-nt_passive
-      zooc_ind_t    = iZOOC-iTandS-nt_passive
-      spc_ind_t     = iSPC-iTandS-nt_passive
-      spchl_ind_t   = iSPCHL-iTandS-nt_passive
-      spfe_ind_t    = iSPFE-iTandS-nt_passive
-      spcaco3_ind_t = iSPCACO3-iTandS-nt_passive
-      diatc_ind_t   = iDIATC-iTandS-nt_passive
-      diatchl_ind_t = iDIATCHL-iTandS-nt_passive
-      diatfe_ind_t  = iDIATFE-iTandS-nt_passive
-      diatsi_ind_t  = iDIATSI-iTandS-nt_passive
-      diazc_ind_t   = iDiazc-iTandS-nt_passive
-      diazchl_ind_t = iDiazchl-iTandS-nt_passive
-      diazfe_ind_t  = iDiazfe-iTandS-nt_passive
-#ifdef Ncycle_SY
-      no2_ind_t     = iNO2-iTandS-nt_passive
-      n2_ind_t      = iN2-iTandS-nt_passive
-      n2o_ind_t     = iN2O-iTandS-nt_passive
-#endif
 
 # ifdef BEC2_DIAG
 #include "bgc_2Ddiagnostics.opt"
