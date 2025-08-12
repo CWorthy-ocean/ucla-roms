@@ -55,6 +55,8 @@
         integer                           :: irec =0   ! Record number in file
         integer                           :: it1 = 1, it2 = 2              ! used to cycle between correct entries of 'data' above
         real,dimension(2)                 :: times = -99 ! [-99,-99]       ! stores 2 times that go with 'data' above
+        logical                           :: single_file = .false.
+        character(len=20)                 :: single_filename=''
       end type ncforce
 
       integer, target :: test_var
@@ -395,7 +397,6 @@
         endif
 
         call fill_frc_slice(nc,modtime,it2,d1,bry)
-
         ! If (new irec) is greater than (old irec-1), this means we skipped one or more
         ! forcing entries. Then we need to also do fill_frc_slice for it1,
         ! and we will read in the greatest irec that is less than (new irec)
@@ -508,7 +509,7 @@
 
       end subroutine set_frc_data_surf  !]
 ! ----------------------------------------------------------------------
-      subroutine find_new_record(vname,tname,time,ifile,irec,vtime) ![
+      subroutine find_new_record(vname,tname,time,ifile,irec,vtime,single_filename) ![
       ! Finds the index for the filename and record number of the first record
       ! with a time that is larger than the model time. It will stores
       ! the corresponding time of the record in vtime.
@@ -524,7 +525,9 @@
       integer                       ,intent(inout):: ifile   ! index for file name in list
       integer                       ,intent(inout):: irec    ! variable record entry
       real                          ,intent(out)  :: vtime   ! read in variable time
-
+      character(len=*), optional    ,intent(in)   :: single_filename ! If this variable is present,
+                                                             ! read this file only on the head node.
+                                                             ! It is assumed that this function is only being called on rank 0.
       ! local
       integer, dimension(1) :: dimids     ! time dimension ID
       real    :: time_old
@@ -558,7 +561,11 @@
       do while (.not.found_rec .and. ifile <= max_frc)               ! while record not found & still more files to check
 
         found_var = .false.                                          ! reset for new file
-        ierr = nf90_open(frcfile(ifile), nf90_nowrite, ncid)
+        if (present(single_filename)) then
+          ierr = nf90_open(single_filename, nf90_nowrite, ncid)
+        else
+          ierr = nf90_open(frcfile(ifile), nf90_nowrite, ncid)
+        endif
         if (ierr/=nf90_noerr)
      &    call handle_ierr(ierr,'Find_new_record, opening: ',frcfile(ifile))
 
@@ -611,6 +618,11 @@
           ifile_stride = ifile_stride+1
           ifile = ifile+1
           irec = 0                                                   ! Reset irec for new file
+          if (present(single_filename)) then
+            print *, 'ERROR: find_new_record: Ran out of time records ',
+     &           'for ', vname, ' in single file ', single_filename
+            error stop
+          endif
         endif
 
         ierr=nf90_close (ncid)
@@ -701,6 +713,10 @@
 ! ----------------------------------------------------------------------
       subroutine fill_frc_slice_aux(nc,modtime,it,d1,bry) ![
       ! Fill a time slice of forcing data, not surface forcing
+
+      use param
+      use mpi
+
       implicit none
 
       ! input/outputs
@@ -718,11 +734,38 @@
       character(len=100) :: forcing_version ! version of forcing input data
       character(len=300) :: frcstr
       integer            :: irec,ifile
+      integer            :: msg_size
 
       irec  = nc%irec
       ifile = nc%ifile
       vname = nc%vname
       tname = nc%tname
+
+      if (nc%single_file) then
+        if (mynode == 0) then
+          call find_new_record(vname,tname,modtime,ifile,irec,
+     &                         nc%times(it), nc%single_filename)
+
+          ierr=nf90_open(nc%single_filename,nf90_nowrite, ncid)
+          if (d1) then
+            call ncread(ncid,vname,nc%vdata(:,1,it),(/1,irec/))
+          else
+            call ncread(ncid,vname,nc%vdata(:,:,it),(/1,1,irec/))
+          endif
+          ierr = nf90_close(ncid)
+        endif
+        call MPI_Barrier(ocean_grid_comm, ierr)
+        msg_size = size(nc%vdata(:,:,it))
+        ! These are needed to make sure each rank follows the same
+        ! code pathway in set_frc_data
+        call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+        call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+        call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+        call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+        ! Send time and vdata to each rank
+        call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
+        call MPI_Bcast(nc%vdata(:,:,it),msg_size,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
+      else
 
       call find_new_record(vname,tname,modtime,ifile,irec,
      &                         nc%times(it))
@@ -751,6 +794,7 @@
         endif
       endif
       ierr = nf90_close(ncid)
+      endif ! single_file
 
       if (bry==0) then
         if (mynode==0)

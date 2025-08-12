@@ -290,8 +290,15 @@
         if (cdr_volume) then
           allocate(nc_cdrvol%vdata(ncdr,1 ,2))
           allocate(nc_cdrtrc%vdata(ncdr,nt,2))
+          nc_cdrvol%single_file = .true.
+          nc_cdrvol%single_filename = cdr_file
+
+          nc_cdrtrc%single_file = .true.
+          nc_cdrtrc%single_filename = cdr_file
         else
           allocate(nc_cdrflx%vdata(ncdr,nt,2))
+          nc_cdrflx%single_file = .true.
+          nc_cdrflx%single_filename = cdr_file
         endif
       endif
 
