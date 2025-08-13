@@ -12,9 +12,9 @@
 # ifdef MARBL_DIAGS
      &     ,marbldrv_configure_diagnostics
      &     ,nr_marbl_diag_2d,nr_marbl_diag_3d
-     &     ,diag_array_2d,diag_array_3d
-     &     ,idx_bgc_diag_2d,idx_bgc_diag_3d
-     &     ,wrt_bgc_diag_2d,wrt_bgc_diag_3d
+     &     ,marbl_diag_2d,marbl_diag_3d
+     &     ,idx_marbl_diag_2d,idx_marbl_diag_3d
+     &     ,wrt_marbl_diag_2d,wrt_marbl_diag_3d
 # endif
 #endif
 
@@ -123,16 +123,6 @@
 # endif
      &  ,liron_flux,ldust_flux
 
-!
-! Relative tracer indices for prognostic variables:
-!
-      integer :: po4_ind_t, no3_ind_t, sio3_ind_t, nh4_ind_t, fe_ind_t, dic_ind_t, alk_ind_t,
-     &        o2_ind_t, doc_ind_t, don_ind_t, dofe_ind_t, dop_ind_t, dopr_ind_t, donr_ind_t,
-     &        zooc_ind_t, spchl_ind_t, spc_ind_t, spfe_ind_t, spcaco3_ind_t, diatchl_ind_t,
-     &        diatc_ind_t, diatfe_ind_t, diatsi_ind_t, diazchl_ind_t, diazc_ind_t, diazfe_ind_t
-#ifdef Ncycle_SY
-      integer :: no2_ind_t, n2_ind_t, n2o_ind_t
-# endif
 
 !
 ! Parameters related to sinking particles:
@@ -211,10 +201,10 @@
 
 #elif defined(MARBL_DIAGS)
 
-      wrt_bgc_diag_2d => wrt_bec2_diag_2d
-      wrt_bgc_diag_3d => wrt_bec2_diag_3d
-      idx_bgc_diag_2d => idx_bec2_diag_2d
-      idx_bgc_diag_3d => idx_bec2_diag_3d
+      wrt_marbl_diag_2d => wrt_bec2_diag_2d
+      wrt_marbl_diag_3d => wrt_bec2_diag_3d
+      idx_marbl_diag_2d => idx_bec2_diag_2d
+      idx_marbl_diag_3d => idx_bec2_diag_3d
 
 
       call marbldrv_configure_diagnostics(
@@ -270,8 +260,8 @@
       bec2_diag_2d=0.0
       bec2_diag_3d=0.0
 #ifdef MARBL_DIAGS
-      diag_array_2d => bec2_diag_2d
-      diag_array_3d => bec2_diag_3d
+      marbl_diag_2d => bec2_diag_2d
+      marbl_diag_3d => bec2_diag_3d
 #endif
 
       if (wrt_avg_dia) then

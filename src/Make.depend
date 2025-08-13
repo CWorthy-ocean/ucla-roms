@@ -80,10 +80,10 @@ mpi_exchanges.o : mpi_exchanges.F hidden_mpi_vars.o dimensions.o param.o
 zslice_output.o : zslice_output.F zslice_output.opt set_global_definitions.h cppdefs.opt surf_flux.o tracers.o diagnostics.o ocean_vars.o scalars.o nc_read_write.o roms_read_write.o dimensions.o grid.o param.o
 bgc_ecosys_vars.o : bgc_ecosys_vars.F bgc_3Ddiagnostics.opt bgc_2Ddiagnostics.opt bgc.opt set_global_definitions.h cppdefs.opt roms_read_write.o tracers.o param.o
 bgc_forces.o : bgc_forces.F set_global_definitions.h cppdefs.opt param.o
-bgc_param_ini.o : bgc_param_ini.F set_global_definitions.h cppdefs.opt
-bgc_ecosys_bec2.o : bgc_ecosys_bec2.F set_global_definitions.h cppdefs.opt bgc_param_ini.o bgc_ecosys_vars.o scalars.o ocean_vars.o grid.o param.o
+bec2_params.o : bec2_params.F set_global_definitions.h cppdefs.opt
+bgc_ecosys_bec2.o : bgc_ecosys_bec2.F set_global_definitions.h cppdefs.opt bec2_params.o bgc_ecosys_vars.o scalars.o ocean_vars.o grid.o param.o
 marbl_driver.o : marbl_driver.F set_global_definitions.h cppdefs.opt
-main.o : main.F set_global_definitions.h cppdefs.opt mixing.o tides.o zslice_output.o surf_flux.o extract_data.o bgc.o bgc_param_ini.o random_output.o particles.o boundary.o diagnostics.o analytical.o grid.o dimensions.o basic_output.o ocean_vars.o scalars.o sponge_tune.o tracers.o param.o
+main.o : main.F set_global_definitions.h cppdefs.opt mixing.o tides.o zslice_output.o surf_flux.o extract_data.o bgc.o bec2_params.o random_output.o particles.o boundary.o diagnostics.o analytical.o grid.o dimensions.o basic_output.o ocean_vars.o scalars.o sponge_tune.o tracers.o param.o
 checkdims.o : checkdims.F compute_starts_counts.h set_global_definitions.h cppdefs.opt scoord.o nc_read_write.o roms_read_write.o param.o
 insert_node.o : insert_node.F insert_node.F
 get_init.o : get_init.F compute_tile_bounds.h set_global_definitions.h cppdefs.opt dimensions.o roms_read_write.o nc_read_write.o sponge_tune.o diagnostics.o bgc_ecosys_vars.o scalars.o basic_output.o ocean_vars.o mixing.o analytical.o hidden_mpi_vars.o grid.o coupling.o bgc.o tracers.o param.o

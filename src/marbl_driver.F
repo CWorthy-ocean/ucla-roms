@@ -101,13 +101,13 @@
       integer, public :: diag_cnt_tot    ! Total number of MARBL diagnostic vars
 
 !     Making local versions of these "bec2" arrays for bgc diagnostic output control
-      logical, dimension(:), pointer :: wrt_bgc_diag_2d
-      logical, dimension(:), pointer :: wrt_bgc_diag_3d
-      integer, dimension(:), pointer :: idx_bgc_diag_2d
-      integer, dimension(:), pointer :: idx_bgc_diag_3d
+      logical, dimension(:), pointer :: wrt_marbl_diag_2d
+      logical, dimension(:), pointer :: wrt_marbl_diag_3d
+      integer, dimension(:), pointer :: idx_marbl_diag_2d
+      integer, dimension(:), pointer :: idx_marbl_diag_3d
 
-      real,dimension(:,:,:,:),pointer :: diag_array_3d ! points to bec2_diag_3d
-      real,dimension(:,:,:)  ,pointer :: diag_array_2d ! points to bec2_diag_2d
+      real,dimension(:,:,:,:),pointer :: marbl_diag_3d ! points to bec2_diag_3d
+      real,dimension(:,:,:)  ,pointer :: marbl_diag_2d ! points to bec2_diag_2d
 
 #endif
 !     Saved state variables: (mimicking structure of bgc_ecosys_vars for bec2_diag arrays)
@@ -838,7 +838,6 @@
 #ifdef MARBL_DIAGS
       subroutine marbldrv_configure_diagnostics(
      &     vname_bgc_diag_2d,vname_bgc_diag_3d
-!     &     ,wrt_bgc_diag_2d,wrt_bgc_diag_3d
      &     )
 
 !-----------------------------------------------------------------------
@@ -858,9 +857,6 @@
 !     INPUT/OUTPUT:
 !     - vname_bgc_diag_2d,vname_bgc_diag_3d:
 !        diagnostics metadata arrays (short,long names and units)
-!     - wrt_bgc_diag_2d,wrt_bgc_diag_3d:
-!         logical arrays to determine which diagnostics are output
-!         (currently hardcoded to all)
 !
 !     NOTES:
 !     - For generalisation purposes, it is assumed that 3D surface flux
@@ -871,8 +867,6 @@
 
       character*72, dimension(:,:), intent(inout) :: vname_bgc_diag_2d
       character*72, dimension(:,:), intent(inout) :: vname_bgc_diag_3d
-!      logical,      dimension(:),   intent(inout) :: wrt_bgc_diag_2d
-!      logical,      dimension(:),   intent(inout) :: wrt_bgc_diag_3d
       integer                                     :: m,diagidx2d,diagidx3d
 
 !     1. Check hardcoded array size in ROMS matches MARBL expectations
@@ -959,7 +953,7 @@
             vname_bgc_diag_2d(3,diagidx2d)=
      &           trim(MARBL_instance%surface_flux_diags%diags(m)%units)
             vname_bgc_diag_2d(4,diagidx2d)='  '
-            wrt_bgc_diag_2d(diagidx2d)=.false.
+            wrt_marbl_diag_2d(diagidx2d)=.false.
 
             diagidx2d=diagidx2d+1
          else                   ! 3D field
@@ -970,7 +964,7 @@
             vname_bgc_diag_3d(3,diagidx3d)=
      &           trim(MARBL_instance%surface_flux_diags%diags(m)%units)
             vname_bgc_diag_3d(4,diagidx3d)='  '
-            wrt_bgc_diag_3d(diagidx3d)=.false.
+            wrt_marbl_diag_3d(diagidx3d)=.false.
 !
             diagidx3d=diagidx3d+1
          end if
@@ -986,7 +980,7 @@
             vname_bgc_diag_2d(3,diagidx2d)=
      &           trim(MARBL_instance%interior_tendency_diags%diags(m)%units)
                vname_bgc_diag_2d(4,diagidx2d)='  '
-               wrt_bgc_diag_2d(diagidx2d)=.false.
+               wrt_marbl_diag_2d(diagidx2d)=.false.
 
             diagidx2d=diagidx2d+1
          else                   ! 3D field
@@ -997,7 +991,7 @@
             vname_bgc_diag_3d(3,diagidx3d)=
      &            trim(MARBL_instance%interior_tendency_diags%diags(m)%units)
             vname_bgc_diag_3d(4,diagidx3d)='  '
-            wrt_bgc_diag_3d(diagidx3d)=.false.
+            wrt_marbl_diag_3d(diagidx3d)=.false.
 
             diagidx3d=diagidx3d+1
          end if
@@ -1087,7 +1081,7 @@
                do idx=1,size(vname_bgc_diag_2d(1,:))
                   if (trim(vname_bgc_diag_2d(1,idx)) == trim(file_line))
      &                 then
-                     wrt_bgc_diag_2d(idx) =.true.
+                     wrt_marbl_diag_2d(idx) =.true.
                      if (mynode==printnode) then
                         write(*,'(2A)'),
      &                       'REQUESTED MARBL DIAGNOSTIC OUTPUT: ' //
@@ -1102,7 +1096,7 @@
                do idx=1,size(vname_bgc_diag_3d(1,:))
                   if (trim(vname_bgc_diag_3d(1,idx)) == trim(file_line))
      &                 then
-                     wrt_bgc_diag_3d(idx) =.true.
+                     wrt_marbl_diag_3d(idx) =.true.
                      if (mynode==printnode) then
                         write(*,'(2A)'),
      &                       'REQUESTED MARBL DIAGNOSTIC OUTPUT: ' //
@@ -1133,8 +1127,8 @@
 
          if (no_diags_requested) then ! Write all of them to output
 
-            wrt_bgc_diag_2d(:)=.true.
-            wrt_bgc_diag_3d(:)=.true.
+            wrt_marbl_diag_2d(:)=.true.
+            wrt_marbl_diag_3d(:)=.true.
 
             if (mynode==0) then
                write(*,'(A)'), 'NO REQUESTED DIAGNOSTICS FOUND IN ' //
@@ -1229,11 +1223,6 @@
       real, dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,
      &                            intent(inout)     :: tracer_array
 #ifdef MARBL_DIAGS
-!      real, dimension(GLOBAL_2D_ARRAY,diag_cnt_2d_tot),
-!     &                         intent(inout)        :: diag_array_2d
-!      real, dimension(GLOBAL_2D_ARRAY,nz,diag_cnt_3d_tot),
-!     &                         intent(inout)        :: diag_array_3d
-
       integer                                       :: diagidx2d,diagidx3d ! indices for stepping through diagnostics arrays
 #endif
       integer                                       :: i,j,k,m
@@ -1386,15 +1375,15 @@
                if (trim(MARBL_instance%surface_flux_diags%diags(m
      &              )%vertical_grid) .eq. "none") then ! 2D field
 
-                  if (wrt_bgc_diag_2d(diagidx2d)) then
-                     diag_array_2d(i,j,idx_bgc_diag_2d(diagidx2d))=
+                  if (wrt_marbl_diag_2d(diagidx2d)) then
+                     marbl_diag_2d(i,j,idx_marbl_diag_2d(diagidx2d))=
      &                    real(MARBL_instance%surface_flux_diags%diags(m)%field_2d(1))
                   end if
                   diagidx2d=diagidx2d+1
 
                else             ! 3D field
-                  if (wrt_bgc_diag_3d(diagidx3d)) then
-                     diag_array_3d(i,j,:,idx_bgc_diag_3d(diagidx3d))=
+                  if (wrt_marbl_diag_3d(diagidx3d)) then
+                     marbl_diag_3d(i,j,:,idx_marbl_diag_3d(diagidx3d))=
      &                    real(MARBL_instance%surface_flux_diags%diags(m)%field_3d(nz:1:-1,1))
                   end if
                   diagidx3d=diagidx3d+1
@@ -1573,14 +1562,14 @@
             do m=1,size(MARBL_instance%interior_tendency_diags%diags)
                if (trim(MARBL_instance%interior_tendency_diags%diags(m
      &              )%vertical_grid) .eq. "none") then ! 2D field
-                  if (wrt_bgc_diag_2d(diagidx2d)) then
-                     diag_array_2d(i,j,idx_bgc_diag_2d(diagidx2d))=
+                  if (wrt_marbl_diag_2d(diagidx2d)) then
+                     marbl_diag_2d(i,j,idx_marbl_diag_2d(diagidx2d))=
      &                    real(MARBL_instance%interior_tendency_diags%diags(m)%field_2d(1))
                   end if
                   diagidx2d=diagidx2d+1
                else             ! 3D field
-                  if (wrt_bgc_diag_3d(diagidx3d)) then
-                     diag_array_3d(i,j,:,idx_bgc_diag_3d(diagidx3d))=
+                  if (wrt_marbl_diag_3d(diagidx3d)) then
+                     marbl_diag_3d(i,j,:,idx_marbl_diag_3d(diagidx3d))=
      &                    real(MARBL_instance%interior_tendency_diags%diags(m)%field_3d(nz:1:-1,1))
                   end if
                   diagidx3d=diagidx3d+1
