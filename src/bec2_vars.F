@@ -1,56 +1,33 @@
-      module bgc_ecosys_vars
-      ! formerly bgc_ecosys_bec2.h
-
+      module bec2_vars
 #include "cppdefs.opt"
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef BIOLOGY_BEC2
 
       use param
       use tracers               ! for iPO4, etc, indices of bgc tracers (formerly in param.h)
       use roms_read_write
-#ifdef MARBL
-      use marbl_driver,only: marbldrv_configure_saved_state
-# ifdef MARBL_DIAGS
-     &     ,marbldrv_configure_diagnostics
-     &     ,nr_marbl_diag_2d,nr_marbl_diag_3d
-     &     ,diag_array_2d,diag_array_3d
-     &     ,idx_bgc_diag_2d,idx_bgc_diag_3d
-     &     ,wrt_bgc_diag_2d,wrt_bgc_diag_3d
-# endif
-#endif
+
 
       implicit none
-
-#include "bgc.opt"
-
-      ! tracer: values passed to biological model by ROMS
       ! DTRACER_MODULE: stores the tendencies of the biological tracers
       ! in the long run this should be removed, no need to copy arrays?
       ! local copies are made in ecosys_set_interior already anyway?
-      real,allocatable,dimension(:,:,:,:) :: tracer
       real,allocatable,dimension(:,:,:,:) :: DTRACER_MODULE
 
-#if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
-!
-! Diagnostic variables appearing in average and history files:
-!
-      integer :: nr_bec2_diag_2d, nr_bec2_diag_3d, nr_bec2_diag
-      integer :: nr_bec2_wrdiag_2d, nr_bec2_wrdiag_3d, nr_bec2_wrdiag
-#ifndef MARBL_DIAGS
-      parameter( nr_bec2_diag_3d=103, nr_bec2_diag_2d=37)
-#else
-      ! Just hardcoding this for now but would be nice to obtain it dynamically
-      parameter( nr_bec2_diag_3d=nr_marbl_diag_3d,
-     &           nr_bec2_diag_2d=nr_marbl_diag_2d)
-#endif
-      parameter( nr_bec2_diag=nr_bec2_diag_2d+nr_bec2_diag_3d )
-      real,allocatable,dimension(:,:,:,:),target   :: bec2_diag_3d
-      real,allocatable,dimension(:,:,:)  ,target   :: bec2_diag_2d
+C      integer, pointer :: nr_bec2_diag_2d, nr_bec2_diag_3d, nr_bec2_diag
+C      integer, pointer :: nr_bec2_wrdiag_2d, nr_bec2_wrdiag_3d, nr_bec2_wrdiag
+
+      real,dimension(:,:,:,:),pointer   :: bec2_diag_3d
+      real,dimension(:,:,:)  ,pointer   :: bec2_diag_2d
 
 ! Control BEC2_DIAG Output vars
-      logical, target :: wrt_bec2_diag_2d(nr_bec2_diag_2d)
-      logical, target :: wrt_bec2_diag_3d(nr_bec2_diag_3d)
-      integer, target :: idx_bec2_diag_2d(nr_bec2_diag_2d)
-      integer, target :: idx_bec2_diag_3d(nr_bec2_diag_3d)
+      logical, dimension(:), pointer :: wrt_bec2_diag_2d
+      logical, dimension(:), pointer :: wrt_bec2_diag_3d
+      integer, dimension(:), pointer :: idx_bec2_diag_2d
+      integer, dimension(:), pointer :: idx_bec2_diag_3d
+
+      character*72, pointer ::  vname_bec2_diag_2d(:,:)
+      character*72, pointer ::  vname_bec2_diag_3d(:,:)
+
 #if defined(BEC2_DIAG)
       ! Indices to be used in bec2_diag_3d only:
       integer :: par_idx_t, pocfluxin_idx_t,
@@ -101,38 +78,24 @@
 !      ! The IDs of the 2d vars are first, the those of the 3d.
 !      integer :: hisT_bec2_diag(nr_bec2_diag)  , avgT_bec2_diag(nr_bec2_diag),
 !     &           slavgT_bec2_diag(nr_bec2_diag), rstT_bec2_diag(nr_bec2_diag)
+      integer, parameter, public :: nr_bec2_diag_2d = 37 !TODO clean
+      integer, parameter, public :: nr_bec2_diag_3d = 103 !TODO clean
+C
 #endif /* BEC2_DIAG */
-      ! Arrays storing information (name, unit, fill value) about each diagnostic variable:
-      character*72 ::  vname_bec2_diag_2d(4,nr_bec2_diag_2d)
-      character*72 ::  vname_bec2_diag_3d(4,nr_bec2_diag_3d)
 
-      real,allocatable,dimension(:,:,:,:) :: bec2_diag_3d_avg
-      real,allocatable,dimension(:,:,:)   :: bec2_diag_2d_avg
-
-#endif /* BEC2_DIAG  || MARBL_DIAGS */
 
       real,allocatable,dimension(:,:) :: ifrac, press
 
       logical,allocatable,dimension(:,:) :: landmask
 
 
-#ifdef BIOLOGY_BEC2
+
       logical :: lsource_sink,lflux_gas_o2, lflux_gas_co2
 #if defined Ncycle_SY
      &  ,lflux_gas_n2o, lflux_gas_n2
 # endif
      &  ,liron_flux,ldust_flux
 
-!
-! Relative tracer indices for prognostic variables:
-!
-      integer :: po4_ind_t, no3_ind_t, sio3_ind_t, nh4_ind_t, fe_ind_t, dic_ind_t, alk_ind_t,
-     &        o2_ind_t, doc_ind_t, don_ind_t, dofe_ind_t, dop_ind_t, dopr_ind_t, donr_ind_t,
-     &        zooc_ind_t, spchl_ind_t, spc_ind_t, spfe_ind_t, spcaco3_ind_t, diatchl_ind_t,
-     &        diatc_ind_t, diatfe_ind_t, diatsi_ind_t, diazchl_ind_t, diazc_ind_t, diazfe_ind_t
-#ifdef Ncycle_SY
-      integer :: no2_ind_t, n2_ind_t, n2o_ind_t
-# endif
 
 !
 ! Parameters related to sinking particles:
@@ -180,121 +143,25 @@
 !! Arrays related to carbon chemistry:
 !!
       real,allocatable,dimension(:,:) :: ph_srf
-#endif /*BIOLOGY_BEC2*/
-!!
-!! Arrays related to carbon chemistry: these are in bec2_diag_2d or
-!! bec2_diag_3d if BEC2_DIAG is defined
-!!
-!#ifndef BEC2_DIAG
-!      real,allocatable,dimension(:,:)   :: ph_hist, pCO2sw, PARinc
-!      real,allocatable,dimension(:,:,:) :: PAR
-!# ifndef PCO2AIR_FORCING
-!!     otherwise defined in bgc_forces.h
-!      real :: pco2air
-!# endif
-!
-!      real,allocatable,dimension(:,:) :: ph_avg, pCO2_avg, pCO2air_avg, PARinc_avg
-!      real,allocatable,dimension(:,:,:) :: PAR_avg
-!#endif /* !BEC2_DIAG */
 
+      ! misc from porting ETH code:
+      character(len=40) tclm_name(NT) ! Taken from ETH code ncvars
+
+
+      public init_scalars_bec2
       contains
+!----------------------------------------------------------------------
 
 !----------------------------------------------------------------------
-#if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
-      subroutine find_write_bgc_diag
+      subroutine init_arrays_bec2_vars  ![
       implicit none
 
-      integer idiag
-#if defined(BEC2_DIAG)
-#include "bgc_2Ddiagnostics.opt"
-#include "bgc_3Ddiagnostics.opt"
-
-#elif defined(MARBL_DIAGS)
-
-      wrt_bgc_diag_2d => wrt_bec2_diag_2d
-      wrt_bgc_diag_3d => wrt_bec2_diag_3d
-      idx_bgc_diag_2d => idx_bec2_diag_2d
-      idx_bgc_diag_3d => idx_bec2_diag_3d
-
-
-      call marbldrv_configure_diagnostics(
-     &     vname_bec2_diag_2d,vname_bec2_diag_3d
-     & )
-#endif /* BEC2_DIAG */
-
-      nr_bec2_wrdiag_2d=0
-      do idiag=1,nr_bec2_diag_2d
-        if (wrt_bec2_diag_2d(idiag)) then
-           nr_bec2_wrdiag_2d=nr_bec2_wrdiag_2d+1
-           idx_bec2_diag_2d(idiag)=nr_bec2_wrdiag_2d
-           if (mynode == 0) then
-              write(*,'(7x,A,I3,I3,A,A)') '2D BGC diags :: ',
-     &        nr_bec2_wrdiag_2d, idiag, ' ', vname_bec2_diag_2d(1,idiag)
-           endif
-        else
-           idx_bec2_diag_2d(idiag)=0
-        endif
-      enddo
-
-      nr_bec2_wrdiag_3d=0
-      do idiag=1,nr_bec2_diag_3d
-        if (wrt_bec2_diag_3d(idiag)) then
-           nr_bec2_wrdiag_3d=nr_bec2_wrdiag_3d+1
-           idx_bec2_diag_3d(idiag)=nr_bec2_wrdiag_3d
-           if (mynode == 0) then
-              write(*,'(7x,A,I3,I3,A,A)') '3D BGC diags :: ',
-     &        nr_bec2_wrdiag_3d, idiag, ' ',vname_bec2_diag_3d(1,idiag)
-           endif
-        else
-           idx_bec2_diag_3d(idiag)=0
-        endif
-      enddo
-
-      end subroutine find_write_bgc_diag  !]
-#endif /* BEC2_DIAG || MARBL_DIAGS */
-
-!----------------------------------------------------------------------
-      subroutine init_arrays_bgc_ecosys_vars  ![
-      implicit none
-
-      allocate( tracer(GLOBAL_2D_ARRAY,N,ntrc_bio) )
       allocate( DTRACER_MODULE(GLOBAL_2D_ARRAY,N,ntrc_bio) )
 
-#if defined(BEC2_DIAG) || defined (MARBL_DIAGS)
-
-      call find_write_bgc_diag
-
-      allocate( bec2_diag_3d(GLOBAL_2D_ARRAY,N,nr_bec2_wrdiag_3d) )
-      allocate( bec2_diag_2d(GLOBAL_2D_ARRAY,nr_bec2_wrdiag_2d) )
-
-      bec2_diag_2d=0.0
-      bec2_diag_3d=0.0
-#ifdef MARBL_DIAGS
-      diag_array_2d => bec2_diag_2d
-      diag_array_3d => bec2_diag_3d
-#endif
-
-      if (wrt_avg_dia) then
-        allocate( bec2_diag_3d_avg(GLOBAL_2D_ARRAY,N,nr_bec2_wrdiag_3d) )
-        allocate( bec2_diag_2d_avg(GLOBAL_2D_ARRAY,nr_bec2_wrdiag_2d) )
-        bec2_diag_2d_avg=0.0
-        bec2_diag_3d_avg=0.0
-      endif
-
-      if (mynode == 0) then
-              write(*,'(7x,A,I3,I3)') 'BGC diags allocation :: ',
-     &        nr_bec2_wrdiag_2d, nr_bec2_wrdiag_3d
-      endif
-
-#endif /* BEC2_DIAG || MARBL_DIAGS */
-#ifdef MARBL
-!     Allocate arrays for MARBL saved state variables
-      call marbldrv_configure_saved_state
-#endif
       allocate( ifrac(GLOBAL_2D_ARRAY), press(GLOBAL_2D_ARRAY) )
 
       allocate( landmask(GLOBAL_2D_ARRAY) )
-#if defined(BIOLOGY_BEC2)
+
       allocate(P_CaCO3_sflux_out(GLOBAL_2D_ARRAY), P_CaCO3_hflux_out(GLOBAL_2D_ARRAY) )
       allocate( P_SiO2_sflux_out(GLOBAL_2D_ARRAY),  P_SiO2_hflux_out(GLOBAL_2D_ARRAY) )
       allocate(   dust_sflux_out(GLOBAL_2D_ARRAY),    dust_hflux_out(GLOBAL_2D_ARRAY) )
@@ -312,39 +179,66 @@
       allocate(        POC_remin(GLOBAL_2D_ARRAY),      P_iron_remin(GLOBAL_2D_ARRAY) )
       allocate(     P_SiO2_remin(GLOBAL_2D_ARRAY),     P_CaCO3_remin(GLOBAL_2D_ARRAY) )
 
-!      allocate(
-!     &   P_CaCO3_sflux_out, P_CaCO3_hflux_out,
-!     &   P_SiO2_sflux_out, P_SiO2_hflux_out,
-!     &   dust_sflux_out, dust_hflux_out,
-!     &   P_iron_sflux_out, P_iron_hflux_out,
-!     &   POC_sflux_out, POC_hflux_out,
-!     &   P_CaCO3_sflux_in, P_CaCO3_hflux_in,
-!     &   P_SiO2_sflux_in, P_SiO2_hflux_in,
-!     &   dust_sflux_in, dust_hflux_in,
-!     &   P_iron_sflux_in, P_iron_hflux_in,
-!     &   POC_sflux_in, POC_hflux_in,
-!     &   P_CaCO3_sed_loss, P_SiO2_sed_loss,
-!     &   P_iron_sed_loss,POC_sed_loss,
-!     &   dust_sed_loss,
-!     &   DOP_remin, DOPr_remin,
-!     &   mold=ifrac )                           ! DevinD added mold statement, to avoid
-!                                                ! repeated GLOBAL.. for every array
-!      allocate( POC_remin, P_iron_remin, P_SiO2_remin, P_CaCO3_remin, mold=ifrac )
 
       allocate( ph_srf(GLOBAL_2D_ARRAY) )
 
-!#ifndef BEC2_DIAG
-!      allocate( ph_hist, pCO2sw, PARinc, mold=ifrac )
-!      allocate( PAR(GLOBAL_2D_ARRAY,N) )
-!
-!      allocate( ph_avg, pCO2_avg, pCO2air_avg, PARinc_avg, mold=ifrac )
-!      allocate( PAR_avg(GLOBAL_2D_ARRAY,N) )
-!#endif /* !BEC2_DIAG */
-#endif /* BIOLOGY_BEC2*/
-      end subroutine init_arrays_bgc_ecosys_vars  !]
+      end subroutine init_arrays_bec2_vars  !]
 
 !----------------------------------------------------------------------
+      subroutine init_scalars_bec2()  ![
+!
+! Set initial values for  globally accessible (stored in common
+! blocks) scalar variables of the BEC model.
+!
+      use comm_vars
+      use scalars
 
-#endif /* BIOLOGY_BEC2 || MARBL  */
+      implicit none
+      integer i,j, itrc ,lvar,lenstr ! ierr, DevinD removed ierr as arguement
+      integer omp_get_num_threads
 
-      end module bgc_ecosys_vars
+#ifdef SOLVE3D
+
+# ifdef BEC2_DIAG
+
+# endif /* BEC2_DIAG */
+
+      tclm_name(iPO4) = 'po4_time'
+      tclm_name(iNO3) = 'no3_time'
+      tclm_name(iSIO3) = 'sio3_time'
+      tclm_name(iO2) = 'o2_time'
+      tclm_name(iFE) = 'fe_time'
+      tclm_name(iDIC) = 'dic_time'
+      tclm_name(iALK) = 'alk_time'
+      tclm_name(iNH4) = 'nh4_time'
+      tclm_name(iDOC) = 'doc_time'
+      tclm_name(iDOP) = 'dop_time'
+      tclm_name(iDOP) = 'dop_time'
+      tclm_name(iDOPR) = 'dop_time'
+      tclm_name(iDON) = 'don_time'
+      tclm_name(iDONR) = 'don_time'
+      tclm_name(iDOFE) = 'dofe_time'
+      tclm_name(iSPC) = 'spc_time'
+      tclm_name(iSPCHL) = 'spchl_time'
+      tclm_name(iSPCACO3) = 'spcaco3_time'
+      tclm_name(iSPFE) = 'spfe_time'
+      tclm_name(iDIATC) = 'diatc_time'
+      tclm_name(iDIATCHL) = 'diatchl_time'
+      tclm_name(iDIATSI) = 'diatsi_time'
+      tclm_name(iDIATFE) = 'diatfe_time'
+      tclm_name(iZOOC) = 'zooc_time'
+      tclm_name(iDIAZC) = 'diazc_time'
+      tclm_name(iDIAZCHL) = 'diazchl_time'
+      tclm_name(iDIAZFE) = 'diazfe_time'
+# ifdef Ncycle_SY
+      tclm_name(iNO2) = 'no2_time'
+      tclm_name(iN2) = 'n2_time'
+      tclm_name(iN2O) = 'n2o_time'
+# endif
+#endif /* SOLVE3D */
+
+      end subroutine init_scalars_bec2  !]
+! ----------------------------------------------------------------------
+C
+#endif BIOLOGY_BEC2
+      end module bec2_vars

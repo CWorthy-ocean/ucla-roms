@@ -38,7 +38,7 @@
       use cdr_frc
       use tides
       use wec_frc
-      use bgc ! , only: set_bgc_surf_frc
+      use bgc_io ! , only: set_bgc_surf_frc
       use hidden_mpi_vars
       use scalars
       use analytical
