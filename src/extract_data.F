@@ -147,6 +147,7 @@
 
       ! For vertical velocity
       allocate( Wvl(GLOBAL_2D_ARRAY,nz+1))
+
       if (diag_pflx) then
 #ifndef DIAGNOSTICS
         if (mynode == 0) then
@@ -321,7 +322,6 @@
           if (findstr(variables,'vp'  ) ) obj(iobj)%vp   = .True.
           if (findstr(variables,'bgc'    ) ) obj(iobj)%bgc     = .True.
 
-          ! DIAGNOSTICS needs to be activated and diag_pflx=.true.
           if (obj(iobj)%up.and. .not.diag_pflx) then
             print *,'Fatal ERROR: up extraction, diag_pflx is not set'
             stop
