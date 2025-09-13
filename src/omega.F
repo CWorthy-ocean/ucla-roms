@@ -43,7 +43,7 @@
       use scalars
 
       implicit none
-      integer istr,iend,jstr,jend, i,j,k
+      integer istr,iend,jstr,jend, i,j,k, icdr, cidx
       real CX(PRIVATE_1D_SCRATCH_ARRAY,0:N),  dtau, c2d,dh, cw, cff,
      &    wrk(PRIVATE_1D_SCRATCH_ARRAY),      cw_min,cw_max,cw_max2
       real, parameter :: cu_min=0.6D0, cu_max=1.0D0,

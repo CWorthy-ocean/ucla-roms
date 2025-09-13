@@ -40,7 +40,7 @@ c--# define CONST_TRACERS
 #  endif
 # endif
      &                                                             )
-      end
+      end subroutine step3d_t
 
       subroutine step3d_t_iso_tile( istr,iend,jstr,jend, WC,FC,CF,DC
      &                                                 ,  FX,FE, wrk1
@@ -55,7 +55,8 @@ c--# define CONST_TRACERS
 
       use param
       use pipe_frc
-      use cdr_frc
+      use cdr_frc, only: cdr_nprf, cdr_icdr,
+     &     cdr_source, cdr_iloc, cdr_jloc, cdr_flx, cdr_prf
       use river_frc
       use surf_flux, only: stflx, srflx
       use tracers
@@ -70,7 +71,7 @@ c--# define CONST_TRACERS
       use scalars
 
       implicit none
-      integer istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k!, td
+      integer icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k!, td
       real, dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: WC,FC,CF,DC
       real, dimension(PRIVATE_2D_SCRATCH_ARRAY)     :: FX,FE, wrk1
 # ifdef ADV_ISONEUTRAL
@@ -829,6 +830,9 @@ c**               cff=1./(z_r(i,j,k+1)-z_r(i,j,k))
             icdr = cdr_icdr(cidx)
             i = cdr_iloc(cidx)
             j = cdr_jloc(cidx)
+            if (icdr==0) then
+               print *, "LOST AT LOCATION",mynode,i,j,cidx,cdr_nprf
+            end if
             do k=1,nz
               t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)
      &           +dt*pm(i,j)*pn(i,j)*
@@ -1094,7 +1098,7 @@ c??         enddo
         call exchange_xxx( t(:,:,:,nnew,nt) )
       endif
 # endif
-      end
+      end subroutine step3d_t_iso_tile
 
       subroutine check_step_t_switches(ierr)
 
@@ -1123,8 +1127,8 @@ c??         enddo
      &  'Insufficient length of string "cpps" in file "strings".',
      &        'Increase parameter "max_opt_size" it and recompile.'
       ierr=ierr+1
-      end
+      end subroutine check_step_t_switches
 #else
       subroutine step3d_t_empty
-      end
+      end subroutine step3d_t_empty
 #endif  /* SOLVE3D */
