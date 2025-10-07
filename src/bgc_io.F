@@ -17,6 +17,7 @@
       use marbl_driver
 #endif
       use bgc_shared_vars
+      use hidden_mpi_vars, only: inode,jnode
       use nc_read_write
       use roms_read_write
       use netcdf

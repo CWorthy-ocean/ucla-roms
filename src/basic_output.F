@@ -7,6 +7,7 @@
 
       use param
       use netcdf
+      use dimensions
       use nc_read_write
       use roms_read_write
       use sponge_tune

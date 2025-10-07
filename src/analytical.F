@@ -216,6 +216,7 @@
       use surf_flux !, only: sustr,svstr
       use grid
       use scalars
+      use hidden_mpi_vars, only : inode,jnode
 
       implicit none
       integer istr,iend,jstr,jend, i,j
@@ -242,6 +243,7 @@
       use surf_flux, only: srflx
       use grid
       use scalars
+      use hidden_mpi_vars
 
       implicit none
       integer istr,iend,jstr,jend, i,j
@@ -263,6 +265,7 @@
       use surf_flux, only: stflx
       use grid
       use scalars
+      use hidden_mpi_vars, only: inode, jnode
 
       implicit none
       integer istr,iend,jstr,jend, itrc, i,j
