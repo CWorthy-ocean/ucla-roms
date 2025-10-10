@@ -112,6 +112,21 @@ c---#define BIO_1ST_USTREAM_TEST
 #endif
             enddo           !--> discard curv,grad, keep FX
           enddo
+!!!
+#ifdef UPSCALING
+          if (.not.west_exchng) then
+            do j=jstr,jend
+              FX(istr,j) = FX(istr,j) + 0.5*(t(istr-1,j,k,nrhs,itrc)-t(istr,j,k,nrhs,itrc))
+     &          * max(FlxU(istr,j,k),0.0)
+            enddo
+          endif
+          if (.not.east_exchng) then
+            do j=jstr,jend
+              FX(iend+1,j) = FX(iend+1,j) + 0.5*(t(iend+1,j,k,nrhs,itrc)-t(iend,j,k,nrhs,itrc))
+     &          * min(FlxU(iend+1,j,k),0.0)
+            enddo
+          endif
+#endif
 
 #ifndef NS_PERIODIC
           if (SOUTHERN_EDGE) then
@@ -183,6 +198,22 @@ c---#define BIO_1ST_USTREAM_TEST
 #endif
             enddo
           enddo             !--> discard curv,grad, keep FE
+!!!
+#ifdef UPSCALING
+          if (.not.south_exchng) then
+            do i=istr,iend
+              FE(i,jstr) = FE(i,jstr) + 0.5*(t(i,jstr-1,k,nrhs,itrc)-t(i,jstr,k,nrhs,itrc))
+     &          * max(FlxV(i,jstr,k),0.0)
+            enddo
+          endif
+          if (.not.north_exchng) then
+            do i=istr,iend
+              FE(i,jend+1) = FE(i,jend+1) + 0.5*(t(i,jend+1,k,nrhs,itrc)-t(i,jend,k,nrhs,itrc))
+     &          * min(FlxV(i,jend+1,k),0.0)
+            enddo
+          endif
+#endif
+
 #ifdef BIO_1ST_USTREAM_TEST
         endif  !<-- itrc>isalt, bio-components only.
 #endif

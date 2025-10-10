@@ -69,6 +69,9 @@ c--# define CONST_TRACERS
       use mixing
       use ocean_vars
       use scalars
+#ifdef UPSCALING
+      use upscale_output
+#endif
 
       implicit none
       integer icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k!, td
@@ -183,6 +186,12 @@ c--#  define ntdf nrhs
      &                                                           )
               enddo
             enddo                 !-->  discard FX,FE
+
+#if defined MARBL && defined UPSCALING
+        if (do_upscale) then
+          call calc_forcing_rates(itrc,k,FX,FE,istr,iend,jstr,jend)
+        endif
+#endif
 
 # ifdef DIAGNOSTICS
 #  ifdef ADV_ISONEUTRAL
@@ -824,7 +833,7 @@ c**               cff=1./(z_r(i,j,k+1)-z_r(i,j,k))
 
         if (cdr_source) then
           ! Loop over cdr release locations in this subdomain
-          ! The global sum over all cdr_prf should be 1.
+          ! The global sum over all cdr_prf for each tracer should be 1.
           ! cdr_flux unit is [C/s]
           do cidx=1,cdr_nprf
             icdr = cdr_icdr(cidx)
@@ -836,7 +845,7 @@ c**               cff=1./(z_r(i,j,k+1)-z_r(i,j,k))
             do k=1,nz
               t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)
      &           +dt*pm(i,j)*pn(i,j)*
-     &            cdr_prf(cidx,k)*cdr_flx(icdr,itrc)
+     &            cdr_prf(cidx,itrc,k)*cdr_flx(icdr,itrc)
             enddo
           enddo
         endif
@@ -1073,12 +1082,20 @@ c??         enddo
 #endif
         enddo      !<-- j
 
+      enddo     !<-- itrc
+
+! Need to calculate/save additionality before the perturbation at the boundaries
+! is zeroed out in t3db_tile
+#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
+      if (do_upscale) call wrt_upscale
+#endif
+
+      do itrc=1,nt
         call t3dbc_tile (istr,iend,jstr,jend, itrc, wrk1)
 # ifdef DIAGNOSTICS
 !       if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag)
 !    &    call set_diags_t_bc(itrc,td)
 # endif
-
       enddo     !<-- itrc
 
 # if defined(MARBL)
