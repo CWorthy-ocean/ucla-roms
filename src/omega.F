@@ -70,7 +70,9 @@ c**     dtau=(1.-1./6.)*dt
           j = cdr_iloc(cidx)
           do k=1,nz
             Wi(i,j,k)=Wi(i,j,k-1)
-     &         + cdr_vol(icdr)*cdr_prf(cidx,k)
+               ! Here we will assume that the vertical distribution of the CDR volume flux
+               ! is the same as the vertical distribution of the heat flux.
+     &         + cdr_vol(icdr)*cdr_prf(cidx,1,k)
           enddo
         enddo
       endif

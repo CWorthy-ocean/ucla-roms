@@ -319,13 +319,13 @@
         j = cdr_jloc(cidx)
         do k=1,nz
           ALK_source(i,j,k) = ALK_source(i,j,k)
-     &      +cdr_prf(cidx,k)*cdr_flx(icdr,iALK)
+     &      +cdr_prf(cidx,iALK,k)*cdr_flx(icdr,iALK)
           ALK_alt_source(i,j,k) = ALK_alt_source(i,j,k)
-     &      + cdr_prf(cidx,k)*cdr_flx(icdr,iALK_alt)
+     &      + cdr_prf(cidx,iALK_alt,k)*cdr_flx(icdr,iALK_alt)
           DIC_source(i,j,k) = DIC_source(i,j,k)
-     &      + cdr_prf(cidx,k)*cdr_flx(icdr,iDIC)
+     &      + cdr_prf(cidx,iDIC,k)*cdr_flx(icdr,iDIC)
           DIC_alt_source(i,j,k) = DIC_alt_source(i,j,k)
-     &      + cdr_prf(cidx,k)*cdr_flx(icdr,iDIC_alt)
+     &      + cdr_prf(cidx,iDIC_alt,k)*cdr_flx(icdr,iDIC_alt)
         enddo
       enddo
 

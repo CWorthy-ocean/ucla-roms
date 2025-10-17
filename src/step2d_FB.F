@@ -143,7 +143,7 @@
           j = cdr_jloc(cidx)
 
           zeta(i,j,kstp)=zeta(i,j,kstp) + dtfast*pm(i,j)*pn(i,j)
-     &               *cdr_vol(icdr)*sum(cdr_prf(cidx,:))
+     &               *cdr_vol(icdr)*sum(cdr_prf(cidx,1,:))
         enddo
       endif
       do j=jstrV-1,jend !! why are these from ...-1?

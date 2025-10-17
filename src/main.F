@@ -98,6 +98,7 @@ C$OMP END MASTER                         ! is in uniform state]. This
       use boundary
       use particles
       use cstar_output
+      use upscale_output
       use random_output
       use cstar_output
       use cdr_frc
@@ -209,9 +210,6 @@ CR      write(*,*) ' -6' MYID
       call ecosys2_init
 # endif /*BIOLOGY_BEC2*/
 
-      ! we should have a grid and z_r by now
-      if (cdr_source) call init_cdr_frc
-
 #ifdef ANA_INITIAL
                                     ! Set initial conditions for
       call set_forces               ! model prognostic variables,
@@ -271,6 +269,9 @@ CR      write(*,*)  ' -2' MYID
         call init_particles
       endif
 
+      ! we should have a grid and z_r by now
+!      if (cdr_source) call init_cdr_frc
+
 #if defined SPONGE
       call set_nudgcof(0)
 #endif
@@ -283,6 +284,7 @@ CR      write(*,*)  ' -2' MYID
 #endif
       if (do_random) call init_random
       if (do_cstar)  call init_cstar
+      if (do_upscale) call init_upscale
 
       if (may_day_flag /=0 ) goto 99     !-->  EXIT
 
