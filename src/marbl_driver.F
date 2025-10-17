@@ -760,7 +760,8 @@
 
       use netcdf
       use nc_read_write
-      use roms_read_write, only: dn_xr,dn_yr,dn_zr,dn_tm,xi_rho,eta_rho
+      use roms_read_write, only: dn_xr,dn_yr,dn_zr,dn_tm
+      use dimensions, only: xi_rho, eta_rho
       use param, only : N
 
       implicit none

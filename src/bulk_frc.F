@@ -6,6 +6,7 @@
       use dimensions
       use mpi_exchanges
       use roms_read_write
+      use hidden_mpi_vars, only : inode,jnode
 
       implicit none
 

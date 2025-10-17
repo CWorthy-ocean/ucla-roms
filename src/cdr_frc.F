@@ -32,9 +32,7 @@
       real   ,public,allocatable,dimension(:,:) :: cdr_prf      ! cdr fractions
       integer,public,allocatable,dimension(:)   :: cdr_iloc     ! cdr local i location
       integer,public,allocatable,dimension(:)   :: cdr_jloc     ! cdr local j location
-      real   ,public,allocatable,dimension(:)   :: cdr_icdr     ! cdr release number
-
-      integer,public  :: icdr,cidx !   index for looping through cdr locations
+      integer,public,allocatable,dimension(:)   :: cdr_icdr     ! cdr release number
 
       real,public,dimension(ncdr)           :: cdr_vol      ! cdr volume
       real,public,dimension(ncdr,nt)        :: cdr_flx      ! cdr tracer flux
@@ -49,8 +47,6 @@
       character(len=11) :: cdr_vol_name = 'cdr_volume'!! stored in a forcing file
       character(len=11) :: cdr_trc_name = 'cdr_tracer'!! stored in a forcing file
       character(len=9)  :: cdr_tim_name = 'cdr_time'  !! stored in a forcing file
-!     character(len=5)  :: ncdr_dim_name = 'ncdr'      !! dimension name for number of cdrs in file
-!     character(len=8)  :: ntrc_dim_name = 'ntracers'   !! dimension name for number of tracers in file
 
 
       logical :: init_cdr_done = .false.
@@ -70,7 +66,7 @@
       implicit none
 
       ! local
-      integer :: i,j
+      integer :: i,j, icdr
 
       if (.not. init_cdr_done) call init_cdr_frc
 
@@ -110,18 +106,19 @@
       implicit none
 
       ! local
-      integer :: ierr,ncid,i,j,k
+      integer :: ierr,ncid,i,j,k, icdr, cidx, cidx_start
+      logical, dimension(ncdr)  :: bad_releases
+      integer, dimension(2) :: lmi
       real :: vint,arg
       real :: local_int,global_int
       real, dimension(nz) :: arg_nz
       real :: local_min_val
-      integer, dimension(2) :: lmi
       real, dimension(2) :: local_minloc
       real, dimension(2) :: global_minloc
       real,dimension(:,:)  ,allocatable :: dist
       real,dimension(:,:,:),allocatable :: frac
-      integer :: cidx_start
 
+      bad_releases(:) = .false.
       call init_arrays_cdr
 
       if (cdr_analytical) then
@@ -132,7 +129,8 @@
 
         ierr=nf90_open(cdr_file, nf90_nowrite, ncid)
         if(ierr/=0)
-     &      call handle_ierr(ierr,'init_cdr_frc:: Cant open cdr forcing file')
+     &      call handle_ierr(ierr,
+     &       'init_cdr_frc:: Cant open cdr forcing file')
 
         call ncread(ncid,cdr_loc_lon,cdr_lon)
         call ncread(ncid,cdr_loc_lat,cdr_lat)
@@ -174,9 +172,6 @@
             print *, 'at point', lmi
             print *, 'The intended release location was Lon:', cdr_lon(icdr), 'Lat:', cdr_lat(icdr)
             print *, 'The release will take place at Lon:', lonr(lmi(1),lmi(2)), 'Lat:', latr(lmi(1),lmi(2))
-            if ((rmask(lmi(1),lmi(2))==0) .and. (cdr_hsc(icdr) == 0)) then
-              error stop 'ERROR: single-point CDR release requested on a land point'
-            endif
           endif
 
 
@@ -205,12 +200,34 @@
                 frac(lmi(1),lmi(2),icdr) = 1
                 cidx = cidx+1
               endif
-            endif
-
+           endif
           endif ! cdr_hsc(icdr) = 0
-          cidx_start = cidx
 
-        enddo ! icdr
+          ! Check for releases on land
+          if ((frac(lmi(1),lmi(2),icdr) ==1 ) .and.
+     &         (rmask(lmi(1),lmi(2))==0)) then
+             bad_releases(icdr) = .true.
+          end if
+
+          cidx_start = cidx
+       enddo                    ! icdr
+
+! Report any releases on land and stop
+       call MPI_Allreduce(MPI_IN_PLACE, bad_releases, ncdr, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
+
+!     Now every rank has the same bad_releases array
+       if (any(bad_releases)) then
+          if (mynode == 0) then
+             print *, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+             print *, "ERROR: the following CDR releases are on land"
+             print *, "(Note 1-indexing):",
+     &            pack([(i,i=1,ncdr)], bad_releases)
+             print *, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+             call MPI_Abort(MPI_COMM_WORLD, 1, ierr)
+          end if
+          call MPI_Barrier(MPI_COMM_WORLD, ierr)
+       end if
+
 
         cdr_nprf = cidx
 
