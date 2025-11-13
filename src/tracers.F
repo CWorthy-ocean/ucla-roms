@@ -79,12 +79,10 @@
       contains
 
 ! ----------------------------------------------------------------------
-      subroutine set_surf_tracer_flx(istr,iend,jstr,jend) ![ set tracer flux at surface
+      subroutine set_surf_tracer_flx ![
+      ! set tracer flux at surface
 
       implicit none
-
-      ! input/outputs
-      integer,intent(in) :: istr,iend,jstr,jend
 
       ! local
       integer           :: itrc       ! tracer number for loop index
@@ -94,7 +92,7 @@
 
         if (t_ana_frc(itrc)==0) then ! Read in forcing data (not analytical)
 
-          call set_frc_data(nc_t(itrc), stflx(i0:i1,j0:j1,itrc) )
+          call set_frc_data(nc_t(itrc), stflx(:,:,itrc),'r' )
 
         elseif(t_ana_frc(itrc)==1) then ! Analytical forcing
 
