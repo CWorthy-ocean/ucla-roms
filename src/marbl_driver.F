@@ -52,6 +52,9 @@
 #ifdef NHY_FORCING
       use bgc_forces                  , only: nhy
 #endif
+#ifdef FESEDFLUX_FORCING
+      use bgc_forces                  , only: fesedflux
+#endif
       use ocean_vars                  , only: Hz, z_r, z_w
 
 !     ----------------------------------------------------------------------
@@ -89,7 +92,7 @@
 #ifdef MARBL_DIAGS
 !     Keeping count of diagnostics:
 !     These are the amount to allocate in ROMS...
-      integer, parameter, public :: nr_marbl_diag_2d = 179
+      integer, parameter, public :: nr_marbl_diag_2d = 180
       integer, parameter, public :: nr_marbl_diag_3d = 164
 !     ... and these are the amount supplied by MARBL (to be counted up)
       integer, public :: diag_cnt_sf_2d  ! Number of MARBL 2D surface flux diagnostic vars
@@ -106,8 +109,8 @@
       integer, dimension(:), pointer :: idx_marbl_diag_2d
       integer, dimension(:), pointer :: idx_marbl_diag_3d
 
-      real,dimension(:,:,:,:),pointer :: marbl_diag_3d ! points to bec2_diag_3d
-      real,dimension(:,:,:)  ,pointer :: marbl_diag_2d ! points to bec2_diag_2d
+      real,dimension(:,:,:,:),pointer :: marbl_diag_3d ! points to bgc_diag_3d
+      real,dimension(:,:,:)  ,pointer :: marbl_diag_2d ! points to bgc_diag_2d
 
 #endif
 !     Saved state variables: (mimicking structure of bgc_shared_vars for bec2_diag arrays)
@@ -287,7 +290,19 @@
          t_tname(itot)=''
          wrt_t     (itot)=.false.
          wrt_t_avg (itot)=.false.
-         t_ana_frc( itot)=1
+!         t_ana_frc( itot)=1
+!     Apply virtual fluxes for the carbon system
+         if ( trim(t_vname(itot))=="DIC" ) then
+            t_ana_frc( itot)=2
+         elseif ( trim(t_vname(itot))=="DIC_ALT_CO2" ) then
+            t_ana_frc( itot)=2
+         elseif ( trim(t_vname(itot))=="ALK" ) then
+            t_ana_frc( itot)=2
+         elseif ( trim(t_vname(itot))=="ALK_ALT_CO2" ) then
+            t_ana_frc( itot)=2
+         else
+            t_ana_frc( itot)=1
+         endif
 
       end do
       ! Read user file to determine which tracers to write out
@@ -1470,6 +1485,9 @@
 ! iron flux
             if (fesedflux_ind > 0) then
                MARBL_instance%interior_tendency_forcings(fesedflux_ind)%field_1d(1,:)=0.
+#ifdef FESEDFLUX_FORCING
+               MARBL_instance%interior_tendency_forcings(fesedflux_ind)%field_1d(1,nz)=fesedflux(i,j)
+#endif
                if (print_values) call if_test_print(fesedflux_ind,i,j)
             end if
 

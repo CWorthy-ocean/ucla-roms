@@ -54,13 +54,20 @@
 
       ! Sea-surface temperature (SST) and salinity (SSS) data for restoring
       real,public,allocatable,dimension(:,:) :: sst
-      real,public :: dSSTdt
       real,public,allocatable,dimension(:,:) :: sss
-      real,public :: dSSSdt                                ! input units (cm/day)
+
+      ! Sea-surface DIC (sDIC) and ALK (sALK) data for restoring
+      real,public,allocatable,dimension(:,:) :: sDIC
+      real,public,allocatable,dimension(:,:) :: sALK
+!      real,public :: dCdt                                  ! input units (cm/day)
+
+      ! Surface fluxes of restoring tracer type variables (rho-points)
+      real,public,allocatable,dimension(:,:,:) :: rstflx
+      real,allocatable,dimension(:,:,:):: rstflx_avg
 
       ! Netcdf outputting:
-      real    :: output_time = 0
-      integer :: record = nrpf     ! to trigger the first file creation
+      integer            :: output_time = 0
+      integer            :: record = nrpf     ! to trigger the first file creation
       integer :: ncid = -1, prev_fill_mode
 
       ! Public functions
@@ -76,6 +83,7 @@
       implicit none
 
       ! local
+      character(len=30) :: string
       allocate(  uwnd  (GLOBAL_2D_ARRAY)    );
       allocate(  vwnd  (GLOBAL_2D_ARRAY)    );
       allocate( sustr  (GLOBAL_2D_ARRAY)    ); sustr=init
@@ -88,13 +96,40 @@
 #if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
       allocate( sss(GLOBAL_2D_ARRAY)        ); sss=init
       allocate(nc_sss%vdata(GLOBAL_2D_ARRAY,2) )
+! NOTE unclear if these blocks belong here
+      call store_string_att(surf_forcing_strings,'<surf_flux.F>')
+      call store_string_att(surf_forcing_strings,'dSSSdt=')
+      write (string, "(F9.6)") dSSSdt*(100.*day2sec)                 ! convert number to string...
+      call store_string_att(surf_forcing_strings,string)
+      call store_string_att(surf_forcing_strings,'dSSSdt_units')
+      call store_string_att(surf_forcing_strings,'cm/day')
+#endif
 
+#if defined CFLX_CORR && defined MARBL
+      allocate( sDIC(GLOBAL_2D_ARRAY)        ); sDIC=init
+      allocate(nc_sDIC%vdata(GLOBAL_2D_ARRAY,2) )
+      allocate( sALK(GLOBAL_2D_ARRAY)        ); sALK=init
+      allocate(nc_sALK%vdata(GLOBAL_2D_ARRAY,2) )
+
+      call store_string_att(surf_forcing_strings,'<surf_flux.F>')
+      call store_string_att(surf_forcing_strings,'dCdt=')
+      write (string, "(F9.6)") dCdt*(100.*day2sec)                 ! convert number to string...
+      call store_string_att(surf_forcing_strings,string)
+      call store_string_att(surf_forcing_strings,'dCdt_units')
+      call store_string_att(surf_forcing_strings,'cm/day')
 #endif
 
       if (sflx_avg) then
         allocate(sustr_avg(1:i1,j0:j1))
         allocate(svstr_avg(i0:i1,1:j1))
         allocate(stflx_avg(i0:i1,j0:j1,nt))
+      endif
+
+      if (wrt_rstflx) then
+         allocate( rstflx  (GLOBAL_2D_ARRAY,nt) ); rstflx=init
+         if (sflx_avg) then
+            allocate( rstflx_avg(i0:i1,j0:j1,nt))
+         endif
       endif
 
       end subroutine init_arrays_surf_flx  !]
@@ -113,6 +148,13 @@
 #if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
       ! Sea-surface salinity (SSS) data
       call set_frc_data(nc_sss,sss,'r')
+#endif
+
+#if defined CFLX_CORR && defined MARBL
+      ! Sea-surface DIC
+      call set_frc_data(nc_sDIC,sDIC,'r')
+      ! Sea-surface ALK
+      call set_frc_data(nc_sALK,sALK,'r')
 #endif
 
       end subroutine set_surf_field_corr  !]
@@ -134,6 +176,10 @@
         stflx_avg = stflx_avg*(1-coef)+stflx(i0:i1,j0:j1,:)*coef
       endif
 
+      if (wrt_rstflx) then  ! surface tracer fluxes
+        rstflx_avg = rstflx_avg*(1-coef)+rstflx(i0:i1,j0:j1,:)*coef
+      endif
+
       end subroutine calc_sflx_avg !]
 !----------------------------------------------------------------------
       subroutine create_sflx_vars(ncid)  ![
@@ -143,7 +189,8 @@
       ! input
       integer,intent(in) :: ncid
       ! local
-      integer           :: ierr, varid
+      integer           :: ierr, varid, itrc
+      character(len=20) :: varname
 
       ! output surface flux as per Eq.Sys. units m^2/s^2 not N/m^2
       if (wrt_smflx) then
@@ -172,6 +219,29 @@
      &                            'Surface Salinity flux')
           ierr = nf90_put_att(ncid,varid,'units','PSU m/s')
         endif
+        do itrc = 1, nt
+          if (trc2diag(itrc)==1) then
+          write(varname,'("SRFFLX_tracer",I2.2)') itrc
+          varid = nccreate(ncid,varname,
+     &           (/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/))
+          ierr = nf90_put_att(ncid,varid,'long_name',
+     &                                'Surface virtual tracer flux')
+          ierr = nf90_put_att(ncid,varid,'units','tracer units m/s')
+          endif
+        enddo
+      endif
+
+      if (wrt_rstflx) then
+        do itrc = 1, nt
+          if (rst2diag(itrc)==1) then
+          write(varname,'("RSTFLX_tracer",I2.2)') itrc
+          varid = nccreate(ncid,varname,
+     &           (/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/))
+          ierr = nf90_put_att(ncid,varid,'long_name',
+     &                'Surface restoring flux (included in SRFFLX)')
+          ierr = nf90_put_att(ncid,varid,'units','tracer units m/s')
+          endif
+        enddo
       endif
 
       end subroutine create_sflx_vars  !]
@@ -186,7 +256,8 @@
       ! local
       integer,dimension(4)   :: start
       character(len=99),save :: fname
-      integer                :: ierr
+      integer                :: ierr, itrc
+      character(len=20)      :: varname
 
       output_time = output_time + dt
 
@@ -218,6 +289,20 @@
             if (salinity) then
              call ncwrite(ncid,'ssflx',stflx_avg(:,:,2),start)
             endif
+            do itrc = 1, nt
+             if (trc2diag(itrc)==1) then
+             write(varname,'("SRFFLX_tracer",I2.2)') itrc
+             call ncwrite(ncid,varname,stflx_avg(:,:,itrc),start)
+             endif
+            enddo
+          endif
+          if (wrt_rstflx) then
+            do itrc = 1, nt
+             if (rst2diag(itrc)==1) then
+             write(varname,'("RSTFLX_tracer",I2.2)') itrc
+             call ncwrite(ncid,varname,rstflx_avg(:,:,itrc),start)
+             endif
+            enddo
           endif
         else  ! snapshots
           if (wrt_smflx) then
@@ -229,6 +314,20 @@
             if (salinity) then
              call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,2),start)
             endif
+            do itrc = 1, nt
+             if (trc2diag(itrc)==1) then
+             write(varname,'("SRFFLX_tracer",I2.2)') itrc
+             call ncwrite(ncid,varname,stflx(:,:,itrc),start)
+             endif
+            enddo
+          endif
+          if (wrt_rstflx) then
+            do itrc = 1, nt
+             if (rst2diag(itrc)==1) then
+             write(varname,'("RSTFLX_tracer",I2.2)') itrc
+             call ncwrite(ncid,varname,rstflx(:,:,itrc),start)
+             endif
+            enddo
           endif
         endif
         ierr=nf90_close(ncid)

@@ -44,7 +44,7 @@
       logical, dimension(nt), public      :: wrt_t_avg               ! t/f output avg tracer.
       logical, dimension(nt), public      :: wrt_t_dia = .false.     ! t/f diagnostics tracer.
 
-      integer, dimension(nt)              :: t_ana_frc               ! whether surface flux is read in (0), or analytical (1)
+      integer, public, dimension(nt)      :: t_ana_frc               ! whether surface flux is read in (0), or analytical (1), or computed as a virtual flux in bulk_frc (2)
 
       !-- Tracer netcdf variables as arrays/matrices of 'NT' length:
       ! Final tracer concentrations live in 't' in ocean3d
@@ -79,10 +79,12 @@
       contains
 
 ! ----------------------------------------------------------------------
-      subroutine set_surf_tracer_flx ![
-      ! set tracer flux at surface
+      subroutine set_surf_tracer_flx(istr,iend,jstr,jend) ![ set tracer flux at surface
 
       implicit none
+
+      ! input/outputs
+      integer,intent(in) :: istr,iend,jstr,jend
 
       ! local
       integer           :: itrc       ! tracer number for loop index
@@ -92,11 +94,15 @@
 
         if (t_ana_frc(itrc)==0) then ! Read in forcing data (not analytical)
 
-          call set_frc_data(nc_t(itrc), stflx(:,:,itrc),'r' )
+          call set_frc_data(nc_t(itrc), stflx(i0:i1,j0:j1,itrc) )
 
         elseif(t_ana_frc(itrc)==1) then ! Analytical forcing
 
           call set_ana_surf_tracer_flx(itrc)
+
+        elseif(t_ana_frc(itrc)==2) then   ! bulk forcing
+
+           ! do nothing, this is done in bulk_frc
 
         else
 
@@ -109,7 +115,8 @@
 
         endif ! if(t_ana_frc(itrc)==0)
 
-!       call exchange_xxx(stflx)
+! NOTE: PD why was this commented on main? relevant change?
+        call exchange_xxx(stflx)
 
       enddo
 
@@ -318,6 +325,7 @@
             print *,'SHORT NAME: ', t_vname(itrc)
             print *,'LONG NAME: ', t_lname(itrc)
             print *,'UNITS: ', t_units(itrc)
+            print *,'FRC : ', t_ana_frc(itrc)
             print *, '-----------'
          end do
       end if
