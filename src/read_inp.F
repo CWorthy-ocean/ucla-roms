@@ -68,6 +68,9 @@
 #endif
       if (ierr /= 0) return
       mpi_master_only call print_switches
+!     Git hash
+      mpi_master_only write(*,'(/1x,2A)') "Git hash: ", git_hash
+      call print_jobid
 
 ! Use pre-set default startup filename for known applications, or
 ! get it as an argument from command line via iargc-getarg (override
@@ -119,7 +122,6 @@
 
 ! Read input parameters according to the keyword:
 !----- ----- ---------- --------- --- ---- -------
-
 ! Title
 
         if (keyword(1:kwlen) == 'title') then
@@ -636,4 +638,42 @@ c**       write(*,'(1x,A,1x,A)') 'Recognized: ', kwds(is:ie-1)
       enddo
       end
 
+!***********************************************************************
+!     >  Print SLURM or PBS job ID information (master-only write).
+!     >
+!     >  Retrieves and prints the job ID and, if applicable, the array task
+!     >  index for SLURM or PBS/Torque jobs. Output uses `mpi_master_only write`.
+!***********************************************************************
+      subroutine print_jobid()
 
+      use param
+
+      implicit none
+
+      character(len=100) :: jobid, taskid
+      integer            :: len1, len2, stat1, stat2
+
+! --- SLURM ---
+      call get_environment_variable('SLURM_JOB_ID', jobid, len1, stat1)
+      call get_environment_variable('SLURM_ARRAY_TASK_ID', taskid, len2, stat2)
+
+      if (stat1 == 0) then
+         mpi_master_only write(*,'(A,1X,A)') 'SLURM Job ID:',        trim(jobid(1:len1))
+         if (stat2 == 0) then
+            mpi_master_only write(*,'(A,1X,A)') 'SLURM Array Task ID:', trim(taskid(1:len2))
+         end if
+         return
+      end if
+! --- PBS ---
+      call get_environment_variable('PBS_JOBID', jobid, len1, stat1)
+      call get_environment_variable('PBS_ARRAY_INDEX', taskid, len2, stat2)
+
+      if (stat1 == 0) then
+         mpi_master_only write(*,'(A,1X,A)') 'PBS Job ID:',          trim(jobid(1:len1))
+          if (stat2 == 0) then
+             mpi_master_only write(*,'(A,1X,A)') 'PBS Array Index:',  trim(taskid(1:len2))
+          end if
+          return
+      end if
+         mpi_master_only write(*,'(A)') 'No SLURM or PBS job ID found.'
+      end subroutine print_jobid

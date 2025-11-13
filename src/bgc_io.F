@@ -55,22 +55,6 @@
 
       contains
 
-      integer function bgc_idx(t_idx)
-      ! Takes a tracer array tracer index t(:,:,:,:,t_idx) and returns
-      ! the corresponding bgc tracer index.
-      ! Were previously harcoded individually as, e.g.
-      ! po4_ind_t     = iPO4-iTandS-nt_passive
-      integer, intent(in) :: t_idx
-      bgc_idx = t_idx-iTandS-nt_passive
-
-      end function bgc_idx
-
-      real function t_idx(b_idx)
-      ! Takes a bgc tracer index (e.g. dtracer_module(:,:,:,b_idx)) and
-      ! returns the corresponding tracer array index t(:,:,:,:,t_idx)
-      integer, intent(in) ::b_idx
-      t_idx = b_idx+iTandS+nt_passive
-      end function t_idx
 ! ----------------------------------------------------------------------
       subroutine set_bgc_surf_frc(istr,iend,jstr,jend)  ![
 
