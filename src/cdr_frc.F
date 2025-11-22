@@ -252,7 +252,7 @@
 
           ! Handler for single-point release
           if ((cdr_hsc(icdr) == 0) .or. (depth_profiles=='T')) then
-            if (mynode == global_minloc(2)) then
+            if (mynode == int(global_minloc(2))) then
               frac(lmi(1),lmi(2),icdr) = 1
               cidx = cidx+1
             endif
@@ -427,13 +427,22 @@
           if (depth_profiles=='F') then
           cdr_nloc(icdr) = cidx
 
-          local_int = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),:,:))
+          ! Do this once for ALK and again for DIC
+          local_int = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:))
           call MPI_Reduce(local_int,global_int,1,
      %           mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
           call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
 
-          cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),:,:) =
-     %        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),:,:)/global_int
+          cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:) =
+     %        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:)/global_int
+
+          local_int = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:))
+          call MPI_Reduce(local_int,global_int,1,
+     %           mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
+          call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
+
+          cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:) =
+     %        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:)/global_int
           endif
 
         enddo
