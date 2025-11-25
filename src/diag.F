@@ -60,12 +60,14 @@ c--#define MAX_BY_VERT_CFL_ONLY
       use ocean_vars
       use scalars
       use mpi
+      use timers, only: tstart
 
       implicit none
 
 #include "diag.opt"
 
       integer istr,iend,jstr,jend
+      real :: walltime0 = 0.
       real, dimension(PRIVATE_2D_SCRATCH_ARRAY) :: dVol, ke, pe
 #ifdef SOLVE3D
      &                             , ke2b, ke3bc, kesrf, ub, vb
@@ -99,7 +101,7 @@ c--#define MAX_BY_VERT_CFL_ONLY
 #ifdef SUM_BY_PAIRS
       integer isize,itg, js,jsize,jtg
 #endif
-      integer, parameter :: max_check_line=128
+      integer, parameter :: max_check_line=512
       character(len=max_check_line) check_line
       character(len=18) tstring
 
@@ -508,32 +510,37 @@ c**     write(*,*) 'received avke =', buff(3)/volume
 # endif
 #endif
 
-
 #ifdef SOLVE3D
 # if defined MAX_ADV_CFL
+
+          !WALLTIME0 is MPI_Wtime() on node 0
+          walltime0 = MPI_Wtime()-tstart
           if (first_time==0) then
             first_time=1
             if (code_check) then
               write(*,3) 'STEP',  'KINETIC_ENRG',                  ! Special for code checks
-     &                'BAROTR_KE', 'MAX_ADV_CFL', 'MAX_VERT_CFL'
+     &              'BAROTR_KE', 'MAX_ADV_CFL', 'MAX_VERT_CFL'
             else
-              write(*,1) 'STEP', 'time[DAYS]',  'KINETIC_ENRG',    !  Normal log file output
+               write(*,1) 'STEP', 'time[DAYS]',
+     &              'KINETIC_ENRG', !  Normal log file output
      &                'BAROTR_KE', 'MAX_ADV_CFL', 'MAX_VERT_CFL',
-     &                                     'i_cx', 'j_cx', 'k_c'
+     &              'i_cx', 'j_cx', 'k_c', 'WALLTIME0'
+
             endif
           endif
           if (code_check) then
             write(*,4) iic, avke,  avke2b, Cu_Adv, Cu_W
           else
-            write(check_line,2,iostat=ierr)  avke,  avke2b,  Cu_Adv,
-     &                        Cu_W, i_cx_max,  j_cx_max,  k_cx_max
+             write(check_line,2,iostat=ierr)
+     &            avke,  avke2b,  Cu_Adv,
+     &            Cu_W, i_cx_max,  j_cx_max,  k_cx_max,
+     &            walltime0
           endif
-
-  1   format(/1x,A,2x,A,1x,A,5x,A,8x,A,2(5x,A),3x,A,2(1x,A))
-  2   format(ES18.11, ES17.10, 2F16.12, 2I7,I5, I3)
-  3   format(/2x,A,1x,A,5x,A,8x,A,2(5x,A),3x,A,2(1x,A))
-  4   format(I2,1x,4ES23.16)
-
+c$$$  1   format(/,1X, A6, 2X, A10, 1X, A13, 1X, A13, 1X, A13, 1X, A13, 3X, A7, 1X, A7, 1X, A5, 1X, A12)
+  1   format(/1x,A,2x,A,1x,A,5x,A,8x,A,2(5x,A),3x,A,2(2x,A),10x,A)
+  2   format(ES18.11, ES17.10, 2F16.12, 2I7,I5, F12.3)
+  3   format(/2x,A,1x,A,5x,A,8x,A,2(5x,A),3x,A,2(1x,A),10x,A)
+  4   format(I2,1x,4ES23.16,F12.3)
 # elif defined REPORT_MAX_UV && defined REPORT_POTEN_ENRG
 
           if (first_time==0) then

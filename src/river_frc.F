@@ -157,11 +157,13 @@
             call MPI_Reduce( local_maxval, global_maxval, 1, mpi_double_precision,
      &      mpi_max, 0, ocean_grid_comm, ierr)
 
-            if (global_maxval > nriv) then
-              write(*,*) 'ERROR: nriv=', nriv,
-     &       'but index ', global_maxval,
-     &       ' found in river input file.'
-              stop
+            if (mynode == 0) then
+              if (global_maxval > nriv) then
+                write(*,*) 'ERROR: nriv=', nriv,
+     &         'but index ', global_maxval,
+     &         ' found in river input file.'
+                error stop
+              endif
             endif
 
 !     Check for non-integer values

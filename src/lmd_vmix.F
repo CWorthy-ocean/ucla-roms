@@ -382,21 +382,21 @@ c----#  define tind nstp
 
       do j=jstr,jend
         do i=istr,iend
-          Kv(i,j,N)=Kv(i,j,N-1)
-          Ks(i,j,N)=Ks(i,j,N-1)
-          Kt(i,j,N)=Kt(i,j,N-1)
-          Kv(i,j,0)=Kv(i,j,  1)
-          Ks(i,j,0)=Ks(i,j,  1)
-          Kt(i,j,0)=Kt(i,j,  1)
+          Kv(i,j,N)=Kv(i,j,N-1) + Akv_bak
+          Ks(i,j,N)=Ks(i,j,N-1) + Akt_bak(isalt)
+          Kt(i,j,N)=Kt(i,j,N-1) + Akt_bak(itemp)
+          Kv(i,j,0)=Kv(i,j,  1) + Akv_bak
+          Ks(i,j,0)=Ks(i,j,  1) + Akt_bak(isalt)
+          Kt(i,j,0)=Kt(i,j,  1) + Akt_bak(itemp)
         enddo
       enddo
       ! vertical smoothing of interior mixing
       do k=1,N-1
         do j=jstr,jend
           do i=istr,iend
-            Kv(i,j,k)=0.5*Kv(i,j,k)+0.25*Kv(i,j,k-1)+0.25*Kv(i,j,k+1)
-            Kt(i,j,k)=0.5*Kt(i,j,k)+0.25*Kt(i,j,k-1)+0.25*Kt(i,j,k+1)
-            Ks(i,j,k)=0.5*Ks(i,j,k)+0.25*Ks(i,j,k-1)+0.25*Ks(i,j,k+1)
+            Kv(i,j,k)=0.5*Kv(i,j,k)+0.25*Kv(i,j,k-1)+0.25*Kv(i,j,k+1) + Akv_bak
+            Kt(i,j,k)=0.5*Kt(i,j,k)+0.25*Kt(i,j,k-1)+0.25*Kt(i,j,k+1) + Akt_bak(itemp)
+            Ks(i,j,k)=0.5*Ks(i,j,k)+0.25*Ks(i,j,k-1)+0.25*Ks(i,j,k+1) + Akt_bak(isalt)
           enddo
         enddo
       enddo
@@ -408,12 +408,12 @@ c----#  define tind nstp
         do j=jstr,jend
           do i=istr,iend
 !           Akv(i,j,k)=Kv(i,j,k)
-            AKv(i,j,k)=0.5*Kv(i,j,k)+0.25*Kv(i,j,k-1)+0.25*Kv(i,j,k+1)
+            AKv(i,j,k)=0.5*Kv(i,j,k)+0.25*Kv(i,j,k-1)+0.25*Kv(i,j,k+1) + Akv_bak
 !           Akt(i,j,k,itemp)=Kt(i,j,k)
-            AKt(i,j,k,itemp)=0.5*Kt(i,j,k)+0.25*Kt(i,j,k-1)+0.25*Kt(i,j,k+1)
+            AKt(i,j,k,itemp)=0.5*Kt(i,j,k)+0.25*Kt(i,j,k-1)+0.25*Kt(i,j,k+1) + Akt_bak(itemp)
 #  ifdef SALINITY
 !           Akt(i,j,k,isalt)=Ks(i,j,k)
-            AKt(i,j,k,isalt)=0.5*Ks(i,j,k)+0.25*Ks(i,j,k-1)+0.25*Ks(i,j,k+1)
+            AKt(i,j,k,isalt)=0.5*Ks(i,j,k)+0.25*Ks(i,j,k-1)+0.25*Ks(i,j,k+1) + Akt_bak(isalt)
 #  endif
           enddo
         enddo

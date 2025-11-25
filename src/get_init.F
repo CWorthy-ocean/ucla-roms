@@ -320,15 +320,19 @@ c--#define VERBOSE
       if (ierr == nf90_noerr) then
         call ncread(ncid,'riv_umask',riv_umask(1:i1,j0:j1),start)
       else
-        write(*,*) 'riv_umask not found in initial file. Initializing',
+        if (mynode == 0) then
+        write(*,*) 'riv_umask not found in initial file. Initializing ',
      & 'to zero.'
+        endif
       endif
       ierr=nf90_inq_varid(ncid, 'riv_vmask', varid)
       if (ierr == nf90_noerr) then
         call ncread(ncid,'riv_vmask',riv_vmask(i0:i1,1:j1),start)
       else
-        write(*,*) 'riv_vmask not found in initial file. Initializing',
+        if (mynode == 0) then
+        write(*,*) 'riv_vmask not found in initial file. Initializing ',
      & 'to zero.'
+        endif
       endif
 
 ! Free-surface and barotropic 2D momentuma, XI- and ETA-components

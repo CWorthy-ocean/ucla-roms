@@ -248,8 +248,9 @@
 #endif
 
       ! NOTE: call this here to prevent output in between timesteps which would break code
-      ! checking script.
-      if (wrt_file_his) call display_output_settings_to_terminal
+! checking script.
+      if (wrt_file_rst) call display_output_settings_to_terminal_rst
+      if (wrt_file_his) call display_output_settings_to_terminal_his
       if (wrt_file_avg) call display_output_settings_to_terminal_avg
 
       end subroutine init_avg_arrays !]
@@ -1112,93 +1113,124 @@
 
       end subroutine write_time_step  !]
 !-----------------------------------------------------------------------
-      subroutine display_output_settings_to_terminal  ![
+      subroutine display_output_settings_to_terminal_his  ![
       use tracers
       implicit none
 
       ! local
       integer :: itrc
+      if (mynode==0) then
+         write(*,'(/7x,2A,F6.1,2x,A,I4)') ! write to terminal output in simulation pre-amble text which
+     &     'ocean_vars :: history file ', ! result variables are being stored
+     &     'output_period =', output_period_his,
+     &     'recs/file =', nrpf_his
 
-      if (mynode==0) write(*,'(/7x,2A,F6.1,2x,A,I4)')                ! write to terminal output in simulation pre-amble text which
-     &  'ocean_vars :: history file ',                               ! result variables are being stored
-     &  'ouput_period =', output_period_his,
-     &  'recs/file =', nrpf_his
-
-      if (mynode==0) write(*,'(9x,A,13(/11x,A,T20,L1,4x,A),/)')      ! 13(....) repeats formatting 11 times.
-     &               'his fields to be saved: (T/F)'                 ! T20 moves to the 20th character on line
-     &                 , 'zeta',   wrt_Z,    vname(2,indxZ)
-     &                 , 'ubar',   wrt_Ub,   vname(2,indxUb)
-     &                 , 'vbar',   wrt_Vb,   vname(2,indxVb)
+         write(*,'(9x,A)')
+     &        'his fields to be saved: (T/F)' ! T20 moves to the 20th character on line
+         write(*,'(9x,A)')  repeat('-',62)
+         write(*, '(11x,A,T20,A,T36,A)')
+     &        "Name","Write (T/F)","Long name"
+         write(*,'(9x,A)')  repeat('-',62)
+         write(*,'(13(/11x,A,T30,L1,T36,A))') ! 13(....) repeats formatting 11 times.
+     &        'zeta',   wrt_Z,    vname(2,indxZ)
+     &        , 'ubar',   wrt_Ub,   vname(2,indxUb)
+     &        , 'vbar',   wrt_Vb,   vname(2,indxVb)
 #ifdef SOLVE3D
-     &                 , 'u',      wrt_U,    vname(2,indxU)
-     &                 , 'v',      wrt_V,    vname(2,indxV)
+     &        , 'u',      wrt_U,    vname(2,indxU)
+     &        , 'v',      wrt_V,    vname(2,indxV)
 
-     &                 , 'rho',    wrt_R,    vname(2,indxR)
-     &                 , 'Omega',  wrt_O,    vname(2,indxO)
-     &                 , 'W',      wrt_W,    vname(2,indxW)
+     &        , 'rho',    wrt_R,    vname(2,indxR)
+     &        , 'Omega',  wrt_O,    vname(2,indxO)
+     &        , 'W',      wrt_W,    vname(2,indxW)
 
-     &                 , 'Akv',    wrt_Akv,  vname(2,indxAkv)
-     &                 , 'Akt',    wrt_Akt,  vname(2,indxAkt)
+     &        , 'Akv',    wrt_Akv,  vname(2,indxAkv)
+     &        , 'Akt',    wrt_Akt,  vname(2,indxAkt)
 # ifdef SALINITY
-     &                 , 'Aks',    wrt_Aks,  vname(2,indxAks)
+     &        , 'Aks',    wrt_Aks,  vname(2,indxAks)
 # endif
 # ifdef LMD_KPP
-     &                 , 'hbls',   wrt_Hbls, vname(2,indxHbls)
+     &        , 'hbls',   wrt_Hbls, vname(2,indxHbls)
 # endif
 # ifdef LMD_BKPP
-     &                 , 'hbbl',   wrt_Hbbl, vname(2,indxHbbl)
+     &        , 'hbbl',   wrt_Hbbl, vname(2,indxHbbl)
 # endif
-          do itrc=1,iTandS+nt_passive
-            if (mynode==0) write(*,'(11x,A,I2,A,T16,L1,T20,A)') 't(',
+         do itrc=1,iTandS+nt_passive
+            write(*,'(11x,A,I2,A,T30,L1,T36,A)') 't(',
      &        itrc, ')', wrt_t(itrc), t_vname(itrc)
-          enddo
+         enddo
+         write(*,'(9x,A)')  repeat('-',62)
+      end if
 #endif /* SOLVE3D */
 
-      end subroutine display_output_settings_to_terminal  !]
-!-----------------------------------------------------------------------
+      end subroutine display_output_settings_to_terminal_his  !]
+
       subroutine display_output_settings_to_terminal_avg  ![
       use tracers
       implicit none
 
       ! local
       integer :: itrc
+      if (mynode==0) then
+         write(*,'(/7x,2A,F6.1,2x,A,I4)') ! write to terminal output in simulation pre-amble text which
+     &     'ocean_vars :: average file ', ! result variables are being stored
+     &     'output_period =', output_period_avg,
+     &     'recs/file =', nrpf_avg
 
-      if (mynode==0) write(*,'(/7x,2A,F6.1,2x,A,I4)')                ! write to terminal output in simulation pre-amble text which
-     &  'ocean_vars :: average file ',                               ! result variables are being stored
-     &  'ouput_period =', output_period_avg,
-     &  'recs/file =', nrpf_avg
-
-      if (mynode==0) write(*,'(9x,A,13(/11x,A,T20,L1,4x,A),/)')      ! 13(....) repeats formatting 11 times.
-     &               'avg fields to be saved: (T/F)'                 ! T20 moves to the 20th character on line
-     &                 , 'zeta',   wrt_avg_Z,    vname(2,indxZ)
-     &                 , 'ubar',   wrt_avg_Ub,   vname(2,indxUb)
-     &                 , 'vbar',   wrt_avg_Vb,   vname(2,indxVb)
+         write(*,'(9x,A)')
+     &        'avg fields to be saved: (T/F)' ! T20 moves to the 20th character on line
+         write(*,'(9x,A)')  repeat('-',62)
+         write(*, '(11x,A,T20,A,T36,A)')
+     &        "Name","Write (T/F)","Long name"
+         write(*,'(9x,A)')  repeat('-',62)
+         write(*,'(13(/11x,A,T30,L1,T36,A))') ! 13(....) repeats formatting 11 times.
+     &     , 'zeta',   wrt_avg_Z,    vname(2,indxZ)
+     &     , 'ubar',   wrt_avg_Ub,   vname(2,indxUb)
+     &     , 'vbar',   wrt_avg_Vb,   vname(2,indxVb)
 #ifdef SOLVE3D
-     &                 , 'u',      wrt_avg_U,    vname(2,indxU)
-     &                 , 'v',      wrt_avg_V,    vname(2,indxV)
+     &     , 'u',      wrt_avg_U,    vname(2,indxU)
+     &     , 'v',      wrt_avg_V,    vname(2,indxV)
 
-     &                 , 'rho',    wrt_avg_R,    vname(2,indxR)
-     &                 , 'Omega',  wrt_avg_O,    vname(2,indxO)
-     &                 , 'W',      wrt_avg_W,    vname(2,indxW)
+     &     , 'rho',    wrt_avg_R,    vname(2,indxR)
+     &     , 'Omega',  wrt_avg_O,    vname(2,indxO)
+     &     , 'W',      wrt_avg_W,    vname(2,indxW)
 
-     &                 , 'Akv',    wrt_avg_Akv,  vname(2,indxAkv)
-     &                 , 'Akt',    wrt_avg_Akt,  vname(2,indxAkt)
+     &     , 'Akv',    wrt_avg_Akv,  vname(2,indxAkv)
+     &     , 'Akt',    wrt_avg_Akt,  vname(2,indxAkt)
 # ifdef SALINITY
-     &                 , 'Aks',    wrt_avg_Aks,  vname(2,indxAks)
+     &     , 'Aks',    wrt_avg_Aks,  vname(2,indxAks)
 # endif
 # ifdef LMD_KPP
-     &                 , 'hbls',   wrt_avg_Hbls, vname(2,indxHbls)
+     &     , 'hbls',   wrt_avg_Hbls, vname(2,indxHbls)
 # endif
 # ifdef LMD_BKPP
-     &                 , 'hbbl',   wrt_avg_Hbbl, vname(2,indxHbbl)
+     &     , 'hbbl',   wrt_avg_Hbbl, vname(2,indxHbbl)
 # endif
-          do itrc=1,iTandS+nt_passive
-            if (mynode==0) write(*,'(11x,A,I2,A,T16,L1,T20,A)') 't(',
+         do itrc=1,iTandS+nt_passive
+            write(*,'(11x,A,I2,A,T30,L1,T36,A)') 't(',
      &        itrc, ')', wrt_t_avg(itrc), t_vname(itrc)
-          enddo
+         enddo
+         write(*,'(9x,A)')  repeat('-',62)
+      end if ! (mynode==0)
 #endif /* SOLVE3D */
 
       end subroutine display_output_settings_to_terminal_avg  !]
-! ----------------------------------------------------------------------
+
+      subroutine display_output_settings_to_terminal_rst
+      character(len=120) :: stdout_str
+      character(len=120) :: period_info
+      if (mynode==0) then
+         write(stdout_str,'(7x,A,2x,A,I4)')
+     &        'ocean_vars :: restart file ', ! result variables are being stored
+     &        'recs/file = ', nrpf_rst
+         if (monthly_restarts) then
+            write(period_info,'(A,1L)')
+     &           'monthly_restarts = ', monthly_restarts
+         else
+            write(period_info,'(7x,A,F6.1)')
+     &           'output_period_rst =', output_period_rst
+         end if
+         write(*,'(A,2x,A)'),trim(stdout_str),trim(period_info)
+      end if
+      end subroutine display_output_settings_to_terminal_rst
 
       end module basic_output

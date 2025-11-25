@@ -249,13 +249,16 @@
       implicit none
 
       ! local
-      integer :: i,j,k
-      integer :: istr, iend, jstr, jend
-      integer :: itrc
-      real, dimension(PRIVATE_2D_SCRATCH_ARRAY) :: FX,FE
+      integer, intent(in) :: itrc,k
+      real, dimension(PRIVATE_2D_SCRATCH_ARRAY), intent(in) :: FX,FE
+      integer, intent(in) :: istr, iend, jstr, jend
+
+      ! local
+      integer :: i,j
 
         if ((itrc == iALK) .or. (itrc == iALK_alt) .or. (itrc == iDIC) .or. (itrc == iDIC_alt)) then
 
+#ifdef OBC_NORTH
         ! North boundary
         if (NORTHERN_EDGE) then
           do i=istr,iend
@@ -269,7 +272,9 @@
      &        DIC_alt_rate_north(i,k) = FE(i,jend+1)
           enddo
         endif
+#endif
 
+#ifdef OBC_SOUTH
         ! South boundary
         if (SOUTHERN_EDGE) then
           do i=istr,iend
@@ -283,7 +288,9 @@
      &        DIC_alt_rate_south(i,k) = -FE(i,jstr)
           enddo
         endif
+#endif
 
+#ifdef OBC_EAST
             ! East boundary
         if (EASTERN_EDGE) then
           do j=jstr,jend
@@ -297,8 +304,10 @@
      &        DIC_alt_rate_east(j,k) = FX(iend+1,j)
           enddo
         endif
+#endif
 
-            ! South boundary
+#ifdef OBC_WEST
+            ! West boundary
         if (WESTERN_EDGE) then
           do j=jstr,jend
             if (itrc == iALK)
@@ -311,6 +320,7 @@
      &        DIC_alt_rate_west(j,k) = -FX(istr,j)
           enddo
         endif
+#endif
 
         endif ! itrc number
 

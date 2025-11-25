@@ -232,16 +232,16 @@
 
           ! Pack local minimum and MPI rank into a vector
           local_minloc(1) = local_min_val
-          local_minloc(2) = mynode
+          local_minloc(2) = dble(mynode)
 
           ! Find global minimum and rank where the minimum occurs
-          call MPI_Reduce( local_minloc, global_minloc, 2, mpi_2double_precision,
+          call MPI_Reduce( local_minloc, global_minloc, 1, mpi_2double_precision,
      &    mpi_minloc, 0, ocean_grid_comm, ierr)
 
           ! Broadcast rank where minimum occurs to all processes
           call MPI_Bcast(global_minloc, 2,mpi_double_precision,0,ocean_grid_comm,ierr)
 
-          if (mynode == global_minloc(2)) then
+          if (mynode == int(global_minloc(2))) then
             print *, 'The minimum distance to Release', icdr, 'is', global_minloc(1)
             print *, 'This is on rank:', mynode
             print *, 'at point', lmi

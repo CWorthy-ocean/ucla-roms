@@ -10,12 +10,12 @@
       use tracers, only: init_tracers
       use mpi
       use sponge_tune
-
+      use timers, only: tstart, tend
 
       implicit none                                        ! with single parallel region using
       integer :: ierr                                      ! explicit barrier synchronization.
 # ifdef MPI
-      real*8 tstart, tend
+c$$$      real*8 tstart, tend
 C$    integer level,req_lev
 
 c**   call system('uname -nmr')
@@ -59,6 +59,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       use scalars
       use ocean_vars
       use basic_output
+      use timers
 
       implicit none
 
