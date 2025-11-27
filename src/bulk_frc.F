@@ -6,6 +6,7 @@
       use dimensions
       use mpi_exchanges
       use roms_read_write
+      use tracers
 
       implicit none
 
@@ -69,14 +70,6 @@
         nc_swrad%coarse = 1
       endif
 
-      ! Print user options (bulk_frc.opt) to netcdf attributes
-      ! Note: to turn bulk forces off, edit cppdefs!
-      bulk_frc_opt = ''
-      if (interp_frc==1) then
-        call store_string_att(bulk_frc_opt, 'Interpolation ON')
-      else
-        call store_string_att(bulk_frc_opt, 'Interpolation OFF')
-      endif
 
       end subroutine init_arrays_bulk_frc  !]
 ! ----------------------------------------------------------------------
@@ -182,7 +175,7 @@
       ! Modules required
       ! ----------------
       use surf_flux
-      use tracers, only: t
+      use tracers, only: t, t_ana_frc, iTandS
       use grid
       use mixing
       use ocean_vars
@@ -193,7 +186,8 @@
       ! input/outputs
       integer,intent(in)  :: istr,iend,jstr,jend
 
-      integer i,j, IterMax,iter
+      integer i, j, IterMax, iter
+      integer itrc, itrc2read, itrc2writ
       real a
       real rho0i
       real TseaC,TseaK,Qsea
@@ -218,8 +212,8 @@
       real blk_Rgas,blk_ZW,blk_ZT,blk_ZQ,blk_beta,blk_Cpa,blk_Zabl
       parameter (blk_Rgas=287.1)
       parameter (blk_ZW=10.0)  ! The height at which the atm. Wind is taken
-      parameter (blk_ZT=10.0)  ! The height at which the atm. Temp is taken
-      parameter (blk_ZQ=10.0)  ! The height at which the atm. Humi.is taken
+      parameter (blk_ZT=2.0)   ! The height at which the atm. Temp is taken
+      parameter (blk_ZQ=2.0)   ! The height at which the atm. Humi.is taken
       parameter (blk_Zabl=600.0)
       parameter (blk_beta=1.2)
       parameter (blk_Cpa=1004.67)
@@ -737,6 +731,20 @@
           stflx(i,j,isalt)=stflx(i,j,isalt)*rmask(i,j)
 # endif
 # endif
+
+#if defined BIOLOGY_BEC2 || defined MARBL
+!!!! Virtual DIC/ALK flux
+       do itrc = iTandS+1,NT
+        if (t_ana_frc(itrc)==2) then
+          stflx(i,j,itrc)=(evap-(prate(i,j)/(100.*3600.*24.))) *
+     &                            t(i,j,N,nrhs,itrc)
+# ifdef MASKING
+          stflx(i,j,itrc)=stflx(i,j,itrc)*rmask(i,j)
+# endif
+        endif
+       enddo
+#endif /* BIOLOGY_BEC2  || MARBL */
+
 !
 !  Save for the calculation of wind stress
 !
@@ -795,7 +803,85 @@
 #  ifdef MASKING
      &                                           *rmask(i,j)
 #  endif
+       if (wrt_rstflx) then
+           rstflx(i,j,isalt) = -dSSSdt*(
+     &           t(i,j,N,nrhs,isalt) - sss(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       endif
 # endif
+# endif
+
+!
+!--------------------------------------------------------------
+! Flux correction to surface Alk/DIC
+!--------------------------------------------------------------
+#if defined CFLX_CORR && defined MARBL
+!NOTE can avoid this loop with new bgc changes
+!!!!!!!      DIC
+       do itrc = iTandS+1,NT
+         if ( trim(t_vname(itrc))=="DIC" ) then
+            itrc2writ=itrc
+         elseif ( trim(t_vname(itrc))=="DIC_ALT_CO2" ) then
+            itrc2read=itrc
+         endif
+      enddo
+      
+          stflx(i,j,itrc2read)=stflx(i,j,itrc2read) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+          stflx(i,j,itrc2writ)=stflx(i,j,itrc2writ) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       if (wrt_rstflx) then
+           rstflx(i,j,itrc2read) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+           rstflx(i,j,itrc2writ) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       endif
+
+!!!!!!!      ALK
+       do itrc = iTandS+1,NT
+         if ( trim(t_vname(itrc))=="ALK" ) then
+            itrc2writ=itrc
+         elseif ( trim(t_vname(itrc))=="ALK_ALT_CO2" ) then
+            itrc2read=itrc
+         endif
+       enddo
+          stflx(i,j,itrc2read)=stflx(i,j,itrc2read) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+          stflx(i,j,itrc2writ)=stflx(i,j,itrc2writ) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       if (wrt_rstflx) then
+           rstflx(i,j,itrc2read) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+           rstflx(i,j,itrc2writ) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       endif
+
 # endif
 
 !---------------------------------------------------------------
