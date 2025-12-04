@@ -41,9 +41,10 @@
       use grid
       use ocean_vars
       use scalars
+      use hidden_mpi_vars
 
       implicit none
-      integer istr,iend,jstr,jend, i,j,k
+      integer istr,iend,jstr,jend, i,j,k, icdr, cidx
       real CX(PRIVATE_1D_SCRATCH_ARRAY,0:N),  dtau, c2d,dh, cw, cff,
      &    wrk(PRIVATE_1D_SCRATCH_ARRAY),      cw_min,cw_max,cw_max2
       real, parameter :: cu_min=0.6D0, cu_max=1.0D0,
@@ -70,7 +71,9 @@ c**     dtau=(1.-1./6.)*dt
           j = cdr_iloc(cidx)
           do k=1,nz
             Wi(i,j,k)=Wi(i,j,k-1)
-     &         + cdr_vol(icdr)*cdr_prf(cidx,k)
+               ! Here we will assume that the vertical distribution of the CDR volume flux
+               ! is the same as the vertical distribution of the heat flux.
+     &         + cdr_vol(icdr)*cdr_prf(cidx,1,k)
           enddo
         enddo
       endif

@@ -5,7 +5,8 @@
 
       use param
       use grid
-      use hidden_mpi_vars
+      use hidden_mpi_vars, only: inode, jnode
+      use dimensions, only : npx,npy
       use private_scratch
       use mpi_exchanges
 
@@ -21,6 +22,8 @@
       use param
       use mixing
       use scalars
+      use dimensions, only : npx,npy
+      use hidden_mpi_vars, only: inode, jnode
 
       implicit none
       integer istr,iend,jstr,jend

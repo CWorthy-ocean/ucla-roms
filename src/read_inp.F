@@ -23,10 +23,11 @@
       integer ierr
 
       integer, parameter :: input=15, testunit=40,
-     &                  max_fname=256, max_kwsize=256
-      character(len=max_fname)  :: fname, force_string
+     &                  max_fname=256, max_kwsize=99
+      character(len=max_fname)  :: fname, fname_orig,force_string
       character(len=max_kwsize) :: keyword
       character(len=3), parameter :: end_signal='end'
+      integer idx
       integer is,ie,  kwlen, lstr, lenstr
 #ifdef SOLVE3D
      &                                 , itrc
@@ -53,7 +54,7 @@
 ! they add 1 for each error discovered.
 
       ierr=0                      ! <-- reset error counter
-      call check_tiling(ierr)
+!      call check_tiling(ierr)
       call check_switches1(ierr)
 #ifdef SOLVE3D
       call check_pre_step_switches(ierr)
@@ -68,6 +69,9 @@
 #endif
       if (ierr /= 0) return
       mpi_master_only call print_switches
+!     Git hash
+      mpi_master_only write(*,'(/1x,2A)') "Git hash: ", git_hash
+      call print_jobid
 
 ! Use pre-set default startup filename for known applications, or
 ! get it as an argument from command line via iargc-getarg (override
@@ -119,7 +123,6 @@
 
 ! Read input parameters according to the keyword:
 !----- ----- ---------- --------- --- ---- -------
-
 ! Title
 
         if (keyword(1:kwlen) == 'title') then
@@ -275,8 +278,8 @@
 #endif
 
 #ifdef SOLVE3D
-# if !defined LMD_MIXING && !defined BVF_MIXING && !defined PP_MIXING\
-                         && !defined MY2_MIXING && !defined MY25_MIXING
+!# if !defined LMD_MIXING && !defined BVF_MIXING && !defined PP_MIXING\
+!                         && !defined MY2_MIXING && !defined MY25_MIXING
 
 ! Background vertical viscosity and mixing coefficients for tracers.
 
@@ -291,7 +294,7 @@
      &                     'background vertical mixing [m^2/s] for ',
      &        vname(2,indxT+itrc-1)(1:lenstr(vname(2,indxT+itrc-1)))
           enddo
-# endif
+!# endif
 # ifdef MY25_MIXING
 ! Mellor-Yamada Level 2.5 turbulent closure parameters.
 
@@ -424,8 +427,10 @@ c-->    elseif (keyword(1:kwlen) == 'nudg_cof') then
           call cancel_kwd(keyword(1:kwlen), ierr)
           read(input,'(A)',err=95) fname
           lstr=lenstr(fname)
+          idx = index(fname,'/',back=.true.)
+          fname_orig = trim(fname(idx+1:lstr))
 # if defined MPI && defined PARALLEL_FILES
-          call insert_node(fname, lstr, mynode, NNODES, ierr)
+          call insert_node(fname, lstr, mynode, nsize, ierr)
 !         call insert_nodes(fname)
 # endif
           open(testunit,file=fname(1:lstr), status='old', err=97)
@@ -433,6 +438,8 @@ c-->    elseif (keyword(1:kwlen) == 'nudg_cof') then
           grdname=fname(1:lstr)
           mpi_master_only write(*,'(1x,2A)') 'grid file: ',
      &                                     grdname(1:lstr)
+          grid_files = ''
+          call store_string_att(grid_files, fname_orig)
 #endif
 
 ! Initial conditions file name. Check its availability (in the case
@@ -447,13 +454,17 @@ c-->    elseif (keyword(1:kwlen) == 'nudg_cof') then
 #endif
             read(input,'(A)',err=95) fname
             lstr=lenstr(fname)
+            idx = index(fname,'/',back=.true.)
+            fname_orig = trim(fname(idx+1:lstr))
 #if defined MPI && defined PARALLEL_FILES
-            call insert_node(fname, lstr, mynode, NNODES, ierr)
+            call insert_node(fname, lstr, mynode, nsize, ierr)
 #endif
             ininame=fname(1:lstr)
             mpi_master_only write(*,'(1x,A,I3,2x,3A)')
      &       'initial condition :: rec =', nrrec,  'file = ''',
      &                                   ininame(1:lstr), ''''
+            ini_files = ''
+            call store_string_att(ini_files, fname_orig)
 #ifdef ANA_INITIAL
          endif
 #endif
@@ -470,8 +481,14 @@ c-->    elseif (keyword(1:kwlen) == 'nudg_cof') then
             read(input,'(A)',err=95) fname
             lstr=lenstr(fname)
             if (lstr > 0) then
+              idx = index(fname,'/',back=.true.)
+              fname_orig = trim(fname(idx+1:lstr))
+              if (mynode==0) then
+                print *,'idx: ',idx
+                print *,'fnames: ',trim(fname),' ',trim(fname_orig)
+              endif
 # if defined MPI && defined PARALLEL_FILES
-              call insert_node(fname, lstr, mynode, NNODES, ierr)
+              call insert_node(fname, lstr, mynode, nsize, ierr)
 # endif
               open(testunit,file=fname(1:lstr),status='old',err=97)
               close(testunit)
@@ -479,23 +496,15 @@ c-->    elseif (keyword(1:kwlen) == 'nudg_cof') then
               if (max_frc < max_frc_files) then
                 max_frc=max_frc+1
                 frcfile(max_frc)=fname(1:lstr)
-# ifdef MPI_SILENT_MODE
-                if (mynode == 0) then
-# endif
-                  if (max_frc == 1) then
-                    write(*,'(1x,2A)') 'forcing data file(s): ',
-     &                                 frcfile(max_frc)(1:lstr)
-                  else
-                    write(*,'(23x,A)') frcfile(max_frc)(1:lstr)
-                  endif
-                  ! add to attributes
-                  if (mynode == 0) then
-                    call store_string_att(force_files, frcfile(max_frc)(1:lstr))
-                  endif
-
-# ifdef MPI_SILENT_MODE
+                if (max_frc == 1) then
+                  write(*,'(1x,2A)') 'forcing data file(s): ',
+     &                                frcfile(max_frc)(1:lstr)
+                else
+                  write(*,'(23x,A)') frcfile(max_frc)(1:lstr)
                 endif
-# endif
+                ! add to attributes
+c$$$                call store_string_att(force_files, frcfile(max_frc)(1:lstr))
+                call store_string_att(force_files, fname_orig)
               else
                 mpi_master_only write(*,'(1x,2A/12x,2A/)')
      &          '### ERROR: read_inp :: Too many forcing files are ',
@@ -526,7 +535,7 @@ c-->    elseif (keyword(1:kwlen) == 'nudg_cof') then
           read(input,'(A)',err=95) fname
           lstr=lenstr(fname)
 # if defined MPI && defined PARALLEL_FILES
-          call insert_node(fname, lstr, mynode, NNODES, ierr)
+          call insert_node(fname, lstr, mynode, nsize, ierr)
 # endif
           open(testunit, file=fname(1:lstr), status='old', err=97)
           close(testunit)
@@ -628,12 +637,55 @@ c**       write(*,'(1x,A,1x,A)') 'Recognized: ', kwds(is:ie-1)
           do while (kwds(ie:ie)/=' ' .and. ie<max_opt_size)
             ie=ie+1
           enddo
-          ierr=ierr+1
-          write(*,'(/1x,A,1x,A/)') '### ERROR: keyword not found:',
+            if (kwds(is:ie-1) == 'vertical_mixing') then
+              write(*,'(/1x,A,1x,A/)') '### WARNING: keyword not found:',
      &                                               kwds(is:ie-1)
+            else
+              ierr=ierr+1
+              write(*,'(/1x,A,1x,A/)') '### ERROR: keyword not found:',
+     &                                               kwds(is:ie-1)
+            endif
           is=ie
         endif
       enddo
       end
 
+!***********************************************************************
+!     >  Print SLURM or PBS job ID information (master-only write).
+!     >
+!     >  Retrieves and prints the job ID and, if applicable, the array task
+!     >  index for SLURM or PBS/Torque jobs. Output uses `mpi_master_only write`.
+!***********************************************************************
+      subroutine print_jobid()
 
+      use param
+
+      implicit none
+
+      character(len=100) :: jobid, taskid
+      integer            :: len1, len2, stat1, stat2
+
+! --- SLURM ---
+      call get_environment_variable('SLURM_JOB_ID', jobid, len1, stat1)
+      call get_environment_variable('SLURM_ARRAY_TASK_ID', taskid, len2, stat2)
+
+      if (stat1 == 0) then
+         mpi_master_only write(*,'(A,1X,A)') 'SLURM Job ID:',        trim(jobid(1:len1))
+         if (stat2 == 0) then
+            mpi_master_only write(*,'(A,1X,A)') 'SLURM Array Task ID:', trim(taskid(1:len2))
+         end if
+         return
+      end if
+! --- PBS ---
+      call get_environment_variable('PBS_JOBID', jobid, len1, stat1)
+      call get_environment_variable('PBS_ARRAY_INDEX', taskid, len2, stat2)
+
+      if (stat1 == 0) then
+         mpi_master_only write(*,'(A,1X,A)') 'PBS Job ID:',          trim(jobid(1:len1))
+          if (stat2 == 0) then
+             mpi_master_only write(*,'(A,1X,A)') 'PBS Array Index:',  trim(taskid(1:len2))
+          end if
+          return
+      end if
+         mpi_master_only write(*,'(A)') 'No SLURM or PBS job ID found.'
+      end subroutine print_jobid

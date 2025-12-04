@@ -94,6 +94,8 @@
       real,allocatable,dimension(:,:) :: pmask
       real,allocatable,dimension(:,:) :: umask
       real,allocatable,dimension(:,:) :: vmask
+      real,allocatable,dimension(:,:) :: riv_umask
+      real,allocatable,dimension(:,:) :: riv_vmask
 #endif
 
       real :: xl,el
@@ -117,6 +119,8 @@
       allocate( pmask(GLOBAL_2D_ARRAY) ) ; pmask=init
       allocate( umask(GLOBAL_2D_ARRAY) ) ; umask=init
       allocate( vmask(GLOBAL_2D_ARRAY) ) ; vmask=init
+      allocate( riv_umask(GLOBAL_2D_ARRAY) ); riv_umask = init
+      allocate( riv_vmask(GLOBAL_2D_ARRAY) ); riv_vmask = init
 #endif
 
       allocate( h(GLOBAL_2D_ARRAY) )    ; h=init           ! potential first touch issue.

@@ -40,7 +40,7 @@ c--# define CONST_TRACERS
 #  endif
 # endif
      &                                                             )
-      end
+      end subroutine step3d_t
 
       subroutine step3d_t_iso_tile( istr,iend,jstr,jend, WC,FC,CF,DC
      &                                                 ,  FX,FE, wrk1
@@ -55,7 +55,8 @@ c--# define CONST_TRACERS
 
       use param
       use pipe_frc
-      use cdr_frc
+      use cdr_frc, only: cdr_nprf, cdr_icdr, cdr_source, cdr_iloc,
+     &      cdr_jloc, cdr_flx, cdr_prf, cdr_flx_3d, forcing_3d, ncdr
       use river_frc
       use surf_flux, only: stflx, srflx
       use tracers
@@ -68,9 +69,13 @@ c--# define CONST_TRACERS
       use mixing
       use ocean_vars
       use scalars
+      use hidden_mpi_vars
+#ifdef UPSCALING
+      use upscale_output
+#endif
 
       implicit none
-      integer istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k!, td
+      integer icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k!, td
       real, dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: WC,FC,CF,DC
       real, dimension(PRIVATE_2D_SCRATCH_ARRAY)     :: FX,FE, wrk1
 # ifdef ADV_ISONEUTRAL
@@ -182,6 +187,12 @@ c--#  define ntdf nrhs
      &                                                           )
               enddo
             enddo                 !-->  discard FX,FE
+
+#if defined MARBL && defined UPSCALING
+        if (do_upscale) then
+          call calc_forcing_rates(itrc,k,FX,FE,istr,iend,jstr,jend)
+        endif
+#endif
 
 # ifdef DIAGNOSTICS
 #  ifdef ADV_ISONEUTRAL
@@ -822,19 +833,36 @@ c**               cff=1./(z_r(i,j,k+1)-z_r(i,j,k))
 # endif
 
         if (cdr_source) then
-          ! Loop over cdr release locations in this subdomain
-          ! The global sum over all cdr_prf should be 1.
-          ! cdr_flux unit is [C/s]
-          do cidx=1,cdr_nprf
-            icdr = cdr_icdr(cidx)
-            i = cdr_iloc(cidx)
-            j = cdr_jloc(cidx)
-            do k=1,nz
-              t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)
-     &           +dt*pm(i,j)*pn(i,j)*
-     &            cdr_prf(cidx,k)*cdr_flx(icdr,itrc)
+
+          if (forcing_3d) then
+            do icdr=1,ncdr
+              do k=1,nz
+                do j=1,ny
+                  do i=1,nx
+                    t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)
+     &                +dt*pm(i,j)*pn(i,j)*cdr_flx_3d(icdr,itrc,i,j,k)
+                  enddo
+                enddo
+              enddo
             enddo
-          enddo
+          else
+            ! Loop over cdr release locations in this subdomain
+            ! The global sum over all cdr_prf for each tracer should be 1.
+            ! cdr_flux unit is [C/s]
+            do cidx=1,cdr_nprf
+              icdr = cdr_icdr(cidx)
+              i = cdr_iloc(cidx)
+              j = cdr_jloc(cidx)
+              if (icdr==0) then
+               print *, "LOST AT LOCATION",mynode,i,j,cidx,cdr_nprf
+              end if
+              do k=1,nz
+                t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)
+     &           +dt*pm(i,j)*pn(i,j)*
+     &            cdr_prf(cidx,itrc,k)*cdr_flx(icdr,itrc)
+              enddo
+            enddo
+          endif
         endif
 
         do j=jstr,jend
@@ -1069,12 +1097,20 @@ c??         enddo
 #endif
         enddo      !<-- j
 
+      enddo     !<-- itrc
+
+! Need to calculate/save additionality before the perturbation at the boundaries
+! is zeroed out in t3db_tile
+#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
+      if (do_upscale) call wrt_upscale
+#endif
+
+      do itrc=1,nt
         call t3dbc_tile (istr,iend,jstr,jend, itrc, wrk1)
 # ifdef DIAGNOSTICS
 !       if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag)
 !    &    call set_diags_t_bc(itrc,td)
 # endif
-
       enddo     !<-- itrc
 
 # if defined(MARBL)
@@ -1094,7 +1130,7 @@ c??         enddo
         call exchange_xxx( t(:,:,:,nnew,nt) )
       endif
 # endif
-      end
+      end subroutine step3d_t_iso_tile
 
       subroutine check_step_t_switches(ierr)
 
@@ -1123,8 +1159,8 @@ c??         enddo
      &  'Insufficient length of string "cpps" in file "strings".',
      &        'Increase parameter "max_opt_size" it and recompile.'
       ierr=ierr+1
-      end
+      end subroutine check_step_t_switches
 #else
       subroutine step3d_t_empty
-      end
+      end subroutine step3d_t_empty
 #endif  /* SOLVE3D */

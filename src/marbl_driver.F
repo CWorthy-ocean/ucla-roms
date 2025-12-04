@@ -760,7 +760,8 @@
 
       use netcdf
       use nc_read_write
-      use roms_read_write, only: dn_xr,dn_yr,dn_zr,dn_tm,xi_rho,eta_rho
+      use roms_read_write, only: dn_xr,dn_yr,dn_zr,dn_tm
+      use dimensions, only: xi_rho, eta_rho
       use param, only : N
 
       implicit none
@@ -1002,11 +1003,6 @@
      &     vname_marbl_diag_2d,vname_marbl_diag_3d
      &     )                    !
 
-      if (mynode==printnode) then
-         print *, 'number of 2D marbl diags', diag_cnt_2d_tot
-         print *, 'number of 3D marbl diags', diag_cnt_3d_tot
-      end if
-
       end subroutine marbldrv_configure_diagnostics
 
 
@@ -1082,11 +1078,6 @@
                   if (trim(vname_marbl_diag_2d(1,idx)) == trim(file_line))
      &                 then
                      wrt_marbl_diag_2d(idx) =.true.
-                     if (mynode==printnode) then
-                        write(*,'(2A)'),
-     &                       'REQUESTED MARBL DIAGNOSTIC OUTPUT: ' //
-     &                       trim(vname_marbl_diag_2d(1,idx))
-                     end if
                      recognized_diag=.true.
                      no_diags_requested=.false.
                      cycle
@@ -1097,11 +1088,6 @@
                   if (trim(vname_marbl_diag_3d(1,idx)) == trim(file_line))
      &                 then
                      wrt_marbl_diag_3d(idx) =.true.
-                     if (mynode==printnode) then
-                        write(*,'(2A)'),
-     &                       'REQUESTED MARBL DIAGNOSTIC OUTPUT: ' //
-     &                       trim(vname_marbl_diag_3d(1,idx))
-                     end if
                      recognized_diag=.true.
                      no_diags_requested=.false.
                      cycle
@@ -1129,21 +1115,9 @@
 
             wrt_marbl_diag_2d(:)=.true.
             wrt_marbl_diag_3d(:)=.true.
-
-            if (mynode==0) then
-               write(*,'(A)'), 'NO REQUESTED DIAGNOSTICS FOUND IN ' //
-     &              trim(marbl_diag_list_fname), '. Defaulting to ' //
-     &              ' writing all BGC diagnostics to output file.'
-            end if
          end if
 
-         if (is_iostat_end(read_status)) then
-            if (mynode==printnode) then
-               write(*, '(3A)') "Successfully read ",
-     &              trim(marbl_diag_list_fname),
-     &              " to end of file"
-            end if
-         else
+         if (.not. is_iostat_end(read_status)) then
             if (mynode==printnode) then
                write(*, '(A, I0, 2A)') "IO ERROR ", read_status,
      &              " : ERROR reading MARBL diagnostic list file  ",
@@ -1153,11 +1127,6 @@
          end if
 
          close(marbl_diag_list)
-         if (mynode==printnode) then
-            write(*,'(2A)'), 'we successfully read and closed ',
-     &           trim(marbl_diag_list_fname)
-
-         end if
       endif
 
       end subroutine marbldrv_read_diagnostic_output_list

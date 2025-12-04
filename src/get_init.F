@@ -312,21 +312,43 @@ c--#define VERBOSE
 
 ! Read initial fields:
 !---------------------
-
-! Free-surface and barotropic 2D momentuma, XI- and ETA-components
+! River mask (needed for exact restarts)
 
       start=1; start(3)=record                                       ! 2D vars
+
+      ierr=nf90_inq_varid(ncid, 'riv_umask', varid)
+      if (ierr == nf90_noerr) then
+        call ncread(ncid,'riv_umask',riv_umask(1:i1,j0:j1),start)
+      else
+        if (mynode == 0) then
+        write(*,*) 'riv_umask not found in initial file. Initializing ',
+     & 'to zero.'
+        endif
+      endif
+      ierr=nf90_inq_varid(ncid, 'riv_vmask', varid)
+      if (ierr == nf90_noerr) then
+        call ncread(ncid,'riv_vmask',riv_vmask(i0:i1,1:j1),start)
+      else
+        if (mynode == 0) then
+        write(*,*) 'riv_vmask not found in initial file. Initializing ',
+     & 'to zero.'
+        endif
+      endif
+
+! Free-surface and barotropic 2D momentuma, XI- and ETA-components
 
       call ncread(ncid,'zeta',zeta(i0:i1,j0:j1,1),start)
       zeta(i0:i1,j0:j1,1)=zeta(i0:i1,j0:j1,1)*rmask(i0:i1,j0:j1)
       call exchange_xxx(zeta(:,:,1))
 
       call ncread(ncid,'ubar',ubar( 1:i1,j0:j1,1),start)
-      ubar(1:i1,j0:j1,1) = ubar(1:i1,j0:j1,1)*umask(1:i1,j0:j1)
+      ubar(1:i1,j0:j1,1) = ubar(1:i1,j0:j1,1)*
+     &  (umask(1:i1,j0:j1)+riv_umask(1:i1,j0:j1))
       call exchange_xxx(ubar(:,:,1))
 
       call ncread(ncid,'vbar',vbar(i0:i1, 1:j1,1),start)
-      vbar(i0:i1,1:j1,1) = vbar(i0:i1,1:j1,1)*vmask(i0:i1,1:j1)
+      vbar(i0:i1,1:j1,1) = vbar(i0:i1,1:j1,1)*
+     &  (vmask(i0:i1,1:j1)+riv_vmask(i0:i1,1:j1))
       call exchange_xxx(vbar(:,:,1))
 
 ! Two sets of fast-time-averaged barotropic fluxes needed for exact
@@ -390,14 +412,16 @@ c--#define VERBOSE
 
       call ncread(ncid,vname(1,indxU), u(1:i1,j0:j1,:,tindx),start)
       do k=1,nz
-        u(1:i1,j0:j1,k,tindx) = u(1:i1,j0:j1,k,tindx)*umask(1:i1,j0:j1)
+        u(1:i1,j0:j1,k,tindx) = u(1:i1,j0:j1,k,tindx)*
+     &  (umask(1:i1,j0:j1)+riv_umask(1:i1,j0:j1))
       enddo
       call exchange_xxx(u(:,:,:,tindx) )
 
       call ncread(ncid,vname(1,indxV), v(i0:i1, 1:j1,:,tindx),start)           ! v requires masking and
-       do k=1,nz
-         v(i0:i1,1:j1,k,tindx) = v(i0:i1,1:j1,k,tindx)*vmask(i0:i1,1:j1)
-       enddo
+      do k=1,nz
+        v(i0:i1,1:j1,k,tindx) = v(i0:i1,1:j1,k,tindx)*
+     &  (vmask(i0:i1,1:j1)+riv_vmask(i0:i1,1:j1))
+      enddo
       call exchange_xxx(v(:,:,:,tindx) )
 
 # if defined NHMG

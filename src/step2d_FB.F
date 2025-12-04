@@ -37,9 +37,10 @@
       use ocean_vars
       use scalars
       use mpi_exchanges
+      use hidden_mpi_vars
 
       implicit none
-      integer istr,iend,jstr,jend, i,j, kbak, kold
+      integer istr,iend,jstr,jend, i,j, kbak, kold, icdr, cidx
       real, dimension(PRIVATE_2D_SCRATCH_ARRAY) :: zeta_new, Dnew,
      &                         rubar,rvbar,  urhs,vrhs,  DUon,DVom,
      &                                       Drhs, UFx,UFe,VFx,VFe
@@ -143,7 +144,7 @@
           j = cdr_jloc(cidx)
 
           zeta(i,j,kstp)=zeta(i,j,kstp) + dtfast*pm(i,j)*pn(i,j)
-     &               *cdr_vol(icdr)*sum(cdr_prf(cidx,:))
+     &               *cdr_vol(icdr)*sum(cdr_prf(cidx,1,:))
         enddo
       endif
       do j=jstrV-1,jend !! why are these from ...-1?

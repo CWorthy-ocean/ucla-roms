@@ -90,12 +90,14 @@
       ! Or: .... if analytical, define the river fluxes in this
       ! subroutine
       use netcdf
+      use mpi
       implicit none
 
       ! local
       integer :: i,j
       integer :: ierr,ncid,varid
       real  :: riv_cells,riv_east,riv_west
+      real  :: local_maxval, global_maxval
 
       allocate( riv_uflx(GLOBAL_2D_ARRAY) ); riv_uflx = 0.
       allocate( riv_vflx(GLOBAL_2D_ARRAY) ); riv_vflx = 0.
@@ -146,6 +148,24 @@
             call ncread(ncid, "river_index", ridx_real(i0:i1,j0:j1))
             call ncread(ncid, "river_fraction", rfrc(i0:i1,j0:j1))
             ierr = nf90_close(ncid)
+
+            ! Check if any river indices are greater than the chosen
+            ! value for nriv, in which case we could get a segfault
+            local_maxval = MAXVAL(ridx_real)
+
+            ! Find global maximum
+            call MPI_Reduce( local_maxval, global_maxval, 1, mpi_double_precision,
+     &      mpi_max, 0, ocean_grid_comm, ierr)
+
+            if (mynode == 0) then
+              if (global_maxval > nriv) then
+                write(*,*) 'ERROR: nriv=', nriv,
+     &         'but index ', global_maxval,
+     &         ' found in river input file.'
+                error stop
+              endif
+            endif
+
 !     Check for non-integer values
             ridx(i0:i1, j0:j1) = int(ridx_real(i0:i1, j0:j1))
             if (any(abs(ridx_real(i0:i1,j0:j1) - ridx(i0:i1,j0:j1)) > 1.0e-6)) then
@@ -216,10 +236,22 @@
             endif
             ! 10*iriver needed because uflx/vflx can be positive or negative around
             ! the iriver number, and hence nearest integer is safest done with 10*.
-            if (rmask(i-1,j)>0 ) riv_uflx(i  ,j) =-(rfrc(i,j))/faces + 10*ridx(i,j)
-            if (rmask(i+1,j)>0 ) riv_uflx(i+1,j) = (rfrc(i,j))/faces + 10*ridx(i,j)
-            if (rmask(i,j-1)>0 ) riv_vflx(i,j  ) =-(rfrc(i,j))/faces + 10*ridx(i,j)
-            if (rmask(i,j+1)>0 ) riv_vflx(i,j+1) = (rfrc(i,j))/faces + 10*ridx(i,j)
+            if (rmask(i-1,j)>0 ) then
+              riv_uflx(i,j) =-(rfrc(i,j))/faces + 10*ridx(i,j)
+              riv_umask(i,j) = 1.0
+            endif
+            if (rmask(i+1,j)>0 ) then
+              riv_uflx(i+1,j) = (rfrc(i,j))/faces + 10*ridx(i,j)
+              riv_umask(i+1,j) = 1.0
+            endif
+            if (rmask(i,j-1)>0 ) then
+              riv_vflx(i,j) =-(rfrc(i,j))/faces + 10*ridx(i,j)
+              riv_vmask(i,j) = 1.0
+            endif
+            if (rmask(i,j+1)>0 ) then
+              riv_vflx(i,j+1) = (rfrc(i,j))/faces + 10*ridx(i,j)
+              riv_vmask(i,j+1) = 1.0
+            endif
 #endif
           endif
         enddo
