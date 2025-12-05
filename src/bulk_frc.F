@@ -771,36 +771,10 @@
 !          shflx_sen(i,j)=hfsen
 !          shflx_rlw(i,j)=hflw
 !
-!---------------------------------------------------------------
-! Flux correction to surface net heat flux.
-!---------------------------------------------------------------
-!
-# ifdef QCORRECTION
-          ! Not sure that this still works....
-          cff=cff11*dqdtg(i,j,it11)+cff12*dqdtg(i,j,it12)
-          stflx(i,j,itemp)=stflx(i,j,itemp) +cff*(
-     &           t(i,j,N,nrhs,itemp) -cff13*sstg(i,j,it13)
-     &                               -cff14*sstg(i,j,it14)
-     &                                                  )
-#  ifdef MASKING
-     &                                           *rmask(i,j)
-#  endif
-# endif /* QCORRECTION */
-
-!
 !--------------------------------------------------------------
-! Flux correction to surface salt flux.
+! Flux corrections to surface net heat flux and salt flux.
 !--------------------------------------------------------------
-# ifdef SFLX_CORR
-# ifdef SALINITY
-          stflx(i,j,isalt)=stflx(i,j,isalt) -dSSSdt*(
-     &           t(i,j,N,nrhs,isalt) - sss(i,j)  )
-#  ifdef MASKING
-     &                                           *rmask(i,j)
-#  endif
-# endif
-# endif
-
+      call apply_surf_field_corr
 !---------------------------------------------------------------
 ! Restrict stflx to prevent surface temperature to go below -1.8
 ! degrees C.
