@@ -151,7 +151,6 @@
       public :: insert_nodes
       public :: findstr,append_date_node
       public :: set_frc_data
-      public :: read_output_root_name
       public :: init_output_indices
       public :: find_new_record
       public :: nc_check_units
@@ -1102,37 +1101,7 @@
 
       end subroutine display_read_time_to_log  !]
 ! ----------------------------------------------------------------------
-      subroutine read_output_root_name(keyword, kwlen)  ![
-      ! read from .in file the root-name
-      ! for all output netcdf result files
-      ! this is called from read_inp.F
-      ! The following needs to be in the roms.in input file to use this
-      ! subroutine (file name needs to be 5 spaces from left margin):
-      !output_root_name:
-      !     rootname (<- insert desired rootname)
 
-      implicit none
-
-      ! inputs
-      character(len=*) :: keyword
-      integer          :: kwlen                            ! keyword length
-      ! local
-      integer           :: ierr = nf90_noerr
-      integer,parameter :: input=15
-
-      call cancel_kwd (keyword(1:kwlen), ierr)             ! remove keyword from keyword list for read_inp.F
-                                                           ! to know it's accounted for
-      read(input,'(A)',err=95) output_root_name            ! read & save filename root
-      goto 100
-                                                           ! error for read(input,'(A)',err=95)
-  95  write(*,'(/1x,4A/)') '### ERROR: roms_read_write :: Cannot ',
-     &                    'read entry ''', keyword(1:kwlen), '''.'
-      error stop
- 100  continue
-
-
-      end subroutine read_output_root_name  !]
-! ----------------------------------------------------------------------
       subroutine create_file(ftype,fname,nodate)  ![
       ! Creates a file using the root_name plus the extension
       ! It appends a date/time string and, if neccesary, a node number
