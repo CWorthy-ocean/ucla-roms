@@ -314,8 +314,6 @@
 
         if (.not. first_step_dia_his) then
            output_time_dia_his = output_time_dia_his + dt
-        endif
-        first_step_dia_his=.false.
 
         if (output_time_dia_his>=output_period_his_dia .or.
      &      output_time_dia_his==0                     ) then  ! time for an output
@@ -347,9 +345,13 @@
      &       'bgc diag :: wrote history, tdays =', tdays,
      &       'step =', iic, 'rec =', record_dia_his
           endif
-        endif  ! <-- wrt_file_his
+        endif  ! <-- output_time_dia_his
 
-      endif
+      endif ! first_step_dia_his
+
+      first_step_dia_his=.false.
+
+      endif ! wrt_his_dia
 
       ierr=nf90_close(ncid)
 #endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
