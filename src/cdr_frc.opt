@@ -14,8 +14,9 @@
       logical,public                     :: forcing_parameterized  = .true.      ! T if forcing with idealized Gaussian profiles
 
       ! INTERPOLATE FORCING IN TIME, OR NO?
-      logical                            :: time_interpolation = .false.   ! T if using time interpolation; if F, forcing is linearly
-                                                                           ! interpolated in time between consecutive records
+      logical                            :: time_interpolation = .false.   ! T if using time interpolation. If T, forcing is linearly
+                                                                           ! interpolated in time between consecutive records; otherwise,
+                                                                           ! forcing is held constant until the next record is reached
 
 
       ! PARAMETERIZED VERTICAL PROFILES ********************************
