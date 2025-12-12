@@ -70,7 +70,7 @@
         integer                           :: it1 = 1, it2 = 2              ! used to cycle between correct entries of 'data' above
         real,dimension(2)                 :: times = -99 ! [-99,-99]       ! stores 2 times that go with 'data' above
         logical                           :: ungridded = .false.
-        character(len=100)                 :: ungridded_forcing_file=''
+        character(len=100)                :: ungridded_forcing_file=''
         logical                           :: time_interpolation = .true.
       end type ncforce3d
 
@@ -512,13 +512,11 @@
 
       nc%it1 = it1
       nc%it2 = it2
-
       ! Temporal interpolation
       if (nc%time_interpolation) then
         vtimes  = nc%times
         cff1=( vtimes(it2)-modtime )/( vtimes(it2)-vtimes(it1) )
         cff2=( modtime-vtimes(it1) )/( vtimes(it2)-vtimes(it1) )
-
         var3d = cff1*nc%vdata(:,:,:,it1) + cff2*nc%vdata(:,:,:,it2)
 
         if (vtimes(it1)>modtime+eps.or.vtimes(it2)<modtime-eps) then
@@ -974,9 +972,8 @@
 
       call find_new_record(vname,tname,modtime,ifile,irec,
      &                         nc%times(it))
-
       ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
-      call ncread(ncid,vname,nc%vdata(:,:,:,it),(/1,1,1,irec/))
+      call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,:,it),(/1,1,1,irec/))
       ! add force file info to output nc
       if (mynode == 0) then
         ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)

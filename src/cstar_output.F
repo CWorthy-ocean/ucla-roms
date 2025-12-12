@@ -467,6 +467,17 @@
       DIC_source(:,:,:) = 0
       DIC_alt_source(:,:,:) = 0
 
+      if (forcing_3d) then
+        do k=1,nz
+          do j=1,ny
+            do i=1,nx
+              ALK_source(i,j,k) = cdr_flx_3d_ALK(i,j,k)
+              DIC_source(i,j,k) = cdr_flx_3d_DIC(i,j,k)
+            enddo
+          enddo
+        enddo
+
+      else
       ! Loop over cdr release locations in this subdomain
       do cidx=1,cdr_nprf
         icdr = cdr_icdr(cidx)
@@ -483,6 +494,8 @@
      &      + cdr_prf(cidx,iDIC_alt,k)*cdr_flx(icdr,iDIC_alt)
         enddo
       enddo
+
+      endif ! forcing_3d
 
       end subroutine calc_cdr_source !]
 

@@ -45,7 +45,7 @@
 
 
       ! 3D FORCING FROM FILE *************************************
-      ! Layerwise additionality
-      type (ncforce3d) :: nc_cdrflx_3d = ncforce3d( vname='cdr_trcflx_3d', tname='cdr_time')
+      type (ncforce3d) :: nc_cdrflx_3d_ALK = ncforce3d( vname='cdr_trcflx_3d_ALK', tname='cdr_time')
+      type (ncforce3d) :: nc_cdrflx_3d_DIC = ncforce3d( vname='cdr_trcflx_3d_DIC', tname='cdr_time')
 
       ! end user inputs
