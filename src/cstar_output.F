@@ -17,12 +17,13 @@
       use ocean_vars
       use diagnostics
       use cdr_frc
+      use error_handling, only : global_failure_condition_exit
       implicit none
 
       private
 
 #include "cstar_output.opt"
-
+      character(len=12) :: module_name = "cstar_output"
       real    :: output_time = 0
       integer :: record = nrpf ! to trigger the first file creation
 
@@ -218,7 +219,8 @@
       end subroutine define_cstar_output_variables
 
       subroutine init_cstar ![
-      ! Allocate and initialize arrays.
+! Allocate and initialize arrays.
+      character(len=9) :: sr_name = "init_cstar"
       implicit none
 
       ! local
@@ -233,7 +235,9 @@
       endif
 
       if (monthly_averages .and. .not. do_avg) then
-         error stop 'ERROR: cstar_output:: monthly avgs=t, but do_avg=f'
+         call global_failure_condition_exit(
+     &        context=module_name//"/"//sr_name,
+     &        info="`monthly_avg` is .true., but `do_avg` is .false.")
       endif
 
       ! Look one timestep ahead to initialize the "previous month", so that
@@ -706,9 +710,10 @@
       use roms_read_write
       use scalars
       use ocean_vars
+      use error_handling, only : global_failure_condition_exit
 
       implicit none
-
+      character(len=12) :: module_name = "cstar_output"
       private
 
 #include "cstar_output.opt"
@@ -719,15 +724,20 @@
       contains
 
       subroutine init_cstar ![
-      ! Allocate and initialize arrays.
+!     Allocate and initialize arrays.
       implicit none
+      character(len=9) :: sr_name = "init_cstar"
 
 #ifndef MARBL
-        error stop 'ERROR: cstar_output must have MARBL enabled.'
+         call global_failure_condition_exit(
+     &        context=module_name//"/"//sr_name,
+     &        info="cstar_output must have MARBL enabled.")
 #endif
 
 #ifndef MARBL_DIAGS
-        error stop 'ERROR: cstar_output must have MARBL_DIAGS enabled.'
+         call global_failure_condition_exit(
+     &        context=module_name//"/"//sr_name,
+     &        info="cstar_output must have MARBL_DIAGS enabled.")
 #endif
 
 #ifndef CDR_FORCING

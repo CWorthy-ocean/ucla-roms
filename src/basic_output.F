@@ -13,11 +13,12 @@
       use diagnostics
       use scalars
       use ocean_vars
+      use error_handling, only : global_failure_condition_exit
       implicit none
       private
 
 #include "ocean_vars.opt"
-
+      character(len=12) :: module_name = "basic_output"
 # ifdef SOLVE3D
       real,allocatable,dimension(:,:,:) :: akv_avg
       real,allocatable,dimension(:,:,:) :: akt_avg
@@ -112,15 +113,31 @@
 !----------------------------------------------------------------------
       subroutine init_avg_arrays  ![
       use scalars
-
       implicit none
+      character(len=15) :: sr_name = "init_avg_arrays"
+      character(len=200) :: error_info
 
-      if (wrt_file_his .and. mod(output_period_his,dt) /= 0) then
-        stop 'ERROR :: ocean_vars.opt - dt not a factor of output_period_his!'
+      if (wrt_file_his .and. mod(output_period_his, dt) /= 0) then
+         write(error_info, '(A, F0.2, (2A), F0.2,A)')
+     &        "dt (", dt, ") is not a factor of ",
+     &        "output_period_his (",
+     &        output_period_his, ")"
+
+         call global_failure_condition_exit(
+     &        context=module_name//"/"//sr_name,
+     &        info=error_info)
       endif
+
       if (wrt_file_avg .and. mod(output_period_avg,dt) /= 0) then
-        stop 'ERROR :: ocean_vars.opt - dt not a factor of output_period_avg!'
+         write(error_info, '(A, F0.2, (2A), F0.2,A)')
+     &        "dt (", dt, ") is not a factor of ",
+     &        "output_period_avg (",
+     &        output_period_avg, ")"
+         call global_failure_condition_exit(
+     &        context=module_name//"/"//sr_name,
+     &        info=error_info)
       endif
+
 
       if (wrt_file_avg) then
         if (wrt_avg_Z)  then

@@ -50,6 +50,7 @@
       use basic_output, vn=>vname
       use scalars
       use diagnostics
+      use error_handling, only : global_failure_condition_exit
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       use bgc_shared_vars
 #endif
@@ -62,7 +63,7 @@
 
 #include "extract_data.opt"
 
-
+      character(len=12) :: module_name = "extract_data"
       integer :: total_rec=0 ! total records
       integer :: nobj  ! number of extraction objects
 
@@ -141,7 +142,8 @@
       !local
       character(len=30) :: preamb
       integer :: i,np,ierr,lpre
-      real,dimension(:),allocatable :: angp  ! grid angle
+      real,dimension(:),allocatable :: angp ! grid angle
+      character(len=17) :: sr_name = "init_extract_data"
 
       call read_extraction_objects
 
@@ -149,12 +151,12 @@
       allocate( Wvl(GLOBAL_2D_ARRAY,nz+1))
       if (diag_pflx) then
 #ifndef DIAGNOSTICS
-        if (mynode == 0) then
-          print *, 'ERROR: init_extract_data :: Must define CPP key '//
-     &    'DIAGNOSTICS if do_extract=.true. and diag_pflx=.true.'
-          call flush()
+         if (mynode == 0) then
+         call global_failure_condition_exit(
+     &        context=module_name//"/"//sr_name,
+     &           info="Must define CPP key DIAGNOSTICS if `do_extract`" //
+     &           "=.true. and diag_pflux=.true")
         endif
-        error stop
 #endif
         allocate( upe(GLOBAL_2D_ARRAY) ); upe = 0
         allocate( vpe(GLOBAL_2D_ARRAY) ); vpe = 0
@@ -233,6 +235,7 @@
       integer               :: n1,n2,i0,i1,lstr
       integer ierr,sidx,sidx2
       real :: period
+      character(len=24) :: sr_name = "read_extraction_objects"
 
       if (mynode==0) then
         write(*,'(7x,2A)')
@@ -323,18 +326,21 @@
 
           ! DIAGNOSTICS needs to be activated and diag_pflx=.true.
           if (obj(iobj)%up.and. .not.diag_pflx) then
-            print *,'Fatal ERROR: up extraction, diag_pflx is not set'
-            stop
+             call global_failure_condition_exit(
+     &            context=module_name//"/"//sr_name,
+     &            info="diag_pflx is not set for up extraction")
           endif
           if (obj(iobj)%vp.and. .not.diag_pflx) then
-            print *,'Fatal ERROR: vp extraction, diag_pflx is not set'
-            stop
+             call global_failure_condition_exit(
+     &            context=module_name//"/"//sr_name,
+     &            info="diag_pflx is not set for vp extraction")
           endif
 #if !defined(BIOLOGY_BEC2) && !defined(MARBL)
-         if (obj(iobj)%bgc) then
-            print *,'Fatal ERROR: BGC extraction, BIOLOGY_BEC2'//
-     &           ' or MARBL cpp key not set'
-            stop
+          if (obj(iobj)%bgc) then
+             call global_failure_condition_exit(
+     &            context=module_name//"/"//sr_name,
+     &            info="MARBL or BIOLOGY_BEC2 cpp key is not "//
+     &            "set for BGC extraction")
          endif
 #endif
 

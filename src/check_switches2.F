@@ -14,7 +14,10 @@
       subroutine check_tile_bounds (tile, ierr)
       use param
       use hidden_mpi_vars
+      use error_handling, only: global_failure_condition_exit
       implicit none
+      character(len=17) :: sr_name="check_tile_bounds"
+      character(len=200) :: error_info
       integer tile, ierr, isize,jsize
 #include "compute_tile_bounds.h"
 
@@ -23,15 +26,24 @@
 
       if (isize<2) then
         ierr=ierr+1
-        write(*,'(1x,2A,I3,1x,A,I4,3x,A,I3,1x,A,2I4)') '### ERROR: ',
+        write(error_info,'(1x,2A,I3,1x,A,I4,3x,A,I3,1x,A,2I4)')
      &          'NSUB_X =', NSUB_X,  'is incompatible with Lm =', Lm,
-     &          'i_X =', i_X,  '==> istr,iend =', istr,iend
+     &       'i_X =', i_X,  '==> istr,iend =', istr,iend
+
+         call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
+
       endif
       if (jsize<2) then
         ierr=ierr+1
-        write(*,'(1x,2A,I3,1x,A,I4,3x,A,I3,1x,A,2I4)') '### ERROR: ',
+        write(error_info,'(1x,2A,I3,1x,A,I4,3x,A,I3,1x,A,2I4)')
      &          'NSUB_E =', NSUB_E,  'is incompatible with Mm =', Mm,
-     &          'j_E =', j_E,  '==> jstr,jend =', jstr,jend
+     &       'j_E =', j_E,  '==> jstr,jend =', jstr,jend
+         call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
+
       endif
       end
 
@@ -89,7 +101,10 @@
       use param
       use scalars
       use strings
+      use error_handling, only: global_failure_condition_exit
       implicit none
+      character(len=16) :: sr_name = "check_switches2"
+      character(len=200) :: error_info
       integer ierr, nobc_west, nobc_east, nobc_south, nobc_north,
      &                                ncoupl, nAk, is,ie, lenstr
 
@@ -163,15 +178,23 @@
       ncoupl=ncoupl+1
 #endif
       if (ncoupl==0) then
-        write(*,'(/1x,3A/)') '### ERROR: neither PRED_COUPLED_MODE ',
-     &                       'nor CORR_COUPLED_MODE are defined in ',
-     &                       '"set_global_definitions.h".'
+        write(error_info,'(A)') 'neither PRED_COUPLED_MODE '//
+     &                       'nor CORR_COUPLED_MODE are defined in '//
+     &        '"set_global_definitions.h".'
+        call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
+
         ierr=ierr+1
       elseif (ncoupl>1) then
-        write(*,'(/1x,2A/12x,2A/)')     '### ERROR: miss-configured ',
-     &          'switches PRED_COUPLED_MODE and CORR_COUPLED_MODE ',
-     &          'in "set_global_definitions.h": only one of them ',
-     &          'should be defined.'
+        write(error_info,'(A)')     'misconfigured '//
+     &          'switches PRED_COUPLED_MODE and CORR_COUPLED_MODE '//
+     &          'in "set_global_definitions.h": only one of them '//
+     &        'should be defined.'
+        call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
+
         ierr=ierr+1
       endif
 
@@ -191,13 +214,19 @@
       nobc_east=nobc_east+1
 #endif
       if (nobc_west>1) then
-        write(*,'(1x,2A)') '### ERROR in "cppdefs.opt": more than one ',
-     &          'boundary condition is chosen on the WESTERN EDGE.'
+        write(error_info,'(A)') 'more than one '//
+     &        'boundary condition is chosen on the WESTERN EDGE.'
+         call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
         ierr=ierr+1
       endif
       if (nobc_east>1) then
-        write(*,'(1x,2A)') '### ERROR in "cppdefs.opt": more than one ',
-     &          'boundary condition is chosen on the EASTERN EDGE.'
+        write(*,'(A)') 'more than one '//
+     &        'boundary condition is chosen on the EASTERN EDGE.'
+         call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
         ierr=ierr+1
       endif
 
@@ -215,13 +244,20 @@
       nobc_north=nobc_north+1
 #endif
       if (nobc_south>1) then
-        write(*,'(1x,2A)') '### ERROR in "cppdefs.opt": more than one ',
-     &          'boundary condition is chosen on the SOUTHERN EDGE.'
+        write(error_info,'(A)') 'more than one '//
+     &        'boundary condition is chosen on the SOUTHERN EDGE.'
+         call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
         ierr=ierr+1
       endif
       if (nobc_north>1) then
-        write(*,'(1x,2A)') '### ERROR in "cppdefs.opt": more than one ',
-     &          'boundary condition is chosen on the NORTHERN EDGE.'
+        write(error_info,'(1x,2A)') 'more than one '//
+     &        'boundary condition is chosen on the NORTHERN EDGE.'
+         call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
+
         ierr=ierr+1
       endif
 
@@ -247,17 +283,25 @@
       nAk=nAk+1
 #endif
       if (nAk>1) then
-        write(*,'(1x,2A)') '### ERROR in "cppdefs.opt": more than ',
-     &                     'one vertical mixing scheme is chosen.'
+        write(error_info,'(A)') 'cppdefs.opt: more than '//
+     &        'one vertical mixing scheme is chosen.'
+        call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
+
         ierr=ierr+1
       endif
 
 /*
 #ifdef SPLIT_EOS
 # ifndef NONLIN_EOS
-      write(*,'(1x,2A/12x,A)') '### ERROR in "cppdefs.opt": ',
-     &        'illegal combination of CPP-switches: ',
-     &        'SPLIT_EOS is defined, but NONLIN_EOS is not.'
+      write(*,'(A') 'cppdefs.opt: '//
+     &        'illegal combination of CPP-switches: '//
+     &'SPLIT_EOS is defined, but NONLIN_EOS is not.'
+      call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
+
       ierr=ierr+1
 # endif
 #endif
@@ -268,17 +312,22 @@
 
 #ifndef SOLVE3D
       if (ndtfast>1) then
-        write(*,'(1x,A,I3,1x,A/12x,A,2x,A)')  '### ERROR: NDTFAST =',
+        write(error_info,'(A,I3,1x,A/12x,A,2x,A)')  'NDTFAST =',
      &         ndtfast, 'is greater than unity for a shallow water',
      &        'configuration.','Change it to unity in startup file.'
-     &
+      call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
         ierr=ierr+1
       endif
 #endif
       return
-  99  mpi_master_only write(*,'(/1x,2A/14x,A)')
-     &  '### ERROR: checkdefs :: Insufficient size of string "cpps" ',
-     &  'in file "strings".', 'Increase the size it and recompile.'
+  99  mpi_master_only write(error_info,'(/1x,2A/14x,A)')
+     &     'Insufficient size of string "cpps" ',
+     &     'in file "strings".', 'Increase the size it and recompile.'
+      call global_failure_condition_exit(
+     &        context=sr_name,
+     &        info=error_info)
       ierr=ierr+1
       return
       end

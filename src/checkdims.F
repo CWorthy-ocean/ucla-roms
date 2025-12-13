@@ -1,4 +1,19 @@
 #include "cppdefs.opt"
+      character(len=200) function write_dim_error_info(dimname, filename,
+     &     expected_size, actual_size) result(info_msg)
+
+      character(*), intent(in) :: dimname, filename
+      integer,      intent(in) :: expected_size, actual_size
+      character(len=500) :: message_buffer
+
+      write(message_buffer, '(A,A,A,I0,A,A,A,I0,A)')
+     &     'wrong size of dimension ', trim(dimname),
+     &     ' = ', actual_size, ' in netCDF file ', trim(filename),
+     &     ': must be ',expected_size, ' instead.'
+      info_msg = trim(message_buffer)
+
+      end function write_dim_error_info
+
 
       integer function checkdims(ncid, fname, max_rec)  ![
 
@@ -20,17 +35,23 @@
       use netcdf
       use roms_read_write
       use nc_read_write
+      use error_handling, only : global_failure_condition_exit
 
       implicit none
+      character(len=9) :: fn_name="checkdims"
+      character(len=200) :: error_info
       integer ncid, max_rec, ierr, icount, ndims, recdim,
      &                       dsize, id, ldim, lname, lenstr
       character(len=*) fname
       character(len=16) dname
+      character(len=200) write_dim_error_info
 
 #ifdef SOLVE3D
       integer check_scoord, chk_Cs_wr
       chk_Cs_wr=0
 #endif
+
+
       lname=lenstr(fname)
 
       icount=0      !--> initialize: error counter (must remain 0);
@@ -38,6 +59,8 @@
       max_rec=0     ! current size unlimited dimension (if exists).
 
       ierr=nf90_inquire(ncid, ndimensions = ndims)
+
+
       if (ierr == nf90_noerr) then
         ierr=nf90_inquire(ncid,unlimiteddimid = recdim)
         if (ierr/=0) call handle_ierr(ierr,'checkdim:: find unldimid ')
@@ -47,39 +70,62 @@
             ldim=lenstr(dname)
             if ( (ldim == 6 .and. dname(1:ldim) == 'xi_rho') .or.
      &           (ldim == 4 .and. dname(1:ldim) == 'xi_v' ) ) then
-              if (dsize/=xi_rho) then
-                write(*,1) dname(1:ldim), dsize,fname(1:lname),xi_rho
+               if (dsize/=xi_rho) then
+                  error_info=write_dim_error_info(
+     &                 dname(1:ldim), fname(1:lname), xi_rho, dsize)
+                  call global_failure_condition_exit(
+     &                 context=fn_name,
+     &                 info=error_info)
                 icount=icount+1
               endif
             elseif ( (ldim == 4 .and. dname(1:ldim) == 'xi_u'  ) .or.
      &               (ldim == 6 .and. dname(1:ldim) == 'xi_psi') ) then
-              if (dsize /= xi_u) then
-                write(*,1) dname(1:ldim), dsize, fname(1:lname), xi_u
+               if (dsize /= xi_u) then
+                  error_info=write_dim_error_info(
+     &                 dname(1:ldim), fname(1:lname), xi_u, dsize)
+                  call global_failure_condition_exit(
+     &                 context=fn_name,
+     &                 info=error_info)
                 icount=icount+1
               endif
             elseif ( (ldim == 7 .and. dname(1:ldim) == 'eta_rho') .or.
      &               (ldim == 5 .and. dname(1:ldim) == 'eta_u' ) ) then
-              if (dsize/=eta_rho) then
-                write(*,1) dname(1:ldim), dsize,fname(1:lname),eta_rho
+               if (dsize/=eta_rho) then
+                  error_info=write_dim_error_info(
+     &                 dname(1:ldim), fname(1:lname), eta_rho, dsize)
+                  call global_failure_condition_exit(
+     &                 context=fn_name,
+     &                 info=error_info)
                 icount=icount+1
               endif
             elseif ( (ldim == 5 .and. dname(1:ldim) == 'eta_v' ) .or.
      &               (ldim == 7 .and. dname(1:ldim) =='eta_psi') ) then
-              if (dsize /= eta_v) then
-                write(*,1) dname(1:ldim), dsize, fname(1:lname), eta_v
+               if (dsize /= eta_v) then
+                  error_info=write_dim_error_info(
+     &                 dname(1:ldim), fname(1:lname), eta_v, dsize)
+                  call global_failure_condition_exit(
+     &                 context=fn_name,
+     &                 info=error_info)
                 icount=icount+1
               endif
 #ifdef SOLVE3D
             elseif (ldim == 3 .and. dname(1:ldim) == 's_w') then
               chk_Cs_wr=chk_Cs_wr+1
               if (dsize /= N+1) then
-                write(*,1) dname(1:ldim), dsize, fname(1:lname), N+1
-                icount=icount+1
+                  error_info=write_dim_error_info(
+     &                 dname(1:ldim), fname(1:lname), N+1, dsize)
+                  call global_failure_condition_exit(
+     &                 context=fn_name,
+     &                 info=error_info)
               endif
             elseif (ldim == 5 .and. dname(1:ldim) == 's_rho') then
               chk_Cs_wr=chk_Cs_wr+2
               if (dsize /= N) then
-                write(*,1) dname(1:ldim), dsize, fname(1:lname), N
+                  error_info=write_dim_error_info(
+     &                 dname(1:ldim), fname(1:lname), N, dsize)
+                  call global_failure_condition_exit(
+     &                 context=fn_name,
+     &                 info=error_info)
                 icount=icount+1
               endif
 #endif
@@ -87,17 +133,25 @@
               max_rec=dsize
             endif
           else
-            write(*,'(/1x,2A,I3/12x,3A/12x,A/)')      '### ERROR: ',
-     &            'checkdims :: Cannot get size of dimension #', id,
-     &            'from netCDF file ''',    fname(1:lname),   '''.',
-     &                                           nf90_strerror(ierr)
+             write(error_info,'(/A,I3/12x,3A/12x,A/)')
+     &            'Cannot get size of dimension #', id,
+     &            'from netCDF file ''',fname(1:lname),'''.',
+     &            nf90_strerror(ierr)
+             call global_failure_condition_exit(
+     &            context=fn_name,
+     &            info=error_info)
+
             icount=icount+1
           endif
         enddo
       else
-        write(*,'(/1x,4A/12x,A/)')       '### ERROR: checkdims :: ',
-     &          'Cannot get number of dimensions in netCDF file ''',
-     &                     fname(1:lname), '''.', nf90_strerror(ierr)
+        write(error_info,'(A)')
+     &          'Cannot get number of dimensions in netCDF file '''//
+     &        fname(1:lname)// '''.'// nf90_strerror(ierr)
+        call global_failure_condition_exit(
+     &       context=fn_name,
+     &       info=error_info)
+
         icount=icount+1
       endif
 #ifdef SOLVE3D
@@ -105,9 +159,9 @@
         icount=icount+check_scoord(ncid, fname, chk_Cs_wr)
       endif
 #endif
-  1   format(/' ### ERROR: checkdims :: wrong size of dimension ''',
-     &                  A, ''' =', i5 / 12x, 'in netCDF file ''', A,
-     &                            ''': must be', i5,1x, 'instead.'/)
+c$$$  1   format(/'wrong size of dimension ''',
+c$$$     &                  A, ''' =', i5 / 12x, 'in netCDF file ''', A,
+c$$$     &                            ''': must be', i5,1x, 'instead.'/)
       checkdims=icount
 
       end  !]
@@ -132,8 +186,11 @@
 
       use param
       use netcdf
+      use error_handling, only: global_failure_condition_exit
 
       implicit none
+      character(len=13) :: fn_name="check_vardims"
+      character(len=200) :: error_info
       integer ncid, varid, horiz_type, n3
       character(len=*) fname
       character(len=32) vname
@@ -155,19 +212,25 @@
           if (ierr == nf90_noerr) then
             ierr=nf90_inquire_dimension(ncid, dimid(i), len=size)
             if (ierr == nf90_noerr) then
-              if (count(i) /= size) then
-                write(*,'(/2A,I3,1x,5A,2(I5,1x,A)/)')   '### ERROR: ',
-     &                    'checkvardims :: mismatch in dimension #', i,
+               if (count(i) /= size) then
+                  write(error_info,'(/A,I3,1x,5A,2(I5,1x,A)/)')
+     &                    'mismatch in dimension #', i,
      &                    'for variable ''', vname(1:lvar), ''' in ''',
      &                     fname(1:lfnm),  ''': expecting',   count(i),
-     &                              'instead of', size, 'in the file.'
+     &                 'instead of', size, 'in the file.'
+                  call global_failure_condition_exit(
+     &                 context=fn_name,
+     &                 info=error_info)
                 ierr=nf90_noerr-1
               endif
             else
-              write(*,'(/1x,2A,I3,1x,6A/)') '### ERROR: checkvardims ',
-     &                    ':: Cannot determine size of dimension #', i,
-     &                    'for variable ''', vname(1:lvar), ''' in ''',
-     &                       fname(1:lfnm), ''', ', nf90_strerror(ierr)
+              write(error_info,'(/A,I3,1x,6A/)')
+     &              'Cannot determine size of dimension #', i,
+     &              'for variable ''', vname(1:lvar), ''' in ''',
+     &              fname(1:lfnm), ''', ', nf90_strerror(ierr)
+              call global_failure_condition_exit(
+     &             context=fn_name,
+     &             info=error_info)
             endif
           endif
         enddo
@@ -177,23 +240,34 @@
           ierr=nf90_inquire_dimension(ncid, dimid(3), len=size)
           if (ierr == nf90_noerr) then
             if (n3 /= size) then
-              write(*,'(/6A,2(I4,1x,A)/)')  '### ERROR: checkvardims ',
-     &                    ':: mismatch in dimension #3 of variable ''',
+              write(error_info,'(/5A,2(I4,1x,A)/)')
+     &                    'mismatch in dimension #3 of variable ''',
      &                        vname(1:lvar), ''' in ''', fname(1:lfnm),
-     &         ''': expecting', n3, 'instead of', size, 'in the file.'
+     &              ''': expecting',n3,'instead of',size,'in the file.'
+              call global_failure_condition_exit(
+     &             context=fn_name,
+     &             info=error_info)
+
               ierr=nf90_noerr-1
             endif
           else
-            write(*,'(/1x,7A/)')  '### ERROR: checkvardims :: Cannot ',
-     &                'determine size of dimension #3 for variable ''',
-     &                vname(1:lvar), ''' in ''', fname(1:lfnm), ''', ',
-     &                                               nf90_strerror(ierr)
+            write(error_info,'(/6A/)')
+     &            'Cannot determine size of dimension #3 for variable''',
+     &            vname(1:lvar), ''' in ''', fname(1:lfnm), ''', ',
+     &            nf90_strerror(ierr)
+            call global_failure_condition_exit(
+     &           context=fn_name,
+     &           info=error_info)
+
           endif
         endif ! <-- n3 > 0
       else
-        write(*,'(/1x,2A,I3,1x,4A/)')    '### ERROR: checkvardims :: ',
+        write(error_info,'(/A,I3,1x,4A/)')
      &      'Cannot make inquiry for variable varid =', varid, 'in ''',
-     &                       fname(1:lfnm), ''', ', nf90_strerror(ierr)
+     &        fname(1:lfnm), ''', ', nf90_strerror(ierr)
+        call global_failure_condition_exit(
+     &       context=fn_name,
+     &       info=error_info)
       endif
       check_vardims=ierr
 
@@ -211,8 +285,11 @@
 
       use param
       use scoord
+      use error_handling, only: global_failure_condition_exit
 
       implicit none
+      character(len=12) :: fn_name = "check_scoord"
+      character(len=200) :: error_info
       integer ncid, what_to_check
       character(len=*) fname
       real, parameter :: epsil=1.D-7
@@ -237,9 +314,12 @@
       if (ierr == 0) then
         if (abs((hc-tst_val(1))/hc)>epsil) then
                 print *, hc,tst_val(1)
-          write(*,'(/1x,2A,F12.5,1x,A,F12.5,1x,3A/)')  '### ERROR: ',
+          write(error_info,'(/A,F12.5,1x,A,F12.5,1x,3A/)')
      &                  'Mismatch in ''hc'': should be', hc, 'found',
      &               tst_val(1), 'in file ''', fname(1:lfile), '''.'
+          call global_failure_condition_exit(
+     &         context=fn_name,
+     &         info=error_info)
           icount=icount+1
 # ifdef VERBOSE
         else
@@ -257,8 +337,11 @@
             endif
           enddo
           if (ierr /= 0) then
-            write(*,'(/1x,4A/)')  '### ERROR: Mismatch in ''Cs_w'' ',
-     &                    'values in file ''', fname(1:lfile), '''.'
+            write(error_info,'(/4A/)')  'Mismatch in ''Cs_w'' ',
+     &            'values in file ''', fname(1:lfile), '''.'
+            call global_failure_condition_exit(
+     &           context=fn_name,
+     &           info=error_info)
             icount=icount+1
 # ifdef VERBOSE
           else
@@ -277,8 +360,11 @@
             endif
           enddo
           if (ierr /= 0) then
-            write(*,'(/1x,4A/)')  '### ERROR: Mismatch in ''Cs_r'' ',
-     &                    'values in file ''', fname(1:lfile), '''.'
+            write(error_info,'(/1x,4A/)')  'Mismatch in ''Cs_r'' ',
+     &            'values in file ''', fname(1:lfile), '''.'
+            call global_failure_condition_exit(
+     &           context=fn_name,
+     &           info=error_info)
             icount=icount+1
 # ifdef VERBOSE
           else
@@ -292,9 +378,12 @@
         ierr=read_nc1dat(ncid, fname, 'theta_s', 1,  tst_val)
         if (ierr == 0) then
           if (abs(theta_s-tst_val(1)) > epsil) then
-            write(*,'(/1x,A,2(A,F9.4,1x),3A/)')       '### ERROR: ',
-     &              'Mismatch in ''theta_s'': should be',   theta_s,
-     &      'found', tst_val(1), 'in file ''', fname(1:lfile), '''.'
+            write(error_info,'(/2(A,F9.4,1x),3A/)')
+     &            'Mismatch in ''theta_s'': should be',   theta_s,
+     &            'found',tst_val(1),'in file ''', fname(1:lfile),'''.'
+            call global_failure_condition_exit(
+     &           context=fn_name,
+     &           info=error_info)
 # ifdef VERBOSE
           else
             write(*,*) 'check_scoord :: checking theta_s: OK'
@@ -304,9 +393,13 @@
         ierr=read_nc1dat(ncid, fname, 'theta_b', 1,  tst_val)
         if (ierr == 0) then
           if (abs(theta_b-tst_val(1)) > epsil) then
-            write(*,'(/1x,A,2(A,F9.4,1x),3A/)')        '### ERROR: ',
+            write(error_info,'(/2(A,F9.4,1x),3A/)')
      &      'Mismatch in ''theta_b'': should be',   theta_b, 'found',
-     &               tst_val(1), 'in file ''', fname(1:lfile), '''.'
+     &            tst_val(1), 'in file ''', fname(1:lfile), '''.'
+            call global_failure_condition_exit(
+     &           context=fn_name,
+     &           info=error_info)
+
 # ifdef VERBOSE
           else
             write(*,*) 'check_scoord :: checking theta_b: OK'
@@ -346,8 +439,11 @@
 
       use param
       use netcdf
+      use error_handling, only : global_failure_condition_exit
 
       implicit none
+      character(len=11) :: fn_name = "read_nc1dat"
+      character(len=200) :: error_info
       integer read_nc1dat, ncid, nlen
       character(len=*) fname, vname
       real value(nlen)
@@ -362,9 +458,12 @@
         if (size == nlen) then
           ierr=nf90_get_att(ncid, nf90_global, vname, value)
           if (ierr /= nf90_noerr) then
-            write(*,'(/1x,6A/12x,A/)')    '### ERROR: read_nc1dat :: ',
+            write(error_info,'(/5A/12x,A/)')
      &          'Cannot retrieve global attribute ''',   vname(1:lvar),
-     &          ''' from ''', fname(1:lfile), '''.', nf90_strerror(ierr)
+     &            ''' from ''', fname(1:lfile), '''.', nf90_strerror(ierr)
+            call global_failure_condition_exit(
+     &           context=fn_name,
+     &           info=error_info)
           endif
         endif
       else
@@ -388,28 +487,40 @@
                   endif
                 enddo
                 if (ierr /= nf90_noerr) then
-                  write(*,'(/1x,2A,I3,1x,3A/12x,A/)')    '### ERROR: ',
+                  write(error_info,'(/A,I3,1x,3A/12x,A/)')
      &                'read_nc1dat :: Cannot find size of dimension #',
      &                 dimids(i),  'in file ''', fname(1:lfile), '''.',
-     &                                             nf90_strerror(ierr)
+     &                  nf90_strerror(ierr)
+                  call global_failure_condition_exit(
+     &                 context=fn_name,
+     &                 info=error_info)
                 endif
               else
-                write(*,'(/1x,6A/12x,A/)')   '### ERROR: read_nc1dat ',
-     &       ':: Cannot determine dimension IDs for ''', vname(1:lvar),
-     &       ''' in file ''', fname(1:lfile), '''.', nf90_strerror(ierr)
+                write(error_info,'(/5A/12x,A/)')
+     &                'Cannot determine dimension IDs for ''', vname(1:lvar),
+     &                ''' in file ''', fname(1:lfile), '''.', nf90_strerror(ierr)
+                call global_failure_condition_exit(
+     &               context=fn_name,
+     &               info=error_info)
               endif
             endif
           else
-            write(*,'(/1x,6A/12x,A/)')    '### ERROR: read_nc1dat :: ',
-     &   'Cannot determine number of dimensions for ''', vname(1:lvar),
-     &      ''' in file ''',  fname(1:lfile), '''.', nf90_strerror(ierr)
+            write(error_info,'(/5A/12x,A/)')
+     &            'Cannot determine number of dimensions for ''', vname(1:lvar),
+     &            ''' in file ''',  fname(1:lfile), '''.', nf90_strerror(ierr)
+            call global_failure_condition_exit(
+     &           context=fn_name,
+     &           info=error_info)
           endif
           if (size == nlen .and. ierr == nf90_noerr) then
             ierr=nf90_get_var(ncid, varid, value)
             if (ierr/=nf90_noerr) then
-              write(*,'(/1x,6A/12x,A/)')  '### ERROR: read_nc1dat :: ',
-     &                       'Cannot read variable ''',  vname(1:lvar),
-     &     ''' from file ''', fname(1:lfile), '''.', nf90_strerror(ierr)
+              write(error_info,'(/5A/12x,A/)')
+     &              'Cannot read variable ''',  vname(1:lvar),
+     &              ''' from file ''', fname(1:lfile), '''.', nf90_strerror(ierr)
+              call global_failure_condition_exit(
+     &             context=fn_name,
+     &             info=error_info)
             endif
           endif
         else
@@ -420,10 +531,13 @@
         endif
       endif
       if (size /= nlen .and. ierr == nf90_noerr) then
-        write(*,'(/1x,6A/12x,A,I7,1x,A,I7/)')    '### ERROR: ',
-     &   'read_nc1dat :: Unexpected size of ''', vname(1:lvar),
-     &   ''' in file ''',  fname(1:lfile),  ''':', 'should be',
-     &                                 nlen, 'but found', size
+        write(error_info,'(/5A/12x,A,I7,1x,A,I7/)')
+     &        'Unexpected size of ''', vname(1:lvar),
+     &        ''' in file ''',  fname(1:lfile),  ''':', 'should be',
+     &        nlen, 'but found', size
+        call global_failure_condition_exit(
+     &       context=fn_name,
+     &       info=error_info)
         ierr=+1
       endif
       read_nc1dat=ierr
