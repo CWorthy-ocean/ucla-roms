@@ -136,6 +136,7 @@
 #define rzeta  UFe
 #define rzeta2  VFe
 #define rzetaSA VFx
+#if defined CDR_FORCING && defined MARBL
       if (cdr_source.and.cdr_volume) then
         do cidx=1,cdr_nprf
           icdr = cdr_icdr(cidx)
@@ -146,6 +147,7 @@
      &               *cdr_vol(icdr)*sum(cdr_prf(cidx,1,:))
         enddo
       endif
+#endif
       do j=jstrV-1,jend !! why are these from ...-1?
         do i=istrU-1,iend
           zeta_new(i,j)=zeta(i,j,kstp) + dtfast*pm(i,j)*pn(i,j)

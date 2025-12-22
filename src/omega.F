@@ -63,6 +63,7 @@ c**     dtau=(1.-1./6.)*dt
 
       Wi(1:nx,1:ny,0)=0.
 
+#if defined CDR_FORCING && defined MARBL
       if (cdr_source.and.cdr_volume) then
         do cidx=1,cdr_nprf
           icdr = cdr_icdr(cidx)
@@ -76,6 +77,7 @@ c**     dtau=(1.-1./6.)*dt
           enddo
         enddo
       endif
+#endif
 
       do j=jstr,jend
 

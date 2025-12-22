@@ -15,6 +15,7 @@
       use scalars
       use roms_read_write
       use dimensions
+      use read_inp_mod, only: read_inp
 
       use, intrinsic :: ieee_arithmetic, only: IEEE_Value, IEEE_QUIET_NAN
       use, intrinsic :: iso_fortran_env, only: real32

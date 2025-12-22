@@ -96,9 +96,38 @@
           enddo
         enddo
       enddo
+
+      ! Only set these during initialization
+      if (iic == 0) then
+        do j=jstrR,jendR
+          do i=istrR,iendR
+            z_w0(i,j,0)=-h(i,j)
+          enddo
+
+          do k=1,N,+1   !--> irreversible because of recursion in Hz
+
+            cff_w=hc*ds* dble(k-N)
+            cff_r=hc*ds*(dble(k-N)-0.5)
+
+            cff1_w=Cs_w(k)
+            cff1_r=Cs_r(k)
+
+            do i=istrR,iendR
+
+              z_w0(i,j,k)= h(i,j)*(cff_w+cff1_w*h(i,j))*hinv(i,j)
+
+              z_r0(i,j,k)= h(i,j)*(cff_r+cff1_r*h(i,j))*hinv(i,j)
+
+              Hz0(i,j,k)= z_w0(i,j,k)-z_w0(i,j,k-1)
+            enddo
+          enddo
+        enddo
+      endif
+
 # ifdef EXCHANGE
       if (iic == 0) then
         call exchange_xxx(hinv)
+              call exchange_xxx(z_w0,z_r0,Hz0)
       endif
       call exchange_xxx(z_w,z_r,Hz)
 # endif

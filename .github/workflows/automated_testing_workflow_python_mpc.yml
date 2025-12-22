@@ -1,0 +1,33 @@
+name: Pytest on mpc changes
+on:
+  push:
+    paths:
+      - "Tools-Roms/mpc_python/**"
+  pull_request:
+    paths:
+      - "Tools-Roms/mpc_python/**"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0   # needed for git show of older commits
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gfortran make
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install Python dependencies
+      run: pip install pytest
+
+    - name: Run Tests
+      run: pytest Tools-Roms/mpc_python/test_src.py -v

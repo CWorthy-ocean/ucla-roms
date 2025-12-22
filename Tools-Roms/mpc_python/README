@@ -1,0 +1,12 @@
+This small codebase replaces the `mpc` program historically included in `Tools-Roms` and written in Fortran.
+It transforms input Fortran code, applying several rules such as line-folding and removing comments. Each
+rule can be turned off as desired using CLI arguments.
+
+For more help, run `mpc -h`
+
+It currently aims to replicate the exact behaviour of the former `mpc` program. This can be tested using:
+
+`pytest test_src.py`
+
+which fetches and compiles the old mpc Fortran program, applies it and this python replacement to every .F
+and .h file in `$ROMS_ROOT/src` and confirms that the outputs are identical.

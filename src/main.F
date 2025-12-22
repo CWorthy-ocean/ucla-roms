@@ -98,11 +98,9 @@ C$OMP END MASTER                         ! is in uniform state]. This
       use diagnostics
       use boundary
       use particles
-      use cstar_output
       use upscale_output
       use random_output
       use cstar_output
-      use cdr_frc
       use frc_output
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
       use bec2_params
@@ -274,7 +272,6 @@ CR      write(*,*)  ' -2' MYID
       endif
 
       ! we should have a grid and z_r by now
-!      if (cdr_source) call init_cdr_frc
 
 #if defined SPONGE
       call set_nudgcof(0)
@@ -324,6 +321,7 @@ CR      write(*,*)  ' -2' MYID
       use random_output
       use frc_output
       use cstar_output
+      use frc_output
       use zslice_output
       use basic_output
       use boundary
@@ -481,7 +479,7 @@ CR      write(*,*)  ' -2' MYID
 #endif
 
       if (do_random) call wrt_random
-#if defined MARBL && defined MARBL_DIAGS
+#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
       if (do_cstar)  call wrt_cstar
 #endif
       if (do_zslice) call wrt_zslice

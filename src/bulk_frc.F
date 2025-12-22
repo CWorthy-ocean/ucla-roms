@@ -14,15 +14,16 @@
 
 #include "bulk_frc.opt"
 
-      real,allocatable,dimension(:,:) ::  tair             ! air temp
-      real,allocatable,dimension(:,:) ::     Q             ! SPECIFIC humidity (kg/kg) (not relative), qair in old code
-      real,allocatable,dimension(:,:) :: prate             ! prate (precipitation rate) - 'rain' variable in old code
-      real,allocatable,dimension(:,:) :: lwrad             ! Long wave radiation - get_bulk_rad.F & set_bulk_rad() in old code
+      real,allocatable,public,dimension(:,:) ::  tair             ! air temp
+      real,allocatable,public,dimension(:,:) ::     Q             ! SPECIFIC humidity (kg/kg) (not relative), qair in old code
+      real,allocatable,public,dimension(:,:) :: prate             ! prate (precipitation rate) - 'rain' variable in old code
+      real,allocatable,public,dimension(:,:) :: evap              ! evap (evaporation rate)
+      real,allocatable,public,dimension(:,:) :: lwrad             ! Long wave radiation - get_bulk_rad.F & set_bulk_rad() in old code
       !real:: srflx(GLOBAL_2D_ARRAY)                       ! short wave radiation: srflx stored in surf_flux.F module as used in flux_frc too
 
 #if defined TAU_CORRECTION
-      real,allocatable,dimension(:,:) :: taux              ! The TAU_CORRECTION flag is used to active a correction term to
-      real,allocatable,dimension(:,:) :: tauy              ! bring bulk force field closer to that of the measured data.
+      real,allocatable,public,dimension(:,:) :: taux              ! The TAU_CORRECTION flag is used to active a correction term to
+      real,allocatable,public,dimension(:,:) :: tauy              ! bring bulk force field closer to that of the measured data.
 #endif
 
       real,public,allocatable,dimension(:,:) :: wspd_used  ! wind speed at rho point (also used in BGC routines)
@@ -38,6 +39,7 @@
       allocate(  tair(GLOBAL_2D_ARRAY) )
       allocate(     Q(GLOBAL_2D_ARRAY) )
       allocate( prate(GLOBAL_2D_ARRAY) )
+      allocate( evap(GLOBAL_2D_ARRAY) )
       allocate( lwrad(GLOBAL_2D_ARRAY) )
 
       allocate( wspd_used(GLOBAL_2D_ARRAY) )
@@ -207,7 +209,8 @@
       ! the same module.
 !      real bulk_psiu,bulk_psit
 
-      real hfsen,hflat,hflw,upvel,evap
+      real hfsen,hflat,hflw,upvel
+
 
       real blk_Rgas,blk_ZW,blk_ZT,blk_ZQ,blk_beta,blk_Cpa,blk_Zabl
       parameter (blk_Rgas=287.1)
@@ -721,9 +724,9 @@
 # ifdef SALINITY
 !  Total surface salt flux
 !
-          evap=-cp*hflat/Hlv
+          evap(i,j)=-cp*hflat/Hlv
           ! Divide prate by 100.*3600.*24. to convert from [cm/day] to [m/s]
-          stflx(i,j,isalt)=(evap- ( prate(i,j)/(100.*3600.*24.) ) )*t(i,j,N,nrhs,isalt)
+          stflx(i,j,isalt)=(evap(i,j)- ( prate(i,j)/(100.*3600.*24.) ) )*t(i,j,N,nrhs,isalt)
 #endif
 # ifdef MASKING
           stflx(i,j,itemp)=stflx(i,j,itemp)*rmask(i,j)
@@ -776,25 +779,8 @@
 !          shflx_sen(i,j)=hfsen
 !          shflx_rlw(i,j)=hflw
 !
-!---------------------------------------------------------------
-! Flux correction to surface net heat flux.
-!---------------------------------------------------------------
-!
-# ifdef QCORRECTION
-          ! Not sure that this still works....
-          cff=cff11*dqdtg(i,j,it11)+cff12*dqdtg(i,j,it12)
-          stflx(i,j,itemp)=stflx(i,j,itemp) +cff*(
-     &           t(i,j,N,nrhs,itemp) -cff13*sstg(i,j,it13)
-     &                               -cff14*sstg(i,j,it14)
-     &                                                  )
-#  ifdef MASKING
-     &                                           *rmask(i,j)
-#  endif
-# endif /* QCORRECTION */
-
-!
 !--------------------------------------------------------------
-! Flux correction to surface salt flux.
+! Flux corrections to surface net heat flux and salt flux.
 !--------------------------------------------------------------
 # ifdef SFLX_CORR
 # ifdef SALINITY
@@ -827,7 +813,7 @@
             itrc2read=itrc
          endif
       enddo
-      
+
           stflx(i,j,itrc2read)=stflx(i,j,itrc2read) -dCdt*(
      &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
 #  ifdef MASKING

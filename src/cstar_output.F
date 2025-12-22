@@ -4,7 +4,7 @@
 
 #include "cppdefs.opt"
 
-#if defined MARBL && defined MARBL_DIAGS
+#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
       use param
       use tracers
       use marbl_driver
@@ -16,7 +16,9 @@
       use scalars
       use ocean_vars
       use diagnostics
-      use cdr_frc
+      use cdr_frc, only: cdr_flx_3d_ALK, cdr_flx_3d_DIC, cdr_prf,
+     &                   cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,
+     &                   cdr_jloc, cdr_source, forcing_3d
       implicit none
 
       private
@@ -32,7 +34,6 @@
       real :: avg_begin_time, avg_end_time
 
       integer :: navg = 0
-      integer :: iALK, iDIC, iALK_alt, iDIC_alt
       integer :: iPH, iPH_alt, iFG, iFG_alt
       real,allocatable,dimension(:,:,:) :: hALK_tmp
       real,allocatable,dimension(:,:,:) :: hDIC_tmp
@@ -229,9 +230,6 @@
       if (done) then
         return
       else
-#ifndef MARBL
-        error stop 'ERROR: cstar_output must have MARBL enabled.'
-#endif
         done = .true.
       endif
 
@@ -247,26 +245,6 @@
       endif
 
       if (mynode==0) print *,'init cstar'
-
-      !  Get tracer indices
-      ! --------------------------------------------------------------------------------
-      ! Loop over MARBL tracers...
-      ! ...but use itot as index (to include other tracers)
-      do idx=1,ntrc_bio
-         itot=itot+1
-         if (t_vname(itot)=='ALK') then
-           iALK = itot
-         endif
-         if (t_vname(itot)=='DIC') then
-           iDIC = itot
-         endif
-         if (t_vname(itot)=='ALK_ALT_CO2') then
-           iALK_alt = itot
-         endif
-         if (t_vname(itot)=='DIC_ALT_CO2') then
-           iDIC_alt = itot
-         endif
-      enddo
 
       itot = 0
       ! Loop over 2D BGC diagnostics...
@@ -467,6 +445,17 @@
       DIC_source(:,:,:) = 0
       DIC_alt_source(:,:,:) = 0
 
+      if (forcing_3d) then
+        do k=1,nz
+          do j=1,ny
+            do i=1,nx
+              ALK_source(i,j,k) = cdr_flx_3d_ALK(i,j,k)
+              DIC_source(i,j,k) = cdr_flx_3d_DIC(i,j,k)
+            enddo
+          enddo
+        enddo
+
+      else
       ! Loop over cdr release locations in this subdomain
       do cidx=1,cdr_nprf
         icdr = cdr_icdr(cidx)
@@ -483,6 +472,8 @@
      &      + cdr_prf(cidx,iDIC_alt,k)*cdr_flx(icdr,iDIC_alt)
         enddo
       enddo
+
+      endif ! forcing_3d
 
       end subroutine calc_cdr_source !]
 
@@ -688,7 +679,7 @@
 
 !----------------------------------------------------------------------
 
-#else /* MARBL && MARBL_DIAGS */
+#else /* MARBL && MARBL_DIAGS && CDR_FORCING */
 !----------------------------------------------------------------------
       use param
       use tracers
@@ -720,9 +711,13 @@
         error stop 'ERROR: cstar_output must have MARBL_DIAGS enabled.'
 #endif
 
+#ifndef CDR_FORCING
+        error stop 'ERROR: cstar_output must have CDR_FORCING enabled.'
+#endif
+
       end subroutine init_cstar !]
 !----------------------------------------------------------------------
 
-#endif /* MARBL && MARBL_DIAGS */
+#endif /* MARBL && MARBL_DIAGS && CDR_FORCING */
 
       end module cstar_output

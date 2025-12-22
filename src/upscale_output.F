@@ -13,7 +13,7 @@
       use nc_read_write
       use roms_read_write
       use netcdf
-      use tracers, only: t, t_vname, t_lname, t_units  ! need to get names of tracers
+      use marbl, only: iALK, iDIC, iALK_alt, iDIC_alt
       use ocean_vars
       use basic_output, vn=>vname
       use scalars
@@ -27,7 +27,6 @@
       integer                        :: record_uscl=nrpf_uscl   ! record number in file
       real                           :: otime=0   ! time since last output
       integer :: navg = 0
-      integer :: iALK, iDIC, iALK_alt, iDIC_alt
 
 #ifdef OBC_NORTH
       real,allocatable,dimension(:,:) :: ALK_add_north_avg
@@ -128,24 +127,6 @@
       endif
 
       if (mynode==0) print *,'init upscale'
-
-      ! Loop over MARBL tracers...
-      ! ...but use itot as index (to include other tracers)
-      do idx=1,ntrc_bio
-         itot=itot+1
-         if (t_vname(itot)=='ALK') then
-           iALK = itot
-         endif
-         if (t_vname(itot)=='DIC') then
-           iDIC = itot
-         endif
-         if (t_vname(itot)=='ALK_ALT_CO2') then
-           iALK_alt = itot
-         endif
-         if (t_vname(itot)=='DIC_ALT_CO2') then
-           iDIC_alt = itot
-         endif
-      enddo
 
 #ifdef OBC_NORTH
       if (.not.north_exchng) then

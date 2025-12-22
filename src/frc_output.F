@@ -219,9 +219,12 @@
       call ncwrite(ncid,'taux',taux_avg(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'tauy',tauy_avg(i0:i1,j0:j1),(/1,1,record/))
 #endif
+<<<<<<< HEAD
 #if defined BIOLOGY_BEC2 || defined MARBL
 
 #endif /* BIOLOGY_BEC2  || MARBL */
+=======
+>>>>>>> main
 #else
       call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),(/1,1,record/))
 #endif
@@ -425,7 +428,6 @@
      &           'Virtual flux of ALK')
       ierr = nf90_put_att(ncid,varid,'units','mmol m-2 s-1 ')
 #endif /* BIOLOGY_BEC2  || MARBL */
-
 #else
       ! Input comes in units of:         N m-2
       ! Output is written in units of:   m2 s-2

@@ -70,7 +70,7 @@
         integer                           :: it1 = 1, it2 = 2              ! used to cycle between correct entries of 'data' above
         real,dimension(2)                 :: times = -99 ! [-99,-99]       ! stores 2 times that go with 'data' above
         logical                           :: ungridded = .false.
-        character(len=100)                 :: ungridded_forcing_file=''
+        character(len=100)                :: ungridded_forcing_file=''
         logical                           :: time_interpolation = .true.
       end type ncforce3d
 
@@ -151,7 +151,6 @@
       public :: insert_nodes
       public :: findstr,append_date_node
       public :: set_frc_data
-      public :: read_output_root_name
       public :: init_output_indices
       public :: find_new_record
       public :: nc_check_units
@@ -513,13 +512,11 @@
 
       nc%it1 = it1
       nc%it2 = it2
-
       ! Temporal interpolation
       if (nc%time_interpolation) then
         vtimes  = nc%times
         cff1=( vtimes(it2)-modtime )/( vtimes(it2)-vtimes(it1) )
         cff2=( modtime-vtimes(it1) )/( vtimes(it2)-vtimes(it1) )
-
         var3d = cff1*nc%vdata(:,:,:,it1) + cff2*nc%vdata(:,:,:,it2)
 
         if (vtimes(it1)>modtime+eps.or.vtimes(it2)<modtime-eps) then
@@ -975,9 +972,8 @@
 
       call find_new_record(vname,tname,modtime,ifile,irec,
      &                         nc%times(it))
-
       ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
-      call ncread(ncid,vname,nc%vdata(:,:,:,it),(/1,1,1,irec/))
+      call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,:,it),(/1,1,1,irec/))
       ! add force file info to output nc
       if (mynode == 0) then
         ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
@@ -1102,37 +1098,7 @@
 
       end subroutine display_read_time_to_log  !]
 ! ----------------------------------------------------------------------
-      subroutine read_output_root_name(keyword, kwlen)  ![
-      ! read from .in file the root-name
-      ! for all output netcdf result files
-      ! this is called from read_inp.F
-      ! The following needs to be in the roms.in input file to use this
-      ! subroutine (file name needs to be 5 spaces from left margin):
-      !output_root_name:
-      !     rootname (<- insert desired rootname)
 
-      implicit none
-
-      ! inputs
-      character(len=*) :: keyword
-      integer          :: kwlen                            ! keyword length
-      ! local
-      integer           :: ierr = nf90_noerr
-      integer,parameter :: input=15
-
-      call cancel_kwd (keyword(1:kwlen), ierr)             ! remove keyword from keyword list for read_inp.F
-                                                           ! to know it's accounted for
-      read(input,'(A)',err=95) output_root_name            ! read & save filename root
-      goto 100
-                                                           ! error for read(input,'(A)',err=95)
-  95  write(*,'(/1x,4A/)') '### ERROR: roms_read_write :: Cannot ',
-     &                    'read entry ''', keyword(1:kwlen), '''.'
-      error stop
- 100  continue
-
-
-      end subroutine read_output_root_name  !]
-! ----------------------------------------------------------------------
       subroutine create_file(ftype,fname,nodate)  ![
       ! Creates a file using the root_name plus the extension
       ! It appends a date/time string and, if neccesary, a node number

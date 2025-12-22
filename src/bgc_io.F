@@ -579,9 +579,12 @@
       subroutine wrt_bgc(init)  ![
       implicit none
 
-! import/export
+!     import/export
       logical,optional       :: init
-
+      integer :: tile = 0
+#ifdef MARBL_DIAGS
+#include "compute_tile_bounds.h"
+#endif
       ! initialisation writting
       if (wrt_his.and.present(init)) then
          call wrt_bgc_tracers(.false.) ! write his data
@@ -592,6 +595,11 @@
       endif
 
 #if defined BEC2_DIAG || defined MARBL_DIAGS
+#if defined MARBL
+      if (present(init)) then
+         call marbldrv_compute_init_diagnostics(istr,iend,jstr,jend,t)
+      end if
+#endif
       call wrt_bgc_diags
 #endif
 

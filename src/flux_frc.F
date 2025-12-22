@@ -90,14 +90,6 @@
         enddo
       enddo
 #endif
-# if defined QCORRECTION
-      do j=j0,j1
-        do i=i0,i1
-          stflx(i,j,itemp)=
-     &       -dSSTdt*(t(i,j,nz,nrhs,itemp) - sst(i,j))
-        enddo
-      enddo
-#endif
 
       ! 2a) set bottom heat flux: stflx(itemp)
 !     call set_frc_data(nc_bhflx,btflx(i0:i1,j0:j1,itemp),'r')
@@ -110,15 +102,8 @@
       call set_swflux
 #endif
 
-#ifdef EXCHANGE
-!     call exchange_xxx(sustr,svstr)
-!     call exchange_xxx(srflx,stflx(:,:,itemp))
-#ifdef SALINITY
-!     call exchange_xxx(stflx(:,:,isalt))
-#endif
-#endif
-!     srflx = 0
-!     print *,'maxval srflx: ', maxval(abs(srflx))
+      ! 5) Apply sst and sss corrections, if desired
+      call apply_surf_field_corr
 
       end subroutine set_flux_frc  !]
 ! ----------------------------------------------------------------------
@@ -138,14 +123,6 @@
         do i=i0,i1
           ! cm/day -> m/s
           stflx(i,j,isalt)=stflx(i,j,isalt)*t(i,j,N,nrhs,isalt)*cmday2ms
-
-! Add relaxation of surface salinity back to climatological value to
-! avoid long-term drift.  Note that dSSSdt below is "piston velocity"
-! expressed in [m/s].
-# if defined SFLX_CORR
-     &                 -dSSSdt*( t(i,j,N,nrhs,isalt)-sss(i,j) )
-# endif
-
         enddo
       enddo
 
