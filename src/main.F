@@ -103,6 +103,7 @@ C$OMP END MASTER                         ! is in uniform state]. This
       use random_output
       use cstar_output
       use cdr_frc
+      use frc_output
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
       use bec2_params
       use bgc_io
@@ -288,6 +289,7 @@ CR      write(*,*)  ' -2' MYID
       if (do_random) call init_random
       if (do_cstar)  call init_cstar
       if (do_upscale) call init_upscale
+      if (do_frc) call init_frc
 
       if (may_day_flag /=0 ) goto 99     !-->  EXIT
 
@@ -320,6 +322,7 @@ CR      write(*,*)  ' -2' MYID
       use particles
       use surf_flux
       use random_output
+      use frc_output
       use cstar_output
       use zslice_output
       use basic_output
@@ -482,6 +485,7 @@ CR      write(*,*)  ' -2' MYID
       if (do_cstar)  call wrt_cstar
 #endif
       if (do_zslice) call wrt_zslice
+      if (do_frc)    call wrt_frc
 
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       call wrt_bgc
