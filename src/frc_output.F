@@ -17,6 +17,7 @@
       use scalars
 !      use mixing
 !      use diagnostics
+      use marbl_driver, only : iALK, iDIC, iALK_alt, iDIC_alt
 #ifdef BULK_FRC
       use bulk_frc
 #else
@@ -108,7 +109,7 @@
         allocate(tauy_avg(GLOBAL_2D_ARRAY) )
         tauy_avg(:,:)=0
 #endif
-#if defined BIOLOGY_BEC2 || defined MARBL
+#if defined MARBL
         allocate(vflux_ALK_avg(GLOBAL_2D_ARRAY) )
         vflux_ALK_avg(:,:)=0
         allocate(vflux_DIC_avg(GLOBAL_2D_ARRAY) )
@@ -117,7 +118,7 @@
         vflux_ALK_ALT_CO2_avg(:,:)=0
         allocate(vflux_DIC_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
         vflux_DIC_ALT_CO2_avg(:,:)=0
-#endif /* BIOLOGY_BEC2  || MARBL */
+#endif MARBL */
 #else
         allocate(swflx_avg(GLOBAL_2D_ARRAY) )
         swflx_avg(:,:)=0
@@ -162,12 +163,12 @@
       taux_avg(:,:)  = taux_avg(:,:)*(1-coef)  + taux(:,:)*coef
       tauy_avg(:,:)  = tauy_avg(:,:)*(1-coef)  + tauy(:,:)*coef
 #endif
-#if defined BIOLOGY_BEC2 || defined MARBL
-      vflux_ALK_avg(:,:)  = vflux_ALK_avg(:,:)*(1-coef)  + stflx(:,:,itrc)(:,:)*coef
-      vflux_DIC_avg(:,:)  = vflux_DIC_avg(:,:)*(1-coef)  + stflx(:,:,itrc)*coef
-      vflux_ALK_ALT_CO2_avg(:,:)  = vflux_ALK_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,itrc)*coef
-      vflux_DIC_ALT_CO2_avg(:,:)  = vflux_DIC_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,itrc)*coef
-#endif /* BIOLOGY_BEC2  || MARBL */
+#if defined MARBL
+      vflux_ALK_avg(:,:)  = vflux_ALK_avg(:,:)*(1-coef)  + stflx(:,:,iALK)*coef
+      vflux_DIC_avg(:,:)  = vflux_DIC_avg(:,:)*(1-coef)  + stflx(:,:,iDIC)*coef
+      vflux_ALK_ALT_CO2_avg(:,:)  = vflux_ALK_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,iALK_alt)*coef
+      vflux_DIC_ALT_CO2_avg(:,:)  = vflux_DIC_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,iDIC_alt)*coef
+#endif MARBL */
 #else
       swflx_avg(:,:) = swflx_avg(:,:)*(1-coef) + stflx(:,:,isalt)*coef
 #endif
@@ -208,30 +209,49 @@
       if (do_avg) then
 #ifdef BULK_FRC
       call ncwrite(ncid,'tair',tair_avg(i0:i1,j0:j1),(/1,1,record/))
+      tair_avg(:,:) = 0
       call ncwrite(ncid,'Q',Q_avg(i0:i1,j0:j1),(/1,1,record/))
+      Q_avg(:,:) = 0
       call ncwrite(ncid,'prate',prate_avg(i0:i1,j0:j1),(/1,1,record/))
+      prate_avg(:,:) = 0
       call ncwrite(ncid,'lwrad',lwrad_avg(i0:i1,j0:j1),(/1,1,record/))
+      lwrad_avg(:,:) = 0
       call ncwrite(ncid,'evap',evap_avg(i0:i1,j0:j1),(/1,1,record/))
+      evap_avg(:,:) = 0
       call ncwrite(ncid,'uwnd',uwnd_avg(i0:i1,j0:j1),(/1,1,record/))
+      uwnd_avg(:,:) = 0
       call ncwrite(ncid,'vwnd',vwnd_avg(i0:i1,j0:j1),(/1,1,record/))
+      vwnd_avg(:,:) = 0
       call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/))
+      ssflx_avg(:,:) = 0
 #ifdef TAU_CORRECTION
       call ncwrite(ncid,'taux',taux_avg(i0:i1,j0:j1),(/1,1,record/))
+      taux_avg(:,:) = 0
       call ncwrite(ncid,'tauy',tauy_avg(i0:i1,j0:j1),(/1,1,record/))
+      tauy_avg(:,:) = 0
 #endif
-<<<<<<< HEAD
-#if defined BIOLOGY_BEC2 || defined MARBL
-
-#endif /* BIOLOGY_BEC2  || MARBL */
-=======
->>>>>>> main
+#ifdef MARBL
+      call ncwrite(ncid,'vflux_ALK',vflux_ALK_avg(i0:i1,j0:j1),(/1,1,record/))
+      vflux_ALK_avg(:,:) = 0
+      call ncwrite(ncid,'vflux_DIC',vflux_DIC_avg(i0:i1,j0:j1),(/1,1,record/))
+      vflux_DIC_avg(:,:) = 0
+      call ncwrite(ncid,'vflux_ALK_ALT_CO2',vflux_ALK_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
+      vflux_ALK_ALT_CO2_avg(:,:) = 0
+      call ncwrite(ncid,'vflux_DIC_ALT_CO2',vflux_DIC_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
+      vflux_DIC_ALT_CO2_avg(:,:) = 0
+#endif MARBL */
 #else
       call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),(/1,1,record/))
+      swflx_avg(:,:) = 0
 #endif
       call ncwrite(ncid,'sustr',sustr_avg(1:i1,j0:j1),(/1,1,record/))
+      sustr_avg(:,:) = 0
       call ncwrite(ncid,'svstr',svstr_avg(i0:i1,1:j1),(/1,1,record/))
+      svstr_avg(:,:) = 0
       call ncwrite(ncid,'shflx',shflx_avg(i0:i1,j0:j1),(/1,1,record/))
+      shflx_avg(:,:) = 0
       call ncwrite(ncid,'srflx',srflx_avg(i0:i1,j0:j1),(/1,1,record/))
+      srflx_avg(:,:) = 0
       else
 #ifdef BULK_FRC
       call ncwrite(ncid,'tair',tair(i0:i1,j0:j1),(/1,1,record/))
