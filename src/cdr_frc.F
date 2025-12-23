@@ -18,6 +18,7 @@
       use ocean_vars
       use hidden_mpi_vars
       use marbl_driver, only : iALK, iDIC
+      use vertical_remapping
 
       implicit none
 
@@ -63,7 +64,6 @@
       real, allocatable, dimension(:,:)          :: cdr_hz        ! layer thicknesses of CDR release
       integer                                    :: ncdr_prof     ! number of release locations
       integer                                    :: N_src         ! number of layers from source file
-      integer,public :: iALK, iDIC                                ! Tracer indices for ALK and DIC
       integer, dimension(2) :: cdr_inds                           ! Array to hold those indices
 
       !!! Variables used only for (3)
@@ -218,6 +218,9 @@
       ! Get tracer indices for ALK and DIC
       cdr_inds(1) = iALK
       cdr_inds(2) = iDIC
+
+      cdr_flx(:,iALK) = 1.0
+      cdr_flx(:,iDIC) = 1.0
 
       end subroutine init_cdr_frc_dp  !]
 ! ----------------------------------------------------------------------
@@ -406,9 +409,10 @@
 
       ! local
       integer :: ierr,ncid,i,j,k
-      integer :: icdr, cidx
+      integer :: icdr, cidx, itrc
       real :: vint,arg
       real :: local_int,global_int
+      real, dimension(nz) :: cdr_flx_dp_remap
       real, dimension(nz) :: arg_nz
       real :: local_min_val
 
@@ -429,7 +433,11 @@
                  if (forcing_depth_profiles) then
                  ! VERTICAL STRUCTURE FROM DATA
                  ! Conservatively remap the fluxes from the source grid to the current grid
-                   call remap_src_to_grid(i,j,icdr,cidx)
+                   !call remap_src_to_grid(i,j,icdr,cidx)
+                   do itrc=1,2
+                     call remap_src_to_grid(nz, cdr_hz(icdr,:), Hz(i,j,:), cdr_flx_dp(icdr,itrc,:),cdr_flx_dp_remap)
+                     cdr_prf(cidx,cdr_inds(itrc),:) = cdr_flx_dp_remap(:)
+                   enddo
                  else
                    ! figure vertical profile, depths are relative to surface
                    ! prf = exp( - ((z-d)/vsc )^2)
@@ -484,381 +492,6 @@
         enddo
 
       end subroutine create_cdr_vertical_structure  !]
-! ----------------------------------------------------------------------
-      subroutine remap_src_to_grid(i,j,icdr,cidx)
-
-      ! This routine will populate cdr_prf using the data that is read from file
-      ! Perform conservative remapping of a depth profile from the source grid to the
-      ! target (current) grid using piecewise parabolic reconstruction.
-
-      use mpi
-      implicit none
-
-      integer, intent(in) :: i,j,icdr,cidx
-
-      ! local
-      integer :: ierr,ncid,k,k_new,trc,idx
-      real, dimension(2,N_src+1) :: interface_values
-      real :: total_depth_src, total_depth_tgt
-      real, dimension(2,N_src) :: a0, a1, a2
-      real, dimension(N_src+1) :: z_orig_interfaces
-      real, dimension(N_src) :: H_orig
-      real, dimension(nz) :: H_new
-      real :: H_new_tot
-      real :: H_orig_tot
-      real :: tot_dist
-
-      integer :: curr_src_index
-      integer, dimension(nz) :: tgt_index_start
-      integer, dimension(nz) :: tgt_index_end
-
-      ! Keep track of how far up we are in the water column
-      real :: curr_tgt_height, curr_src_height
-
-      ! Keep track of where in each H_orig cell the interfaces of H_new are
-      real, dimension(nz) :: tgt_frac_start
-      real, dimension(nz) :: tgt_frac_end
-
-      ! This holds the integrated_values
-      real, dimension(2,nz) :: definite_integral
-
-      ! Temporary array to hold the remapped fluxes
-      real, dimension(2,nz) :: cdrflx_tmp
-
-      ! Array to hold the tracer mass in each cell
-      real, dimension(2) :: total_tracer_orig
-      real, dimension(2) :: total_tracer_new
-      real, dimension(2) :: total_tracer_diff
-      real :: cellwise_mass_frac
-
-
-      H_new_tot = 0.0
-      H_orig_tot = 0.0
-      tot_dist = 0.0
-
-      tgt_frac_start(:) = 0.0
-      tgt_frac_end(:)   = 0.0
-
-      definite_integral(:,:) = 0.0
-      cdrflx_tmp(:,:) = 0.0
-
-      call calc_interface_values(cdr_flx_dp(icdr,:,:), cdr_hz(icdr,:), interface_values)
-
-      ! Compare total depths and expand/contract current grid to match original depth
-      total_depth_src = 0
-      total_depth_tgt = 0
-      do k=1,nz
-        total_depth_tgt = total_depth_tgt + Hz(i,j,k)
-      enddo
-
-      do k=1,N_src
-        total_depth_src = total_depth_src + cdr_hz(icdr,k)
-      enddo
-
-      total_tracer_orig(:) = 0.0
-      do trc=1,2
-        do k=1,N_src
-          a0(trc,k) = interface_values(trc,k)
-          a1(trc,k) = 6*cdr_flx_dp(icdr,trc,k) - 4*interface_values(trc,k) - 2*interface_values(trc,k+1)
-          a2(trc,k) = 3*(interface_values(trc,k) + interface_values(trc,k+1) - 2*cdr_flx_dp(icdr,trc,k))
-          total_tracer_orig(trc) = total_tracer_orig(trc) + cdr_flx_dp(icdr,trc,k)
-        enddo
-      enddo
-
-      ! These are vector copies of the source and target column.
-      do k = 1,N_src
-        H_orig(k) = cdr_hz(icdr,k)
-      enddo
-
-      do k = 1,nz
-        H_new(k) = Hz(i,j,k)
-      enddo
-
-      ! Match the thicknesses of the source and target columns
-      do k = 1,N_src
-        H_orig(k) = H_orig(k) * (total_depth_tgt / total_depth_src)
-      enddo
-      !! The division and multiplication in the above step may not make the total column thicknesses
-      !! match exactly, so one more really small correction will be added to the top layer.
-      H_orig_tot = 0
-      do k = 1,N_src
-        H_orig_tot = H_orig_tot + H_orig(k)
-      enddo
-      H_orig(N_src) = H_orig(N_src) + total_depth_tgt - H_orig_tot
-
-      !! Also keep track of the original interface depths.
-      z_orig_interfaces(1) = 0
-      do k = 1,N_src
-        z_orig_interfaces(k+1) = z_orig_interfaces(k) + H_orig(k)
-      enddo
-
-      ! Keep track of how far up we are in the water column
-      tgt_index_start = 1
-      tgt_index_end = 1
-      curr_tgt_height = H_new(1)
-      curr_src_height = H_orig(1)
-      curr_src_index = 1
-
-      ! Sort the source and target cell heights so we know how to perform the integration
-      do k_new = 1,nz-1
-
-        do while (curr_tgt_height > curr_src_height)
-          curr_src_index = curr_src_index + 1
-          curr_src_height = curr_src_height + H_orig(curr_src_index)
-        enddo
-
-        tgt_index_end(k_new) = curr_src_index
-        tgt_index_start(k_new+1) = curr_src_index
-
-        tgt_frac_end(k_new) = (curr_tgt_height - z_orig_interfaces(curr_src_index)) / H_orig(curr_src_index)
-        tgt_frac_start(k_new+1) = tgt_frac_end(k_new)
-
-        curr_tgt_height = curr_tgt_height + H_new(k_new+1)
-
-      enddo
-
-      ! Remap by integrating the piecewise parabolas from the source grid
-      tgt_index_end(nz) = N_src
-      tgt_frac_end(nz)  = 1
-
-      total_tracer_new(:) = 0
-      do trc = 1,2
-        do k = 1,nz
-
-          do idx = tgt_index_start(k),tgt_index_end(k)
-
-            if (tgt_index_start(k) == tgt_index_end(k)) then
-              definite_integral(trc,k) = integrate(a0(trc,idx), a1(trc,idx), a2(trc,idx), tgt_frac_start(k), tgt_frac_end(k))
-              tot_dist = tgt_frac_end(k) - tgt_frac_start(k)
-            elseif ((idx == tgt_index_start(k)) .and. (idx < tgt_index_end(k))) then
-              definite_integral(trc,k) = integrate(a0(trc,idx), a1(trc,idx), a2(trc,idx), tgt_frac_start(k), 1.0)
-              tot_dist = 1 - tgt_frac_start(k)
-            elseif ((idx < tgt_index_end(k)) .and. (idx > tgt_index_start(k))) then
-              definite_integral(trc,k) = definite_integral(trc,k) + integrate(a0(trc,idx), a1(trc,idx), a2(trc,idx), 0.0, 1.0)
-              tot_dist = tot_dist + 1
-            else
-              definite_integral(trc,k) = definite_integral(trc,k) +
-     &          integrate(a0(trc,idx), a1(trc,idx), a2(trc,idx), 0.0, tgt_frac_end(k))
-              tot_dist = tot_dist + tgt_frac_end(k)
-            endif
-
-          enddo
-          cdrflx_tmp(trc,k) = definite_integral(trc,k) / tot_dist
-          total_tracer_new(trc) = total_tracer_new(trc) + cdrflx_tmp(trc,k)
-        enddo
-      enddo
-
-      ! Correction to ensure exact tracer conservation in the remapping
-      ! We distribute the correction over the entire column, where the cellwise amount
-      ! depends on how much of the column mass the cell contains
-      total_tracer_diff(:) = total_tracer_new(:) - total_tracer_orig(:)
-
-      do trc = 1,2
-        if (total_tracer_new(trc) /= 0.0) then
-          do k = 1,nz
-            cellwise_mass_frac = cdrflx_tmp(trc,k) / total_tracer_new(trc)
-            cdrflx_tmp(trc,k) = cdrflx_tmp(trc,k) - total_tracer_diff(trc)*cellwise_mass_frac
-          enddo
-        endif
-      enddo
-
-      total_tracer_new(:) = 0
-      do trc = 1,2
-        do k = 1,nz
-          cdr_prf(cidx,cdr_inds(trc),k) = cdrflx_tmp(trc,k)
-        enddo
-      enddo
-
-      cdr_flx(icdr,iALK) = 1.0
-      cdr_flx(icdr,iDIC) = 1.0
-
-      end subroutine remap_src_to_grid
-! ----------------------------------------------------------------------
-      real function integrate(a0, a1, a2, z0, z1) ![
-      ! Definite integration of a parabola
-
-      implicit none
-
-      real :: a0, a1, a2, z0, z1
-      real :: one_third = 0.3333333333
-
-      integrate = a0 * (z1 - z0) + 0.5*a1*(z1**2 - z0**2) +
-     & one_third*a2*(z1**3 - z0**3)
-
-      end function integrate !]
-! ----------------------------------------------------------------------
-      subroutine calc_interface_values(arr, H, int_vals)  ![
-
-      ! Interpolate/extrapolate values from cell centers to the cell interfaces
-
-      implicit none
-
-      real, dimension(2,N_src), intent(in)  :: arr
-      real, dimension(N_src), intent(in)    ::  H
-      real, dimension(2,N_src+1), intent(out) :: int_vals
-
-      real, dimension(2,0:3) :: B
-      real, dimension(0:3,0:3) :: M
-      real :: h_b
-      real :: h_t
-      real :: iH
-      real, dimension(2) :: Ts_bot
-      real, dimension(2) :: Ts_top
-
-      integer :: k, kk, kkp, kkp1, trc
-      integer :: ord = 3
-
-      !!                  Get tracer values at layer interfaces                !!
-      !!  Calculated with Implicit Fourth-order scheme using Thomas algorithm  !!
-      !!                   (White and Adcroft, 2008, Eq. 46)                   !!
-
-      !! Bottom boundary extrapolation
-      !! Calculated using a polynomial of order "ord" over the bottom (ord+1) cells
-
-      h_b = 0
-      h_t = H(1)
-      iH  = 1.0 / (h_t - h_b)
-
-      do k = 0,ord
-        do kk = 0,ord
-          kkp1 = kk+1
-          M(k,kk) = (1.0 / kkp1) * iH * (h_t**(kkp1) - h_b**(kkp1))
-        enddo
-
-        h_b = h_b + H(k+1)
-        h_t = h_t + H(k+2)
-        iH = 1.0/(h_t - h_b)
-        do trc = 1,2
-          B(trc,k) = arr(trc,k+1)
-        enddo
-      enddo
-
-      do trc = 1,2
-        Ts_bot(trc) = gauss(M, B(trc,:),ord)
-      enddo
-
-      !! Top boundary extrapolation
-      h_b = 0
-      h_t = H(N_src)
-      iH = 1.0 / (h_t - h_b)
-      do k = 0,ord
-        do kk = 0,ord
-          kkp1 = kk+1
-          M(k,kk) = (1.0 / kkp1) * iH * (h_t**kkp1 - h_b**kkp1)
-        enddo
-
-        h_b = h_b + H(N_src-k)
-        h_t = h_t + H(N_src-1-k)
-        iH = 1.0 / (h_t - h_b)
-        do trc = 1,2
-          B(trc,k) = arr(trc,N_src-k)
-        enddo
-      enddo
-
-      do trc = 1,2
-        Ts_top(trc) = gauss(M, B(trc,:),ord)
-      enddo
-      !!!!!!!!!!!!!!!!!!!!!!
-
-      call thomas_PPM(Ts_bot, Ts_top, arr, H, int_vals)
-
-      end subroutine calc_interface_values  !]
-! ----------------------------------------------------------------------
-      real function gauss(M, b, ord) ![
-
-      !! This routine uses Gaussian Elimination to reduce the matrix M to row-echelon form (lower triangular).
-      !! It only returns the first element of the solution vector.
-
-      implicit none
-
-      real, dimension(0:3,0:3), intent(inout) :: M
-      real, dimension(0:3), intent(inout) :: b
-      integer, intent(in) :: ord
-      real :: ratio
-      integer :: i,j,k
-
-      !! Starting from the last row, we're going to work upwards to
-      !! make M a lower triangular matrix
-      do i = ord,1,-1
-      !! Iterate over all rows above i
-        do j = 0,(i-1)
-          ratio = M(j,i) / M(i,i)
-
-          !! Iterate over all columns up to i.
-          !! This operation basically is multiplying the ith row by "ratio" and adding it to the jth row
-          do k = 0,i
-            M(j,k) = M(j,k) - ratio*M(i,k)
-          enddo
-          b(j) = b(j) - ratio*b(i)
-        enddo
-      enddo
-
-      gauss = (b(0) / M(0,0))
-
-      end function gauss !]
-! ----------------------------------------------------------------------
-      subroutine thomas_PPM(Ts_bot, Ts_top, arr, H, int_vals)  ![
-
-      ! Extremely efficient tridiagonal matrix solver for cases where we
-      ! have a diagonally dominant input matrix
-
-      implicit none
-
-      real, dimension(2), intent(in) :: Ts_bot
-      real, dimension(2), intent(in) :: Ts_top
-      real, dimension(2,N_src), intent(in)  :: arr
-      real, dimension(N_src),   intent(in)  :: H
-      real, dimension(2,N_src+1), intent(out) :: int_vals
-
-      integer :: n,t,k
-      real, dimension(N_src+1) :: a, b, c, d, cp, dp, x
-      real :: h0, h1, alpha, beta, d1, d2
-
-      n = N_src+1
-
-      do t = 1,2
-        ! Solution for top and bottom boundaries
-        b(1) = 1.0
-        b(n) = 1.0
-        d(1) = Ts_bot(t)
-        d(n) = Ts_top(t)
-        a(n) = 0
-        c(1) = 0
-
-        ! Fill interior of tridiagonal matrix
-        do k=2,(n-1)
-          h0 = H(k-1)
-          h1 = H(k)
-
-          alpha = (h1**2) / ((h0 + h1)**2)
-          beta  = (h0**2) / ((h0 + h1)**2)
-          d1 = 2*(h1**2)*(h1**2 + 2*h0**2 + 3*h0*h1) / ((h0+h1)**4)
-          d2 = 2*(h0**2)*(h0**2 + 2*h1**2 + 3*h0*h1) / ((h0+h1)**4)
-
-          a(k) = alpha
-          b(k) = 1.0
-          c(k) = beta
-
-          d(k) = d1*arr(t,k-1) + d2*arr(t,k)
-        enddo
-
-        ! Solve using Thomas algorithm
-        cp(1) = c(1) / b(1)
-        dp(1) = d(1) / b(1)
-
-        do k = 2,(n-1)
-          cp(k) = c(k) / (b(k) - a(k)*cp(k-1))
-          dp(k) = (d(k) - a(k)*dp(k-1)) / (b(k) - a(k)*cp(k-1))
-        enddo
-        dp(n) = (d(n) - a(n)*dp(n-1)) / (b(n) - a(n)*cp(n-1))
-
-        int_vals(t,n) = d(n)
-        do k = (n-1),1,-1
-          int_vals(t,k) = dp(k) - cp(k)*int_vals(t,k+1)
-        enddo
-      enddo
-
-      end subroutine thomas_PPM !]
 ! ----------------------------------------------------------------------
       subroutine init_arrays_cdr  ![
 
