@@ -13,10 +13,10 @@
       use roms_read_write
       use hidden_mpi_vars
       use mixing
-
+      use error_handling, only: handle_netcdf_error
       implicit none
       private
-
+      character(len=11) :: module_name = "sponge_tune"
 #include "sponge_tune.opt"
 
       logical   :: tune_init = .true.
@@ -277,6 +277,7 @@
       subroutine write_sp_tune ![
       implicit none
 
+      character(len=13) :: sr_name = "write_sponge_tune"
       !local
       integer            :: ncid,ierr
       character(len=99)  :: fname
@@ -289,8 +290,11 @@
       record = record + 1
 
       ierr=nf90_open(fname, nf90_write, ncid)
-      if (ierr/=nf90_noerr)
-     &    call handle_ierr(ierr,'write sponge_tune: ',fname)
+      if (ierr/=nf90_noerr) then
+         call handle_netcdf_error(netcdf_status=ierr,
+     &        info="error opening "//fname,
+     &        context=module_name//"/"//sr_name)
+      end if
 
       call ncwrite(ncid,'ocean_time',(/time/),(/record/))
 

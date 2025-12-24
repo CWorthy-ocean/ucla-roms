@@ -23,7 +23,7 @@
       private
 
 #include "upscale_output.opt"
-
+      character(len=15) :: module_name = "upscale_output"
       integer                        :: record_uscl=nrpf_uscl   ! record number in file
       real                           :: otime=0   ! time since last output
       integer :: navg = 0
@@ -377,7 +377,8 @@
       ! and write to file
       implicit none
 
-      ! local
+! local
+      character(len=11) :: sr_name = "wrt_upscale"
       integer :: ierr,ncid
       character(len=99),save :: fname
       integer,dimension(3) :: start2D
@@ -629,7 +630,7 @@
       use ocean_vars
 
       implicit none
-
+      character(len=15) :: module_name = "upscale_output"
       private
 
 #include "upscale_output.opt"
@@ -639,20 +640,28 @@
 
       contains
 
-      subroutine init_upscale ![
+      subroutine init_upscale   ![
+      use error_handling, only: handle_configuration_error
       ! Allocate and initialize arrays.
       implicit none
+      character(len=13) :: sr_name
 
 #ifndef MARBL
-      error stop 'ERROR: upscale module must have MARBL enabled.'
+      call handle_configuration_error(
+     &     context=module_name//"/"//sr_name,
+     &     info="upscale module must have MARBL cpp key enabled")
 #endif
 
 #ifndef MARBL_DIAGS
-      error stop 'ERROR: upscale module must have MARBL_DIAGS enabled.'
+      call handle_configuration_error(
+     &     context=module_name//"/"//sr_name,
+     &     info="upscale module must have MARBL_DIAGS cpp key enabled.")
 #endif
 
 #ifndef UPSCALING
-      error stop 'ERROR: upscale module must have UPSCALING enabled.'
+      call handle_configuration_error(
+     &     context=module_name//"/"//sr_name,
+     &     info="upscale module must have UPSCALING cpp key enabled.")
 #endif
 
       end subroutine init_upscale !]

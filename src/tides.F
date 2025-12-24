@@ -12,7 +12,7 @@
       implicit none
 
       private                                              ! default variables private to module
-
+      character(len=5) :: module_name = "tides"
 #include "tides.opt"
 
       real, dimension(:)    ,allocatable :: ftide
@@ -255,8 +255,9 @@
 
       use netcdf
       use dimensions
+      use error_handling, only: handle_netcdf_error, handle_configuration_error
       implicit none
-
+      character(len=10) :: sr_name = "read_tides"
       ! local
       integer :: i,j
       integer :: ierr, var_file_indx, ncid, var_id, itide, found_rec
@@ -274,9 +275,11 @@
       do while ((found_rec==0).and.(var_file_indx <= max_frc))
 
         ierr=nf90_open(frcfile(var_file_indx), nf90_nowrite, ncid)
-        if(ierr/=0)
-     &     call handle_ierr(ierr,'tides :: opening forcing file')
-
+        if(ierr/=0) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          context=module_name//"/"//sr_name,
+     &          info="error opening tidal forcing file")
+        end if
         ierr=nf90_inq_varid(ncid, 'omega', var_id)
         if(ierr/=0) then
           var_file_indx = var_file_indx +1
@@ -286,7 +289,9 @@
       enddo
 
       if (found_rec==0) then
-        error stop 'tides :: tide input data not found'
+         call handle_configuration_error(
+     &        context=module_name//"/"//sr_name,
+     &        info="tide input data not found")
       endif
 
       start = 1                                                      ! netcdf start indices
@@ -295,8 +300,11 @@
 
         ierr=nf90_inq_varid(ncid, 'omega', var_id)
         ierr=nf90_get_var(ncid,var_id,ftide(itide),(/itide/))
-        if(ierr/=0) call handle_ierr(ierr,'tides :: read omega')
-
+        if(ierr/=0) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          info="unable to get var 'omega' from tidal file",
+     &          context=module_name//"/"//sr_name)
+        end if
         start(3) = itide
 
         if (bry_tides) then

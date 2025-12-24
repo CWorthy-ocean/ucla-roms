@@ -20,9 +20,8 @@
       use marbl_driver, only : iALK, iDIC
 
       implicit none
-
       private
-
+      character(len=7) :: module_name="cdr_frc"
 #include "cdr_frc.opt"
 
       !!! (1) Parameterized releases
@@ -130,19 +129,22 @@
       use netcdf
       use mpi
       implicit none
-
+      character(len=12) :: sr_name = "init_cdr_frc"
       ! local
-      integer      :: ierr, ierr1 =0
+      integer      :: ierr, type_count =0
       integer      :: ncid
       character(1) :: tmp1
 
       ! Check if we selected too many forcing types
-      if (forcing_depth_profiles) ierr = ierr+1
-      if (forcing_3d)             ierr = ierr+1
-      if (forcing_parameterized)  ierr = ierr+1
+      if (forcing_depth_profiles) type_count = type_count+1
+      if (forcing_3d)             type_count = type_count+1
+      if (forcing_parameterized)  type_count = type_count+1
 
-      if (ierr==0) then
-        error stop 'ERROR: cdr_source set to true, but no forcing type selected.'
+      if (type_count==0) then
+         call handle_configuration_error(
+     &        context=module_name//"/"//sr_name,
+     &        info="cdr_source set to true, "//
+     &        "but no forcing type selected")
       endif
 
       if (forcing_3d) then
@@ -151,13 +153,17 @@
 
         ! Open file
         ierr=nf90_open(cdr_file, nf90_nowrite, ncid)
-        if(ierr/=0)
-     &    call handle_ierr(ierr,
-     &     'init_cdr_frc:: Cant open cdr forcing file')
+        if(ierr/=0) then
+           call handle_netcdf_error(
+     &          info="Cannot open CDR forcing file",
+     &          context=module_name//"/"//sr_name)
+        end if
 
-        if (ierr>1)
-     &    error stop 'ERROR: More than one CDR forcing type selected.'
-
+        if (type_count>1) then
+           call handle_configuration_error(
+     &          info="More than one CDR forcing type selected.",
+     &          context=module_name//"/"//sr_name)
+        end if
 
         if (forcing_depth_profiles) then
           call init_cdr_frc_dp(ncid)
@@ -189,14 +195,20 @@
       ! Check how many vertical profiles (i.e. tracer releases) we will use
       ierr = nf90_inq_dimid(ncid, 'ncdr_prof', dimid)
       if (ierr /= nf90_noerr) then
-        error stop 'ERROR: CDR forcing file is missing necessary dimension ncdr_prof.'
+         call handle_netcdf_error(netcdf_status=ierr,
+     &        context=module_name//"/"//sr_name,
+     &        info="CDR forcing file is missing "//
+     &        "necessary dimension ncdr_prof.")
       endif
       ierr = nf90_inquire_dimension(ncid, dimid, len=ncdr_prof)
 
       ! How many vertical levels did the child/source grid have?
       ierr = nf90_inq_dimid(ncid, 's_rho', dimid)
       if (ierr /= nf90_noerr) then
-        error stop 'ERROR: CDR forcing file is missing necessary dimension s_rho.'
+         call handle_netcdf_error(netcdf_status=ierr,
+     &   info="CDR forcing file is missing "//
+     &        "necessary dimension s_rho.",
+     &   context=module_name//"/"//sr_name)
       endif
       ierr = nf90_inquire_dimension(ncid, dimid, len=N_src)
 
@@ -281,7 +293,7 @@
       use netcdf
       use mpi
       implicit none
-
+      chracter(len=23) :: sr_name = "find_release_locations"
       ! local
       integer :: i,j
       integer :: icdr, cidx, cidx_start, ierr
@@ -374,14 +386,11 @@
 
       ! Now every rank has the same bad_releases array
       if (any(bad_releases)) then
-        if (mynode == 0) then
-          print *, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-          print *, "ERROR: the following CDR releases are on land"
-          print *, "(Note 1-indexing):", pack([(i,i=1,ncdr)], bad_releases)
-          print *, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-          call MPI_Abort(MPI_COMM_WORLD, 1, ierr)
-        end if
-        call MPI_Barrier(MPI_COMM_WORLD, ierr)
+         write(error_info,*) "the following CDR releases are on land ",
+     &        "(Note 1-indexing): ",pack([(i,i=1,ncdr)], bad_releases)
+         call handle_configuration_error(
+     &     context=module_name//"/"//sr_name,
+     &     info=error_info)
       end if
 
 
@@ -972,11 +981,11 @@
       use grid
       use ocean_vars
       use hidden_mpi_vars
-
+      use error_handling, only: handle_configuration_error
       implicit none
 
       private
-
+      character(len=9) :: module_name="cdr_frc"
 #include "cdr_frc.opt"
 
       ! Public functions
@@ -984,16 +993,19 @@
 
       contains
 
-      subroutine set_cdr_frc ![
+      subroutine set_cdr_frc    ![
       ! Allocate and initialize arrays.
       implicit none
+      character(len=11) :: sr_name = "set_cdr_frc"
 
 #if (!defined MARBL)
-      error stop 'ERROR: CDR module must have MARBL enabled.'
+      call handle_configuration_error(context=module_name//"/"//sr_name,
+     &     info="CDR module must have MARBL enabled.")
 #endif
 
 #if (!defined CDR_FORCING)
-      error stop 'ERROR: CDR module must have CDR_FORCING enabled.'
+      call handle_configuration_error(context=module_name//"/"//sr_name,
+     &     info="CDR module must have CDR_FORCING enabled.")
 #endif
 
       end subroutine set_cdr_frc !]

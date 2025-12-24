@@ -27,12 +27,13 @@
       use roms_read_write
       use netcdf
 #ifdef MARBL
-      use marbl_driver
+      use marbl_driver, only: marbldrv_configure_tracers
 #endif
       use mpi_exchanges
       implicit none
       private
-
+      character(len=7) :: module_name = "tracers"
+      character(len=200) :: error_info = ""
       real,public,allocatable,dimension(:,:,:,:,:) :: t              ! array of tracers
 
                                                                      ! tracer netcdf variables (user input required in init_tracers)
@@ -81,9 +82,9 @@
 ! ----------------------------------------------------------------------
       subroutine set_surf_tracer_flx ![
       ! set tracer flux at surface
-
+      use error_handling, only: handle_configuration_error
       implicit none
-
+      character(len=20) :: sr_name = "set_surf_tracer_flx"
       ! local
       integer           :: itrc       ! tracer number for loop index
       character(len=46) :: t_flx_name ! Tracer time name
@@ -101,11 +102,13 @@
         else
 
           if(mynode==0) then
-            write(*,'(/1x,2A,I3,2A/)') 'ERROR: set_surf_tracer_flx:: ',
-     &      'Forcing type not supported: t_ana_frc(itrc)= ', t_ana_frc(itrc),
-     &      ', for tracer: ', nc_t(itrc)%vname
+             write(error_info,'(/1x,2A,I3,2A/)')
+     &            'Forcing type not supported: t_ana_frc(itrc)= ', t_ana_frc(itrc),
+     &            ', for tracer: ', nc_t(itrc)%vname
+            call handle_configuration_error(
+     &            context=module_name//"/"//sr_name,
+     &            info=error_info)
           endif
-          error stop
 
         endif ! if(t_ana_frc(itrc)==0)
 

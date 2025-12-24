@@ -11,12 +11,13 @@
       use scalars
       use ocean_vars
       use diagnostics
+      use error_handling, only: handle_netcdf_error
       implicit none
 
       private
 
 #include "random_output.opt"
-
+      character(len=13) :: module_name = "random_output"
       real    :: output_time = 0
       integer :: record = nrpf ! to trigger the first file creation
 
@@ -72,7 +73,7 @@
       ! Call wrt_random after completion of the time-step
       ! (After step3d_uv2)
       implicit none
-
+      character(len=10) :: sr_name = "wrt_random"
       ! local
       character(len=99),save :: fname
       integer,dimension(3)   :: start
@@ -93,9 +94,11 @@
         record = record+1
 
         ierr=nf90_open(fname,nf90_write,ncid)
-        if (ierr/=nf90_noerr)
-     &      call handle_ierr(ierr,'wrt_random, opening: ',fname)
-
+        if (ierr/=nf90_noerr) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          info="error opening "//fname,
+     &          context=module_name//"/"//sr_name)
+        end if
 !       ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)     ! set fill value - nf90_nofill for optimized writing
 
         ! always add time

@@ -14,11 +14,12 @@
       use diagnostics
       use tracers
       use surf_flux
+      use error_handling, only: handle_netcdf_error
 
       implicit none
 
       private
-
+      character(len=13) :: module_name = "zslice_output"
 #include "zslice_output.opt"
 
       real    :: output_time = 0
@@ -327,7 +328,7 @@
       ! Call wrt_zslice after completion of the time-step
       ! (After step3d_uv2)
       implicit none
-
+      character(len=10) :: sr_name= "wrt_zslice"
       ! local
       character(len=99),save :: fname
       integer,dimension(3)   :: start
@@ -360,8 +361,12 @@
         record = record+1
 
         ierr=nf90_open(fname,nf90_write,ncid)
-        if (ierr/=nf90_noerr)
-     &      call handle_ierr(ierr,'wrt_zslice, opening: ',fname)
+
+        if (ierr/=nf90_noerr) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          info="error opening "//fname,
+     &          context=module_name//"/"//sr_name)
+        end if
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
         if (wrt_T_zsl) then
           do n=1,nt_z

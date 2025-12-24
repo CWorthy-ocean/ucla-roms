@@ -53,10 +53,13 @@
       use bgc_forces                  , only: nhy
 #endif
       use ocean_vars                  , only: Hz, z_r, z_w
+      use error_handling              , only: handle_configuration_error
 
 !     ----------------------------------------------------------------------
 
       implicit none
+      private
+      character(len=12) :: module_name = "marbl_driver"
 
       type(MARBL_interface_class) :: marbl_instance ! Object to interface between ROMS and MARBL
       integer                     :: nt_marbl       ! number of marbl tracers (according to MARBL)
@@ -101,23 +104,23 @@
       integer, public :: diag_cnt_tot    ! Total number of MARBL diagnostic vars
 
 !     Making local versions of these "bec2" arrays for bgc diagnostic output control
-      logical, dimension(:), pointer :: wrt_marbl_diag_2d
-      logical, dimension(:), pointer :: wrt_marbl_diag_3d
-      integer, dimension(:), pointer :: idx_marbl_diag_2d
-      integer, dimension(:), pointer :: idx_marbl_diag_3d
+      logical, dimension(:), pointer, public :: wrt_marbl_diag_2d
+      logical, dimension(:), pointer, public :: wrt_marbl_diag_3d
+      integer, dimension(:), pointer, public :: idx_marbl_diag_2d
+      integer, dimension(:), pointer, public :: idx_marbl_diag_3d
 
-      real,dimension(:,:,:,:),pointer :: marbl_diag_3d ! points to bec2_diag_3d
-      real,dimension(:,:,:)  ,pointer :: marbl_diag_2d ! points to bec2_diag_2d
+      real,dimension(:,:,:,:),pointer, public :: marbl_diag_3d ! points to bec2_diag_3d
+      real,dimension(:,:,:)  ,pointer, public :: marbl_diag_2d ! points to bec2_diag_2d
 
 #endif
 !     Saved state variables: (mimicking structure of bgc_shared_vars for bec2_diag arrays)
-      integer                             :: nr_marbl_ss_2d,nr_marbl_ss_3d       ! No. of saved_state vars
+      integer, public                         :: nr_marbl_ss_2d,nr_marbl_ss_3d       ! No. of saved_state vars
       parameter( nr_marbl_ss_2d=3, nr_marbl_ss_3d=2)                             ! Hardcode no. of vars (error if wrong)
 
-      real,allocatable,dimension(:,:,:  ) :: marbl_saved_state_2d                ! Array to store them
-      real,allocatable,dimension(:,:,:,:) :: marbl_saved_state_3d                ! " "
-      character*72                        :: vname_marbl_ss_2d(4,nr_marbl_ss_2d) ! Metadata (shortname,longname,units)
-      character*72                        :: vname_marbl_ss_3d(4,nr_marbl_ss_3d) ! " "
+      real,allocatable,dimension(:,:,:  ),public :: marbl_saved_state_2d                ! Array to store them
+      real,allocatable,dimension(:,:,:,:),public :: marbl_saved_state_3d                ! " "
+      character*72, public                       :: vname_marbl_ss_2d(4,nr_marbl_ss_2d) ! Metadata (shortname,longname,units)
+      character*72, public                       :: vname_marbl_ss_3d(4,nr_marbl_ss_3d) ! " "
 
 
 !     Integers to define where print statements should come from
@@ -127,8 +130,18 @@
       logical                             :: print_values = .false. ! Print example values to stdout during loop
 
 !     Indices of carbonate system tracers
-      integer,public :: iALK, iDIC, iALK_alt, iDIC_alt
+      integer, public :: iALK, iDIC, iALK_alt, iDIC_alt
+      character(len=200) :: error_info
 ! ----------------------------------------------------------------------
+
+      public :: marbldrv_configure_tracers
+      public :: marbldrv_configure_diagnostics
+      public :: marbldrv_configure_saved_state
+      public :: marbldrv_compute_init_diagnostics
+      public :: marbldrv_write_ss_vars_to_rst
+      public :: marbldrv_create_ss_vars_in_rst
+      public :: marbldrv_read_ss_vars_from_rst
+      public :: marbldrv_column_physics
 
       contains
 
@@ -168,7 +181,7 @@
 !
 !-----------------------------------------------------------------------
 
-
+      character(len=27) :: sr_name = "marbldrv_configure_tracers"
       character*42, dimension(nt), intent(inout) :: t_vname, t_units
       character*60, dimension(nt), intent(inout) :: t_lname
       character*47, dimension(nt), intent(inout) :: t_tname
@@ -184,8 +197,6 @@
 
 !     1. Read in MARBL settings file (marbl_in), pass settings to MARBL:
 !     ------------------------------------------------------------------
-
-      if (mynode==0) print *, "FIRST TRACER CONFIG"
 
 !     read the marbl_in into buffer
       if (mynode==0) then
@@ -234,19 +245,16 @@
      &                 " to end of file"
                end if
             else
-               if (mynode==printnode) then
-                  write(*, '(A, I0, 2A)') "IO ERROR ", read_status,
-     &                 " : ERROR reading MARBL namelist file  ",
-     &                 trim(marbl_namelist_fname)
-               end if
-               error stop
+               write(error_info, '(3A, I0, A)')
+     &              "error reading MARBL settings file ",
+     &              trim(marbl_namelist_fname)," (read status ",
+     &              read_status, ")"
+               call handle_configuration_error(
+     &              context=module_name//"/"//sr_name,
+     &              info=error_info)
             end if
 
             close(marbl_settings_in)
-            if (mynode==printnode) then
-               write(*, '(A)'), 'we successfully read and closed ' //
-     &              trim(marbl_namelist_fname)
-            end if
          endif
 
 !     2. Now generate a MARBL instance with these settings:
@@ -267,14 +275,16 @@
 
 !     Check that the number of tracers in MARBL_instance agrees with ROMS' ntrc_bio:
       if ( nt_marbl .ne. ntrc_bio ) then
-         write(*,'(7x,A,I4,A,I4,A,I4,A)')
-     &        'ERROR: Allocated no. of MARBL tracers'
+         write(error_info,'(7x,A,I4,A,I4,A,I4,A)')
+     &        'Allocated no. of MARBL tracers'
      &        ,ntrc_bio
      &        ,' does not match no. expected by MARBL: '
      &        ,nt_marbl
      &        ,' set ntrc_bio = ',nt_marbl
      &        ,' in param.opt and recompile'
-         error stop 'ERROR reported from MARBL library'
+         call handle_configuration_error(
+     &        context=module_name//"/"//sr_name,
+     &        info=error_info)
       end if
 
       call print_marbl_log(marbl_instance%StatusLog)
@@ -410,7 +420,7 @@
 !      $MARBL_ROOT/tests/regression_tests/requested_tracers/requested_tracers.py
 !-----------------------------------------------------------------------
 
-
+      character(len=33) :: sr_name ="marbldrv_read_tracer_output_list"
       character*42, dimension(nt), intent(inout) :: t_vname
       character(len=256)                         :: file_line
       logical , dimension(nt)    , intent(inout) :: wrt_t
@@ -503,12 +513,13 @@
      &              " to end of file"
             end if
          else
-            if (mynode==printnode) then
-               write(*, '(A, I0, 2A)') "IO ERROR ", read_status,
-     &              " : ERROR reading MARBL tracer list file  ",
-     &              trim(marbl_tracer_list_fname)
-            end if
-            error stop
+               write(error_info, '(3A, I0, A)')
+     &              "error reading MARBL tracer list file ",
+     &              trim(marbl_tracer_list_fname)," (read status ",
+     &           read_status, ")"
+               call handle_configuration_error(
+     &              context=module_name//"/"//sr_name,
+     &              info=error_info)
          end if
 
          close(marbl_tracer_list)
@@ -545,7 +556,7 @@
 !       current versions of MARBL
 !
 !-----------------------------------------------------------------------
-
+      character(len=31) :: sr_name = "marbldrv_configure_saved_state"
       integer            :: nr_marbl_ss_2d_check,nr_marbl_ss_3d_check,
      &                      iss,i,j,k
       character(len=200) :: ss_varname
@@ -585,19 +596,23 @@
 
 !     Throw error if counts don't match
             if (nr_marbl_ss_2d/=nr_marbl_ss_2d_check) then
-               write(*,'(7x,A,I4,A,I4,A)')
-     &              'ERROR: Allocated no. of 2D marbl saved state vars '
+               write(error_info,'(7x,A,I4,A,I4,A)')
+     &              'Allocated no. of 2D marbl saved state vars '
      &              ,nr_marbl_ss_2d,
      &              ' does not match actual no. expected by MARBL: '
      &              ,nr_marbl_ss_2d_check
-               error stop 'ERROR reported from MARBL library'
+               call handle_configuration_error(
+     &              context=module_name//"/"//sr_name,
+     &              info=error_info)
             elseif (nr_marbl_ss_3d/=nr_marbl_ss_3d_check) then
-               write(*,'(7x,A,I4,A,I4,A)')
-     &              'ERROR: Allocated no. of 3D marbl saved state vars '
+               write(error_info,'(7x,A,I4,A,I4,A)')
+     &              'Allocated no. of 3D marbl saved state vars '
      &              ,nr_marbl_ss_3d,
      &              ' does not match actual no. expected by MARBL: '
      &              ,nr_marbl_ss_3d_check
-               error stop 'ERROR reported from MARBL library'
+               call handle_configuration_error(
+     &              context=module_name//"/"//sr_name,
+     &              info=error_info)
             end if
 
 !     2. Populate saved state metadata arrays in ROMS using MARBL instance
@@ -681,7 +696,7 @@
 !
 !-----------------------------------------------------------------------
 
-      use nc_read_write, only: ncread,handle_ierr
+      use nc_read_write, only: ncread
       use netcdf
       use dimensions, only : i0,i1,j0,j1
       use mpi_exchanges, only : exchange_xxx
@@ -870,7 +885,7 @@
 !       However, all current versions of MARBL do not contain any.
 !
 !-----------------------------------------------------------------------
-
+      character(len=31) :: sr_name = "marbldrv_configure_diagnostics"
       character*72, dimension(:,:), intent(inout) :: vname_marbl_diag_2d
       character*72, dimension(:,:), intent(inout) :: vname_marbl_diag_3d
       integer                                     :: m,diagidx2d,diagidx3d
@@ -921,28 +936,34 @@
       if ( size(vname_marbl_diag_2d(1,:)) .ne.
      &     (diag_cnt_2d_tot) ) then
 
-         write(*,'(7x,A,I4,A,I4,A,I4,A)')
-     &        'ERROR: Allocated no. of 2D BGC diagnostics: '
+         write(error_info,'(7x,A,I4,A,I4,A,I4,A)')
+     &        'Allocated no. of 2D BGC diagnostics: '
      &        ,size(vname_marbl_diag_2d(1,:))
      &        ,' does not match no. expected by MARBL: '
      &        ,(diag_cnt_sf_2d+diag_cnt_it_2d)
      &        ,'. Set nr_bec2_diag_2d = '
      &        ,(diag_cnt_sf_2d+diag_cnt_it_2d)
      &        ,' in bgc_shared_vars.F and recompile'
-         error stop 'ERROR reported from MARBL driver'
+         call handle_configuration_error(
+     &        context=module_name//"/"//sr_name,
+     &        info=error_info)
+
 
       elseif ( size(vname_marbl_diag_3d(1,:)) .ne.
      &        (diag_cnt_3d_tot) ) then
 
-         write(*,'(7x,A,I4,A,I4,A,I4,A)')
-     &        'ERROR: Allocated no. of 3D BGC diagnostics: '
+         write(error_info,'(7x,A,I4,A,I4,A,I4,A)')
+     &        'Allocated no. of 3D BGC diagnostics: '
      &        ,size(vname_marbl_diag_3d(1,:))
      &        ,' does not match no. expected by MARBL: '
      &        ,(diag_cnt_sf_3d+diag_cnt_it_3d)
      &        ,'. Set nr_bec2_diag_3d = '
      &        ,(diag_cnt_sf_3d+diag_cnt_it_3d)
      &        ,' in bgc_shared_vars.F and recompile'
-         error stop 'ERROR reported from MARBL driver'
+         call handle_configuration_error(
+     &        context=module_name//"/"//sr_name,
+     &        info=error_info)
+
       end if
 
 !     2. Fill BGC diagnostics metadata arrays in ROMS from MARBL instance
@@ -1031,7 +1052,8 @@
 !     - The possible options are listed in STDOUT or can be found with
 !     $MARBL_ROOT/tests/regression_tests/requested_diagnostics/requested_diagnostics.py
 !-----------------------------------------------------------------------
-
+      character(len=37) :: sr_name =
+     &     "marbldrv_read_diagnostic_output_list"
       character*72, dimension(:,:), intent(inout) :: vname_marbl_diag_2d
       character*72, dimension(:,:), intent(inout) :: vname_marbl_diag_3d
 
@@ -1124,12 +1146,13 @@
          end if
 
          if (.not. is_iostat_end(read_status)) then
-            if (mynode==printnode) then
-               write(*, '(A, I0, 2A)') "IO ERROR ", read_status,
-     &              " : ERROR reading MARBL diagnostic list file  ",
-     &              trim(marbl_diag_list_fname)
-            end if
-            error stop
+               write(error_info, '(3A, I0, A)')
+     &              "error reading MARBL diagnostic list file ",
+     &              trim(marbl_diag_list_fname)," (read status ",
+     &           read_status, ")"
+               call handle_configuration_error(
+     &              context=module_name//"/"//sr_name,
+     &              info=error_info)
          end if
 
          close(marbl_diag_list)
@@ -1460,10 +1483,9 @@
          call marbl_instance%surface_flux_compute()
 
          if (marbl_instance%StatusLog%labort_marbl) then
-            print *, 'abort during surface flux compute'
             call marbl_instance%StatusLog%log_error_trace(
      &           "marbl_instance%surface_flux_compute()",
-     &           "MARBL_tracers_column_physics")
+     &           "marbl_driver/marbldrv_compute_surface_fluxes")
             call print_marbl_log(marbl_instance%StatusLog,i,j)
          end if
 
@@ -1773,9 +1795,8 @@
          print *, 'abort during interior tendency compute'
          call marbl_instance%StatusLog%log_error_trace(
      &        "marbl_instance%interior_tendency_compute()",
-     &        "MARBL_tracers_column_physics")
+     &        "marbl_driver/marbldrv_compute_interior_tendency")
          call print_marbl_log(marbl_instance%StatusLog,i,j)
-!     error stop 'ERROR reported from MARBL library'
       end if
 !     call print_marbl_log(marbl_instance%StatusLog,i,j)
       call marbl_instance%StatusLog%erase()
@@ -1865,7 +1886,8 @@
 
 ! If MARBL needs to abort, stop the program
       if (log_to_print%labort_marbl) then
-         error stop 'ERROR reported from MARBL library'
+         call handle_configuration_error(context=module_name,
+     &        info="error reported from MARBL (external library)")
       end if
 
 

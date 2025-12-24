@@ -12,13 +12,13 @@
       use hidden_mpi_vars
       use grid
       use nc_read_write
-
+      use error_handling, only: handle_netcdf_error
       implicit none
       private
 
 
 #include "particles.opt"
-
+      character(len=9) :: module_name = "particles"
       logical :: terminal_vel= .false. ! terminal velocities on particles (not yet implemented)
 
       ! We choose not to define a derived particle type that has all the
@@ -184,7 +184,8 @@
       if (full_seed) then
         call store_string_att(particle_opt, 'full seed')
         call store_string_att(particle_opt, ', constant density')
-        write(particle_conc_string, '(A, E10.2)') ', concentration(m^-3):', ppm3
+        write(particle_conc_string, '(A, E10.2)')
+     &       ', concentration(m^-3):', ppm3
         call store_string_att(particle_opt, particle_conc_string)
         write(particle_num_string, '(A, I2)') ', # of partciles:', np
 
@@ -428,6 +429,7 @@
       subroutine create_particles_file(fname)![
       implicit none
 
+      character(len=22) :: sr_name = "create_particles_file"
       !input/output
       character(len=99),intent(out) :: fname
 
@@ -446,8 +448,11 @@
       ierr=nf90_open(fname,nf90_write,ncid)
 
       varid = nccreate(ncid,'particles',dimnames,dimsizes,nf90_double)
-      if (ierr/=nf90_noerr)
-     &    call handle_ierr(ierr,'create_particles_file: ')
+      if (ierr/=nf90_noerr) then
+         call handle_netcdf_error(netcdf_status=ierr,
+     &        info="error creating particles file",
+     &        context=module_name//"/"//sr_name)
+      end if
       ierr = nf90_put_att(ncid,varid,'long_name'
      &                                ,'Tag/x/y/z/u/v/w')
 

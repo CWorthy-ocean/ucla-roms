@@ -50,6 +50,7 @@
       use basic_output, vn=>vname
       use scalars
       use diagnostics
+      use error_handling, only : handle_configuration_error, handle_netcdf_error
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       use bgc_shared_vars
 #endif
@@ -62,7 +63,7 @@
 
 #include "extract_data.opt"
 
-
+      character(len=12) :: module_name = "extract_data"
       integer :: total_rec=0 ! total records
       integer :: nobj  ! number of extraction objects
 
@@ -141,7 +142,8 @@
       !local
       character(len=30) :: preamb
       integer :: i,np,ierr,lpre
-      real,dimension(:),allocatable :: angp  ! grid angle
+      real,dimension(:),allocatable :: angp ! grid angle
+      character(len=17) :: sr_name = "init_extract_data"
 
       call read_extraction_objects
 
@@ -149,12 +151,12 @@
       allocate( Wvl(GLOBAL_2D_ARRAY,nz+1))
       if (diag_pflx) then
 #ifndef DIAGNOSTICS
-        if (mynode == 0) then
-          print *, 'ERROR: init_extract_data :: Must define CPP key '//
-     &    'DIAGNOSTICS if do_extract=.true. and diag_pflx=.true.'
-          call flush()
+         if (mynode == 0) then
+         call handle_configuration_error(
+     &        context=module_name//"/"//sr_name,
+     &           info="Must define CPP key DIAGNOSTICS if `do_extract`" //
+     &           "=.true. and diag_pflux=.true")
         endif
-        error stop
 #endif
         allocate( upe(GLOBAL_2D_ARRAY) ); upe = 0
         allocate( vpe(GLOBAL_2D_ARRAY) ); vpe = 0
@@ -222,7 +224,7 @@
       subroutine read_extraction_objects  ![
       ! Read all objects from file and determine local ranges
       implicit none
-
+      character(len=24) :: sr_name = "read_extraction_objects"
       ! local
       integer               :: iobj,ncid
       integer,dimension(2)  :: dimids
@@ -239,21 +241,39 @@
      &    'extract_data :: read objects: ',extract_file
       endif
       ierr = nf90_open(extract_file,nf90_nowrite,ncid)
-      if (ierr/=0)
-     &  call handle_ierr(ierr,'extract_data :: read objects file', extract_file)
+      if (ierr/=0) then
+         call handle_netcdf_error(netcdf_status=ierr,
+     &        info="error reading objects file "//extract_file,
+     &        context=module_name//"/"//sr_name)
+      end if
       ierr = nf90_inquire(ncid,nVariables=nobj)
-      if (ierr/=0) call handle_ierr(ierr,'read extr ')
-
+      if (ierr/=0) then
+         call handle_netcdf_error(netcdf_status=ierr,
+     &        context=module_name//"/"//sr_name,
+     &        info="read extr")
+      end if
       allocate(obj(nobj))
 
       ! Read all objects from file.
       do iobj = 1,nobj
         ierr = nf90_inquire_variable(ncid,iobj,name=objname,dimids=dimids)
-        if (ierr/=0) call handle_ierr(ierr,'read extr ')
+        if (ierr/=0) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          context=module_name//"/"//sr_name,
+     &          info="error during inquire,  variable:"//objname)
+        end if
         ierr = nf90_inquire_dimension(ncid,dimids(1),name=dname,len=n1)
-        if (ierr/=0) call handle_ierr(ierr,'read extr ')
+        if (ierr/=0) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          context=module_name//"/"//sr_name,
+     &          info="error during inquire,  dimension:"//dname)
+        end if
         ierr = nf90_inquire_dimension(ncid,dimids(2),len=n2)
-        if (ierr/=0) call handle_ierr(ierr,'read extr ')
+        if (ierr/=0) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          context=module_name//"/"//sr_name,
+     &          info="error during inquire")
+        end if
 
         lstr = len(trim(dname))
         allocate(character(len=lstr) :: obj(iobj)%dname)
@@ -292,7 +312,11 @@
 !       endif
 
         ierr = nf90_get_att(ncid,iobj,'output_period',period)
-        if (ierr/=0) call handle_ierr(ierr,'read extr ')
+        if (ierr/=0) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          info="error when getting `output_period` attribute",
+     &          context=module_name//"/"//sr_name)
+        end if
         obj(iobj)%period   = period
 
         if (obj(iobj)%np>0) then
@@ -307,8 +331,11 @@
 
           ! Figure out which variables to output for this object
           ierr = nf90_get_att(ncid,iobj,'output_vars',variables)
-          if (ierr/=0) call handle_ierr(ierr,'read extr ')
-
+          if (ierr/=0) then
+             call handle_netcdf_error(netcdf_status=ierr,
+     &         info="error getting `output_vars` attribute",
+     &         context=module_name//"/"//sr_name)
+          end if
           if (findstr(variables,'zeta') ) obj(iobj)%zeta = .True.
           if (findstr(variables,'temp') ) obj(iobj)%temp = .True.
           if (findstr(variables,'salt') ) obj(iobj)%salt = .True.
@@ -323,18 +350,21 @@
 
           ! DIAGNOSTICS needs to be activated and diag_pflx=.true.
           if (obj(iobj)%up.and. .not.diag_pflx) then
-            print *,'Fatal ERROR: up extraction, diag_pflx is not set'
-            stop
+             call handle_configuration_error(
+     &            context=module_name//"/"//sr_name,
+     &            info="diag_pflx is not set for up extraction")
           endif
           if (obj(iobj)%vp.and. .not.diag_pflx) then
-            print *,'Fatal ERROR: vp extraction, diag_pflx is not set'
-            stop
+             call handle_configuration_error(
+     &            context=module_name//"/"//sr_name,
+     &            info="diag_pflx is not set for vp extraction")
           endif
 #if !defined(BIOLOGY_BEC2) && !defined(MARBL)
-         if (obj(iobj)%bgc) then
-            print *,'Fatal ERROR: BGC extraction, BIOLOGY_BEC2'//
-     &           ' or MARBL cpp key not set'
-            stop
+          if (obj(iobj)%bgc) then
+             call handle_configuration_error(
+     &            context=module_name//"/"//sr_name,
+     &            info="MARBL or BIOLOGY_BEC2 cpp key is not "//
+     &            "set for BGC extraction")
          endif
 #endif
 
@@ -744,6 +774,7 @@
 
       ! import/export
       integer :: ncid
+      character(len=10) :: sr_name = "create_var"
       type(extract_object),intent(in) ::obj
       character(len=*)              ,intent(in) :: vname
       character(len=20),dimension(:),intent(in) :: dname ! dimension names
@@ -761,7 +792,11 @@
       ierr = nf90_put_att(ncid,varid,'count',obj%np)
       ierr = nf90_put_att(ncid,varid,'dname',obj%dname)
       ierr = nf90_put_att(ncid,varid,'dsize',obj%dsize)
-      if (ierr/=0) call handle_ierr(ierr,'extract create var: '//vname)
+      if (ierr/=0) then
+         call handle_netcdf_error(netcdf_status=ierr,
+     &        info="error creating var "//vname,
+     &        context=module_name//"/"//sr_name)
+      end if
 
       if (present(idx)) then
         if (idx>=0) then
