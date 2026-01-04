@@ -4,15 +4,24 @@
       ! his, avg, and rst files
 
 #include "cppdefs.opt"
-
-      use param
-      use netcdf
-      use nc_read_write
-      use roms_read_write
-      use sponge_tune
-      use diagnostics
-      use scalars
-      use ocean_vars
+      use netcdf, only:
+     &     nf90_double, nf90_int, nf90_global, nf90_write,
+     &     nf90_inq_varid, nf90_put_var, nf90_put_att, nf90_open, nf90_close,
+     &     nf90_nofill, nf90_set_fill
+      use nc_read_write, only: nccreate, ncwrite
+      use roms_read_write, only:
+     &     max_name_size, dn_tm, dn_xr, dn_xu,
+     &     dn_yr, dn_yv, dn_zr, eta_rho, eta_v, xi_rho, xi_u, dn_zw,
+     & avg_output, create_file
+      use sponge_tune, only: ub_tune
+      use diagnostics, only: diag_pflx
+      use scalars, only:
+     &     NT, iic, knew, nstp, time,
+     &     N, dt, start_time, nnew, tdays
+      use ocean_vars, only:
+     &     zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,
+     &     w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
+      use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive
       use error_handling, only : handle_configuration_error, handle_netcdf_error
       implicit none
       private
@@ -112,7 +121,6 @@
       end subroutine init_restarts !]
 !----------------------------------------------------------------------
       subroutine init_avg_arrays  ![
-      use scalars
       implicit none
       character(len=15) :: sr_name = "init_avg_arrays"
       character(len=200) :: error_info
@@ -277,11 +285,22 @@
       ! ocean_vars variables are calculated for t=n in timestep t=n
       ! (unlike u/v/etc which are calculated for t=n+1 in timestep t=n)
 
-      use mixing
-      use eos_vars
-      use work_mod
-      use grid
-      use tracers    !, only: wrt_his_trc
+      use mixing, only: Akv, Akt
+#ifdef LMD_KPP
+     &     ,hbls
+#endif
+#ifdef LMD_BKPP
+     &     , hbbl
+#endif
+#ifdef SPLIT_EOS
+      use eos_vars, only: rho1
+#else
+      use eos_vars, only: rho
+#endif
+      use work_mod, only: work
+      use grid, only: pn, pm
+      use dimensions, only: i0,i1,j0,j1
+      use tracers, only: wrt_his_trc
 
       implicit none
 
@@ -415,10 +434,8 @@
       ! but this 0.5dt error has always been in ROMS.
       ! for 2 steps. True avg would be 0.5*t0 + t1 + 0.5*t2, but we've never done that.
 
-      use eos_vars
-      use mixing
-      use tracers
-      use grid
+      use grid, only: pm, pn
+      use dimensions, only: i0, i1, j0, j1
       implicit none
 
       ! local
@@ -563,13 +580,15 @@
       ! write ocean_vars variables to output netcdf restart file
       ! ocean_vars variables are calculated for t=n in timestep t=n
       ! (unlike u/v/etc which are calculated for t=n+1 in timestep t=n)
-
-      use mixing
-      use eos_vars
-      use work_mod
-      use grid
-      use tracers
-      use coupling
+#if defined LMD_KPP
+      use mixing, only: hbls, hbbl
+#endif
+      use dimensions, only: i0, i1, j0,j1
+      use tracers, only: wrt_rst_trc
+      use coupling, only:
+     &     du_avg1, dv_avg1, du_avg2, dv_avg2,
+     &     du_avg_bak, dv_avg_bak
+      use grid, only: riv_umask, riv_vmask
 #ifdef MARBL
 !     add MARBL saved state to restart to restart file
       use marbl_driver, only: marbldrv_write_ss_vars_to_rst
@@ -730,7 +749,7 @@
       ! define output variable & attributes in netcdf results file
       ! for instantaneous or averaged variables
 
-      use tracers
+      use tracers, only: def_avg_trc, def_his_trc
       implicit none
 
       ! input
@@ -865,7 +884,7 @@
 ! ----------------------------------------------------------------------
       subroutine def_vars_rst_ocean_vars  ![
       ! define output variable & attributes in netcdf restart file
-      use tracers
+      use tracers, only: t_vname, t_lname, t_units
 #ifdef MARBL
 !     add MARBL saved state to restart to restart file
       use marbl_driver, only: marbldrv_create_ss_vars_in_rst
@@ -1028,13 +1047,19 @@
       end subroutine def_vars_rst_ocean_vars  !]
 ! ----------------------------------------------------------------------
       subroutine calc_avg_ocean_vars  ![
-      ! set averaged variables
-      use eos_vars
-      use work_mod
-      use mixing
-      use tracers
-      use private_scratch
-      use dimensions
+! set averaged variables
+#ifdef SPLIT_EOS
+      use eos_vars, only: rho1, qp1
+#else
+      use eos_vars, only: rho
+#endif
+      use work_mod, only: work
+      use mixing, only: akv, akt
+#ifdef LMD_KPP
+     &     , hbls, hbbl
+#endif
+      use private_scratch, only: a2d
+      use dimensions, only: i0, i1, j0, j1, nx, ny
       implicit none
 
       ! local
@@ -1140,7 +1165,7 @@
       end subroutine write_time_step  !]
 !-----------------------------------------------------------------------
       subroutine display_output_settings_to_terminal_his  ![
-      use tracers
+      use tracers, only: itands, wrt_t, t_vname
       implicit none
 
       ! local
@@ -1191,7 +1216,7 @@
       end subroutine display_output_settings_to_terminal_his  !]
 
       subroutine display_output_settings_to_terminal_avg  ![
-      use tracers
+      use tracers, only: itands, wrt_t_avg, t_vname
       implicit none
 
       ! local

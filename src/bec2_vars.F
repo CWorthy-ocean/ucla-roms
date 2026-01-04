@@ -2,9 +2,7 @@
 #include "cppdefs.opt"
 #ifdef BIOLOGY_BEC2
 
-      use param
-      use tracers               ! for iPO4, etc, indices of bgc tracers (formerly in param.h)
-      use roms_read_write
+      use param, only: nt, lm, mm, n, ntrc_bio
 
 
       implicit none
@@ -152,7 +150,7 @@ C
 !----------------------------------------------------------------------
 
 !----------------------------------------------------------------------
-      subroutine init_arrays_bec2_vars  ![
+      subroutine init_arrays_bec2_vars ![
       implicit none
 
       allocate( DTRACER_MODULE(GLOBAL_2D_ARRAY,N,ntrc_bio) )

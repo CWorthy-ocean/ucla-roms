@@ -11,13 +11,37 @@
      &                                                   kbls, kmo,
      &                                                         tind)
 
-      use param
-      use wec_frc
-      use surf_flux ! bulk_frc-> only: sustr_r, svstr_r, stflx, srflx
-      use grid      ! flux_frc-> only: sustr, svstr, stflx, srflx
-      use mixing
-      use ocean_vars
-      use scalars
+      use surf_flux, only: stflx, srflx, svstr, sustr, svstr_r, sustr_r
+!     bulk_frc-> only: sustr_r, svstr_r, stflx, srflx, only:
+      use grid, only: f, rmask, umask, vmask
+!     flux_frc-> only: sustr, svstr, stflx, srflx
+      use mpi_exchanges, only: exchange_xxx
+      use param, only:
+     &     ieast, east_exchng, south_exchng, west_exchng,
+     &     north_exchng, itemp, iwest, jnorth, jsouth
+#ifdef SALINITY
+     &     , isalt
+#endif
+      use mixing, only: akt, akv
+# if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
+  || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
+  || defined LMD_BKPP
+     & , bvf
+#endif
+#ifdef LMD_KPP
+     & , hbls, swr_frac
+#ifdef LMD_NONLOCAL
+     & , ghat
+#endif
+#endif
+#ifdef LMD_BKPP
+     &     , hbbl
+#endif
+#ifdef WEC
+      use wec_frc, only: akb
+#endif
+      use ocean_vars, only: z_w, hz, v, u, z_r
+      use scalars, only: n, forw_start, g, iic, nstp, vonkar, zob
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k
@@ -653,9 +677,8 @@ c--         Vtsq=Vtc*ws*sqrt(max(0., 0.5*(bvf(i,j,k)+bvf(i,j,k-1)) ))
 ! in a separate file in order to be exposed to relevant CPP-settings.
 ! This routine does not affect model results, other than signature in
 ! global attribute "CPPS" in output netCDF files.
-
-      use param
-      use strings
+      use strings, only: cpps, max_opt_size
+      use param, only: mynode
 
       implicit none
       integer ierr, is,ie, lenstr

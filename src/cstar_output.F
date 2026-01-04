@@ -5,16 +5,25 @@
 #include "cppdefs.opt"
 
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
-      use param
-      use tracers
-      use marbl_driver
-      use bgc_shared_vars
-      use dimensions
-      use roms_read_write
-      use netcdf
-      use scalars
-      use ocean_vars
-      use diagnostics
+      use tracers, only: t_units
+      use param, only: itemp, isalt
+      use marbl_driver, only:
+     &     marbl_saved_state_3d, ialk,
+     &     ialk_alt, idic, idic_alt, nr_marbl_ss_3d,
+     &     vname_marbl_ss_3d
+      use bgc_shared_vars, only:
+     &     t, bgc_diag_2d, mynode, lm, mm,
+     &     nr_bgc_diag_2d, vname_bgc_diag_2d, t_lname
+      use dimensions, only: i0, i1, j0, j1, nx, ny, nz
+      use roms_read_write, only:
+     &     dn_tm, dn_xr, dn_yr, dn_zr, eta_rho,
+     &     xi_rho, create_file
+      use nc_read_write, only: nccreate, ncwrite
+      use netcdf, only:
+     &     nf90_noerr, nf90_write, nf90_double, nf90_open,
+     &     nf90_put_att, nf90_close
+      use scalars, only: iic, knew, nnew, tdays, time, dt, n
+      use ocean_vars, only: zeta, hz
       use error_handling, only : handle_configuration_error, handle_netcdf_error
       use cdr_frc, only: cdr_flx_3d_ALK, cdr_flx_3d_DIC, cdr_prf,
      &                   cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,
@@ -219,9 +228,9 @@
       end subroutine define_cstar_output_variables
 
       subroutine init_cstar ![
-! Allocate and initialize arrays.
-      character(len=9) :: sr_name = "init_cstar"
+!     Allocate and initialize arrays.
       implicit none
+      character(len=9) :: sr_name = "init_cstar"
 
       ! local
       logical,save :: done=.false.
@@ -350,7 +359,6 @@
       ! Update averages
       ! The average is always scaled properly throughout
       ! reset navg_rnd=0 after an output of the average
-      use param
       implicit none
 
       ! local
@@ -423,7 +431,6 @@
       ! Update averages
       ! The average is always scaled properly throughout
       ! reset navg_rnd=0 after an output of the average
-      use param
       implicit none
 
       hALK_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK)*Hz(i0:i1,j0:j1,:)
@@ -438,7 +445,6 @@
 !----------------------------------------------------------------------
       subroutine calc_cdr_source ![
       ! Update source terms from the CDR module
-      use param
       implicit none
 
       integer :: i,j,k,icdr,cidx
@@ -642,6 +648,7 @@
         subroutine display_cstar_output_settings_to_terminal_cstar
 !     Basic header
         character(len=120) :: stdout_str
+        integer :: idx
         if (mynode==0) then
            if (.not. do_avg) then
               write(stdout_str,'(7x,A)')
@@ -687,12 +694,6 @@
 
 #else /* MARBL && MARBL_DIAGS && CDR_FORCING */
 !----------------------------------------------------------------------
-      use param
-      use tracers
-      use dimensions
-      use roms_read_write
-      use scalars
-      use ocean_vars
       use error_handling, only : handle_configuration_error
 
       implicit none

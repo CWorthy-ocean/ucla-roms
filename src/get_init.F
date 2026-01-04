@@ -3,27 +3,48 @@
       subroutine get_init(req_rec, tindx)    ! Reads initial conditions
                                              ! from netCDF file.
 
-      use param
+      use scalars, only:
+     &     day2sec, dt, forw_start, iic, ntstart,
+     &     sec2day, start_time, may_day_flag
+      use hidden_mpi_vars, only: inode, jnode
       use tracers, only: t_vname, t, iTandS
-      use bgc_io ! get_init_bgc_diag
 #ifdef MARBL
       use marbl_driver, only: marbldrv_read_ss_vars_from_rst
 #endif
-      use coupling
-      use grid
-      use hidden_mpi_vars
-      use analytical
-      use mixing
-      use ocean_vars
-      use basic_output
-      use scalars
-      use netcdf
-      use bgc_shared_vars
-      use diagnostics
-      use sponge_tune
+      use coupling, only:
+     &     du_avg1, dv_avg1, du_avg2, dv_avg2,
+     &     du_avg_bak, dv_avg_bak
+#ifdef LMD_BKPP
+      use mixing, only: hbbl
+#endif
+#ifdef LMD_KPP
+      use mixing, only: hbls
+#endif
+      use ocean_vars, only: zeta, ubar, vbar, u, v
+      use basic_output, only:
+     &     vname, iaux, indxtime,
+     &     indxu, indxv
+#ifdef LMD_BKPP
+     &     , indxhbbl,
+#endif
+#ifdef LMD_KPP
+     &     indxhbls
+#endif
+      use netcdf, only:
+     &     nf90_get_att, nf90_inquire_variable,
+     &     nf90_inquire_dimension, nf90_noerr, nf90_nowrite,
+     &     nf90_strerror, nf90_inq_varid, nf90_get_var, nf90_close,
+     &     nf90_open
       use nc_read_write, only: ncread
-      use roms_read_write
-      use dimensions
+      use roms_read_write, only: ininame
+      use grid, only:
+     &     riv_umask, riv_vmask, rmask, umask, vmask
+      use dimensions, only: i0, i1, j0, j1, nz
+      use param, only:
+     &     ieast, iwest, jnorth, jsouth, mynode,
+     &     nsub_e, nsub_x, north_exchng, east_exchng,
+     &     west_exchng, south_exchng, nnodes, n, nt
+      use mpi_exchanges, only: exchange_xxx
       use error_handling, only : handle_configuration_error, handle_netcdf_error
 
       implicit none
@@ -39,9 +60,6 @@
      &                    , apprx_rst=3, exact_rst=4
       real time_bak
       logical :: exact_succes
-# ifdef NHMG
-!     integer i,j,k
-# endif
 #endif
 #define time illegal
 #define tdays illegal
@@ -488,24 +506,6 @@ c--#define VERBOSE
      &  (vmask(i0:i1,1:j1)+riv_vmask(i0:i1,1:j1))
       enddo
       call exchange_xxx(v(:,:,:,tindx) )
-
-# if defined NHMG
-      ! since ncdf_read already does an exchange to fill buffers, we're
-      ! ready to initialy w using no-div
-!     do j=1,Lm
-!       do k=1,N
-!         do i=1,Mm
-!           DC(i,0)=pm(i,j)*pn(i,j)
-!           w(i,j,k,nnew)=w(i,j,k-1,nnew)
-!    &      - DC(i,0)*(
-!    &       +0.5*(Hz(i,j,k)+Hz(i+1,j,k))*dn_u(i+1,j)*u(i+1,j,k,nnew)
-!    &       -0.5*(Hz(i-1,j,k)+Hz(i,j,k))*dn_u(i,j)*u(i,j,k,nnew)
-!    &       +0.5*(Hz(i,j,k)+Hz(i,j+1,k))*dm_v(i,j+1)*v(i,j+1,k,nnew)
-!    &       -0.5*(Hz(i,j-1,k)+Hz(i,j,k))*dm_v(i,j)*v(i,j,k,nnew) )
-!         enddo
-!       enddo
-!     enddo
-# endif
 
 
 ! Tracer variables.

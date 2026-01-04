@@ -20,10 +20,11 @@ c--#define MAX_BY_VERT_CFL_ONLY
 
 
       subroutine diag
-      use param
-      use hidden_mpi_vars
-      use private_scratch
-      use scalars
+      use param, only: ieast, iwest, jnorth, jsouth
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: nsub_e, nsub_x, a2d
+      use scalars, only: iic, ninfo
+
       implicit none
       character(len=4) :: sr_name = "diag"
 
@@ -52,14 +53,24 @@ c--#define MAX_BY_VERT_CFL_ONLY
 #endif
      &                                                      )
 
-      use param
-      use comm_vars
-      use diag_vars
-      use eos_vars
-      use grid
-      use ocean_vars
-      use scalars
-      use mpi
+      use comm_vars, only: area, first_time, tile_count, volume
+      use diag_vars, only:
+     &     avke, avke2b, avke3bc, avkesrf, avpe,
+     &     avzeta, cu_adv, cu_w, i_cx_max, j_cx_max, k_cx_max, v2d_max
+#ifdef SPLIT_EOS
+      use eos_vars, only: qp1, rho1
+#else
+      use eos_vars, only: rho
+#endif
+      use grid, only:
+     &     ieast, isw_corn, iwest, jnorth, jsouth, jsw_corn,
+     &     mynode, nsub_e, nsub_x, ocean_grid_comm, pn, pm, rmask
+      use ocean_vars, only: u, hz, v, z_w, wi, we, flxv, flxu, z_r
+      use param, only: nnodes
+      use scalars, only:
+     &     diag_sync, dt, g, iic, may_day_flag, n, nstp,
+     &     rho0, tdays
+      use mpi, only: mpi_real8, mpi_status_size, mpi_wtime
       use timers, only: tstart
       use error_handling, only : handle_configuration_error
       implicit none

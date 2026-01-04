@@ -7,9 +7,9 @@
 ! stepping algorithm [Sec. 2.3 from SM2005 starting with Eq. (2.49)]
 ! and perform fast-time averaging to interact with baroclinic mode.
 
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: nsub_e, nsub_x, a2d
 
       implicit none
       integer,save :: tile=0
@@ -25,18 +25,25 @@
      &                           rubar,rvbar, urhs,vrhs,  DUon,DVom,
      &                                       Drhs, UFx,UFe,VFx,VFe)
 
-      use param
-      use river_frc
-      use pipe_frc
-      use cdr_frc
-      use wec_frc
-      use tides
-      use coupling
-      use grid
-      use mixing
-      use ocean_vars
-      use scalars
-      use mpi_exchanges
+      use river_frc, only:
+     &     iriver, river_flux, river_source, riv_uflx,
+     &     riv_vol, riv_vflx
+      use pipe_frc, only: pipe_source, pipe_idx, pipe_flx
+#if defined(CDR_FORCING)
+      use cdr_frc, only:
+     &     cdr_prf, cdr_nprf, cdr_source, cdr_volume,
+     &     cdr_icdr, cdr_iloc, cdr_jloc, cdr_vol
+#endif
+      use coupling, only:
+     &     rhos, rhoa, weight, du_avg_bak, du_avg2,
+     &     du_avg1, dv_avg_bak, dv_avg2, dv_avg1, zt_avg1, rufrc, rvfrc
+      use grid, only: h, dn_u, dm_v, pn, pm, rmask, umask, vmask
+      use param, only:
+     &     east_exchng, ieast, iwest, jnorth, jsouth,
+     &     north_exchng, south_exchng, west_exchng
+      use ocean_vars, only: zeta, ubar, vbar
+      use scalars, only: dtfast, g, iif, knew, kstp, nfast
+      use mpi_exchanges, only: exchange_xxx
 
       implicit none
       integer istr,iend,jstr,jend, i,j, kbak, kold, icdr, cidx

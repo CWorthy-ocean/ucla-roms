@@ -1,10 +1,13 @@
       module mpi_exchanges
       ! overloaded mpi exchange subroutines
 
-      use param
-      use dimensions
-      use hidden_mpi_vars
-      use mpi
+      use param, only: ocean_grid_comm
+      use dimensions, only: bf, i0, i1, j0, j1, nz
+      use hidden_mpi_vars, only:
+     &     east_msg_exch, north_msg_exch, p_e,
+     &     p_n, p_ne, p_nw, p_s, p_se, p_sw, p_w, south_msg_exch,
+     &     west_msg_exch, inode, jnode, np_eta, np_xi, mynode
+      use mpi, only: mpi_double_precision, mpi_status_size
       implicit none
 
       private

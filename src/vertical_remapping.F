@@ -6,10 +6,7 @@
 #include "cppdefs.opt"
 
 
-      use dimensions
-      use scalars
-      use grid
-      use ocean_vars
+      use dimensions, only: nz
 
       implicit none
 

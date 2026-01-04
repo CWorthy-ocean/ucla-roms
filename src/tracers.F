@@ -19,17 +19,19 @@
 
 #include "cppdefs.opt"
 
-      use param
-      use dimensions
-      use surf_flux,  only: stflx                          ! surface tracer flux should possibly live in this module rather?
-      use scalars                                          ! for 'FIRST_TIME_STEP' and nstp
-      use nc_read_write
-      use roms_read_write
-      use netcdf
+      use param, only: isalt, itemp, lm, mm, mynode, nt_passive
+      use dimensions, only: i0, i1, j0, j1, nx, ny
+      use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rather?
+      use scalars, only: n, nstp, nnew, forw_start, iic, nt
+! for 'FIRST_TIME_STEP' and nstp, only:
+      use nc_read_write, only: nccreate, ncwrite
+      use roms_read_write, only:
+     &     ncforce, dn_tm, dn_xr, dn_yr, dn_zr,
+     &     eta_rho, xi_rho, set_frc_data
+      use netcdf, only: nf90_put_att
 #ifdef MARBL
       use marbl_driver, only: marbldrv_configure_tracers
 #endif
-      use mpi_exchanges
       implicit none
       private
       character(len=7) :: module_name = "tracers"

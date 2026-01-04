@@ -3,17 +3,21 @@
 
 #include "cppdefs.opt"
 
-      use param
-      use grid
-      use dimensions
-      use roms_read_write
-      use nc_read_write
-      use netcdf
-      use scalars
-      use ocean_vars
-      use diagnostics
-      use tracers
-      use surf_flux
+      use grid, only: rmask
+      use param, only: lm, mm
+      use mpi_exchanges, only: exchange_xxx
+      use hidden_mpi_vars, only: mynode
+      use dimensions, only: nx, ny, nz
+      use roms_read_write, only:
+     &     bfx, bfy, dn_tm, dn_xr, dn_xu, dn_yr,
+     &     dn_yv, eta_rho, eta_v, xi_rho, xi_u, create_file
+      use nc_read_write, only: nccreate, ncwrite
+      use netcdf, only:
+     &     nf90_noerr, nf90_write, nf90_open,
+     &     nf90_put_att, nf90_close
+      use scalars, only: n, dt, iic, tdays, time, nnew
+      use ocean_vars, only: u, v, z_w, z_r
+      use tracers, only: t, t_vname, t_lname, t_units
       use error_handling, only: handle_netcdf_error
 
       implicit none
@@ -257,7 +261,6 @@
       ! Update averages
       ! The average is always scaled properly throughout
       ! reset navg_rnd=0 after an output of the average
-      use param
       implicit none
 
       ! local

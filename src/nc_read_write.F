@@ -2,7 +2,10 @@
 
 #include "cppdefs.opt"
 
-      use netcdf
+      use netcdf, only:
+     &     nf90_float, nf90_noerr, nf90_strerror,
+     &     nf90_inq_dimid, nf90_def_dim, nf90_def_var, nf90_inq_varid,
+     &     nf90_put_var, nf90_get_var
       use error_handling, only: handle_netcdf_error, handle_configuration_error
       implicit none
       private

@@ -8,14 +8,14 @@
 #include "cppdefs.opt"
 
       ! Modules needed:
-      use param
-      use dimensions
-      use tracers,    only: t
-      use surf_flux ! sustr, svstr, stflx, srflx, sss, sst
-      use scalars
-      use roms_read_write
-      use grid
-
+      use tracers, only: t
+      use surf_flux, only: sustr, svstr, stflx, srflx, sss, sst, apply_surf_field_corr
+      use scalars, only: cp, rho0, day2sec, n, nrhs
+      use roms_read_write, only: ncforce, flux_frc_opt, set_frc_data,
+     &     store_string_att
+      use dimensions, only: i0, i1, j0, j1
+      use param, only: lm, mm, isalt, itemp
+      use grid, only: nz
 
       implicit none
 

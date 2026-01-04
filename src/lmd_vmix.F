@@ -3,9 +3,9 @@
 # define SMOOTH_RIG  /* local Ri number smoothing */
 
       subroutine lmd_vmix(tind)
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: nsub_e, nsub_x, a3d, a2d, ia2d
       implicit none
       integer,save :: tile=0
       integer      :: tind
@@ -44,12 +44,14 @@
 !             A Review and model with a nonlocal boundary layer
 !             parameterization.  Reviews of Geophysics, 32,363-403.
 
-      use param
       use tracers, only: t
-      use grid
-      use mixing
-      use ocean_vars
-      use scalars
+      use grid, only: umask, vmask
+      use mixing, only: bvf
+      use param, only:
+     &     east_exchng, ieast, isalt, itemp, iwest,
+     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
+      use ocean_vars, only: z_r, u, v, z_w
+      use scalars, only: n, akv_bak, pi, akt_bak
 
       implicit none
 

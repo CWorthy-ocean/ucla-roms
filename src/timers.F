@@ -1,8 +1,10 @@
       module timers
 
-      use param
-      use comm_vars
-      use scalars
+      use param, only:
+     &     llm, mmm, mynode, nnodes, np_eta, np_xi, nsub_e,
+     &     nsub_x
+      use comm_vars, only: trd_count
+      use scalars, only: cpu_init, n, numthreads, proc
 
       implicit none
 
@@ -90,9 +92,8 @@ C$OMP END CRITICAL (start_timers_cr_rgn)
 
       subroutine stop_timers()            ! Finalize timing
 
-      use param
-      use comm_vars
-      use scalars
+      use comm_vars, only: cpu_all
+      use scalars, only: cpu_net
 
       implicit none                       ! for all threads.
 
@@ -165,8 +166,7 @@ C$OMP END CRITICAL (stop_timers_cr_rgn)
 ! "itest" computed below must always match "priv_count".
 
       subroutine sync_trap(ibarr)
-      use param
-      use scalars
+      use scalars, only: priv_count, barr_count
       implicit none
       integer ibarr, indx, itest
 
@@ -189,8 +189,6 @@ C$OMP END CRITICAL(trap_cr_rgn)
 #else
                                        ! These are stub-routines for
       subroutine start_timers          ! compatibility with compilers
-      use param
-      use scalars
       implicit none                    ! without OpenMP support.
 
       mpi_master_only write(*,'(/2(1x,A,I3),4x,2(1x,A,I4)/)')

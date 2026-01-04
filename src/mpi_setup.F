@@ -12,10 +12,17 @@ C$    end
 
 
       subroutine mpi_setup(ierr)
-      use param
-      use hidden_mpi_vars
-      use mpi
-      use roms_read_write
+      use param, only:
+     &     east_exchng, ieast, iwest, jnorth, jsouth, llm,
+     &     lm, mm, mmm, north_exchng, ocean_grid_comm, south_exchng,
+     &     west_exchng, np_xi, np_eta
+      use hidden_mpi_vars, only:
+     &     east_msg_exch, exc_call_count, inode,
+     &     isw_corn, jnode, jsw_corn, mynode, nnodes, north_msg_exch,
+     &     p_e, p_n, p_ne, p_nw, p_s, p_se, p_sw, p_w,
+     &     south_msg_exch, west_msg_exch
+      use mpi, only: mpi_comm_world
+      use roms_read_write, only: eta_rho, eta_v, xi_rho, xi_u
       implicit none
       integer ierr
 

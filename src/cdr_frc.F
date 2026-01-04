@@ -19,10 +19,12 @@
       use hidden_mpi_vars
       use marbl_driver, only : iALK, iDIC
       use vertical_remapping
+      use error_handling, only: handle_configuration_error, handle_netcdf_error
 
       implicit none
       private
       character(len=7) :: module_name="cdr_frc"
+      character(len=200) :: error_info=""
 #include "cdr_frc.opt"
 
       !!! (1) Parameterized releases
@@ -155,6 +157,7 @@
         ierr=nf90_open(cdr_file, nf90_nowrite, ncid)
         if(ierr/=0) then
            call handle_netcdf_error(
+     &          netcdf_status=ierr,
      &          info="Cannot open CDR forcing file",
      &          context=module_name//"/"//sr_name)
         end if
@@ -191,6 +194,7 @@
       ! local
       integer :: ierr
       integer :: dimid
+      character(len=16) :: sr_name = "init_cdr_frc_dp"
 
       ! Check how many vertical profiles (i.e. tracer releases) we will use
       ierr = nf90_inq_dimid(ncid, 'ncdr_prof', dimid)
@@ -296,7 +300,7 @@
       use netcdf
       use mpi
       implicit none
-      chracter(len=23) :: sr_name = "find_release_locations"
+      character(len=23) :: sr_name = "find_release_locations"
       ! local
       integer :: i,j
       integer :: icdr, cidx, cidx_start, ierr
@@ -613,7 +617,6 @@
       use grid
       use ocean_vars
       use hidden_mpi_vars
-      use error_handling, only: handle_configuration_error
       implicit none
 
       private
@@ -626,7 +629,8 @@
       contains
 
       subroutine set_cdr_frc    ![
-      ! Allocate and initialize arrays.
+! Allocate and initialize arrays.
+      use error_handling, only: handle_configuration_error
       implicit none
       character(len=11) :: sr_name = "set_cdr_frc"
 

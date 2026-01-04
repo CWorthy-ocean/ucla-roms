@@ -2,7 +2,7 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only: lm, mm, nsub_e, nsub_x
       implicit none
 
 ! Auxiliary module "private_scratch":   A set of tile-size arrays
@@ -39,7 +39,7 @@ C$OMP THREADPRIVATE( A3d, A2d, iA2d, A2d )
 
 !----------------------------------------------------------------------
       subroutine init_arrays_private_scratch  ![
-      use scalars
+      use scalars, only: n
       implicit none
 
 #ifdef ALLOW_SINGLE_BLOCK_MODE

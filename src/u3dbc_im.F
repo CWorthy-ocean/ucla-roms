@@ -6,13 +6,23 @@
 ! Set lateral boundary conditions for XI-component velocity
 ! u(:,:,:,nnew).
 
-      use param
-      use wec_frc
-      use boundary
-      use grid
-      use ocean_vars
-      use scalars
-      use sponge_tune
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use boundary, only: u_west, u_east, u_south, u_north
+      use hidden_mpi_vars, only: inode
+      use ocean_vars, only: u, v
+      use scalars, only: dt, n, nnew, nrhs, nstp, gamma2
+#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
+  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
+                                             || defined M3NUDGING
+     & , ubind
+#endif
+      use sponge_tune, only:
+     &     ub_tune, ub_west, ub_east, ub_south,
+     &     ub_north
+      use dimensions, only: ny, nz
+      use grid, only: pmask, pm, umask, pn
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k

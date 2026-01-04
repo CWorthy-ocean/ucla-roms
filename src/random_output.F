@@ -3,14 +3,17 @@
 
 #include "cppdefs.opt"
 
-      use param
-      use dimensions
-      use roms_read_write
-      use nc_read_write
-      use netcdf
-      use scalars
-      use ocean_vars
-      use diagnostics
+      use param, only: mynode
+      use dimensions, only: i0, i1, j0, j1, nz
+      use roms_read_write, only:
+     &     dn_tm, dn_xr, dn_xu, dn_yr, dn_yv,
+     &     eta_rho, eta_v, xi_rho, xi_u, create_file
+      use nc_read_write, only: nccreate, ncwrite
+      use netcdf, only:
+     &     nf90_noerr, nf90_write, nf90_open,
+     &     nf90_put_att, nf90_close
+      use scalars, only: dt, iic, knew, nnew, tdays, time
+      use ocean_vars, only: zeta, u, v
       use error_handling, only: handle_netcdf_error
       implicit none
 

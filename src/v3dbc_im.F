@@ -6,13 +6,21 @@
 ! Set lateral boundary conditions for ETA-component velocity
 ! v(:,:,:,nnew)
 
-      use param
-      use wec_frc
-      use boundary
-      use grid
-      use ocean_vars
-      use scalars
-      use sponge_tune
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use boundary, only: v_south, v_north, v_west, v_east
+      use grid, only: pmask, pn, vmask, pm
+      use ocean_vars, only: v, u
+      use scalars, only: dt, n, nnew, nrhs, nstp, gamma2
+#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
+  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
+                                             || defined M3NUDGING
+     & , ubind
+#endif
+      use sponge_tune, only:
+     &     ub_tune, ub_south, ub_north, ub_west,
+     &     ub_east
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k

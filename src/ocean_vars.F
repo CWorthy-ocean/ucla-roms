@@ -4,8 +4,8 @@
 
 #include "cppdefs.opt"
 
-      use param
-      use scalars
+      use param, only: lm, mm
+      use scalars, only: init, n
       implicit none
       private
 

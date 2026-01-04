@@ -3,11 +3,13 @@
 
       subroutine w3dbc_tile (istr,iend,jstr,jend,grad)
 
-      use param
-      use boundary
-      use grid
-      use ocean_vars
-      use scalars
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use boundary, only: w_west
+      use grid, only: pm, pn, rmask
+      use ocean_vars, only: w, u, v
+      use scalars, only: dt, gamma2, n, nnew, nrhs, nstp
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k
@@ -348,7 +350,7 @@
       endif
 #  endif
 # endif
-      end
+      end subroutine w3dbc_tile
 
 #else
 

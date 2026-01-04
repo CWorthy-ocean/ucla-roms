@@ -5,14 +5,18 @@
 ! Set lateral boundary conditions for the barotropic (i.e. vertically
 ! integrated) XI-component velocity ubar(:,:,knew).
 
-      use param
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
 #ifdef WEC
-      use wec_frc
+      use wec_frc, only: ust2d
 #endif
-      use boundary
-      use grid
-      use ocean_vars
-      use scalars
+      use boundary, only:
+     &     zeta_west, ubar_west, zeta_east, ubar_east,
+     &     ubar_south, ubar_north
+      use grid, only:  h, pm, umask, pn
+      use ocean_vars, only: zeta, ubar, vbar
+      use scalars, only: dtfast, g, knew, kstp, gamma2
 
       implicit none
       integer istr,iend,jstr,jend, i,j

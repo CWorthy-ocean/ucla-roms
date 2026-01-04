@@ -1,7 +1,7 @@
 #include "cppdefs.opt"
                                            ! Checking compatibility of
       subroutine check_tiling (ierr)       ! dimensions of the grid and
-      use param
+      use param, only: nsub_e, nsub_x
       implicit none                        ! partitioning parameters:
       integer ierr, tile                   ! logic of the code requires
 
@@ -12,9 +12,12 @@
                                            ! smaller size.
 
       subroutine check_tile_bounds (tile, ierr)
-      use param
-      use hidden_mpi_vars
+
+      use param, only:
+     &     ieast, iwest, jnorth, jsouth, lm, mm, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
       use error_handling, only: handle_configuration_error
+
       implicit none
       character(len=17) :: sr_name="check_tile_bounds"
       character(len=200) :: error_info
@@ -55,7 +58,7 @@
 ! starting with "check_switches1".    This routine is merely for
 ! reporting, and it does not perform any checks, nor does it raise
 ! the error flag.
-      use strings
+      use strings, only: cpps, max_opt_size
       implicit none
       character(len=32) bffr(3)
       integer is,ie, i,nwd, lbffr(3)
@@ -98,10 +101,10 @@
 ! Manually check mutual consistency of settings of CPP switches, report
 ! contradictions (if any), and raise errors flag to terminate the run.
 
-      use param
-      use scalars
-      use strings
+      use param, only: mynode
+      use strings, only: cpps, max_opt_size
       use error_handling, only: handle_configuration_error
+
       implicit none
       character(len=16) :: sr_name = "check_switches2"
       character(len=200) :: error_info

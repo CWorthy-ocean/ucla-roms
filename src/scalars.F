@@ -2,7 +2,7 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only: nt, N
       implicit none
 
 ! This is include file "scalars"

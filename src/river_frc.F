@@ -9,11 +9,15 @@
 
 #include "cppdefs.opt"
 
-      use dimensions
-      use roms_read_write
-      use nc_read_write
-      use scalars                                                    ! for FIRST_STEP
-      use grid
+      use roms_read_write, only: ncforce, frcfile, set_frc_data
+      use nc_read_write, only: nccreate, ncread, ncwrite
+      use scalars, only: nt
+      use grid, only:
+     &     nx, ny, ana_grdname, dn_xr, dn_yr, eta_rho, xl,
+     &     grdname, pm, rmask, riv_umask, riv_vmask, xr
+      use dimensions, only: i0, i1, j0, j1
+      use roms_read_write, only: xi_rho
+      use param, only: lm, mm, mynode, ocean_grid_comm
       use error_handling, only : handle_configuration_error, handle_netcdf_error, handle_local_error
 
       implicit none
@@ -90,8 +94,10 @@
       ! done only once as river mouth position does not change.
       ! Or: .... if analytical, define the river fluxes in this
       ! subroutine
-      use netcdf
-      use mpi
+      use netcdf, only:
+     &     nf90_double, nf90_noerr, nf90_nowrite,
+     &     nf90_write, nf90_open, nf90_put_att, nf90_close, nf90_inq_varid
+      use mpi, only: mpi_double_precision, mpi_max
       implicit none
 
       character(len=14) :: sr_name = "init_river_frc"
@@ -224,7 +230,8 @@
       ! calculate the river flux contributions to each cell.
       ! river_flux = iriver + fraction of river's flux through grid point.
       ! e.g. River 3 is over 2 grid points (half flux through each point),
-      ! hence river_flux = 3 + 0.5 = 3.5
+! hence river_flux = 3 + 0.5 = 3.5
+      use param, only: N
       implicit none
 
 ! local

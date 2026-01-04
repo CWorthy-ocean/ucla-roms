@@ -3,9 +3,9 @@
 
       subroutine set_depth(tile)
 
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: nsub_e, nsub_x
 
       implicit none
       integer tile
@@ -20,13 +20,22 @@
 ! of vertical grid boxes "Hz" from fast-time-averaged free surface,
 ! topography h(i,j), and vertical coordinate transformation formula.
 
-      use param
-      use wec_frc
-      use coupling
-      use grid
-      use ocean_vars
-      use scalars
-      use scoord
+      use coupling, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, du_avg1, dv_avg1
+      use grid, only: h, hinv, dn_u, dm_v, pn, pm
+      use param, only: ieast, jnorth, lm, mm
+      use mpi_exchanges, only: exchange_xxx
+      use ocean_vars, only:
+     &     ubar, zeta, vbar, z_w, z_r, hz, z_w0, z_r0, hz0
+# if defined NHMG || defined NONTRAD_COR
+     &     , dzdxi, dzdeta
+#endif
+      use scalars, only: iic, knew
+      use scoord, only: hc, iwest, jsouth, n, cs_w, cs_r
+#ifdef WEC
+      use wec_frc, only: ust2d, vst2d
+#endif
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k
@@ -197,8 +206,8 @@
 
       subroutine set_HUV
 
-      use param
-      use hidden_mpi_vars
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
 
       implicit none
       integer,save:: tile=0
@@ -207,13 +216,16 @@
       end
 
       subroutine set_HUV_tile (istr,iend,jstr,jend)
-
-      use param
-      use wec_frc
-      use grid
-      use ocean_vars
-      use scalars
-
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use grid, only: dn_u, dm_v
+      use mpi_exchanges, only: exchange_xxx
+      use ocean_vars, only: flxu, u, hz, flxv, v
+      use scalars, only: n, nrhs
+#ifdef WEC
+      use wec_frc, only: ust, vst
+#endif
       implicit none
       integer istr,iend,jstr,jend, i,j,k
 
@@ -261,9 +273,9 @@
 
       subroutine set_HUV1(tile)
 
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: nsub_e, nsub_x, a2d
 
       implicit none
       integer tile
@@ -273,15 +285,22 @@
       end
 
       subroutine set_HUV1_tile (istr,iend,jstr,jend, DC,FC)
-
-      use param
-      use wec_frc
-      use coupling
-      use grid
-      use ocean_vars
-      use scalars
-      use dimensions
-      use diagnostics
+      use param, only:
+     &  east_exchng, north_exchng, south_exchng, west_exchng,
+     & ieast, iwest, jnorth, jsouth
+     &     , east_exchng
+      use coupling, only:
+     &     du_avg1, du_avg_bak, du_avg2, dv_avg1, dv_avg_bak,
+     &     dv_avg2
+      use grid, only:  dn_u, umask, dm_v,
+     &     vmask
+      use mpi_exchanges, only: exchange_xxx
+      use ocean_vars, only: u, v, hz, flxu, flxv
+      use scalars, only: n, forw_start, iic, nnew
+      use dimensions, only: nz
+#ifdef WEC
+      use wec_frc, only: ust2d, vst2d, ust, vst
+#endif
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k
@@ -481,8 +500,8 @@
 ! above.  It does not affect any model results, other than signature in
 ! global attribute "CPPS" in output netCDF files.
 
-      use param
-      use strings
+      use param, only: mynode
+      use strings, only: cpps, max_opt_size
 
       implicit none
       integer ierr, is,ie, lenstr

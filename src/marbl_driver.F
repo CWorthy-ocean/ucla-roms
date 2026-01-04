@@ -32,19 +32,19 @@
      &                                        marbl_saved_state_type
 #endif
       use param                       , only: mynode,nt,ntrc_bio,
-     &                                        isalt,itemp,Lm,Mm
+     &                                        isalt,itemp,Lm,Mm,
+     &                                        ocean_grid_comm
       use dimensions                  , only: nz
       use surf_flux                   , only: uwnd, vwnd
       use bgc_forces                  , only: pco2air,pco2air_alt,
      &                                        dust,iron
       use surf_flux                   , only: srflx
-      use nc_read_write
       use scalars                     , only: nstp,nnew,dt,iic,ntstart,
      &                                        Cp, rho0
       use grid                        , only : rmask
 #ifdef MPI
-      use mpi
-      use hidden_mpi_vars
+      use mpi                         , only: MPI_CHARACTER, MPI_INTEGER
+!      use hidden_mpi_vars
 #endif
 #ifdef NOX_FORCING
       use bgc_forces                  , only: nox
@@ -135,9 +135,11 @@
 ! ----------------------------------------------------------------------
 
       public :: marbldrv_configure_tracers
-      public :: marbldrv_configure_diagnostics
       public :: marbldrv_configure_saved_state
+#ifdef MARBL_DIAGS
       public :: marbldrv_compute_init_diagnostics
+      public :: marbldrv_configure_diagnostics
+#endif
       public :: marbldrv_write_ss_vars_to_rst
       public :: marbldrv_create_ss_vars_in_rst
       public :: marbldrv_read_ss_vars_from_rst
@@ -697,10 +699,9 @@
 !-----------------------------------------------------------------------
 
       use nc_read_write, only: ncread
-      use netcdf
+      use netcdf, only: nf90_noerr, nf90_inq_varid
       use dimensions, only : i0,i1,j0,j1
       use mpi_exchanges, only : exchange_xxx
-!      use hidden_mpi_vars
       use param, only : N
       implicit none
 
@@ -779,8 +780,8 @@
 !
 !-----------------------------------------------------------------------
 
-      use netcdf
-      use nc_read_write
+      use netcdf, only: nf90_double, nf90_put_att
+      use nc_read_write, only: nccreate
       use roms_read_write, only: dn_xr,dn_yr,dn_zr,dn_tm,xi_rho,eta_rho
       use param, only : N
 
@@ -1289,8 +1290,6 @@
 !     4a. Update saved state array in ROMS using newly computed values:
 !     ----------------------------------------------------------------------
             call marbldrv_update_roms_saved_state_values_surf(i,j)
-#ifdef MARBL_DIAGS
-#endif
 !     4b. Update tracer array in ROMS using newly computed values:
 !     ----------------------------------------------------------------------
             call marbldrv_update_roms_tracers_surf(i,j,tracer_array)
@@ -1963,8 +1962,7 @@
       subroutine get_tracer_indices(t_vname)  ![
 
       ! Store the indices in the tracer array corresponding to particular tracers
-      use param
-
+!
       implicit none
 
       character*42, dimension(nt), intent(inout) :: t_vname

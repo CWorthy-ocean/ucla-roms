@@ -1,8 +1,8 @@
       subroutine add_git_hash(ncid)
 
       use roms_read_write, only: git_hash
+      use netcdf, only: nf90_global, nf90_noerr, nf90_put_att
       use error_handling, only: handle_netcdf_error
-      use netcdf
 
       implicit none
       integer :: ncid,ierr

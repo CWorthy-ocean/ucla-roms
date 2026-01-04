@@ -7,14 +7,17 @@
 ! global summation counters, model utility switches, i/o contlol, etc.
 ! Note that NONE of the model physical parameters is initialized here.
 
-      use param
-      use bec2_vars ! init_scalars_bec2
-      use boundary
-      use comm_vars
-      use mixing
-      use scalars
-      use roms_read_write
-      use dimensions
+      use comm_vars, only:
+     &     bc_count, bc_crss, cg_max, cg_min, cpu_all,
+     &     first_time, grdmax, grdmin, hmax, hmin, mcheck, rx0, rx1,
+     &     tile_count, trd_count, volume
+      use scalars, only:
+     &     barr_count, gamma2, iic, iif, init, knew,
+     &     kstp, may_day_flag, nfast, nnew, nrhs, nstp, ntstart, start_time
+      use roms_read_write, only:
+     &     max_frc_files, ncfrc,
+     &     init_output_indices
+      use dimensions, only: init_dimensions
       use read_inp_mod, only: read_inp
 
       use, intrinsic :: ieee_arithmetic, only: IEEE_Value, IEEE_QUIET_NAN
@@ -69,9 +72,6 @@ c      write(*,*) 'kmp_stacksize =', size
       do i=1,max_frc_files
         ncfrc(i)=-1
       enddo
-#ifndef ANA_BRY
-!      bry_id=-1
-#endif
 
       call init_dimensions                                 ! needs to come before init_output_indices
       call init_output_indices      ! retire this soon (the bfx, bfy thing)

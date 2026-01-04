@@ -2,10 +2,10 @@
 
 #include "cppdefs.opt"
 
-      use param
-      use dimensions
-      use mpi_exchanges
-      use roms_read_write
+      use param, only: mynode, lm, mm
+      use roms_read_write, only:
+     &     ncforce, bulk_frc_opt, frcfile,
+     &     nc_check_units, set_frc_data, store_string_att
 
       implicit none
 
@@ -183,11 +183,15 @@
 
       ! Modules required
       ! ----------------
-      use surf_flux
+      use surf_flux, only:
+     &     srflx, vwnd, uwnd, stflx, sustr_r, svstr_r,
+     &     sustr, svstr, apply_surf_field_corr
       use tracers, only: t
-      use grid
-      use mixing
-      use ocean_vars
+      use grid, only: rmask, umask, vmask
+      use mixing, only:
+     &     east_exchng, ieast, isalt, itemp, iwest,
+     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
+      use ocean_vars, only: u, v
       use scalars
 
       implicit none

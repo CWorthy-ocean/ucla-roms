@@ -40,20 +40,29 @@
 
 #include "cppdefs.opt"
 
-      use dimensions
-      use grid
-      use nc_read_write
-      use roms_read_write
-      use netcdf
+      use grid, only: nx, ny, nz, angler, rmask, umask, vmask
+      use nc_read_write, only: nccreate, ncread, ncwrite
+      use roms_read_write, only: findstr, create_file
+      use netcdf, only:
+     &     nf90_double, nf90_write, nf90_nowrite,
+     &     nf90_put_att, nf90_inq_varid, nf90_open, nf90_close,
+     &     nf90_inquire, nf90_inquire_variable, nf90_inquire_dimension,
+     &     nf90_get_att
       use tracers, only: t, t_vname, t_lname, t_units  ! need to get names of tracers
-      use ocean_vars
-      use basic_output, vn=>vname
-      use scalars
-      use diagnostics
-      use error_handling, only : handle_configuration_error, handle_netcdf_error
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
-      use bgc_shared_vars
+      use ocean_vars, only: zeta, ubar, vbar, u, v
+      use scalars, only: dt, knew, nstp, time
+      use param, only: isalt, nt, itemp, isw_corn, jsw_corn,
+     &     nt_passive, mynode, lm, mm
+      use diagnostics, only: diag_pflx, up, vp
+      use basic_output, only: vn=>vname
+#ifdef SOLVE3D
+     &     ,indxt, indxu, indxv, indxw
 #endif
+     &     ,indxvb, indxub,indxz
+#ifdef SALINITY
+     &     , indxs
+#endif
+      use error_handling, only : handle_configuration_error, handle_netcdf_error
 
       ! TODO: add averaging
 
@@ -464,7 +473,6 @@
 ! ----------------------------------------------------------------------
       subroutine interpolate_2D(var,vari,coef,ip,jp)  ![
       ! Interpolate a scalar variable
-      use dimensions
       implicit none
 
       ! inputs
@@ -489,7 +497,6 @@
 ! ----------------------------------------------------------------------
       subroutine interpolate_3D(var,vari,coef,ip,jp)  ![
       ! Interpolate a variable
-      use dimensions
       implicit none
 
       ! inputs
@@ -706,7 +713,6 @@
       subroutine create_edata_vars(ncid)  ![
       ! Add edata variables to an opened netcdf file
 
-      use nc_read_write
       implicit none
 
       !import/export

@@ -6,13 +6,67 @@ c # TODO marbldrve_configure_diagnostics for pointers example
 #include "cppdefs.opt"
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
 
-      use param
-      use tracers               ! for iPO4, etc, indices of bgc tracers (formerly in param.h)
-      use roms_read_write
+      use param, only: mynode, nt_passive, ntrc_bio, lm, mm, n
+      use roms_read_write, only: ncforce
+      use tracers, only:
+     &     itands, t_vname, wrt_t, t_lname, t
 #if defined(BIOLOGY_BEC2)
-      use bec2_vars
+     &     , ialk, idic, ife, io2, ipo4, isio3, idoc,
+     &     idofe, idon, idonr, idop, idopr, inh4, ino3, izooc, idiatc,
+     &     idiatchl, idiatfe, idiatsi, idiazc, idiazchl, idiazfe, ispc,
+     &     ispcaco3, ispchl, ispfe
+      use bec2_vars, only:
+     &     init_arrays_bec2_vars
+#if defined(BEC2_DIAG)
+     &     ,nr_bec2_diag_2d, nr_bec2_diag_3d,
+     &     vname_bec2_diag_2d, wrt_bec2_diag_2d, vname_bec2_diag_3d,
+     &     wrt_bec2_diag_3d, bec2_diag_2d, bec2_diag_3d,
+     &     ammox_idx_t, anammox_idx_t, atmpress_idx_t, caco3fluxin_idx_t,
+     &     caco3fluxtosed_idx_t, caco3prod_idx_t, caco3remin_idx_t,
+     &     caco3sedloss_idx_t, co2star_idx_t, dco2star_idx_t,
+     &     denitrif1_idx_t, denitrif2_idx_t, denitrif3_idx_t,
+     &     denitrif_idx_t, diatagg_idx_t, diatczero_idx_t,
+     &     diatfeuptake_idx_t, diatlightlim_idx_t, diatloss_idx_t,
+     &     diatnh4uptake_idx_t, diatnlim_idx_t, diatno2uptake_idx_t,
+     &     diatno3uptake_idx_t, diatphotoacc_idx_t, diatplim_idx_t,
+     &     diatpo4uptake_idx_t, diatsio3uptake_idx_t, diatsiuptake_idx_t,
+     &     diazagg_idx_t, diazczero_idx_t, diazfeuptake_idx_t,
+     &     diazlightlim_idx_t, diazloss_idx_t, diaznfix_idx_t,
+     &     diaznh4uptake_idx_t, diazno2uptake_idx_t, diazno3uptake_idx_t,
+     &     diazphotoacc_idx_t, diazplim_idx_t, diazpo4uptake_idx_t,
+     &     docprod_idx_t, docremin_idx_t, doczero_idx_t, dofeprod_idx_t,
+     &     doferemin_idx_t, donprod_idx_t, donremin_idx_t, donrremin_idx_t,
+     &     dopprod_idx_t, dopremin_idx_t, dustfluxin_idx_t,
+     &     dustfluxtosed_idx_t, dustremin_idx_t, fescavenge_idx_t,
+     &     fescavengerate_idx_t, fesedflux_idx_t, fgco2_idx_t, fgn2_idx_t,
+     &     fgn2o_idx_t, fgo2_idx_t, fluxtosed_idx_t, grazediat_idx_t,
+     &     grazediatzoo_idx_t, grazediaz_idx_t, grazediazzoo_idx_t,
+     &     grazedicdiat_idx_t, grazedicdiaz_idx_t, grazedicsp_idx_t,
+     &     grazesp_idx_t, grazespzoo_idx_t, idx_bec2_diag_2d,
+     &     idx_bec2_diag_3d, ironflux_idx_t, ironuptakediat_idx_t,
+     &     ironuptakediaz_idx_t, ironuptakesp_idx_t, lossdicdiat_idx_t,
+     &     lossdicdiaz_idx_t, lossdicsp_idx_t, n2oammox_idx_t,
+     &     n2osat_idx_t, n2sat_idx_t, nitrif_idx_t, nitrox_idx_t,
+     &     o2cons_idx_t, o2prod_idx_t, o2sat_idx_t, otherremin_idx_t,
+     &     par_idx_t, parinc_idx_t, pcaco3prod_idx_t, pco2_idx_t,
+     &     pco2air_idx_t, pco2oc_idx_t, ph_idx_t, photocdiat_idx_t,
+     &     photocdiaz_idx_t, photocsp_idx_t, pironfluxin_idx_t,
+     &     pironfluxtosed_idx_t, pironprod_idx_t, pironremin_idx_t,
+     &     pocfluxin_idx_t, pocprod_idx_t, pocremin_idx_t,
+     &     pocsedloss_idx_t, pvco2_idx_t, pvn2_idx_t, pvn2o_idx_t,
+     &     pvo2_idx_t, schmidt_n2_idx_t, schmidt_n2o_idx_t,
+     &     schmidtco2_idx_t, schmidto2_idx_t, seddenitrif_idx_t,
+     &     sio2fluxin_idx_t, sio2fluxtosed_idx_t, sio2prod_idx_t,
+     &     sio2remin_idx_t, sio2sedloss_idx_t, spagg_idx_t,
+     &     spcaco3zero_idx_t, spczero_idx_t, spfeuptake_idx_t,
+     &     splightlim_idx_t, sploss_idx_t, spnh4uptake_idx_t, spnlim_idx_t,
+     &     spno2uptake_idx_t, spno3uptake_idx_t, spphotoacc_idx_t,
+     &     spplim_idx_t, sppo4uptake_idx_t, spqcaco3_idx_t, totchl_idx_t,
+     &     totphytoc_idx_t, totprod_idx_t, ws10m_idx_t, xkw_idx_t,
+     &     zooczero_idx_t, zooloss_idx_t, zoolossdic_idx_t
+#endif
 #elif defined(MARBL)
-      use marbl_driver,only: marbldrv_configure_saved_state
+      use marbl_driver, only: marbldrv_configure_saved_state
 # ifdef MARBL_DIAGS
      &     ,marbldrv_configure_diagnostics
      &     ,nr_marbl_diag_2d,nr_marbl_diag_3d

@@ -5,15 +5,24 @@
 
 #include "cppdefs.opt"
 
-      use netcdf
-      use nc_read_write
-      use scalars
-      use dimensions
-      use diagnostics
-      use roms_read_write
-      use hidden_mpi_vars
-      use mixing
+
+      use netcdf, only:
+     &     nf90_noerr, nf90_write, nf90_inq_varid,
+     &     nf90_open, nf90_put_att, nf90_close
+      use nc_read_write, only: nccreate, ncread, ncwrite
+      use scalars, only: iic, tdays, time, dt
+      use dimensions, only: nx, ny
+      use diagnostics, only: up, vp, diag_pflx
+      use roms_read_write, only:
+     &     ncforce, bfx, bfy, dn_tm, dn_xr,
+     &     dn_yr, xi_rho, bc_options, create_file, set_frc_data,
+     &     store_string_att
+      use hidden_mpi_vars, only: inode, jnode, mynode, np_eta, np_xi
+      use param, only:
+     &     obc_east, obc_north, obc_south, obc_west,
+     &     east_exchng, north_exchng, south_exchng, west_exchng
       use error_handling, only: handle_netcdf_error
+
       implicit none
       private
       character(len=11) :: module_name = "sponge_tune"
@@ -131,7 +140,7 @@
       ! Read parent grid baroclinic pressure fluxes from bry file
       ! and interpolate to the correct time
 
-      use grid
+      use grid, only: rmask
 
       !local
       integer:: i,j,ierr
@@ -248,7 +257,6 @@
       ! Update diagnostics averages
       ! The average is always scaled properly throughout
       ! reset navg_diag=0 after an output of the average
-      use param
       implicit none
 
       ! local

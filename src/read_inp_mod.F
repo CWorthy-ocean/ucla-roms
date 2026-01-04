@@ -1,15 +1,11 @@
       module read_inp_mod
 
-      use param
-      use surf_flux
-      use boundary
-      use eos_vars
-      use basic_output
-      use scalars
-      use scoord
-      use mpi
-      use roms_read_write
-      use keyword_registry, only: init_registry, registry, register_keyword, report_keyword_mismatch, lookup_keyword
+      use param, only: mynode, nnodes, ocean_grid_comm
+      use mpi, only: mpi_byte
+      use roms_read_write, only: git_hash
+      use keyword_registry, only:
+     &     init_registry, registry, register_keyword,
+     &     report_keyword_mismatch, lookup_keyword
 
       implicit none
       contains
@@ -246,7 +242,6 @@
 !     Perform a first-pass check of the provided input file's keywords
 !     against the keyword registry, highlighting any mismatches.
 !-----------------------------------------------------------------------
-      use keyword_registry
       implicit none
 
       character(len=*), intent(in) :: fname
@@ -391,7 +386,6 @@
 !     index for SLURM or PBS/Torque jobs.
 !-----------------------------------------------------------------------
 
-      use param
 
       implicit none
 
@@ -433,6 +427,8 @@
 !***********************************************************************
 
       subroutine kwread_title(unit, ierr)
+      use roms_read_write, only: title
+      implicit none
          integer, intent(in) :: unit
          integer, intent(inout) :: ierr
          integer ios
@@ -446,6 +442,7 @@
       end subroutine
 
       subroutine kwread_time_stepping(unit, ierr)
+      use scalars, only: dt, dtfast, ndtfast, ntimes, ninfo
       implicit none
 
       integer, intent(in) :: unit
@@ -539,6 +536,7 @@
       subroutine kwread_scoord(unit, ierr)
 !     Vertical S-coordinates transformation. Note that "hc" may be chosen
 !     to be very large (infinity) if vertically uniform sigma is desired.
+      use scoord, only: hc, theta_b, theta_s
       implicit none
 
       integer, intent(in) :: unit
@@ -566,7 +564,8 @@
       end subroutine kwread_scoord
 
       subroutine kwread_rho0(unit, ierr)
-      !--> Boussinesq  reference density.
+!--> Boussinesq  reference density.
+      use scalars, only: rho0
       implicit none
 
       integer, intent(in)    :: unit
@@ -586,6 +585,11 @@
       end subroutine kwread_rho0
 # ifndef NONLIN_EOS
       subroutine kwread_lin_rho_eos(unit, ierr)
+      use eos_vars, only: Tcoef, T0
+#  ifdef SALINITY
+     &                       , Scoef, S0
+#  endif
+
       implicit none
 
       integer, intent(in)    :: unit
@@ -616,6 +620,7 @@
 #ifdef UV_VIS2
       subroutine kwread_lateral_visc(unit, ierr)
 !     Lateral viscosity coefficients.
+      use scalars, only: visc2
       implicit none
 
       integer, intent(in)    :: unit
@@ -637,6 +642,7 @@
 #if !defined EW_PERIODIC || !defined NS_PERIODIC
       subroutine kwread_gamma2(unit, ierr)
 !     Lateral boundary slipperness.
+      use scalars, only: gamma2
       implicit none
 
       integer, intent(in)    :: unit
@@ -660,6 +666,8 @@
 
 #if defined SOLVE3D && defined TS_DIF2
       subroutine kwread_tracer_diff2(unit, ierr)
+      use scalars, only: nt, tnu2
+      use param, only: itemp
       implicit none
 
       integer, intent(in)    :: unit
@@ -692,6 +700,7 @@
 #endif
 
       subroutine kwread_bottom_drag(unit, ierr)
+      use scalars, only: rdrg, rdrg2, zob
       implicit none
 
       integer, intent(in)    :: unit
@@ -731,6 +740,7 @@
 
       subroutine kwread_vertical_mixing(unit, ierr)
 !     Background vertical viscosity and mixing coefficients for tracers.
+      use scalars, only: akv_bak, akt_bak, nt
       implicit none
 
       integer, intent(in)    :: unit
@@ -862,6 +872,7 @@
   || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
   || defined M3NUDGING  || defined WKB_FRC_BRY
       subroutine kwread_ubind(unit, ierr)
+      use scalars, only: ubind
       implicit none
 
       integer, intent(in)    :: unit
@@ -883,6 +894,7 @@
 
 #ifdef SPONGE
       subroutine kwread_v_sponge(unit, ierr)
+      use scalars, only: v_sponge
       implicit none
 
       integer, intent(in)    :: unit
@@ -904,6 +916,7 @@
 
 #ifndef ANA_GRID
       subroutine kwread_grid(unit, ierr)
+      use roms_read_write, only: grdname
       implicit none
 
       integer, intent(in)    :: unit
@@ -942,6 +955,7 @@
 !     Initial conditions file name. Check its availability (in the case
 !     of analytical initial conditions and nrrec=0 initial conditions are
 !     created internally and no file is needed).
+      use roms_read_write, only: nrrec, ininame
       implicit none
 
       integer, intent(in)    :: unit
@@ -988,6 +1002,9 @@
       end subroutine kwread_initial
 
       subroutine kwread_forcing(unit, ierr)
+      use roms_read_write, only:
+     &     force_files, force_info, max_frc_files,
+     &     store_string_att, frcfile, max_frc
       implicit none
 
       integer, intent(in)    :: unit
@@ -1124,7 +1141,7 @@
       ! subroutine (file name needs to be 5 spaces from left margin):
       !output_root_name:
       !     rootname (<- insert desired rootname)
-
+      use roms_read_write, only: output_root_name
       implicit none
 
       integer, intent(in)    :: unit

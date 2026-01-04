@@ -4,7 +4,7 @@
 #include "cppdefs.opt"
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
 
-      use param
+      use param, only: lm, mm
       implicit none
 
 #ifdef PCO2AIR_FORCING

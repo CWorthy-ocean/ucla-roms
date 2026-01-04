@@ -11,20 +11,51 @@
 #if defined BIOLOGY_BEC2 || defined MARBL
 
       ! param needed for GLOBAL_2D_array to work. NT = number tracer from param
-      use param
-      use tracers               ! for iPO4, etc, indices of bgc tracers (formerly in param.h)
-#ifdef MARBL
-      use marbl_driver
+      use param, only:
+     &     east_exchng, ieast, itemp, iwest, jnorth,
+     &     jsouth, north_exchng, south_exchng, west_exchng
+      use tracers, only: t_avg, wrt_t_avg, nt_2_t_avg, t_units
+#ifdef MARBL_DIAGS
+      use marbl_driver, only: marbldrv_compute_init_diagnostics
 #endif
-      use bgc_shared_vars
+
+      use bgc_shared_vars, only:
+     &     nrpf_avg, nrpf_his, nrpf_avg_dia,
+     &     nrpf_his_dia, t, nc_dust, nc_iron, nc_pco2air
+#ifdef MARBL
+     &     , nc_pco2air_alt
+#endif
+#ifdef NOX_FORCING
+     &     , nc_nox
+#endif
+#ifdef NHY_FORCING
+     &     , nc_nhy
+#endif
+#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
+     &     , nc_swrad_avg
+#endif
+     &     , bgc_idx, t_idx, wrt_avg, wrt_his, interp_frc, lm, mm, itands,
+     &     mynode, nt_passive, output_period_avg, output_period_his,
+     &     t_vname, wrt_t, t_lname
+#if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
+     &     , bgc_diag_2d_avg, bgc_diag_3d_avg,
+     &     bgc_diag_2d, bgc_diag_3d, nr_bgc_diag_2d, nr_bgc_diag_3d,
+     &     nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d, output_period_avg_dia,
+     &     output_period_his_dia, wrt_avg_dia, wrt_his_dia,
+     &     wrt_bgc_diag_2d, idx_bgc_diag_2d, vname_bgc_diag_2d,
+     &     wrt_bgc_diag_3d, idx_bgc_diag_3d, vname_bgc_diag_3d
+#endif
+      use nc_read_write, only: nccreate, ncwrite
+      use roms_read_write, only: max_name_size
+      use roms_read_write, only:
+     &     dn_tm, dn_xr, dn_yr, dn_zr, eta_rho,
+     &     xi_rho, create_file, set_frc_data
+      use netcdf, only:
+     &     nf90_write, nf90_open, nf90_close,
+     &     nf90_put_att, nf90_enddef
+      use scalars, only: nstp, nt, time, n, dt, iic, nnew, tdays
+      use dimensions, only: i0, i1, j0, j1
       use error_handling, only: handle_configuration_error
-      use nc_read_write
-      use roms_read_write
-      use netcdf
-      use scalars
-      use dimensions !
-      use ocean_vars
-      use dimensions
 
       implicit none
 
@@ -68,8 +99,20 @@
 
       ! this routine is called by # if defined BIOLOGY_BEC2 in set_forces.F of ETH code
 
-      use scalars
-      use bgc_forces
+      use scalars, only: cp, nrhs, rho0
+      use bgc_forces, only: dust, iron, pco2air
+#ifdef MARBL
+     &     , pco2air_alt
+#endif
+#ifdef NOX_FORCING
+     &     , nox
+#endif
+#ifdef NHY_FORCING
+     &     , nhy
+#endif
+#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
+     &     , swrad_avg
+#endif
 
       implicit none
 
@@ -611,12 +654,13 @@
 ! ----------------------------------------------------------------------
       subroutine wrt_bgc(init)  ![
 #ifdef MARBL_DIAGS
-      use hidden_mpi_vars, only : inode, jnode
+      use hidden_mpi_vars, only: inode, jnode
+      use param, only: nsub_e, nsub_x
 #endif
       implicit none
 
 !     import/export
-      logical,optional       :: init
+      logical,optional,intent(in)       :: init
       integer :: tile = 0
 #ifdef MARBL_DIAGS
 #include "compute_tile_bounds.h"

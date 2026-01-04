@@ -2,7 +2,7 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only: lm, mm
       implicit none
 
 ! This is "work": declaration of utility work array.
@@ -13,7 +13,7 @@
 
       !----------------------------------------------------------------
       subroutine init_arrays_work_mod  ![
-      use scalars
+      use scalars, only: N, init
       implicit none
 
       allocate( work(GLOBAL_2D_ARRAY,0:N) ); work=init

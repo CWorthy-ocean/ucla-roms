@@ -7,12 +7,16 @@
 
 #include "cppdefs.opt"
 
-      use param
-      use dimensions
-      use roms_read_write
-      use nc_read_write
-      use netcdf
-      use scalars
+      use param, only: mynode, lm, mm
+      use dimensions, only: i0, i1, j0, j1
+      use roms_read_write, only:
+     &     ncforce, dn_tm, dn_xr, dn_xu, dn_yr
+     &     , dn_yv, eta_rho, eta_v, xi_rho, xi_u, create_file
+      use nc_read_write, only: nccreate, ncwrite
+      use netcdf, only:
+     &     nf90_global, nf90_write, nf90_nofill,
+     &     nf90_open, nf90_put_att, nf90_close, nf90_set_fill
+      use scalars, only: dt, iic, tdays, time
 
       implicit none
 
@@ -73,7 +77,7 @@
 
 ! ----------------------------------------------------------------------
       subroutine init_arrays_surf_flx  ![
-      use scalars
+      use scalars, only: init, nt
       implicit none
 
       ! local

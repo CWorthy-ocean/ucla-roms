@@ -2,7 +2,7 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only: n, isw_corn, iwest, jsouth, jsw_corn
       implicit none
 
 ! Control parameters for vertical coordinate transform: "theta_s" and

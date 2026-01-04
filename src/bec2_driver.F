@@ -9,20 +9,43 @@
        subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
        ! Taken from PDamien's ecosys_bec2_td2.F
 
-       use param
+       use tracers, only: in2, in2o
+       !, only: t, iTandS
+       use surf_flux, only: srflx, sustr, svstr
+! , only: sustr,sustr_r,svstr,svstr_r,srflx
+# ifdef BULK_FRC
+       use bulk_frc, only: wspd_used ! to compute gas exchange
+# endif
+       use grid, only: isalt, rmask
+       use ocean_vars, only: hz
+       use scalars, only: cp, dt, nmol_cm2_to_mmol_m2, nnew, rho0
+       use bgc_shared_vars, only:
+     &      t, ialk, idic, ife, io2, ipo4, isio3,
+     &      mynode, nt_passive, bgc_idx
+       use bec2_vars, only:
+     &      ifrac, landmask, press, ph_srf,
+     &      dtracer_module, lflux_gas_co2, lflux_gas_n2, lflux_gas_n2o,
+     &      lflux_gas_o2, liron_flux, n, ntrc_bio
+#ifdef BEC2_DIAG
+     &      ,bec2_diag_2d, atmpress_idx_t,
+     &      co2star_idx_t, dco2star_idx_t, fgco2_idx_t, fgn2_idx_t,
+     &      fgn2o_idx_t, fgo2_idx_t, ironflux_idx_t, n2osat_idx_t,
+     &      n2sat_idx_t, o2sat_idx_t, pco2air_idx_t, pco2oc_idx_t, ph_idx_t,
+     &      pvco2_idx_t, pvn2_idx_t, pvn2o_idx_t, pvo2_idx_t,
+     &      schmidt_n2_idx_t, schmidt_n2o_idx_t, schmidtco2_idx_t,
+     &      schmidto2_idx_t, ws10m_idx_t, xkw_idx_t, wrt_bec2_diag_2d,
+     &      idx_bec2_diag_2d
+
+#endif
+       use bgc_forces, only: swrad_avg, pco2air, iron, dust
+       use bec2_params, only: c0, c1, parm_fe_bioavail
+
+
        use tracers, only: t, iTandS
        use surf_flux ! , only: sustr,sustr_r,svstr,svstr_r,srflx
 # ifdef BULK_FRC
        use bulk_frc, only: wspd_used ! to compute gas exchange
 # endif
-       use bgc_io
-       use grid
-       use ocean_vars
-       use scalars
-       use bgc_shared_vars
-       use bec2_vars
-       use bgc_forces
-       use bec2_params
 
        implicit none
 
@@ -570,13 +593,81 @@
 #endif
      &  qa_dust_def,istr,iend,j,dt2,dust_flux)
 
-       use param
-       use grid
-       use ocean_vars
-       use scalars
-       use bgc_io
-       use bgc_shared_vars
-       use bec2_params
+       use grid, only: rmask
+       use ocean_vars, only: hz, z_r
+       use scalars, only: dt, nnew
+       use bgc_shared_vars, only: bgc_idx
+       use bec2_params, only:
+     &      autotroph_cnt, c0, c1, c10, c2,
+     &      caco3_poc_min, caco3_sp_thres, caco3_temp_thres1,
+     &      caco3_temp_thres2, denitrif_c_n, denitrif_n2o_c, denitrif_no2_c,
+     &      denitrif_no3_c, diat_ind, diaz_ind, doc_reminr, dofe_reminr,
+     &      don_reminr, donr_reminr, donrefract, dop_reminr, dopr_reminr,
+     &      doprefract, dps, dust_fescav_scale, f_graze_caco3_remin,
+     &      f_graze_si_remin, f_graze_sp_poc_lim, f_photosp_caco3,
+     &      f_qsw_par, fe_max_scale2, fe_scavenge_thres1, gqsi_0, gqsi_max,
+     &      gqsi_min, loss_thres_zoo, par_thres_pchl, parm_f_prod_sp_caco3,
+     &      parm_fe_scavenge_rate0, parm_kao, parm_kax, parm_kden1,
+     &      parm_kden2, parm_kden3, parm_kn2o_den3, parm_knh4_ao,
+     &      parm_knh4_ax, parm_kno, parm_kno2_ax, parm_kno2_den2,
+     &      parm_kno2_no, parm_kno3_den1, parm_ko2_ao, parm_ko2_ax,
+     &      parm_ko2_den1, parm_ko2_den2, parm_ko2_den3, parm_ko2_no,
+     &      parm_ko2_oxic, parm_koxic, parm_labile_ratio, parm_n2o_ji_a,
+     &      parm_n2o_ji_b, parm_nitrif_par_lim, parm_o2_min,
+     &      parm_o2_min_delta, parm_red_d_c_o2, parm_red_d_c_o2_diaz,
+     &      parm_red_d_c_o2_no2v, parm_remin_d_c_o2, parm_z_mort2_0,
+     &      parm_z_mort_0, q, q_10, qcaco3_max, qfe_zoo, qp_zoo_pom,
+     &      r_nfix_photo, r_no2tonh4_ax, sp_ind, spc_poc_fac, t0_kelvin,
+     &      thres_z1, thres_z2, tref, yps, ksio3, gqfe_0, kfe, gqfe_min,
+     &      caco3_ind, temp_thres, loss_thres2, loss_thres, knh4, kno2,
+     &      kno3, nfixer, kdop, kpo4, pcref, alphapi, qp, thetan_max,
+     &      imp_calcifier, exp_calcifier, mort, agg_rate_max, mort2,
+     &      agg_rate_min, grazee_ind, z_umax_0, z_grz, graze_zoo, graze_poc,
+     &      graze_doc, loss_poc, f_zoo_detr, c_ind, chl_ind, fe_ind, si_ind
+       use bec2_vars, only:
+     &      dop_remin, dopr_remin, poc_sflux_out,
+     &      poc_hflux_out, p_caco3_sflux_out, p_caco3_hflux_out,
+     &      p_sio2_sflux_out, p_sio2_hflux_out, dust_sflux_out,
+     &      dust_hflux_out, poc_remin, dtracer_module, p_iron_remin,
+     &      p_sio2_remin, p_caco3_remin, lsource_sink, n, p_caco3_mass,
+     &      p_sio2_mass
+#ifdef BEC2_DIAG
+     &      ,bec2_diag_3d, bec2_diag_2d, ammox_idx_t,
+     &      anammox_idx_t, caco3prod_idx_t, denitrif1_idx_t,
+     &      denitrif2_idx_t, denitrif3_idx_t, diatagg_idx_t,
+     &      diatczero_idx_t, diatfeuptake_idx_t, diatlightlim_idx_t,
+     &      diatloss_idx_t, diatnh4uptake_idx_t, diatnlim_idx_t,
+     &      diatno2uptake_idx_t, diatno3uptake_idx_t, diatphotoacc_idx_t,
+     &      diatplim_idx_t, diatpo4uptake_idx_t, diatsio3uptake_idx_t,
+     &      diatsiuptake_idx_t, diazagg_idx_t, diazczero_idx_t,
+     &      diazfeuptake_idx_t, diazlightlim_idx_t, diazloss_idx_t,
+     &      diaznfix_idx_t, diaznh4uptake_idx_t, diazno2uptake_idx_t,
+     &      diazno3uptake_idx_t, diazphotoacc_idx_t, diazplim_idx_t,
+     &      diazpo4uptake_idx_t, docprod_idx_t, docremin_idx_t,
+     &      doczero_idx_t, dofeprod_idx_t, doferemin_idx_t, donprod_idx_t,
+     &      donremin_idx_t, donrremin_idx_t, dopprod_idx_t, dopremin_idx_t,
+     &      fescavenge_idx_t, fescavengerate_idx_t, grazediat_idx_t,
+     &      grazediatzoo_idx_t, grazediaz_idx_t, grazediazzoo_idx_t,
+     &      grazedicdiat_idx_t, grazedicdiaz_idx_t, grazedicsp_idx_t,
+     &      grazesp_idx_t, grazespzoo_idx_t, ironuptakediat_idx_t,
+     &      ironuptakediaz_idx_t, ironuptakesp_idx_t, lossdicdiat_idx_t,
+     &      lossdicdiaz_idx_t, lossdicsp_idx_t, nitrox_idx_t, o2cons_idx_t,
+     &      o2prod_idx_t, par_idx_t, parinc_idx_t, pcaco3prod_idx_t,
+     &      photocdiat_idx_t, photocdiaz_idx_t, photocsp_idx_t,
+     &      pironprod_idx_t, pocprod_idx_t, sio2prod_idx_t, spagg_idx_t,
+     &      spcaco3zero_idx_t, spczero_idx_t, spfeuptake_idx_t,
+     &      splightlim_idx_t, sploss_idx_t, spnh4uptake_idx_t, spnlim_idx_t,
+     &      spno2uptake_idx_t, spno3uptake_idx_t, spphotoacc_idx_t,
+     &      spplim_idx_t, sppo4uptake_idx_t, spqcaco3_idx_t, totchl_idx_t,
+     &      totphytoc_idx_t, totprod_idx_t, zooczero_idx_t, zooloss_idx_t,
+     &      zoolossdic_idx_t, wrt_bec2_diag_3d, idx_bec2_diag_3d,
+     &      wrt_bec2_diag_2d, idx_bec2_diag_2d
+#endif
+       use tracers, only:
+     &      t, ialk, idiatc, idiatchl, idiatfe, idiatsi,
+     &      idiazc, idiazchl, idiazfe, idic, idoc, idofe, idon, idonr, idop,
+     &      idopr, ife, in2, in2o, inh4, ino2, ino3, io2, ipo4, isio3, ispc,
+     &      ispcaco3, ispchl, ispfe, izooc
 
         implicit none
 
@@ -2300,11 +2391,16 @@
         SUBROUTINE init_particulate_terms(QA_dust_def,istr,
      &      iend,j,net_dust_in)
 
-        use param
-        use ocean_vars
-        use scalars
-        use bgc_shared_vars
-        use bec2_params
+        use bec2_params, only:
+     &       c0, c1, parm_caco3_diss, parm_poc_diss, parm_sio2_diss
+        use bec2_vars, only:
+     &       dust_sflux_out, dust_hflux_out, dust_diss,
+     &       dust_gamma, dust_mass, dust_rho, p_caco3_diss, p_caco3_gamma,
+     &       p_caco3_hflux_out, p_caco3_mass, p_caco3_rho, p_caco3_sflux_out,
+     &       p_iron_gamma, p_iron_hflux_out, p_iron_sflux_out, p_sio2_diss,
+     &       p_sio2_gamma, p_sio2_hflux_out, p_sio2_mass, p_sio2_rho,
+     &       p_sio2_sflux_out, poc_diss, poc_gamma, poc_hflux_out, poc_mass,
+     &       poc_sflux_out
 
         implicit none
 
@@ -2436,11 +2532,36 @@
      &        POC_prod,P_iron_prod,P_CaCO3_prod,P_SiO2_prod,SED_DENITRIF,
      &        OTHER_REMIN,istr,iend,j)
 
-       use param
-       use grid
-       use ocean_vars
-       use bgc_shared_vars
-       use bec2_params
+       use ocean_vars, only: z_w, hz
+       use bec2_params, only:
+     &      c0, c1, c10, denitrif_c_n, dust_to_fe,
+     &      parm_bsibury, parm_lowo2_remin_factor, parm_pombury,
+     &      parm_red_fe_c, parm_sed_denitrif_no3_limit, q_10, spd, tref,
+     &      parm_scalelen_z, parm_scalelen_vals
+       use bec2_vars, only:
+     &      p_caco3_sflux_in, p_caco3_sflux_out,
+     &      p_caco3_hflux_in, p_caco3_hflux_out, p_sio2_sflux_in,
+     &      p_sio2_sflux_out, p_sio2_hflux_in, p_sio2_hflux_out,
+     &      dust_sflux_in, dust_sflux_out, dust_hflux_in, dust_hflux_out,
+     &      poc_sflux_in, poc_sflux_out, poc_hflux_in, poc_hflux_out,
+     &      p_iron_sflux_in, p_iron_sflux_out, p_iron_hflux_in,
+     &      p_iron_hflux_out, p_iron_sed_loss, poc_sed_loss,
+     &      p_caco3_sed_loss, p_sio2_sed_loss, dust_sed_loss, dust_diss,
+     &      dust_rho, p_caco3_diss, p_caco3_gamma, p_caco3_rho,
+     &      p_iron_gamma, p_sio2_diss, p_sio2_gamma, p_sio2_rho, poc_diss,
+     &      landmask, p_caco3_remin, p_sio2_remin, poc_remin, p_iron_remin
+#ifdef BEC2_DIAG
+     &      ,bec2_diag_3d, caco3fluxin_idx_t,
+     &      caco3fluxtosed_idx_t, caco3remin_idx_t, caco3sedloss_idx_t,
+     &      dustfluxin_idx_t, dustfluxtosed_idx_t, dustremin_idx_t,
+     &      fesedflux_idx_t, fluxtosed_idx_t, otherremin_idx_t,
+     &      pironfluxin_idx_t, pironfluxtosed_idx_t, pironremin_idx_t,
+     &      pocfluxin_idx_t, pocremin_idx_t, pocsedloss_idx_t,
+     &      seddenitrif_idx_t, sio2fluxin_idx_t, sio2fluxtosed_idx_t,
+     &      sio2remin_idx_t, sio2sedloss_idx_t, wrt_bec2_diag_3d,
+     &      idx_bec2_diag_3d, wrt_bec2_diag_2d, idx_bec2_diag_2d,
+     &      bec2_diag_2d
+#endif
 
        implicit none
 
@@ -3101,8 +3222,7 @@
     !-------------------------------------------------------------------------
 
 ! needed for scalars
-        use param
-        use scalars
+        use scalars, only: rho0
 
         implicit none
 
@@ -3250,7 +3370,7 @@
           subroutine N2OSATU(SSTT, SSSS,landmaskc, N2OSAT,istr,
      &         iend,jstr,jend)
 
-        use bec2_params
+        use bec2_params, only: c0, t0_kelvin
 
         implicit none
 ! needed for c0
@@ -3382,7 +3502,7 @@
           subroutine N2SATU(SSTT, SSSS, landmaskc, N2SAT,istr,
      &         iend,jstr,jend)
 
-        use bec2_params
+        use bec2_params, only: c0, c1, t0_kelvin
 
         implicit none
        integer,intent(in)::istr,iend,jstr,jend
@@ -3527,7 +3647,7 @@
           subroutine O2SATU(SSTT, SSSS,landmaskc, O2SAT,istr,
      &         iend,jstr,jend)
 
-        use bec2_params
+        use bec2_params, only: c0, t0_kelvin
 
         implicit none
         integer,intent(in)::istr,iend,jstr,jend
@@ -3619,7 +3739,6 @@
           subroutine CSCHMIDT_CO2(SSTT,landmaskc,SCHMIDT_CO2,istr,
      &                     iend,jstr,jend )
 
-        use bec2_params
 
         implicit none
         integer,intent(in)::istr,iend,jstr,jend

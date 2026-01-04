@@ -102,9 +102,6 @@
             v(i,j,k,indx)=v(i,j,k,indx) + dt*cff
           enddo
         enddo
-# if defined NHMG
-!   Do things
-# endif
 # ifdef DIAGNOSTICS
       if (diag_uv .and. calc_diag) then
         do j=1,ny

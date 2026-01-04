@@ -4,24 +4,24 @@
 ! or thermodynamically forced.
 
 #include "cppdefs.opt"
-
-      use dimensions
-      use grid
-      use nc_read_write
-      use roms_read_write
-      use netcdf
-      use ocean_vars
-      use basic_output
-      use scalars
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x,
+     &     lm, mm, isalt, itemp, mynode
+      use dimensions, only: i0, i1, j0, j1
+      use nc_read_write, only: nccreate, ncwrite
+      use roms_read_write, only:
+     &     dn_tm, dn_xr, dn_xu, dn_yr, dn_yv,
+     &     eta_rho, eta_v, xi_rho, xi_u, dn_zr, create_file
+      use netcdf, only:
+     &     nf90_double, nf90_write, nf90_put_att,
+     &     nf90_open, nf90_close
+      use scalars, only: n, dt, iic, tdays, time
 #ifdef MARBL
-      use marbl_driver, only : iALK, iDIC, iALK_alt, iDIC_alt
+      use marbl_driver, only: iALK, iDIC, iALK_alt, iDIC_alt
 #endif
 #ifdef BULK_FRC
-      use bulk_frc
-#else
-      use flux_frc
+      use bulk_frc, only: tair, q, lwrad, evap, prate
 #endif
-      use surf_flux
+      use surf_flux, only: stflx, sustr, svstr, srflx, uwnd, vwnd
 
       implicit none
       private
@@ -138,7 +138,6 @@
       ! Update averages
       ! The average is always scaled properly throughout
       ! reset navg_rnd=0 after an output of the average
-      use param
       implicit none
 
       ! local
@@ -311,8 +310,7 @@
 ! ----------------------------------------------------------------------
       subroutine create_frc_vars(ncid)  ![
 
-      use nc_read_write
-      use hidden_mpi_vars
+      use hidden_mpi_vars, only: inode, jnode
       implicit none
 
       !import/export

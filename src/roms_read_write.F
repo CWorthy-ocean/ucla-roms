@@ -5,13 +5,19 @@
       ! Length is limited to 18 characters, because output_file_names
       ! are appended with frame and node number and are limited to 32
 
-      use netcdf
-      use scalars
-      use nc_read_write
-      use dimensions
-      use hidden_mpi_vars
-      use mpi_exchanges
+      use netcdf, only:
+     &     nf90_noerr, nf90_nowrite, nf90_double,
+     &     nf90_netcdf4, nf90_global, nf90_enotatt, nf90_open,
+     &     nf90_inq_varid, nf90_get_att, nf90_close, nf90_create,
+     &     nf90_put_att, nf90_inquire_variable, nf90_inquire_dimension,
+     &     nf90_get_var
+      use scalars, only: time, dt, sec2day, tdays, akt_bak, akv_bak
+      use nc_read_write, only: nccreate, ncread
+      use dimensions, only: bf, nx, ny, gnx, gny, i0, i1, j0, j1
+      use hidden_mpi_vars, only: mynode, nnodes, inode, jnode
+      use mpi_exchanges, only: exchange_xxx
       use error_handling, only: handle_configuration_error, handle_netcdf_error
+
       implicit none
       character(len=15) :: module_name="roms_read_write"
 #include "cppdefs.opt"
@@ -213,8 +219,7 @@
       ! Used so we can read in coarse surface
       ! forcing data
       !
-      use dimensions
-      use hidden_mpi_vars
+      use hidden_mpi_vars, only: np_eta, np_xi
       implicit none
 
       integer :: gnxc,gnyc
@@ -856,8 +861,8 @@
       subroutine fill_frc_slice_aux(nc,modtime,it,d1,bry) ![
       ! Fill a time slice of forcing data, not surface forcing
 
-      use param
-      use mpi
+      use param, only: ocean_grid_comm
+      use mpi, only: mpi_double_precision, mpi_integer
 
       implicit none
       character(len=19) :: sr_name = "fill_frc_slice_aux"
@@ -960,8 +965,8 @@
       subroutine fill_frc_slice_aux3d(nc,modtime,it,bry) ![
       ! Fill a time slice of forcing data, not surface forcing
 
-      use param
-      use mpi
+      use param, only: ocean_grid_comm
+      use mpi, only: mpi_double_precision, mpi_integer
 
       implicit none
       character(len=21) :: sr_name="fill_frc_slice_aux3d"
@@ -1196,8 +1201,7 @@
       subroutine coarse2fine(cdata,fdata,gtype) ![
       ! interpolates from (possibly partitioned) coarse to fine surface forcing data
       ! NOT correct for u-grid or v-grid variables
-      use hidden_mpi_vars
-      use dimensions
+      use hidden_mpi_vars, only: isw_corn, jsw_corn
       implicit none
 
       ! input/output
@@ -1526,12 +1530,28 @@
 ! ---------------------------------------------------------------------
       subroutine put_global_atts (ncid, ierr)  ![
 
-      use param
-      use eos_vars
-      use scalars
-      use scoord
-      use strings
-      use netcdf
+      use scalars, only:
+     &     dtfast, gamma2, ndtfast, ntimes, rdrg, rdrg2,
+     &     rho0, tnu2, visc2, zob
+#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
+  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
+                                             || defined M3NUDGING
+     & , ubind
+#endif
+#ifdef SPONGE
+     & , v_sponge
+#endif
+      use scoord, only:
+     &     cs_r, cs_w, hc, isw_corn, iwest, jsouth,
+     &     jsw_corn, theta_b, theta_s
+#ifndef NONLIN_EOS
+      use eos_vars, only: T0, Tcoef
+#ifdef SALINITY
+     &     ,S0, Scoef
+#endif
+#endif
+      use strings, only: cpps, srcs
+      use netcdf, only: nf90_def_dim
 
       implicit none
       character(len=15) :: sr_name = "put_global_atts"

@@ -3,9 +3,9 @@
 
       subroutine omega
 
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: nsub_e, nsub_x, a2d
 
       implicit none
       integer,save :: tile = 0
@@ -35,12 +35,22 @@
 ! below which vertical advection is fully explicit; "cu_max" is the
 ! maximum CN which the explicit component "We" is allowed to reach.
 
-      use param
-      use pipe_frc
-      use cdr_frc
-      use grid
-      use ocean_vars
-      use scalars
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use dimensions, only: nx, ny, nz
+      use grid, only: pn, pm
+      use pipe_frc, only:
+     &     pidx, pipe_source, pipe_idx, pipe_prf,
+     &     pipe_flx
+#if defined(CDR_FORCING)
+      use cdr_frc, only:
+     &     cdr_nprf, cdr_source, cdr_volume, cdr_icdr,
+     &     cdr_iloc, cdr_prf, cdr_vol
+#endif
+      use mpi_exchanges, only: exchange_xxx
+      use ocean_vars, only: wi, flxv, flxu, z_w, we, hz
+      use scalars, only: n, dt, forw_start, iic, nrhs
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k, icdr, cidx

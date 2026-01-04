@@ -8,16 +8,22 @@
       ! spherical
       ! non-traditional (horizontal coriolis components
 
-      use param
-      use netcdf
-      use nc_read_write
-      use dimensions
-      use roms_read_write
-      use pipe_frc
-      use scalars
-      use mpi_exchanges
+      use param, only:
+     &     mynode, isw_corn, jsw_corn, lm, mm,
+     &     ocean_grid_comm, obc_east, obc_north, obc_south, obc_west,
+     &     ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, isalt, itemp
+      use netcdf, only:
+     &     nf90_noerr, nf90_nowrite, nf90_write,
+     &     nf90_open, nf90_strerror, nf90_inq_varid, nf90_get_var,
+     &     nf90_close
+      use nc_read_write, only: ncread
+      use dimensions, only: i0, i1, j0, j1, gnx, gny, nx, ny, nz
+      use roms_read_write, only:
+     &     grdname, dn_xr, dn_yr, eta_rho,
+     &     xi_rho, dn_tm, particle_opt, nrrec, create_file, store_string_att
+      use scalars, only: may_day_flag, init
+      use mpi_exchanges, only: exchange_xxx
       implicit none
-
 !
 ! h         Model bottom topography (depth [m] at RHO-points.)
 ! f, fomn   Coriolis parameter [1/s] and compound term f/[pm*pn]
@@ -173,7 +179,12 @@
       end subroutine init_arrays_grid  !]
 !----------------------------------------------------------------------
       subroutine ana_grid ![
-!   Provide analytical definition of coordinates, grid scale, coriolis, and depth
+!     Provide analytical definition of coordinates, grid scale, coriolis, and depth
+#ifdef ANA_PIPES
+      use pipe_frc, only: pipe_source, pipe_fraction, pipe_idx
+#elif defined(ANA_RIVER_USWC)
+      use param, only: llm, mmm
+#endif
       implicit none
 
 #include "ana_grid.h"
@@ -203,8 +214,10 @@
 ! Arguments: ncid    NetCDF unit-ID of NetCDF file, which must be
 !                            already opened and in definition mode;
 
-      use nc_read_write
-      use netcdf
+      use nc_read_write, only: nccreate
+      use netcdf, only:
+     &     nf90_char, nf90_double, nf90_def_var,
+     &     nf90_put_att
       implicit none
 
       ! inport/export
@@ -310,8 +323,8 @@
       ! Arguments: ncid    netCDF unit-ID of NetCDF file, which must be
       !                            already opened and in definition mode
 
-      use netcdf
-      use nc_read_write
+      use netcdf, only: nf90_put_var
+      use nc_read_write, only: ncwrite
       use error_handling, only: handle_configuration_error, handle_netcdf_error
 
       implicit none
