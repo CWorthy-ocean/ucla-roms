@@ -178,13 +178,13 @@
       use surf_flux, only:
      &     srflx, vwnd, uwnd, stflx, sustr_r, svstr_r,
      &     sustr, svstr, apply_surf_field_corr
-      use tracers, only: t, iT&S
+      use tracers, only: t, iTandS, t_ana_frc
       use grid, only: rmask, umask, vmask
       use mixing, only:
      &     east_exchng, ieast, isalt, itemp, iwest,
      &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
       use ocean_vars, only: u, v
-      use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar
+      use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar, nt
 
       implicit none
 
@@ -727,7 +727,7 @@
 # ifdef SALINITY
 !  Total surface salt flux
 !
-          evap(i,j)=-cp*hflat/Hlv
+          evap(i,j)=-cp*hflat/Hlv !NOTE doesn't need to be 2d?
           ! Divide prate by 100.*3600.*24. to convert from [cm/day] to [m/s]
           stflx(i,j,isalt)=(evap(i,j)- ( prate(i,j)/(100.*3600.*24.) ) )*t(i,j,N,nrhs,isalt)
 #endif
@@ -742,7 +742,7 @@
 !!!! Virtual DIC/ALK flux
        do itrc = iTandS+1,NT
         if (t_ana_frc(itrc)==2) then
-          stflx(i,j,itrc)=(evap-(prate(i,j)/(100.*3600.*24.))) *
+          stflx(i,j,itrc)=(evap(i,j)-(prate(i,j)/(100.*3600.*24.))) *
      &                            t(i,j,N,nrhs,itrc)
 # ifdef MASKING
           stflx(i,j,itrc)=stflx(i,j,itrc)*rmask(i,j)

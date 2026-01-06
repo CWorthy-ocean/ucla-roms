@@ -85,6 +85,7 @@
       subroutine set_surf_tracer_flx ![
       ! set tracer flux at surface
       use error_handling, only: handle_configuration_error
+      use mpi_exchanges, only: exchange_xxx
       implicit none
       character(len=20) :: sr_name = "set_surf_tracer_flx"
       ! local

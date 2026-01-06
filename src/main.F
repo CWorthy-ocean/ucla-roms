@@ -321,7 +321,7 @@ CR      write(*,*)  ' -2' MYID
      &     nstp, ntstart, sec2day, start_time, tdays, time
       use sponge_tune, only: ub_tune
       use particles, only: floats
-      use surf_flux, only: wrt_smflx, wrt_stflx
+      use surf_flux, only: wrt_smflx, wrt_stflx, wrt_sflux
       use random_output, only: do_random
       use cstar_output, only: do_cstar
       use frc_output, only: do_frc
