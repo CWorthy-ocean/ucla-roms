@@ -2,9 +2,9 @@
 #ifdef SOLVE3D
 
       subroutine prsgrd
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: a3d, a2d
       implicit none
       integer,save:: tile=0
 
@@ -31,18 +31,28 @@
 # endif
      &                                      dR,dZ, FC,dZx,rx,dRx)
 
-      use param
 #ifdef WEC
-      use wec_frc, cff1 => cff_ext, cff2 => cff_ext2
+      use wec_frc, only: cff1 => cff_ext, cff2 => cff_ext2
 #endif
-      use dimensions
-      use tides
-      use diagnostics
-      use coupling
-      use ocean_vars
-      use eos_vars
-      use grid
-      use scalars
+      use grid, only: f, pm, pn, umask, dn_u, vmask, dm_v
+      use tides, only: pot_tides, ptide
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use ocean_vars, only: z_r, z_w, hz
+#ifdef NHMG
+     &     , dzdeta, dzdxi
+#endif
+#ifdef SPLIT_EOS
+      use eos_vars, only: qp1, rho1, qp2
+#else
+      use eos_vars, only: rho
+#endif
+#ifdef ADV_ISONEUTRAL
+      use eos_vars, only: drdx,drde
+#endif
+      use dimensions, only:  nx, ny, nz
+      use scalars, only: n, g, rho0, nrhs
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k, imin,imax,jmin,jmax

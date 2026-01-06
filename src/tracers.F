@@ -19,20 +19,23 @@
 
 #include "cppdefs.opt"
 
-      use param
-      use dimensions
-      use surf_flux,  only: stflx                          ! surface tracer flux should possibly live in this module rather?
-      use scalars                                          ! for 'FIRST_TIME_STEP' and nstp
-      use nc_read_write
-      use roms_read_write
-      use netcdf
+      use param, only: isalt, itemp, lm, mm, mynode, nt_passive
+      use dimensions, only: i0, i1, j0, j1, nx, ny
+      use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rather?
+      use scalars, only: n, nstp, nnew, forw_start, iic, nt
+! for 'FIRST_TIME_STEP' and nstp, only:
+      use nc_read_write, only: nccreate, ncwrite
+      use roms_read_write, only:
+     &     ncforce, dn_tm, dn_xr, dn_yr, dn_zr,
+     &     eta_rho, xi_rho, set_frc_data
+      use netcdf, only: nf90_put_att
 #ifdef MARBL
-      use marbl_driver
+      use marbl_driver, only: marbldrv_configure_tracers
 #endif
-      use mpi_exchanges
       implicit none
       private
-
+      character(len=7) :: module_name = "tracers"
+      character(len=200) :: error_info = ""
       real,public,allocatable,dimension(:,:,:,:,:) :: t              ! array of tracers
 
                                                                      ! tracer netcdf variables (user input required in init_tracers)
@@ -81,9 +84,9 @@
 ! ----------------------------------------------------------------------
       subroutine set_surf_tracer_flx ![
       ! set tracer flux at surface
-
+      use error_handling, only: handle_configuration_error
       implicit none
-
+      character(len=20) :: sr_name = "set_surf_tracer_flx"
       ! local
       integer           :: itrc       ! tracer number for loop index
       character(len=46) :: t_flx_name ! Tracer time name
@@ -105,11 +108,13 @@
         else
 
           if(mynode==0) then
-            write(*,'(/1x,2A,I3,2A/)') 'ERROR: set_surf_tracer_flx:: ',
-     &      'Forcing type not supported: t_ana_frc(itrc)= ', t_ana_frc(itrc),
-     &      ', for tracer: ', nc_t(itrc)%vname
+             write(error_info, *)
+     &            'Forcing type not supported: t_ana_frc(itrc)= ', t_ana_frc(itrc),
+     &            ', for tracer: ', nc_t(itrc)%vname
+            call handle_configuration_error(
+     &            context=module_name//"/"//sr_name,
+     &            info=error_info)
           endif
-          error stop
 
         endif ! if(t_ana_frc(itrc)==0)
 
@@ -371,8 +376,6 @@
       enddo
 
       end subroutine init_tracers  !]
-
 ! ----------------------------------------------------------------------
-
       end module tracers
 

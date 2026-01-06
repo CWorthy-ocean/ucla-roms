@@ -3,9 +3,9 @@
 # define UPSTREAM_UV
 
       subroutine step3d_uv1(tile)
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: a3d, a2d
       implicit none
       integer tile
 
@@ -28,25 +28,40 @@
 # endif
      &                                                              )
 
-      use param
 # ifdef NHMG
-      use nhmg
-      use mg_grids, mggrid => grid
-      use mg_tictoc, only : tic, toc
+      use ocean_vars, only:
+     &     nh_ubar, nh_vbar, nh_wcor, nhdu,
+     &     nhdv, nhdw, w
+      use nhmg, only:
+     &     nhmg_solve,  iprec1, iprec2, halo
+      use mg_namelist, only: surface_neumann
+      use mg_grids, only: mggrid => grid
 # endif
 # ifdef WEC
-      use wec_frc
+      use wec_frc, only: compute_wec_rhs_uv_terms
 # endif
-      use diagnostics
-      use dimensions
+      use diagnostics, only: diag_uv, u_prev, v_prev
       use surf_flux, only: sustr, svstr
-      use coupling
-      use eos_vars
-      use grid
-      use mixing
-      use ocean_vars
-      use scalars
-
+      use coupling, only: r_d, rufrc, rvfrc
+      use grid, only:
+     &     nx, fomn, umask, vmask, pn, pm, dn_u,
+     &     dm_u, dn_v, dm_v, dn_r, dm_r, pn_u, pm_v
+#if (defined CURVGRID && defined UV_ADV)
+     &     , dmde,dndx
+#endif
+      use mixing, only: akv
+      use param, only:
+     &     east_exchng, ieast, iwest, jnorth, jsouth,
+     &     north_exchng, south_exchng, west_exchng, lm, mm,
+     &     padd_e, padd_x
+      use ocean_vars, only: u, v, hz, flxu, flxv, we, wi, z_w
+      use scalars, only: n, dt, nnew, nrhs, ntstart
+#ifdef EXCHANGE
+      use mpi_exchanges, only: exchange_xxx
+#endif
+# if defined ADV_ISONEUTRAL && defined EXCHANGE
+      use eos_vars, only: drde, drdx
+#endif
       implicit none
       integer istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
       real, dimension(PRIVATE_2D_SCRATCH_ARRAY,N) :: ru,rv
@@ -552,8 +567,8 @@
 ! above.  It does not affect any model results, other than signature in
 ! global attribute "CPPS" in output netCDF files.
 
-      use param
-      use strings
+      use param, only: mynode
+      use strings, only: cpps, max_opt_size
 
       implicit none
       integer ierr, is,ie, lenstr

@@ -1,7 +1,7 @@
 #include "cppdefs.opt"
                                            ! Checking compatibility of
       subroutine check_tiling (ierr)       ! dimensions of the grid and
-      use param
+      use param, only: nsub_e, nsub_x
       implicit none                        ! partitioning parameters:
       integer ierr, tile                   ! logic of the code requires
 
@@ -12,9 +12,15 @@
                                            ! smaller size.
 
       subroutine check_tile_bounds (tile, ierr)
-      use param
-      use hidden_mpi_vars
+
+      use param, only:
+     &     ieast, iwest, jnorth, jsouth, lm, mm, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use error_handling, only: handle_configuration_error
+
       implicit none
+      character(len=17) :: sr_name="check_tile_bounds"
+      character(len=200) :: error_info
       integer tile, ierr, isize,jsize
 #include "compute_tile_bounds.h"
 
@@ -23,15 +29,24 @@
 
       if (isize<2) then
         ierr=ierr+1
-        write(*,'(1x,2A,I3,1x,A,I4,3x,A,I3,1x,A,2I4)') '### ERROR: ',
+        write(error_info, *)
      &          'NSUB_X =', NSUB_X,  'is incompatible with Lm =', Lm,
-     &          'i_X =', i_X,  '==> istr,iend =', istr,iend
+     &       'i_X =', i_X,  '==> istr,iend =', istr,iend
+
+         call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
+
       endif
       if (jsize<2) then
         ierr=ierr+1
-        write(*,'(1x,2A,I3,1x,A,I4,3x,A,I3,1x,A,2I4)') '### ERROR: ',
+        write(error_info, *)
      &          'NSUB_E =', NSUB_E,  'is incompatible with Mm =', Mm,
-     &          'j_E =', j_E,  '==> jstr,jend =', jstr,jend
+     &       'j_E =', j_E,  '==> jstr,jend =', jstr,jend
+         call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
+
       endif
       end
 
@@ -43,7 +58,7 @@
 ! starting with "check_switches1".    This routine is merely for
 ! reporting, and it does not perform any checks, nor does it raise
 ! the error flag.
-      use strings
+      use strings, only: cpps, max_opt_size
       implicit none
       character(len=32) bffr(3)
       integer is,ie, i,nwd, lbffr(3)
@@ -86,10 +101,13 @@
 ! Manually check mutual consistency of settings of CPP switches, report
 ! contradictions (if any), and raise errors flag to terminate the run.
 
-      use param
-      use scalars
-      use strings
+      use param, only: mynode
+      use strings, only: cpps, max_opt_size
+      use error_handling, only: handle_configuration_error
+
       implicit none
+      character(len=16) :: sr_name = "check_switches2"
+      character(len=200) :: error_info
       integer ierr, nobc_west, nobc_east, nobc_south, nobc_north,
      &                                ncoupl, nAk, is,ie, lenstr
 
@@ -163,15 +181,23 @@
       ncoupl=ncoupl+1
 #endif
       if (ncoupl==0) then
-        write(*,'(/1x,3A/)') '### ERROR: neither PRED_COUPLED_MODE ',
-     &                       'nor CORR_COUPLED_MODE are defined in ',
-     &                       '"set_global_definitions.h".'
+        write(error_info, *) 'neither PRED_COUPLED_MODE '//
+     &                       'nor CORR_COUPLED_MODE are defined in '//
+     &        '"set_global_definitions.h".'
+        call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
+
         ierr=ierr+1
       elseif (ncoupl>1) then
-        write(*,'(/1x,2A/12x,2A/)')     '### ERROR: miss-configured ',
-     &          'switches PRED_COUPLED_MODE and CORR_COUPLED_MODE ',
-     &          'in "set_global_definitions.h": only one of them ',
-     &          'should be defined.'
+        write(error_info, *)     'misconfigured '//
+     &          'switches PRED_COUPLED_MODE and CORR_COUPLED_MODE '//
+     &          'in "set_global_definitions.h": only one of them '//
+     &        'should be defined.'
+        call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
+
         ierr=ierr+1
       endif
 
@@ -191,13 +217,19 @@
       nobc_east=nobc_east+1
 #endif
       if (nobc_west>1) then
-        write(*,'(1x,2A)') '### ERROR in "cppdefs.opt": more than one ',
-     &          'boundary condition is chosen on the WESTERN EDGE.'
+        write(error_info, *) 'more than one '//
+     &        'boundary condition is chosen on the WESTERN EDGE.'
+         call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
         ierr=ierr+1
       endif
       if (nobc_east>1) then
-        write(*,'(1x,2A)') '### ERROR in "cppdefs.opt": more than one ',
-     &          'boundary condition is chosen on the EASTERN EDGE.'
+        write(*,'(A)') 'more than one '//
+     &        'boundary condition is chosen on the EASTERN EDGE.'
+         call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
         ierr=ierr+1
       endif
 
@@ -215,13 +247,20 @@
       nobc_north=nobc_north+1
 #endif
       if (nobc_south>1) then
-        write(*,'(1x,2A)') '### ERROR in "cppdefs.opt": more than one ',
-     &          'boundary condition is chosen on the SOUTHERN EDGE.'
+        write(error_info, *) 'more than one '//
+     &        'boundary condition is chosen on the SOUTHERN EDGE.'
+         call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
         ierr=ierr+1
       endif
       if (nobc_north>1) then
-        write(*,'(1x,2A)') '### ERROR in "cppdefs.opt": more than one ',
-     &          'boundary condition is chosen on the NORTHERN EDGE.'
+        write(error_info, *) 'more than one '//
+     &        'boundary condition is chosen on the NORTHERN EDGE.'
+         call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
+
         ierr=ierr+1
       endif
 
@@ -247,17 +286,25 @@
       nAk=nAk+1
 #endif
       if (nAk>1) then
-        write(*,'(1x,2A)') '### ERROR in "cppdefs.opt": more than ',
-     &                     'one vertical mixing scheme is chosen.'
+        write(error_info, *) 'cppdefs.opt: more than '//
+     &        'one vertical mixing scheme is chosen.'
+        call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
+
         ierr=ierr+1
       endif
 
 /*
 #ifdef SPLIT_EOS
 # ifndef NONLIN_EOS
-      write(*,'(1x,2A/12x,A)') '### ERROR in "cppdefs.opt": ',
-     &        'illegal combination of CPP-switches: ',
-     &        'SPLIT_EOS is defined, but NONLIN_EOS is not.'
+      write(*,'(A') 'cppdefs.opt: '//
+     &        'illegal combination of CPP-switches: '//
+     &'SPLIT_EOS is defined, but NONLIN_EOS is not.'
+      call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
+
       ierr=ierr+1
 # endif
 #endif
@@ -268,17 +315,22 @@
 
 #ifndef SOLVE3D
       if (ndtfast>1) then
-        write(*,'(1x,A,I3,1x,A/12x,A,2x,A)')  '### ERROR: NDTFAST =',
+        write(error_info, *)  'NDTFAST =',
      &         ndtfast, 'is greater than unity for a shallow water',
      &        'configuration.','Change it to unity in startup file.'
-     &
+      call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
         ierr=ierr+1
       endif
 #endif
       return
-  99  mpi_master_only write(*,'(/1x,2A/14x,A)')
-     &  '### ERROR: checkdefs :: Insufficient size of string "cpps" ',
-     &  'in file "strings".', 'Increase the size it and recompile.'
+  99  mpi_master_only write(error_info, *)
+     &     'Insufficient size of string "cpps" ',
+     &     'in file "strings".', 'Increase the size it and recompile.'
+      call handle_configuration_error(
+     &        context=sr_name,
+     &        info=error_info)
       ierr=ierr+1
       return
       end

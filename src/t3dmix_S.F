@@ -2,9 +2,9 @@
 #if defined SOLVE3D && ( defined TS_DIF2 || defined TS_DIF4 )
 
       subroutine t3dmix
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth, nt, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: a2d
       implicit none
       integer,save:: tile=0
       integer itrc
@@ -20,13 +20,18 @@
 
 ! Computes horizontal mixing of tracers along S-surfaces.
 
-      use param
-      use grid
-      use mixing
-      use ocean_vars
-      use scalars
-      use tracers
-      use diagnostics
+      use grid, only: nz, umask, pmon_u, vmask, pnom_v, pn, pm
+      use mpi_exchanges, only: exchange_xxx
+      use param, only:
+     &     east_exchng, ieast, iwest, jnorth, jsouth,
+     &     north_exchng, south_exchng, west_exchng
+      use mixing, only: diff2
+      use ocean_vars, only: hz
+      use scalars, only: dt, nnew, nrhs
+      use tracers, only: t, wrt_t_dia
+      use diagnostics, only:
+     &     calc_diag, diag_trc, tmixx, tmixy, td,
+     &     tdiag
 
       implicit none
       integer istr,iend,jstr,jend, itrc, i,j,k

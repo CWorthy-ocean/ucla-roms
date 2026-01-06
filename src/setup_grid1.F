@@ -1,8 +1,8 @@
 #include "cppdefs.opt"
                                             ! Setting up curvilinear
       subroutine setup_grid1(tile)          ! grid: Compute various
-      use param
-      use hidden_mpi_vars
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
       implicit none                         ! combinations of metric
       integer tile                          ! terms.
 #include "compute_tile_bounds.h"
@@ -11,9 +11,11 @@
       end
 
       subroutine setup_Corls_tile(istr,iend,jstr,jend)
-      use param
-      use grid
-      use scalars
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use grid, only: f, latr, fomn, pn, pm
+      use scalars, only: deg2rad, pi
       implicit none
       integer istr,iend,jstr,jend, i,j
 
@@ -55,9 +57,17 @@
 
 
       subroutine setup_grid1_tile (istr,iend,jstr,jend)
-      use param
-      use grid
-      use scalars
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use grid, only: dm_r, pm, dn_r, pn,
+     &     pmon_u, dm_u, dn_u, pn_u,
+     &     umask, rmask, pmask, vmask, ia_u, pnom_v, dn_p,
+     &     pm_v, ia_v, dm_v, dn_v, dm_p
+#if (defined CURVGRID && defined UV_ADV)
+     &     , dndx, dmde
+#endif
+      use mpi_exchanges, only: exchange_xxx
       implicit none
       integer :: istr,iend,jstr,jend, i,j
 

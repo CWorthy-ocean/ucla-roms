@@ -6,9 +6,9 @@ c--# define TEST_WEIGHTS
 
       subroutine set_weights
 
-      use param
-      use coupling
-      use scalars
+      use coupling, only: weight
+      use param, only: mynode
+      use scalars, only: ndtfast, nfast
 
       implicit none
 
@@ -268,9 +268,6 @@ c**       weight(1,i)=1.                   !<-- FLAT
 #  ifdef FORW_BAK
       subroutine step2d_FB_imitator (zeta, DUon, Zt_av1, DU_av2)
 
-      use param
-      use coupling
-      use scalars
 
       implicit none
       real zeta(4), DUon, Zt_av1, DU_av2, cff1,cff2
@@ -292,8 +289,6 @@ c**       weight(1,i)=1.                   !<-- FLAT
 
       subroutine step2d_LFAM3_imitator (zeta, DUon, Zt_av1, DU_av2)
 
-      use param
-      use coupling
 
       implicit none
       logical PREDICTOR_2D_STEP

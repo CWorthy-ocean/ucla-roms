@@ -2,7 +2,7 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only: lm, mm, n
       implicit none
 
       real,allocatable,dimension(:,:)   :: A2D, B2D, C2D, D2D

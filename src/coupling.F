@@ -2,7 +2,9 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only:
+     &     lm, mm, east_exchng, north_exchng, south_exchng,
+     &     west_exchng
       implicit none
 
 ! File "coupling":  Declare 2D arrays associated with coupling
@@ -42,7 +44,7 @@
 
       !----------------------------------------------------------------
       subroutine init_arrays_coupling  ![
-      use scalars
+      use scalars, only: init
       implicit none
 
 #ifdef SOLVE3D

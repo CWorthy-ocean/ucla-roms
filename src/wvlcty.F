@@ -2,9 +2,11 @@
 #ifdef SOLVE3D
 
       subroutine wvlcty (tile, Wvlc)
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only:
+     &     n, ieast, iwest, jnorth, jsouth,
+     &     lm, mm, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: a2d
       implicit none
       integer tile
       real Wvlc(GLOBAL_2D_ARRAY,0:N)
@@ -23,10 +25,15 @@
 ! purposes and does not have any feedback onto the model.
 ! Unlike W, absolute vertical velocity is defined at RHO-points.
 
-      use param
-      use grid
-      use ocean_vars
-      use scalars
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     & west_exchng, lm, mm, ieast, iwest, jnorth, jsouth
+      use grid, only:  pn, pm
+      use ocean_vars, only: flxv, flxu, z_r, u, v
+#ifdef NHMG
+     &     , w
+#endif
+      use scalars, only: n, nstp
 
       implicit none
       integer istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k

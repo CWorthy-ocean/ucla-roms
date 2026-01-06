@@ -5,14 +5,18 @@
 ! Set lateral boundary conditions for the barotropic (i.e. vertically
 ! integrated) ETA-component velocity vbar(:,:,knew).
 
-      use param
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
 #ifdef WEC
-      use wec_frc
+      use wec_frc, only: vst2d
 #endif
-      use boundary
-      use grid
-      use ocean_vars
-      use scalars
+      use boundary, only:
+     &     zeta_south, vbar_south, zeta_north,
+     &     vbar_north, vbar_west, vbar_east
+      use grid, only: h, pn, vmask, pm
+      use ocean_vars, only: zeta, vbar, ubar
+      use scalars, only: dtfast, g, knew, kstp, gamma2
 
       implicit none
       integer istr,iend,jstr,jend, i,j

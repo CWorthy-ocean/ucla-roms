@@ -8,14 +8,14 @@ include Makedefs.inc
    SRCS = $(wildcard *$(UPF77_ext))
 
 # Exclude files that are not part of main build
-   EXCL = mpi_test checkkwds cppcheck srcscheck
+   EXCL = mpi_test cppcheck srcscheck
    EXCL += check_alfabeta check_rho_eos int_r3d sediment t3dmix_GP transp_nodes u3dbc_new visc3d_GP visc3d_S_FS
    EXCL := $(addsuffix $(UPF77_ext), $(EXCL))
    SRCS := $(filter-out $(EXCL), $(SRCS))
 
 # Include files that do not exist yet but
 # 	are generated as part of the build:
-   INCL = check_srcs check_switches1 setup_kwds
+   INCL = check_srcs check_switches1
    INCL := $(addsuffix $(UPF77_ext), $(INCL))
    SRCS := $(SRCS) $(INCL)
 
@@ -69,7 +69,7 @@ mpi_test: $(MPI_TEST_OBJ)
 
 # Auxiliary utility programs
 # --------- ------- --------
- TOOLS = cppcheck srcscheck checkkwds redefs
+ TOOLS = cppcheck srcscheck redefs
 
 tools: $(TOOLS)
 
@@ -82,22 +82,17 @@ srcscheck: srcscheck$(OBJ_ext)
 	$(CFT) $(FFLAGS) $(LDFLAGS) -o srcscheck srcscheck$(OBJ_ext)
 srcscheck$(OBJ_ext): strings$(OBJ_ext)
 
-checkkwds: checkkwds$(OBJ_ext)
-	$(CFT) $(FFLAGS) $(LDFLAGS) -o checkkwds checkkwds$(OBJ_ext)
-
 redefs: redefs$(OBJ_ext)
 	$(CFT) $(FFLAGS) $(LDFLAGS) -o redefs redefs$(OBJ_ext)
 
 
 
-checkdefs: check_switches1$(UPF77_ext) setup_kwds$(UPF77_ext)
+checkdefs: check_switches1$(UPF77_ext)
 
 check_switches1$(UPF77_ext): cppcheck cppdefs.opt
 	./cppcheck cppdefs.opt
 check_srcs$(UPF77_ext): srcscheck Makefile
 	./srcscheck
-setup_kwds$(UPF77_ext): checkkwds read_inp$(UPF77_ext)
-	./checkkwds
 
 .PHONY: depend
 depend:  # makedepf90 is preferable but does not work on e.g. osx-arm64. Offer python fallback.
@@ -125,7 +120,7 @@ allclean: clean
 
 .PHONY: clobber
 clobber: clean
-	/bin/rm -f check_switches1$(UPF77_ext) setup_kwds$(UPF77_ext) check_srcs$(UPF77_ext)
+	/bin/rm -f check_switches1$(UPF77_ext) check_srcs$(UPF77_ext)
 	/bin/rm -f $(SBIN) $(TOOLS) nsub
 	/bin/rm -f core core.*
 	/bin/rm -f *_genmod.mod *_genmod$(PPF90_ext)

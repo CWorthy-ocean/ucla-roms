@@ -4,20 +4,30 @@
       ! his, avg, and rst files
 
 #include "cppdefs.opt"
-
-      use param
-      use netcdf
-      use nc_read_write
-      use roms_read_write
-      use sponge_tune
-      use diagnostics
-      use scalars
-      use ocean_vars
+      use netcdf, only:
+     &     nf90_double, nf90_int, nf90_global, nf90_write,
+     &     nf90_inq_varid, nf90_put_var, nf90_put_att, nf90_open, nf90_close,
+     &     nf90_nofill, nf90_set_fill
+      use nc_read_write, only: nccreate, ncwrite
+      use roms_read_write, only:
+     &     max_name_size, dn_tm, dn_xr, dn_xu,
+     &     dn_yr, dn_yv, dn_zr, eta_rho, eta_v, xi_rho, xi_u, dn_zw,
+     & avg_output, create_file
+      use sponge_tune, only: ub_tune
+      use diagnostics, only: diag_pflx
+      use scalars, only:
+     &     NT, iic, knew, nstp, time,
+     &     N, dt, start_time, nnew, tdays
+      use ocean_vars, only:
+     &     zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,
+     &     w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
+      use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive
+      use error_handling, only : handle_configuration_error, handle_netcdf_error
       implicit none
       private
 
 #include "ocean_vars.opt"
-
+      character(len=12) :: module_name = "basic_output"
 # ifdef SOLVE3D
       real,allocatable,dimension(:,:,:) :: akv_avg
       real,allocatable,dimension(:,:,:) :: akt_avg
@@ -111,16 +121,31 @@
       end subroutine init_restarts !]
 !----------------------------------------------------------------------
       subroutine init_avg_arrays  ![
-      use scalars
-
       implicit none
+      character(len=15) :: sr_name = "init_avg_arrays"
+      character(len=200) :: error_info
 
-      if (wrt_file_his .and. mod(output_period_his,dt) /= 0) then
-        stop 'ERROR :: ocean_vars.opt - dt not a factor of output_period_his!'
+      if (wrt_file_his .and. mod(output_period_his, dt) /= 0) then
+         write(error_info, *)
+     &        "dt (", dt, ") is not a factor of ",
+     &        "output_period_his (",
+     &        output_period_his, ")"
+
+         call handle_configuration_error(
+     &        context=module_name//"/"//sr_name,
+     &        info=error_info)
       endif
+
       if (wrt_file_avg .and. mod(output_period_avg,dt) /= 0) then
-        stop 'ERROR :: ocean_vars.opt - dt not a factor of output_period_avg!'
+         write(error_info, *)
+     &        "dt (", dt, ") is not a factor of ",
+     &        "output_period_avg (",
+     &        output_period_avg, ")"
+         call handle_configuration_error(
+     &        context=module_name//"/"//sr_name,
+     &        info=error_info)
       endif
+
 
       if (wrt_file_avg) then
         if (wrt_avg_Z)  then
@@ -248,8 +273,9 @@
 #endif
 
       ! NOTE: call this here to prevent output in between timesteps which would break code
-      ! checking script.
-      if (wrt_file_his) call display_output_settings_to_terminal
+! checking script.
+      if (wrt_file_rst) call display_output_settings_to_terminal_rst
+      if (wrt_file_his) call display_output_settings_to_terminal_his
       if (wrt_file_avg) call display_output_settings_to_terminal_avg
 
       end subroutine init_avg_arrays !]
@@ -259,11 +285,22 @@
       ! ocean_vars variables are calculated for t=n in timestep t=n
       ! (unlike u/v/etc which are calculated for t=n+1 in timestep t=n)
 
-      use mixing
-      use eos_vars
-      use work_mod
-      use grid
-      use tracers    !, only: wrt_his_trc
+      use mixing, only: Akv, Akt
+#ifdef LMD_KPP
+     &     ,hbls
+#endif
+#ifdef LMD_BKPP
+     &     , hbbl
+#endif
+#ifdef SPLIT_EOS
+      use eos_vars, only: rho1
+#else
+      use eos_vars, only: rho
+#endif
+      use work_mod, only: work
+      use grid, only: pn, pm
+      use dimensions, only: i0,i1,j0,j1
+      use tracers, only: wrt_his_trc
 
       implicit none
 
@@ -397,10 +434,8 @@
       ! but this 0.5dt error has always been in ROMS.
       ! for 2 steps. True avg would be 0.5*t0 + t1 + 0.5*t2, but we've never done that.
 
-      use eos_vars
-      use mixing
-      use tracers
-      use grid
+      use grid, only: pm, pn
+      use dimensions, only: i0, i1, j0, j1
       implicit none
 
       ! local
@@ -545,13 +580,15 @@
       ! write ocean_vars variables to output netcdf restart file
       ! ocean_vars variables are calculated for t=n in timestep t=n
       ! (unlike u/v/etc which are calculated for t=n+1 in timestep t=n)
-
-      use mixing
-      use eos_vars
-      use work_mod
-      use grid
-      use tracers
-      use coupling
+#if defined LMD_KPP
+      use mixing, only: hbls, hbbl
+#endif
+      use dimensions, only: i0, i1, j0,j1
+      use tracers, only: wrt_rst_trc
+      use coupling, only:
+     &     du_avg1, dv_avg1, du_avg2, dv_avg2,
+     &     du_avg_bak, dv_avg_bak
+      use grid, only: riv_umask, riv_vmask
 #ifdef MARBL
 !     add MARBL saved state to restart to restart file
       use marbl_driver, only: marbldrv_write_ss_vars_to_rst
@@ -712,7 +749,7 @@
       ! define output variable & attributes in netcdf results file
       ! for instantaneous or averaged variables
 
-      use tracers
+      use tracers, only: def_avg_trc, def_his_trc
       implicit none
 
       ! input
@@ -847,7 +884,7 @@
 ! ----------------------------------------------------------------------
       subroutine def_vars_rst_ocean_vars  ![
       ! define output variable & attributes in netcdf restart file
-      use tracers
+      use tracers, only: t_vname, t_lname, t_units
 #ifdef MARBL
 !     add MARBL saved state to restart to restart file
       use marbl_driver, only: marbldrv_create_ss_vars_in_rst
@@ -1010,13 +1047,19 @@
       end subroutine def_vars_rst_ocean_vars  !]
 ! ----------------------------------------------------------------------
       subroutine calc_avg_ocean_vars  ![
-      ! set averaged variables
-      use eos_vars
-      use work_mod
-      use mixing
-      use tracers
-      use private_scratch
-      use dimensions
+! set averaged variables
+#ifdef SPLIT_EOS
+      use eos_vars, only: rho1, qp1
+#else
+      use eos_vars, only: rho
+#endif
+      use work_mod, only: work
+      use mixing, only: akv, akt
+#ifdef LMD_KPP
+     &     , hbls, hbbl
+#endif
+      use private_scratch, only: a2d
+      use dimensions, only: i0, i1, j0, j1, nx, ny
       implicit none
 
       ! local
@@ -1088,7 +1131,7 @@
 ! ----------------------------------------------------------------------
       subroutine write_time_step( ncid, record, total_recs )  ![
       implicit none
-
+      character(len=16) :: sr_name = "write_time_step"
       ! inputs
       integer, intent(in) :: ncid
       integer, intent(in) :: record                        ! current file record number
@@ -1105,100 +1148,140 @@
       start(2)=record ; count(2)=1
 
       ierr=nf90_inq_varid(ncid, 'time_step', var_id_tmp)
-      if (ierr/=0) call handle_ierr(ierr,'ocean_vars write_time_step inq_varid')
-      ierr=nf90_put_var(ncid, var_id_tmp, ibuff, start, count)  ! & record time step info
-      if (ierr/=0) call handle_ierr(ierr,'ocean_vars write_time_step put_var')
+      if (ierr/=0) then
+         call handle_netcdf_error(netcdf_status=ierr,
+     &        context=module_name//"/"//sr_name,
+     &        info="variable: time_step")
+      end if
+
+      ierr=nf90_put_var(ncid, var_id_tmp, ibuff, start, count) ! & record time step info
+      if (ierr/=0) then
+         call handle_netcdf_error(netcdf_status=ierr,
+     &        context=module_name//"/"//sr_name,
+     &        info="variable: time_step")
+      end if
       ! can't use ncwrite() as ibuff is an integer array not real
 
       end subroutine write_time_step  !]
 !-----------------------------------------------------------------------
-      subroutine display_output_settings_to_terminal  ![
-      use tracers
+      subroutine display_output_settings_to_terminal_his  ![
+      use tracers, only: itands, wrt_t, t_vname
       implicit none
 
       ! local
       integer :: itrc
+      if (mynode==0) then
+         write(*,'(/7x,2A,F6.1,2x,A,I4)') ! write to terminal output in simulation pre-amble text which
+     &     'ocean_vars :: history file ', ! result variables are being stored
+     &     'output_period =', output_period_his,
+     &     'recs/file =', nrpf_his
 
-      if (mynode==0) write(*,'(/7x,2A,F6.1,2x,A,I4)')                ! write to terminal output in simulation pre-amble text which
-     &  'ocean_vars :: history file ',                               ! result variables are being stored
-     &  'ouput_period =', output_period_his,
-     &  'recs/file =', nrpf_his
-
-      if (mynode==0) write(*,'(9x,A,13(/11x,A,T20,L1,4x,A),/)')      ! 13(....) repeats formatting 11 times.
-     &               'his fields to be saved: (T/F)'                 ! T20 moves to the 20th character on line
-     &                 , 'zeta',   wrt_Z,    vname(2,indxZ)
-     &                 , 'ubar',   wrt_Ub,   vname(2,indxUb)
-     &                 , 'vbar',   wrt_Vb,   vname(2,indxVb)
+         write(*,'(9x,A)')
+     &        'his fields to be saved: (T/F)' ! T20 moves to the 20th character on line
+         write(*,'(9x,A)')  repeat('-',62)
+         write(*, '(11x,A,T20,A,T36,A)')
+     &        "Name","Write (T/F)","Long name"
+         write(*,'(9x,A)')  repeat('-',62)
+         write(*,'(13(/11x,A,T30,L1,T36,A))') ! 13(....) repeats formatting 11 times.
+     &        'zeta',   wrt_Z,    vname(2,indxZ)
+     &        , 'ubar',   wrt_Ub,   vname(2,indxUb)
+     &        , 'vbar',   wrt_Vb,   vname(2,indxVb)
 #ifdef SOLVE3D
-     &                 , 'u',      wrt_U,    vname(2,indxU)
-     &                 , 'v',      wrt_V,    vname(2,indxV)
+     &        , 'u',      wrt_U,    vname(2,indxU)
+     &        , 'v',      wrt_V,    vname(2,indxV)
 
-     &                 , 'rho',    wrt_R,    vname(2,indxR)
-     &                 , 'Omega',  wrt_O,    vname(2,indxO)
-     &                 , 'W',      wrt_W,    vname(2,indxW)
+     &        , 'rho',    wrt_R,    vname(2,indxR)
+     &        , 'Omega',  wrt_O,    vname(2,indxO)
+     &        , 'W',      wrt_W,    vname(2,indxW)
 
-     &                 , 'Akv',    wrt_Akv,  vname(2,indxAkv)
-     &                 , 'Akt',    wrt_Akt,  vname(2,indxAkt)
+     &        , 'Akv',    wrt_Akv,  vname(2,indxAkv)
+     &        , 'Akt',    wrt_Akt,  vname(2,indxAkt)
 # ifdef SALINITY
-     &                 , 'Aks',    wrt_Aks,  vname(2,indxAks)
+     &        , 'Aks',    wrt_Aks,  vname(2,indxAks)
 # endif
 # ifdef LMD_KPP
-     &                 , 'hbls',   wrt_Hbls, vname(2,indxHbls)
+     &        , 'hbls',   wrt_Hbls, vname(2,indxHbls)
 # endif
 # ifdef LMD_BKPP
-     &                 , 'hbbl',   wrt_Hbbl, vname(2,indxHbbl)
+     &        , 'hbbl',   wrt_Hbbl, vname(2,indxHbbl)
 # endif
-          do itrc=1,iTandS+nt_passive
-            if (mynode==0) write(*,'(11x,A,I2,A,T16,L1,T20,A)') 't(',
+         do itrc=1,iTandS+nt_passive
+            write(*,'(11x,A,I2,A,T30,L1,T36,A)') 't(',
      &        itrc, ')', wrt_t(itrc), t_vname(itrc)
-          enddo
+         enddo
+         write(*,'(9x,A)')  repeat('-',62)
+      end if
 #endif /* SOLVE3D */
 
-      end subroutine display_output_settings_to_terminal  !]
-!-----------------------------------------------------------------------
+      end subroutine display_output_settings_to_terminal_his  !]
+
       subroutine display_output_settings_to_terminal_avg  ![
-      use tracers
+      use tracers, only: itands, wrt_t_avg, t_vname
       implicit none
 
       ! local
       integer :: itrc
+      if (mynode==0) then
+         write(*,'(/7x,2A,F6.1,2x,A,I4)') ! write to terminal output in simulation pre-amble text which
+     &     'ocean_vars :: average file ', ! result variables are being stored
+     &     'output_period =', output_period_avg,
+     &     'recs/file =', nrpf_avg
 
-      if (mynode==0) write(*,'(/7x,2A,F6.1,2x,A,I4)')                ! write to terminal output in simulation pre-amble text which
-     &  'ocean_vars :: average file ',                               ! result variables are being stored
-     &  'ouput_period =', output_period_avg,
-     &  'recs/file =', nrpf_avg
-
-      if (mynode==0) write(*,'(9x,A,13(/11x,A,T20,L1,4x,A),/)')      ! 13(....) repeats formatting 11 times.
-     &               'avg fields to be saved: (T/F)'                 ! T20 moves to the 20th character on line
-     &                 , 'zeta',   wrt_avg_Z,    vname(2,indxZ)
-     &                 , 'ubar',   wrt_avg_Ub,   vname(2,indxUb)
-     &                 , 'vbar',   wrt_avg_Vb,   vname(2,indxVb)
+         write(*,'(9x,A)')
+     &        'avg fields to be saved: (T/F)' ! T20 moves to the 20th character on line
+         write(*,'(9x,A)')  repeat('-',62)
+         write(*, '(11x,A,T20,A,T36,A)')
+     &        "Name","Write (T/F)","Long name"
+         write(*,'(9x,A)')  repeat('-',62)
+         write(*,'(13(/11x,A,T30,L1,T36,A))') ! 13(....) repeats formatting 11 times.
+     &       'zeta',   wrt_avg_Z,    vname(2,indxZ)
+     &     , 'ubar',   wrt_avg_Ub,   vname(2,indxUb)
+     &     , 'vbar',   wrt_avg_Vb,   vname(2,indxVb)
 #ifdef SOLVE3D
-     &                 , 'u',      wrt_avg_U,    vname(2,indxU)
-     &                 , 'v',      wrt_avg_V,    vname(2,indxV)
+     &     , 'u',      wrt_avg_U,    vname(2,indxU)
+     &     , 'v',      wrt_avg_V,    vname(2,indxV)
 
-     &                 , 'rho',    wrt_avg_R,    vname(2,indxR)
-     &                 , 'Omega',  wrt_avg_O,    vname(2,indxO)
-     &                 , 'W',      wrt_avg_W,    vname(2,indxW)
+     &     , 'rho',    wrt_avg_R,    vname(2,indxR)
+     &     , 'Omega',  wrt_avg_O,    vname(2,indxO)
+     &     , 'W',      wrt_avg_W,    vname(2,indxW)
 
-     &                 , 'Akv',    wrt_avg_Akv,  vname(2,indxAkv)
-     &                 , 'Akt',    wrt_avg_Akt,  vname(2,indxAkt)
+     &     , 'Akv',    wrt_avg_Akv,  vname(2,indxAkv)
+     &     , 'Akt',    wrt_avg_Akt,  vname(2,indxAkt)
 # ifdef SALINITY
-     &                 , 'Aks',    wrt_avg_Aks,  vname(2,indxAks)
+     &     , 'Aks',    wrt_avg_Aks,  vname(2,indxAks)
 # endif
 # ifdef LMD_KPP
-     &                 , 'hbls',   wrt_avg_Hbls, vname(2,indxHbls)
+     &     , 'hbls',   wrt_avg_Hbls, vname(2,indxHbls)
 # endif
 # ifdef LMD_BKPP
-     &                 , 'hbbl',   wrt_avg_Hbbl, vname(2,indxHbbl)
+     &     , 'hbbl',   wrt_avg_Hbbl, vname(2,indxHbbl)
 # endif
-          do itrc=1,iTandS+nt_passive
-            if (mynode==0) write(*,'(11x,A,I2,A,T16,L1,T20,A)') 't(',
+         do itrc=1,iTandS+nt_passive
+            write(*,'(11x,A,I2,A,T30,L1,T36,A)') 't(',
      &        itrc, ')', wrt_t_avg(itrc), t_vname(itrc)
-          enddo
+         enddo
+         write(*,'(9x,A)')  repeat('-',62)
+      end if ! (mynode==0)
 #endif /* SOLVE3D */
 
       end subroutine display_output_settings_to_terminal_avg  !]
-! ----------------------------------------------------------------------
+
+      subroutine display_output_settings_to_terminal_rst
+      character(len=120) :: stdout_str
+      character(len=120) :: period_info
+      if (mynode==0) then
+         write(stdout_str,'(7x,A,2x,A,I4)')
+     &        'ocean_vars :: restart file ', ! result variables are being stored
+     &        'recs/file = ', nrpf_rst
+         if (monthly_restarts) then
+            write(period_info,'(A,1L)')
+     &           'monthly_restarts = ', monthly_restarts
+         else
+            write(period_info,'(7x,A,F6.1)')
+     &           'output_period_rst =', output_period_rst
+         end if
+         write(*,'(A,2x,A)') trim(stdout_str),trim(period_info)
+      end if
+      end subroutine display_output_settings_to_terminal_rst
 
       end module basic_output

@@ -8,26 +8,31 @@
 
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
 
-      use dimensions
-      use grid
-      use nc_read_write
-      use roms_read_write
-      use netcdf
-      use tracers, only: t, t_vname, t_lname, t_units  ! need to get names of tracers
-      use ocean_vars
-      use basic_output, vn=>vname
-      use scalars
-      use diagnostics
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, jnorth, jsouth, ieast, iwest, nsub_e, nsub_x
+      use tracers, only: t_units
+      use dimensions, only: i0, i1, j0, j1
+      use grid, only: latr, lonr
+      use nc_read_write, only: nccreate, ncwrite
+      use roms_read_write, only: dn_tm, dn_xr, dn_yr, dn_zr, eta_rho,
+     &     xi_rho, create_file
+      use netcdf, only:
+     &     nf90_double, nf90_write, nf90_put_att,
+     &     nf90_open, nf90_close
+      use marbl_driver, only: iALK, iDIC, iALK_alt, iDIC_alt
+      use ocean_vars, only: hz
+      use basic_output, only: vn=>vname
+      use scalars, only: n, dt, time
 
       implicit none
       private
 
 #include "upscale_output.opt"
-
+      character(len=15) :: module_name = "upscale_output"
       integer                        :: record_uscl=nrpf_uscl   ! record number in file
       real                           :: otime=0   ! time since last output
       integer :: navg = 0
-      integer :: iALK, iDIC, iALK_alt, iDIC_alt
 
 #ifdef OBC_NORTH
       real,allocatable,dimension(:,:) :: ALK_add_north_avg
@@ -100,8 +105,8 @@
       subroutine init_upscale ![
       ! Allocate and initialize arrays.
 
-      use param
-      use hidden_mpi_vars
+      use param, only: lm, mm, mynode
+      use hidden_mpi_vars, only: inode, jnode
 
       implicit none
 
@@ -128,24 +133,6 @@
       endif
 
       if (mynode==0) print *,'init upscale'
-
-      ! Loop over MARBL tracers...
-      ! ...but use itot as index (to include other tracers)
-      do idx=1,ntrc_bio
-         itot=itot+1
-         if (t_vname(itot)=='ALK') then
-           iALK = itot
-         endif
-         if (t_vname(itot)=='DIC') then
-           iDIC = itot
-         endif
-         if (t_vname(itot)=='ALK_ALT_CO2') then
-           iALK_alt = itot
-         endif
-         if (t_vname(itot)=='DIC_ALT_CO2') then
-           iDIC_alt = itot
-         endif
-      enddo
 
 #ifdef OBC_NORTH
       if (.not.north_exchng) then
@@ -244,18 +231,19 @@
       subroutine calc_forcing_rates(itrc,k,FX,FE,istr,iend,jstr,jend) ![
       ! Calculate the instantaneous forcing rate in the halo by measuring the rate at
       ! which tracer mass is added via advection
-      use param
-      use hidden_mpi_vars
       implicit none
 
       ! local
-      integer :: i,j,k
-      integer :: istr, iend, jstr, jend
-      integer :: itrc
-      real, dimension(PRIVATE_2D_SCRATCH_ARRAY) :: FX,FE
+      integer, intent(in) :: itrc,k
+      real, dimension(PRIVATE_2D_SCRATCH_ARRAY), intent(in) :: FX,FE
+      integer, intent(in) :: istr, iend, jstr, jend
+
+      ! local
+      integer :: i,j
 
         if ((itrc == iALK) .or. (itrc == iALK_alt) .or. (itrc == iDIC) .or. (itrc == iDIC_alt)) then
 
+#ifdef OBC_NORTH
         ! North boundary
         if (NORTHERN_EDGE) then
           do i=istr,iend
@@ -269,7 +257,9 @@
      &        DIC_alt_rate_north(i,k) = FE(i,jend+1)
           enddo
         endif
+#endif
 
+#ifdef OBC_SOUTH
         ! South boundary
         if (SOUTHERN_EDGE) then
           do i=istr,iend
@@ -283,7 +273,9 @@
      &        DIC_alt_rate_south(i,k) = -FE(i,jstr)
           enddo
         endif
+#endif
 
+#ifdef OBC_EAST
             ! East boundary
         if (EASTERN_EDGE) then
           do j=jstr,jend
@@ -297,8 +289,10 @@
      &        DIC_alt_rate_east(j,k) = FX(iend+1,j)
           enddo
         endif
+#endif
 
-            ! South boundary
+#ifdef OBC_WEST
+            ! West boundary
         if (WESTERN_EDGE) then
           do j=jstr,jend
             if (itrc == iALK)
@@ -311,6 +305,7 @@
      &        DIC_alt_rate_west(j,k) = -FX(istr,j)
           enddo
         endif
+#endif
 
         endif ! itrc number
 
@@ -320,8 +315,8 @@
       ! Update averages
       ! The average is always scaled properly throughout
       ! reset navg_rnd=0 after an output of the average
-      use param
-      use hidden_mpi_vars
+      use hidden_mpi_vars, only: inode, jnode
+      use param, only: mynode
       implicit none
 
       ! local
@@ -386,7 +381,8 @@
       ! and write to file
       implicit none
 
-      ! local
+! local
+      character(len=11) :: sr_name = "wrt_upscale"
       integer :: ierr,ncid
       character(len=99),save :: fname
       integer,dimension(3) :: start2D
@@ -489,8 +485,7 @@
       subroutine create_upscale_vars(ncid)  ![
       ! Add edata variables to an opened netcdf file
 
-      use nc_read_write
-      use hidden_mpi_vars
+      use hidden_mpi_vars, only: inode, jnode
       implicit none
 
       !import/export
@@ -629,18 +624,10 @@
 #else /* MARBL && MARBL_DIAGS && UPSCALING */
 
 !----------------------------------------------------------------------
-      use param
-      use tracers
-      use dimensions
-      use roms_read_write
-      use netcdf
-      use scalars
-      use ocean_vars
-
+      use netcdf, only: nf90_double
       implicit none
-
+      character(len=15) :: module_name = "upscale_output"
       private
-
 #include "upscale_output.opt"
 
       ! Public functions
@@ -648,20 +635,28 @@
 
       contains
 
-      subroutine init_upscale ![
+      subroutine init_upscale   ![
+      use error_handling, only: handle_configuration_error
       ! Allocate and initialize arrays.
       implicit none
+      character(len=13) :: sr_name
 
 #ifndef MARBL
-      error stop 'ERROR: upscale module must have MARBL enabled.'
+      call handle_configuration_error(
+     &     context=module_name//"/"//sr_name,
+     &     info="upscale module must have MARBL cpp key enabled")
 #endif
 
 #ifndef MARBL_DIAGS
-      error stop 'ERROR: upscale module must have MARBL_DIAGS enabled.'
+      call handle_configuration_error(
+     &     context=module_name//"/"//sr_name,
+     &     info="upscale module must have MARBL_DIAGS cpp key enabled.")
 #endif
 
 #ifndef UPSCALING
-      error stop 'ERROR: upscale module must have UPSCALING enabled.'
+      call handle_configuration_error(
+     &     context=module_name//"/"//sr_name,
+     &     info="upscale module must have UPSCALING cpp key enabled.")
 #endif
 
       end subroutine init_upscale !]

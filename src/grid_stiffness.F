@@ -2,8 +2,8 @@
 #ifdef SOLVE3D
 
       subroutine grid_stiffness (tile)
-      use param
-      use hidden_mpi_vars
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
       implicit none
       integer tile
 # include "compute_tile_bounds.h"
@@ -23,11 +23,15 @@
 ! This is done for purely diagnostic purposes does not affect
 ! computations.
 
-      use param
-      use comm_vars
-      use grid
-      use ocean_vars
-      use mpi
+      use param, only:
+     &     east_exchng, n, nnodes, north_exchng,
+     &     south_exchng, west_exchng, ieast, iwest, jnorth, jsouth,
+     &     mynode, nsub_e, nsub_x, ocean_grid_comm
+      use comm_vars, only:
+     &     rx0, rx1, tile_count
+      use grid, only: umask, vmask
+      use ocean_vars, only: z_w
+      use mpi, only: mpi_double_precision, mpi_status_size
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k, NSUB

@@ -2,9 +2,9 @@
 #define SUM_BY_PAIRS
 
       subroutine setup_grid2 (tile)
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: a2d
       implicit none
       integer tile
 
@@ -21,11 +21,18 @@
 ! and local grid intervals); combined crossection of all open
 ! boundaries.
 
-      use param
-      use comm_vars
-      use grid
-      use scalars
-      use mpi
+      use param, only:
+     &     east_exchng, nnodes, north_exchng, south_exchng,
+     &     west_exchng,  ieast, iwest, jnorth, jsouth, mynode, nsub_e,
+     & nsub_x, ocean_grid_comm
+      use comm_vars, only:
+     &     area, bc_crss, cg_max, cg_min, cu_cor,
+     &     grdmax, grdmin, hmax, hmin, tile_count, volume
+      use scalars, only: dt, dtfast, g
+      use mpi, only: mpi_real8, mpi_status_size
+      use grid, only:
+     &     rmask, h, pn, pm, f, umask, dn_u,
+     &     vmask, dm_v
 
       implicit none
       integer istr,iend,jstr,jend, i,j, nsub

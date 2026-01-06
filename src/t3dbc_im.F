@@ -5,13 +5,18 @@
 
 ! Set lateral boundary conditions for tracer field t(:,:,:,itrc)
 
-      use param
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
       use tracers, only: t
-      use boundary
-      use grid
-      use ocean_vars
-      use scalars
-      use sponge_tune
+      use boundary, only: t_west, t_east, t_south, t_north
+      use dimensions, only: nz
+      use grid, only: vmask, pm, pn, rmask, umask
+      use ocean_vars, only: u, v
+      use scalars, only: dt, n, nnew, nrhs, nstp
+      use sponge_tune, only:
+     &     ub_tune, ub_west, ub_east, ub_south,
+     &     ub_north
 
       implicit none
       integer istr,iend,jstr,jend, itrc, i,j,k

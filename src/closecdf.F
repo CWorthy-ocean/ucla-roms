@@ -1,8 +1,8 @@
 #include "cppdefs.opt"
 
       subroutine closecdf       ! Close output netCDF files.
-      use param
-      use scalars
+      use param, only: mynode
+      use scalars, only: may_day_flag
       implicit none
 
 # ifdef MPI_SILENT_MODE

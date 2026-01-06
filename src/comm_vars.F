@@ -2,7 +2,7 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only: nt
       implicit none
 
 ! The following common block contains a set of globally accessible

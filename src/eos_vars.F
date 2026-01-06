@@ -4,7 +4,7 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only: lm, mm
       implicit none
 
 ! Tcoef, T0   Coefficients for linear Equation of State
@@ -36,7 +36,7 @@
 
 !----------------------------------------------------------------------
       subroutine init_arrays_eos_vars  ![
-      use scalars
+      use scalars, only: n, init
       implicit none
 
 #ifdef SOLVE3D

@@ -4,11 +4,12 @@
 
 ! Set boundary conditions for free surface zeta_new
 
-      use param
-      use boundary
-      use grid
-      use ocean_vars
-      use scalars
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng,
+     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use grid, only:  h, pm, rmask, pn
+      use ocean_vars, only: zeta
+      use scalars, only: dtfast, g, kstp
 
       implicit none
       integer istr,iend,jstr,jend, i,j

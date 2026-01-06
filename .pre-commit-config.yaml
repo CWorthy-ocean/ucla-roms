@@ -3,3 +3,24 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+  - repo: local
+    hooks:
+      - id: fortran-explicit-use
+        name: Enforce explicit Fortran USE statements
+        entry: ci/pre-commit/check_explicit_use.py
+        language: python
+        files: ^src/.*\.F$
+        exclude: |
+          (?x)(
+          ^src/check_alfabeta\.F$ |
+          ^src/check_rho_eos\.F$ |
+          ^src/int_r3d\.F$ |
+          ^src/sediment\.F$ |
+          ^src/t3dmix_GP\.F$ |
+          ^src/transp_nodes\.F$ |
+          ^src/u3dbc_new\.F$ |
+          ^src/visc3d_GP\.F$ |
+          ^src/visc3d_S_FS\.F$ |
+          ^src/wec_frc\.F$ |
+          ^src/mpi_test\.F$
+          )

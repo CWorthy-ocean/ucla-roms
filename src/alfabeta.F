@@ -15,12 +15,15 @@
 ! Both are evaluated at the surface.  Adapted from original "rati"
 ! and "beta" routines.
 
-      use param
       use tracers, only: t
-      use eos_vars
-      use grid
-      use ocean_vars
-      use scalars
+      use scalars, only: nstp, rho0
+      use param, only: N, isalt, itemp
+#ifndef NONLIN_EOS
+      use eos_vars, only: tcoef
+#ifdef SALINITY
+     &     , scoef
+#endif
+#endif
 
       implicit none
       integer istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j

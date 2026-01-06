@@ -3,19 +3,18 @@
 
 !!    program main               ! Open MP version of ROMS driver
 
-      use param
+      use param, only: mynode, ocean_grid_comm
 #ifdef NHMG
-      use nhmg
+      use nhmg, only: nhmg_clean
 #endif
       use tracers, only: init_tracers
-      use mpi
-      use sponge_tune
-
+      use mpi, only: mpi_wtime
+      use timers, only: tstart, tend
 
       implicit none                                        ! with single parallel region using
       integer :: ierr                                      ! explicit barrier synchronization.
 # ifdef MPI
-      real*8 tstart, tend
+c$$$      real*8 tstart, tend
 C$    integer level,req_lev
 
 c**   call system('uname -nmr')
@@ -55,10 +54,9 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
 
 
       subroutine roms_thread
-      use param
-      use scalars
-      use ocean_vars
-      use basic_output
+      use basic_output, only: wrt_his_ocean_vars
+      use scalars, only: may_day_flag, ntimes, iic, ntstart, diag_sync
+      use timers, only: start_timers, stop_timers
 
       implicit none
 
@@ -83,29 +81,36 @@ C$OMP END MASTER                         ! is in uniform state]. This
 #endif
 
       subroutine roms_init
-      use param
 #ifdef NHMG
-      use nhmg
+      use nhmg, only: nhmg_matrices, nhmg_init, halo
+      use ocean_vars, only: dzdeta, dzdxi, hz
 #endif
-      use dimensions
-      use grid
-      use ocean_vars
-      use basic_output
-      use scalars
-      use analytical
-      use sponge_tune
-      use diagnostics
-      use boundary
-      use particles
-      use cstar_output
-      use upscale_output
-      use random_output
-      use cstar_output
-      use cdr_frc
+      use basic_output, only: init_restarts, wrt_his_ocean_vars
+      use scalars, only:
+     &     diag_sync, dt, iic, iif, knew, kstp,
+     &     may_day_flag, nnew, nrhs, nstp, numthreads, priv_count, sec2day,
+     &     start_time, synchro_flag, tdays, time, proc
+      use sponge_tune, only: ub_tune
+      use particles, only: floats
+      use upscale_output, only: do_upscale
+      use random_output, only: do_random
+      use cstar_output, only: do_cstar
+      use frc_output, only: do_frc
+      use analytical, only: ana_vmix
+#ifdef ANA_INITIAL
+     &     , ana_init
+#endif
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
-      use bec2_params
-      use bgc_io
+      use bgc_io, only: wrt_bgc
 # endif
+# if defined(BIOLOGY_BEC2)
+      use bec2_params, only: ecosys2_init
+#endif
+      use grid, only: get_grid, dm_r, dn_r
+      use roms_read_write, only: nrrec
+      use param, only:
+     &     mynode, nsub_e, nsub_x, lm, mm,
+     &     N, np_eta, np_xi, padd_e, padd_x
 
       implicit none
 
@@ -272,7 +277,6 @@ CR      write(*,*)  ' -2' MYID
       endif
 
       ! we should have a grid and z_r by now
-!      if (cdr_source) call init_cdr_frc
 
 #if defined SPONGE
       call set_nudgcof(0)
@@ -287,6 +291,7 @@ CR      write(*,*)  ' -2' MYID
       if (do_random) call init_random
       if (do_cstar)  call init_cstar
       if (do_upscale) call init_upscale
+      if (do_frc) call init_frc
 
       if (may_day_flag /=0 ) goto 99     !-->  EXIT
 
@@ -310,23 +315,26 @@ CR      write(*,*)  ' -2' MYID
 
       subroutine roms_step
 
-      use param
-      use ocean_vars
-      use extract_data
-      use diagnostics
-      use scalars
-      use sponge_tune
-      use particles
-      use surf_flux
-      use random_output
-      use cstar_output
-      use zslice_output
-      use basic_output
-      use boundary
-      use analytical
-      use bgc_io
-      use tides
-      use mixing
+      use extract_data, only: do_extract, do_extract_data
+      use scalars, only:
+     &     dt, iic, iif, knew, kstp, nfast, nnew, nrhs,
+     &     nstp, ntstart, sec2day, start_time, tdays, time
+      use sponge_tune, only: ub_tune
+      use particles, only: floats
+      use surf_flux, only: wrt_smflx, wrt_stflx
+      use random_output, only: do_random
+      use cstar_output, only: do_cstar
+      use frc_output, only: do_frc
+      use zslice_output, only: do_zslice
+      use basic_output, only:
+     &     calc_avg_ocean_vars, wrt_avg_ocean_vars,
+     &     wrt_his_ocean_vars, wrt_rst_ocean_vars
+      use boundary, only: set_bry_all
+      use tides, only: set_tides
+# if defined(BIOLOGY_BEC2) || defined(MARBL)
+      use bgc_io, only: wrt_bgc
+#endif
+      use tides, only: bry_tides, pot_tides
 
       implicit none
 
@@ -477,10 +485,11 @@ CR      write(*,*)  ' -2' MYID
 #endif
 
       if (do_random) call wrt_random
-#if defined MARBL && defined MARBL_DIAGS
+#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
       if (do_cstar)  call wrt_cstar
 #endif
       if (do_zslice) call wrt_zslice
+      if (do_frc)    call wrt_frc
 
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       call wrt_bgc

@@ -4,10 +4,15 @@
 
 #include "cppdefs.opt"
 
-      use param
-      use roms_read_write
-      use dimensions
-      use hidden_mpi_vars
+      use param, only: nt
+      use param, only:
+     &     lm, mm, n, obc_east, obc_north, obc_south,
+     &     obc_west
+      use roms_read_write, only:
+     &     ncforce, bc_options, set_frc_data,
+     &     frctype, store_string_att
+      use dimensions, only: i0, i1, j0, j1, nz
+      use hidden_mpi_vars, only: inode
       implicit none
 
       ! Set module to private and make vars explicitly public
@@ -219,8 +224,7 @@
       end subroutine init_arrays_boundary !]
 !----------------------------------------------------------------------
       subroutine set_bry_all  ![
-      use param
-      use scalars
+      use param, only: east_exchng, north_exchng, south_exchng
       implicit none
 
       integer :: itrc

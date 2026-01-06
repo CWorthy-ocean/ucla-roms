@@ -354,12 +354,19 @@
 !!===========================================================
 !! Purpose :   Initialisation of the BEC biogeochemical model
 !!===========================================================
-
-      use param
-      use grid
-      use bgc_io
-      use bgc_shared_vars
-      use bec2_vars
+      use grid, only: rmask
+      use tracers, only:
+     &     idiatc, idiatchl, idiatfe, idiatsi,
+     &     idiazc, idiazchl, idiazfe, ispc, ispcaco3, ispchl, ispfe
+      use param, only: mynode
+      use bgc_shared_vars, only: bgc_idx
+      use bec2_vars, only:
+     &     bec2_diag_2d, bec2_diag_3d, ifrac, landmask,
+     &     lflux_gas_co2, lflux_gas_o2
+#if defined Ncycle_SY
+     &     , lflux_gas_n2o, lflux_gas_n2
+# endif
+     &     , liron_flux, lsource_sink, ph_srf, press
 
       implicit none
 

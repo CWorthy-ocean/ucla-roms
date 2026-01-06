@@ -3,14 +3,22 @@
       ! all analytical routines contained in this module
 
 #include "cppdefs.opt"
-
-      use param
-      use ocean_vars
-      use grid
-      use scalars
-      use tracers
-      use mixing
-      use scalars
+      use ocean_vars, only: zeta, ubar, vbar, u, v, z_w, hz
+      use grid, only: xr, pm, f
+      use mpi_exchanges, only: exchange_xxx
+      use dimensions, only: nx, ny, nz
+      use tracers, only: t
+      use mixing, only: akt, akv
+      use scalars, only:
+     &     akv_bak, forw_start, iic, ntstart, akt_bak, g, rho0
+      use param, only: isalt, itemp
+#ifdef FILAMENT_IDEAL
+     &     , hd
+#endif
+!     For Filament example case:
+#ifndef NONLIN_EOS
+      use eos_vars, only: tcoef
+#endif
 
       implicit none
       private
@@ -37,9 +45,7 @@
 
 ! ----------------------------------------------------------------------
       subroutine ana_init ![
-
-      use boundary
-      use eos_vars
+      use ocean_vars, only: z_r
 
       implicit none
 
@@ -51,8 +57,7 @@
 ! ----------------------------------------------------------------------
       subroutine ana_init_generic(istr,iend,jstr,jend) ![
 
-      use param
-      use boundary
+      use boundary, only: nt
       implicit none
 
       ! input
@@ -212,10 +217,10 @@
 ! ----------------------------------------------------------------------
       subroutine ana_smflux_tile(istr,iend,jstr,jend) ![
 
-      use param
-      use surf_flux !, only: sustr,svstr
-      use grid
-      use scalars
+      use surf_flux, only: sustr,svstr
+      use param, only:
+     &     east_exchng, ieast, iwest, jnorth, jsouth,
+     &     north_exchng, south_exchng, west_exchng
 
       implicit none
       integer istr,iend,jstr,jend, i,j
@@ -237,11 +242,11 @@
       subroutine ana_srflux_tile(istr,iend,jstr,jend)  ![
 
 ! Set kinematic surface solar shortwave radiation flux "srflx"
-! [degC m/s] using an analytical expression.
-      use param
+!     [degC m/s] using an analytical expression.
       use surf_flux, only: srflx
-      use grid
-      use scalars
+      use param, only:
+     &     east_exchng, ieast, iwest, jnorth, jsouth,
+     &     north_exchng, south_exchng, west_exchng
 
       implicit none
       integer istr,iend,jstr,jend, i,j
@@ -258,11 +263,11 @@
       subroutine ana_stflux_tile(istr,iend,jstr,jend, itrc)  ![
 
 ! Set kinematic surface flux of tracer type variables "stflx" (tracer
-! units m/s) using analytical expressions.
-      use param
+!     units m/s) using analytical expressions.
       use surf_flux, only: stflx
-      use grid
-      use scalars
+      use param, only:
+     &     east_exchng, ieast, iwest, jnorth, jsouth,
+     &     north_exchng, south_exchng, west_exchng
 
       implicit none
       integer istr,iend,jstr,jend, itrc, i,j

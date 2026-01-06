@@ -11,23 +11,23 @@
       integer,parameter        :: nrpf          = 12        ! total recs per file
 
 
-      ! edit variable name and time name to match input netcdf file if necessary:          
+      ! edit variable name and time name to match input netcdf file if necessary:
       type (ncforce) :: nc_sst  = ncforce(vname='sst' ,tname='sst_time'  )     ! sea-surface temperature (SST) data
       type (ncforce) :: nc_sss  = ncforce(vname='sss' ,tname='sss_time'  )     ! sea-surface salinity (SSS) data
       type (ncforce) :: nc_sdic = ncforce(vname='sDIC',tname='sDIC_time' )     ! sea-surface DIC data
       type (ncforce) :: nc_salk = ncforce(vname='sALK',tname='sALK_time' )     ! sea-surface ALK data
 
-      ! Diagnose virtual surface fluxes of additional tracers :   
+      ! Diagnose virtual surface fluxes of additional tracers :
       ! for MARBL, indexes of the DIC and Alk tracers are 10, 11, 12, and 13
       ! for BEC  , indexes of the DIC and Alk tracers are 8 and 9
-      integer, parameter :: trc2diag(nt) = [0,0,1,0,0,0,0,1,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] 
+      integer, parameter :: trc2diag(nt) = [0,0,1,0,0,0,0,1,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 
-      ! Restoring time-scale. coefficient expressed kinematically as piston velocity (m/s): 
+      ! Restoring time-scale. coefficient expressed kinematically as piston velocity (m/s):
       real,public,parameter :: dSSTdt = 7.777/(100.*86400.)  ! SST correction     (required QCORRECTION)
-      real,public,parameter :: dSSSdt = 7.777/(100.*86400.)  ! SSS correction     (required SFLX_CORR)  
+      real,public,parameter :: dSSSdt = 7.777/(100.*86400.)  ! SSS correction     (required SFLX_CORR)
       real,public,parameter :: dCdt   = 7.777/(100.*86400.)  ! DIC/Alk correction (required CFLX_CORR)
       ! Diagnose restoring surface fluxes  :
-      integer, parameter :: rst2diag(nt) = [0,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]                      
+      integer, parameter :: rst2diag(nt) = [0,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 
       ! interpolate forcing from coarser input grid (=1) or not (=0)
       integer :: interp_frc = 0 ! For SST and SSS correction

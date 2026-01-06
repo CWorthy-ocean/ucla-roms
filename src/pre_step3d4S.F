@@ -2,9 +2,9 @@
 #ifdef SOLVE3D
                                     ! Note that arrays A2d(1,1:4) in
       subroutine pre_step3d (tile)  ! the call just below are repeated
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: a3d, a2d
       implicit none                 ! within the list of agruments to
       integer tile                  ! use the same memory for vertical
                                     ! and horizontal scratch arrays.
@@ -28,23 +28,37 @@
 # endif
      &                                                              )
 
-      use dimensions
-      use param
-      use river_frc
-      use wec_frc
+      use river_frc, only:
+     &     iriver, riv_depth, riv_uvel, riv_vvel,
+     &     river_source, riv_uflx, riv_vol, riv_trc, riv_vflx
 #ifdef NHMG
-      use nhmg
-      use mg_grids, mggrid => grid
-      use mg_tictoc
+      use ocean_vars, only:
+     &     nhdu, nhdv, nhdw,
+     &     nh_ubar, nh_vbar, nh_wcor, w
+      use nhmg, only: iprec1, iprec2, halo, nhmg_solve
+      use mg_grids, only: mggrid => grid
 #endif
       use surf_flux, only: sustr, svstr
-      use tracers,   only: iTandS, t
-      use diagnostics                     ! needed for compute_horiz_uv_terms.h below
-      use coupling
-      use grid
-      use mixing
-      use ocean_vars
-      use scalars
+      use tracers, only: iTandS, t
+      use coupling, only: r_d
+      use mpi_exchanges, only: exchange_xxx
+      use grid, only:
+     &     pn, pm, umask, vmask, fomn, dn_u, dm_v, pn_u, pm_v
+#if (defined CURVGRID && defined UV_ADV)
+     &     ,dmde, dndx
+#endif
+      use mixing, only: akt, akv
+      use param, only:
+     &     east_exchng, ieast, iwest, jnorth, jsouth,
+     &     north_exchng, south_exchng, west_exchng, lm, mm,
+     &     padd_e, padd_x
+#ifdef NHMG
+      use mg_namelist, only: surface_neumann
+#endif
+      use ocean_vars, only: wi, we, flxv, flxu, hz, z_w, u, v
+      use scalars, only:
+     &     n, dt, forw_start, iic, nnew, nrhs, nstp, nt,
+     &     rdrg, vonkar, zob, ntstart
 
       implicit none
       integer istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
@@ -776,8 +790,8 @@
 ! not affect any model results, other than "CPPS" signature saved
 ! as a global attribute in output netCDF files.
 
-      use param
-      use strings
+      use param, only: mynode
+      use strings, only: cpps, max_opt_size
       implicit none
       integer ierr, is,ie, lenstr
 

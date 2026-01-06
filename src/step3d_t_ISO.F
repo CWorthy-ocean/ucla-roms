@@ -19,9 +19,9 @@ c--# define CONST_TRACERS
                                   ! Note that arrays A2d(1,1:4) within
       subroutine step3d_t(tile)   ! the list of agruments in call below
 
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: a2d, a3d
 
       implicit none               ! are repeated to use the same memory
       integer tile                ! for vertical and horizontal scratch
@@ -52,26 +52,47 @@ c--# define CONST_TRACERS
 #  endif
 # endif
      &                                                             )
-
-      use param
-      use pipe_frc
-      use cdr_frc, only: cdr_nprf, cdr_icdr,
-     &     cdr_source, cdr_iloc, cdr_jloc, cdr_flx, cdr_prf
-      use river_frc
+      use pipe_frc, only: pidx, pipe_source, pipe_idx, pipe_trc,
+     & pipe_prf, pipe_flx
+#if defined CDR_FORCING && defined MARBL
+      use cdr_frc, only: cdr_nprf, cdr_icdr, cdr_source, cdr_iloc,
+     &      cdr_jloc, cdr_flx, cdr_prf, cdr_flx_3d_ALK, cdr_flx_3d_DIC,
+     &      forcing_3d, ncdr
+#endif
+      use river_frc, only: iriver, riv_depth, riv_uvel, riv_vvel,
+     & river_source, riv_uflx, riv_vol, riv_trc, riv_vflx
       use surf_flux, only: stflx, srflx
-      use tracers
+      use tracers, only: t, itands
 #ifdef MARBL
-      use marbl_driver, only: marbldrv_column_physics
+      use marbl_driver, only: marbldrv_column_physics, iALK, iDIC
 #endif
-      use diagnostics
-      use eos_vars
-      use grid
-      use mixing
-      use ocean_vars
-      use scalars
+      use grid, only: umask, vmask, pn, pm, rmask, nx, ny, nz, dn_u, dm_v
+      use param, only: mynode
+      use mpi_exchanges, only: exchange_xxx
+      use mixing, only:
+     &     east_exchng, ieast, isalt, itemp, iwest,
+     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
+#ifdef LMD_NONLOCAL
+     &     , ghat
+#endif
+     &     , akt
+#ifdef LMD_KPP
+     &     , swr_frac
+#endif
+#ifdef ADV_ISONEUTRAL
+     &     , diff3u, diff3v
+#endif
+
+      use ocean_vars, only: flxu, flxv, z_w, hz, we, wi, z_r
+      use scalars, only: n, dt, nnew, nrhs, nt, nstp
 #ifdef UPSCALING
-      use upscale_output
+      use upscale_output, only:
+     &     do_upscale, calc_forcing_rates, wrt_upscale
 #endif
+#ifdef ADV_ISONEUTRAL
+      use eos_vars, only: drdx, drde, idrz
+#endif
+
 
       implicit none
       integer icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k!, td
@@ -831,24 +852,51 @@ c**               cff=1./(z_r(i,j,k+1)-z_r(i,j,k))
         endif
 # endif
 
+#if defined CDR_FORCING && defined MARBL
         if (cdr_source) then
-          ! Loop over cdr release locations in this subdomain
-          ! The global sum over all cdr_prf for each tracer should be 1.
-          ! cdr_flux unit is [C/s]
-          do cidx=1,cdr_nprf
-            icdr = cdr_icdr(cidx)
-            i = cdr_iloc(cidx)
-            j = cdr_jloc(cidx)
-            if (icdr==0) then
+
+          if (forcing_3d) then
+            if (itrc == iALK) then
+              do k=1,nz
+                do j=1,ny
+                  do i=1,nx
+                    t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)
+     &                +dt*pm(i,j)*pn(i,j)*cdr_flx_3d_ALK(i,j,k)
+                  enddo
+                enddo
+              enddo
+            else if (itrc == iDIC) then
+              do k=1,nz
+                do j=1,ny
+                  do i=1,nx
+                    t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)
+     &                +dt*pm(i,j)*pn(i,j)*cdr_flx_3d_DIC(i,j,k)
+                  enddo
+                enddo
+              enddo
+            endif
+
+          else ! forcing_3d
+            ! Loop over cdr release locations in this subdomain
+            ! The global sum over all cdr_prf for each tracer should be 1.
+            ! cdr_flux unit is [C/s]
+            do cidx=1,cdr_nprf
+              icdr = cdr_icdr(cidx)
+              i = cdr_iloc(cidx)
+              j = cdr_jloc(cidx)
+              if (icdr==0) then
                print *, "LOST AT LOCATION",mynode,i,j,cidx,cdr_nprf
-            end if
-            do k=1,nz
-              t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)
+              end if
+              do k=1,nz
+                t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)
      &           +dt*pm(i,j)*pn(i,j)*
      &            cdr_prf(cidx,itrc,k)*cdr_flx(icdr,itrc)
+              enddo
             enddo
-          enddo
-        endif
+          endif ! forcing_3d
+
+        endif ! cdr_source
+#endif
 
         do j=jstr,jend
 
@@ -1092,10 +1140,6 @@ c??         enddo
 
       do itrc=1,nt
         call t3dbc_tile (istr,iend,jstr,jend, itrc, wrk1)
-# ifdef DIAGNOSTICS
-!       if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag)
-!    &    call set_diags_t_bc(itrc,td)
-# endif
       enddo     !<-- itrc
 
 # if defined(MARBL)
@@ -1126,8 +1170,8 @@ c??         enddo
 ! model results, other than signature in global attribute "CPPS" in
 ! the output netCDF files.
 
-      use param
-      use strings
+      use param, only: mynode
+      use strings, only: cpps, max_opt_size
 
       implicit none
       integer ierr, is,ie, lenstr

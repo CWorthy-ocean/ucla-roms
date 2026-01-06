@@ -5,8 +5,8 @@
       ! ========================================
 
       ! coded by Jeroen Molemaker
-      use param
-      use hidden_mpi_vars
+      use param, only: llm, mmm, n, lm, mm
+      use hidden_mpi_vars, only: inode, jnode, np_eta, np_xi
 
       implicit none
       private

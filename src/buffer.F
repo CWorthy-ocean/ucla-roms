@@ -2,7 +2,7 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only: lm, mm
       implicit none
 
       !  Buffer array to allow reshaping input/output data for compatibility
@@ -29,7 +29,7 @@
 
       !----------------------------------------------------------------
       subroutine init_arrays_buffer  ![
-      use scalars
+      use scalars, only: init, n
       implicit none
 
       allocate( buff((Lm+5)*(Mm+5)*(N+1)) ); buff=init

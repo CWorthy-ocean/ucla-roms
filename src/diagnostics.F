@@ -5,16 +5,31 @@
 
 #include "cppdefs.opt"
 
-      use dimensions
-      use netcdf
-      use tracers
-      use ocean_vars
-      use scalars
-      use hidden_mpi_vars
-      use nc_read_write
-      use roms_read_write
-      use grid
-      use tides
+      use netcdf, only:
+     &     nf90_double, nf90_global, nf90_nofill,
+     &     nf90_put_att, nf90_set_fill, nf90_noerr,
+     &     nf90_write, nf90_inq_varid, nf90_close, nf90_open
+      use tracers, only: wrt_t_dia, t_vname, t
+      use ocean_vars, only: flxu, flxv, u, v, z_w, hz, wi, we
+      use scalars, only: nt
+      use scalars, only:
+     &     dt, iic, tdays, time, nrhs, n, nnew
+      use hidden_mpi_vars, only:
+     &     east_msg_exch, north_msg_exch,
+     &     south_msg_exch, west_msg_exch
+      use nc_read_write, only: ncwrite, ncread
+      use roms_read_write, only:
+     &     diag_avg_output, diagnostic_opt, bfx,
+     &     bfy, dn_xu, dn_yv, dn_zr, eta_v, xi_u,
+     &     dn_tm, dn_xr, dn_yr, eta_rho, xi_rho,
+     &     store_string_att, create_file
+      use dimensions, only: nz, nx, ny, i0, i1, j0, j1
+      use param, only: lm, mm, ieast, iwest, jnorth, jsouth, mynode
+      use grid, only:
+     &     pn, pm,
+     &     umask
+      use mpi_exchanges, only: exchange_xxx
+      use grid, only: vmask, rmask
 
       implicit none
       private
@@ -760,9 +775,6 @@
       end subroutine diag_t_adv_vc4  !]
 ! ----------------------------------------------------------------------
       subroutine calc_diag_pflux(p) ![
-      use coupling
-      use param
-      use eos_vars
       implicit none
       !! W => kg m2 s-3
       !!  p dz => m3 s-2, u*p*dz => m4 s-3, rho0*u*p*dz=> kg m s-3 = W/m
@@ -866,7 +878,6 @@
       ! Update diagnostics averages
       ! The average is always scaled properly throughout
       ! reset navg_diag=0 after an output of the average
-      use param
       implicit none
 
       ! local
@@ -897,8 +908,6 @@
       ! as of now, this subroutine is called at the very beginning of step,
       ! before anything has been computed. Therefore, skip the first time
       ! Write diagnostics to file
-      use param
-      use nc_read_write
       implicit none
 
       ! local
@@ -959,7 +968,7 @@
       subroutine create_diagvars(ncid)  ![
       ! Add diagnostics variables to an opened netcdf file
 
-      use nc_read_write
+      use nc_read_write, only: nccreate
       implicit none
 
       !import/export
@@ -1106,8 +1115,7 @@
       subroutine wrt_diag_uv(ncid,record,ud,vd)  ![
       ! Write uv diagnostic vars to file
 
-      use param
-      use nc_read_write
+      use param, only: south_exchng, west_exchng
       implicit none
 
       !import/export
@@ -1145,8 +1153,6 @@
       subroutine wrt_diag_trc(ncid,record,trcd)  ![
       ! Write uv diagnostic vars to file
 
-      use param
-      use nc_read_write
       implicit none
 
       !import/export
@@ -1176,8 +1182,6 @@
       subroutine wrt_diag_pflx(ncid,record,up,vp)  ![
       ! Write pressure fluxes
 
-      use param
-      use nc_read_write
       implicit none
 
       !import/export

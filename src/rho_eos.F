@@ -4,9 +4,9 @@
 
 
       subroutine rho_eos(tidx)
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: nsub_e, nsub_x
       implicit none
       integer, intent(in) :: tidx
       integer,save :: tile=0
@@ -119,14 +119,31 @@
 ! interchangeable. >>
 !                                          John Wilkin, 29 July 92
 
-      use param
       use tracers, only: t
-      use coupling
-      use eos_vars
-      use grid
-      use mixing
-      use ocean_vars
-      use scalars
+      use coupling, only: rhos, rhoa
+#ifdef SPLIT_EOS
+      use eos_vars, only: qp2, rho1, qp1
+#else
+      use eos_vars, only: rho
+#endif
+#ifndef NONLIN_EOS
+      use eos_vars, only: T0, Tcoef
+#ifdef SALINITY
+     &     ,S0, Scoef
+#endif
+#endif
+
+      use grid, only: rmask
+      use param, only:
+     &     east_exchng, ieast, isalt, itemp, iwest,
+     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
+# if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
+  || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
+  || defined LMD_BKPP
+      use mixing, only: bvf
+#endif
+      use ocean_vars, only: z_r, hz, z_w
+      use scalars, only: g, n, rho0
 
       implicit none
 

@@ -9,6 +9,8 @@ MPI_WRAPPER ?=auto
 BUILD_MODE ?=regular
 # Keep pre-processed source code or not:
 KEEP_PPSRC ?=false
+# Allow additional FFLAGS to defaults without overriding them:
+USER_FFLAGS ?=
 ##############################
 #       FILE EXTENSIONS      #
 
@@ -114,7 +116,7 @@ ifeq ($(COMPILER),intel)
 	CPPFLAGS = -D__IFC -free -I${MPIHOME}/include -I${NETCDFHOME}/include
 else
         CPP = /usr/bin/cpp
-	CPPFLAGS =  -traditional -D__IFC -I${MPIHOME}/include -I${NETCDFHOME}/include
+	CPPFLAGS =  -traditional -D__IFC -Wno-invalid-pp-token -I${MPIHOME}/include -I${NETCDFHOME}/include
 endif
 
 #   Since we no longer keep preprocessed files after compilation, if you want to still
@@ -217,7 +219,7 @@ ifeq ($(USENHMG),true)
 	LCDF += $(NHMG_INC)
 endif
 
-
+FFLAGS+=$(USER_FFLAGS)
 # Compilation rules for file types:
 #   (used for every file until the final linking step)
 

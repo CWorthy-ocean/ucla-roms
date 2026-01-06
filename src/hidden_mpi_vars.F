@@ -11,7 +11,7 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only: mynode, nnodes, isw_corn, jsw_corn, np_eta, np_xi
       implicit none
 
 #ifdef MPI

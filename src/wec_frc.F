@@ -1669,20 +1669,6 @@ C$OMP BARRIER
 
       implicit none
 
-!# include "param"
-!# include "grid"
-!# include "scalars"
-# ifdef SOLVE3D
-!#  if defined WAVE_FRICTION && defined BODY_FRICTION
-!#   include "mixing"
-!#  endif
-# endif
-!# ifdef ANA_BRY
-!#   include "boundary"
-!# endif
-!# ifdef WKB_WWAVE
-!#   include "wkb_wwave.h"
-!# endif
 !----- Cigdem (Uorb => Uorb1)
       integer istr,iend,jstr,jend,i,j,imin,jmin
       real    cff,cff1,cff2,cff3,cff4,inv_g,khd,kh,umag,
@@ -1762,17 +1748,11 @@ C$OMP BARRIER
       do j=jstrR,jendR
         do i=istr,iendR
           ust2d(i,j)=0.5*(ustr2d(i-1,j)+ustr2d(i,j))
-# ifdef MASKING
-!    &                  *umask(i,j)
-# endif
         enddo
       enddo
       do j=jstr,jendR
         do i=istrR,iendR
           vst2d(i,j)=0.5*(vstr2d(i,j-1)+vstr2d(i,j))
-# ifdef MASKING
-!    &                  *vmask(i,j)
-# endif
         enddo
       enddo
 
@@ -2216,9 +2196,6 @@ c             vst_r(i,j,k)= ust_r(i,j,k)*wdre(i,j) ! test
 !# else
             ust(i,j,k)=0.5*( ust_r(i-1,j,k)
      &                        +ust_r(i,j,k))/fac2d(i,j)
-# ifdef MASKING
-!    &                  *umask(i,j)
-# endif
 !# endif
           enddo
         enddo
@@ -2230,9 +2207,6 @@ c             vst_r(i,j,k)= ust_r(i,j,k)*wdre(i,j) ! test
 !# else
             vst(i,j,k)=0.5*( vst_r(i,j-1,k)
      &                        +vst_r(i,j,k) )/fac2d(i,j)
-# ifdef MASKING
-!    &                  *vmask(i,j)
-# endif
 !# endif
           enddo
         enddo
@@ -2863,9 +2837,6 @@ c             vst_r(i,j,k)= ust_r(i,j,k)*wdre(i,j) ! test
 #   ifndef SURFACE_BREAK
       call exchange_2_tile (istr,iend,jstr,jend, brk3dx,N, brk3de,N)
 #   endif
-!#   if defined WAVE_FRICTION && defined BODY_FRICTION
-!      call exchange_2_tile (istr,iend,jstr,jend, frc3dx,N, frc3de,N)
-!#   endif
 #  endif
 # endif
 

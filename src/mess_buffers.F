@@ -2,7 +2,7 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only: lm, mm
       implicit none
 
 ! Note: these buffers are designed to accommodate MPI computational
@@ -22,7 +22,7 @@ C$OMP THREADPRIVATE(sn_SW,rv_SW, sendS,recvS, sn_SE,rv_SE)
 
 !----------------------------------------------------------------------
       subroutine init_arrays_mess_buffers  ![
-      use scalars
+      use scalars, only: init, n
       implicit none
 
       size_Z=16*(N+1); size_X=8*(N+1)*(Lm+4)   ! DevinD 8=2x4= 2 for margin, up to 4 different arrays

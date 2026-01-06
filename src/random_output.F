@@ -3,20 +3,24 @@
 
 #include "cppdefs.opt"
 
-      use param
-      use dimensions
-      use roms_read_write
-      use nc_read_write
-      use netcdf
-      use scalars
-      use ocean_vars
-      use diagnostics
+      use param, only: mynode
+      use dimensions, only: i0, i1, j0, j1, nz
+      use roms_read_write, only:
+     &     dn_tm, dn_xr, dn_xu, dn_yr, dn_yv,
+     &     eta_rho, eta_v, xi_rho, xi_u, create_file
+      use nc_read_write, only: nccreate, ncwrite
+      use netcdf, only:
+     &     nf90_noerr, nf90_write, nf90_open,
+     &     nf90_put_att, nf90_close
+      use scalars, only: dt, iic, knew, nnew, tdays, time
+      use ocean_vars, only: zeta, u, v
+      use error_handling, only: handle_netcdf_error
       implicit none
 
       private
 
 #include "random_output.opt"
-
+      character(len=13) :: module_name = "random_output"
       real    :: output_time = 0
       integer :: record = nrpf ! to trigger the first file creation
 
@@ -72,7 +76,7 @@
       ! Call wrt_random after completion of the time-step
       ! (After step3d_uv2)
       implicit none
-
+      character(len=10) :: sr_name = "wrt_random"
       ! local
       character(len=99),save :: fname
       integer,dimension(3)   :: start
@@ -93,9 +97,11 @@
         record = record+1
 
         ierr=nf90_open(fname,nf90_write,ncid)
-        if (ierr/=nf90_noerr)
-     &      call handle_ierr(ierr,'wrt_random, opening: ',fname)
-
+        if (ierr/=nf90_noerr) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          info="error opening "//fname,
+     &          context=module_name//"/"//sr_name)
+        end if
 !       ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)     ! set fill value - nf90_nofill for optimized writing
 
         ! always add time

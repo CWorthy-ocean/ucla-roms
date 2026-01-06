@@ -2,7 +2,10 @@
 
 #include "cppdefs.opt"
 
-      use param
+      use param, only:
+     &     isalt, lm, mm, east_exchng, ieast, itemp, iwest,
+     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng,
+     &     obc_east, obc_north, obc_south, obc_west
       implicit none
 
 ! This is include file "mixing"
@@ -78,8 +81,8 @@
 
       !----------------------------------------------------------------
       subroutine init_arrays_mixing  ![
-      use scalars
-      use tracers
+      use scalars, only: init, n, nt, visc2, tnu2, akv_bak, akt_bak
+      use tracers, only: itands
       implicit none
 
       integer :: itrc
@@ -167,7 +170,6 @@
 
 # if !defined LMD_MIXING && !defined BVF_MIXING && !defined PP_MIXING\
                          && !defined MY2_MIXING && !defined MY25_MIXING
-
       Akv=Akv_bak
 # else
       Akv=0.

@@ -8,7 +8,7 @@
 ! document  the model configuration (that is composition of names of
 ! source files at the moment when model was compiled).
 
-      use strings
+      use strings, only: max_opt_size
       implicit none
 
       integer, parameter :: iin=11, iout=12, max_string=128

@@ -3,10 +3,10 @@
                                          ! Setup S-coordinate system:
       subroutine set_scoord              ! input: theta_s, theta_b, hc
 
-      use param
-      use comm_vars
-      use scalars
-      use scoord
+      use param, only: mynode
+      use comm_vars, only: hmax, hmin
+      use scoord, only: hc, theta_b, theta_s, cs_w, cs_r
+      use scalars, only: n
 
       implicit none                      ! output: Cs_w(0:N), Cs_r(1:N)
 

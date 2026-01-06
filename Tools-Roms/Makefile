@@ -19,7 +19,7 @@ endif
 ALL = partit ncjoin ncjoin_mpi extract_data_join nc3to4z zslice sample
 #r2r_bry r2r_match_topo r2r_init
 
-all:	$(info MAKING ROMS TOOLS: ) mpc $(ALL)
+all:	$(info MAKING ROMS TOOLS: ) $(ALL)
 
 #install: $(ALL)
 #	mv $(ALL) ~/bin
@@ -47,11 +47,6 @@ NC3TO4Z = nc3to4z lenstr read_string
 NC3TO4Z := $(addsuffix $(OBJ_ext),$(NC3TO4Z))
 nc3to4z: $(NC3TO4Z)
 	$(LDR) $(FFLAGS) $(LDFLAGS) -o nc3to4z $(NC3TO4Z) $(LCDF)
-
-# mpc
-mpc: mpc$(UPF77_ext) Makefile
-	$(CPP) $(CPPFLAGS) -P mpc$(UPF77_ext) > ./mpc$(PPF77_ext)
-	$(CFT) $(FFLAGS) $(LDFLAGS) -o mpc ./mpc$(PPF77_ext)
 
 # extract_data_join
 EXTRACT_DATA_JOIN = ncjoin_mod extract_data_join  lenstr

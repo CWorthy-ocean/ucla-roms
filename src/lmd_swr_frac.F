@@ -3,9 +3,9 @@
 
       subroutine swr_frac (tile)
 
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: a2d
 
       implicit none
       integer tile
@@ -29,10 +29,10 @@
 ! output: swr_frac (in "mixing")  shortwave radiation fraction
 !
 
-      use param
-      use mixing
-      use ocean_vars
-      use mpi_exchanges
+      use scalars, only: n
+      use ocean_vars, only: hz
+      use mixing, only: swr_frac
+      use mpi_exchanges, only: exchange_xxx
 
       implicit none
       integer istr,iend,jstr,jend,     i,j,k, Jwt

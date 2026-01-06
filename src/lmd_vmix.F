@@ -3,9 +3,9 @@
 # define SMOOTH_RIG  /* local Ri number smoothing */
 
       subroutine lmd_vmix(tind)
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: a3d, a2d, ia2d
       implicit none
       integer,save :: tile=0
       integer      :: tind
@@ -44,12 +44,14 @@
 !             A Review and model with a nonlocal boundary layer
 !             parameterization.  Reviews of Geophysics, 32,363-403.
 
-      use param
       use tracers, only: t
-      use grid
-      use mixing
-      use ocean_vars
-      use scalars
+      use grid, only: umask, vmask
+      use mixing, only: bvf
+      use param, only:
+     &     east_exchng, ieast, isalt, itemp, iwest,
+     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
+      use ocean_vars, only: z_r, u, v, z_w
+      use scalars, only: n, akv_bak, pi, akt_bak
 
       implicit none
 
@@ -382,21 +384,21 @@ c----#  define tind nstp
 
       do j=jstr,jend
         do i=istr,iend
-          Kv(i,j,N)=Kv(i,j,N-1)
-          Ks(i,j,N)=Ks(i,j,N-1)
-          Kt(i,j,N)=Kt(i,j,N-1)
-          Kv(i,j,0)=Kv(i,j,  1)
-          Ks(i,j,0)=Ks(i,j,  1)
-          Kt(i,j,0)=Kt(i,j,  1)
+          Kv(i,j,N)=Kv(i,j,N-1) + Akv_bak
+          Ks(i,j,N)=Ks(i,j,N-1) + Akt_bak(isalt)
+          Kt(i,j,N)=Kt(i,j,N-1) + Akt_bak(itemp)
+          Kv(i,j,0)=Kv(i,j,  1) + Akv_bak
+          Ks(i,j,0)=Ks(i,j,  1) + Akt_bak(isalt)
+          Kt(i,j,0)=Kt(i,j,  1) + Akt_bak(itemp)
         enddo
       enddo
       ! vertical smoothing of interior mixing
       do k=1,N-1
         do j=jstr,jend
           do i=istr,iend
-            Kv(i,j,k)=0.5*Kv(i,j,k)+0.25*Kv(i,j,k-1)+0.25*Kv(i,j,k+1)
-            Kt(i,j,k)=0.5*Kt(i,j,k)+0.25*Kt(i,j,k-1)+0.25*Kt(i,j,k+1)
-            Ks(i,j,k)=0.5*Ks(i,j,k)+0.25*Ks(i,j,k-1)+0.25*Ks(i,j,k+1)
+            Kv(i,j,k)=0.5*Kv(i,j,k)+0.25*Kv(i,j,k-1)+0.25*Kv(i,j,k+1) + Akv_bak
+            Kt(i,j,k)=0.5*Kt(i,j,k)+0.25*Kt(i,j,k-1)+0.25*Kt(i,j,k+1) + Akt_bak(itemp)
+            Ks(i,j,k)=0.5*Ks(i,j,k)+0.25*Ks(i,j,k-1)+0.25*Ks(i,j,k+1) + Akt_bak(isalt)
           enddo
         enddo
       enddo
@@ -408,12 +410,12 @@ c----#  define tind nstp
         do j=jstr,jend
           do i=istr,iend
 !           Akv(i,j,k)=Kv(i,j,k)
-            AKv(i,j,k)=0.5*Kv(i,j,k)+0.25*Kv(i,j,k-1)+0.25*Kv(i,j,k+1)
+            AKv(i,j,k)=0.5*Kv(i,j,k)+0.25*Kv(i,j,k-1)+0.25*Kv(i,j,k+1) + Akv_bak
 !           Akt(i,j,k,itemp)=Kt(i,j,k)
-            AKt(i,j,k,itemp)=0.5*Kt(i,j,k)+0.25*Kt(i,j,k-1)+0.25*Kt(i,j,k+1)
+            AKt(i,j,k,itemp)=0.5*Kt(i,j,k)+0.25*Kt(i,j,k-1)+0.25*Kt(i,j,k+1) + Akt_bak(itemp)
 #  ifdef SALINITY
 !           Akt(i,j,k,isalt)=Ks(i,j,k)
-            AKt(i,j,k,isalt)=0.5*Ks(i,j,k)+0.25*Ks(i,j,k-1)+0.25*Ks(i,j,k+1)
+            AKt(i,j,k,isalt)=0.5*Ks(i,j,k)+0.25*Ks(i,j,k-1)+0.25*Ks(i,j,k+1) + Akt_bak(isalt)
 #  endif
           enddo
         enddo

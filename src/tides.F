@@ -2,17 +2,20 @@
 
 #include "cppdefs.opt"
 
-      use param
-      use scalars                                          ! For iic, ntstart, deg2rad
-      use nc_read_write
-      use roms_read_write
-      use mpi_exchanges
-      use grid
+      use param, only:
+     &     east_exchng, north_exchng, south_exchng, west_exchng,
+     &     mynode, ieast, iwest, jnorth, jsouth, lm, mm
+      use scalars, only: g, pi, dt, time
+! For iic, ntstart, deg2rad, only:
+      use roms_read_write, only:
+     &     force_info, frctype, max_frc,
+     &     tide_opt, frcfile, store_string_att
+      use grid, only: xr, yr
 
       implicit none
 
       private                                              ! default variables private to module
-
+      character(len=5) :: module_name = "tides"
 #include "tides.opt"
 
       real, dimension(:)    ,allocatable :: ftide
@@ -29,7 +32,6 @@
 !-----------------------------------------------------------------------
       subroutine init_tides  ![
       ! allocate tidal variables and read tidal data
-
       implicit none
 
       character(len=30) :: string
@@ -89,9 +91,8 @@
       ! and compute_auxilliary_bounds in the same subroutine as they both
       ! declare and compute. Fortan doesn't allow.
 
-      use hidden_mpi_vars
-      use private_scratch  ! this isn't needed?
-
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: nsub_e, nsub_x
       implicit none
 
       integer :: tile
@@ -104,8 +105,11 @@
 !-----------------------------------------------------------------------
       subroutine set_tides_tile(istr,iend,jstr,jend)  ![
 
-      use boundary
-      use grid
+      use boundary, only:
+     &     zeta_west, ubar_west, vbar_west, zeta_east,
+     &     ubar_east, vbar_east, zeta_south, ubar_south, vbar_south,
+     &     zeta_north, ubar_north, vbar_north
+
       implicit none
 
       ! input/outputs
@@ -238,7 +242,7 @@
           else
             do j=jstrR-1,jendR ! DevinD does jstrR-1 not go beyond computational margin?
               do i=istrR-1,iendR
-                ptide(i,j)= ptide(i,j)+
+                ptide(i,j)= ptide(i,j)
      &          + ptide_r(i,j,itide)*cos(omT)-ptide_i(i,j,itide)*sin(omT)
               enddo
             enddo
@@ -253,10 +257,15 @@
       subroutine read_tides  ![
       ! read tides from forcing file. Only read once at first timestep.
 
-      use netcdf
-      use dimensions
+      use netcdf, only:
+     &     nf90_global, nf90_nowrite, nf90_open,
+     &     nf90_inq_varid, nf90_get_var, nf90_get_att
+      use dimensions, only: i0, i1, j0, j1
+      use error_handling, only: handle_netcdf_error, handle_configuration_error
+      use mpi_exchanges, only: exchange_xxx
+      use nc_read_write, only: ncread
       implicit none
-
+      character(len=10) :: sr_name = "read_tides"
       ! local
       integer :: i,j
       integer :: ierr, var_file_indx, ncid, var_id, itide, found_rec
@@ -274,9 +283,11 @@
       do while ((found_rec==0).and.(var_file_indx <= max_frc))
 
         ierr=nf90_open(frcfile(var_file_indx), nf90_nowrite, ncid)
-        if(ierr/=0)
-     &     call handle_ierr(ierr,'tides :: opening forcing file')
-
+        if(ierr/=0) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          context=module_name//"/"//sr_name,
+     &          info="error opening tidal forcing file")
+        end if
         ierr=nf90_inq_varid(ncid, 'omega', var_id)
         if(ierr/=0) then
           var_file_indx = var_file_indx +1
@@ -286,7 +297,9 @@
       enddo
 
       if (found_rec==0) then
-        error stop 'tides :: tide input data not found'
+         call handle_configuration_error(
+     &        context=module_name//"/"//sr_name,
+     &        info="tide input data not found")
       endif
 
       start = 1                                                      ! netcdf start indices
@@ -295,8 +308,11 @@
 
         ierr=nf90_inq_varid(ncid, 'omega', var_id)
         ierr=nf90_get_var(ncid,var_id,ftide(itide),(/itide/))
-        if(ierr/=0) call handle_ierr(ierr,'tides :: read omega')
-
+        if(ierr/=0) then
+           call handle_netcdf_error(netcdf_status=ierr,
+     &          info="unable to get var 'omega' from tidal file",
+     &          context=module_name//"/"//sr_name)
+        end if
         start(3) = itide
 
         if (bry_tides) then
@@ -350,7 +366,7 @@
       subroutine make_tides  ![
       ! Construct an analytical tidal forcing
 
-      use dimensions
+      use dimensions, only: nx, ny
       implicit none
 
       ! local

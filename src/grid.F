@@ -8,16 +8,22 @@
       ! spherical
       ! non-traditional (horizontal coriolis components
 
-      use param
-      use netcdf
-      use nc_read_write
-      use dimensions
-      use roms_read_write
-      use pipe_frc
-      use scalars
-      use mpi_exchanges
+      use param, only:
+     &     mynode, isw_corn, jsw_corn, lm, mm,
+     &     ocean_grid_comm, obc_east, obc_north, obc_south, obc_west,
+     &     ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, isalt, itemp
+      use netcdf, only:
+     &     nf90_noerr, nf90_nowrite, nf90_write,
+     &     nf90_open, nf90_strerror, nf90_inq_varid, nf90_get_var,
+     &     nf90_close
+      use nc_read_write, only: ncread
+      use dimensions, only: i0, i1, j0, j1, gnx, gny, nx, ny, nz
+      use roms_read_write, only:
+     &     grdname, dn_xr, dn_yr, eta_rho,
+     &     xi_rho, dn_tm, particle_opt, nrrec, create_file, store_string_att
+      use scalars, only: may_day_flag, init
+      use mpi_exchanges, only: exchange_xxx
       implicit none
-
 !
 ! h         Model bottom topography (depth [m] at RHO-points.)
 ! f, fomn   Coriolis parameter [1/s] and compound term f/[pm*pn]
@@ -173,7 +179,12 @@
       end subroutine init_arrays_grid  !]
 !----------------------------------------------------------------------
       subroutine ana_grid ![
-!   Provide analytical definition of coordinates, grid scale, coriolis, and depth
+!     Provide analytical definition of coordinates, grid scale, coriolis, and depth
+#ifdef ANA_PIPES
+      use pipe_frc, only: pipe_source, pipe_fraction, pipe_idx
+#elif defined(ANA_RIVER_USWC)
+      use param, only: llm, mmm
+#endif
       implicit none
 
 #include "ana_grid.h"
@@ -203,8 +214,10 @@
 ! Arguments: ncid    NetCDF unit-ID of NetCDF file, which must be
 !                            already opened and in definition mode;
 
-      use nc_read_write
-      use netcdf
+      use nc_read_write, only: nccreate
+      use netcdf, only:
+     &     nf90_char, nf90_double, nf90_def_var,
+     &     nf90_put_att
       implicit none
 
       ! inport/export
@@ -310,14 +323,16 @@
       ! Arguments: ncid    netCDF unit-ID of NetCDF file, which must be
       !                            already opened and in definition mode
 
-      use netcdf
-      use nc_read_write
+      use netcdf, only: nf90_put_var
+      use nc_read_write, only: ncwrite
+      use error_handling, only: handle_configuration_error, handle_netcdf_error
 
       implicit none
       ! input
       integer,intent(in) :: ncid
       ! local
       integer :: varid, ierr, ncdf_write
+      character(len=8) :: sr_name = "wrt_grid"
 
 #if defined MPI && !defined PARALLEL_FILES
       if (mynode == 0) then
@@ -334,13 +349,17 @@
      &                                         'F')
 #endif
           if (ierr /= nf90_noerr) then
-            call handle_ierr(ierr, 'wrt_grid spherical')
+             call handle_netcdf_error(
+     &            netcdf_status=ierr,
+     &            context=sr_name,
+     &            info="failed to put variable `spherical`")
           endif
-        else
-          print *,'spherical var not found'
-          call handle_ierr(ierr, 'wrt_grid spherical')
+       else
+          call handle_netcdf_error(
+     &            netcdf_status=ierr,
+     &            context=sr_name,
+     &            info="spherical var not found")
         endif
-        if (ierr /= nf90_noerr)  goto 99                   !--> ERROR
 
 #ifndef SPHERICAL
 ! Physical Dimensions of Model Domain, xl,el (Cartesian grid only).
@@ -349,23 +368,32 @@
         if (ierr == nf90_noerr) then
           ierr=nf90_put_var(ncid, varid, xl)
           if (ierr /= nf90_noerr) then
-            call handle_ierr(ierr, 'wrt_grid xl ')
+             call handle_netcdf_error(
+     &            netcdf_status=ierr,
+     &            context=sr_name,
+     &            info="failed to put variable `xl`")
           endif
-        else
-          call handle_ierr(ierr, 'wrt_grid no xl found')
+       else
+          call handle_netcdf_error(
+     &            netcdf_status=ierr,
+     &            context=sr_name,
+     &            info="`xl` var not found")
         endif
-        if (ierr /= nf90_noerr)  goto 99                   !--> ERROR
-
         ierr=nf90_inq_varid(ncid, 'el', varid)
         if (ierr == nf90_noerr) then
           ierr=nf90_put_var(ncid, varid, el)
           if (ierr /= nf90_noerr) then
-            call handle_ierr(ierr, 'wrt_grid el')
+             call handle_netcdf_error(
+     &            netcdf_status=ierr,
+     &            context=sr_name,
+     &            info="failed to put variable `el`")
           endif
-        else
-          call handle_ierr(ierr, 'wrt_grid no el found')
+       else
+          call handle_netcdf_error(
+     &         netcdf_status=ierr,
+     &         context=sr_name,
+     &         info="`el` var not found")
         endif
-        if (ierr /= nf90_noerr)  goto 99                   !--> ERROR
 #endif
 
 
@@ -400,24 +428,18 @@
       endif
 #endif
 
-      return
- 99   may_day_flag=3
-      return
-
-  1   format(/1x,'### ERROR: wrt_grid :: Cannot find variable ''',
-     &             A, ''' within netCDF' /25x, 'file ''', A,'''.'/)
-  2   format(/1x,'### ERROR: wrt_grid :: Cannot write variable ''',
-     &               A, ''' into netCDF' /25x, 'file ''', A,'''.'/)
-
       end subroutine wrt_grid  !]
 !----------------------------------------------------------------------
       subroutine get_grid  ![
-      ! read in grid data from NetCDF file or define analytical grid
+! read in grid data from NetCDF file or define analytical grid
+      use error_handling, only: handle_netcdf_error, handle_configuration_error
       implicit none
 
       character*1 char1
       integer :: ierr, ncid, varid, lstr, checkdims
       integer,dimension(4) :: start
+      character(len=8) :: sr_name = "get_grid"
+      character(len=200) :: error_info = ''
 
 
 #ifdef ANA_GRID
@@ -430,12 +452,19 @@
       ierr=nf90_open(grdname, nf90_nowrite, ncid)
       if (ierr == nf90_noerr) then
         ierr=checkdims (ncid, grdname, varid)
-        if (ierr. ne. nf90_noerr) goto 99
+        if (ierr. ne. nf90_noerr) then
+           call handle_netcdf_error(
+     &          netcdf_status=ierr,
+     &       context=sr_name,
+     &       info="Cause of termination: netCDF input.")
+        end if
       else
-        write(*,'(/1x,4A/12x,A)')  '### ERROR: get_grid :: Cannot ',
-     &          'open input NetCDF file ''', trim(grdname), '''.',
-     &                                            nf90_strerror(ierr)
-        goto 99                                          !--> ERROR
+         write(error_info, *)  'Cannot ',
+     &        'open input NetCDF file ''', trim(grdname), '''.'
+         call handle_netcdf_error(
+     &        netcdf_status=ierr,
+     &       context=sr_name,
+     &       info=error_info)
       endif
 
 ! Logical switch for spherical grid configuration:
@@ -444,49 +473,99 @@
       if (ierr == nf90_noerr) then
         ierr=nf90_get_var(ncid, varid, char1)
         if (ierr /= nf90_noerr) then
-          write(*,2) 'spherical', trim(grdname), nf90_strerror(ierr)
-          goto 99                                        !--> ERROR
-        endif
+           write(error_info, *)
+     &          "Cannot read variable ",
+     &          "'spherical'",
+     &          " from netCDF file ",
+     &          trim(grdname),
+     &          "."
+           call handle_netcdf_error(
+     &          netcdf_status=ierr,
+     &          context=sr_name,
+     &          info=error_info)
+        end if
+
       else
-        write(*,1) 'spherical', trim(grdname)
-        goto 99                                          !--> ERROR
+         write(error_info, *)
+     &        'Cannot find variable ''',
+     &        'spherical',
+     &        ''' within netCDF file ''',
+     &        trim(grdname),
+     &        '''.'
+         call handle_netcdf_error(
+     &        netcdf_status=ierr,
+     &          context=sr_name,
+     &          info=error_info)
       endif
 
       if (char1=='t' .or. char1=='T') then
 # ifdef SPHERICAL
         mpi_master_only write(*,'(/1x,A/)') 'Spherical grid detected.'
 # else
-        write(*,'(/1x,2A/24x,A/)')   '### ERROR: get_grid :: ',
+        write(error_info, *)
      &          'Spherical grid file detected, but CPP-switch',
      &                                 'SPHERICAL is not set.'
-        goto 99                                          !--> ERROR
+           call handle_configuration_error(
+     &          context=sr_name,
+     &          info=error_info)
 # endif
       else
 
 ! Physical dimensions of the basin in XI- and ETA-directions:
-
         ierr=nf90_inq_varid (ncid, 'xl', varid)
         if (ierr == nf90_noerr) then
           ierr=nf90_get_var(ncid, varid, xl)
           if (ierr /= nf90_noerr) then
-            write(*,2) 'xl', trim(grdname), nf90_strerror(ierr)
-            goto 99                                      !--> ERROR
+           write(error_info, *)
+     &            "Cannot read variable ",
+     &            "xl",
+     &            " from netCDF file ",
+     &            trim(grdname),
+     &            "."
+           call handle_netcdf_error(
+     &          netcdf_status=ierr,
+     &          context=sr_name,
+     &          info=error_info)
           endif
-        else
-          write(*,1) 'xl', trim(grdname)
-          goto 99                                        !--> ERROR
+       else
+         write(error_info, *)
+     &        "Cannot find variable ",
+     &         "'xl'",
+     &         " within netCDF file ",
+     &         trim(grdname),
+     &         "."
+         call handle_netcdf_error(
+     &        netcdf_status=ierr,
+     &        context=sr_name,
+     &        info=error_info)
         endif
 
         ierr=nf90_inq_varid (ncid, 'el', varid)
         if (ierr == nf90_noerr) then
           ierr=nf90_get_var(ncid, varid, el)
           if (ierr /= nf90_noerr) then
-            write(*,2) 'el', trim(grdname), nf90_strerror(ierr)
-            goto 99                                      !--> ERROR
+           write(error_info, *)
+     &            "Cannot read variable ",
+     &            "'el'",
+     &            " from netCDF file ",
+     &            trim(grdname),
+     &            "."
+           call handle_netcdf_error(
+     &          netcdf_status=ierr,
+     &          context=sr_name,
+     &          info=error_info)
           endif
-        else
-          write(*,1) 'el', trim(grdname)
-          goto 99                                        !--> ERROR
+       else
+          write(error_info, *)
+     &         "Cannot find variable ",
+     &         "'el'",
+     &         " within netCDF file ",
+     &         trim(grdname),
+     &         "."
+          call handle_netcdf_error(
+     &         netcdf_status=ierr,
+     &        context=sr_name,
+     &        info=error_info)
         endif
       endif
 
@@ -545,19 +624,16 @@
         endif
 #endif
       else
-        write(*,'(1x,4A/12x,A,1x,A,I4)')   '### ERROR: get_grid :: ',
+        write(error_info, *)
      &                'Cannot close file ''', trim(grdname), '''.',
-     &                 nf90_strerror(ierr) MYID
-        goto 99
+     &        nf90_strerror(ierr) MYID
+        call handle_netcdf_error(
+     &       netcdf_status=ierr,
+     &       context=sr_name,
+     &       info=error_info)
+
       endif
       return                                     !--> NORMAL RETURN
-
-   1  format(/1x, '### ERROR: get_grid :: Cannot find variable ''', A,
-     &                          ''' within netCDF file ''', A, '''.'/)
-   2  format(/1x, '### ERROR: get_grid :: Cannot read variable ''', A,
-     &                     ''' from netCDF file ''', A, '''.' /12x,A/)
-  99  may_day_flag=2
-      return                                             !--> ERROR
 
 #endif /* ifdef ANA_GRID */
 

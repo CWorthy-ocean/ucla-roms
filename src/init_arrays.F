@@ -2,9 +2,9 @@
 
       subroutine init_arrays
 
-      use param
-      use hidden_mpi_vars
-      use private_scratch
+      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+      use hidden_mpi_vars, only: inode, jnode
+      use private_scratch, only: n2d, ia2d, init_arrays_private_scratch
 
       implicit none
 
@@ -39,30 +39,35 @@
       ! Required modules
       ! ----------------
 
-      use param
-      use wec_frc
-      use bulk_frc
-      use surf_flux ! for: sustr, svstr, stflx, sst_data, sss_data
-      use tracers   ! iTandS, t, t_avg
-      use coupling
-      use eos_vars
-      use grid
-      use mixing
-      use ocean_vars
-      use basic_output
-      use scalars
-      use mpi
-      use work_mod
-      use boundary
-      use buffer
-      use mess_buffers
-      use dimensions
-      use flux_frc
-      use pipe_frc
-      use cdr_frc
-      use bgc_shared_vars
-      use bgc_forces
-      use bgc_io
+      use surf_flux, only: sustr, svstr, stflx, init_arrays_surf_flx
+      use tracers, only: iTandS, t, t_avg
+      use coupling, only: init_arrays_coupling
+      use eos_vars, only: init_arrays_eos_vars
+      use grid, only: init_arrays_grid
+      use mixing, only: init_arrays_mixing
+      use ocean_vars, only: we, wi, init_arrays_ocean
+#ifdef NHMG
+     &     , w
+#endif
+      use basic_output, only: init_avg_arrays
+      use work_mod, only: init_arrays_work_mod
+      use boundary, only: init_arrays_boundary
+      use buffer, only: init_arrays_buffer
+      use param, only:
+     &     ieast, iwest, jnorth, jsouth,
+     &     north_exchng, south_exchng, west_exchng, east_exchng,
+     &     n
+      use mess_buffers, only: init_arrays_mess_buffers
+      use flux_frc, only: init_arrays_flux_frc
+      use pipe_frc, only: pipe_source, init_arrays_pipes
+#if defined(BIOLOGY_BEC2) || defined(MARBL)
+      use bgc_shared_vars, only: init_arrays_bgc_shared_vars
+      use bgc_forces, only: init_arrays_bgc_forces
+      use bgc_io, only: init_arrays_bgc_frc
+#endif
+#ifdef BULK_FRC
+      use bulk_frc, only: init_arrays_bulk_frc
+#endif
 
       implicit none
       integer, intent(in) :: istr, iend, jstr, jend
@@ -166,8 +171,6 @@
 #endif
 
       if (pipe_source) call init_arrays_pipes
-
-!     if (cdr_source) call init_cdr_frc ! must be after get_grid
 
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       call init_arrays_bgc_shared_vars

@@ -14,14 +14,23 @@ forcing: filename
      input_data/sample_flux_frc.nc
      input_data/sample_wwv_riv.nc
      input_data/roms_bry_trace.nc
-     cdr_release.nc
+     input_data/sample_flux_bgc.nc
+     input_data/sample_bry_bgc.nc
+     input_data/roms_bgcbry.nc
+     input_data/roms_default_bgcbry.nc
+     input_data/roms_LFfrc.nc
 
 initial: NRREC  filename
           1
-     input_data/roms_init_trace.nc
+     input_data/roms_init_bgc.nc
 
 output_root_name:
      cdr
+
+MARBL_biogeochemistry: namelist  tracer_output_list   diagnostic_output_list
+      marbl_in
+      marbl_tracer_output_list
+      marbl_diagnostic_output_list
 
 lateral_visc:   VISC2,    VISC4    [m^2/sec for all]
                  0.       0.
@@ -33,11 +42,11 @@ v_sponge:           V_SPONGE [m^2/sec]
                    1.
 
 vertical_mixing:  Akv  Akt1  Akt2
-                  0.0  0.0   0.0
+                  0.0  0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
 
 
 tracer_diff2: TNU2(1:NT)           [m^2/sec for all]
- 0. 0. 0. 0. 0. 0. 0. 0. 0.
+0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
 
 bottom_drag:     RDRG [m/s],  RDRG2,  Zob [m],  Cdb_min, Cdb_max
                   0.E-4       1.0E-3   1.E-2     1.E-4    1.E-2
