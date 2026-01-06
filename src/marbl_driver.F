@@ -309,11 +309,11 @@
 !     Apply virtual fluxes for the carbon system
          if ( trim(t_vname(itot))=="DIC" ) then
             t_ana_frc( itot)=2
-         elseif ( trim(t_vname(itot))=="DIC_ALT_CO2" ) then
-            t_ana_frc( itot)=2
          elseif ( trim(t_vname(itot))=="ALK" ) then
             t_ana_frc( itot)=2
          elseif ( trim(t_vname(itot))=="ALK_ALT_CO2" ) then
+            t_ana_frc( itot)=2
+         elseif ( trim(t_vname(itot))=="DIC_ALT_CO2" ) then
             t_ana_frc( itot)=2
          else
             t_ana_frc( itot)=1

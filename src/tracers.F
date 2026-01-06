@@ -120,7 +120,7 @@
         endif ! if(t_ana_frc(itrc)==0)
 
 ! NOTE: PD why was this commented on main? relevant change?
-        call exchange_xxx(stflx)
+!       call exchange_xxx(stflx)
 
       enddo
 
