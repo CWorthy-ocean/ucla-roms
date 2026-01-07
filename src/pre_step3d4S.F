@@ -59,6 +59,9 @@
       use scalars, only:
      &     n, dt, forw_start, iic, nnew, nrhs, nstp, nt,
      &     rdrg, vonkar, zob, ntstart
+#ifdef DIAGNOSTICS
+      use diagnostics ! needed for compute_horiz_rhs_uv_terms.h below
+#endif
 
       implicit none
       integer istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
