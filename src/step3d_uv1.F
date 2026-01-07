@@ -47,7 +47,7 @@
       use surf_flux, only: sustr, svstr
       use coupling, only: r_d, rufrc, rvfrc
       use grid, only:
-     &     nx, nz, fomn, umask, vmask, pn, pm, dn_u,
+     &     nx, ny, nz, fomn, umask, vmask, pn, pm, dn_u,
      &     dm_u, dn_v, dm_v, dn_r, dm_r, pn_u, pm_v
 #if (defined CURVGRID && defined UV_ADV)
      &     , dmde,dndx
