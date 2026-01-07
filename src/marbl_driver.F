@@ -52,6 +52,9 @@
 #ifdef NHY_FORCING
       use bgc_forces                  , only: nhy
 #endif
+#ifdef FESEDFLUX_FORCING
+      use bgc_forces                  , only: fesedflux
+#endif
       use ocean_vars                  , only: Hz, z_r, z_w
       use error_handling              , only: handle_configuration_error
 
@@ -302,7 +305,19 @@
          t_tname(itot)=''
          wrt_t     (itot)=.false.
          wrt_t_avg (itot)=.false.
-         t_ana_frc( itot)=1
+!         t_ana_frc( itot)=1
+!     Apply virtual fluxes for the carbon system
+         if ( trim(t_vname(itot))=="DIC" ) then
+            t_ana_frc( itot)=2
+         elseif ( trim(t_vname(itot))=="ALK" ) then
+            t_ana_frc( itot)=2
+         elseif ( trim(t_vname(itot))=="ALK_ALT_CO2" ) then
+            t_ana_frc( itot)=2
+         elseif ( trim(t_vname(itot))=="DIC_ALT_CO2" ) then
+            t_ana_frc( itot)=2
+         else
+            t_ana_frc( itot)=1
+         endif
 
       end do
       ! Read user file to determine which tracers to write out

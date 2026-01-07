@@ -10,7 +10,7 @@
       ! Modules needed:
       use tracers, only: t
       use surf_flux, only: sustr, svstr, stflx, srflx, sss, sst, apply_surf_field_corr
-      use scalars, only: cp, rho0, day2sec, n, nrhs
+      use scalars, only: cp, rho0, day2sec, n, nrhs, nt
       use roms_read_write, only: ncforce, flux_frc_opt, set_frc_data,
      &     store_string_att
       use dimensions, only: i0, i1, j0, j1

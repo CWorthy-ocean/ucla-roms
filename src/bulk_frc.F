@@ -71,14 +71,6 @@
         nc_swrad%coarse = 1
       endif
 
-      ! Print user options (bulk_frc.opt) to netcdf attributes
-      ! Note: to turn bulk forces off, edit cppdefs!
-      bulk_frc_opt = ''
-      if (interp_frc==1) then
-        call store_string_att(bulk_frc_opt, 'Interpolation ON')
-      else
-        call store_string_att(bulk_frc_opt, 'Interpolation OFF')
-      endif
 
       end subroutine init_arrays_bulk_frc  !]
 ! ----------------------------------------------------------------------
@@ -186,20 +178,21 @@
       use surf_flux, only:
      &     srflx, vwnd, uwnd, stflx, sustr_r, svstr_r,
      &     sustr, svstr, apply_surf_field_corr
-      use tracers, only: t
+      use tracers, only: t, iTandS, t_ana_frc
       use grid, only: rmask, umask, vmask
       use mixing, only:
      &     east_exchng, ieast, isalt, itemp, iwest,
      &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
       use ocean_vars, only: u, v
-      use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar
+      use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar, nt
 
       implicit none
 
       ! input/outputs
       integer,intent(in)  :: istr,iend,jstr,jend
 
-      integer i,j, IterMax,iter
+      integer i, j, IterMax, iter
+      integer itrc, itrc2read, itrc2writ
       real a
       real rho0i
       real TseaC,TseaK,Qsea
@@ -225,8 +218,8 @@
       real blk_Rgas,blk_ZW,blk_ZT,blk_ZQ,blk_beta,blk_Cpa,blk_Zabl
       parameter (blk_Rgas=287.1)
       parameter (blk_ZW=10.0)  ! The height at which the atm. Wind is taken
-      parameter (blk_ZT=10.0)  ! The height at which the atm. Temp is taken
-      parameter (blk_ZQ=10.0)  ! The height at which the atm. Humi.is taken
+      parameter (blk_ZT=10.0)   ! The height at which the atm. Temp is taken
+      parameter (blk_ZQ=10.0)   ! The height at which the atm. Humi.is taken
       parameter (blk_Zabl=600.0)
       parameter (blk_beta=1.2)
       parameter (blk_Cpa=1004.67)
@@ -734,7 +727,7 @@
 # ifdef SALINITY
 !  Total surface salt flux
 !
-          evap(i,j)=-cp*hflat/Hlv
+          evap(i,j)=-cp*hflat/Hlv !NOTE doesn't need to be 2d?
           ! Divide prate by 100.*3600.*24. to convert from [cm/day] to [m/s]
           stflx(i,j,isalt)=(evap(i,j)- ( prate(i,j)/(100.*3600.*24.) ) )*t(i,j,N,nrhs,isalt)
 #endif
@@ -744,6 +737,20 @@
           stflx(i,j,isalt)=stflx(i,j,isalt)*rmask(i,j)
 # endif
 # endif
+
+#if defined BIOLOGY_BEC2 || defined MARBL
+!!!! Virtual DIC/ALK flux
+       do itrc = iTandS+1,NT
+        if (t_ana_frc(itrc)==2) then
+          stflx(i,j,itrc)=(evap(i,j)-(prate(i,j)/(100.*3600.*24.))) *
+     &                            t(i,j,N,nrhs,itrc)
+# ifdef MASKING
+          stflx(i,j,itrc)=stflx(i,j,itrc)*rmask(i,j)
+# endif
+        endif
+       enddo
+#endif /* BIOLOGY_BEC2  || MARBL */
+
 !
 !  Save for the calculation of wind stress
 !
@@ -778,7 +785,94 @@
 !--------------------------------------------------------------
 ! Flux corrections to surface net heat flux and salt flux.
 !--------------------------------------------------------------
-      call apply_surf_field_corr
+# ifdef SFLX_CORR
+# ifdef SALINITY
+          stflx(i,j,isalt)=stflx(i,j,isalt) -dSSSdt*(
+     &           t(i,j,N,nrhs,isalt) - sss(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       if (wrt_rstflx) then
+           rstflx(i,j,isalt) = -dSSSdt*(
+     &           t(i,j,N,nrhs,isalt) - sss(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       endif
+# endif
+# endif
+
+!
+!--------------------------------------------------------------
+! Flux correction to surface Alk/DIC
+!--------------------------------------------------------------
+#if defined CFLX_CORR && defined MARBL
+!NOTE can avoid this loop with new bgc changes
+!!!!!!!      DIC
+       do itrc = iTandS+1,NT
+         if ( trim(t_vname(itrc))=="DIC" ) then
+            itrc2writ=itrc
+         elseif ( trim(t_vname(itrc))=="DIC_ALT_CO2" ) then
+            itrc2read=itrc
+         endif
+      enddo
+
+          stflx(i,j,itrc2read)=stflx(i,j,itrc2read) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+          stflx(i,j,itrc2writ)=stflx(i,j,itrc2writ) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       if (wrt_rstflx) then
+           rstflx(i,j,itrc2read) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+           rstflx(i,j,itrc2writ) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       endif
+
+!!!!!!!      ALK
+       do itrc = iTandS+1,NT
+         if ( trim(t_vname(itrc))=="ALK" ) then
+            itrc2writ=itrc
+         elseif ( trim(t_vname(itrc))=="ALK_ALT_CO2" ) then
+            itrc2read=itrc
+         endif
+       enddo
+          stflx(i,j,itrc2read)=stflx(i,j,itrc2read) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+          stflx(i,j,itrc2writ)=stflx(i,j,itrc2writ) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       if (wrt_rstflx) then
+           rstflx(i,j,itrc2read) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+           rstflx(i,j,itrc2writ) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       endif
+
+# endif
+
 !---------------------------------------------------------------
 ! Restrict stflx to prevent surface temperature to go below -1.8
 ! degrees C.
