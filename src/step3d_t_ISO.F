@@ -62,7 +62,11 @@ c--# define CONST_TRACERS
       use river_frc, only: iriver, riv_depth, riv_uvel, riv_vvel,
      & river_source, riv_uflx, riv_vol, riv_trc, riv_vflx
       use surf_flux, only: stflx, srflx
-      use tracers, only: t, itands
+      use tracers, only: t, itands, wrt_t_dia
+#ifdef DIAGNOSTICS
+      use diagnostics, only: diag_trc, calc_diag, Tdiag, VFlxD, ZFlx, td,
+     &     tadvx, tadvy, tadvz, tmixx, tmixy, tmixz
+#endif
 #ifdef MARBL
       use marbl_driver, only: marbldrv_column_physics, iALK, iDIC
 #endif
