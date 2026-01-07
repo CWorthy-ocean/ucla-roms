@@ -40,11 +40,14 @@
 # ifdef WEC
       use wec_frc, only: compute_wec_rhs_uv_terms
 # endif
-      use diagnostics, only: diag_uv, u_prev, v_prev
+# ifdef DIAGNOSTICS
+      use diagnostics, only: diag_uv, u_prev, v_prev, calc_diag, Udiag, Vdiag,
+     &     dxdyi_u, dxdyi_v, icori, idiss, ipgr, iadv, ivmix
+# endif
       use surf_flux, only: sustr, svstr
       use coupling, only: r_d, rufrc, rvfrc
       use grid, only:
-     &     nx, fomn, umask, vmask, pn, pm, dn_u,
+     &     nx, nz, fomn, umask, vmask, pn, pm, dn_u,
      &     dm_u, dn_v, dm_v, dn_r, dm_r, pn_u, pm_v
 #if (defined CURVGRID && defined UV_ADV)
      &     , dmde,dndx

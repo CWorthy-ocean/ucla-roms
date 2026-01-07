@@ -43,7 +43,7 @@
       use coupling, only: r_d
       use mpi_exchanges, only: exchange_xxx
       use grid, only:
-     &     pn, pm, umask, vmask, fomn, dn_u, dm_v, pn_u, pm_v
+     &     pn, pm, umask, vmask, fomn, dn_u, dm_v, pn_u, pm_v, nx, ny
 #if (defined CURVGRID && defined UV_ADV)
      &     ,dmde, dndx
 #endif
