@@ -27,7 +27,11 @@
 !            the large-scale ocean circulation, JCP, 105, 333-338.
 
       use coupling, only: rufrc, rvfrc
-      use grid, only: pm, pn, dm_r, dn_r, pmask, dm_p, dn_p
+      use grid, only: pm, pn, dm_r, dn_r, pmask, dm_p, dn_p, nx, ny,
+     &     dxdyi_u, dxdyi_v
+#ifdef DIAGNOSTICS
+      use diagnostics ! needed for diag_uv, calc_diag, Udiag, Vdiag, ihmix
+#endif
       use param, only:
      &     east_exchng, ieast, iwest, jnorth, jsouth,
      &     north_exchng, south_exchng, west_exchng

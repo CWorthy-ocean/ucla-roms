@@ -34,7 +34,10 @@
 #ifdef WEC
       use wec_frc, only: cff1 => cff_ext, cff2 => cff_ext2
 #endif
-      use grid, only: f, pm, pn, umask, dn_u, vmask, dm_v
+      use grid, only: f, pm, pn, umask, dn_u, vmask, dm_v, dxdyi_u, dxdyi_v, dxdyi
+#ifdef DIAGNOSTICS
+      use diagnostics ! needed for diag_uv, calc_diag, Udiag, Vdiag, ipgr, diag_pflx, calc_diag_pflux
+#endif
       use tides, only: pot_tides, ptide
       use param, only:
      &     east_exchng, north_exchng, south_exchng,
