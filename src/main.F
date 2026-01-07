@@ -319,6 +319,9 @@ CR      write(*,*)  ' -2' MYID
       use scalars, only:
      &     dt, iic, iif, knew, kstp, nfast, nnew, nrhs,
      &     nstp, ntstart, sec2day, start_time, tdays, time
+#ifdef DIAGNOSTICS
+      use diagnostics, only: diag_uv, diag_trc, diag_pflx, do_diagnostics
+#endif
       use sponge_tune, only: ub_tune
       use particles, only: floats
       use surf_flux, only: wrt_smflx, wrt_stflx
