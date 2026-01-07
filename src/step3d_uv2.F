@@ -1,4 +1,5 @@
 
+
 #include "cppdefs.opt"
 
 #ifdef SOLVE3D
@@ -41,8 +42,11 @@
 
       use coupling, only: du_avg1, dv_avg1, du_avg2, dv_avg2
       use grid, only:
-     &     nz, dn_u, umask, dm_v, vmask, dm_u, dn_v, f,
+     &     nz, nx, dn_u, umask, dm_v, vmask, dm_u, dn_v, f,
      &     dm_r, pn, pm
+#ifdef DIAGNOSTICS
+      use diagnostics ! needed for diag_uv, calc_diag, Udiag, Vdiag, etc.
+#endif
       use ocean_vars, only: z_r, wi
 #ifdef NHMG
      &     , w
