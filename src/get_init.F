@@ -37,6 +37,10 @@
      &     nf90_open
       use nc_read_write, only: ncread
       use roms_read_write, only: ininame
+#ifdef DIAGNOSTICS
+      use diagnostics, only: diag_pflx
+#endif
+      use sponge_tune, only: ub_tune
       use grid, only:
      &     riv_umask, riv_vmask, rmask, umask, vmask
       use dimensions, only: i0, i1, j0, j1, nz
