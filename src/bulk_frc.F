@@ -13,7 +13,7 @@
 
 #include "bulk_frc.opt"
 
-      real,allocatable,public,dimension(:,:) ::  tair             ! air temp
+      real,allocatable,public,dimension(:,:) ::  tair             ! air temp, used in step3d_t to add the heat of rain water
       real,allocatable,public,dimension(:,:) ::     Q             ! SPECIFIC humidity (kg/kg) (not relative), qair in old code
       real,allocatable,public,dimension(:,:) :: prate             ! prate (precipitation rate) - 'rain' variable in old code
       real,allocatable,public,dimension(:,:) :: evap              ! evap (evaporation rate)
@@ -185,14 +185,14 @@
       ! ----------------
       use surf_flux, only:
      &     srflx, vwnd, uwnd, stflx, sustr_r, svstr_r,
-     &     sustr, svstr, apply_surf_field_corr
+     &     sustr, svstr, apply_surf_field_corr, swflx
       use tracers, only: t
       use grid, only: rmask, umask, vmask
       use mixing, only:
      &     east_exchng, ieast, isalt, itemp, iwest,
      &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
       use ocean_vars, only: u, v
-      use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar
+      use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar, cmday2ms
 
       implicit none
 
@@ -735,8 +735,11 @@
 !  Total surface salt flux
 !
           evap(i,j)=-cp*hflat/Hlv
+
           ! Divide prate by 100.*3600.*24. to convert from [cm/day] to [m/s]
-          stflx(i,j,isalt)=(evap(i,j)- ( prate(i,j)/(100.*3600.*24.) ) )*t(i,j,N,nrhs,isalt)
+          swflx(i,j) = prate(i,j)*cmday2ms-evap(i,j)
+          ! This is the old way of adding salt flux          
+!          stflx(i,j,isalt)=(evap(i,j)- ( prate(i,j)/(100.*3600.*24.) ) )*t(i,j,N,nrhs,isalt)
 #endif
 # ifdef MASKING
           stflx(i,j,itemp)=stflx(i,j,itemp)*rmask(i,j)

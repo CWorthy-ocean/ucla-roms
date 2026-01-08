@@ -96,6 +96,8 @@ c--# define CONST_TRACERS
       use diagnostics, only: diag_trc, calc_diag, tdiag, tmixx, tadvx, tadvy,
      &  tmixy, tadvy, tadvz, td, vflxd, zflx, tmixz
 #endif
+      use bulk_frc, only: tair
+      use surf_flux, only: swflx
       implicit none
       integer icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k!, td
       real, dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: WC,FC,CF,DC
@@ -934,6 +936,17 @@ c**               cff=1./(z_r(i,j,k+1)-z_r(i,j,k))
             enddo
           enddo
 
+          ! Add in the heat of rain water. If using BULK_FRC, use the 2m air temperature;
+          ! If using FLUX_FRC, just use the local water temperature
+          do i=istr,iend
+             t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc) +dt*pm(i,j)*pn(i,j)
+     &            *swflx(i,j)
+#ifdef BULK_FRC
+     &            *tair(i,j)
+#else
+     &            *t(i,j,k,nnew,itrc)
+#endif
+          enddo
 
 
 ! Start computation of vertical diffusion: add surface forcing fluxes
