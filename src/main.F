@@ -95,7 +95,7 @@ C$OMP END MASTER                         ! is in uniform state]. This
       use upscale_output, only: do_upscale, init_upscale
       use random_output, only: do_random, init_random
       use cstar_output, only: do_cstar, init_cstar
-      use frc_output, only: do_frc
+      use frc_output, only: do_frc, init_frc
       use analytical, only: ana_vmix
 #ifdef DIAGNOSTICS
       use diagnostics, only: diag_uv,diag_trc,diag_pflx, init_diagnostics
@@ -327,7 +327,7 @@ CR      write(*,*)  ' -2' MYID
       use surf_flux, only: wrt_smflx, wrt_stflx
       use random_output, only: do_random, wrt_random
       use cstar_output, only: do_cstar, wrt_cstar
-      use frc_output, only: do_frc
+      use frc_output, only: do_frc, wrt_frc
       use zslice_output, only: do_zslice
       use basic_output, only:
      &     calc_avg_ocean_vars, wrt_avg_ocean_vars,
