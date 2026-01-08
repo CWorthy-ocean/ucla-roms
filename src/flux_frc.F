@@ -104,10 +104,10 @@
       ! 3) set short-wave radiation flux
       call set_srflux
 
-#ifdef SALINITY
-      ! 4) set water flux: stflx(isalt)
-      call set_swflux
-#endif
+!#ifdef SALINITY
+!      ! 4) set water flux: stflx(isalt)
+!      call set_swflux
+!#endif
 
       ! 5) Apply sst and sss corrections, if desired
       call apply_surf_field_corr
