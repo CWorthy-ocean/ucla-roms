@@ -337,7 +337,7 @@
       ierr = nf90_put_att(ncid,varid,'units','kg/kg')
 
       ! Input comes in units of:         cm day-1
-      ! Output is written in units of:   cm day-1
+      ! Output is written in units of:   m s-1
       varid = nccreate(ncid,'prate',(/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/),prec)
       ierr=nf90_put_att(ncid, varid, 'long_name',
      &           'precipitation rate')
