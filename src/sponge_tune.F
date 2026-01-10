@@ -11,16 +11,15 @@
      &     nf90_open, nf90_put_att, nf90_close
       use nc_read_write, only: nccreate, ncread, ncwrite
       use scalars, only: iic, tdays, time, dt
-      use dimensions, only: nx, ny
+      use dimensions, only: nx, ny, xi_rho, npx, npy
       use diagnostics, only: up, vp, diag_pflx
       use roms_read_write, only:
      &     ncforce, bfx, bfy, dn_tm, dn_xr,
-     &     dn_yr, xi_rho, bc_options, create_file, set_frc_data,
+     &     dn_yr, bc_options, create_file, set_frc_data,
      &     store_string_att
       use hidden_mpi_vars, only: inode, jnode
       use param, only:
      &     obc_east, obc_north, obc_south, obc_west,
-     &     east_exchng, north_exchng, south_exchng, west_exchng,
      &     mynode, np_eta, np_xi
       use error_handling, only: handle_netcdf_error
 
@@ -76,7 +75,7 @@
       !! max value based of cfl condition
 !     sp_mx = 0.06/(maxval(pm)*maxval(pn)*dt)
 
-      if (obc_west.and.(.not.west_exchng)) then
+      if (obc_west.and.inode.eq.0) then
         allocate(nc_pflx_w%vdata(ny,1,2))
         allocate(pflx_west(ny))
         pflx_west = 0
@@ -93,7 +92,7 @@
         allocate(ub_west_avg(ny))
         ub_west_avg = 0.
       endif
-      if (obc_east.and.(.not.east_exchng)) then
+      if (obc_east.and.inode.eq.np_xi-1) then
         allocate(nc_pflx_e%vdata(ny,1,2))
         allocate(pflx_east(ny))
         pflx_east = 0
@@ -104,7 +103,7 @@
           ub_east = 0.
         endif
       endif
-      if (obc_north.and.(.not.north_exchng)) then
+      if (obc_north.and.jnode.eq.np_eta-1) then
         allocate(nc_pflx_n%vdata(nx,1,2))
         allocate(pflx_north(nx))
         pflx_north = 0
@@ -115,7 +114,7 @@
           ub_north = 0.
         endif
       endif
-      if (obc_south.and.(.not.south_exchng)) then
+      if (obc_south.and.jnode.eq.0) then
         allocate(nc_pflx_s%vdata(nx,1,2))
         allocate(pflx_south(nx))
         pflx_south = 0
@@ -146,25 +145,25 @@
       !local
       integer:: i,j,ierr
 
-      if (obc_west.and.(.not.west_exchng)) then
+      if (obc_west.and.inode.eq.0) then
         call set_frc_data(nc_pflx_w,pflx_west)
         do j=1,ny
           if (abs(pflx_west(j))>100) pflx_west(j) = 0.
         enddo
       endif
-      if (obc_east.and.(.not.east_exchng)) then
+      if (obc_east.and.inode.eq.np_xi-1) then
         call set_frc_data(nc_pflx_e,pflx_east)
         do j=1,ny
           if (abs(pflx_east(j))>100) pflx_east(j) = 0.
         enddo
       endif
-      if (obc_south.and.(.not.south_exchng)) then
+      if (obc_south.and.jnode.eq.0) then
         call set_frc_data(nc_pflx_s,pflx_south)
         do i=1,nx
           if (abs(pflx_south(i))>100) pflx_south(i) = 0.
         enddo
       endif
-      if (obc_north.and.(.not.north_exchng)) then
+      if (obc_north.and.jnode.eq.np_eta-1) then
         call set_frc_data(nc_pflx_n,pflx_north)
         do i=1,nx
           if (rmask(i,ny+1)<1) pflx_north(i) = 0.
@@ -184,16 +183,16 @@
       integer :: pos
 
       pos = 2
-      if (obc_west.and.(.not.west_exchng)) then
+      if (obc_west.and.inode.eq.0) then
         cflx_west = up(pos,1:ny)
       endif
-      if (obc_east.and.(.not.east_exchng)) then
+      if (obc_east.and.inode.eq.npx-1) then
         cflx_east = up(nx-pos+1,1:ny)
       endif
-      if (obc_south.and.(.not.south_exchng)) then
+      if (obc_south.and.jnode.eq.0) then
         cflx_south = vp(1:nx,pos)
       endif
-      if (obc_north.and.(.not.north_exchng)) then
+      if (obc_north.and.jnode.eq.npy-1) then
         cflx_north = vp(1:nx,ny-pos+1)
       endif
 
@@ -220,26 +219,26 @@
       call set_pflx
       call comp_cflx
 
-      if (obc_south.and.(.not.south_exchng)) then
+      if (obc_south.and.jnode.eq.0) then
         ub_south = ub_south+alpha*(pflx_south-cflx_south)
         ub_south = max(ub_mn,ub_south)
         ub_south = min(ub_mx,ub_south)
 !       if (mynode==6) write(10,*),pflx_south(50),cflx_south(50),ub_south(50)
       endif
 
-      if (obc_north.and.(.not.north_exchng)) then
+      if (obc_north.and.jnode.eq.npy-1) then
         ub_north = ub_north-alpha*(pflx_north-cflx_north)
         ub_north = max(ub_mn,ub_north)
         ub_north = min(ub_mx,ub_north)
       endif
 
-      if (obc_west.and.(.not.west_exchng)) then
+      if (obc_west.and.inode.eq.0) then
         ub_west = ub_west+alpha*(pflx_west-cflx_west)
         ub_west = max(ub_mn,ub_west)
         ub_west = min(ub_mx,ub_west)
       endif
 
-      if (obc_east.and.(.not.east_exchng)) then
+      if (obc_east.and.inode.eq.npx-1) then
         ub_east = ub_east-alpha*(pflx_east-cflx_east)
         ub_east = max(ub_mn,ub_east)
         ub_east = min(ub_mx,ub_east)
@@ -268,13 +267,13 @@
       coef = 1./navg
 
       if (spn_avg) then
-        if (obc_south.and.(.not.south_exchng)) then
+        if (obc_south.and.jnode.eq.0) then
           cflx_south_avg = cflx_south_avg*(1-coef) + cflx_south*coef
           pflx_south_avg = pflx_south_avg*(1-coef) + pflx_south*coef
           ub_south_avg   =   ub_south_avg*(1-coef) +   ub_south*coef
         endif
 
-        if (obc_west.and.(.not.west_exchng)) then
+        if (obc_west.and.inode.eq.0) then
           cflx_west_avg = cflx_west_avg*(1-coef) + cflx_west*coef
           pflx_west_avg = pflx_west_avg*(1-coef) + pflx_west*coef
           ub_west_avg   =   ub_west_avg*(1-coef) +   ub_west*coef

@@ -5,7 +5,6 @@
 
       subroutine step3d_uv2(tile)
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: a2d
       implicit none
       integer tile
@@ -20,9 +19,8 @@
       use river_frc, only:
      &     iriver, riv_depth, riv_uvel, riv_vvel,
      &     river_source, riv_uflx, riv_vol, riv_vflx
-      use param, only:
-     &     east_exchng, ieast, iwest, jnorth, jsouth,
-     &     north_exchng, south_exchng, west_exchng
+      use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
+      use hidden_mpi_vars, only: inode, jnode
 
 #ifdef ADV_ISONEUTRAL
       use eos_vars, only: drdx, drde, idrz

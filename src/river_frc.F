@@ -9,13 +9,13 @@
 
 #include "cppdefs.opt"
 
-      use roms_read_write, only: ncforce, frcfile, set_frc_data, xi_rho
+      use roms_read_write, only: ncforce, frcfile, set_frc_data
       use nc_read_write, only: nccreate, ncread, ncwrite
       use scalars, only: nt
       use grid, only:
-     &     ana_grdname, dn_xr, dn_yr, eta_rho, xl,
+     &     ana_grdname, dn_xr, dn_yr, xl,
      &     grdname, pm, rmask, riv_umask, riv_vmask, xr
-      use dimensions, only: i0, i1, j0, j1, nx, ny
+      use dimensions, only: i0, i1, j0, j1, nx, ny, xi_rho, eta_rho
       use param, only: lm, mm, mynode, ocean_grid_comm
       use error_handling, only : handle_configuration_error, handle_netcdf_error, handle_local_error
 

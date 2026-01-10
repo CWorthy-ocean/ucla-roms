@@ -6,11 +6,12 @@
       use ocean_vars, only: zeta, ubar, vbar, u, v, z_w, hz
       use grid, only: xr, pm, f
       use mpi_exchanges, only: exchange_xxx
-      use dimensions, only: nx, ny, nz
+      use dimensions, only: nx, ny, nz, npx, npy
       use tracers, only: t
       use mixing, only: akt, akv
       use scalars, only:
      &     akv_bak, forw_start, iic, ntstart, akt_bak, g, rho0
+      use hidden_mpi_vars, only: inode, jnode
       use param, only: isalt, itemp
 #ifdef FILAMENT_IDEAL
      &     , hd
@@ -218,9 +219,7 @@
       subroutine ana_smflux_tile(istr,iend,jstr,jend) ![
 
       use surf_flux, only: sustr,svstr
-      use param, only:
-     &     east_exchng, ieast, iwest, jnorth, jsouth,
-     &     north_exchng, south_exchng, west_exchng
+      use param, only: ieast, iwest, jnorth, jsouth
 
       implicit none
       integer istr,iend,jstr,jend, i,j
@@ -244,9 +243,7 @@
 ! Set kinematic surface solar shortwave radiation flux "srflx"
 !     [degC m/s] using an analytical expression.
       use surf_flux, only: srflx
-      use param, only:
-     &     east_exchng, ieast, iwest, jnorth, jsouth,
-     &     north_exchng, south_exchng, west_exchng
+      use param, only: ieast, iwest, jnorth, jsouth
 
       implicit none
       integer istr,iend,jstr,jend, i,j
@@ -265,9 +262,7 @@
 ! Set kinematic surface flux of tracer type variables "stflx" (tracer
 !     units m/s) using analytical expressions.
       use surf_flux, only: stflx
-      use param, only:
-     &     east_exchng, ieast, iwest, jnorth, jsouth,
-     &     north_exchng, south_exchng, west_exchng
+      use param, only: ieast, iwest, jnorth, jsouth
 
       implicit none
       integer istr,iend,jstr,jend, itrc, i,j

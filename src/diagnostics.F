@@ -20,10 +20,11 @@
       use nc_read_write, only: ncwrite, ncread
       use roms_read_write, only:
      &     diag_avg_output, diagnostic_opt, bfx,
-     &     bfy, dn_xu, dn_yv, dn_zr, eta_v, xi_u,
-     &     dn_tm, dn_xr, dn_yr, eta_rho, xi_rho,
+     &     bfy, dn_xu, dn_yv, dn_zr,
+     &     dn_tm, dn_xr, dn_yr,
      &     store_string_att, create_file
-      use dimensions, only: nz, nx, ny, i0, i1, j0, j1
+      use dimensions, only:
+     &     nz, nx, ny, i0, i1, j0, j1, eta_v, xi_u, eta_rho, xi_rho
       use param, only: lm, mm, ieast, iwest, jnorth, jsouth, mynode
       use grid, only:
      &     pn, pm,
@@ -1114,8 +1115,7 @@
 ! ----------------------------------------------------------------------
       subroutine wrt_diag_uv(ncid,record,ud,vd)  ![
       ! Write uv diagnostic vars to file
-
-      use param, only: south_exchng, west_exchng
+      use hidden_mpi_vars, only: inode, jnode
       implicit none
 
       !import/export
@@ -1126,7 +1126,7 @@
       !local
       integer,   dimension(4) :: start    ! start vector for writing
 
-        if (.not.west_exchng) ud(1,:,:,:) = 0
+        if (inode.eq.0) ud(1,:,:,:) = 0
         start = (/1, bfy, 1, record/)
 
         call ncwrite(ncid,'u_pgr',ud(:,:,:,1),start)
@@ -1137,7 +1137,7 @@
         call ncwrite(ncid,'u_vmx',ud(:,:,:,6),start)
         call ncwrite(ncid,'u_cpl',ud(:,:,:,7),start)
 
-        if (.not.south_exchng) vd(:,1,:,:) = 0
+        if (jnode.eq.0) vd(:,1,:,:) = 0
         start = (/bfx, 1, 1, record/)
 
         call ncwrite(ncid,'v_pgr',vd(:,:,:,1),start)

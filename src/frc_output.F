@@ -6,11 +6,11 @@
 #include "cppdefs.opt"
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x,
      &     lm, mm, isalt, itemp, mynode
-      use dimensions, only: i0, i1, j0, j1
+      use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u
       use nc_read_write, only: nccreate, ncwrite
       use roms_read_write, only:
      &     dn_tm, dn_xr, dn_xu, dn_yr, dn_yv,
-     &     eta_rho, eta_v, xi_rho, xi_u, dn_zr, create_file
+     &     dn_zr, create_file
       use netcdf, only:
      &     nf90_double, nf90_write, nf90_put_att,
      &     nf90_open, nf90_close

@@ -4,7 +4,6 @@
 
       subroutine step3d_uv1(tile)
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: a3d, a2d
       implicit none
       integer tile
@@ -27,7 +26,7 @@
      &                                            ,rw
 # endif
      &                                                              )
-
+      use hidden_mpi_vars, only: inode, jnode
 # ifdef NHMG
       use ocean_vars, only:
      &     nh_ubar, nh_vbar, nh_wcor, nhdu,
@@ -52,9 +51,8 @@
 #endif
       use mixing, only: akv
       use param, only:
-     &     east_exchng, ieast, iwest, jnorth, jsouth,
-     &     north_exchng, south_exchng, west_exchng, lm, mm,
-     &     padd_e, padd_x
+     &     ieast, iwest, jnorth, jsouth,
+     &     lm, mm, padd_e, padd_x, np_xi, np_eta
       use ocean_vars, only: u, v, hz, flxu, flxv, we, wi, z_w
       use scalars, only: n, dt, nnew, nrhs, ntstart
 #ifdef EXCHANGE

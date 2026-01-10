@@ -5,12 +5,11 @@
 
 ! Set lateral boundary conditions for tracer field t(:,:,:,itrc)
 
-      use param, only:
-     &     east_exchng, north_exchng, south_exchng,
-     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
       use tracers, only: t
       use boundary, only: t_west, t_east, t_south, t_north
       use dimensions, only: nz
+      use hidden_mpi_vars, only: inode, jnode
       use grid, only: vmask, pm, pn, rmask, umask
       use ocean_vars, only: u, v
       use scalars, only: dt, n, nnew, nrhs, nstp

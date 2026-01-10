@@ -4,7 +4,6 @@
       subroutine visc3d
 
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: a2d
 
       implicit none
@@ -28,9 +27,8 @@
 
       use coupling, only: rufrc, rvfrc
       use grid, only: pm, pn, dm_r, dn_r, pmask, dm_p, dn_p, nx,ny
-      use param, only:
-     &     east_exchng, ieast, iwest, jnorth, jsouth,
-     &     north_exchng, south_exchng, west_exchng
+      use hidden_mpi_vars, only: inode, jnode
+      use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
       use mixing, only: visc2_r, visc2_p
       use ocean_vars, only: v, u, hz
       use scalars, only: dt, n, nstp

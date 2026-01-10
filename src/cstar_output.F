@@ -14,10 +14,9 @@
       use bgc_shared_vars, only:
      &     t, bgc_diag_2d, mynode, lm, mm,
      &     nr_bgc_diag_2d, vname_bgc_diag_2d, t_lname
-      use dimensions, only: i0, i1, j0, j1, nx, ny, nz
+      use dimensions, only: i0, i1, j0, j1, nx, ny, nz, eta_rho, xi_rho
       use roms_read_write, only:
-     &     dn_tm, dn_xr, dn_yr, dn_zr, eta_rho,
-     &     xi_rho, create_file
+     &     dn_tm, dn_xr, dn_yr, dn_zr, create_file
       use nc_read_write, only: nccreate, ncwrite
       use netcdf, only:
      &     nf90_noerr, nf90_write, nf90_double, nf90_open,

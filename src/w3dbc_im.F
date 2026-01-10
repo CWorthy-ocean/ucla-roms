@@ -3,9 +3,7 @@
 
       subroutine w3dbc_tile (istr,iend,jstr,jend,grad)
 
-      use param, only:
-     &     east_exchng, north_exchng, south_exchng,
-     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use param, only: ieast, iwest, jnorth, jsouth
       use boundary, only: w_west
       use grid, only: pm, pn, rmask
       use ocean_vars, only: w, u, v

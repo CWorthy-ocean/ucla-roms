@@ -35,7 +35,7 @@
       use netcdf, only:
      &     nf90_noerr, nf90_inquire,
      &     nf90_inquire_dimension, nf90_strerror
-      use roms_read_write, only: eta_rho, eta_v, xi_rho, xi_u
+      use dimensions, only: eta_rho, eta_v, xi_rho, xi_u
       use error_handling, only: handle_configuration_error, handle_netcdf_error
 
       implicit none
@@ -315,6 +315,9 @@ c$$$     &                            ''': must be', i5,1x, 'instead.'/)
       else                                 ! has the corresponding
         chk_Cs_r=.false.                   ! vertical dimension
       endif
+
+      chk_Cs_r = .false.
+      chk_Cs_w = .false.
 
       icount=0
       lfile=lenstr(fname)

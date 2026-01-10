@@ -4,7 +4,6 @@
       subroutine set_nudgcof (tile)  ! Set up nudging-to-climatology
 
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: a2d
 
       implicit none                  ! inverse time-scale coeffcients
@@ -15,10 +14,10 @@
       end
 
       subroutine set_nudgcof_tile (istr,iend,jstr,jend, wrk)
-
-      use param, only: isw_corn, jsw_corn, llm, mmm, mynode
-     &     , east_exchng, ieast, iwest, jnorth, jsouth,
-     &     north_exchng, south_exchng, west_exchng
+      use hidden_mpi_vars, only: inode, jnode
+      use param, only: isw_corn, jsw_corn, llm, mmm, mynode,
+     &     ieast, iwest, jnorth, jsouth
+      use dimensions, only: npx, npy
       use mixing, only:  sponge_size, visc2_r,
      &     visc2_p, diff2
       use scalars, only: nt

@@ -3,9 +3,8 @@
 #include "cppdefs.opt"
 
       use param, only:
-     &     isalt, lm, mm, east_exchng, ieast, itemp, iwest,
-     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng,
-     &     obc_east, obc_north, obc_south, obc_west
+     &     isalt, lm, mm, ieast, itemp, iwest,
+     &     jnorth, jsouth, obc_east, obc_north, obc_south, obc_west
       implicit none
 
 ! This is include file "mixing"

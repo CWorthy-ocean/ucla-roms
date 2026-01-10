@@ -4,10 +4,10 @@
 #include "cppdefs.opt"
 
       use param, only: mynode
-      use dimensions, only: i0, i1, j0, j1, nz
+      use dimensions, only: i0, i1, j0, j1, nz, eta_rho, eta_v, xi_rho, xi_u
       use roms_read_write, only:
      &     dn_tm, dn_xr, dn_xu, dn_yr, dn_yv,
-     &     eta_rho, eta_v, xi_rho, xi_u, create_file
+     &      create_file
       use nc_read_write, only: nccreate, ncwrite
       use netcdf, only:
      &     nf90_noerr, nf90_write, nf90_open,

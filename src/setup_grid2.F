@@ -3,7 +3,6 @@
 
       subroutine setup_grid2 (tile)
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: a2d
       implicit none
       integer tile
@@ -22,14 +21,14 @@
 ! boundaries.
 
       use param, only:
-     &     east_exchng, nnodes, north_exchng, south_exchng,
-     &     west_exchng,  ieast, iwest, jnorth, jsouth, mynode, nsub_e,
-     & nsub_x, ocean_grid_comm
+     &     ieast, iwest, jnorth, jsouth, mynode, nsub_e,
+     &     nsub_x, ocean_grid_comm, np_xi, np_eta, nnodes
       use comm_vars, only:
      &     area, bc_crss, cg_max, cg_min, cu_cor,
      &     grdmax, grdmin, hmax, hmin, tile_count, volume
       use scalars, only: dt, dtfast, g
       use mpi_f08, only: mpi_real8, mpi_status_size
+      use hidden_mpi_vars, only: inode, jnode
       use grid, only:
      &     rmask, h, pn, pm, f, umask, dn_u,
      &     vmask, dm_v

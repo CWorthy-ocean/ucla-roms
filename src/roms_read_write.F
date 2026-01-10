@@ -13,7 +13,9 @@
      &     nf90_get_var
       use scalars, only: time, dt, sec2day, tdays, akt_bak, akv_bak
       use nc_read_write, only: nccreate, ncread
-      use dimensions, only: bf, nx, ny, gnx, gny, i0, i1, j0, j1
+      use dimensions, only:
+     &     bf, nx, ny, gnx, gny, i0, i1, j0, j1,
+     &     eta_rho, xi_rho, xi_u, eta_v
       use param, only: mynode, nnodes
       use hidden_mpi_vars, only: inode, jnode
       use mpi_exchanges, only: exchange_xxx
@@ -118,6 +120,8 @@
       character(len=max_options_string),public::particle_opt='OFF'
       character(len=max_options_string),public::cdr_frc_opt  ='OFF'
       ! forcing file specifications
+      character(len=max_options_string),public::grid_files='N/A'
+      character(len=max_options_string),public::ini_files='N/A'
       character(len=max_options_string),public::force_files='N/A'
       character(len=max_options_string),public::force_info='N/A'
       character(len=100),public::frctype ! variable across netcdf files (forcing module)
@@ -146,14 +150,15 @@
       integer, public :: ifile_max_recs(max_frc_files)
 
 #if defined MPI && defined PARALLEL_FILES
-      integer, public ::  xi_rho, xi_u, eta_rho, eta_v
+!      integer, public ::  xi_rho, xi_u, eta_rho, eta_v
 #else
-      integer, parameter, public :: xi_rho=LLm+2, eta_rho=MMm+2,
-     &                              xi_u=xi_rho-1, eta_v=eta_rho-1
+!      integer, parameter, public :: xi_rho=LLm+2, eta_rho=MMm+2,
+!     &                              xi_u=xi_rho-1, eta_v=eta_rho-1
 #endif
 
       character, public :: date_str*44, title*80
-      character(len=max_name_size), public :: ininame, grdname, frcfile(max_frc_files)
+!     character(len=max_name_size), public :: ininame, grdname, frcfile(max_frc_files)
+      character(len=max_name_size), public :: ininame,frcfile(max_frc_files)
 
 
       public :: insert_nodes
@@ -1104,18 +1109,18 @@
         endif
       endif
       ! add force file info to output nc
-      if (mynode == 0) then
-        ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
+!      if (mynode == 0) then
+      ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
         ! if forcing netcdf has information
-        if (len(trim(forcing_version)) /= 0) then
+      if (len(trim(forcing_version)) /= 0) then
           ! if attribute has not been set yet
-          if (index(force_info,forcing_version) == 0) then
-            write(frcstr,'(2A)') trim(adjustl(frctype)),trim(adjustl(forcing_version))
-            frcstr = trim(adjustl(frcstr))
-            call store_string_att(force_info,frcstr)
-          endif
+        if (index(force_info,forcing_version) == 0) then
+          write(frcstr,'(2A)') trim(adjustl(frctype)),trim(adjustl(forcing_version))
+          frcstr = trim(adjustl(frcstr))
+          call store_string_att(force_info,frcstr)
         endif
       endif
+!      endif
       ierr = nf90_close(ncid)
 
       call exchange_xxx(nc%vdata(:,:,it))
@@ -1583,6 +1588,9 @@
 
       ierr=nf90_put_att(ncid, nf90_global, 'partition', ibuff)
 #endif
+!     ierr=nf90_put_att(ncid, nf90_global, 'global_x', gnx)
+!     ierr=nf90_put_att(ncid, nf90_global, 'global_y', gny)
+      ierr=nf90_put_att(ncid, nf90_global, 'globaldims', (/gnx+2,gny+2/))
 
       ierr=nf90_put_att(ncid, nf90_global, 'global_x', gnx)
       ierr=nf90_put_att(ncid, nf90_global, 'global_y', gny)
@@ -1590,15 +1598,13 @@
       ierr=nf90_put_att(ncid, nf90_global, 'title',title)         ! Title of the run
 
 #ifndef ANA_GRID
-      ierr=nf90_put_att(ncid, nf90_global, 'grid_file',grdname)
+      ierr=nf90_put_att(ncid, nf90_global, 'grid_file',grid_files)
 #endif
 #ifndef ANA_GRID
       ierr=nf90_put_att (ncid, nf90_global, 'forcing_files', force_files)
       ierr=nf90_put_att (ncid, nf90_global, 'forcing_info', adjustl(force_info))
 #endif
-#ifndef ANA_INITIAL
-      ierr=nf90_put_att(ncid, nf90_global, 'init_file',ininame)
-#endif
+      ierr=nf90_put_att(ncid, nf90_global, 'init_file',ini_files)
 
       ierr=nf90_put_att(ncid, nf90_global, 'ntimes', ntimes)         ! Time stepping parameters
       ierr=nf90_put_att(ncid, nf90_global, 'ndtfast',ndtfast)

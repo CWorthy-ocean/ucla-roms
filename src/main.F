@@ -3,13 +3,14 @@
 
 !!    program main               ! Open MP version of ROMS driver
 
-      use param, only: mynode, ocean_grid_comm
+      use param, only: mynode, ocean_grid_comm, nsize
 #ifdef NHMG
       use nhmg, only: nhmg_clean
 #endif
       use tracers, only: init_tracers
-      use mpi_f08, only: mpi_wtime
+      use mpi_f08, only: mpi_wtime, mpi_comm_world
       use timers, only: tstart, tend
+      use read_inp_mod, only: read_inp
 
       implicit none                                        ! with single parallel region using
       integer :: ierr                                      ! explicit barrier synchronization.
@@ -25,7 +26,15 @@ C$ !!   write(*,*) 'MPI thread support levels =', req_lev,level
 C$    ierr=0
       if (ierr == 1) call MPI_Init(ierr)
 
-      call mpi_setup(ierr)
+      ocean_grid_comm=MPI_COMM_WORLD
+      call MPI_Comm_size(ocean_grid_comm, nsize,  ierr)
+      call MPI_Comm_rank(ocean_grid_comm, mynode, ierr)
+
+      ierr=0
+      call read_inp (ierr)
+
+      if (ierr==0) call mpi_setup(ierr)
+
       tstart=MPI_Wtime()
       if (ierr == 0) then
 # endif

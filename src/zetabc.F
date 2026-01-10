@@ -4,12 +4,11 @@
 
 ! Set boundary conditions for free surface zeta_new
 
-      use param, only:
-     &     east_exchng, north_exchng, south_exchng,
-     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
       use grid, only:  h, pm, rmask, pn
       use ocean_vars, only: zeta
       use scalars, only: dtfast, g, kstp
+      use hidden_mpi_vars, only: inode, jnode
 
       implicit none
       integer istr,iend,jstr,jend, i,j
@@ -24,7 +23,7 @@ c--#define OBC_Z2ORLANSKI
 
 
 #ifndef EW_PERIODIC
-      if (WESTERN_EDGE) then
+      if (inode==0) then
 # if defined OBC_WEST && defined OBC_M2FLATHER
         do j=jstrV-1,jend
           cx=dtfast*pm(istr,j)*sqrt(g*h(istr,j))

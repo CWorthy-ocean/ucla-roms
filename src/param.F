@@ -18,7 +18,7 @@
 ! Array dimensions and bounds of the used portions of sub-arrays:
 
 #ifdef MPI
-      integer, parameter :: nnodes=NP_XI*NP_ETA
+      integer :: nnodes,nsize
 
       integer ::
      &    Lm=(LLm+NP_XI-1)/NP_XI, Mm=(MMm+NP_ETA-1)/NP_ETA
@@ -26,8 +26,6 @@
       integer mynode,  iSW_corn, jSW_corn,
      &     iwest, ieast, jsouth, jnorth
       type(mpi_comm) :: ocean_grid_comm
-      logical west_exchng,  east_exchng
-      logical south_exchng, north_exchng
 #else
       integer, parameter :: Lm=LLm, Mm=MMm
 #endif

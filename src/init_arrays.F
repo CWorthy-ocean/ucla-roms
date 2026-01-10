@@ -3,7 +3,6 @@
       subroutine init_arrays
 
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: n2d, ia2d, init_arrays_private_scratch
 
       implicit none
@@ -25,6 +24,7 @@
       end
 
       subroutine init_arrays_tile (istr,iend,jstr,jend)
+      use hidden_mpi_vars, only: inode, jnode
 
 ! This routine initialize "first-touches" model shared arrays. Most
 ! of them are assigned to zeros, vertical mixing coefficients are set
@@ -53,10 +53,7 @@
       use work_mod, only: init_arrays_work_mod
       use boundary, only: init_arrays_boundary
       use buffer, only: init_arrays_buffer
-      use param, only:
-     &     ieast, iwest, jnorth, jsouth,
-     &     north_exchng, south_exchng, west_exchng, east_exchng,
-     &     n
+      use param, only: ieast, iwest, jnorth, jsouth, n
       use mess_buffers, only: init_arrays_mess_buffers
       use flux_frc, only: init_arrays_flux_frc
       use pipe_frc, only: pipe_source, init_arrays_pipes
@@ -68,7 +65,7 @@
 #ifdef BULK_FRC
       use bulk_frc, only: init_arrays_bulk_frc
 #endif
-
+      use dimensions, only: npx, npy
       implicit none
       integer, intent(in) :: istr, iend, jstr, jend
       integer             :: i, j, k, itrc, itavg

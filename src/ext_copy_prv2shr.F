@@ -3,9 +3,9 @@
 ! extended range of indices.
 
       subroutine ext_copy_prv2shr_2d_tile (istr,iend,jstr,jend, A,B)
-      use param, only:
-     &     lm, mm, east_exchng, ieast, iwest, jnorth,
-     &     jsouth, north_exchng, south_exchng, west_exchng
+      use param, only: lm, mm, ieast, iwest, jnorth, jsouth
+      use hidden_mpi_vars, only: inode, jnode
+      use dimensions, only: npx, npy
       implicit none
       integer istr,iend,jstr,jend, i,j
       real A(PRIVATE_2D_SCRATCH_ARRAY)
@@ -22,9 +22,9 @@
 
 #ifdef SOLVE3D
       subroutine ext_copy_prv2shr_tile (istr,iend,jstr,jend, A,B,nmax)
-      use param, only:
-     &     lm, mm, east_exchng, ieast, iwest, jnorth,
-     &     jsouth, north_exchng, south_exchng, west_exchng
+      use param, only: lm, mm, ieast, iwest, jnorth, jsouth
+      use hidden_mpi_vars, only: inode, jnode
+      use dimensions, only: npx, npy
       implicit none
       integer istr,iend,jstr,jend, nmax, i,j,k
       real A(PRIVATE_2D_SCRATCH_ARRAY,nmax)
@@ -43,7 +43,9 @@
 
 # define XI_ONLY
       subroutine ext_copy_prv2shr_1Dslb_tile (istr,iend,j, A,B,nmax)
-      use param, only: lm, mm, east_exchng, ieast, iwest, west_exchng
+      use param, only: lm, mm,  ieast, iwest
+      use hidden_mpi_vars, only: inode, jnode
+      use dimensions, only: npx, npy
       implicit none
       integer istr,iend, nmax, i,j,k
       real A(PRIVATE_1D_SCRATCH_ARRAY,nmax)

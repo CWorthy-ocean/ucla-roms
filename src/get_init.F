@@ -42,8 +42,8 @@
       use dimensions, only: i0, i1, j0, j1, nz
       use param, only:
      &     ieast, iwest, jnorth, jsouth, mynode,
-     &     nsub_e, nsub_x, north_exchng, east_exchng,
-     &     west_exchng, south_exchng, nnodes, n, nt
+     &     nsub_e, nsub_x, nnodes, n, nt,
+     &     np_xi, np_eta
       use mpi_exchanges, only: exchange_xxx
       use error_handling, only : handle_configuration_error, handle_netcdf_error
 #ifdef DIAGNOSTICS

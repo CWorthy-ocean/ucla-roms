@@ -17,10 +17,10 @@
      &     nf90_open, nf90_strerror, nf90_inq_varid, nf90_get_var,
      &     nf90_close
       use nc_read_write, only: ncread
-      use dimensions, only: i0, i1, j0, j1, gnx, gny, nx, ny, nz
+      use dimensions, only:
+     &     i0, i1, j0, j1, gnx, gny, nx, ny, nz, eta_rho, xi_rho, grdname
       use roms_read_write, only:
-     &     grdname, dn_xr, dn_yr, eta_rho,
-     &     xi_rho, dn_tm, particle_opt, nrrec, create_file, store_string_att
+     &     dn_xr, dn_yr, dn_tm, particle_opt, nrrec, create_file, store_string_att
       use scalars, only: may_day_flag, init
       use mpi_exchanges, only: exchange_xxx
       implicit none

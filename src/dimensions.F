@@ -17,6 +17,9 @@
       integer,parameter, public :: gny = MMm
       integer,parameter, public ::  nz = N
 
+      integer,parameter, public :: npx = np_xi
+      integer,parameter, public :: npy = np_eta
+
       integer,parameter, public ::  bf = 2 ! allocation buffer size
 
 
@@ -24,9 +27,10 @@
       integer,public            :: ny
 
       integer,public :: i0,i1,j0,j1     ! accounts for physical boundary buffers
+      integer, public ::  xi_rho, xi_u, eta_rho, eta_v
 
       public :: init_dimensions
-
+      character(len=256), public :: grdname
       contains
 
 ! ----------------------------------------------------------------------
@@ -34,8 +38,10 @@
       implicit none
       ! need to do this here because Lm, Mm change in mpi_setup and are not known at compile time.
 
-      nx = Lm
-      ny = Mm
+c$$$      nx = Lm
+c$$$      ny = Mm
+      Lm = nx
+      Mm = ny
 
       i0=1; i1=nx; j0=1; j1=ny
 

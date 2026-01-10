@@ -3,7 +3,6 @@
 
       subroutine t3dmix
       use param, only: ieast, iwest, jnorth, jsouth, nt, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: a2d
       implicit none
       integer,save:: tile=0
@@ -22,9 +21,8 @@
 
       use grid, only: nz, umask, pmon_u, vmask, pnom_v, pn, pm
       use mpi_exchanges, only: exchange_xxx
-      use param, only:
-     &     east_exchng, ieast, iwest, jnorth, jsouth,
-     &     north_exchng, south_exchng, west_exchng
+      use hidden_mpi_vars, only: inode, jnode
+      use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
       use mixing, only: diff2
       use ocean_vars, only: hz
       use scalars, only: dt, nnew, nrhs

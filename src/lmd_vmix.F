@@ -4,7 +4,6 @@
 
       subroutine lmd_vmix(tind)
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: a3d, a2d, ia2d
       implicit none
       integer,save :: tile=0
@@ -48,10 +47,10 @@
       use grid, only: umask, vmask
       use mixing, only: bvf
       use param, only:
-     &     east_exchng, ieast, isalt, itemp, iwest,
-     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
+     &     ieast, isalt, itemp, iwest, jnorth, jsouth, np_xi, np_eta
       use ocean_vars, only: z_r, u, v, z_w
       use scalars, only: n, akv_bak, pi, akt_bak
+      use hidden_mpi_vars, only: inode, jnode
 
       implicit none
 

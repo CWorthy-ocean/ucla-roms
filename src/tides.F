@@ -1,10 +1,9 @@
       module tides
 
 #include "cppdefs.opt"
-
+      use hidden_mpi_vars, only: inode, jnode
       use param, only:
-     &     east_exchng, north_exchng, south_exchng, west_exchng,
-     &     mynode, ieast, iwest, jnorth, jsouth, lm, mm
+     &     mynode, ieast, iwest, jnorth, jsouth, lm, mm, np_xi, np_eta
       use scalars, only: g, pi, dt, time
 ! For iic, ntstart, deg2rad, only:
       use roms_read_write, only:
@@ -91,7 +90,6 @@
       ! and compute_auxilliary_bounds in the same subroutine as they both
       ! declare and compute. Fortan doesn't allow.
 
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: nsub_e, nsub_x
       implicit none
 

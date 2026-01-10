@@ -9,9 +9,10 @@
      &     nf90_inq_varid, nf90_put_var, nf90_put_att, nf90_open, nf90_close,
      &     nf90_nofill, nf90_set_fill
       use nc_read_write, only: nccreate, ncwrite
+      use dimensions, only:  eta_rho, eta_v, xi_rho, xi_u
       use roms_read_write, only:
      &     max_name_size, dn_tm, dn_xr, dn_xu,
-     &     dn_yr, dn_yv, dn_zr, eta_rho, eta_v, xi_rho, xi_u, dn_zw,
+     &     dn_yr, dn_yv, dn_zr, dn_zw,
      &     avg_output, create_file, sec2date
       use sponge_tune, only: ub_tune, wrt_rst_ub
       use diagnostics, only: diag_pflx

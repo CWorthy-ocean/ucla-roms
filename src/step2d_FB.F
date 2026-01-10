@@ -8,7 +8,6 @@
 ! and perform fast-time averaging to interact with baroclinic mode.
 
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: a2d
 
       implicit none
@@ -24,7 +23,7 @@
       subroutine step2d_FB_tile( istr,iend,jstr,jend, zeta_new,Dnew,
      &                           rubar,rvbar, urhs,vrhs,  DUon,DVom,
      &                                       Drhs, UFx,UFe,VFx,VFe)
-
+      use hidden_mpi_vars, only: inode, jnode
       use river_frc, only:
      &     iriver, river_flux, river_source, riv_uflx,
      &     riv_vol, riv_vflx
@@ -38,9 +37,7 @@
      &     rhos, rhoa, weight, du_avg_bak, du_avg2,
      &     du_avg1, dv_avg_bak, dv_avg2, dv_avg1, zt_avg1, rufrc, rvfrc
       use grid, only: h, dn_u, dm_v, pn, pm, rmask, umask, vmask
-      use param, only:
-     &     east_exchng, ieast, iwest, jnorth, jsouth,
-     &     north_exchng, south_exchng, west_exchng
+      use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
       use ocean_vars, only: zeta, ubar, vbar
       use scalars, only: dtfast, g, iif, knew, kstp, nfast
       use mpi_exchanges, only: exchange_xxx

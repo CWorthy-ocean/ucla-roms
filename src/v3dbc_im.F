@@ -6,9 +6,8 @@
 ! Set lateral boundary conditions for ETA-component velocity
 ! v(:,:,:,nnew)
 
-      use param, only:
-     &     east_exchng, north_exchng, south_exchng,
-     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
+      use hidden_mpi_vars, only: inode, jnode
       use boundary, only: v_south, v_north, v_west, v_east
       use grid, only: pmask, pn, vmask, pm
       use ocean_vars, only: v, u

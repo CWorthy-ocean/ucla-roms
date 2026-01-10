@@ -20,7 +20,6 @@ c--# define CONST_TRACERS
       subroutine step3d_t(tile)   ! the list of agruments in call below
 
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: a2d, a3d
 
       implicit none               ! are repeated to use the same memory
@@ -53,7 +52,8 @@ c--# define CONST_TRACERS
 # endif
      &                                                             )
       use pipe_frc, only: pidx, pipe_source, pipe_idx, pipe_trc,
-     & pipe_prf, pipe_flx
+     &     pipe_prf, pipe_flx
+      use hidden_mpi_vars, only: inode, jnode
 #if defined CDR_FORCING && defined MARBL
       use cdr_frc, only: cdr_nprf, cdr_icdr, cdr_source, cdr_iloc,
      &      cdr_jloc, cdr_flx, cdr_prf, cdr_flx_3d_ALK, cdr_flx_3d_DIC,
@@ -67,11 +67,9 @@ c--# define CONST_TRACERS
       use marbl_driver, only: marbldrv_column_physics, iALK, iDIC
 #endif
       use grid, only: umask, vmask, pn, pm, rmask, nx, ny, nz, dn_u, dm_v
-      use param, only: mynode
+      use param, only: mynode, np_eta, np_xi
       use mpi_exchanges, only: exchange_xxx
-      use mixing, only:
-     &     east_exchng, ieast, isalt, itemp, iwest,
-     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
+      use mixing, only: ieast, isalt, itemp, iwest, jnorth, jsouth
 #ifdef LMD_NONLOCAL
      &     , ghat
 #endif

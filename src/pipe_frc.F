@@ -12,9 +12,9 @@
 ! we have no PIPE_SOURCE flag here anymore, since we are moving away from cpp flags.
 ! Variables still need to be visible within code even when pipes are not used.
 
-      use dimensions, only: i0, i1, j0, j1, nx, ny
+      use dimensions, only: i0, i1, j0, j1, nx, ny, grdname
       use roms_read_write, only:
-     &     ncforce, pipe_frc_opt, grdname,
+     &     ncforce, pipe_frc_opt,
      &     set_frc_data, store_string_att
       use nc_read_write, only: ncread
       use param, only: n, lm, mm, nt, mynode

@@ -5,7 +5,6 @@
       use param, only:
      &     n, ieast, iwest, jnorth, jsouth,
      &     lm, mm, nsub_e, nsub_x
-      use hidden_mpi_vars, only: inode, jnode
       use private_scratch, only: a2d
       implicit none
       integer tile
@@ -24,10 +23,9 @@
 ! surface. This computation is done solely for diagnostic/output
 ! purposes and does not have any feedback onto the model.
 ! Unlike W, absolute vertical velocity is defined at RHO-points.
-
-      use param, only:
-     &     east_exchng, north_exchng, south_exchng,
-     & west_exchng, lm, mm, ieast, iwest, jnorth, jsouth
+      use hidden_mpi_vars, only: inode, jnode
+      use param, only: lm, mm, ieast, iwest, jnorth, jsouth, np_xi, np_eta
+      use dimensions, only: npx, npy
       use grid, only:  pn, pm
       use ocean_vars, only: flxv, flxu, z_r, u, v
 #ifdef NHMG

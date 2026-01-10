@@ -6,7 +6,8 @@
       use roms_read_write, only:
      &     ncforce, bulk_frc_opt, frcfile,
      &     nc_check_units, set_frc_data, store_string_att
-
+      use hidden_mpi_vars, only: inode, jnode
+      use dimensions, only: npx, npy
       implicit none
 
       private  ! make all variable private to this module unless public specified
@@ -188,9 +189,7 @@
      &     sustr, svstr, apply_surf_field_corr
       use tracers, only: t
       use grid, only: rmask, umask, vmask
-      use mixing, only:
-     &     east_exchng, ieast, isalt, itemp, iwest,
-     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
+      use mixing, only: ieast, isalt, itemp, iwest, jnorth, jsouth
       use ocean_vars, only: u, v
       use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar
 

@@ -35,9 +35,7 @@
 ! below which vertical advection is fully explicit; "cu_max" is the
 ! maximum CN which the explicit component "We" is allowed to reach.
 
-      use param, only:
-     &     east_exchng, north_exchng, south_exchng,
-     &     west_exchng, ieast, iwest, jnorth, jsouth
+      use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
       use dimensions, only: nx, ny, nz
       use grid, only: pn, pm
       use pipe_frc, only:
@@ -51,6 +49,7 @@
       use mpi_exchanges, only: exchange_xxx
       use ocean_vars, only: wi, flxv, flxu, z_w, we, hz
       use scalars, only: n, dt, forw_start, iic, nrhs
+      use hidden_mpi_vars, only: inode, jnode
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k, icdr, cidx
