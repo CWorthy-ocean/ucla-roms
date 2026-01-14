@@ -940,12 +940,12 @@ c**               cff=1./(z_r(i,j,k+1)-z_r(i,j,k))
           ! If using FLUX_FRC, just use the local water temperature
           if (itrc==itemp) then
             do i=istr,iend
-              t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc) +dt*pm(i,j)*pn(i,j)
+              t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc) +dt
      &            *swflx(i,j)
 #ifdef BULK_FRC
      &            *tair(i,j)
 #else
-     &            *t(i,j,k,nnew,itrc)
+     &            *t(i,j,k,nnew,itrc)/Hz(i,j,nz)
 #endif
             enddo
           endif
