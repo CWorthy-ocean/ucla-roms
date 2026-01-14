@@ -156,6 +156,7 @@
       uwnd_avg(:,:)  = uwnd_avg(:,:)*(1-coef)  + uwnd(:,:)*coef
       vwnd_avg(:,:)  = vwnd_avg(:,:)*(1-coef)  + vwnd(:,:)*coef
       ssflx_avg(:,:) = ssflx_avg(:,:)*(1-coef) + stflx(:,:,isalt)*coef
+      swflx_avg(:,:) = swflx_avg(:,:)*(1-coef) + swflx(:,:)*coef
 #ifdef TAU_CORRECTION
       taux_avg(:,:)  = taux_avg(:,:)*(1-coef)  + taux(:,:)*coef
       tauy_avg(:,:)  = tauy_avg(:,:)*(1-coef)  + tauy(:,:)*coef
@@ -221,6 +222,8 @@
       vwnd_avg(:,:) = 0
       call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/))
       ssflx_avg(:,:) = 0
+      call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),(/1,1,record/))
+      swflx_avg(:,:) = 0
 #ifdef TAU_CORRECTION
       call ncwrite(ncid,'taux',taux_avg(i0:i1,j0:j1),(/1,1,record/))
       taux_avg(:,:) = 0
@@ -259,6 +262,7 @@
       call ncwrite(ncid,'uwnd',uwnd(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'vwnd',vwnd(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/))
+      call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),(/1,1,record/))
 #ifdef TAU_CORRECTION
       call ncwrite(ncid,'taux',taux(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'tauy',tauy(i0:i1,j0:j1),(/1,1,record/))
@@ -405,6 +409,13 @@
       ierr=nf90_put_att(ncid, varid, 'long_name',
      &           'surface salt flux')
       ierr = nf90_put_att(ncid,varid,'units','psi m s-1')
+
+      ! Input comes in units of:         N/A (calculated)
+      ! Output is written in units of:   m s-1
+      varid = nccreate(ncid,'swflx',(/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/),prec)
+      ierr=nf90_put_att(ncid, varid, 'long_name',
+     &           'surface freshwater flux')
+      ierr = nf90_put_att(ncid,varid,'units','m s-1')
 
       ! Input comes in units of:         N/A (calculated)
       ! Output is written in units of:   m2 s-2
