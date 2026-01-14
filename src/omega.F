@@ -39,7 +39,7 @@
      &     east_exchng, north_exchng, south_exchng,
      &     west_exchng, ieast, iwest, jnorth, jsouth
       use dimensions, only: nx, ny, nz
-      use grid, only: pn, pm
+      use grid, only: pn, pm, dn_r, dm_r
       use pipe_frc, only:
      &     pidx, pipe_source, pipe_idx, pipe_prf,
      &     pipe_flx
