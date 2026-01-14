@@ -737,7 +737,7 @@
           evap(i,j)=-cp*hflat/Hlv
 
           ! Divide prate by 100.*3600.*24. to convert from [cm/day] to [m/s]
-          swflx(i,j) = prate(i,j)*cmday2ms-evap(i,j)
+          swflx(i,j) = 0*(prate(i,j)*cmday2ms-evap(i,j))
           ! This is the old way of adding salt flux          
 !          stflx(i,j,isalt)=(evap(i,j)- ( prate(i,j)/(100.*3600.*24.) ) )*t(i,j,N,nrhs,isalt)
 #endif
