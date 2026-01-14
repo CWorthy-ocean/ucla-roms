@@ -53,13 +53,12 @@
       real,allocatable,dimension(:,:) :: vflux_ALK_ALT_CO2_avg
       real,allocatable,dimension(:,:) :: vflux_DIC_ALT_CO2_avg
 #endif ! MARBL
-#else
-      real,allocatable,dimension(:,:) :: swflx_avg
 #endif
       real,allocatable,dimension(:,:) :: sustr_avg
       real,allocatable,dimension(:,:) :: svstr_avg
       real,allocatable,dimension(:,:) :: shflx_avg
       real,allocatable,dimension(:,:) :: srflx_avg
+      real,allocatable,dimension(:,:) :: swflx_avg
 
       integer,parameter :: prec = nf90_double  ! Precision of output variables (nf90_float/nf90_double)
 
@@ -117,9 +116,6 @@
         allocate(vflux_DIC_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
         vflux_DIC_ALT_CO2_avg(:,:)=0
 #endif MARBL */
-#else
-        allocate(swflx_avg(GLOBAL_2D_ARRAY) )
-        swflx_avg(:,:)=0
 #endif
         allocate(sustr_avg(GLOBAL_2D_ARRAY) )
         sustr_avg(:,:)=0
@@ -129,6 +125,8 @@
         shflx_avg(:,:)=0
         allocate(srflx_avg(GLOBAL_2D_ARRAY) )
         srflx_avg(:,:)=0
+        allocate(swflx_avg(GLOBAL_2D_ARRAY) )
+        swflx_avg(:,:)=0        
       endif ! do_avg
       endif ! done
 
@@ -222,8 +220,6 @@
       vwnd_avg(:,:) = 0
       call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/))
       ssflx_avg(:,:) = 0
-      call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),(/1,1,record/))
-      swflx_avg(:,:) = 0
 #ifdef TAU_CORRECTION
       call ncwrite(ncid,'taux',taux_avg(i0:i1,j0:j1),(/1,1,record/))
       taux_avg(:,:) = 0
@@ -240,9 +236,6 @@
       call ncwrite(ncid,'vflux_DIC_ALT_CO2',vflux_DIC_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
       vflux_DIC_ALT_CO2_avg(:,:) = 0
 #endif MARBL */
-#else
-      call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),(/1,1,record/))
-      swflx_avg(:,:) = 0
 #endif
       call ncwrite(ncid,'sustr',sustr_avg(1:i1,j0:j1),(/1,1,record/))
       sustr_avg(:,:) = 0
@@ -252,6 +245,8 @@
       shflx_avg(:,:) = 0
       call ncwrite(ncid,'srflx',srflx_avg(i0:i1,j0:j1),(/1,1,record/))
       srflx_avg(:,:) = 0
+      call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),(/1,1,record/))
+      swflx_avg(:,:) = 0      
       else
 #ifdef BULK_FRC
       call ncwrite(ncid,'tair',tair(i0:i1,j0:j1),(/1,1,record/))
