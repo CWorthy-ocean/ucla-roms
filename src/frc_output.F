@@ -21,7 +21,7 @@
 #ifdef BULK_FRC
       use bulk_frc, only: tair, q, lwrad, evap, prate
 #endif
-      use surf_flux, only: stflx, sustr, svstr, srflx, uwnd, vwnd
+      use surf_flux, only: stflx, sustr, svstr, srflx, uwnd, vwnd, swflx
 
       implicit none
       private
