@@ -35,13 +35,13 @@
 ! ----------------------------------------------------------------------
       subroutine init_arrays_bulk_frc  ![
       implicit none
-      allocate(  tair(GLOBAL_2D_ARRAY) )
-      allocate(     Q(GLOBAL_2D_ARRAY) )
-      allocate( prate(GLOBAL_2D_ARRAY) )
-      allocate( evap(GLOBAL_2D_ARRAY) )
-      allocate( lwrad(GLOBAL_2D_ARRAY) )
+      allocate(  tair(GLOBAL_2D_ARRAY) ); tair = 0
+      allocate(     Q(GLOBAL_2D_ARRAY) ); Q = 0
+      allocate( prate(GLOBAL_2D_ARRAY) ); prate = 0
+      allocate( evap(GLOBAL_2D_ARRAY) ); evap = 0
+      allocate( lwrad(GLOBAL_2D_ARRAY) ); lwrad = 0
 
-      allocate( wspd_used(GLOBAL_2D_ARRAY) )
+      allocate( wspd_used(GLOBAL_2D_ARRAY) ); wspd_used = 0
 
 !     vdata needs to be of global_2d_array size
       allocate( nc_uwnd%vdata(GLOBAL_2D_ARRAY,2) )
@@ -737,7 +737,7 @@
           evap(i,j)=-cp*hflat/Hlv
 
           ! Divide prate by 100.*3600.*24. to convert from [cm/day] to [m/s]
-          swflx(i,j) = 0*(prate(i,j)*cmday2ms-evap(i,j))
+          swflx(i,j) = prate(i,j)*cmday2ms-evap(i,j)
           ! This is the old way of adding salt flux          
 !          stflx(i,j,isalt)=(evap(i,j)- ( prate(i,j)/(100.*3600.*24.) ) )*t(i,j,N,nrhs,isalt)
 #endif

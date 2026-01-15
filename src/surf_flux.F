@@ -82,8 +82,8 @@
       implicit none
 
       ! local
-      allocate( uwnd  (GLOBAL_2D_ARRAY)     );
-      allocate( vwnd  (GLOBAL_2D_ARRAY)     );
+      allocate( uwnd  (GLOBAL_2D_ARRAY)     ); uwnd = 0
+      allocate( vwnd  (GLOBAL_2D_ARRAY)     ); vwnd = 0
       allocate( sustr  (GLOBAL_2D_ARRAY)    ); sustr=init
       allocate( sustr_r(GLOBAL_2D_ARRAY)    ); sustr_r=init
       allocate( svstr  (GLOBAL_2D_ARRAY)    ); svstr=init
