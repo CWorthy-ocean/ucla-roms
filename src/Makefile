@@ -4,26 +4,34 @@
 
 include Makedefs.inc
 
-# Build ROMS source list from unprocessed F77 files (typically .F extension)
-   SRCS = $(wildcard *$(UPF77_ext))
 
-# Exclude files that are not part of main build
+# Build ROMS source list from unprocessed Fortran files
+   SRCS_F77 = $(wildcard *$(UPF77_ext))
+   SRCS_F90 = $(wildcard *$(UPF90_ext))
+   SRCS = $(SRCS_F77) $(SRCS_F90)
+# Exclude files that are not part of main build (just f77 for now)
    EXCL = mpi_test cppcheck srcscheck
    EXCL += check_alfabeta check_rho_eos int_r3d sediment t3dmix_GP transp_nodes u3dbc_new visc3d_GP visc3d_S_FS
    EXCL := $(addsuffix $(UPF77_ext), $(EXCL))
-   SRCS := $(filter-out $(EXCL), $(SRCS))
+   SRCS_F77 := $(filter-out $(EXCL), $(SRCS_F77))
 
 # Include files that do not exist yet but
-# 	are generated as part of the build:
+# 	are generated as part of the build (just f77 for now):
    INCL = check_srcs check_switches1
    INCL := $(addsuffix $(UPF77_ext), $(INCL))
-   SRCS := $(SRCS) $(INCL)
+   SRCS_F77 := $(SRCS_F77) $(INCL)
+   SRCS_F77 := $(SRCS_F77)
 
 # Object and pre-processed source files are source list with extension changes
-   RCS = $(SRCS:$(UPF77_ext)=$(PPF77_ext))
-  OBJS = $(RCS:$(PPF77_ext)=$(OBJ_ext))
+   RCS_F77 = $(SRCS_F77:$(UPF77_ext)=$(PPF77_ext))
+   RCS_F90 = $(SRCS_F90:$(UPF90_ext)=$(PPF90_ext))
+
+   OBJS_F77 = $(RCS_F77:$(PPF77_ext)=$(OBJ_ext))
+   OBJS_F90 = $(RCS_F90:$(PPF90_ext)=$(OBJ_ext))
+   OBJS = $(OBJS_F77) $(OBJS_F90)
 # Sort OBJS to remove duplicates
   OBJS := $(sort $(OBJS))
+  $(info DEBUG: OBJS = $(OBJS))
 
   SBIN = roms
  LROMS = libroms.a

@@ -72,7 +72,8 @@ c--#define MAX_BY_VERT_CFL_ONLY
      &     rho0, tdays
       use mpi_f08, only: mpi_real8, mpi_status_size, mpi_wtime
       use timers, only: tstart
-      use error_handling, only : handle_configuration_error
+      use error_handling_mod, only: error_log
+
       implicit none
       character(len=9) :: sr_name = "diag_tile"
 #include "diag.opt"
@@ -633,11 +634,11 @@ C$   &                                                 , proc(2)
      &             check_line(i:i) /= '+'  .and.
      &             check_line(i:i) /= '-'  .and.
      &              check_line(i:i) /= '.') then
-                 call handle_configuration_error(
+                 call error_log%raise_global(
      &                info="Abnormal termination: BLOWUP",
      &                context=sr_name)
               endif
-            endif
+           endif
           enddo  ! <-- while(..)
 
           write(tstring,'(F18.8)') tdays
@@ -663,6 +664,7 @@ C$   &                                                 , proc(2)
 #endif
       endif  ! <-- tile_count==nsubs
 C$OMP END CRITICAL (diag_cr_rgn)
-      diag_sync=.true.     !<-- to signal that "diag" has been called
+      call error_log%handle_abort()
+      diag_sync=.true.          !<-- to signal that "diag" has been called
       end
 

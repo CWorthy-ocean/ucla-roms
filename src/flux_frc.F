@@ -16,6 +16,7 @@
       use dimensions, only: i0, i1, j0, j1
       use param, only: lm, mm, isalt, itemp
       use grid, only: nz
+      use error_handling_mod, only: error_log
 
       implicit none
 
@@ -72,11 +73,14 @@
       ! 1) set surface momentum flux
       call set_frc_data(nc_sustr,sustr,'u')
       call set_frc_data(nc_svstr,svstr,'v')
+      call error_log%handle_abort()
       sustr = sustr/rho0
       svstr = svstr/rho0
 
       ! 2) set surface heat flux: stflx(itemp)
       call set_frc_data(nc_shflx,stflx(:,:,itemp),'r')
+      call error_log%handle_abort()
+
       stflx(:,:,itemp) = stflx(:,:,itemp) /(rho0*Cp)
 #ifdef SEA_ICE_NOFLUX
       do j=j0,j1
@@ -117,6 +121,7 @@
       real cmday2ms
 
       call set_frc_data(nc_swflux,stflx(:,:,isalt),'r')
+      call error_log%handle_abort()
 
       cmday2ms=0.01/day2sec ! Set coefficient outside of loop for efficiency
       do j=j0,j1
@@ -142,6 +147,7 @@
 # endif
 
       call set_frc_data(nc_swrad,srflx,'r')
+      call error_log%handle_abort()
       srflx = srflx/(rho0*Cp)
 
 # ifdef DIURNAL_SRFLUX

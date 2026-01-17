@@ -76,7 +76,8 @@
       contains
 
 ! ----------------------------------------------------------------------
-      subroutine init_arrays_surf_flx  ![
+      subroutine init_arrays_surf_flx ![
+      use error_handling_mod, only: error_log
       use scalars, only: init, nt
       implicit none
 
@@ -115,11 +116,13 @@
 #if defined(QCORRECTION) && !defined(ANA_SST)
       ! Sea-surface temperature (SST) data
       call set_frc_data(nc_sst,sst,'r')
+      call error_log%handle_abort()
 #endif
 
 #if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
       ! Sea-surface salinity (SSS) data
       call set_frc_data(nc_sss,sss,'r')
+      call error_log%handle_abort()
 #endif
 
       end subroutine set_surf_field_corr  !]

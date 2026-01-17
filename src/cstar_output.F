@@ -24,7 +24,7 @@
      &     nf90_put_att, nf90_close
       use scalars, only: iic, knew, nnew, tdays, time, dt, n
       use ocean_vars, only: zeta, hz
-      use error_handling, only : handle_configuration_error, handle_netcdf_error
+      use error_handling_mod, only: error_log
       use cdr_frc, only: cdr_flx_3d_ALK, cdr_flx_3d_DIC, cdr_prf,
      &                   cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,
      &                   cdr_jloc, cdr_source, forcing_3d
@@ -244,7 +244,7 @@
       endif
 
       if (monthly_averages .and. .not. do_avg) then
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info="`monthly_avg` is .true., but `do_avg` is .false.")
       endif
@@ -554,11 +554,11 @@
         record = record+1
 
         ierr=nf90_open(fname,nf90_write,ncid)
-        if (ierr/=nf90_noerr) then
-           call handle_netcdf_error(netcdf_status=ierr,
-     &          info="error opening "//fname,
-     &          context=module_name//"/"//sr_name)
-        end if
+        call error_log%check_netcdf_status(netcdf_status=ierr,
+     &       info="error opening "//fname,
+     &       context=module_name//"/"//sr_name)
+        call error_log%handle_abort()
+
         call multiply_by_thickness
         ! always add time
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
@@ -694,7 +694,7 @@
 
 #else /* MARBL && MARBL_DIAGS && CDR_FORCING */
 !----------------------------------------------------------------------
-      use error_handling, only : handle_configuration_error
+      use error_handling_mod, only : error_log
 
       implicit none
       character(len=12) :: module_name = "cstar_output"
@@ -713,13 +713,13 @@
       character(len=9) :: sr_name = "init_cstar"
 
 #ifndef MARBL
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info="cstar_output must have MARBL enabled.")
 #endif
 
 #ifndef MARBL_DIAGS
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info="cstar_output must have MARBL_DIAGS enabled.")
 #endif

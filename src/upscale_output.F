@@ -636,29 +636,29 @@
       contains
 
       subroutine init_upscale   ![
-      use error_handling, only: handle_configuration_error
+      use error_handling_mod, only: error_log
       ! Allocate and initialize arrays.
       implicit none
       character(len=13) :: sr_name
 
 #ifndef MARBL
-      call handle_configuration_error(
+      call error_log%raise_global(
      &     context=module_name//"/"//sr_name,
      &     info="upscale module must have MARBL cpp key enabled")
 #endif
 
 #ifndef MARBL_DIAGS
-      call handle_configuration_error(
+      call error_log%raise_global(
      &     context=module_name//"/"//sr_name,
      &     info="upscale module must have MARBL_DIAGS cpp key enabled.")
 #endif
 
 #ifndef UPSCALING
-      call handle_configuration_error(
+      call error_log%raise_global(
      &     context=module_name//"/"//sr_name,
      &     info="upscale module must have UPSCALING cpp key enabled.")
 #endif
-
+      call error_log%handle_abort()
       end subroutine init_upscale !]
 !----------------------------------------------------------------------
 

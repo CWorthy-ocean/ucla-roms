@@ -37,6 +37,7 @@ endif
 OS := $(shell uname -s)
 ifeq ($(OS),Darwin)
     PPF77_ext = .fpp
+    PPF90_ext = .pp.f90
 endif
 
 ## Setting MPI wrapper:
@@ -227,7 +228,14 @@ FFLAGS+=$(USER_FFLAGS)
 # Compilation rules for file types:
 #   (used for every file until the final linking step)
 
-.SUFFIXES: $(OBJ_ext) $(PPF77_ext) $(UPF77_ext) $(PPF90_ext)
+.SUFFIXES: $(OBJ_ext) $(PPF77_ext) $(UPF77_ext) $(UPF90_ext) $(PPF90_ext)
+
+#Unprocessed F90 -> object file (typically .F90->.o)
+$(UPF90_ext)$(OBJ_ext):
+	$(CPP) -P $(CPPFLAGS) $*$(UPF90_ext)  > $*$(PPF90_ext)
+	$(CFT) -c $(FFLAGS) -o $*$(OBJ_ext) $*$(PPF90_ext) $(LCDF)
+	@if [ "$(KEEP_PPSRC)" = "false" ]; then rm -f $*$(PPF90_ext); fi
+
 # Unprocessed F77 -> object file (typically .F->.o)
 $(UPF77_ext)$(OBJ_ext):
 	@$(CPP) -P $(CPPFLAGS) $*$(UPF77_ext) | mpc > $*$(PPF77_ext)
@@ -244,6 +252,9 @@ $(PPF77_ext)$(OBJ_ext):
 	@if [ "$(KEEP_PPSRC)" = "false" ]; then \
 	   /bin/rm -f $*$(PPF77_ext); \
 	fi
+# Unprocessed F90 -> preprocessed F90
+$(UPF90_ext)$(PPF90_ext):
+	$(CPP) -P $(CPPFLAGS) $*$(UPF90_ext)  > $*$(PPF90_ext)
 # preprocessed F90 -> object file
 $(PPF90_ext)$(OBJ_ext):
 	$(CFT) -c $(FFLAGS) -o $*$(OBJ_ext) $*$(PPF90_ext) $(LCDF)

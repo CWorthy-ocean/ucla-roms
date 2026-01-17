@@ -1065,14 +1065,15 @@
                     write(*,'(23x,A)') frcfile(max_frc)(1:lstr)
                   endif
 ! Add to attributes
-                  if (mynode == 0) then
-                     call store_string_att(force_files,
-     &                                      frcfile(max_frc)(1:lstr))
-                  end if
+c$$$                  if (mynode == 0) then
+c$$$                  end if TODO
 
 # ifdef MPI_SILENT_MODE
                end if
 # endif
+               call store_string_att(force_files,
+     &              frcfile(max_frc)(1:lstr))
+
             else
                 mpi_master_only write(*,'(1x,2A/12x,2A/)')
      &          '### ERROR: read_inp :: Too many forcing files are ',

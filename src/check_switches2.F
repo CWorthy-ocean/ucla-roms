@@ -16,7 +16,7 @@
       use param, only:
      &     ieast, iwest, jnorth, jsouth, lm, mm, nsub_e, nsub_x
       use hidden_mpi_vars, only: inode, jnode
-      use error_handling, only: handle_configuration_error
+      use error_handling_mod, only: error_log
 
       implicit none
       character(len=17) :: sr_name="check_tile_bounds"
@@ -33,7 +33,7 @@
      &          'NSUB_X =', NSUB_X,  'is incompatible with Lm =', Lm,
      &       'i_X =', i_X,  '==> istr,iend =', istr,iend
 
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
@@ -43,7 +43,7 @@
         write(error_info, *)
      &          'NSUB_E =', NSUB_E,  'is incompatible with Mm =', Mm,
      &       'j_E =', j_E,  '==> jstr,jend =', jstr,jend
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
@@ -103,7 +103,7 @@
 
       use param, only: mynode
       use strings, only: cpps, max_opt_size
-      use error_handling, only: handle_configuration_error
+      use error_handling_mod, only: error_log
 
       implicit none
       character(len=16) :: sr_name = "check_switches2"
@@ -184,7 +184,7 @@
         write(error_info, *) 'neither PRED_COUPLED_MODE '//
      &                       'nor CORR_COUPLED_MODE are defined in '//
      &        '"set_global_definitions.h".'
-        call handle_configuration_error(
+        call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
@@ -194,7 +194,7 @@
      &          'switches PRED_COUPLED_MODE and CORR_COUPLED_MODE '//
      &          'in "set_global_definitions.h": only one of them '//
      &        'should be defined.'
-        call handle_configuration_error(
+        call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
@@ -219,7 +219,7 @@
       if (nobc_west>1) then
         write(error_info, *) 'more than one '//
      &        'boundary condition is chosen on the WESTERN EDGE.'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
         ierr=ierr+1
@@ -227,7 +227,7 @@
       if (nobc_east>1) then
         write(*,'(A)') 'more than one '//
      &        'boundary condition is chosen on the EASTERN EDGE.'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
         ierr=ierr+1
@@ -249,7 +249,7 @@
       if (nobc_south>1) then
         write(error_info, *) 'more than one '//
      &        'boundary condition is chosen on the SOUTHERN EDGE.'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
         ierr=ierr+1
@@ -257,7 +257,7 @@
       if (nobc_north>1) then
         write(error_info, *) 'more than one '//
      &        'boundary condition is chosen on the NORTHERN EDGE.'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
@@ -288,7 +288,7 @@
       if (nAk>1) then
         write(error_info, *) 'cppdefs.opt: more than '//
      &        'one vertical mixing scheme is chosen.'
-        call handle_configuration_error(
+        call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
@@ -301,7 +301,7 @@
       write(*,'(A') 'cppdefs.opt: '//
      &        'illegal combination of CPP-switches: '//
      &'SPLIT_EOS is defined, but NONLIN_EOS is not.'
-      call handle_configuration_error(
+      call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
@@ -318,7 +318,7 @@
         write(error_info, *)  'NDTFAST =',
      &         ndtfast, 'is greater than unity for a shallow water',
      &        'configuration.','Change it to unity in startup file.'
-      call handle_configuration_error(
+      call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
         ierr=ierr+1
@@ -328,7 +328,7 @@
   99  mpi_master_only write(error_info, *)
      &     'Insufficient size of string "cpps" ',
      &     'in file "strings".', 'Increase the size it and recompile.'
-      call handle_configuration_error(
+      call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
       ierr=ierr+1
