@@ -1,5 +1,5 @@
 #!/bin/bash
-
+# Script to download input data used by Example cases
 if command -v curl &> /dev/null;then
     DOWNLOAD_COMMAND="curl -O -L"
 elif command -v wget &> /dev/null;then
@@ -7,26 +7,18 @@ elif command -v wget &> /dev/null;then
 fi
 echo ${DOWNLOAD_COMMAND}
 # URLs to download
-URL_PREFIX="https://github.com/CESR-lab/input_data/raw/main"
+URL_PREFIX="https://github.com/CWorthy-ocean/ucla_roms_example_input_data/raw/main"
 files=(
-    "roms_LFfrc.nc"
-    "sample_flux_bgc.nc"
-    "sample_bry_bgc.nc"
-    "roms_bgcbry.nc"
-    "roms_default_bgcbry.nc"
-    "roms_init_trace.nc"
-    "roms_init_bgc.nc"
-    "sample_grd_riv.nc"
-    "sample_rad_units_DPD.nc"
-    "sample_tra_units_DPD.nc"
-    "sample_wnd.nc"
-    "sample_edata.nc"
-    "roms_bry_trace.nc"
-    "sample_flux_frc.nc"
-    "sample_prec_units_DPD.nc"
-    "sample_tides.nc"
-    "sample_tracers.nc"
-    "sample_wwv_riv.nc"
+    "example_input_surface_forcing.nc"
+    "example_input_pipe_forcing.nc"
+    "example_input_bgc_surface_forcing_clim.nc"
+    "example_input_tides.nc"
+    "example_input_river_forcing.nc"
+    "example_input_boundary_forcing.nc"
+    "example_input_bgc_boundary_forcing_clim.nc"
+    "example_input_surface_flux_forcing.nc"
+    "example_input_grid.nc"
+    "example_input_bgc_initial_conditions.nc"
 )
 
 for fname in "${files[@]}";do

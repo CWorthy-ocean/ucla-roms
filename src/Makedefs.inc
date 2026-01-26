@@ -186,6 +186,8 @@ endif
 ifeq ($(COMPILER),$(filter ifort intel, $(COMPILER)))
     ifeq ($(BUILD_MODE),debug)
         FFLAGS = -g -traceback -check all
+    else ifeq ($(BUILD_MODE),test)
+	FFLAGS = -O0
     else ifeq ($(BUILD_MODE),strict)
         FFLAGS += -fp-model strict
     else ifeq ($(BUILD_MODE),vtune)
@@ -200,6 +202,8 @@ ifeq ($(COMPILER),gnu)
     FFLAGS = -O3 -fallow-argument-mismatch
     ifeq ($(BUILD_MODE),debug)
         FFLAGS = -fallow-argument-mismatch -g -fbacktrace -fcheck=all
+    else ifeq ($(BUILD_MODE),test)
+	FFLAGS = -fallow-argument-mismatch -O0
     endif
 endif
 

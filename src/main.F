@@ -91,7 +91,7 @@ C$OMP END MASTER                         ! is in uniform state]. This
      &     may_day_flag, nnew, nrhs, nstp, numthreads, priv_count, sec2day,
      &     start_time, synchro_flag, tdays, time, proc
       use sponge_tune, only: ub_tune
-      use particles, only: floats
+      use particles, only: floats, init_particles
       use upscale_output, only: do_upscale, init_upscale
       use random_output, only: do_random, init_random
       use cstar_output, only: do_cstar, init_cstar
@@ -114,7 +114,9 @@ C$OMP END MASTER                         ! is in uniform state]. This
       use param, only:
      &     mynode, nsub_e, nsub_x, lm, mm,
      &     N, np_eta, np_xi, padd_e, padd_x
-
+#ifdef SPONGE_TUNE
+      use sponge_tune, only: init_orlanski_tune
+#endif
       implicit none
 
       integer trd, tile, my_first, my_last, range
@@ -322,13 +324,13 @@ CR      write(*,*)  ' -2' MYID
       use scalars, only:
      &     dt, iic, iif, knew, kstp, nfast, nnew, nrhs,
      &     nstp, ntstart, sec2day, start_time, tdays, time
-      use sponge_tune, only: ub_tune
-      use particles, only: floats
+      use sponge_tune, only: ub_tune, adjust_orlanski
+      use particles, only: floats, do_particles
       use surf_flux, only: wrt_smflx, wrt_stflx, wrt_sflux
       use random_output, only: do_random, wrt_random
       use cstar_output, only: do_cstar, wrt_cstar
       use frc_output, only: do_frc, wrt_frc
-      use zslice_output, only: do_zslice
+      use zslice_output, only: do_zslice, wrt_zslice
       use basic_output, only:
      &     calc_avg_ocean_vars, wrt_avg_ocean_vars,
      &     wrt_his_ocean_vars, wrt_rst_ocean_vars

@@ -26,7 +26,7 @@ cp -p $ROMS_ROOT/Examples/code_check/diag.opt .
 #cp -p $ROMS_ROOT/Examples/code_check/Makedefs.inc .
 cp -p $ROMS_ROOT/Examples/Makefile .
 make compile_clean &> /dev/null
-make > compile.log
+make BUILD_MODE=test > compile.log
 
 
 # 2) Run test case:

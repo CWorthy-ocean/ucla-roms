@@ -52,7 +52,9 @@
       real,allocatable,dimension(:,:) :: vflux_DIC_avg
       real,allocatable,dimension(:,:) :: vflux_ALK_ALT_CO2_avg
       real,allocatable,dimension(:,:) :: vflux_DIC_ALT_CO2_avg
-#endif ! MARBL
+#endif /* MARBL */
+#else
+      real,allocatable,dimension(:,:) :: swflx_avg
 #endif
       real,allocatable,dimension(:,:) :: sustr_avg
       real,allocatable,dimension(:,:) :: svstr_avg
@@ -115,7 +117,10 @@
         vflux_ALK_ALT_CO2_avg(:,:)=0
         allocate(vflux_DIC_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
         vflux_DIC_ALT_CO2_avg(:,:)=0
-#endif MARBL */
+#endif /* MARBL */
+#else
+        allocate(swflx_avg(GLOBAL_2D_ARRAY) )
+        swflx_avg(:,:)=0
 #endif
         allocate(sustr_avg(GLOBAL_2D_ARRAY) )
         sustr_avg(:,:)=0
@@ -164,7 +169,7 @@
       vflux_DIC_avg(:,:)  = vflux_DIC_avg(:,:)*(1-coef)  + stflx(:,:,iDIC)*coef
       vflux_ALK_ALT_CO2_avg(:,:)  = vflux_ALK_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,iALK_alt)*coef
       vflux_DIC_ALT_CO2_avg(:,:)  = vflux_DIC_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,iDIC_alt)*coef
-#endif MARBL */
+#endif /* MARBL */
 #else
       swflx_avg(:,:) = swflx_avg(:,:)*(1-coef) + stflx(:,:,isalt)*coef
 #endif
@@ -235,7 +240,10 @@
       vflux_ALK_ALT_CO2_avg(:,:) = 0
       call ncwrite(ncid,'vflux_DIC_ALT_CO2',vflux_DIC_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
       vflux_DIC_ALT_CO2_avg(:,:) = 0
-#endif MARBL */
+#endif /* MARBL */
+#else
+      call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),(/1,1,record/))
+      swflx_avg(:,:) = 0
 #endif
       call ncwrite(ncid,'sustr',sustr_avg(1:i1,j0:j1),(/1,1,record/))
       sustr_avg(:,:) = 0

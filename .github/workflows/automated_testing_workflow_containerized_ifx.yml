@@ -46,22 +46,20 @@ jobs:
         run: |
           source $GITHUB_ENV
           cd Work/
-          make nhmg COMPILER=intel
           cd ${ROMS_ROOT}/Tools-Roms/
-          make COMPILER=intel
+          make partit COMPILER=intel
 
       - name: Cache input_data
         id: cache-input
         uses: actions/cache@v4
         with:
           path: Examples/input_data
-          key: roms-input-${{ hashFiles('ci/get_input_files.sh') }}
+          key: roms-input-${{ hashFiles('Examples/input_data/get_input_files.sh') }}
 
       - name: Get input data (if not cached)
         if: steps.cache-input.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          cp ${ROMS_ROOT}/ci/get_input_files.sh ${ROMS_ROOT}/Examples/input_data/
           cd ${ROMS_ROOT}/Examples/input_data/
           ./get_input_files.sh
       - name: Update COMPILER arg in make commands and allow OpenMPI oversubscription

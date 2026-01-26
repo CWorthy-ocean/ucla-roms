@@ -41,7 +41,7 @@ cp -p $ROMS_ROOT/Examples/code_check/diag.opt .
 cp -p $ROMS_ROOT/Examples/Makefile .
 cp -p $ROMS_ROOT/Examples/code_check/test_roms.py .
 make compile_clean &> /dev/null
-make > compile_${BGC_MODEL}.log # 2>&1 | tee -a compile_${BGC_MODEL}.log
+make BUILD_MODE=test > compile_${BGC_MODEL}.log # 2>&1 | tee -a compile_${BGC_MODEL}.log
 
 # 2) Run test case:
 echo "##############################"

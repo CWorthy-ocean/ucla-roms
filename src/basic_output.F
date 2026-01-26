@@ -12,8 +12,8 @@
       use roms_read_write, only:
      &     max_name_size, dn_tm, dn_xr, dn_xu,
      &     dn_yr, dn_yv, dn_zr, eta_rho, eta_v, xi_rho, xi_u, dn_zw,
-     & avg_output, create_file
-      use sponge_tune, only: ub_tune
+     &     avg_output, create_file, sec2date
+      use sponge_tune, only: ub_tune, wrt_rst_ub
       use diagnostics, only: diag_pflx
       use scalars, only:
      &     NT, iic, knew, nstp, time,
@@ -439,6 +439,8 @@
 
       use grid, only: pm, pn
       use dimensions, only: i0, i1, j0, j1
+      use tracers, only: wrt_avg_trc
+      use roms_read_write, only: store_string_att
       implicit none
 
       ! local
@@ -529,7 +531,6 @@
       ! write ocean_vars variables to output netcdf restart file
       ! ocean_vars variables are calculated for t=n in timestep t=n
       ! (unlike u/v/etc which are calculated for t=n+1 in timestep t=n)
-
       implicit none
 
       ! local
@@ -1063,6 +1064,7 @@
 #endif
       use private_scratch, only: a2d
       use dimensions, only: i0, i1, j0, j1, nx, ny
+      use tracers, only: set_avg_trc
       implicit none
 
       ! local

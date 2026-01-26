@@ -44,29 +44,27 @@ jobs:
         micromamba run -n roms-ci bash -c '
         #Copy GNU-compatible makefiles
         cd Work/
-        make nhmg COMPILER=gnu
         cd ${ROMS_ROOT}/Tools-Roms/
-        make COMPILER=gnu
+        make partit COMPILER=gnu
         '
     - name: Cache input_data
       id: cache-input
       uses: actions/cache@v4
       with:
         path: Examples/input_data
-        key: roms-input-${{ hashFiles('ci/get_input_files.sh') }}
+        key: roms-input-${{ hashFiles('Examples/input_data/get_input_files.sh') }}
 
     - name: Get input data (if not cached)
       if: steps.cache-input.outputs.cache-hit != 'true'
       shell: bash
       run: |
-        cp ${ROMS_ROOT}/ci/get_input_files.sh ${ROMS_ROOT}/Examples/input_data/
         cd ${ROMS_ROOT}/Examples/input_data/
         ./get_input_files.sh
     - name: Update COMPILER arg in make commands
       shell: bash
       run: |
-        sed -i -e "s/make /make COMPILER=gnu USER_FFLAGS=-Werror/g" $ROMS_ROOT/Examples/code_check/do_test_roms.sh
-        sed -i -e "s/make /make COMPILER=gnu USER_FFLAGS=-Werror/g" $ROMS_ROOT/Examples/bgc_real/code_check/do_test_roms.sh
+        sed -i -e "s/make /make COMPILER=gnu USER_FFLAGS=-Werror /g" $ROMS_ROOT/Examples/code_check/do_test_roms.sh
+        sed -i -e "s/make /make COMPILER=gnu USER_FFLAGS=-Werror /g" $ROMS_ROOT/Examples/bgc_real/code_check/do_test_roms.sh
     - name: Run Test for ${{ matrix.example }}
       shell: bash
       run: |

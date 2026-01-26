@@ -160,9 +160,9 @@ c***              no code here
       endif
 
       if (pipe_source) call set_pipe_frc
-
+#if defined(CDR_FORCING)
       if (cdr_source) call set_cdr_frc
-
+#endif
 # ifdef WEC
       call set_wec_frc_tile(istr,iend,jstr,jend,ierr)
       call wec_forces
