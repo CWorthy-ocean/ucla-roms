@@ -126,7 +126,7 @@
         allocate(srflx_avg(GLOBAL_2D_ARRAY) )
         srflx_avg(:,:)=0
         allocate(swflx_avg(GLOBAL_2D_ARRAY) )
-        swflx_avg(:,:)=0        
+        swflx_avg(:,:)=0
       endif ! do_avg
       endif ! done
 
@@ -246,7 +246,7 @@
       call ncwrite(ncid,'srflx',srflx_avg(i0:i1,j0:j1),(/1,1,record/))
       srflx_avg(:,:) = 0
       call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),(/1,1,record/))
-      swflx_avg(:,:) = 0      
+      swflx_avg(:,:) = 0
       else
 #ifdef BULK_FRC
       call ncwrite(ncid,'tair',tair(i0:i1,j0:j1),(/1,1,record/))
