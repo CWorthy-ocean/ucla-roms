@@ -11,7 +11,6 @@
        LMD_BKPP                LMD_RIMIX               LMD_NONLOCAL
        OBC_WEST                OBC_EAST                OBC_NORTH
        OBC_SOUTH               OBC_M2FLATHER           OBC_M3ORLANSKI
-./print_output_logs.sh: line 31: bgc_real: command not found
        OBC_TORLANSKI           Z_FRC_BRY               M2_FRC_BRY
        M3_FRC_BRY              T_FRC_BRY               SPONGE
        BIOLOGY_BEC2            BIOLOGY                 PCO2AIR_FORCING
@@ -397,10 +396,10 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
 
 
   STEP KINETIC_ENRG     BAROTR_KE        MAX_ADV_CFL     MAX_VERT_CFL
- 0  3.6229628195672916E-03 1.4392038342093960E-03 6.3833781982263776E-02 3.8255911220012553E-02
+ 0  3.6229628195672916E-03 1.4392038342093960E-03 6.3834801906551136E-02 3.8256931144299920E-02
          set_frc :: zeta_east        input time (days) =   3654.00     rec =   2
-         set_frc :: zeta_east        input time (days) =   3655.00     rec =   3
          set_frc :: zeta_west        input time (days) =   3654.00     rec =   2
+         set_frc :: zeta_east        input time (days) =   3655.00     rec =   3
          set_frc :: zeta_west        input time (days) =   3655.00     rec =   3
          set_frc :: zeta_north       input time (days) =   3654.00     rec =   2
          set_frc :: zeta_north       input time (days) =   3655.00     rec =   3
@@ -408,15 +407,15 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
          set_frc :: zeta_south       input time (days) =   3655.00     rec =   3
        tides :: read all tides
        ecosys_bec2_td:: computing bgc
- 1  3.6230165764642845E-03 1.4392130225301038E-03 5.8786445050160785E-02 4.3313436696380610E-02
+ 1  3.6230165778479949E-03 1.4392130225812207E-03 5.8787661818496852E-02 4.3314678969436061E-02
        ecosys_bec2_td:: computing bgc
- 2  3.5817630447720502E-03 1.3982763514559862E-03 5.6248002498950650E-02 5.0384208675385241E-02
+ 2  3.5817637139088239E-03 1.3982763660205560E-03 5.6249866765231624E-02 5.0386122714691749E-02
        ecosys_bec2_td:: computing bgc
- 3  3.5246779118408354E-03 1.3412033441358878E-03 6.0363773489668031E-02 5.1832771987926886E-02
+ 3  3.5246795966696206E-03 1.3412033738205613E-03 6.0366568966473626E-02 5.1835641479626722E-02
        ecosys_bec2_td:: computing bgc
- 4  3.4755095962035829E-03 1.2918165298361200E-03 6.2988518394321541E-02 5.2819449031077541E-02
+ 4  3.4755128681009956E-03 1.2918166196224151E-03 6.2992522742916779E-02 5.2823545194467386E-02
        ecosys_bec2_td:: computing bgc
- 5  3.4397035904285716E-03 1.2555170187978349E-03 6.5303883452899336E-02 5.4973555686781625E-02
+ 5  3.4397092052149227E-03 1.2555171853521408E-03 6.5309626880533531E-02 5.4979399622186592E-02
        ocean_vars :: wrote history, tdays =   3654.0012  step =      5 rec =   2
        wrt_bgc_tracers :: history , trc =  PO4
        wrt_bgc_tracers :: history , trc =  NO3
@@ -424,23 +423,23 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
        wrt_bgc_tracers :: history , trc =  DIC
        bgc :: wrote history, tdays =   3654.0012  step =      4 rec =   2
        ecosys_bec2_td:: computing bgc
- 6  3.4169376541025114E-03 1.2320458675590675E-03 6.7201664118717266E-02 5.6969813245436533E-02
+ 6  3.4169458265513823E-03 1.2320460911766601E-03 6.7208910212247064E-02 5.6977184941235458E-02
        ecosys_bec2_td:: computing bgc
- 7  3.4015350331162162E-03 1.2158073672640041E-03 7.0599451883314068E-02 5.8685761449695159E-02
+ 7  3.4015462522997415E-03 1.2158076103216454E-03 7.0608293867517727E-02 5.8694765622249574E-02
        ecosys_bec2_td:: computing bgc
- 8  3.3924390268684516E-03 1.2058019444794695E-03 7.3829293387386266E-02 6.0657239353231765E-02
+ 8  3.3924538291388250E-03 1.2058021553132236E-03 7.3840384949926813E-02 6.0668555858555878E-02
        ecosys_bec2_td:: computing bgc
- 9  3.3884364781522694E-03 1.2008132913140829E-03 7.8639432086868688E-02 5.0406010835449613E-02
+ 9  3.3884554971978192E-03 1.2008134173221432E-03 7.8654726003167336E-02 5.0421201110960316E-02
        ecosys_bec2_td:: computing bgc
-10  3.3886049800886148E-03 1.1999646237532012E-03 8.5598031883502373E-02 5.5730054153631157E-02
+10  3.3886276598144712E-03 1.1999646142837191E-03 8.5613847007952854E-02 5.5745722986667461E-02
        ocean_vars :: wrote history, tdays =   3654.0023  step =     10 rec =   3
        wrt_bgc_tracers :: history , trc =  PO4
        wrt_bgc_tracers :: history , trc =  NO3
        wrt_bgc_tracers :: history , trc =  O2
        wrt_bgc_tracers :: history , trc =  DIC
        bgc :: wrote history, tdays =   3654.0023  step =      9 rec =   3
- Process    0  thread  0  cpu time =       95.56 sec
+ Process    0  thread  0  cpu time =       45.25 sec
 
  MAIN: DONE - Records written:
 
- MPI_run_time =   145.13102154800001
+ MPI_run_time =   68.031659226000102
