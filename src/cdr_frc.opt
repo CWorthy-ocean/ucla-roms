@@ -18,6 +18,11 @@
                                                                            ! interpolated in time between consecutive records; otherwise,
                                                                            ! forcing is held constant until the next record is reached
 
+      ! RELOCATE CDR FORCING TO NEAREST WET POINT?
+      logical                            :: relocate_to_wet_pts = .false.  ! If false, any depth profile or single-point parameterized
+                                                                           ! forcing that is centered on land will cause the model to
+                                                                           ! error out.  If true, the forcing will be relocated or
+                                                                           ! recentered to the nearest wet point.
 
       ! PARAMETERIZED VERTICAL PROFILES ********************************
       logical,parameter,public :: cdr_volume  = .false.  ! Set to .false. if you want a tracer flux but no added water.
