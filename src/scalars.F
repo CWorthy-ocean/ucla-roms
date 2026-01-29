@@ -111,7 +111,7 @@ C$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
 */
 #endif
 
-      integer ntstart, ntimes, ndtfast, nfast, ninfo, may_day_flag,
+      integer ntstart, ntimes, ndtfast, nfast, ninfo,
      &                                                barr_count(16)
 #ifdef EXACT_RESTART
       integer forw_start

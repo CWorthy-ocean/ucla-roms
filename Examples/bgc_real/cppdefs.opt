@@ -10,14 +10,14 @@
 
 #if defined RIVERS
 
-c--# define DIAGNOSTICS
+!#define DIAGNOSTICS
 # define TIDES
 # define BULK_FRC
 # define SPONGE_TUNE
 # define RIVER_SOURCE
 # define EXTRACT_DATA
 
-c--# define SFLX_CORR
+!#define SFLX_CORR
 
 # define SOLVE3D
 # define UV_COR
@@ -31,7 +31,7 @@ c--# define SFLX_CORR
 # define NONLIN_EOS
 # define SPLIT_EOS
 
-c--# define AVERAGES
+!#define AVERAGES
 # define EXACT_RESTART
 # define IMPLICIT_BOTTOM_DRAG
 
@@ -43,7 +43,7 @@ c--# define AVERAGES
 # define LMD_BKPP
 # define LMD_RIMIX
 # define LMD_NONLOCAL
-c--# define LMD_CONVEC
+!#define LMD_CONVEC
 
 # define OBC_WEST
 # define OBC_EAST
@@ -61,16 +61,16 @@ c--# define LMD_CONVEC
 # define SPONGE
 
                         /* Biology Settings */
-!# define MARBL
+# define MARBL
 
 
 #ifdef MARBL
 # define NOX_FORCING
 # define NHY_FORCING
-# define MARBL_DIAGS
+!# define MARBL_DIAGS
 #endif
 
-# define BIOLOGY_BEC2
+!# define BIOLOGY_BEC2
 
 #ifdef BIOLOGY_BEC2
 # define BIOLOGY                  /* DPD current does nothing in new code */

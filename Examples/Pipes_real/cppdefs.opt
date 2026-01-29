@@ -11,10 +11,10 @@
     Embedded (nested) grid configuration segment
 */
 
-c--#ifndef MAX_GRID_LEVEL
-c--# define MAX_GRID_LEVEL 2
-c--# include "redefs.X"
-c--#endif
+!--#ifndef MAX_GRID_LEVEL
+!#define MAX_GRID_LEVEL 2
+!--# include "redefs.X"
+!--#endif
 
 /*
    Main switch starts here: model configuration choice.
@@ -23,7 +23,7 @@ c--#endif
 #if defined USWC_sample
 
 /* Include standard CPP switches for UP ETH Zurich */
-c-dd#include "cppdefs_UP.h"
+!-dd#include "cppdefs_UP.h"
 
 /*
    Standard UP ETH Zurich Settings for Regional and Basin Configurations
@@ -38,11 +38,11 @@ c-dd#include "cppdefs_UP.h"
 #define NONLIN_EOS
 #define SPLIT_EOS
 #define SALINITY
-c-dd#define SFLX_CORR    /* DevinD turned off as new 25km input wrong for sss */
+!#define SFLX_CORR    /* DevinD turned off as new 25km input wrong for sss */
                      /*  Forcing */
                      /*         - surface */
 #define DIURNAL_SRFLUX /* Note this is 'undef'ed' below */
-c-dd#define QCORRECTION /* DevinD no longer used for bulk force */
+!#define QCORRECTION /* DevinD no longer used for bulk force */
                      /*         - lateral */
 #define T_FRC_BRY
 #define Z_FRC_BRY
@@ -100,23 +100,23 @@ c-dd#define QCORRECTION /* DevinD no longer used for bulk force */
 
 
 /* Switches required for Flux correction */
-c-dd#define SFLX_CORR ! Already defined in cppdefs_UP.h & DEVIND IN NEW CODE
+!#define SFLX_CORR ! Already defined in cppdefs_UP.h & DEVIND IN NEW CODE
 #undef VFLX_CORR
 #undef QCORRECTION
-c-dd#define TAU_CORRECTION
+!#define TAU_CORRECTION
 #undef DIURNAL_SRFLUX
 
      /* Output */
 #define AVERAGES
 #undef SLICE_AVG
 
-c---#define ADV_ISONEUTRAL
+!#define ADV_ISONEUTRAL
 
      /* Biology */
-c-dd#define BIOLOGY_BEC2
+!#define BIOLOGY_BEC2
 
-c-dd#define BULK_FRC
-c-dd#define BULK_FLUX_OUTPUT /* DevinD added this for sustr and svstr outputs in new code */
+!#define BULK_FRC
+!#define BULK_FLUX_OUTPUT /* DevinD added this for sustr and svstr outputs in new code */
 
 
 #endif

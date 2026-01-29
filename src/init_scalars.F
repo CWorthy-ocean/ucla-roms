@@ -1,6 +1,6 @@
 #include "cppdefs.opt"
 
-      subroutine init_scalars (ierr)
+      subroutine init_scalars()
 
 ! Set initial values for globally accessable (stored in common blocks)
 ! scalar variables.  Typically these are associated with time indices,
@@ -13,7 +13,7 @@
      &     tile_count, trd_count, volume
       use scalars, only:
      &     barr_count, gamma2, iic, iif, init, knew,
-     &     kstp, may_day_flag, nfast, nnew, nrhs, nstp, ntstart, start_time
+     &     kstp, nfast, nnew, nrhs, nstp, ntstart, start_time
       use roms_read_write, only:
      &     max_frc_files, ncfrc,
      &     init_output_indices
@@ -24,7 +24,7 @@
       use, intrinsic :: iso_fortran_env, only: real32
 
       implicit none
-      integer ierr, i
+      integer  i
 
       real :: nan  !real(real32) :: nan
       nan = IEEE_VALUE(nan, IEEE_QUIET_NAN)
@@ -45,7 +45,7 @@ c      write(*,*) 'kmp_stacksize =', size
       nrhs=1  ; nnew=1               ! of model fields.
 #endif
                                      ! Reset intra-thread
-      may_day_flag=0                 ! communication signal
+                                     ! communication signal
       trd_count=0                    ! variables and counters.
       cpu_all=0.   !<-- array
       barr_count=0 !<-- array
@@ -76,14 +76,9 @@ c      write(*,*) 'kmp_stacksize =', size
       call init_dimensions                                 ! needs to come before init_output_indices
       call init_output_indices      ! retire this soon (the bfx, bfy thing)
 
-
-      ierr=0
-      call read_inp (ierr)
-      if (ierr==0) then
+      call read_inp()
 #ifdef SOLVE3D
       call set_weights
 #endif
-
-      endif
 
       end

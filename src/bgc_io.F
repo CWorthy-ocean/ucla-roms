@@ -52,7 +52,7 @@
      &     nf90_put_att, nf90_enddef
       use scalars, only: nstp, nt, time, n, dt, iic, nnew, tdays
       use dimensions, only: i0, i1, j0, j1, xi_rho, eta_rho
-      use error_handling, only: handle_configuration_error
+      use error_handling_mod, only: error_log
 
       implicit none
 
@@ -146,12 +146,12 @@
       call set_frc_data(nc_nhy,nhy,'r')
 #endif /* NHY_FORCING */
 
-
+      call error_log%abort_check()
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
       ! Daily average Short wave radiation
 !     call set_frc_var_tile( istr, iend, jstr, jend, nc_swrad_avg, swrad_avg, interp_frc )
       call set_frc_data(nc_swrad_avg,swrad_avg,'r')
-
+      call error_log%abort_check()
       do j=jstrR,jendR
         do i=istrR,iendR
           swrad_avg(i,j)= swrad_avg(i,j)/(rho0*Cp)
@@ -165,10 +165,8 @@
 #   endif
           endif
 #endif
-
         enddo !<- istrR
       enddo   !<- jstrR
-
 #endif /* DAILYPAR_PHOTOINHIBITION */
 
       end subroutine set_bgc_surf_frc  !]
@@ -204,7 +202,7 @@
      &        "output_period_his (",
      &        output_period_his, ")"
 
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
       endif
@@ -215,11 +213,11 @@
      &        "output_period_avg (",
      &        output_period_avg, ")"
 
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
       endif
-
+      call error_log%abort_check()
       if (avg) then
 
 !        if (.not. first_step_avg) then
@@ -326,7 +324,7 @@
      &        "output_period_his_dia (",
      &        output_period_his_dia, ")"
 
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
       endif
@@ -337,11 +335,11 @@
      &        "output_period_avg_dia (",
      &        output_period_avg_dia, ")"
 
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
       endif
-
+      call error_log%abort_check()
 
       if (wrt_avg_dia) then
 

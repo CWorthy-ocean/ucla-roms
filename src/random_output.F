@@ -14,7 +14,7 @@
      &     nf90_put_att, nf90_close
       use scalars, only: dt, iic, knew, nnew, tdays, time
       use ocean_vars, only: zeta, u, v
-      use error_handling, only: handle_netcdf_error
+      use error_handling_mod, only: error_log
       implicit none
 
       private
@@ -98,7 +98,7 @@
 
         ierr=nf90_open(fname,nf90_write,ncid)
         if (ierr/=nf90_noerr) then
-           call handle_netcdf_error(netcdf_status=ierr,
+           call error_log%check_netcdf_status(netcdf_status=ierr,
      &          info="error opening "//fname,
      &          context=module_name//"/"//sr_name)
         end if
@@ -121,7 +121,7 @@
 
         output_time=0
       endif
-
+      call error_log%abort_check()
       end subroutine wrt_random !]
 !----------------------------------------------------------------------
 

@@ -8,8 +8,8 @@
 ! linear (if no CPP switch is defined).
 
 #define SPLINE_TS
-c--#define NEUMANN_TS
-c--#define AKIMA_V
+!#define NEUMANN_TS
+!#define AKIMA_V
 
 #ifdef BIO_1ST_USTREAM_TEST
           if (itrc > isalt) then   !<-- biological components only
@@ -124,16 +124,16 @@ c--#define AKIMA_V
           enddo
 #endif
 
-c**       do k=1,N-1
-c**         do i=istr,iend
-c**           FC(i,k)=0.5*(t(i,j,k,nrhs,itrc)+t(i,j,k+1,nrhs,itrc))
-c**     &                                                *We(i,j,k)
-c**         enddo
-c**       enddo
-c**       do i=istr,iend
-c**         FC(i, 0)=0.
-c**         FC(i,N )=0.
-c**       enddo
+!**       do k=1,N-1
+!**         do i=istr,iend
+!**           FC(i,k)=0.5*(t(i,j,k,nrhs,itrc)+t(i,j,k+1,nrhs,itrc))
+!**     &                                                *We(i,j,k)
+!**         enddo
+!**       enddo
+!**       do i=istr,iend
+!**         FC(i, 0)=0.
+!**         FC(i,N )=0.
+!**       enddo
 
 #ifdef BIO_1ST_USTREAM_TEST
         endif  !<-- itrc > isalt, bio-components only.

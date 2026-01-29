@@ -23,7 +23,7 @@
      &     nf90_put_att, nf90_close
       use scalars, only: iic, knew, nnew, tdays, time, dt, n
       use ocean_vars, only: zeta, hz
-      use error_handling, only : handle_configuration_error, handle_netcdf_error
+      use error_handling_mod, only: error_log
       use cdr_frc, only: cdr_flx_3d_ALK, cdr_flx_3d_DIC, cdr_prf,
      &                   cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,
      &                   cdr_jloc, cdr_source, forcing_3d
@@ -243,7 +243,7 @@
       endif
 
       if (monthly_averages .and. .not. do_avg) then
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info="`monthly_avg` is .true., but `do_avg` is .false.")
       endif
@@ -386,25 +386,25 @@
 
       zeta__avg(:,:) = zeta__avg(:,:)*(1-coef) + zeta(:,:,knew)*coef
 
-      temp_avg(:,:,:) = temp_avg(:,:,:)*(1-coef) + t(:,:,:,knew,itemp)*coef
+      temp_avg(:,:,:) = temp_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,itemp)*coef
 
-      salt_avg(:,:,:) = salt_avg(:,:,:)*(1-coef) + t(:,:,:,knew,isalt)*coef
+      salt_avg(:,:,:) = salt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,isalt)*coef
 
-      ALK_avg(:,:,:) = ALK_avg(:,:,:)*(1-coef) + t(:,:,:,knew,iALK)*coef
+      ALK_avg(:,:,:) = ALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*coef
 
-      hALK_avg(:,:,:) = hALK_avg(:,:,:)*(1-coef) + t(:,:,:,knew,iALK)*Hz(:,:,:)*coef
+      hALK_avg(:,:,:) = hALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*Hz(:,:,:)*coef
 
-      DIC_avg(:,:,:) = DIC_avg(:,:,:)*(1-coef) + t(:,:,:,knew,iDIC)*coef
+      DIC_avg(:,:,:) = DIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*coef
 
-      hDIC_avg(:,:,:) = hDIC_avg(:,:,:)*(1-coef) + t(:,:,:,knew,iDIC)*Hz(:,:,:)*coef
+      hDIC_avg(:,:,:) = hDIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*Hz(:,:,:)*coef
 
-      ALK_alt_avg(:,:,:) = ALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,knew,iALK_alt)*coef
+      ALK_alt_avg(:,:,:) = ALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*coef
 
-      hALK_alt_avg(:,:,:) = hALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,knew,iALK_alt)*Hz(:,:,:)*coef
+      hALK_alt_avg(:,:,:) = hALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*Hz(:,:,:)*coef
 
-      DIC_alt_avg(:,:,:) = DIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,knew,iDIC_alt)*coef
+      DIC_alt_avg(:,:,:) = DIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*coef
 
-      hDIC_alt_avg(:,:,:) = hDIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,knew,iDIC_alt)*Hz(:,:,:)*coef
+      hDIC_alt_avg(:,:,:) = hDIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*Hz(:,:,:)*coef
 
       pH_avg(:,:,:) = pH_avg(:,:,:)*(1-coef) + marbl_saved_state_3d(:,:,:,iPH)*coef
 
@@ -553,11 +553,11 @@
         record = record+1
 
         ierr=nf90_open(fname,nf90_write,ncid)
-        if (ierr/=nf90_noerr) then
-           call handle_netcdf_error(netcdf_status=ierr,
-     &          info="error opening "//fname,
-     &          context=module_name//"/"//sr_name)
-        end if
+        call error_log%check_netcdf_status(netcdf_status=ierr,
+     &       info="error opening "//fname,
+     &       context=module_name//"/"//sr_name)
+        call error_log%abort_check()
+
         call multiply_by_thickness
         ! always add time
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
@@ -693,7 +693,7 @@
 
 #else /* MARBL && MARBL_DIAGS && CDR_FORCING */
 !----------------------------------------------------------------------
-      use error_handling, only : handle_configuration_error
+      use error_handling_mod, only : error_log
 
       implicit none
       character(len=12) :: module_name = "cstar_output"
@@ -712,21 +712,23 @@
       character(len=9) :: sr_name = "init_cstar"
 
 #ifndef MARBL
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info="cstar_output must have MARBL enabled.")
 #endif
 
 #ifndef MARBL_DIAGS
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info="cstar_output must have MARBL_DIAGS enabled.")
 #endif
 
 #ifndef CDR_FORCING
-        error stop 'ERROR: cstar_output must have CDR_FORCING enabled.'
+        call error_log%raise_global(
+     &        context=module_name//"/"//sr_name,
+     &        info='cstar_output must have CDR_FORCING enabled.')
 #endif
-
+        call error_log%abort_check()
       end subroutine init_cstar !]
 
       subroutine wrt_cstar ![

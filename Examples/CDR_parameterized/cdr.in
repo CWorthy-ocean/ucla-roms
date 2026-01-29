@@ -8,21 +8,18 @@ S-coord: THETA_S,   THETA_B,    hc (m)
           6.0D0        6.0D0     25.0D0
 
 grid:  filename
-     input_data/sample_grd_riv.nc
+     input_data/example_input_grid.nc
 
 forcing: filename
-     input_data/sample_flux_frc.nc
-     input_data/sample_wwv_riv.nc
-     input_data/roms_bry_trace.nc
-     input_data/sample_flux_bgc.nc
-     input_data/sample_bry_bgc.nc
-     input_data/roms_bgcbry.nc
-     input_data/roms_default_bgcbry.nc
-     input_data/roms_LFfrc.nc
+     input_data/example_input_bgc_surface_forcing_clim.nc
+     input_data/example_input_bgc_boundary_forcing_clim.nc
+     input_data/example_input_boundary_forcing.nc
+     input_data/example_input_surface_forcing.nc
+     input_data/example_input_tides.nc
 
 initial: NRREC  filename
           1
-     input_data/roms_init_bgc.nc
+     input_data/example_input_bgc_initial_conditions.nc
 
 output_root_name:
      cdr

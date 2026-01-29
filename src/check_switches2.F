@@ -1,49 +1,48 @@
 #include "cppdefs.opt"
                                            ! Checking compatibility of
-      subroutine check_tiling (ierr)       ! dimensions of the grid and
+      subroutine check_tiling () ! dimensions of the grid and
+      use error_handling_mod, only: error_log
       use param, only: nsub_e, nsub_x
       implicit none                        ! partitioning parameters:
-      integer ierr, tile                   ! logic of the code requires
+      integer tile                   ! logic of the code requires
 
       do tile=0,NSUB_X*NSUB_E-1            ! all the tiles to be at
-        call check_tile_bounds (tile,ierr) ! least two point wide.
+        call check_tile_bounds (tile) ! least two point wide.
       enddo                                ! Setting NSUB_X and NSUB_E
-      end                                  ! incorrectly may result in
-                                           ! smaller size.
+      call error_log%abort_check()        ! incorrectly may result in
+      end                                  ! smaller size.
 
-      subroutine check_tile_bounds (tile, ierr)
+      subroutine check_tile_bounds (tile)
 
       use param, only:
      &     ieast, iwest, jnorth, jsouth, lm, mm, nsub_e, nsub_x
       use dimensions, only: inode, jnode
-      use error_handling, only: handle_configuration_error
+      use error_handling_mod, only: error_log
 
       implicit none
       character(len=17) :: sr_name="check_tile_bounds"
       character(len=200) :: error_info
-      integer tile, ierr, isize,jsize
+      integer tile, isize,jsize
 #include "compute_tile_bounds.h"
 
       isize=iend-istr+1                    ! NOTE: run terminates, if
       jsize=jend-jstr+1                    ! violation occurs here.
 
       if (isize<2) then
-        ierr=ierr+1
         write(error_info, *)
      &          'NSUB_X =', NSUB_X,  'is incompatible with Lm =', Lm,
      &       'i_X =', i_X,  '==> istr,iend =', istr,iend
 
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
       endif
       if (jsize<2) then
-        ierr=ierr+1
         write(error_info, *)
      &          'NSUB_E =', NSUB_E,  'is incompatible with Mm =', Mm,
      &       'j_E =', j_E,  '==> jstr,jend =', jstr,jend
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
@@ -96,19 +95,19 @@
       end                            ! it into 80-character width.
 
 
-      subroutine check_switches2(ierr)
+      subroutine check_switches2()
 
 ! Manually check mutual consistency of settings of CPP switches, report
 ! contradictions (if any), and raise errors flag to terminate the run.
 
       use param, only: mynode
       use strings, only: cpps, max_opt_size
-      use error_handling, only: handle_configuration_error
+      use error_handling_mod, only: error_log
 
       implicit none
       character(len=16) :: sr_name = "check_switches2"
       character(len=200) :: error_info
-      integer ierr, nobc_west, nobc_east, nobc_south, nobc_north,
+      integer nobc_west, nobc_east, nobc_south, nobc_north,
      &                                ncoupl, nAk, is,ie, lenstr
 
       ie=lenstr(cpps)
@@ -127,44 +126,75 @@
 ! useful information.
 
 !----->>>>>>>>> begin copy-pasted section.
+      write(error_info, *)
+     &     'Insufficient size of string "cpps" ',
+     &     'in file "strings".', 'Increase the size it and recompile.'
 
       is=ie+2 ; ie=is+25
-      if (ie >= max_opt_size) goto 99
+      if (ie >= max_opt_size) then
+         call error_log%raise_global(
+     &        context=sr_name,
+     &        info=error_info)
+      end if
       cpps(is:ie)='<set_global_definitions.h>'
       cpps(ie+1:ie+1)=' '
 #ifdef PRED_COUPLED_MODE
       is=ie+2 ; ie=is+16
-      if (ie >= max_opt_size) goto 99
+      if (ie >= max_opt_size) then
+         call error_log%raise_global(
+     &        context=sr_name,
+     &        info=error_info)
+      end if
       cpps(is:ie)='PRED_COUPLED_MODE'
       cpps(ie+1:ie+1)=' '
 #endif
 #ifdef CORR_COUPLED_MODE
       is=ie+2 ; ie=is+16
-      if (ie >= max_opt_size) goto 99
+      if (ie >= max_opt_size) then
+         call error_log%raise_global(
+     &        context=sr_name,
+     &        info=error_info)
+      end if
       cpps(is:ie)='CORR_COUPLED_MODE'
       cpps(ie+1:ie+1)=' '
 #endif
 #ifdef EXTRAP_BAR_FLUXES
       is=ie+2 ; ie=is+16
-      if (ie >= max_opt_size) goto 99
+      if (ie >= max_opt_size) then
+         call error_log%raise_global(
+     &        context=sr_name,
+     &        info=error_info)
+      end if
       cpps(is:ie)='EXTRAP_BAR_FLUXES'
       cpps(ie+1:ie+1)=' '
 #endif
 #ifdef KEEP_CORIOLIS
       is=ie+2 ; ie=is+12
-      if (ie >= max_opt_size) goto 99
+      if (ie >= max_opt_size) then
+         call error_log%raise_global(
+     &        context=sr_name,
+     &        info=error_info)
+      end if
       cpps(is:ie)='KEEP_CORIOLIS'
       cpps(ie+1:ie+1)=' '
 #endif
 #ifdef IMPLCT_NO_SLIP_BTTM_BC
       is=ie+2 ; ie=is+21
-      if (ie >= max_opt_size) goto 99
+      if (ie >= max_opt_size) then
+         call error_log%raise_global(
+     &        context=sr_name,
+     &        info=error_info)
+      end if
       cpps(is:ie)='IMPLCT_NO_SLIP_BTTM_BC'
       cpps(ie+1:ie+1)=' '
 #endif
 #ifdef VAR_RHO_2D
       is=ie+2 ; ie=is+9
-      if (ie >= max_opt_size) goto 99
+      if (ie >= max_opt_size) then
+         call error_log%raise_global(
+     &        context=sr_name,
+     &        info=error_info)
+      end if
       cpps(is:ie)='VAR_RHO_2D'
       cpps(ie+1:ie+1)=' '
 #endif
@@ -184,21 +214,19 @@
         write(error_info, *) 'neither PRED_COUPLED_MODE '//
      &                       'nor CORR_COUPLED_MODE are defined in '//
      &        '"set_global_definitions.h".'
-        call handle_configuration_error(
+        call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
-        ierr=ierr+1
       elseif (ncoupl>1) then
         write(error_info, *)     'misconfigured '//
      &          'switches PRED_COUPLED_MODE and CORR_COUPLED_MODE '//
      &          'in "set_global_definitions.h": only one of them '//
      &        'should be defined.'
-        call handle_configuration_error(
+        call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
-        ierr=ierr+1
       endif
 
 ! Checking the number of selections of boundary conditions.
@@ -219,18 +247,16 @@
       if (nobc_west>1) then
         write(error_info, *) 'more than one '//
      &        'boundary condition is chosen on the WESTERN EDGE.'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
-        ierr=ierr+1
       endif
       if (nobc_east>1) then
         write(*,'(A)') 'more than one '//
      &        'boundary condition is chosen on the EASTERN EDGE.'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
-        ierr=ierr+1
       endif
 
 #ifdef NS_PERIODIC
@@ -249,19 +275,17 @@
       if (nobc_south>1) then
         write(error_info, *) 'more than one '//
      &        'boundary condition is chosen on the SOUTHERN EDGE.'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
-        ierr=ierr+1
       endif
       if (nobc_north>1) then
         write(error_info, *) 'more than one '//
      &        'boundary condition is chosen on the NORTHERN EDGE.'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
-        ierr=ierr+1
       endif
 
 ! Checking the number of selections vertical mixing schemes.
@@ -288,11 +312,10 @@
       if (nAk>1) then
         write(error_info, *) 'cppdefs.opt: more than '//
      &        'one vertical mixing scheme is chosen.'
-        call handle_configuration_error(
+        call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
-        ierr=ierr+1
       endif
 
 /*
@@ -301,11 +324,10 @@
       write(*,'(A') 'cppdefs.opt: '//
      &        'illegal combination of CPP-switches: '//
      &'SPLIT_EOS is defined, but NONLIN_EOS is not.'
-      call handle_configuration_error(
+      call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
 
-      ierr=ierr+1
 # endif
 #endif
 */
@@ -318,19 +340,10 @@
         write(error_info, *)  'NDTFAST =',
      &         ndtfast, 'is greater than unity for a shallow water',
      &        'configuration.','Change it to unity in startup file.'
-      call handle_configuration_error(
+      call error_log%raise_global(
      &        context=sr_name,
      &        info=error_info)
-        ierr=ierr+1
       endif
 #endif
-      return
-  99  mpi_master_only write(error_info, *)
-     &     'Insufficient size of string "cpps" ',
-     &     'in file "strings".', 'Increase the size it and recompile.'
-      call handle_configuration_error(
-     &        context=sr_name,
-     &        info=error_info)
-      ierr=ierr+1
-      return
-      end
+
+      end subroutine

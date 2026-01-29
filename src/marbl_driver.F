@@ -53,7 +53,7 @@
       use bgc_forces                  , only: nhy
 #endif
       use ocean_vars                  , only: Hz, z_r, z_w
-      use error_handling              , only: handle_configuration_error
+      use error_handling_mod          , only: error_log
 
 !     ----------------------------------------------------------------------
 
@@ -251,14 +251,14 @@
      &              "error reading MARBL settings file ",
      &              trim(marbl_namelist_fname)," (read status ",
      &              read_status, ")"
-               call handle_configuration_error(
+               call error_log%raise_global(
      &              context=module_name//"/"//sr_name,
      &              info=error_info)
             end if
 
             close(marbl_settings_in)
-         endif
-
+         endif ! open_status 0
+         call error_log%abort_check()
 !     2. Now generate a MARBL instance with these settings:
 ! ---------------------------------------------------------
 
@@ -284,10 +284,11 @@
      &        ,nt_marbl
      &        ,' set ntrc_bio = ',nt_marbl
      &        ,' in param.opt and recompile'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
       end if
+      call error_log%abort_check()
 
       call print_marbl_log(marbl_instance%StatusLog)
       call marbl_instance%StatusLog%erase()
@@ -519,7 +520,7 @@
      &              "error reading MARBL tracer list file ",
      &              trim(marbl_tracer_list_fname)," (read status ",
      &           read_status, ")"
-               call handle_configuration_error(
+               call error_log%raise_global(
      &              context=module_name//"/"//sr_name,
      &              info=error_info)
          end if
@@ -530,6 +531,7 @@
      &           trim(marbl_tracer_list_fname)
          end if
       endif
+      call error_log%abort_check()
 
       end subroutine marbldrv_read_tracer_output_list
 
@@ -575,103 +577,105 @@
 !     increment the size check variables accordingly:
 
 !     Add surface flux saved state variables to the counts:
-            do iss=1,MARBL_instance%surface_flux_saved_state%saved_state_cnt
-               if (MARBL_instance%surface_flux_saved_state%state(iss)%rank==2)
-     &              then
-                  nr_marbl_ss_2d_check=nr_marbl_ss_2d_check+1
-               elseif (MARBL_instance%surface_flux_saved_state%state(iss)%rank==3)
-     &                 then
-                  nr_marbl_ss_3d_check=nr_marbl_ss_3d_check+1
-               end if
-            end do
+      do iss=1,MARBL_instance%surface_flux_saved_state%saved_state_cnt
+         if (MARBL_instance%surface_flux_saved_state%state(iss)%rank==2)
+     &        then
+            nr_marbl_ss_2d_check=nr_marbl_ss_2d_check+1
+         elseif (MARBL_instance%surface_flux_saved_state%state(iss)%rank==3)
+     &           then
+            nr_marbl_ss_3d_check=nr_marbl_ss_3d_check+1
+         end if
+      end do
 
 !     Add interior tendency saved state variables to the counts:
-            do iss=1,MARBL_instance%interior_tendency_saved_state%saved_state_cnt
-               if (MARBL_instance%interior_tendency_saved_state%state(iss)%rank==2)
-     &              then
-                  nr_marbl_ss_2d_check=nr_marbl_ss_2d_check+1
-               elseif (MARBL_instance%interior_tendency_saved_state%state(iss)%rank==3)
-     &                 then
-                  nr_marbl_ss_3d_check=nr_marbl_ss_3d_check+1
-               end if
-            end do
+      do iss=1,MARBL_instance%interior_tendency_saved_state%saved_state_cnt
+         if (MARBL_instance%interior_tendency_saved_state%state(iss)%rank==2)
+     &        then
+            nr_marbl_ss_2d_check=nr_marbl_ss_2d_check+1
+         elseif (MARBL_instance%interior_tendency_saved_state%state(iss)%rank==3)
+     &           then
+            nr_marbl_ss_3d_check=nr_marbl_ss_3d_check+1
+         end if
+      end do
 
 !     Throw error if counts don't match
-            if (nr_marbl_ss_2d/=nr_marbl_ss_2d_check) then
-               write(error_info, *)
-     &              'Allocated no. of 2D marbl saved state vars '
-     &              ,nr_marbl_ss_2d,
-     &              ' does not match actual no. expected by MARBL: '
-     &              ,nr_marbl_ss_2d_check
-               call handle_configuration_error(
-     &              context=module_name//"/"//sr_name,
-     &              info=error_info)
-            elseif (nr_marbl_ss_3d/=nr_marbl_ss_3d_check) then
-               write(error_info, *)
-     &              'Allocated no. of 3D marbl saved state vars '
-     &              ,nr_marbl_ss_3d,
-     &              ' does not match actual no. expected by MARBL: '
-     &              ,nr_marbl_ss_3d_check
-               call handle_configuration_error(
-     &              context=module_name//"/"//sr_name,
-     &              info=error_info)
-            end if
+      if (nr_marbl_ss_2d/=nr_marbl_ss_2d_check) then
+         write(error_info, *)
+     &        'Allocated no. of 2D marbl saved state vars '
+     &        ,nr_marbl_ss_2d,
+     &        ' does not match actual no. expected by MARBL: '
+     &        ,nr_marbl_ss_2d_check
+         call error_log%raise_global(
+     &        context=module_name//"/"//sr_name,
+     &        info=error_info)
+      end if
+      if (nr_marbl_ss_3d/=nr_marbl_ss_3d_check) then
+         write(error_info, *)
+     &        'Allocated no. of 3D marbl saved state vars '
+     &        ,nr_marbl_ss_3d,
+     &        ' does not match actual no. expected by MARBL: '
+     &        ,nr_marbl_ss_3d_check
+         call error_log%raise_global(
+     &        context=module_name//"/"//sr_name,
+     &        info=error_info)
+      end if
+      call error_log%abort_check()
 
 !     2. Populate saved state metadata arrays in ROMS using MARBL instance
 !     ----------------------------------------------------------------------
 
             ! surface flux saved state metadata (all 2D variables currently)
-            do iss=1,MARBL_instance%surface_flux_saved_state%saved_state_cnt
-               write(ss_varname, "(2A)")
-     &              "MARBL_",
-     &              trim(MARBL_instance%surface_flux_saved_state%state(iss)%short_name)
-               vname_marbl_ss_2d(1,iss)=trim(ss_varname)
-               vname_marbl_ss_2d(2,iss)=
-     &              trim(MARBL_instance%surface_flux_saved_state%state(iss)%long_name)
-               vname_marbl_ss_2d(3,iss)=
-     &              trim(MARBL_instance%surface_flux_saved_state%state(iss)%units)
-               vname_marbl_ss_2d(4,iss)='  '
+      do iss=1,MARBL_instance%surface_flux_saved_state%saved_state_cnt
+         write(ss_varname, "(2A)")
+     &        "MARBL_",
+     &        trim(MARBL_instance%surface_flux_saved_state%state(iss)%short_name)
+         vname_marbl_ss_2d(1,iss)=trim(ss_varname)
+         vname_marbl_ss_2d(2,iss)=
+     &        trim(MARBL_instance%surface_flux_saved_state%state(iss)%long_name)
+         vname_marbl_ss_2d(3,iss)=
+     &        trim(MARBL_instance%surface_flux_saved_state%state(iss)%units)
+         vname_marbl_ss_2d(4,iss)='  '
 
-               if (mynode==printnode) then
-                  print *, 'MARBL SURFACE FLUX SAVED STATE VARIABLE ',
-     &                 trim(vname_marbl_ss_2d(1,iss)),'  ',
-     &                 trim(vname_marbl_ss_2d(2,iss)),'  ',
-     &                 trim(vname_marbl_ss_2d(3,iss))
-               end if
+         if (mynode==printnode) then
+            print *, 'MARBL SURFACE FLUX SAVED STATE VARIABLE ',
+     &           trim(vname_marbl_ss_2d(1,iss)),'  ',
+     &           trim(vname_marbl_ss_2d(2,iss)),'  ',
+     &           trim(vname_marbl_ss_2d(3,iss))
+         end if
 
-            end do
+      end do
 
-            ! interior tendency saved state metadata (all 3D variables currently)
-            do iss=1,MARBL_instance%interior_tendency_saved_state%saved_state_cnt
-               write(ss_varname, "(2A)")
-     &              "MARBL_",
-     &              trim(MARBL_instance%interior_tendency_saved_state%state(iss)%short_name)
-               vname_marbl_ss_3d(1,iss)=trim(ss_varname)
-               vname_marbl_ss_3d(2,iss)=
-     &              trim(MARBL_instance%interior_tendency_saved_state%state(iss)%long_name)
-               vname_marbl_ss_3d(3,iss)=
-     &              trim(MARBL_instance%interior_tendency_saved_state%state(iss)%units)
+! interior tendency saved state metadata (all 3D variables currently)
+      do iss=1,MARBL_instance%interior_tendency_saved_state%saved_state_cnt
+         write(ss_varname, "(2A)")
+     &        "MARBL_",
+     &        trim(MARBL_instance%interior_tendency_saved_state%state(iss)%short_name)
+         vname_marbl_ss_3d(1,iss)=trim(ss_varname)
+         vname_marbl_ss_3d(2,iss)=
+     &        trim(MARBL_instance%interior_tendency_saved_state%state(iss)%long_name)
+         vname_marbl_ss_3d(3,iss)=
+     &        trim(MARBL_instance%interior_tendency_saved_state%state(iss)%units)
 
 
-               if (mynode==printnode) then
-                  print *,
-     &                 'MARBL INTERIOR TENDENCY SAVED STATE VARIABLE ',
-     &                 trim(vname_marbl_ss_3d(1,iss)),'  ',
-     &                 trim(vname_marbl_ss_3d(2,iss)),'  ',
-     &                 trim(vname_marbl_ss_3d(3,iss))
-               end if
+         if (mynode==printnode) then
+            print *,
+     &           'MARBL INTERIOR TENDENCY SAVED STATE VARIABLE ',
+     &           trim(vname_marbl_ss_3d(1,iss)),'  ',
+     &           trim(vname_marbl_ss_3d(2,iss)),'  ',
+     &           trim(vname_marbl_ss_3d(3,iss))
+         end if
 
-            end do
+      end do
 
 !     3. Allocate saved state variable arrays in ROMS
 !     ----------------------------------------------------------------------
 
-            allocate( marbl_saved_state_2d(GLOBAL_2D_ARRAY,nr_marbl_ss_2d))
-            allocate( marbl_saved_state_3d(GLOBAL_2D_ARRAY,nz,nr_marbl_ss_3d))
-            if (mynode==printnode) then
-               write(*,'(7x,A,I4,I4)') 'MARBL saved state allocation ::',
-     &              nr_marbl_ss_2d,nr_marbl_ss_3d !3,2
-            end if
+      allocate( marbl_saved_state_2d(GLOBAL_2D_ARRAY,nr_marbl_ss_2d))
+      allocate( marbl_saved_state_3d(GLOBAL_2D_ARRAY,nz,nr_marbl_ss_3d))
+      if (mynode==printnode) then
+         write(*,'(7x,A,I4,I4)') 'MARBL saved state allocation ::',
+     &        nr_marbl_ss_2d,nr_marbl_ss_3d !3,2
+      end if
 
 
       end subroutine marbldrv_configure_saved_state
@@ -946,7 +950,7 @@
      &        ,'. Set nr_bec2_diag_2d = '
      &        ,(diag_cnt_sf_2d+diag_cnt_it_2d)
      &        ,' in bgc_shared_vars.F and recompile'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
 
@@ -962,11 +966,12 @@
      &        ,'. Set nr_bec2_diag_3d = '
      &        ,(diag_cnt_sf_3d+diag_cnt_it_3d)
      &        ,' in bgc_shared_vars.F and recompile'
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
 
       end if
+      call error_log%abort_check()
 
 !     2. Fill BGC diagnostics metadata arrays in ROMS from MARBL instance
 !     ----------------------------------------------------------------------
@@ -1152,13 +1157,14 @@
      &              "error reading MARBL diagnostic list file ",
      &              trim(marbl_diag_list_fname)," (read status ",
      &           read_status, ")"
-               call handle_configuration_error(
+               call error_log%raise_global(
      &              context=module_name//"/"//sr_name,
      &              info=error_info)
          end if
 
          close(marbl_diag_list)
-      endif
+      endif                     !mynode==0
+      call error_log%abort_check()
 
       end subroutine marbldrv_read_diagnostic_output_list
 
@@ -1792,7 +1798,6 @@
       call marbl_instance%interior_tendency_compute()
 
       if (marbl_instance%StatusLog%labort_marbl) then
-         print *, 'abort during interior tendency compute'
          call marbl_instance%StatusLog%log_error_trace(
      &        "marbl_instance%interior_tendency_compute()",
      &        "marbl_driver/marbldrv_compute_interior_tendency")
@@ -1824,7 +1829,6 @@
 !     - Adapted from the equivalent subroutine in MOM6
 !
 !-----------------------------------------------------------------------
-
       use marbl_logging, only: marbl_status_log_entry_type, marbl_log_type
 !     ----------------------------------------------------------------------
       integer              , optional, intent(in) :: i,j
@@ -1832,65 +1836,78 @@
       character(len=256)                          :: message_prefix,
      &                                               message_location,
      &                                               log_message
+      character(:), allocatable :: accumulated_log
 
       type(marbl_status_log_entry_type), pointer  :: marbl_status_log_pointer
 
       marbl_status_log_pointer => log_to_print%FullLog
 
 !     ----------------------------------------------------------------------
-
+      accumulated_log = ''
 
       do while (associated(marbl_status_log_pointer))
          write(message_prefix, "(A,I0,A)") "Task ",mynode,")"
 
-! Check we are either on principal cpu OR all cpus can write:
-         if ((.not. marbl_status_log_pointer%lonly_master_writes) .or.
-     &        (mynode==printnode)) then
-
 ! Check if we know the location of this log message and write
-            if (marbl_status_log_pointer%ElementInd .gt. 0) then
-               if (present(i) .and. present(j)) then
-                  write(message_location, "(A,I0,A,I0,A,I0)")
-     &                 "Message from (i,j) (", i,",",j,") at level ",
-     &                 marbl_status_log_pointer%ElementInd
-               else
-                  write(message_location, "(A)")
-     &                 "grid cell responsible for message unknown"
-               end if ! i,j present
+         if (marbl_status_log_pointer%ElementInd .gt. 0) then
+            if (present(i) .and. present(j)) then
+               write(message_location, "(A,I0,A,I0,A,I0)")
+     &              "Message from (i,j) (", i,",",j,") at level ",
+     &              marbl_status_log_pointer%ElementInd
+            else
+               write(message_location, "(A)")
+     &              "grid cell responsible for message unknown"
+            end if              ! i,j present
 
 
-! Also write the calling CPU unless on the principal CPU
-               if (mynode==printnode) then
-                  write(log_message,"(A)") trim(message_location)
-               else
-                  write(log_message,"(A,1X,A)")
-     &                 trim(message_prefix), trim(message_location)
-               end if           ! (mynode==printnode)
-               print *, trim(log_message)
-            end if              ! (ElementInd > 0)
-
-! Now write the actual statuslog message from MARBL
+!     Also write the calling CPU unless on the principal CPU
             if (mynode==printnode) then
-               write(log_message,"(A)")
-     &              trim(marbl_status_log_pointer%LogMessage)
+               write(log_message,"(A)") trim(message_location)
             else
                write(log_message,"(A,1X,A)")
-     &              trim(message_prefix),
-     &              trim(marbl_status_log_pointer%LogMessage)
+     &              trim(message_prefix), trim(message_location)
             end if              ! (mynode==printnode)
-            print *, trim(log_message)
-         end if                 ! mynode 0 or not master task only
+            call append_to_log(log_message)
+
+         end if                 ! (ElementInd > 0)
+
+!     Now write the actual statuslog message from MARBL
+         if (mynode==printnode) then
+            write(log_message,"(A)")
+     &           trim(marbl_status_log_pointer%LogMessage)
+         else
+            write(log_message,"(A,1X,A)")
+     &           trim(message_prefix),
+     &           trim(marbl_status_log_pointer%LogMessage)
+         end if                 ! (mynode==printnode)
+         call append_to_log(log_message)
 
          marbl_status_log_pointer => marbl_status_log_pointer%next
       end do                    ! while(associated(marbl_status_log_pointer))
 
 ! If MARBL needs to abort, stop the program
       if (log_to_print%labort_marbl) then
-         call handle_configuration_error(context=module_name,
-     &        info="error reported from MARBL (external library)")
+         call error_log%raise_from_point(
+     &        context = module_name,
+     &        info    = accumulated_log,
+     &        i       = merge(i,-1,present(i)),
+     &        j       = merge(j,-1,present(j)) )
+      elseif ((.not. log_to_print%FullLog%lonly_master_writes) .or.
+     &        (mynode == printnode)) then
+         print *, accumulated_log
       end if
+      call error_log%abort_check()
+      contains
 
+      subroutine append_to_log(line)
+      character(len=*), intent(in) :: line
 
+      if (accumulated_log /= '') then
+         accumulated_log = accumulated_log // new_line('a')
+      end if
+      accumulated_log = accumulated_log // trim(line)
+
+      end subroutine append_to_log
 
       end subroutine print_marbl_log
 !-----------------------------------------------------------------------

@@ -487,7 +487,7 @@
       end
 
 
-      subroutine check_set_HUV1_switches(ierr)
+      subroutine check_set_HUV1_switches
 
 ! This code must be placed here rather than in a separate file in order
 ! to be exposed to the relevant CPP-macros defined locally in this file
@@ -496,15 +496,23 @@
 
       use param, only: mynode
       use strings, only: cpps, max_opt_size
-
+      use error_handling_mod, only: error_log
       implicit none
-      integer ierr, is,ie, lenstr
+      integer is,ie, lenstr
 
       integer lstr
       character(len=16) tmpstr
+      character(len=24) :: sr_name = "check_set_HUV1_switches"
+      character(len=1024) :: error_info =""
+
       ie=lenstr(cpps)
       is=ie+2 ; ie=is+12
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
+
       cpps(is:ie)='<set_depth.F>'
 # ifdef NOW
       write(tmpstr,'(F16.12)') NOW ; lstr=lenstr(tmpstr)
@@ -512,7 +520,12 @@
         lstr=lstr-1
       enddo
       is=ie+2 ; ie=is+3+lstr
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
+
       cpps(is:ie)='NOW='/ /tmpstr(1:lstr)
 # endif
 # ifdef MID
@@ -521,7 +534,12 @@
         lstr=lstr-1
       enddo
       is=ie+2 ; ie=is+3+lstr
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
+
       cpps(is:ie)='MID='/ /tmpstr(1:lstr)
 # endif
 # ifdef BAK
@@ -530,7 +548,12 @@
         lstr=lstr-1
       enddo
       is=ie+2 ; ie=is+3+lstr
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
+
       cpps(is:ie)='BAK='/ /tmpstr(1:lstr)
 
 ! Note that the value of (NOW-MID+BAK-1.D0)/BAK should match
@@ -543,15 +566,15 @@
         lstr=lstr-1
       enddo
       is=ie+2 ; ie=is+9+lstr
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
+
       cpps(is:ie)='(N-M+B-1)/B='/ /tmpstr(1:lstr)
 # endif
-      return
-  99  mpi_master_only write(*,'(/1x,2A/12x,A/)')      '### ERROR: ',
-     &  'Insufficient length of string "cpps" in file "strings".',
-     &        'Increase parameter "max_opt_size" it and recompile.'
-      ierr=ierr+1
-      end
+      end subroutine check_set_HUV1_switches
 #else
       subroutine set_depth_empty
       end

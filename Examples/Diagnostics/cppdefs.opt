@@ -32,20 +32,20 @@
 #  define SPLIT_EOS
 
 #  define AVERAGES
-c# define EXACT_RESTART
+!#define EXACT_RESTART
 #  define NEW_S_COORD
-c# define IMPLICIT_BOTTOM_DRAG
+!#define IMPLICIT_BOTTOM_DRAG
 
 #  define UV_VIS2
 #  define MIX_GP_UV
 #  define TS_DIF2
 #  define MIX_GP_TS
 
-c-#  define LMD_MIXING
-c-#  define LMD_KPP
-c-#  define LMD_BKPP
-c-#  define LMD_CONVEC
-c-#  define LMD_NONLOCAL
+!#define LMD_MIXING
+!#define LMD_KPP
+!#define LMD_BKPP
+!#define LMD_CONVEC
+!#define LMD_NONLOCAL
 
 #  define OBC_WEST
 #  define OBC_EAST
@@ -74,7 +74,7 @@ c-#  define LMD_NONLOCAL
 #    define WAVE_OFFLINE
 #    define WAVE_FRICTION
 #    define BBL_S95
-c#    define BBL_F00
+!#define BBL_F00
 #    define SUP_OFF
 #    define WAVE_DIFF_FROM_LM
 #  else
@@ -86,7 +86,7 @@ c#    define BBL_F00
 #   define SURF_FLUX_OUTPUT_AVG /* DevinD output flux variables as averages */
 #  endif
 
-c--# endif
+!--# endif
 
 /* DevinD - end DH's non-analytical WEC */
 

@@ -65,8 +65,8 @@
      &     , indxs
 #endif
       use vertical_remapping, only: remap_src_to_grid
-      use error_handling, only : handle_configuration_error, handle_netcdf_error
       use roms_mpi, only: exchange_xxx
+      use error_handling_mod, only: error_log
 
       ! TODO: add averaging
 
@@ -176,6 +176,7 @@
       character(len=17) :: sr_name = "init_extract_data"
 
       call read_extraction_objects
+      call error_log%abort_check()
 
       if ((N == N_chd) .and. (theta_s == theta_s_chd) .and. (theta_b == theta_b_chd) .and. (hc == hc_chd)) then
         parent_child_grid_mismatch = .false.
@@ -203,12 +204,12 @@
       allocate( Wvl(GLOBAL_2D_ARRAY,nz+1))
       if (diag_pflx) then
 #ifndef DIAGNOSTICS
-         if (mynode == 0) then
-         call handle_configuration_error(
+
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
-     &           info="Must define CPP key DIAGNOSTICS if `do_extract`" //
-     &           "=.true. and diag_pflux=.true")
-        endif
+     &        info="Must define CPP key DIAGNOSTICS if `do_extract`" //
+     &        "=.true. and diag_pflux=.true")
+         call error_log%abort_check()
 #endif
         allocate( upe(GLOBAL_2D_ARRAY) ); upe = 0
         allocate( vpe(GLOBAL_2D_ARRAY) ); vpe = 0
@@ -308,41 +309,39 @@
         write(*,'(7x,2A)')
      &    'extract_data :: read objects: ',extract_file
       endif
+
       ierr = nf90_open(extract_file,nf90_nowrite,ncid)
-      if (ierr/=0) then
-         call handle_netcdf_error(netcdf_status=ierr,
-     &        info="error reading objects file "//extract_file,
-     &        context=module_name//"/"//sr_name)
-      end if
+      call error_log%check_netcdf_status(netcdf_status=ierr,
+     &     info="error reading objects file "//extract_file,
+     &     context=module_name//"/"//sr_name)
+
       ierr = nf90_inquire(ncid,nVariables=nobj)
-      if (ierr/=0) then
-         call handle_netcdf_error(netcdf_status=ierr,
-     &        context=module_name//"/"//sr_name,
-     &        info="read extr")
-      end if
+      call error_log%check_netcdf_status(netcdf_status=ierr,
+     &     context=module_name//"/"//sr_name,
+     &     info="read extr")
+
+      call error_log%abort_check()
+
       allocate(obj(nobj))
 
       ! Read all objects from file.
       do iobj = 1,nobj
         ierr = nf90_inquire_variable(ncid,iobj,name=objname,dimids=dimids)
-        if (ierr/=0) then
-           call handle_netcdf_error(netcdf_status=ierr,
-     &          context=module_name//"/"//sr_name,
-     &          info="error during inquire,  variable:"//objname)
-        end if
-        ierr = nf90_inquire_dimension(ncid,dimids(1),name=dname,len=n1)
-        if (ierr/=0) then
-           call handle_netcdf_error(netcdf_status=ierr,
-     &          context=module_name//"/"//sr_name,
-     &          info="error during inquire,  dimension:"//dname)
-        end if
-        ierr = nf90_inquire_dimension(ncid,dimids(2),len=n2)
-        if (ierr/=0) then
-           call handle_netcdf_error(netcdf_status=ierr,
-     &          context=module_name//"/"//sr_name,
-     &          info="error during inquire")
-        end if
+        call error_log%check_netcdf_status(netcdf_status=ierr,
+     &       context=module_name//"/"//sr_name,
+     &       info="error during inquire,  variable:"//objname)
 
+        ierr = nf90_inquire_dimension(ncid,dimids(1),name=dname,len=n1)
+        call error_log%check_netcdf_status(netcdf_status=ierr,
+     &       context=module_name//"/"//sr_name,
+     &       info="error during inquire,  dimension:"//dname)
+
+        ierr = nf90_inquire_dimension(ncid,dimids(2),len=n2)
+        call error_log%check_netcdf_status(netcdf_status=ierr,
+     &       context=module_name//"/"//sr_name,
+     &       info="error during inquire")
+
+        call error_log%abort_check()
         lstr = len(trim(dname))
         allocate(character(len=lstr) :: obj(iobj)%dname)
         obj(iobj)%dname = trim(dname)
@@ -363,83 +362,73 @@
         obj(iobj)%obj_name = objname
         lstr = len(trim(objname))
         if (findstr(objname,'_',sidx) ) then
-          obj(iobj)%set = objname(1:sidx-1)
-          if (findstr(objname(sidx+1:lstr),'_',sidx2) ) then
-            obj(iobj)%bnd = objname(sidx:sidx+sidx2-1)
-          else
-            obj(iobj)%bnd = ' '
-          endif
+           obj(iobj)%set = objname(1:sidx-1)
+           if (findstr(objname(sidx+1:lstr),'_',sidx2) ) then
+              obj(iobj)%bnd = objname(sidx:sidx+sidx2-1)
+           else
+              obj(iobj)%bnd = ' '
+           endif
         else
-          obj(iobj)%set = objname
+           obj(iobj)%set = objname
         endif
 
-!       if (mynode==84) then
-!         print *,i,obj(iobj)%obj_name,obj(iobj)%set,obj(iobj)%bnd
-!         print *,trim(obj(iobj)%set)//'_'//vname//'_'//trim(obj(iobj)%bnd)
-!         stop
-!       endif
-
         ierr = nf90_get_att(ncid,iobj,'output_period',period)
-        if (ierr/=0) then
-           call handle_netcdf_error(netcdf_status=ierr,
-     &          info="error when getting `output_period` attribute",
-     &          context=module_name//"/"//sr_name)
-        end if
+        call error_log%check_netcdf_status(netcdf_status=ierr,
+     &       info="error when getting `output_period` attribute",
+     &       context=module_name//"/"//sr_name)
+        call error_log%abort_check()
         obj(iobj)%period   = period
 
         if (obj(iobj)%np>0) then
-          !! only for objects with a presences in this subdomain
+!! only for objects with a presences in this subdomain
 
-          if (n2==3) then
-            allocate(obj(iobj)%ang(obj(iobj)%np))
-            i0 = obj(iobj)%start_idx
-            i1 = i0+obj(iobj)%np-1
-            obj(iobj)%ang = object(i0:i1,3)
-          endif
+           if (n2==3) then
+              allocate(obj(iobj)%ang(obj(iobj)%np))
+              i0 = obj(iobj)%start_idx
+              i1 = i0+obj(iobj)%np-1
+              obj(iobj)%ang = object(i0:i1,3)
+           endif
 
-          ! Figure out which variables to output for this object
-          ierr = nf90_get_att(ncid,iobj,'output_vars',variables)
-          if (ierr/=0) then
-             call handle_netcdf_error(netcdf_status=ierr,
-     &         info="error getting `output_vars` attribute",
-     &         context=module_name//"/"//sr_name)
-          end if
-          if (findstr(variables,'zeta') ) obj(iobj)%zeta = .True.
-          if (findstr(variables,'temp') ) obj(iobj)%temp = .True.
-          if (findstr(variables,'salt') ) obj(iobj)%salt = .True.
-          if (findstr(variables,'ubar') ) obj(iobj)%ubar = .True.
-          if (findstr(variables,'vbar') ) obj(iobj)%vbar = .True.
-          if (findstr(variables,'u'   ) ) obj(iobj)%u    = .True.
-          if (findstr(variables,'v'   ) ) obj(iobj)%v    = .True.
-          if (findstr(variables,'w'   ) ) obj(iobj)%w    = .True.
-          if (findstr(variables,'up'  ) ) obj(iobj)%up   = .True.
-          if (findstr(variables,'vp'  ) ) obj(iobj)%vp   = .True.
-          if (findstr(variables,'bgc'    ) ) obj(iobj)%bgc     = .True.
+! Figure out which variables to output for this object
+           ierr = nf90_get_att(ncid,iobj,'output_vars',variables)
+           call error_log%check_netcdf_status(netcdf_status=ierr,
+     &          info="error getting `output_vars` attribute",
+     &          context=module_name//"/"//sr_name)
 
-          ! DIAGNOSTICS needs to be activated and diag_pflx=.true.
-          if (obj(iobj)%up.and. .not.diag_pflx) then
-             call handle_configuration_error(
-     &            context=module_name//"/"//sr_name,
-     &            info="diag_pflx is not set for up extraction")
-          endif
-          if (obj(iobj)%vp.and. .not.diag_pflx) then
-             call handle_configuration_error(
-     &            context=module_name//"/"//sr_name,
-     &            info="diag_pflx is not set for vp extraction")
-          endif
-#if !defined(BIOLOGY_BEC2) && !defined(MARBL)
-          if (obj(iobj)%bgc) then
-             call handle_configuration_error(
-     &            context=module_name//"/"//sr_name,
-     &            info="MARBL or BIOLOGY_BEC2 cpp key is not "//
-     &            "set for BGC extraction")
-         endif
+           if (findstr(variables,'zeta') ) obj(iobj)%zeta = .True.
+           if (findstr(variables,'temp') ) obj(iobj)%temp = .True.
+           if (findstr(variables,'salt') ) obj(iobj)%salt = .True.
+           if (findstr(variables,'ubar') ) obj(iobj)%ubar = .True.
+           if (findstr(variables,'vbar') ) obj(iobj)%vbar = .True.
+           if (findstr(variables,'u'   ) ) obj(iobj)%u    = .True.
+           if (findstr(variables,'v'   ) ) obj(iobj)%v    = .True.
+           if (findstr(variables,'w'   ) ) obj(iobj)%w    = .True.
+           if (findstr(variables,'up'  ) ) obj(iobj)%up   = .True.
+           if (findstr(variables,'vp'  ) ) obj(iobj)%vp   = .True.
+           if (findstr(variables,'bgc'    ) ) obj(iobj)%bgc     = .True.
+
+! DIAGNOSTICS needs to be activated and diag_pflx=.true.
+           if (obj(iobj)%up.and. .not.diag_pflx) then
+              call error_log%raise_global(
+     &             context=module_name//"/"//sr_name,
+     &             info="diag_pflx is not set for up extraction")
+           endif
+           if (obj(iobj)%vp.and. .not.diag_pflx) then
+              call error_log%raise_global(
+     &             context=module_name//"/"//sr_name,
+     &             info="diag_pflx is not set for vp extraction")
+           endif
+#if                             !defined(BIOLOGY_BEC2) && !defined(MARBL)
+           if (obj(iobj)%bgc) then
+              call error_log%raise_global(
+     &             context=module_name//"/"//sr_name,
+     &             info="MARBL or BIOLOGY_BEC2 cpp key is not "//
+     &             "set for BGC extraction")
+           endif
 #endif
-
-          if (obj(iobj)%up.or.obj(iobj)%vp) extend_up = .true.
+           if (obj(iobj)%up.or.obj(iobj)%vp) extend_up = .true.
 
         endif
-
         deallocate(object)
       enddo
       ierr = nf90_close(ncid)
@@ -667,18 +656,20 @@
 
 ! rho variables --------------------------------------------------------
 
-            ! Get thickness and depth at interpolated location
-            call interpolate(Hz(:,:,:),obj(i)%Hz_par,coef,ip,jp)
-            obj(i)%h_par(:) = 0
-            do j=1,obj(i)%np
-              do k=1,nz
-                obj(i)%h_par(j) = obj(i)%h_par(j) + obj(i)%Hz_par(j,k)
+            if (parent_child_grid_mismatch) then
+              ! Get thickness and depth at interpolated location
+              call interpolate(Hz(:,:,:),obj(i)%Hz_par,coef,ip,jp)
+              obj(i)%h_par(:) = 0
+              do j=1,obj(i)%np
+                do k=1,nz
+                  obj(i)%h_par(j) = obj(i)%h_par(j) + obj(i)%Hz_par(j,k)
+                enddo
               enddo
-            enddo
 
-            do j=1,obj(i)%np
-              call get_child_thickness(obj(i)%h_par(j), obj(i)%Hz_chd(j,:))
-            enddo
+              do j=1,obj(i)%np
+                call get_child_thickness(obj(i)%h_par(j), obj(i)%Hz_chd(j,:))
+              enddo
+            endif
 
             if (obj(i)%zeta) then
               oname = trim(obj(i)%set)//'_zeta'//trim(obj(i)%bnd)
@@ -746,19 +737,21 @@
 
 ! u variables --------------------------------------------------------
 
-            if ((obj(i)%u) .or. (obj(i)%up)) then
-            ! Get thickness and depth at interpolated location
-            call interpolate(Hz_u(:,:,:),obj(i)%Hz_par_u,cfu,ipu,jpu)
-            obj(i)%h_par_u(:) = 0
-            do j=1,obj(i)%np
-              do k=1,nz
-                obj(i)%h_par_u(j) = obj(i)%h_par_u(j) + obj(i)%Hz_par_u(j,k)
-              enddo
-            enddo
+            if (parent_child_grid_mismatch) then
+              if ((obj(i)%u) .or. (obj(i)%up)) then
+                ! Get thickness and depth at interpolated location
+                call interpolate(Hz_u(:,:,:),obj(i)%Hz_par_u,cfu,ipu,jpu)
+                obj(i)%h_par_u(:) = 0
+                do j=1,obj(i)%np
+                  do k=1,nz
+                    obj(i)%h_par_u(j) = obj(i)%h_par_u(j) + obj(i)%Hz_par_u(j,k)
+                  enddo
+                enddo
 
-            do j=1,obj(i)%np
-              call get_child_thickness(obj(i)%h_par_u(j), obj(i)%Hz_chd_u(j,:))
-            enddo
+                do j=1,obj(i)%np
+                  call get_child_thickness(obj(i)%h_par_u(j), obj(i)%Hz_chd_u(j,:))
+                enddo
+              endif
             endif
 
             if (obj(i)%ubar) then
@@ -795,19 +788,21 @@
 
 ! v variables --------------------------------------------------------
 
-            if ((obj(i)%v) .or. (obj(i)%vp)) then
-            ! Get thickness and depth at interpolated location
-            call interpolate(Hz_v(:,:,:),obj(i)%Hz_par_v,cfv,ipv,jpv)
-            obj(i)%h_par_v(:) = 0
-            do j=1,obj(i)%np
-              do k=1,nz
-                obj(i)%h_par_v(j) = obj(i)%h_par_v(j) + obj(i)%Hz_par_v(j,k)
+            if (parent_child_grid_mismatch) then
+              if ((obj(i)%v) .or. (obj(i)%vp)) then
+              ! Get thickness and depth at interpolated location
+              call interpolate(Hz_v(:,:,:),obj(i)%Hz_par_v,cfv,ipv,jpv)
+              obj(i)%h_par_v(:) = 0
+              do j=1,obj(i)%np
+                do k=1,nz
+                  obj(i)%h_par_v(j) = obj(i)%h_par_v(j) + obj(i)%Hz_par_v(j,k)
+                enddo
               enddo
-            enddo
 
-            do j=1,obj(i)%np
-              call get_child_thickness(obj(i)%h_par_v(j), obj(i)%Hz_chd_v(j,:))
-            enddo
+              do j=1,obj(i)%np
+                call get_child_thickness(obj(i)%h_par_v(j), obj(i)%Hz_chd_v(j,:))
+              enddo
+              endif
             endif
 
             if (obj(i)%vbar) then
@@ -864,6 +859,7 @@
       ierr=nf90_open(fname,nf90_write,ncid)
 
       call create_edata_vars(ncid)
+      call error_log%abort_check()
 
       ierr = nf90_close(ncid)
 
@@ -957,11 +953,9 @@
       ierr = nf90_put_att(ncid,varid,'count',obj%np)
       ierr = nf90_put_att(ncid,varid,'dname',obj%dname)
       ierr = nf90_put_att(ncid,varid,'dsize',obj%dsize)
-      if (ierr/=0) then
-         call handle_netcdf_error(netcdf_status=ierr,
-     &        info="error creating var "//vname,
-     &        context=module_name//"/"//sr_name)
-      end if
+      call error_log%check_netcdf_status(netcdf_status=ierr,
+     &     info="error creating var "//vname,
+     &     context=module_name//"/"//sr_name)
 
       if (present(idx)) then
         if (idx>=0) then

@@ -21,7 +21,7 @@
       use nc_read_write, only: ncread
       use marbl_driver, only: iALK, iDIC
       use vertical_remapping, only: remap_src_to_grid
-      use error_handling, only: handle_configuration_error, handle_netcdf_error
+      use error_handling_mod, only: error_log
       use netcdf, only:
      &     nf90_noerr, nf90_inq_dimid,
      &     nf90_inquire_dimension, nf90_nowrite, nf90_open, nf90_close
@@ -105,19 +105,19 @@
 
         call set_frc_data(nc_cdrhz,var2d=cdr_hz)          ! set layer thicknesses for all cdrs at current time
         call set_frc_data(nc_cdrflx_dp,var3d=cdr_flx_dp)
+        call error_log%abort_check()
         call create_cdr_vertical_structure
 
       else if (forcing_3d) then
 
         call set_frc_data(nc_cdrflx_3d_ALK,var3d=cdr_flx_3d_ALK)
         call set_frc_data(nc_cdrflx_3d_DIC,var3d=cdr_flx_3d_DIC)
-
       else if (forcing_parameterized) then
 
         if (cdr_volume) then
           call set_frc_data(nc_cdrvol,cdr_vol)                ! set cdr volume for all cdrs at current time
           call set_frc_data(nc_cdrtrc,var2d=cdr_trc)          ! set cdr tracers conc. for all cdrs at current time
-
+          call error_log%abort_check()
           do icdr=1,ncdr
             cdr_flx(icdr,:) = cdr_vol(icdr)*cdr_trc(icdr,:)
           enddo
@@ -127,7 +127,7 @@
         endif
 
       endif
-
+      call error_log%abort_check()
 
       end subroutine set_cdr_frc !]
 ! ----------------------------------------------------------------------
@@ -149,7 +149,7 @@
       if (forcing_parameterized)  type_count = type_count+1
 
       if (type_count==0) then
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info="cdr_source set to true, "//
      &        "but no forcing type selected")
@@ -161,15 +161,13 @@
 
         ! Open file
         ierr=nf90_open(cdr_file, nf90_nowrite, ncid)
-        if(ierr/=0) then
-           call handle_netcdf_error(
-     &          netcdf_status=ierr,
-     &          info="Cannot open CDR forcing file",
-     &          context=module_name//"/"//sr_name)
-        end if
+        call error_log%check_netcdf_status(
+     &       netcdf_status=ierr,
+     &       info="Cannot open CDR forcing file",
+     &       context=module_name//"/"//sr_name)
 
         if (type_count>1) then
-           call handle_configuration_error(
+           call error_log%raise_global(
      &          info="More than one CDR forcing type selected.",
      &          context=module_name//"/"//sr_name)
         end if
@@ -182,7 +180,7 @@
 
         ierr = nf90_close(ncid)
       endif ! forcing_3d
-
+      call error_log%abort_check()
       init_cdr_done = .true.
       if(mynode==0) write(*,'(/7x,A/)') 'cdr_frc: init cdr locations'
 
@@ -202,22 +200,21 @@
 
       ! Check how many vertical profiles (i.e. tracer releases) we will use
       ierr = nf90_inq_dimid(ncid, 'ncdr_prof', dimid)
-      if (ierr /= nf90_noerr) then
-         call handle_netcdf_error(netcdf_status=ierr,
-     &        context=module_name//"/"//sr_name,
-     &        info="CDR forcing file is missing "//
-     &        "necessary dimension ncdr_prof.")
-      endif
+      call error_log%check_netcdf_status(netcdf_status=ierr,
+     &     context=module_name//"/"//sr_name,
+     &     info="CDR forcing file is missing "//
+     &     "necessary dimension ncdr_prof.")
+
       ierr = nf90_inquire_dimension(ncid, dimid, len=ncdr_prof)
 
       ! How many vertical levels did the child/source grid have?
       ierr = nf90_inq_dimid(ncid, 's_rho', dimid)
-      if (ierr /= nf90_noerr) then
-         call handle_netcdf_error(netcdf_status=ierr,
-     &   info="CDR forcing file is missing "//
-     &        "necessary dimension s_rho.",
-     &   context=module_name//"/"//sr_name)
-      endif
+      call error_log%check_netcdf_status(netcdf_status=ierr,
+     &     info="CDR forcing file is missing "//
+     &     "necessary dimension s_rho.",
+     &     context=module_name//"/"//sr_name)
+
+      call error_log%abort_check()
       ierr = nf90_inquire_dimension(ncid, dimid, len=N_src)
 
       ncdr = ncdr_prof
@@ -303,14 +300,10 @@
       integer :: i,j
       integer :: icdr, cidx, cidx_start, ierr
       integer, dimension(2) :: lmi
-      logical, dimension(ncdr) :: bad_releases
       real,dimension(:,:)  ,allocatable :: dist
       real :: local_min_val
       real, dimension(2) :: local_minloc
       real, dimension(2) :: global_minloc
-
-
-      bad_releases(:) = .false.
 
       ! Figure out where to apply CDR forcing
       ! Find fractional cdr fluxes for this subdomain
@@ -379,25 +372,18 @@
 
         ! Check for releases on land
         if ((frac(lmi(1),lmi(2),icdr) ==1 ) .and.
-     &  (rmask(lmi(1),lmi(2))==0)) then
-           bad_releases(icdr) = .true.
+     &       (rmask(lmi(1),lmi(2))==0)) then
+           write(error_info,'(A,I0,A))') "CDR release ",
+     &          icdr," is on land."
+         call error_log%raise_global(
+     &     context=module_name//"/"//sr_name,
+     &     info=error_info)
         end if
 
         cidx_start = cidx
       enddo                    ! icdr
 
-      ! Report any releases on land and stop
-      call MPI_Allreduce(MPI_IN_PLACE, bad_releases, ncdr, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
-
-      ! Now every rank has the same bad_releases array
-      if (any(bad_releases)) then
-         write(error_info,*) "the following CDR releases are on land ",
-     &        "(Note 1-indexing): ",pack([(i,i=1,ncdr)], bad_releases)
-         call handle_configuration_error(
-     &     context=module_name//"/"//sr_name,
-     &     info=error_info)
-      end if
-
+      call error_log%abort_check()
 
       cdr_nprf = cidx
 
@@ -608,7 +594,7 @@
 
 !----------------------------------------------------------------------
       use roms_read_write, only: ncforce, ncforce3d
-      use error_handling, only: handle_configuration_error
+      use error_handling_mod, only: error_log
 
       implicit none
 
@@ -623,17 +609,17 @@
 
       subroutine set_cdr_frc    ![
 ! Allocate and initialize arrays.
-      use error_handling, only: handle_configuration_error
+
       implicit none
       character(len=11) :: sr_name = "set_cdr_frc"
 
 #if (!defined MARBL)
-      call handle_configuration_error(context=module_name//"/"//sr_name,
+      call error_log%raise_global(context=module_name//"/"//sr_name,
      &     info="CDR module must have MARBL enabled.")
 #endif
 
 #if (!defined CDR_FORCING)
-      call handle_configuration_error(context=module_name//"/"//sr_name,
+      call error_log%raise_global(context=module_name//"/"//sr_name,
      &     info="CDR module must have CDR_FORCING enabled.")
 #endif
 

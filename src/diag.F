@@ -68,11 +68,12 @@ c--#define MAX_BY_VERT_CFL_ONLY
      &     nnodes, ieast, isw_corn, iwest, jnorth, jsouth, jsw_corn,
      &     mynode, nsub_e, nsub_x, ocean_grid_comm
       use scalars, only:
-     &     diag_sync, dt, g, iic, may_day_flag, n, nstp,
+     &     diag_sync, dt, g, iic, n, nstp,
      &     rho0, tdays
       use mpi_f08, only: mpi_real8, mpi_status_size, mpi_wtime
       use timers, only: tstart
-      use error_handling, only : handle_configuration_error
+      use error_handling_mod, only: error_log
+
       implicit none
       character(len=9) :: sr_name = "diag_tile"
 #include "diag.opt"
@@ -90,7 +91,7 @@ c--#define MAX_BY_VERT_CFL_ONLY
 #  define MPI_BUFF_TYPE MPI_REAL8
 # endif
       integer size, step, itag, status(MPI_STATUS_SIZE)
-      real*QUAD buff(16)
+      real*QUAD buff(15)
 #endif
 
       real cff, dA, v2, my_v2d_max
@@ -435,24 +436,23 @@ C$OMP CRITICAL (diag_cr_rgn)
           do while (size>1)
             step=(size+1)/2
             if (mynode>=step .and. mynode<size) then
-              buff(1)=may_day_flag
-              buff(2)=avzeta
-              buff(3)=avke                   ! This is essentially an
-              buff(4)=avpe                   ! MPI_Reduce operation,
-              buff(5)=avke2b                 ! although with a rather
-              buff(6)=avke3bc                ! complicated function.
-              buff(7)=avkesrf
-              buff(8)=v2d_max
+              buff(1)=avzeta
+              buff(2)=avke                   ! This is essentially an
+              buff(3)=avpe                   ! MPI_Reduce operation,
+              buff(4)=avke2b                 ! although with a rather
+              buff(5)=avke3bc                ! complicated function.
+              buff(6)=avkesrf
+              buff(7)=v2d_max
 # ifdef SOLVE3D
 #  ifdef MAX_ADV_CFL
-              buff(9)=Cu_Adv
-              buff(10)=Cu_W
-              buff(11)=i_cx_max
-              buff(12)=j_cx_max
-              buff(13)=k_cx_max
+              buff(8)=Cu_Adv
+              buff(9)=Cu_W
+              buff(10)=i_cx_max
+              buff(11)=j_cx_max
+              buff(12)=k_cx_max
 #  else
-              buff(9)=v3d_max
-              buff(10)=v3bc_max
+              buff(8)=v3d_max
+              buff(9)=v3bc_max
 #  endif
 # endif
 
@@ -460,43 +460,41 @@ c**     write(*,*) 'sending  ',mynode,'->',mynode-step,' size=',size
 c**     write(*,*) 'sending  avke =', buff(3)/volume
 
               itag=mynode+400
-              call MPI_Send (buff, 14, MPI_BUFF_TYPE, mynode-step,
+              call MPI_Send (buff, 13, MPI_BUFF_TYPE, mynode-step,
      &                       itag, ocean_grid_comm,          ierr)
             elseif (mynode < size-step) then
               itag=mynode+400+step
-              call MPI_Recv (buff, 14, MPI_BUFF_TYPE, mynode+step,
+              call MPI_Recv (buff, 13, MPI_BUFF_TYPE, mynode+step,
      &                       itag, ocean_grid_comm,  status, ierr)
 
 c**     write(*,*) 'received ',mynode,'<-',mynode+step,' size=',size
 c**     write(*,*) 'received avke =', buff(3)/volume
 
-              i=buff(1)+0.0001
-              if (i>0 .and. may_day_flag==0) may_day_flag=i
-              avzeta=avzeta+buff(2)
-              avke=avke+buff(3) ! Here "v2" is used as
-              avpe=avpe+buff(4)              ! a scratch variable to
-              avke2b=avke2b+buff(5)          ! avoid type conflict
-              avke3bc=avke3bc+buff(6)        ! in the case if "buff"
-              avkesrf=avkesrf+buff(7)        ! is 16-Byte, while
-              v2=buff(8)                     ! "v2", "v2d_max", etc
+              avzeta=avzeta+buff(1)
+              avke=avke+buff(2) ! Here "v2" is used as
+              avpe=avpe+buff(3)              ! a scratch variable to
+              avke2b=avke2b+buff(4)          ! avoid type conflict
+              avke3bc=avke3bc+buff(5)        ! in the case if "buff"
+              avkesrf=avkesrf+buff(6)        ! is 16-Byte, while
+              v2=buff(7)                     ! "v2", "v2d_max", etc
               v2d_max=max(v2d_max, v2)       ! are only 8-byte long.
 # ifdef SOLVE3D
 #  ifdef MAX_ADV_CFL
 #   ifdef MAX_BY_VERT_CFL_ONLY
-              if (buff(10) > Cu_W) then
+              if (buff(9) > Cu_W) then
 #   else
-              if (buff(9) > Cu_Adv) then
+              if (buff(8) > Cu_Adv) then
 #   endif
-                Cu_Adv=buff(9)
-                Cu_W=buff(10)
-                i_cx_max=buff(11) +0.0001
-                j_cx_max=buff(12) +0.0001
-                k_cx_max=buff(13) +0.0001
+                Cu_Adv=buff(8)
+                Cu_W=buff(9)
+                i_cx_max=buff(10) +0.0001
+                j_cx_max=buff(11) +0.0001
+                k_cx_max=buff(12) +0.0001
               endif
 #  else
-              v2=buff(9)
+              v2=buff(8)
               v3d_max=max(v3d_max, v2)
-              v2=buff(19)
+              v2=buff(18)
               v3bc_max=max(v3bc_max, v2)
 #  endif
 # endif
@@ -623,21 +621,18 @@ C$   &                                                 , proc(2)
 
 ! Appearance of any non-digit character other than blank,"+", "-", or
 ! "." indicates floating point exception condition (usually caused by
-! blowup).    Force writing history file at every time step and set
-! may_day_flag to signal termination.  The code behavior in this
-! situation is to write the last state of all variables into history
-! file and quit.
+! blowup) - raise a global error.
 
             elseif (check_line(i:i)<'0' .or. check_line(i:i)>'9') then
               if ( check_line(i:i) /= ' ' .and.
      &             check_line(i:i) /= '+'  .and.
      &             check_line(i:i) /= '-'  .and.
      &              check_line(i:i) /= '.') then
-                 call handle_configuration_error(
+                 call error_log%raise_global(
      &                info="Abnormal termination: BLOWUP",
      &                context=sr_name)
               endif
-            endif
+           endif
           enddo  ! <-- while(..)
 
           write(tstring,'(F18.8)') tdays
@@ -655,14 +650,10 @@ C$   &                                                 , proc(2)
 #ifdef MPI
         endif    ! <-- mynode==0
 
-        buff(1)=may_day_flag
-
-        call MPI_Bcast(buff,2, MPI_BUFF_TYPE, 0,ocean_grid_comm,ierr)
-
-        may_day_flag=buff(1) +0.0001
 #endif
       endif  ! <-- tile_count==nsubs
 C$OMP END CRITICAL (diag_cr_rgn)
-      diag_sync=.true.     !<-- to signal that "diag" has been called
+      call error_log%abort_check()
+      diag_sync=.true.          !<-- to signal that "diag" has been called
       end
 

@@ -16,14 +16,14 @@
 
 #  define EXTRACT_DATA
 #  define DIAGNOSTICS
-c--#  define HIS_DOUBLE
+!#define HIS_DOUBLE
 #   define SPONGE_TUNE
 
 #  define SOLVE3D
 #  define UV_COR
 #  define UV_ADV
 
-c--#  define NHMG
+!#define NHMG
 
 #  define CURVGRID
 #  define SPHERICAL
@@ -34,9 +34,9 @@ c--#  define NHMG
 #  define SPLIT_EOS
 
 #  define AVERAGES
-c# define EXACT_RESTART
+!#define EXACT_RESTART
 #  define NEW_S_COORD
-c# define IMPLICIT_BOTTOM_DRAG
+!#define IMPLICIT_BOTTOM_DRAG
 
 #  define UV_VIS2
 #  define MIX_GP_UV
@@ -65,7 +65,7 @@ c# define IMPLICIT_BOTTOM_DRAG
 #  define SPONGE
 
 
-c--# endif
+!--# endif
 
 /* DevinD - end DH's non-analytical WEC */
 

@@ -26,7 +26,7 @@
      &     inode, jnode, eta_rho, eta_v, xi_rho, xi_u, grdname, nx, ny,
      &     gnx, gny, analytical_grid
       use mpi_f08, only: mpi_double_precision, mpi_status_size
-      use error_handling, only: handle_netcdf_error
+      use error_handling_mod, only: error_log
       use netcdf, only: nf90_nowrite, nf90_open, nf90_global, nf90_noerr,
      &   nf90_close, nf90_get_att
 
@@ -49,6 +49,7 @@
       integer :: szW,szE,szN,szS,szNE,szNW,szSE,szSW
       logical :: init_buffer_done = .false.
       logical,public :: new_part
+      character(len=1024) :: error_info = ''
 
       integer :: hl         ! Exchange halo can be less than the buffer size
       logical :: do_corners ! Argument to modify the some of the exchanges
@@ -71,7 +72,7 @@
       contains
 
 !--------------------------------------------------------
-      subroutine mpi_setup(ierr)  ![
+      subroutine mpi_setup  ![
       implicit none
       integer :: ierr,ncid
       integer,dimension(8) :: neighbors
@@ -88,7 +89,7 @@
         ! Check in gridfile to check if mpi masking is present
         ierr=nf90_open(grdname,nf90_nowrite,ncid)
 !        if (ierr/=nf90_noerr) call handle_ierr(ierr)
-        if (ierr/=nf90_noerr) call handle_netcdf_error(
+        call error_log%check_netcdf_status(
      &         netcdf_status=ierr,
      &         context=module_name//"/"//sr_name,
      &         info=("error opening "//grdname))
@@ -115,12 +116,14 @@
       ! Also check npx,npy somewhere
 
       if (nsize/=nnodes) then
-        if (mynode.eq.0) write(*,'(/1x,A,I4,1x,A,I3,A/)')
-     &   '### ERROR: mpi_setup: number of MPI-nodes should be',
-     &               nnodes, 'instead of ', nsize, '.'
-        ierr=99
-        return
+         write(error_info,*)
+     &   'Number of MPI-nodes should be',
+     &        NNODES, 'instead of ', nsize, '.'
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
       endif
+      call error_log%abort_check()
 
 !     Determine position of subdomain in logical grid. inodes, jnodes
 !     will be needed to determine whether the subdomain is at a physical
@@ -164,10 +167,16 @@
       ny = ceiling(1.0*gny/npy)
 
         ! Check against original weird integer devision
-        if (nx.ne.(gnx+npx-1)/npx )
-     &       stop 'integer devision error in mpi_setup'
-        if (ny.ne.(gny+npy-1)/npy )
-     &       stop 'integer devision error in mpi_setup'
+      if (nx.ne.(gnx+npx-1)/npx ) then
+         call error_log%raise_global(
+     &        context=module_name//"/"//sr_name,
+     &        info='integer division error in mpi_setup')
+      end if
+      if (ny.ne.(gny+npy-1)/npy ) then
+         call error_log%raise_global(
+     &        context=module_name//"/"//sr_name,
+     &        info='integer division error in mpi_setup')
+      end if
 
 
         offx = npx*nx-gnx

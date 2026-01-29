@@ -13,7 +13,7 @@
 ! twice, in predictor and corrector substeps for tracer variables.
 
 
-c---#define BIO_1ST_USTREAM_TEST
+!#define BIO_1ST_USTREAM_TEST
 #ifdef  BIO_1ST_USTREAM_TEST
         if (itrc>isalt) then       ! biological tracer components:
 !       if (itrc>0) then       ! biological tracer components:

@@ -11,12 +11,12 @@
 
 c--# define DIAGNOSTICS
 c--# define TIDES
-c--# define BULK_FRC
+# define BULK_FRC
 # define SPONGE_TUNE
 # define RIVER_SOURCE
 # define EXTRACT_DATA
 
-c--# define SFLX_CORR
+!#define SFLX_CORR
 
 # define SOLVE3D
 # define UV_COR
@@ -30,7 +30,7 @@ c--# define SFLX_CORR
 # define NONLIN_EOS
 # define SPLIT_EOS
 
-c--# define AVERAGES
+!#define AVERAGES
 # define EXACT_RESTART
 # define IMPLICIT_BOTTOM_DRAG
 
@@ -42,7 +42,7 @@ c--# define AVERAGES
 # define LMD_BKPP
 # define LMD_RIMIX
 # define LMD_NONLOCAL
-c--# define LMD_CONVEC
+!#define LMD_CONVEC
 
 # define OBC_WEST
 # define OBC_EAST

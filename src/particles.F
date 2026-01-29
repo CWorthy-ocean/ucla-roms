@@ -20,7 +20,7 @@
      &     dn_tm, create_file, store_string_att,
      &     particle_opt
       use nc_read_write, only: nccreate
-      use error_handling, only: handle_netcdf_error
+      use error_handling_mod, only: error_log
       implicit none
       private
 
@@ -456,7 +456,7 @@
 
       varid = nccreate(ncid,'particles',dimnames,dimsizes,nf90_double)
       if (ierr/=nf90_noerr) then
-         call handle_netcdf_error(netcdf_status=ierr,
+         call error_log%check_netcdf_status(netcdf_status=ierr,
      &        info="error creating particles file",
      &        context=module_name//"/"//sr_name)
       end if
@@ -464,7 +464,7 @@
      &                                ,'Tag/x/y/z/u/v/w')
 
       ierr=nf90_put_att( ncid, nf90_global, 'big_number', big_number )
-
+      call error_log%abort_check()
       ierr = nf90_close(ncid)
 
       end subroutine create_particles_file !]

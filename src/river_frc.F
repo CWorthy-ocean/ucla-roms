@@ -17,7 +17,7 @@
      &     grdname, pm, rmask, riv_umask, riv_vmask, xr
       use dimensions, only: i0, i1, j0, j1, nx, ny, xi_rho, eta_rho
       use param, only: lm, mm, mynode, ocean_grid_comm
-      use error_handling, only : handle_configuration_error, handle_netcdf_error, handle_local_error
+      use error_handling_mod, only: error_log
 
       implicit none
 
@@ -170,18 +170,18 @@
                   write(error_info,*) 'nriv=', nriv,
      &                 'but index ', global_maxval,
      &                 ' found in river input file.'
-                  call handle_configuration_error(
+                  call error_log%raise_global(
      &                 context=module_name//"/"//sr_name,
      &                 info=error_info)
               endif
             endif
-
 !     Check for non-integer values
             ridx(i0:i1, j0:j1) = int(ridx_real(i0:i1, j0:j1))
-            if (any(abs(ridx_real(i0:i1,j0:j1) - ridx(i0:i1,j0:j1)) > 1.0e-6)) then
-            call handle_configuration_error(
-     &           context=module_name//"/"//sr_name,
-     &           info="river_index contains non-integers!")
+            if (any(abs(ridx_real(i0:i1,j0:j1) - ridx(i0:i1,j0:j1))
+     &           > 1.0e-6)) then
+               call error_log%raise_global(
+     &              context=module_name//"/"//sr_name,
+     &              info="river_index contains non-integers!")
             endif
          else ! if not in the forcing file, look for a single variable in the grid file
             ierr=nf90_close(ncid)
@@ -198,8 +198,7 @@
      &              ') or as a combined variable, '// trim(riv_flx_name) //
      &              ',  in grid (' // trim(grdname)//
      &              ') file.'
-               call handle_netcdf_error(
-     &              netcdf_status=ierr,
+               call error_log%raise_from_rank(
      &              context=module_name//"/"//sr_name,
      &              info=error_info)
             else
@@ -214,9 +213,10 @@
                end where
             end if ! found in grid file
          end if                 ! Separate variables found in forcing file
-      endif !analytical
 
-      call calc_river_flux                                           ! compute uflx,vflx from rflx
+      endif !analytical
+      call error_log%abort_check()
+      call calc_river_flux      ! compute uflx,vflx from rflx
 
       init_riv_done = .true.
 
@@ -249,9 +249,10 @@
 #ifdef MASKING
             faces =  rmask(i-1,j)+rmask(i+1,j)+rmask(i,j-1)+rmask(i,j+1) !! amount of unmasked cells around
             if ( faces == 0 .or. rmask(i,j)>0  ) then
-               call handle_local_error(context=module_name//"/"//sr_name,
+               call error_log%raise_from_point(
+     &              context=module_name//"/"//sr_name,
      &              info='river grid position error',
-     &              i=i, j=j, k=N, tile=mynode)
+     &              i=i, j=j, k=N)
             endif
             ! 10*iriver needed because uflx/vflx can be positive or negative around
             ! the iriver number, and hence nearest integer is safest done with 10*.
@@ -272,10 +273,10 @@
               riv_vmask(i,j+1) = 1.0
             endif
 #endif
-          endif
+         endif
         enddo
       enddo
-
+      call error_log%abort_check()
       end subroutine calc_river_flux  !]
 ! ----------------------------------------------------------------------
       subroutine set_ana_river_frc  ![

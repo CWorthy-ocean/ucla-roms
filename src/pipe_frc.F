@@ -18,7 +18,7 @@
      &     set_frc_data, store_string_att
       use nc_read_write, only: ncread
       use param, only: n, lm, mm, nt, mynode
-      use error_handling, only: handle_netcdf_error
+      use error_handling_mod, only: error_log
       implicit none
 
       private
@@ -94,7 +94,7 @@
       use param, only: ocean_grid_comm
       use mpi_f08, only: mpi_double_precision, mpi_max
       use roms_read_write, only: frcfile
-      use error_handling, only: handle_configuration_error, handle_netcdf_error
+      use error_handling_mod, only: error_log
 
       implicit none
       character(len=13) :: sr_name = "init_pipe_frc"
@@ -129,21 +129,20 @@
                   write(error_info,*) 'npipe=', npip,
      &                 'but index ', global_maxval,
      &                 ' found in pipe input file.'
-                  call handle_configuration_error(
+                  call error_log%raise_global(
      &                 context=module_name//"/"//sr_name,
      &                 info=error_info)
-              endif
+               endif
             endif
-
 !     Check for non-integer values
             pipe_idx(i0:i1, j0:j1) = int(pidx_real(i0:i1, j0:j1))
             if (any(abs(pidx_real(i0:i1,j0:j1) -
      &           pipe_idx(i0:i1,j0:j1)) > 1.0e-6)) then
-            call handle_configuration_error(
-     &           context=module_name//"/"//sr_name,
-     &           info="pipe_index contains non-integers!")
+               call error_log%raise_global(
+     &              context=module_name//"/"//sr_name,
+     &              info="pipe_index contains non-integers!")
             endif
-         else ! if not in the forcing file, look for a single variable in the grid file
+         else ! ierr  / if not in the forcing file, look for a single variable in the grid file
         ! Read 'pipe_flux' from grid file (Pipe_idx & pipe_fraction in one value)
             ierr=nf90_open(grdname, nf90_nowrite, ncid)
         ! Temporarily store as pipe_fraction to avoid extra array,
@@ -159,7 +158,7 @@
      &              ') or as a combined variable, '// trim(pipe_flx_name) //
      &              ',  in grid (' // trim(grdname)//
      &              ') file.'
-               call handle_netcdf_error(
+               call error_log%check_netcdf_status(
      &              netcdf_status=ierr,
      &              context=module_name//"/"//sr_name,
      &              info=error_info)
@@ -180,7 +179,8 @@
               pipe_flx(i,j)=pipe_fraction(i,j)*pipe_vol( pipe_idx(i,j) )
             endif
           enddo
-        enddo
+       enddo
+       call error_log%abort_check()
       end if ! p_analytical
       init_pipe_done = .true.
       if(mynode==0) write(*,'(/7x,A/)') 'pipe_frc: init pipe locations'

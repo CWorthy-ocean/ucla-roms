@@ -22,7 +22,7 @@
       implicit none
 
       integer, parameter :: MAX_NUM_KEYWORDS = 200 ! hardcoded upper bound
-
+      character(len=17) :: module_name = "keyword_registry"
       type :: keyword_entry
 !-----------------------------------------------------------------------
 !     TYPE: keyword_entry
@@ -49,15 +49,13 @@
 !     DESCRIPTION:
 !     Prototype for all keyword handler routines. Each handler is
 !     responsible for reading/processing the keyword’s data from the
-!     specified unit and reporting any errors through ierr.
+!     specified unit and raising any errors through error_log.
 !
 !     ARGUMENTS:
 !       unit  - input unit positioned at the keyword’s data
-!       ierr  - incremental error flag
 !-----------------------------------------------------------------------
-         subroutine keyword_handler(unit, ierr)
+         subroutine keyword_handler(unit)
             integer, intent(in) :: unit
-            integer, intent(inout) :: ierr
          end subroutine keyword_handler
       end interface
 
@@ -122,7 +120,7 @@
          end do
       end function lookup_keyword
 
-      subroutine report_keyword_mismatch(ierr)
+      subroutine report_keyword_mismatch()
 !-----------------------------------------------------------------------
 !     SUBROUTINE: report_keyword_mismatch
 !     DESCRIPTION:
@@ -130,21 +128,26 @@
 !     not been marked as found in the registry when required or was
 !     found multiple times
 !-----------------------------------------------------------------------
-         integer, intent(inout) :: ierr
-         integer :: i
+      use error_handling_mod, only: error_log
+      integer :: i
+      character(len=1024) :: error_info = ""
+      character(len=24) :: sr_name = "report_keyword_mismatch"
 
-         do i = 1, kw_idx
-            if (registry(i)%required .and. (registry(i)%found==0)) then
-               if (mynode==0) write(*,"(3A)") "ERROR: Required keyword ",
-     &              registry(i)%name, " not found"
-               ierr=ierr+1
-            elseif (registry(i)%found>1) then
-               if (mynode==0) write(*,"(3A,I0)")
-     &              "ERROR: Multiple instances of keyword ", registry(i)%name,
-     &              " found: ", registry(i)%found
-               ierr=ierr+1
-            end if
-         end do
+      do i = 1, kw_idx
+         if (registry(i)%required .and. (registry(i)%found==0)) then
+            write(error_info,*) "Required keyword ",
+     &           registry(i)%name, " not found"
+            call error_log%raise_global(
+     &           info=error_info,
+     &           context=module_name//"/"//sr_name)
+         elseif (registry(i)%found>1) then
+            write(error_info,*) "Multiple instances of keyword ",
+     &           registry(i)%name," found: ", registry(i)%found
+            call error_log%raise_global(
+     &           info=error_info,
+     &           context=module_name//"/"//sr_name)
+         end if
+      end do
       end subroutine report_keyword_mismatch
 
       end module keyword_registry

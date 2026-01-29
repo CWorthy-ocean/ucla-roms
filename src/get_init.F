@@ -5,7 +5,7 @@
 
       use scalars, only:
      &     day2sec, dt, forw_start, iic, ntstart,
-     &     sec2day, start_time, may_day_flag
+     &     sec2day, start_time
       use dimensions, only: inode, jnode
       use tracers, only: t_vname, t, iTandS
 #ifdef MARBL
@@ -45,11 +45,12 @@
      &     nsub_e, nsub_x, nnodes, n, nt,
      &     np_xi, np_eta
       use roms_mpi, only: exchange_xxx
-      use error_handling, only : handle_configuration_error, handle_netcdf_error
+      use error_handling_mod, only: error_log
+
 #ifdef DIAGNOSTICS
       use diagnostics, only : diag_pflx, get_init_slow
 #endif
-      use sponge_tune, only: ub_tune
+      use sponge_tune, only: ub_tune, get_init_ub
       implicit none
       character(len=8) :: sr_name = "get_init"
       character(len=200) :: error_info
@@ -74,9 +75,9 @@
 c--#define VERBOSE
 #ifdef VERBOSE
       write(*,'(3(2x,A,I3))') 'enter get_init: req_rec =', req_rec,
-     &            'tindx =', tindx, 'may_day_flag =', may_day_flag
+     &            'tindx =', tindx
 #endif
-      if (may_day_flag /= 0) return      !-->  EXIT
+
 
 ! Open conditions netCDF file for reading.  Check that all spatial
 ! dimensions in that file are consistent with the model, determine how
@@ -97,41 +98,39 @@ c--#define VERBOSE
 
       init_type=0
       ierr=nf90_open(ininame, nf90_nowrite, ncid)
-      if (ierr == nf90_noerr) then
-        ierr=checkdims (ncid, ininame, max_rec)
-        if (ierr == nf90_noerr) then
-          if (max_rec > 0) then
-            if (req_rec > 0) then
-              if (req_rec <= max_rec) then
-                record=req_rec
-              else
-                write(error_info, *)
-     &              'requested restart time ',
-     &              'record',req_rec, 'exceeds number', 'of records',
-     &                       max_rec,  'available in netCDF file ''',
-     &                trim(ininame), '''.'
-                call handle_netcdf_error(
-     &               netcdf_status=ierr,
-     &               context=sr_name,
-     &               info=error_info)
-              endif
+      write(error_info, *)
+     &     'Cannot open netCDF file ''', trim(ininame), '''.'
+      call error_log%check_netcdf_status(
+     &     netcdf_status=ierr,
+     &     context=sr_name,
+     &     info=error_info)
+      call error_log%abort_check()
+
+      ierr=checkdims (ncid, ininame, max_rec)
+      call error_log%abort_check()
+
+      if (max_rec > 0) then
+         if (req_rec > 0) then
+            if (req_rec <= max_rec) then
+               record=req_rec
             else
-              record=max_rec
+               write(error_info, *)
+     &              'requested restart time ',
+     &              'record',req_rec,
+     &              'exceeds number', 'of records',
+     &              max_rec,  'available in netCDF file ''',
+     &              trim(ininame), '''.'
+               call error_log%raise_from_rank(
+     &              context=sr_name,
+     &              info=error_info)
             endif
-          else
-            record=1
-          endif
-        endif
-      else
-        write(error_info, *)
-     &        'Cannot open netCDF file ''', trim(ininame), '''.'
-         call handle_netcdf_error(
-     &        netcdf_status=ierr,
-     &        context=sr_name,
-     &        info=error_info)
+         else                   !(if (req_rec > 0))
+            record=max_rec
+         endif
+      else                      !if (max_rec > 0)
+         record=1
       endif
-
-
+      call error_log%abort_check()
 
 ! Read in evolving model variables:
 !----- -- -------- ----- ----------
@@ -207,21 +206,21 @@ c--#define VERBOSE
         ierr=nf90_inq_varid(ncid, 'scrum_time', varid)
       endif
       if (ierr/=0) then
-         call handle_netcdf_error(
+         call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
      &        context=sr_name,
      &        info="time var not found")
       end if
       ierr=nf90_get_var(ncid, varid, start_time, start=(/record/) )
       if (ierr/=0) then
-         call handle_netcdf_error(
+         call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
      &        context=sr_name,
      &        info="unable to get time var")
       end if
       ierr=nf90_get_att(ncid, varid, 'units', vname(3,indxTime))
       if (ierr/=0) then
-         call handle_netcdf_error(
+         call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
      &        context=sr_name,
      &        info="unable to get time units")
@@ -234,10 +233,11 @@ c--#define VERBOSE
         write(error_info, *)
      &  'unknown units for variable ''',trim(vname(1,indxTime)),
      &        '''', 'in netCDF file ''', trim(ininame), '''.'
-        call handle_configuration_error(
+        call error_log%raise_global(
      &       context=sr_name,
      &       info=error_info)
       endif
+      call error_log%abort_check()
       start_time=start_time*time_scale
 !     start_time=start_time*time_scale + 288
 
@@ -278,7 +278,7 @@ c--#define VERBOSE
      &           'rec =', record,
      &           'file = ''', trim(ininame), '''',
      &           nf90_strerror(ierr)
-            call handle_configuration_error(
+            call error_log%raise_global(
      &           context=sr_name,
      &           info=error_info)
           endif
@@ -293,12 +293,12 @@ c--#define VERBOSE
       endif
 #endif
       if (ierr /= nf90_noerr) then
-         call handle_netcdf_error(
+         call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
      &        context=sr_name,
      &        info="Cause of termination: netCDF input.")
       endif
-
+      call error_log%abort_check()
 ! Check whether variable 'time_step' is present, which can be a
 ! structure of four to up to eight integer numbers storing time step
 ! number and the corresponding record numbers for output files.
@@ -310,14 +310,14 @@ c--#define VERBOSE
       if (ierr == nf90_noerr) then
         ierr=nf90_inquire_variable(ncid, varid, dimids=ibuff)
         if (ierr/=0) then
-           call handle_netcdf_error(
+           call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
      &        context=sr_name,
      &        info="Cannot get time_step dimids.")
         end if
         ierr=nf90_inquire_dimension(ncid, ibuff(1), len=count(1))
         if (ierr/=0) then
-           call handle_netcdf_error(
+           call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
      &        context=sr_name,
      &          info="Cannot get time dim size")
@@ -326,7 +326,7 @@ c--#define VERBOSE
         ibuff(1:iaux)=0
         ierr=nf90_get_var(ncid, varid, ibuff, start, count)
         if (ierr/=0) then
-           call handle_netcdf_error(
+           call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
      &        context=sr_name,
      &          info="Cannot read time_step")
@@ -338,7 +338,7 @@ c--#define VERBOSE
           start(2)=record+1
           ierr=nf90_get_var(ncid, varid, ibuff, start, count)
         if (ierr/=0) then
-           call handle_netcdf_error(
+           call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
      &        context=sr_name,
      &          info="Cannot read second time_step")
@@ -369,7 +369,7 @@ c--#define VERBOSE
         init_type=rst_run
 #endif
         if (ierr/=0) then
-           call handle_netcdf_error(
+           call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
      &        context=sr_name,
      &          info="Cause of termination: netCDF input.")
@@ -390,7 +390,7 @@ c--#define VERBOSE
       write(*,'(1x,2A,F12.4,1x,A,I4)')   'get_init: reading initial ',
      &   'fields for time =', start_time*sec2day, 'record =', record
 #endif
-
+      call error_log%abort_check()
 ! Read initial fields:
 !---------------------
 ! River mask (needed for exact restarts)
@@ -477,7 +477,7 @@ c--#define VERBOSE
           call ncread(ncid,'rufrc_bak', rufrc_bak( 1:i1,j0:j1,tindx),start)    ! DevinD this update was untested
           call ncread(ncid,'rvfrc_bak', rvfrc_bak(i0:i1, 1:j1,tindx),start)
           if (ierr/=nf90_noerr) then
-             call handle_netcdf_error(
+             call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
      &            context=sr_name,
      &            info="Cause of termination: netCDF input.")
@@ -489,6 +489,7 @@ c--#define VERBOSE
       else
         forw_start=ntstart    !--> cancel exact restart
       endif
+      call error_log%abort_check()
 #  endif
 # endif /*EXACT_RESTART*/
 
@@ -534,8 +535,8 @@ c--#define VERBOSE
      &             trim(ininame),
      &             '''',
      &             nf90_strerror(ierr)
-              call handle_netcdf_error(
-     &        netcdf_status=ierr,
+              call error_log%check_netcdf_status(
+     &             netcdf_status=ierr,
      &             context=sr_name,
      &             info=error_info)
           else
@@ -548,7 +549,7 @@ c--#define VERBOSE
 
         endif
       enddo
-
+      call error_log%abort_check()
       start=1; start(3)=record                                       ! 2D vars
 # ifdef LMD_KPP
       ierr=nf90_inq_varid(ncid, vname(1,indxHbls), varid)
@@ -617,7 +618,7 @@ c--#define VERBOSE
      &     'rec =', record, '.'
 #endif
         else
-              call handle_configuration_error(
+              call error_log%raise_from_rank(
      &             context=sr_name,
      &             info="Unknown Error.")
          endif
@@ -625,7 +626,7 @@ c--#define VERBOSE
 #ifdef MPI_SILENT_MODE
       endif
 #endif
-
+      call error_log%abort_check()
       ! Here we catch an initial file that does not have the boundary values of u/v
       ! set to zero, even though we prescribed a closed boundary. This is necessary
       ! for conservation tests.

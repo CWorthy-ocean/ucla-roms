@@ -11,10 +11,10 @@
     Embedded (nested) grid configuration segment
 */
 
-c--#ifndef MAX_GRID_LEVEL
-c--# define MAX_GRID_LEVEL 2
-c--# include "redefs.X"
-c--#endif
+!--#ifndef MAX_GRID_LEVEL
+!#define MAX_GRID_LEVEL 2
+!--# include "redefs.X"
+!--#endif
 
 /*
    Main switch starts here: model configuration choice.
@@ -50,8 +50,8 @@ c--#endif
 # define LMD_CONVEC
 # define LMD_BKPP
         /* Grid Configuration */
-c-dd# define CURVGRID
-c-dd# define SPHERICAL
+!#define CURVGRID
+!#define SPHERICAL
 # define MASKING
         /* Output Options */
 # define MASK_LAND_DATA

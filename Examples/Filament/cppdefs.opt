@@ -9,8 +9,8 @@
 
 #if defined FILAMENT_IDEAL
 
-c# define DIAGNOSTICS
-c# define ANA_BRY
+!#define DIAGNOSTICS
+!#define ANA_BRY
 
 # define ANA_GRID
 # define ANA_INITIAL
@@ -25,9 +25,9 @@ c# define ANA_BRY
 # define UV_COR
 
         /* Equation of State */
-c# define NONLIN_EOS
-c# define SPLIT_EOS
-c# define SALINITY
+!#define NONLIN_EOS
+!#define SPLIT_EOS
+!#define SALINITY
 
         /* Mixing */
         /*        - lateral */
@@ -36,38 +36,38 @@ c# define SALINITY
 
         /*        - vertical */
 # define ANA_VMIX
-c# define LMD_MIXING
-c# define LMD_KPP
-c# define LMD_NONLOCAL
-c# define LMD_RIMIX
-c# define LMD_CONVEC
-c# define LMD_BKPP
+!#define LMD_MIXING
+!#define LMD_KPP
+!#define LMD_NONLOCAL
+!#define LMD_RIMIX
+!#define LMD_CONVEC
+!#define LMD_BKPP
 
         /* Grid Configuration */
-c# define CURVGRID
-c# define SPHERICAL
+!#define CURVGRID
+!#define SPHERICAL
 # define MASKING
 
         /* Boundaries */
 # define NS_PERIODIC
 # define EW_PERIODIC
 
-c#  define OBC_WEST
-c#  define OBC_EAST
-c#  define OBC_NORTH
-c#  define OBC_SOUTH
+!#define OBC_WEST
+!#define OBC_EAST
+!#define OBC_NORTH
+!#define OBC_SOUTH
 
-c#  define OBC_M2FLATHER
-c#  define OBC_M3ORLANSKI
-c#  define OBC_TORLANSKI
+!#define OBC_M2FLATHER
+!#define OBC_M3ORLANSKI
+!#define OBC_TORLANSKI
 
-c#  define Z_FRC_BRY
-c#  define M2_FRC_BRY
-c#  define M3_FRC_BRY
-c#  define T_FRC_BRY
+!#define Z_FRC_BRY
+!#define M2_FRC_BRY
+!#define M3_FRC_BRY
+!#define T_FRC_BRY
 
         /* Waves Effect on Current */
-c# define WEC
+!#define WEC
 # ifdef WEC
 #  define ANA_WEC_FRC
 #  define WAVE_OFFLINE /* DPD: for ust_r */

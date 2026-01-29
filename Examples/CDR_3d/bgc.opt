@@ -28,7 +28,7 @@
       ! BGC forcing
       !       By default BEC require dust and iron depostion
 
-      integer :: interp_frc  = 0                           ! interpolate forcing from coarser input grid (=1) or not (=0)
+      integer :: interp_frc  = 1                           ! interpolate forcing from coarser input grid (=1) or not (=0)
 
       type (ncforce) :: nc_dust        = ncforce(vname='dust', tname='dust_time' )  ! dust forcing
       type (ncforce) :: nc_iron        = ncforce(vname='iron', tname='iron_time' )  ! iron forcing

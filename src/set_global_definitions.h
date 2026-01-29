@@ -28,7 +28,7 @@
  accommodate enough workspace accordingly.  Useful for debugging
  purposes only. Normally should be kept undefined. */
 
-c--#define ALLOW_SINGLE_BLOCK_MODE
+!#define ALLOW_SINGLE_BLOCK_MODE
 #ifdef ALLOW_SINGLE_BLOCK_MODE
 # define SINGLE NSUB_X*NSUB_E,NSUB_X*NSUB_E !!!
 #endif
@@ -57,7 +57,7 @@ c--#define ALLOW_SINGLE_BLOCK_MODE
  corrector-coupled (including the option with forward extrapolation of
  barotropic fluxes) modes. */
 
-c--#define KEEP_CORIOLIS
+!#define KEEP_CORIOLIS
 
 /* Activation of the first switch of the following two makes computing
  vertical viscous terms as well as implicit part of vertical advection
@@ -69,7 +69,7 @@ c--#define KEEP_CORIOLIS
  the tri-diagonal solver as opposite to computing it explicitly from
  whatever latest velocity values available. */
 
-c-# define IMPLICIT_BOTTOM_DRAG
+!#define IMPLICIT_BOTTOM_DRAG
 # define IMPLCT_NO_SLIP_BTTM_BC
 
 
@@ -368,8 +368,8 @@ c-# define IMPLICIT_BOTTOM_DRAG
  roundoff errors. However, not all compilers support quad precision,
  so it can be conditionally switched on-and-off. */
 
-c---#if defined DBLEPREC && !defined GCC && !defined __IFC \
-c---                     && !defined PGI && !defined CRAY
+!---#if defined DBLEPREC && !defined GCC && !defined __IFC \
+!---                     && !defined PGI && !defined CRAY
 /*-- for now, we keep doing the double precision for global sums
    instead of the quad stuff */
 #if defined JEROEN_TEST
@@ -396,12 +396,12 @@ c---                     && !defined PGI && !defined CRAY
 
 #ifdef DBLEPREC
 # define float dble
-c-# define sqrt dsqrt
-c-# define SQRT dsqrt
-c-# define exp dexp
-c-# define EXP dexp
-c-# define dtanh dtanh
-c-# define TANH dtanh
+!#define sqrt dsqrt
+!#define SQRT dsqrt
+!#define exp dexp
+!#define EXP dexp
+!#define dtanh dtanh
+!#define TANH dtanh
 #endif
 
 /* Model netCDF input/output control: decide whether to put grid data
