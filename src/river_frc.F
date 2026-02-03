@@ -105,7 +105,7 @@
       integer :: ierr,ncid,varid
       real  :: riv_cells,riv_east,riv_west
       real  :: local_maxval, global_maxval
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
 
       allocate( riv_uflx(GLOBAL_2D_ARRAY) ); riv_uflx = 0.
       allocate( riv_vflx(GLOBAL_2D_ARRAY) ); riv_vflx = 0.

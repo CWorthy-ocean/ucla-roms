@@ -443,7 +443,7 @@
       ierr=nf90_put_att(ncid, varid, 'long_name',
      &           'Virtual flux of ALK')
       ierr = nf90_put_att(ncid,varid,'units','mmol m-2 s-1 ')
-#endif ! MARBL
+#endif /* MARBL */
 #else
       ! Input comes in units of:         N m-2
       ! Output is written in units of:   m2 s-2

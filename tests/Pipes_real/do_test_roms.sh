@@ -1,0 +1,1 @@
+../scripts/do_test_roms.sh

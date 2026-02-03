@@ -92,6 +92,8 @@
       ! Different parent and child grid parameters?
       logical :: parent_child_grid_mismatch = .true.
 
+      real    :: otime=0   ! time since last output
+
       type extract_object  ! contains all information for a data_extraction object
 
         ! needed as input
@@ -102,7 +104,6 @@
         character(:),allocatable :: dname               ! dimension name for object
         integer                  :: dsize               ! dimension of object
         logical                            :: scalar    ! scalar or vector
-        real                               :: period    ! output period (seconds)
         integer                            :: np        ! local number of locations
         real,   dimension(:)  ,allocatable :: ipos,jpos ! fractional index locations
         real,   dimension(:)  ,allocatable :: ang       ! desired angle for velocities
@@ -112,7 +113,6 @@
         !! Initializing record at nrpf will trigger the making of a file
         !! at the first time step
         integer                        :: record=nrpf   ! record number in file
-        real                               :: otime=0   ! time since last output
 
         real,   dimension(:,:),pointer     :: Hz_par    ! interpolated thickness for parent
         real,   dimension(:,:),pointer     :: Hz_par_u  ! interpolated thickness for parent at u-interface
@@ -303,7 +303,6 @@
       real,dimension(:,:),allocatable :: object
       integer               :: n1,n2,i0,i1,lstr
       integer ierr,sidx,sidx2
-      real :: period
 
       if (mynode==0) then
         write(*,'(7x,2A)')
@@ -372,12 +371,11 @@
            obj(iobj)%set = objname
         endif
 
-        ierr = nf90_get_att(ncid,iobj,'output_period',period)
+        ierr = nf90_get_att(ncid,iobj,'output_period',extract_period)
         call error_log%check_netcdf_status(netcdf_status=ierr,
      &       info="error when getting `output_period` attribute",
      &       context=module_name//"/"//sr_name)
         call error_log%abort_check()
-        obj(iobj)%period   = period
 
         if (obj(iobj)%np>0) then
 !! only for objects with a presences in this subdomain
@@ -601,8 +599,11 @@
 
       if (.not.allocated(obj)) then
         call init_extract_data
-        return
       endif
+
+      otime = otime + dt
+
+      if (otime>=extract_period) then
 
       if (obj(1)%record==nrpf) then
           call create_edata_file(fname)
@@ -624,10 +625,7 @@
       !! there are points in the sub-domain to ensure correct file
       !! names for all
       do i = 1,nobj
-        obj(i)%otime = obj(i)%otime + dt
-        if (obj(i)%otime>=obj(i)%period) then
           obj(i)%record = obj(i)%record+1
-          obj(i)%otime = 0
           if (i==1) total_rec = total_rec+1
           if (obj(i)%np>0) then
 
@@ -838,10 +836,13 @@
             endif
 
           endif
-        endif
+        !endif
       enddo
 
       ierr=nf90_close(ncid)
+
+      otime = 0
+      endif
 
       end subroutine do_extract_data  !]
 ! ----------------------------------------------------------------------

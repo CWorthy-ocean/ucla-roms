@@ -439,7 +439,7 @@
       integer :: ierr, ncid, varid, lstr, checkdims
       integer,dimension(4) :: start
       character(len=8) :: sr_name = "get_grid"
-      character(len=200) :: error_info = ''
+      character(len=1024) :: error_info = ''
 
 
 #ifdef ANA_GRID

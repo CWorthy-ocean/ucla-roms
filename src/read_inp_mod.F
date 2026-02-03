@@ -154,7 +154,7 @@
       character(len=max_fname)  :: fname, force_string
       character(len=max_kwsize) :: keyword
       character(len=3), parameter :: end_signal='end'
-      integer is,ie,  kwlen, lstr, lenstr
+      integer is,ie,  kwlen
 #ifdef SOLVE3D
      &                                 , itrc
 #endif
@@ -192,7 +192,7 @@
 !     Open input file to read keywords
       open(input, file=fname, status='old', form='formatted', iostat=ios)
       if (ios /= 0) then
-         call report_opening_error(fname(1:lstr))
+         call report_opening_error(trim(fname))
          return
       end if
 
@@ -230,14 +230,13 @@
       implicit none
 
       character(len=*), intent(in) :: fname
-      integer :: lstr
       integer :: unit, ios, kwlen, idx
       character(len=256) :: keyword
       logical :: eof
 
       open(newunit=unit, file=fname, status='old', action='read', iostat=ios)
       if (ios /= 0) then
-         call report_opening_error(fname(1:lstr))
+         call report_opening_error(trim(fname))
          return
       end if
 
@@ -422,7 +421,6 @@
       integer, intent(in) :: unit
 
       integer :: ios
-      integer :: lstr
 
 ! Read ntimes, dt, ndtfast, ninfo
       read(unit, *, iostat=ios) ntimes, dt, ndtfast, ninfo
@@ -468,7 +466,6 @@
          call report_read_error("MARBL_biogeochemistry")
          return
       end if
-
       lstr = lenstr(marbl_namelist_fname)
       mpi_master_only write(*,'(1x,A,15x,A)')
      &     'MARBL namelist file',marbl_namelist_fname(1:lstr)
@@ -481,7 +478,6 @@
          call report_read_error("MARBL_biogeochemistry")
          return
       end if
-
       lstr = lenstr(marbl_tracer_list_fname)
       mpi_master_only write(*,'(1x,A,5x,A)')
      &     'MARBL tracer output list file',marbl_tracer_list_fname(1:lstr)
@@ -495,7 +491,6 @@
          call report_read_error("MARBL_biogeochemistry")
          return
       end if
-
       lstr = lenstr(marbl_diag_list_fname)
       mpi_master_only write(*,'(1x,A,1x,A)')
      &     'MARBL diagnostic output list file',marbl_diag_list_fname(1:lstr)
@@ -709,7 +704,7 @@
       implicit none
 
       integer, intent(in)    :: unit
-      integer :: ios, itrc, lstr, lenstr
+      integer :: ios, itrc
       character(len=10) :: mixing_type
 
 
@@ -893,17 +888,17 @@
 # if defined MPI && defined PARALLEL_FILES
       call insert_node(fname, lstr, mynode, nsize)
 # endif
-      open(newunit=testunit, file=fname(1:lstr), status='old',
+      open(newunit=testunit, file=trim(fname), status='old',
      &     iostat=ios)
       if (ios /= 0) then
-         call report_opening_error(fname(1:lstr))
+         call report_opening_error(trim(fname))
          return
       end if
       close(testunit)
 
-      grdname = fname(1:lstr)
+      grdname = trim(fname)
       mpi_master_only write(*,'(1x,2A)')
-     &      'grid file: ', grdname(1:lstr)
+     &      'grid file: ', trim(grdname)
 
       end subroutine kwread_grid
 #endif /* !ANA_GRID */
@@ -939,17 +934,17 @@
 # if defined MPI && defined PARALLEL_FILES
          call insert_node(fname, lstr, mynode, nsize)
 # endif
-         open(newunit=testunit, file=fname(1:lstr), status='old',
+         open(newunit=testunit, file=trim(fname), status='old',
      &        iostat=ios)
          if (ios /= 0) then
-            call report_opening_error(fname(1:lstr))
+            call report_opening_error(trim(fname))
             return
          end if
          close(testunit)
-         ininame = fname(1:lstr)
+         ininame = trim(fname)
          mpi_master_only write(*,'(1x,A,I3,2x,3A)')
      &        'initial condition :: rec =', nrrec,
-     &        'file = ''', ininame(1:lstr), ''''
+     &        'file = ''', trim(ininame), ''''
 
 #ifdef ANA_INITIAL
       endif
@@ -995,10 +990,10 @@
 
 ! Test file availability
 
-            open(newunit=testunit, file=fname(1:lstr), status='old',
+            open(newunit=testunit, file=trim(fname), status='old',
      &           iostat=ios)
             if (ios /= 0) then
-               call report_opening_error(fname(1:lstr))
+               call report_opening_error(trim(fname))
                return
             end if
             close(testunit)
@@ -1008,7 +1003,7 @@
             if (max_frc < max_frc_files) then
 
                max_frc = max_frc + 1
-               frcfile(max_frc) = fname(1:lstr)
+               frcfile(max_frc) = trim(fname)
 
 ! Write file info to output stream
 # ifdef MPI_SILENT_MODE
@@ -1016,9 +1011,9 @@
 # endif
                   if (max_frc == 1) then
                     write(*,'(1x,2A)') 'forcing data file(s): ',
-     &                                 frcfile(max_frc)(1:lstr)
+     &                                 trim(frcfile(max_frc))
                   else
-                    write(*,'(23x,A)') frcfile(max_frc)(1:lstr)
+                    write(*,'(23x,A)') trim(frcfile(max_frc))
                   endif
 ! Add to attributes
 c$$$                  if (mynode == 0) then
@@ -1078,16 +1073,16 @@ c$$$                  end if TODO
       call insert_node(fname, lstr, mynode, nsize)
 # endif
 
-      open(newunit=testunit, file=fname(1:lstr), status='old',
+      open(newunit=testunit, file=trim(fname), status='old',
      &     iostat=ios)
       if (ios /= 0) then
-         call report_opening_error(fname(1:lstr))
+         call report_opening_error(trim(fname))
          return
       end if
       close(testunit)
-      clm_file = fname(1:lstr)
+      clm_file = trim(fname)
           mpi_master_only write(*,'(1x,4A)')   'climatology data :: ',
-     &                           'file = ''', clm_file(1:lstr), ''''
+     &                           'file = ''', trim(clm_file), ''''
 
       end subroutine kwread_climatology
 #endif

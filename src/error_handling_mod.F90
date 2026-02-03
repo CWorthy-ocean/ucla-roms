@@ -395,8 +395,10 @@ contains
     if (present(rank)) error_entry%rank = rank
     if (present(i))    error_entry%i = i
     if (present(j))    error_entry%j = j
-    if (present(k) .and. k>-1) then
-       error_entry%k = k
+    if (present(k)) then
+       if ( k>-1 ) then
+          error_entry%k = k
+       end if
     end if
 
     if (associated(this%tail)) then

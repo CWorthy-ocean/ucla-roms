@@ -99,7 +99,7 @@
       implicit none
       character(len=13) :: sr_name = "init_pipe_frc"
       real  :: local_maxval, global_maxval
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
       ! local
       integer :: ierr,ncid,v_id,i,j,varid
       if (p_analytical) then

@@ -33,7 +33,7 @@
       implicit none
       private
       character(len=7) :: module_name="cdr_frc"
-      character(len=200) :: error_info=""
+      character(len=1024) :: error_info=""
 #include "cdr_frc.opt"
 
       !!! (1) Parameterized releases
@@ -370,15 +370,17 @@
          endif
         endif ! cdr_hsc(icdr) = 0
 
-        ! Check for releases on land
-        if ((frac(lmi(1),lmi(2),icdr) ==1 ) .and.
+        if (.not. relocate_to_wet_pts) then
+          ! Check for releases on land
+          if ((frac(lmi(1),lmi(2),icdr) ==1 ) .and.
      &       (rmask(lmi(1),lmi(2))==0)) then
-           write(error_info,'(A,I0,A))') "CDR release ",
+            write(error_info,'(A,I0,A)') "CDR release ",
      &          icdr," is on land."
-         call error_log%raise_global(
-     &     context=module_name//"/"//sr_name,
-     &     info=error_info)
-        end if
+            call error_log%raise_global(
+     &      context=module_name//"/"//sr_name,
+     &      info=error_info)
+          endif
+        endif
 
         cidx_start = cidx
       enddo                    ! icdr
@@ -405,9 +407,9 @@
 
       ! local
       integer :: ierr,ncid,i,j,k
-      integer :: icdr, cidx, itrc
-      real :: vint,arg
-      real :: local_int,global_int
+      integer :: icdr, cidx, itrc, iarg
+      real :: vint, arg
+      real, dimension( 1) :: local_int(1), global_int(1)
       real, dimension(nz) :: cdr_flx_dp_remap
       real, dimension(nz) :: arg_nz
       real :: local_min_val
@@ -440,8 +442,8 @@
                      do k=1,nz
                        arg_nz(k) = abs(z_r0(i,j,k) + cdr_dep(icdr))
                      enddo
-                       arg = minloc(arg_nz,1)
-                       cdr_prf(cidx,:,arg) = frac(i,j,icdr)
+                       iarg = minloc(arg_nz,1)
+                       cdr_prf(cidx,:,iarg) = frac(i,j,icdr)
                    else
                      vint = 0
                      do k=1,nz
@@ -467,21 +469,21 @@
             cdr_nloc(icdr) = cidx
 
             ! Do this once for ALK and again for DIC
-            local_int = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:))
+            local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:))
             call MPI_Reduce(local_int,global_int,1,
      &           mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
             call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
 
             cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:) =
-     &        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:)/global_int
+     &        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:)/global_int(1)
 
-            local_int = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:))
+            local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:))
             call MPI_Reduce(local_int,global_int,1,
      &           mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
             call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
 
             cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:) =
-     &        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:)/global_int
+     &        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:)/global_int(1)
           endif
 
         enddo
@@ -584,6 +586,17 @@
           dist(i,j) = radius*dist(i,j);    !Haversine distance
         enddo
       enddo
+
+      if (relocate_to_wet_pts) then
+        do j=1,ny
+          do i=1,nx
+            if (rmask(i,j) == 0) then
+              dist(i,j) = 1.E8
+            endif
+          enddo
+        enddo
+      endif
+
       deallocate(dLon2)
       deallocate(dLat2)
 

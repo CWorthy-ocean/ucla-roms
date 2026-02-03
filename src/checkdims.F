@@ -40,7 +40,7 @@
 
       implicit none
       character(len=9) :: fn_name="checkdims"
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
       integer ncid, max_rec, ierr, icount, ndims, recdim,
      &                       dsize, id, ldim, lname, lenstr
       character(len=*) fname
@@ -182,7 +182,7 @@
 
       implicit none
       character(len=12) :: fn_name = "check_scoord"
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
       integer ncid, what_to_check
       character(len=*) fname
       real, parameter :: epsil=1.D-7
@@ -345,7 +345,7 @@
 
       implicit none
       character(len=11) :: fn_name = "read_nc1dat"
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
       integer read_nc1dat, ncid, nlen
       character(len=*) fname, vname
       real value(nlen)

@@ -127,7 +127,7 @@
       subroutine init_avg_arrays  ![
       implicit none
       character(len=15) :: sr_name = "init_avg_arrays"
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
 
       if (wrt_file_his .and. mod(output_period_his, dt) /= 0) then
          write(error_info, *)

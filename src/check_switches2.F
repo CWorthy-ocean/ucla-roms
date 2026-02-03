@@ -21,7 +21,7 @@
 
       implicit none
       character(len=17) :: sr_name="check_tile_bounds"
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
       integer tile, isize,jsize
 #include "compute_tile_bounds.h"
 
@@ -106,7 +106,7 @@
 
       implicit none
       character(len=16) :: sr_name = "check_switches2"
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
       integer nobc_west, nobc_east, nobc_south, nobc_north,
      &                                ncoupl, nAk, is,ie, lenstr
 

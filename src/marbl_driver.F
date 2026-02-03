@@ -131,7 +131,7 @@
 
 !     Indices of carbonate system tracers
       integer, public :: iALK, iDIC, iALK_alt, iDIC_alt
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
 ! ----------------------------------------------------------------------
 
       public :: marbldrv_configure_tracers

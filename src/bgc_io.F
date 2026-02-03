@@ -191,7 +191,7 @@
 ! local
       character(len=15) :: sr_name = "wrt_bgc_tracers"
       character(len=max_name_size),save :: fname_his,fname_avg
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
       integer                :: itrc, itavg, ierr
       logical,save           :: first_step_avg=.true.
       logical,save           :: first_step_his=.true.
@@ -313,7 +313,7 @@
 ! local
       character(len=13) :: sr_name = "wrt_bgc_diags"
       character(len=max_name_size),save :: fname_his,fname_avg
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
       integer                :: itrc, ierr, idiag
       logical,save           :: first_step_dia_avg=.true.
       logical,save           :: first_step_dia_his=.true.

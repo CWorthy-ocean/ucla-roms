@@ -17,4 +17,4 @@
       real, parameter    :: theta_b_chd = 2.0
       real, parameter    :: hc_chd      = 250.0
       !------------------------------
-
+      real :: extract_period = 1800.0   ! output period (seconds)

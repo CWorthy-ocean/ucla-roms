@@ -53,7 +53,7 @@
       use sponge_tune, only: ub_tune, get_init_ub
       implicit none
       character(len=8) :: sr_name = "get_init"
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
       integer :: req_rec, tindx, max_rec, record, ncid, varid, i, j, k,
      &           ierr,  start(4), count(2), ibuff(iaux),
      &           checkdims , itrc

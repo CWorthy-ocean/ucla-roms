@@ -35,7 +35,7 @@
       implicit none
       private
       character(len=7) :: module_name = "tracers"
-      character(len=200) :: error_info = ""
+      character(len=1024) :: error_info = ""
       real,public,allocatable,dimension(:,:,:,:,:) :: t              ! array of tracers
 
                                                                      ! tracer netcdf variables (user input required in init_tracers)
