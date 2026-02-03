@@ -17,7 +17,7 @@
       use scalars, only: n, dt, iic, tdays, time, nnew
       use ocean_vars, only: u, v, z_w, z_r
       use tracers, only: t, t_vname, t_lname, t_units
-      use error_handling, only: handle_netcdf_error
+      use error_handling_mod, only: error_log
 
       implicit none
 
@@ -365,7 +365,7 @@
         ierr=nf90_open(fname,nf90_write,ncid)
 
         if (ierr/=nf90_noerr) then
-           call handle_netcdf_error(netcdf_status=ierr,
+           call error_log%check_netcdf_status(netcdf_status=ierr,
      &          info="error opening "//fname,
      &          context=module_name//"/"//sr_name)
         end if
@@ -394,7 +394,6 @@
           call ncwrite(ncid,'v',Vz(1:nx,1:ny,:),(/bfx,1,1,record/))
           endif
         endif
-
         ierr=nf90_close (ncid)
 
         if (mynode == 0) then
@@ -407,7 +406,7 @@
         navg = 0
 
       endif
-
+      call error_log%abort_check()
       end subroutine wrt_zslice !]
 !----------------------------------------------------------------------
 

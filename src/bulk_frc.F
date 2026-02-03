@@ -6,7 +6,7 @@
       use roms_read_write, only:
      &     ncforce, bulk_frc_opt, frcfile,
      &     nc_check_units, set_frc_data, store_string_att
-
+      use error_handling_mod, only: error_log
       implicit none
 
       private  ! make all variable private to this module unless public specified
@@ -116,7 +116,7 @@
       call set_frc_data(nc_tauy,tauy,'r')
 !     call exchange_xxx(taux,tauy)
 #endif
-
+      call error_log%abort_check()
 !     call exchange_xxx(srflx,lwrad)
 !     call exchange_xxx(uwnd,vwnd)
 !     call exchange_xxx(tair,Q)

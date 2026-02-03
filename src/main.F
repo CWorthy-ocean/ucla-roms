@@ -18,31 +18,30 @@ c$$$      real*8 tstart, tend
 C$    integer level,req_lev
 
 c**   call system('uname -nmr')
-      ierr=1
+
 C$    req_lev=MPI_THREAD_MULTIPLE
 C$    call MPI_Init_thread(req_lev, level, ierr)
 C$ !!   write(*,*) 'MPI thread support levels =', req_lev,level
 C$    ierr=0
-      if (ierr == 1) call MPI_Init(ierr)
+      call MPI_Init(ierr)
 
-      call mpi_setup(ierr)
+      call mpi_setup
       tstart=MPI_Wtime()
-      if (ierr == 0) then
+
 # endif
-        call init_scalars(ierr)          ! Initialize global scalars,
-        call init_tracers
-        if (ierr == 0) then
+      call init_scalars         ! Initialize global scalars,
+      call init_tracers
 C$        call omp_set_dynamic(.false.)
 C$OMP PARALLEL                           ! fast-time averaging weights
-          call roms_thread               ! for barotropic mode, and
+      call roms_thread          ! for barotropic mode, and
 C$OMP END PARALLEL                       ! launch the model in OpenMP
-        endif                            ! parallel regime.
+                                         ! parallel regime.
 #ifdef NHMG
       ! write nhmg statistics to fort.10
       call nhmg_clean()
 #endif
 # ifdef MPI
-      endif
+
       call MPI_Barrier(ocean_grid_comm, ierr)
       tend=MPI_Wtime()
       mpi_master_only write(*,*) 'MPI_run_time =', tend-tstart
@@ -55,29 +54,26 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
 
       subroutine roms_thread
       use basic_output, only: wrt_his_ocean_vars
-      use scalars, only: may_day_flag, ntimes, iic, ntstart, diag_sync
+      use scalars, only: ntimes, iic, ntstart, diag_sync
       use timers, only: start_timers, stop_timers
+      use error_handling_mod, only: error_log
 
       implicit none
 
-                                         ! Note: Because there is
-      call start_timers()                ! a possibility of I/O error
-      call roms_init                     ! occurring on some MPI nodes,
-      if (may_day_flag /= 0) goto 99     ! but not simultaneously on
-      do iic=ntstart,ntstart+ntimes-1    ! all, exiting is deferred
-        diag_sync=.false.                ! until "may_day_flag" is
+
+      call start_timers()
+      call roms_init
+
+      do iic=ntstart,ntstart+ntimes-1
+        diag_sync=.false.
         call roms_step
-        if (diag_sync .and. may_day_flag /= 0) goto 99
+        if (diag_sync .and. error_log%abort_requested) then
+           exit ! break out of loop and wind down
+        end if
       enddo
-  99  call stop_timers()                 ! summarized among all nodes
-      if (may_day_flag /=0)
-     &  call wrt_his_ocean_vars(.true.)  ! Emergency history file output
-C$OMP BARRIER                            ! and broadcasted by "diag"
-C$OMP MASTER                             ! [which sets diag_sync=T to
-      call closecdf                      ! signal that "may_day_flag"
-C$OMP END MASTER                         ! is in uniform state]. This
-      return                             ! is THE ONLY route to exit
-      end                                ! if something goes wrong.
+      call stop_timers()
+      return
+      end subroutine roms_thread
 #endif
 
       subroutine roms_init
@@ -88,7 +84,7 @@ C$OMP END MASTER                         ! is in uniform state]. This
       use basic_output, only: init_restarts, wrt_his_ocean_vars
       use scalars, only:
      &     diag_sync, dt, iic, iif, knew, kstp,
-     &     may_day_flag, nnew, nrhs, nstp, numthreads, priv_count, sec2day,
+     &     nnew, nrhs, nstp, numthreads, priv_count, sec2day,
      &     start_time, synchro_flag, tdays, time, proc
       use sponge_tune, only: ub_tune
       use particles, only: floats, init_particles
@@ -117,11 +113,13 @@ C$OMP END MASTER                         ! is in uniform state]. This
 #ifdef SPONGE_TUNE
       use sponge_tune, only: init_orlanski_tune
 #endif
+      use error_handling_mod, only: error_log
       implicit none
 
       integer trd, tile, my_first, my_last, range
+      character(len=1024) :: error_info = ""
+      character(len=9) :: sr_name ="roms_init"
 C$    integer omp_get_thread_num, omp_get_num_threads
-      integer ierr
 
       numthreads=1 ; trd=0
 C$    numthreads=omp_get_num_threads()
@@ -130,15 +128,17 @@ C$    trd=omp_get_thread_num()
 
       if (mod(NSUB_X*NSUB_E,numthreads) /= 0) then
 C$OMP MASTER
-        mpi_master_only write(*,'(/3(1x,A,I3),A/)')
-     &    '### ERROR: Wrong choice of numthreads =', numthreads,
-c        endif
-     &         'while NSUB_X =', NSUB_X, 'NSUB_E =', NSUB_E,'.'
-        may_day_flag=8
+         write(error_info,*)
+     &    'Wrong choice of numthreads =', numthreads,
+     &        'while NSUB_X =', NSUB_X, 'NSUB_E =', NSUB_E,'.'
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
 C$OMP END MASTER
 C$OMP BARRIER
-        goto 99 !-->  EXIT
+
       endif
+      call error_log%abort_check()
                                        ! NOTE: This code is written
       iic=0  ; kstp=1 ; knew=1         ! under an assumption that all
 #ifdef SOLVE3D
@@ -164,7 +164,6 @@ C$OMP MASTER                           ! Setup vertical stretching
       call set_scoord                  ! functions for S-coordinate
 C$OMP END MASTER                       ! system
 C$OMP BARRIER
-      if (may_day_flag /= 0) goto 99
 #endif
 
       call get_grid                  ! can be analytic or from netcdf
@@ -186,7 +185,6 @@ CR      write(*,*) '-11' MYID
 
 
 
-      if (may_day_flag /= 0) goto 99 !-->  EXIT
 
       do tile=my_tile_range            ! Compute various metric terms
         call setup_grid1(tile)         ! and their combinations.
@@ -244,7 +242,6 @@ CR      write(*,*) ' -6' MYID
 #ifdef ANA_VMIX
       call ana_vmix
 #endif
-      if (may_day_flag /= 0) goto 99      !--> ERROR
 
                                   ! Set initial model clock: at this
       time=start_time             ! moment "start_time" (global scalar)
@@ -298,15 +295,13 @@ CR      write(*,*)  ' -2' MYID
       if (do_upscale) call init_upscale
       if (do_frc) call init_frc
 
-      if (may_day_flag /=0 ) goto 99     !-->  EXIT
 
         mpi_master_only write(*,'(/1x,A/)')
      &     'main :: initialization complete, started time-stepping.'
 
       call diag  ! log file output of global norms
 
-  99  return
-      end
+      end subroutine roms_init
 
 
 !      *****    *********    ******   *******    *********
@@ -345,7 +340,6 @@ CR      write(*,*)  ' -2' MYID
 #endif
       implicit none
 
-      integer :: ierr
 
 ! Increment time-step index and set model clock. Note that "time" set
 ! below corresponds to step "n" (denoted here as "nstp"), while counter

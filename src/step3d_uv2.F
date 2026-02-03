@@ -874,15 +874,28 @@ c             idRz(i,j,k)=ALPHA_MAX/max(ALPHA_MAX*dRz,dRx_max,epsil)
 
       use param, only: mynode
       use strings, only: cpps, max_opt_size
+      use error_handling_mod, only: error_log
 
       implicit none
       integer ierr, is,ie, lenstr
 
       integer lstr
       character(len=32) tmpstr
+      character(len=24) :: sr_name = "check_step_uv2_switches"
+      character(len=1024) :: error_info =""
+
+      write(error_info,*)
+     &  'Insufficient length of string "cpps" in file "strings".',
+     &        'Increase parameter "max_opt_size" and recompile.'
+
       ie=lenstr(cpps)
       is=ie+2 ; ie=is+13
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
+
       cpps(is:ie)='<step3d_uv2.F>'
 # ifdef DELTA
       write(tmpstr,*) DELTA ;  lstr=lenstr(tmpstr)
@@ -890,7 +903,12 @@ c             idRz(i,j,k)=ALPHA_MAX/max(ALPHA_MAX*dRz,dRx_max,epsil)
         lstr=lstr-1
       enddo
       is=ie+2 ; ie=is+5+lstr
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
+
       cpps(is:ie)='DELTA='/ /tmpstr(1:lstr)
 # endif
 # ifdef EPSIL
@@ -899,7 +917,12 @@ c             idRz(i,j,k)=ALPHA_MAX/max(ALPHA_MAX*dRz,dRx_max,epsil)
         lstr=lstr-1
       enddo
       is=ie+2 ; ie=is+5+lstr
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
+
       cpps(is:ie)='EPSIL='/ /tmpstr(1:lstr)
 # endif
 # ifdef GAMMA
@@ -908,7 +931,12 @@ c             idRz(i,j,k)=ALPHA_MAX/max(ALPHA_MAX*dRz,dRx_max,epsil)
         lstr=lstr-1
       enddo
       is=ie+2 ; ie=is+5+lstr
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
+
       cpps(is:ie)='GAMMA='/ /tmpstr(1:lstr)
 # endif
 # ifdef ALPHA_MAX
@@ -918,13 +946,15 @@ c             idRz(i,j,k)=ALPHA_MAX/max(ALPHA_MAX*dRz,dRx_max,epsil)
         lstr=lstr-1
       enddo
       is=ie+2 ; ie=is+9+lstr
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
+
       cpps(is:ie)='ALPHA_MAX='/ /tmpstr(1:lstr)
 # endif
       return
-  99  mpi_master_only write(*,'(/1x,2A/12x,A/)')      '### ERROR: ',
-     &  'Insufficient length of string "cpps" in file "strings".',
-     &        'Increase parameter "max_opt_size" it and recompile.'
       ierr=ierr+1
       end
 #else

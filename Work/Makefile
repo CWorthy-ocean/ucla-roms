@@ -14,8 +14,7 @@
 .PHONY: all clean depend
 
 all:
-	ln -s $(ROMS_ROOT)/Examples/input_data input_data 2>/dev/null || :
-	rsync -a $(ROMS_ROOT)/src/*.F $(ROMS_ROOT)/src/*.h  Compile
+	rsync -a --ignore-missing-args $(ROMS_ROOT)/src/*.F $(ROMS_ROOT)/src/*.F90 $(ROMS_ROOT)/src/*.h  Compile
 	make show_tag
 	@rsync -a $(ROMS_ROOT)/src/*.opt Compile
 	@rsync -a $(ROMS_ROOT)/src/Makedefs.inc Compile
@@ -43,16 +42,6 @@ compile_clean:
 
 work_clean:
 	rm -r Compile/ *.F *.h *.in *.sh *.nc roms 2>/dev/null || :
-
-code_check_clean:
-	@cd $(ROMS_ROOT)/Examples/Flux_frc        ; make compile_clean
-	@cd $(ROMS_ROOT)/Examples/Pipes_ana       ; make compile_clean
-	@cd $(ROMS_ROOT)/Examples/Pipes_real      ; make compile_clean
-	@cd $(ROMS_ROOT)/Examples/Rivers_ana      ; make compile_clean
-	@cd $(ROMS_ROOT)/Examples/Rivers_real     ; make compile_clean
-	@cd $(ROMS_ROOT)/Examples/Tracers_passive ; make compile_clean
-	@cd $(ROMS_ROOT)/Examples/WEC_real        ; make compile_clean
-
 
 copy_to_Work_dir:
 	cp -p *.F *.h *.in *.sh ../../Work 2>/dev/null || :

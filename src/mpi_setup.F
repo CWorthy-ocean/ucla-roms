@@ -11,7 +11,7 @@ C$    if (trd == 0) nthrds=omp_get_num_threads()
 C$    end
 
 
-      subroutine mpi_setup(ierr)
+      subroutine mpi_setup()
       use param, only:
      &     east_exchng, ieast, iwest, jnorth, jsouth, llm,
      &     lm, mm, mmm, north_exchng, ocean_grid_comm, south_exchng,
@@ -23,6 +23,7 @@ C$    end
      &     south_msg_exch, west_msg_exch
       use mpi_f08, only: mpi_comm_world
       use roms_read_write, only: eta_rho, eta_v, xi_rho, xi_u
+      use error_handling_mod, only: error_log
       implicit none
       integer ierr
 
@@ -33,7 +34,8 @@ C$    integer nthrds
       character(len=38) msg1 ! <-- greeting message to print
       character(len=23) msg2
 # endif
-
+      character(len=9) :: sr_name = "mpi_setup"
+      character(len=1024) :: error_info = ""
       ocean_grid_comm=MPI_COMM_WORLD
       call MPI_Comm_size(ocean_grid_comm, nsize,  ierr)
       call MPI_Comm_rank(ocean_grid_comm, mynode, ierr)
@@ -197,15 +199,16 @@ C$    endif
      &                          mynode+1, 1, ocean_grid_comm, ierr)
         call MPI_Barrier(ocean_grid_comm, ierr)
 # endif
-
-        ierr=0
       else
-        mpi_master_only write(*,'(/1x,A,I4,1x,A,I3,A/)')
-     &   '### ERROR: mpi_setup: number of MPI-nodes should be',
-     &                         NNODES, 'instead of ', nsize, '.'
-        ierr=99
+         write(error_info,*)
+     &   'Number of MPI-nodes should be',
+     &        NNODES, 'instead of ', nsize, '.'
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
       endif
-      end
+      call error_log%abort_check()
+      end subroutine mpi_setup
 
 ! Convert processor-grid indices i,jnode into MPI rank. Check whether
 ! the indices are within the bounds of processor grid. Return them back

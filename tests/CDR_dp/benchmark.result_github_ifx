@@ -1,0 +1,1504 @@
+
+ Activated CPP configuration switches:
+ <cppdefs.opt>
+       RIVERS                  BULK_FRC                SPONGE_TUNE
+       RIVER_SOURCE            EXTRACT_DATA            SOLVE3D
+       UV_COR                  UV_ADV                  CURVGRID
+       SPHERICAL               MASKING                 SALINITY
+       NONLIN_EOS              SPLIT_EOS               EXACT_RESTART
+       IMPLICIT_BOTTOM_DRAG    UV_VIS2                 TS_DIF2
+       LMD_MIXING              LMD_KPP                 LMD_BKPP
+       LMD_RIMIX               LMD_NONLOCAL            OBC_WEST
+       OBC_EAST                OBC_NORTH               OBC_SOUTH
+       OBC_M2FLATHER           OBC_M3ORLANSKI          OBC_TORLANSKI
+       Z_FRC_BRY               M2_FRC_BRY              M3_FRC_BRY
+       T_FRC_BRY               SPONGE                  CDR_FORCING
+       MARBL                   MARBL_DIAGS             NOX_FORCING
+       NHY_FORCING             PCO2AIR_FORCING
+ <pre_step3d4S.F>
+       SPLINE_UV               SPLINE_TS
+ <step3d_uv1.F>
+       UPSTREAM_UV             SPLINE_UV
+ <step3d_uv2.F>
+       DELTA=0.28              EPSIL=0.36
+ <step3d_t_ISO.F>
+       UPSTREAM_TS             SPLINE_TS
+ <set_depth.F>
+       NOW=3.63                MID=4.47                BAK=2.05
+       (N-M+B-1)/B=0.102439024
+ <lmd_kpp.F>
+       INT_AT_RHO_POINTS       SMOOTH_HBL
+ <set_global_definitions.h>
+       CORR_COUPLED_MODE       EXTRAP_BAR_FLUXES       IMPLCT_NO_SLIP_BTTM_BC
+
+ Git hash: xxx
+No SLURM or PBS job ID found.
+
+    USWC sample domain - realistic CDR test
+     ntimes =        10   total number of 3D timesteps
+         dt =    40.0000  time step [sec] for 3D equations
+    ndtfast =        30   mode-splitting ratio
+      ninfo =         1   number of steps between runtime diagnostics
+
+    theta_s = 6.0000000  vertical S-coordinate surface
+    theta_b = 6.0000000  and bottom stretching parameters
+         hc =  25.00000  critical depth [m]
+ grid file: input_data/example_input_grid.0.nc
+ forcing data file(s): input_data/example_input_bgc_surface_forcing_clim.0.nc
+                       input_data/example_input_bgc_boundary_forcing_clim.0.nc
+                       input_data/example_input_boundary_forcing.0.nc
+                       input_data/example_input_surface_forcing.0.nc
+                       input_data/example_input_tides.0.nc
+ initial condition :: rec =  1  file = 'input_data/example_input_bgc_initial_conditions.0.nc'
+ MARBL namelist file                     marbl_in
+ MARBL tracer output list file           marbl_tracer_output_list
+ MARBL diagnostic output list                  file       marbl_diagnostic_output_list
+      visc2 = 0.000E+00  horizontal Laplacian kinematic viscosity [m^2/s]
+       rho0 = 1027.5000  Boussinesq reference density [kg/m^3].
+   v_sponge =      1.00  maximum viscosity in sponge layer [m^2/s]
+    Akv_bak = 0.000E+00  additional vertical viscosity [m^2/s]
+ Akt_bak(1) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #1
+ Akt_bak(2) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #2
+ Akt_bak(3) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #3
+ Akt_bak(4) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #4
+ Akt_bak(5) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #5
+ Akt_bak(6) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #6
+ Akt_bak(7) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #7
+ Akt_bak(8) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #8
+ Akt_bak(9) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #9
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #10
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #11
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #12
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #13
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #14
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #15
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #16
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #17
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #18
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #19
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #20
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #21
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #22
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #23
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #24
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #25
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #26
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #27
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #28
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #29
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #30
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #31
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #32
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #33
+ Akt_bak(*) = 0.000E+00  additional vertical mixing [m^2/s] for tracer #34
+   tnu2( 1) = 0.000E+00  horizontal Laplacian kinematic heat conductivity [m^2/s]
+   tnu2( 2) = 0.000E+00  horizontal Laplacian diffusion for tracer  2, [m^2/s]
+   tnu2( 3) = 0.000E+00  horizontal Laplacian diffusion for tracer  3, [m^2/s]
+   tnu2( 4) = 0.000E+00  horizontal Laplacian diffusion for tracer  4, [m^2/s]
+   tnu2( 5) = 0.000E+00  horizontal Laplacian diffusion for tracer  5, [m^2/s]
+   tnu2( 6) = 0.000E+00  horizontal Laplacian diffusion for tracer  6, [m^2/s]
+   tnu2( 7) = 0.000E+00  horizontal Laplacian diffusion for tracer  7, [m^2/s]
+   tnu2( 8) = 0.000E+00  horizontal Laplacian diffusion for tracer  8, [m^2/s]
+   tnu2( 9) = 0.000E+00  horizontal Laplacian diffusion for tracer  9, [m^2/s]
+   tnu2(10) = 0.000E+00  horizontal Laplacian diffusion for tracer 10, [m^2/s]
+   tnu2(11) = 0.000E+00  horizontal Laplacian diffusion for tracer 11, [m^2/s]
+   tnu2(12) = 0.000E+00  horizontal Laplacian diffusion for tracer 12, [m^2/s]
+   tnu2(13) = 0.000E+00  horizontal Laplacian diffusion for tracer 13, [m^2/s]
+   tnu2(14) = 0.000E+00  horizontal Laplacian diffusion for tracer 14, [m^2/s]
+   tnu2(15) = 0.000E+00  horizontal Laplacian diffusion for tracer 15, [m^2/s]
+   tnu2(16) = 0.000E+00  horizontal Laplacian diffusion for tracer 16, [m^2/s]
+   tnu2(17) = 0.000E+00  horizontal Laplacian diffusion for tracer 17, [m^2/s]
+   tnu2(18) = 0.000E+00  horizontal Laplacian diffusion for tracer 18, [m^2/s]
+   tnu2(19) = 0.000E+00  horizontal Laplacian diffusion for tracer 19, [m^2/s]
+   tnu2(20) = 0.000E+00  horizontal Laplacian diffusion for tracer 20, [m^2/s]
+   tnu2(21) = 0.000E+00  horizontal Laplacian diffusion for tracer 21, [m^2/s]
+   tnu2(22) = 0.000E+00  horizontal Laplacian diffusion for tracer 22, [m^2/s]
+   tnu2(23) = 0.000E+00  horizontal Laplacian diffusion for tracer 23, [m^2/s]
+   tnu2(24) = 0.000E+00  horizontal Laplacian diffusion for tracer 24, [m^2/s]
+   tnu2(25) = 0.000E+00  horizontal Laplacian diffusion for tracer 25, [m^2/s]
+   tnu2(26) = 0.000E+00  horizontal Laplacian diffusion for tracer 26, [m^2/s]
+   tnu2(27) = 0.000E+00  horizontal Laplacian diffusion for tracer 27, [m^2/s]
+   tnu2(28) = 0.000E+00  horizontal Laplacian diffusion for tracer 28, [m^2/s]
+   tnu2(29) = 0.000E+00  horizontal Laplacian diffusion for tracer 29, [m^2/s]
+   tnu2(30) = 0.000E+00  horizontal Laplacian diffusion for tracer 30, [m^2/s]
+   tnu2(31) = 0.000E+00  horizontal Laplacian diffusion for tracer 31, [m^2/s]
+   tnu2(32) = 0.000E+00  horizontal Laplacian diffusion for tracer 32, [m^2/s]
+   tnu2(33) = 0.000E+00  horizontal Laplacian diffusion for tracer 33, [m^2/s]
+   tnu2(34) = 0.000E+00  horizontal Laplacian diffusion for tracer 34, [m^2/s]
+       rdrg = 0.000E+00  linear bottom drag coefficient [m/s]
+      rdrg2 = 1.000E-03  quadratic bottom drag coefficient, nondim
+        Zob = 1.000E-02  bottom roughness height [m]
+     gamma2 = 1.000E+00  slipperiness parameter: free-slip = +1, or no-slip = -1.
+      ubind = 1.000E-01  open boundary binding velcity [m/s]
+
+ Mode splitting: ndtfast = 30    nfast =  41        p,q,r =  2.0  4.0   0.2500
+
+Successfully read       marbl_in to end of file
+ --------------------
+MARBL Tracer indices
+--------------------
+
+  1. PO4
+  2. N
+ O3
+  3. SiO3
+  4. NH4
+  5. Fe
+  6. Lig
+  7. O2
+  8. DIC
+  9. DIC_ALT_CO2
+ 10. A
+ LK
+ 11. ALK_ALT_CO2
+ 12. DOC
+ 13. DON
+ 14. DOP
+ 15. DOPr
+ 16. DONr
+ 17. DOCr
+ 1
+ 8. zooC
+ 19. spChl
+ 20. spC
+ 21. spP
+ 22. spFe
+ 23. spCaCO3
+ 24. diatChl
+ 25. d
+ iatC
+ 26. diatP
+ 27. diatFe
+ 28. diatSi
+ 29. diazChl
+ 30. diazC
+ 31. diazP
+ 32.
+  diazFe
+base biotic tracers tracer module contains 32 tracers; indices are 1 to
+  32
+
+-----------------------------
+MARBL-Required Forcing Fields
+--------------
+ ---------------
+
+Surface:
+* u10_sqr
+* sss
+* sst
+* Ice Fraction
+* Atmospheric Pr
+ essure
+* xco2
+* xco2_alt_co2
+* Dust Flux
+* Iron Flux
+* NOx Flux
+* NHy Flux
+
+Int
+ erior:
+* Dust Flux
+* Surface Shortwave
+* Potential Temperature
+* Salinity
+* Pre
+ ssure
+* Iron Sediment Flux
+
+------------------
+Tunable Parameters
+-------------
+ -----
+
+base_bio_on = .true.
+abio_dic_on = .false.
+ciso_on = .false.
+
+PFT_defaul
+ ts = 'CESM2'
+autotroph_cnt = 3
+zooplankton_cnt = 1
+max_grazer_prey_cnt = 3
+
+lso
+ urce_sink = .true.
+lecovars_full_depth_tavg = .false.
+lflux_gas_co2 = .true.
+lc
+ heck_forcing = .false.
+lflux_gas_o2 = .true.
+lcompute_nhx_surface_emis = .true.
+
+lvariable_PtoC = .true.
+ladjust_bury_coeff = .false.
+lo2_consumption_scalef =
+ .false.
+lp_remin_scalef = .false.
+
+init_bury_coeff_opt = 'settings_file'
+
+parti
+ culate_flux_ref_depth =   0.10000000000000000E+03
+bftt_dz_sum_thres =   0.10000
+ 000000000000E-13
+Jint_Ctot_thres_molpm2pyr =   0.10000000000000001E-08
+gQsi_0 =
+    0.13700000000000001E+00
+gQsi_max =   0.82199999999999995E+00
+gQsi_min =   0.
+ 45699999999999998E-01
+gQ_Fe_kFe_thres =   0.10000000000000000E+02
+gQ_Si_kSi_thr
+ es =   0.60000000000000000E+01
+parm_Fe_bioavail =   0.10000000000000000E+01
+par
+ m_o2_min =   0.50000000000000000E+01
+parm_o2_min_delta =   0.50000000000000000E
+ +01
+parm_kappa_nitrif_per_day =   0.59999999999999998E-01
+parm_nitrif_par_lim =
+    0.10000000000000000E+01
+parm_labile_ratio =   0.93999999999999995E+00
+parm_i
+ nit_POC_bury_coeff =   0.25400000000000000E+01
+parm_init_POP_bury_coeff =   0.3
+ 5999999999999999E+00
+parm_init_bSi_bury_coeff =   0.15300000000000000E+01
+parm_
+ Fe_scavenge_rate0 =   0.22000000000000000E+04
+parm_Lig_scavenge_rate0 =   0.150
+ 00000000000000E+01
+parm_FeLig_scavenge_rate0 =   0.12000000000000000E+03
+parm_L
+ ig_degrade_rate0 =   0.93999999999999994E-04
+parm_Fe_desorption_rate0 =   0.999
+ 99999999999991E-04
+parm_f_prod_sp_CaCO3 =   0.70000000000000007E-01
+parm_POC_di
+ ss =   0.10000000000000000E+03
+parm_SiO2_diss =   0.65000000000000000E+03
+parm_
+ SiO2_gamma =   0.00000000000000000E+00
+parm_hPOC_SiO2_ratio =   0.1000000000000
+ 0000E-01
+parm_CaCO3_diss =   0.50000000000000000E+03
+parm_CaCO3_gamma =   0.200
+ 00000000000000E-01
+parm_hPOC_CaCO3_ratio =   0.10000000000000000E-01
+parm_hPOC_
+ dust_ratio =   0.10000000000000000E-01
+o2_sf_o2_range_hi =   0.4500000000000000
+ 0E+02
+o2_sf_o2_range_lo =   0.50000000000000000E+01
+o2_sf_val_lo_o2 =   0.26000
+ 000000000001E+01
+parm_sed_denitrif_coeff =   0.10000000000000000E+01
+bury_coeff
+ _rmean_timescale_years =   0.10000000000000000E+02
+
+parm_scalelen_z(1) =   0.10
+ 000000000000000E+03
+parm_scalelen_z(2) =   0.25000000000000000E+03
+parm_scalele
+ n_z(3) =   0.50000000000000000E+03
+parm_scalelen_z(4) =   0.10000000000000000E+
+ 04
+parm_scalelen_vals(1) =   0.10000000000000000E+01
+parm_scalelen_vals(2) =
+ 0.36000000000000001E+01
+parm_scalelen_vals(3) =   0.47000000000000002E+01
+parm_
+ scalelen_vals(4) =   0.47999999999999998E+01
+
+caco3_bury_thres_opt = 'omega_cal
+ c'
+caco3_bury_thres_depth =   0.30000000000000000E+04
+caco3_bury_thres_omega_ca
+ lc =   0.89000000000000001E+00
+PON_bury_coeff =   0.50000000000000000E+00
+POM_b
+ ury_frac_max =   0.80000000000000004E+00
+bSi_bury_frac_max =   0.10000000000000
+ 000E+01
+auto_mort2_exp =   0.17500000000000000E+01
+zoo_mort2_exp =   0.15000000
+ 000000000E+01
+QCaCO3_max =   0.40000000000000002E+00
+f_graze_CaCO3_remin =   0.
+ 33000000000000002E+00
+
+autotroph_settings(1)%sname = 'sp'
+autotroph_settings(1)
+ %lname = 'Small Phyto'
+autotroph_settings(1)%temp_func_form_opt = 'q_10'
+autotr
+ oph_settings(1)%Nfixer = .false.
+autotroph_settings(1)%imp_calcifier = .true.
+a
+ utotroph_settings(1)%exp_calcifier = .false.
+autotroph_settings(1)%silicifier =
+  .false.
+autotroph_settings(1)%is_carbon_limited = .false.
+autotroph_settings(1
+ )%kFe =   0.30000000000000001E-04
+autotroph_settings(1)%kPO4 =   0.100000000000
+ 00000E-01
+autotroph_settings(1)%kDOP =   0.29999999999999999E+00
+autotroph_sett
+ ings(1)%kNO3 =   0.25000000000000000E+00
+autotroph_settings(1)%kNH4 =   0.10000
+ 000000000000E-01
+autotroph_settings(1)%kSiO3 =   0.00000000000000000E+00
+autotr
+ oph_settings(1)%kCO2 =   0.00000000000000000E+00
+autotroph_settings(1)%Qp_fixed
+  =   0.85470085470085479E-02
+autotroph_settings(1)%gQfe_0 =   0.300000000000000
+ 01E-04
+autotroph_settings(1)%gQfe_min =   0.25000000000000002E-05
+autotroph_set
+ tings(1)%alphaPI_per_day =   0.39000000000000001E+00
+autotroph_settings(1)%PCre
+ f_per_day =   0.50000000000000000E+01
+autotroph_settings(1)%thetaN_max =   0.25
+ 000000000000000E+01
+autotroph_settings(1)%loss_thres =   0.10000000000000000E-0
+ 1
+autotroph_settings(1)%loss_thres2 =   0.00000000000000000E+00
+autotroph_setti
+ ngs(1)%temp_thres =  -0.10000000000000000E+02
+autotroph_settings(1)%mort_per_da
+ y =   0.10000000000000001E+00
+autotroph_settings(1)%mort2_per_day =   0.1000000
+ 0000000000E-01
+autotroph_settings(1)%agg_rate_max =   0.50000000000000000E+00
+a
+ utotroph_settings(1)%agg_rate_min =   0.10000000000000000E-01
+autotroph_setting
+ s(1)%loss_poc =   0.00000000000000000E+00
+autotroph_settings(1)%Ea =   0.320000
+ 00000000001E+00
+
+autotroph_settings(2)%sname = 'diat'
+autotroph_settings(2)%lna
+ me = 'Diatom'
+autotroph_settings(2)%temp_func_form_opt = 'q_10'
+autotroph_setti
+ ngs(2)%Nfixer = .false.
+autotroph_settings(2)%imp_calcifier = .false.
+autotroph
+ _settings(2)%exp_calcifier = .false.
+autotroph_settings(2)%silicifier = .true.
+
+ autotroph_settings(2)%is_carbon_limited = .false.
+autotroph_settings(2)%kFe =
+  0.69999999999999994E-04
+autotroph_settings(2)%kPO4 =   0.50000000000000003E-01
+
+autotroph_settings(2)%kDOP =   0.50000000000000000E+00
+autotroph_settings(2)%k
+ NO3 =   0.50000000000000000E+00
+autotroph_settings(2)%kNH4 =   0.50000000000000
+ 003E-01
+autotroph_settings(2)%kSiO3 =   0.69999999999999996E+00
+autotroph_setti
+ ngs(2)%kCO2 =   0.00000000000000000E+00
+autotroph_settings(2)%Qp_fixed =   0.85
+ 470085470085479E-02
+autotroph_settings(2)%gQfe_0 =   0.30000000000000001E-04
+au
+ totroph_settings(2)%gQfe_min =   0.25000000000000002E-05
+autotroph_settings(2)%
+ alphaPI_per_day =   0.28000000000000003E+00
+autotroph_settings(2)%PCref_per_day
+  =   0.50000000000000000E+01
+autotroph_settings(2)%thetaN_max =   0.40000000000
+ 000000E+01
+autotroph_settings(2)%loss_thres =   0.20000000000000000E-01
+autotro
+ ph_settings(2)%loss_thres2 =   0.00000000000000000E+00
+autotroph_settings(2)%te
+ mp_thres =  -0.10000000000000000E+02
+autotroph_settings(2)%mort_per_day =   0.1
+ 0000000000000001E+00
+autotroph_settings(2)%mort2_per_day =   0.1000000000000000
+ 0E-01
+autotroph_settings(2)%agg_rate_max =   0.50000000000000000E+00
+autotroph_
+ settings(2)%agg_rate_min =   0.20000000000000000E-01
+autotroph_settings(2)%loss
+ _poc =   0.00000000000000000E+00
+autotroph_settings(2)%Ea =   0.320000000000000
+ 01E+00
+
+autotroph_settings(3)%sname = 'diaz'
+autotroph_settings(3)%lname = 'Dia
+ zotroph'
+autotroph_settings(3)%temp_func_form_opt = 'q_10'
+autotroph_settings(3
+ )%Nfixer = .true.
+autotroph_settings(3)%imp_calcifier = .false.
+autotroph_setti
+ ngs(3)%exp_calcifier = .false.
+autotroph_settings(3)%silicifier = .false.
+autot
+ roph_settings(3)%is_carbon_limited = .false.
+autotroph_settings(3)%kFe =   0.45
+ 000000000000003E-04
+autotroph_settings(3)%kPO4 =   0.14999999999999999E-01
+auto
+ troph_settings(3)%kDOP =   0.74999999999999997E-01
+autotroph_settings(3)%kNO3 =
+    0.20000000000000000E+01
+autotroph_settings(3)%kNH4 =   0.20000000000000001E+
+ 00
+autotroph_settings(3)%kSiO3 =   0.00000000000000000E+00
+autotroph_settings(3
+ )%kCO2 =   0.00000000000000000E+00
+autotroph_settings(3)%Qp_fixed =   0.2735042
+ 7350427355E-02
+autotroph_settings(3)%gQfe_0 =   0.60000000000000002E-04
+autotro
+ ph_settings(3)%gQfe_min =   0.25000000000000002E-05
+autotroph_settings(3)%alpha
+ PI_per_day =   0.39000000000000001E+00
+autotroph_settings(3)%PCref_per_day =
+ 0.25000000000000000E+01
+autotroph_settings(3)%thetaN_max =   0.2500000000000000
+ 0E+01
+autotroph_settings(3)%loss_thres =   0.20000000000000000E-01
+autotroph_se
+ ttings(3)%loss_thres2 =   0.10000000000000000E-02
+autotroph_settings(3)%temp_th
+ res =   0.15000000000000000E+02
+autotroph_settings(3)%mort_per_day =   0.100000
+ 00000000001E+00
+autotroph_settings(3)%mort2_per_day =   0.10000000000000000E-01
+
+autotroph_settings(3)%agg_rate_max =   0.50000000000000000E+00
+autotroph_setti
+ ngs(3)%agg_rate_min =   0.10000000000000000E-01
+autotroph_settings(3)%loss_poc
+ =   0.00000000000000000E+00
+autotroph_settings(3)%Ea =   0.32000000000000001E+0
+ 0
+
+zooplankton_settings(1)%sname = 'zoo'
+zooplankton_settings(1)%lname = 'Zoopl
+ ankton'
+zooplankton_settings(1)%temp_func_form_opt = 'q_10'
+zooplankton_setting
+ s(1)%z_mort_0_per_day =   0.10000000000000001E+00
+zooplankton_settings(1)%loss_
+ thres =   0.74999999999999997E-01
+zooplankton_settings(1)%z_mort2_0_per_day =
+  0.40000000000000002E+00
+zooplankton_settings(1)%basal_respiration_rate_per_day
+  =   0.00000000000000000E+00
+zooplankton_settings(1)%Ea =   0.65000000000000002
+ E+00
+
+grazing_relationship_settings(1,1)%sname = 'grz_sp_zoo'
+grazing_relations
+ hip_settings(1,1)%lname = 'Grazing of sp by zoo'
+grazing_relationship_settings(
+ 1,1)%auto_ind_cnt = 1
+grazing_relationship_settings(1,1)%zoo_ind_cnt = 0
+grazin
+ g_relationship_settings(1,1)%grazing_function = 1
+grazing_relationship_settings
+ (1,1)%z_umax_0_per_day =   0.32999999999999998E+01
+grazing_relationship_setting
+ s(1,1)%z_grz =   0.12000000000000000E+01
+grazing_relationship_settings(1,1)%gra
+ ze_zoo =   0.29999999999999999E+00
+grazing_relationship_settings(1,1)%graze_poc
+  =   0.00000000000000000E+00
+grazing_relationship_settings(1,1)%graze_doc =   0
+ .59999999999999998E-01
+grazing_relationship_settings(1,1)%f_zoo_detr =   0.1200
+ 0000000000000E+00
+grazing_relationship_settings(1,1)%auto_ind(1) = 1
+
+grazing_r
+ elationship_settings(2,1)%sname = 'grz_diat_zoo'
+grazing_relationship_settings(
+ 2,1)%lname = 'Grazing of diat by zoo'
+grazing_relationship_settings(2,1)%auto_i
+ nd_cnt = 1
+grazing_relationship_settings(2,1)%zoo_ind_cnt = 0
+grazing_relations
+ hip_settings(2,1)%grazing_function = 1
+grazing_relationship_settings(2,1)%z_uma
+ x_0_per_day =   0.31499999999999999E+01
+grazing_relationship_settings(2,1)%z_gr
+ z =   0.12000000000000000E+01
+grazing_relationship_settings(2,1)%graze_zoo =
+ 0.25000000000000000E+00
+grazing_relationship_settings(2,1)%graze_poc =   0.3900
+ 0000000000001E+00
+grazing_relationship_settings(2,1)%graze_doc =   0.5999999999
+ 9999998E-01
+grazing_relationship_settings(2,1)%f_zoo_detr =   0.239999999999999
+ 99E+00
+grazing_relationship_settings(2,1)%auto_ind(1) = 2
+
+grazing_relationship
+ _settings(3,1)%sname = 'grz_diaz_zoo'
+grazing_relationship_settings(3,1)%lname
+ = 'Grazing of diaz by zoo'
+grazing_relationship_settings(3,1)%auto_ind_cnt = 1
+
+ grazing_relationship_settings(3,1)%zoo_ind_cnt = 0
+grazing_relationship_setting
+ s(3,1)%grazing_function = 1
+grazing_relationship_settings(3,1)%z_umax_0_per_day
+  =   0.32999999999999998E+01
+grazing_relationship_settings(3,1)%z_grz =   0.120
+ 00000000000000E+01
+grazing_relationship_settings(3,1)%graze_zoo =   0.299999999
+ 99999999E+00
+grazing_relationship_settings(3,1)%graze_poc =   0.100000000000000
+ 01E+00
+grazing_relationship_settings(3,1)%graze_doc =   0.59999999999999998E-01
+
+grazing_relationship_settings(3,1)%f_zoo_detr =   0.12000000000000000E+00
+graz
+ ing_relationship_settings(3,1)%auto_ind(1) = 3
+
+tracer_restore_vars(1) = ''
+tra
+ cer_restore_vars(2) = ''
+tracer_restore_vars(3) = ''
+tracer_restore_vars(4) = '
+ '
+tracer_restore_vars(5) = ''
+tracer_restore_vars(6) = ''
+tracer_restore_vars(7
+ ) = ''
+tracer_restore_vars(8) = ''
+tracer_restore_vars(9) = ''
+tracer_restore_v
+ ars(10) = ''
+tracer_restore_vars(11) = ''
+tracer_restore_vars(12) = ''
+tracer_r
+ estore_vars(13) = ''
+tracer_restore_vars(14) = ''
+tracer_restore_vars(15) = ''
+
+ tracer_restore_vars(16) = ''
+tracer_restore_vars(17) = ''
+tracer_restore_vars(1
+ 8) = ''
+tracer_restore_vars(19) = ''
+tracer_restore_vars(20) = ''
+tracer_restor
+ e_vars(21) = ''
+tracer_restore_vars(22) = ''
+tracer_restore_vars(23) = ''
+trace
+ r_restore_vars(24) = ''
+tracer_restore_vars(25) = ''
+tracer_restore_vars(26) =
+ ''
+tracer_restore_vars(27) = ''
+tracer_restore_vars(28) = ''
+tracer_restore_var
+ s(29) = ''
+tracer_restore_vars(30) = ''
+tracer_restore_vars(31) = ''
+tracer_res
+ tore_vars(32) = ''
+
+---------------------
+Setting derived parms
+---------------
+ ------
+
+caco3_bury_thres_iopt = 2 (value computed from caco3_bury_thres_opt)
+pa
+ rm_kappa_nitrif =   0.69444444444444437E-06 (value computed from parm_kappa_nit
+ rif_per_day)
+parm_Fe_scavenge_rate0_yps =   0.69761542364282092E-04 (value comp
+ uted from parm_Fe_scavenge_rate0)
+parm_Lig_scavenge_rate0_yps =   0.47564687975
+ 646879E-07 (value computed from parm_Lig_scavenge_rate0)
+parm_FeLig_scavenge_ra
+ te0_yps =   0.38051750380517502E-05 (value computed from parm_FeLig_scavenge_ra
+ te0)
+Jint_Ctot_thres =   0.31709791983764588E-11 (value computed from Jint_Ctot
+ _thres_molpm2pyr)
+Jint_Ntot_thres =   0.43363818097455852E-12 (value computed f
+ rom Jint_Ctot_thres)
+Jint_Ptot_thres =   0.27102386310909907E-13 (value compute
+ d from Jint_Ctot_thres)
+Jint_Sitot_thres =   0.43442415017757489E-12 (value com
+ puted from Jint_Ctot_thres)
+Jint_Fetot_thres =   0.95129375951293766E-17 (value
+  computed from Jint_Ctot_thres)
+CISO_Jint_13Ctot_thres =   0.31709791983764588E
+ -11 (value computed from Jint_Ctot_thres)
+CISO_Jint_14Ctot_thres =   0.31709791
+ 983764588E-11 (value computed from Jint_Ctot_thres)
+
+autotroph_settings(1)%temp
+ _func_form_iopt = 1 (value computed from autotroph_settings(1)%temp_func_form_o
+ pt)
+autotroph_settings(1)%Tref =   0.30000000000000000E+02 (value computed from
+  autotroph_settings(1)%temp_func_form_opt)
+autotroph_settings(1)%alphaPI =   0.
+ 45138888888888887E-05 (value computed from autotroph_settings(1)%alphaPI_per_da
+ y)
+autotroph_settings(1)%PCref =   0.57870370370370366E-04 (value computed from
+  autotroph_settings(1)%PCref_per_day)
+autotroph_settings(1)%mort =   0.11574074
+ 074074074E-05 (value computed from autotroph_settings(1)%mort_per_day)
+autotrop
+ h_settings(1)%mort2 =   0.11574074074074074E-06 (value computed from autotroph_
+ settings(1)%mort2_per_day)
+autotroph_settings(2)%temp_func_form_iopt = 1 (value
+  computed from autotroph_settings(2)%temp_func_form_opt)
+autotroph_settings(2)%
+ Tref =   0.30000000000000000E+02 (value computed from autotroph_settings(2)%tem
+ p_func_form_opt)
+autotroph_settings(2)%alphaPI =   0.32407407407407410E-05 (val
+ ue computed from autotroph_settings(2)%alphaPI_per_day)
+autotroph_settings(2)%P
+ Cref =   0.57870370370370366E-04 (value computed from autotroph_settings(2)%PCr
+ ef_per_day)
+autotroph_settings(2)%mort =   0.11574074074074074E-05 (value compu
+ ted from autotroph_settings(2)%mort_per_day)
+autotroph_settings(2)%mort2 =   0.
+ 11574074074074074E-06 (value computed from autotroph_settings(2)%mort2_per_day)
+
+autotroph_settings(3)%temp_func_form_iopt = 1 (value computed from autotroph_s
+ ettings(3)%temp_func_form_opt)
+autotroph_settings(3)%Tref =   0.300000000000000
+ 00E+02 (value computed from autotroph_settings(3)%temp_func_form_opt)
+autotroph
+ _settings(3)%alphaPI =   0.45138888888888887E-05 (value computed from autotroph
+ _settings(3)%alphaPI_per_day)
+autotroph_settings(3)%PCref =   0.289351851851851
+ 83E-04 (value computed from autotroph_settings(3)%PCref_per_day)
+autotroph_sett
+ ings(3)%mort =   0.11574074074074074E-05 (value computed from autotroph_setting
+ s(3)%mort_per_day)
+autotroph_settings(3)%mort2 =   0.11574074074074074E-06 (val
+ ue computed from autotroph_settings(3)%mort2_per_day)
+
+zooplankton_settings(1)%
+ temp_func_form_iopt = 1 (value computed from zooplankton_settings(1)%temp_func_
+ form_opt)
+zooplankton_settings(1)%Tref =   0.30000000000000000E+02 (value compu
+ ted from zooplankton_settings(1)%temp_func_form_opt)
+zooplankton_settings(1)%z_
+ mort_0 =   0.11574074074074074E-05 (value computed from zooplankton_settings(1)
+ %z_mort_0_per_day)
+zooplankton_settings(1)%z_mort2_0 =   0.46296296296296296E-0
+ 5 (value computed from zooplankton_settings(1)%z_mort2_0_per_day)
+zooplankton_s
+ ettings(1)%basal_respiration_rate =   0.00000000000000000E+00 (value computed f
+ rom zooplankton_settings(1)%basal_respiration_rate_per_day)
+
+grazing_relationsh
+ ip_settings(1,1)%z_umax_0 =   0.38194444444444444E-04 (value computed from graz
+ ing_relationship_settings(1,1)%z_umax_0_per_day)
+grazing_relationship_settings(
+ 2,1)%z_umax_0 =   0.36458333333333330E-04 (value computed from grazing_relation
+ ship_settings(2,1)%z_umax_0_per_day)
+grazing_relationship_settings(3,1)%z_umax_
+ 0 =   0.38194444444444444E-04 (value computed from grazing_relationship_setting
+ s(3,1)%z_umax_0_per_day)
+NO REQUESTED TRACERS FOUND IN       marbl_tracer_output_list
+. Defaulting to  writing all BGC tracers to output file.
+Successfully read marbl_tracer_output_list to end of file
+we successfully read and closed       marbl_tracer_output_list
+ Here are the SF forcings MARBL requested
+ var: u10_sqr
+ units:m^2/s^2
+ var: sss
+ units:psu
+ var: sst
+ units:degC
+ var: Ice Fraction
+ units:unitless
+ var: Atmospheric Pressure
+ units:atmospheres
+ var: xco2
+ units:ppmv
+ var: xco2_alt_co2
+ units:ppmv
+ var: Dust Flux
+ units:kg/m^2/s
+ var: Iron Flux
+ units:mmol/m^2/s
+ var: NOx Flux
+ units:mmol/m^2/s
+ var: NHy Flux
+ units:mmol/m^2/s
+ Here are the int. tend. forcings MARBL requested
+ var: Dust Flux
+ units: kg/m^2/s
+ var: Surface Shortwave
+ units: W/m^2
+ var: Potential Temperature
+ units: degC
+ var: Salinity
+ units: psu
+ var: Pressure
+ units: bars
+ var: Iron Sediment Flux
+ units: mmol/m^2/s
+ metadata about           34  tracers:
+ -----------
+ TRACER NO.:            1
+ SHORT NAME: temp
+ LONG NAME: potential temperature
+ UNITS: Celsius
+ -----------
+ -----------
+ TRACER NO.:            2
+ SHORT NAME: salt
+ LONG NAME: salinity
+ UNITS: PSU
+ -----------
+ -----------
+ TRACER NO.:            3
+ SHORT NAME: PO4
+ LONG NAME: Dissolved Inorganic Phosphate
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:            4
+ SHORT NAME: NO3
+ LONG NAME: Dissolved Inorganic Nitrate
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:            5
+ SHORT NAME: SiO3
+ LONG NAME: Dissolved Inorganic Silicate
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:            6
+ SHORT NAME: NH4
+ LONG NAME: Dissolved Ammonia
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:            7
+ SHORT NAME: Fe
+ LONG NAME: Dissolved Inorganic Iron
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:            8
+ SHORT NAME: Lig
+ LONG NAME: Iron Binding Ligand
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:            9
+ SHORT NAME: O2
+ LONG NAME: Dissolved Oxygen
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           10
+ SHORT NAME: DIC
+ LONG NAME: Dissolved Inorganic Carbon
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           11
+ SHORT NAME: DIC_ALT_CO2
+ LONG NAME: Dissolved Inorganic Carbon, Alternative CO2
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           12
+ SHORT NAME: ALK
+ LONG NAME: Alkalinity
+ UNITS: meq/m^3
+ -----------
+ -----------
+ TRACER NO.:           13
+ SHORT NAME: ALK_ALT_CO2
+ LONG NAME: Alkalinity, Alternative CO2
+ UNITS: meq/m^3
+ -----------
+ -----------
+ TRACER NO.:           14
+ SHORT NAME: DOC
+ LONG NAME: Dissolved Organic Carbon
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           15
+ SHORT NAME: DON
+ LONG NAME: Dissolved Organic Nitrogen
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           16
+ SHORT NAME: DOP
+ LONG NAME: Dissolved Organic Phosphorus
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           17
+ SHORT NAME: DOPr
+ LONG NAME: Refractory DOP
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           18
+ SHORT NAME: DONr
+ LONG NAME: Refractory DON
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           19
+ SHORT NAME: DOCr
+ LONG NAME: Refractory DOC
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           20
+ SHORT NAME: zooC
+ LONG NAME: Zooplankton Carbon
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           21
+ SHORT NAME: spChl
+ LONG NAME: Small Phyto Chlorophyll
+ UNITS: mg/m^3
+ -----------
+ -----------
+ TRACER NO.:           22
+ SHORT NAME: spC
+ LONG NAME: Small Phyto Carbon
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           23
+ SHORT NAME: spP
+ LONG NAME: Small Phyto Phosphorus
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           24
+ SHORT NAME: spFe
+ LONG NAME: Small Phyto Iron
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           25
+ SHORT NAME: spCaCO3
+ LONG NAME: Small Phyto CaCO3
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           26
+ SHORT NAME: diatChl
+ LONG NAME: Diatom Chlorophyll
+ UNITS: mg/m^3
+ -----------
+ -----------
+ TRACER NO.:           27
+ SHORT NAME: diatC
+ LONG NAME: Diatom Carbon
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           28
+ SHORT NAME: diatP
+ LONG NAME: Diatom Phosphorus
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           29
+ SHORT NAME: diatFe
+ LONG NAME: Diatom Iron
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           30
+ SHORT NAME: diatSi
+ LONG NAME: Diatom Silicon
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           31
+ SHORT NAME: diazChl
+ LONG NAME: Diazotroph Chlorophyll
+ UNITS: mg/m^3
+ -----------
+ -----------
+ TRACER NO.:           32
+ SHORT NAME: diazC
+ LONG NAME: Diazotroph Carbon
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           33
+ SHORT NAME: diazP
+ LONG NAME: Diazotroph Phosphorus
+ UNITS: mmol/m^3
+ -----------
+ -----------
+ TRACER NO.:           34
+ SHORT NAME: diazFe
+ LONG NAME: Diazotroph Iron
+ UNITS: mmol/m^3
+ -----------
+
+ NUMBER OF NODES:   6( 3 x  2) THREADS:   1 TILING: 1 x  1 GRID: 199 x  99 x 50
+         bgc fields to be saved (T/F)
+           --------------------------------------------------------------
+           Name                        Write (T/F)             Long name
+           --------------------------------------------------------------
+
+           PO4                                   T    Dissolved Inorganic Phosphate
+           NO3                                   T    Dissolved Inorganic Nitrate
+           SiO3                                  T    Dissolved Inorganic Silicate
+           NH4                                   T    Dissolved Ammonia
+           Fe                                    T    Dissolved Inorganic Iron
+           Lig                                   T    Iron Binding Ligand
+           O2                                    T    Dissolved Oxygen
+           DIC                                   T    Dissolved Inorganic Carbon
+           DIC_ALT_CO2                           T    Dissolved Inorganic Carbon, Alternative CO2
+           ALK                                   T    Alkalinity
+           ALK_ALT_CO2                           T    Alkalinity, Alternative CO2
+           DOC                                   T    Dissolved Organic Carbon
+           DON                                   T    Dissolved Organic Nitrogen
+           DOP                                   T    Dissolved Organic Phosphorus
+           DOPr                                  T    Refractory DOP
+           DONr                                  T    Refractory DON
+           DOCr                                  T    Refractory DOC
+           zooC                                  T    Zooplankton Carbon
+           spChl                                 T    Small Phyto Chlorophyll
+           spC                                   T    Small Phyto Carbon
+           spP                                   T    Small Phyto Phosphorus
+           spFe                                  T    Small Phyto Iron
+           spCaCO3                               T    Small Phyto CaCO3
+           diatChl                               T    Diatom Chlorophyll
+           diatC                                 T    Diatom Carbon
+           diatP                                 T    Diatom Phosphorus
+           diatFe                                T    Diatom Iron
+           diatSi                                T    Diatom Silicon
+           diazChl                               T    Diazotroph Chlorophyll
+           diazC                                 T    Diazotroph Carbon
+           diazP                                 T    Diazotroph Phosphorus
+           diazFe                                T    Diazotroph Iron
+           ECOSYS_IFRAC                          T    Ice Fraction
+           ECOSYS_XKW                            T    XKW
+           ECOSYS_ATM_PRESS                      T    Atmospheric Pressure
+           PV_CO2                                T    CO2 Piston Velocity
+           SCHMIDT_CO2                           T    CO2 Schmidt Number for base biotic tracers fluxes
+           PV_O2                                 T    O2 Piston Velocity
+           SCHMIDT_O2                            T    O2 Schmidt Number
+           O2SAT                                 T    O2 Saturation
+           CO2STAR                               T    CO2 Star
+           DCO2STAR                              T    D CO2 Star
+           pCO2SURF                              T    surface pCO2
+           DpCO2                                 T    D pCO2
+           FG_CO2                                T    DIC Surface Gas Flux
+           PH                                    T    Surface pH
+           ATM_CO2                               T    Atmospheric CO2
+           CO2STAR_ALT_CO2                       T    CO2 Star, Alternative CO2
+           DCO2STAR_ALT_CO2                      T    D CO2 Star, Alternative CO2
+           pCO2SURF_ALT_CO2                      T    surface pCO2, Alternative CO2
+           DpCO2_ALT_CO2                         T    D pCO2, Alternative CO2
+           FG_ALT_CO2                            T    DIC Surface Gas Flux, Alternative CO2
+           PH_ALT_CO2                            T    Surface pH, Alternative CO2
+           ATM_ALT_CO2                           T    Atmospheric Alternative CO2
+           IRON_FLUX                             T    Atmospheric Iron Flux
+           DUST_FLUX                             T    Atmospheric Dust Flux
+           NOx_FLUX                              T    Flux of NOx from Atmosphere
+           NHy_FLUX                              T    Flux of NHy from Atmosphere
+           NHx_SURFACE_EMIS                      T    Emission of NHx to Atmosphere
+           zsatcalc                              T    Calcite Saturation Depth
+           zsatarag                              T    Aragonite Saturation Depth
+           O2_ZMIN                               T    Vertical Minimum of O2
+           O2_ZMIN_DEPTH                         T    Depth of Vertical Minimum of O2
+           photoC_TOT_zint                       T    Total C Fixation Vertical Integral
+           photoC_TOT_zint_100m                  T    Total C Fixation Vertical Integral, 0-100m
+           photoC_NO3_TOT_zint                   T    Total C Fixation from NO3 Vertical Integral
+           photoC_NO3_TOT_zint_100m              T    Total C Fixation from NO3 Vertical Integral, 0-100m
+           DOC_prod_zint                         T    Vertical Integral of DOC Production
+           DOC_prod_zint_100m                    T    Vertical Integral of DOC Production, 0-100m
+           DOC_remin_zint                        T    Vertical Integral of DOC Remineralization
+           DOC_remin_zint_100m                   T    Vertical Integral of DOC Remineralization, 0-100m
+           DOCr_remin_zint                       T    Vertical Integral of DOCr Remineralization
+           DOCr_remin_zint_100m                  T    Vertical Integral of DOCr Remineralization, 0-100m
+           Jint_Ctot                             T    Vertical Integral of Conservative Subterms of Source Sink Term for Ctot
+           Jint_Ntot                             T    Vertical Integral of Conservative Subterms of Source Sink Term for Ntot
+           Jint_Ptot                             T    Vertical Integral of Conservative Subterms of Source Sink Term for Ptot
+           Jint_Sitot                            T    Vertical Integral of Conservative Subterms of Source Sink Term for Sitot
+           Jint_Fetot                            T    Vertical Integral of Conservative Subterms of Source Sink Term for Fetot
+           calcToFloor                           T    CaCO3 Flux Hitting Sea Floor
+           calcToSed                             T    CaCO3 Flux to Sediments
+           calcToSed_ALT_CO2                     T    CaCO3 Flux to Sediments, Alternative CO2
+           pocToFloor                            T    POC Flux Hitting Sea Floor
+           pocToSed                              T    POC Flux to Sediments
+           ponToSed                              T    nitrogen burial Flux to Sediments
+           SedDenitrif                           T    nitrogen loss in Sediments
+           OtherRemin                            T    non-oxic,non-dentr remin in Sediments
+           popToSed                              T    phosphorus Flux to Sediments
+           bsiToSed                              T    biogenic Si Flux to Sediments
+           dustToSed                             T    dust Flux to Sediments
+           pfeToSed                              T    pFe Flux to Sediments
+           sp_N_lim_surf                         T    Small Phyto N Limitation, Surface
+           sp_N_lim_Cweight_avg_100m             T    Small Phyto N Limitation, carbon biomass weighted average over 0-100m
+           sp_P_lim_surf                         T    Small Phyto P Limitation, Surface
+           sp_P_lim_Cweight_avg_100m             T    Small Phyto P Limitation, carbon biomass weighted average over 0-100m
+           sp_Fe_lim_surf                        T    Small Phyto Fe Limitation, Surface
+           sp_Fe_lim_Cweight_avg_100m            T    Small Phyto Fe Limitation, carbon biomass weighted average over 0-100m
+           sp_light_lim_surf                     T    Small Phyto Light Limitation, Surface
+           sp_light_lim_Cweight_avg_100m         T    Small Phyto Light Limitation, carbon biomass weighted average over 0-100
+           photoC_sp_zint                        T    Small Phyto C Fixation Vertical Integral
+           photoC_sp_zint_100m                   T    Small Phyto C Fixation Vertical Integral, 0-100m
+           photoC_NO3_sp_zint                    T    Small Phyto C Fixation from NO3 Vertical Integral
+           sp_CaCO3_form_zint                    T    Small Phyto CaCO3 Formation Vertical Integral
+           sp_CaCO3_form_zint_100m               T    Small Phyto CaCO3 Formation Vertical Integral, 0-100m
+           graze_sp_zint                         T    Small Phyto Grazing Vertical Integral
+           graze_sp_zint_100m                    T    Small Phyto Grazing Vertical Integral, 0-100m
+           graze_sp_poc_zint                     T    Small Phyto Grazing to POC Vertical Integral
+           graze_sp_poc_zint_100m                T    Small Phyto Grazing to POC Vertical Integral, 0-100m
+           graze_sp_doc_zint                     T    Small Phyto Grazing to DOC Vertical Integral
+           graze_sp_doc_zint_100m                T    Small Phyto Grazing to DOC Vertical Integral, 0-100m
+           graze_sp_zoo_zint                     T    Small Phyto Grazing to Zooplankton Vertical Integral
+           graze_sp_zoo_zint_100m                T    Small Phyto Grazing to Zooplankton Vertical Integral, 0-100m
+           sp_loss_zint                          T    Small Phyto Loss Vertical Integral
+           sp_loss_zint_100m                     T    Small Phyto Loss Vertical Integral, 0-100m
+           sp_loss_poc_zint                      T    Small Phyto Loss to POC Vertical Integral
+           sp_loss_poc_zint_100m                 T    Small Phyto Loss to POC Vertical Integral, 0-100m
+           sp_loss_doc_zint                      T    Small Phyto Loss to DOC Vertical Integral
+           sp_loss_doc_zint_100m                 T    Small Phyto Loss to DOC Vertical Integral, 0-100m
+           sp_agg_zint                           T    Small Phyto Aggregation Vertical Integral
+           sp_agg_zint_100m                      T    Small Phyto Aggregation Vertical Integral, 0-100m
+           diat_N_lim_surf                       T    Diatom N Limitation, Surface
+           diat_N_lim_Cweight_avg_100m           T    Diatom N Limitation, carbon biomass weighted average over 0-100m
+           diat_P_lim_surf                       T    Diatom P Limitation, Surface
+           diat_P_lim_Cweight_avg_100m           T    Diatom P Limitation, carbon biomass weighted average over 0-100m
+           diat_Fe_lim_surf                      T    Diatom Fe Limitation, Surface
+           diat_Fe_lim_Cweight_avg_100m          T    Diatom Fe Limitation, carbon biomass weighted average over 0-100m
+           diat_SiO3_lim_surf                    T    Diatom SiO3 Limitation, Surface
+           diat_SiO3_lim_Cweight_avg_100m        T    Diatom SiO3 Limitation, carbon biomass weighted average over 0-100m
+           diat_light_lim_surf                   T    Diatom Light Limitation, Surface
+           diat_light_lim_Cweight_avg_100m       T    Diatom Light Limitation, carbon biomass weighted average over 0-100m
+           photoC_diat_zint                      T    Diatom C Fixation Vertical Integral
+           photoC_diat_zint_100m                 T    Diatom C Fixation Vertical Integral, 0-100m
+           photoC_NO3_diat_zint                  T    Diatom C Fixation from NO3 Vertical Integral
+           graze_diat_zint                       T    Diatom Grazing Vertical Integral
+           graze_diat_zint_100m                  T    Diatom Grazing Vertical Integral, 0-100m
+           graze_diat_poc_zint                   T    Diatom Grazing to POC Vertical Integral
+           graze_diat_poc_zint_100m              T    Diatom Grazing to POC Vertical Integral, 0-100m
+           graze_diat_doc_zint                   T    Diatom Grazing to DOC Vertical Integral
+           graze_diat_doc_zint_100m              T    Diatom Grazing to DOC Vertical Integral, 0-100m
+           graze_diat_zoo_zint                   T    Diatom Grazing to Zooplankton Vertical Integral
+           graze_diat_zoo_zint_100m              T    Diatom Grazing to Zooplankton Vertical Integral, 0-100m
+           diat_loss_zint                        T    Diatom Loss Vertical Integral
+           diat_loss_zint_100m                   T    Diatom Loss Vertical Integral, 0-100m
+           diat_loss_poc_zint                    T    Diatom Loss to POC Vertical Integral
+           diat_loss_poc_zint_100m               T    Diatom Loss to POC Vertical Integral, 0-100m
+           diat_loss_doc_zint                    T    Diatom Loss to DOC Vertical Integral
+           diat_loss_doc_zint_100m               T    Diatom Loss to DOC Vertical Integral, 0-100m
+           diat_agg_zint                         T    Diatom Aggregation Vertical Integral
+           diat_agg_zint_100m                    T    Diatom Aggregation Vertical Integral, 0-100m
+           diaz_N_lim_surf                       T    Diazotroph N Limitation, Surface
+           diaz_N_lim_Cweight_avg_100m           T    Diazotroph N Limitation, carbon biomass weighted average over 0-100m
+           diaz_P_lim_surf                       T    Diazotroph P Limitation, Surface
+           diaz_P_lim_Cweight_avg_100m           T    Diazotroph P Limitation, carbon biomass weighted average over 0-100m
+           diaz_Fe_lim_surf                      T    Diazotroph Fe Limitation, Surface
+           diaz_Fe_lim_Cweight_avg_100m          T    Diazotroph Fe Limitation, carbon biomass weighted average over 0-100m
+           diaz_light_lim_surf                   T    Diazotroph Light Limitation, Surface
+           diaz_light_lim_Cweight_avg_100m       T    Diazotroph Light Limitation, carbon biomass weighted average over 0-100m
+           photoC_diaz_zint                      T    Diazotroph C Fixation Vertical Integral
+           photoC_diaz_zint_100m                 T    Diazotroph C Fixation Vertical Integral, 0-100m
+           photoC_NO3_diaz_zint                  T    Diazotroph C Fixation from NO3 Vertical Integral
+           graze_diaz_zint                       T    Diazotroph Grazing Vertical Integral
+           graze_diaz_zint_100m                  T    Diazotroph Grazing Vertical Integral, 0-100m
+           graze_diaz_poc_zint                   T    Diazotroph Grazing to POC Vertical Integral
+           graze_diaz_poc_zint_100m              T    Diazotroph Grazing to POC Vertical Integral, 0-100m
+           graze_diaz_doc_zint                   T    Diazotroph Grazing to DOC Vertical Integral
+           graze_diaz_doc_zint_100m              T    Diazotroph Grazing to DOC Vertical Integral, 0-100m
+           graze_diaz_zoo_zint                   T    Diazotroph Grazing to Zooplankton Vertical Integral
+           graze_diaz_zoo_zint_100m              T    Diazotroph Grazing to Zooplankton Vertical Integral, 0-100m
+           diaz_loss_zint                        T    Diazotroph Loss Vertical Integral
+           diaz_loss_zint_100m                   T    Diazotroph Loss Vertical Integral, 0-100m
+           diaz_loss_poc_zint                    T    Diazotroph Loss to POC Vertical Integral
+           diaz_loss_poc_zint_100m               T    Diazotroph Loss to POC Vertical Integral, 0-100m
+           diaz_loss_doc_zint                    T    Diazotroph Loss to DOC Vertical Integral
+           diaz_loss_doc_zint_100m               T    Diazotroph Loss to DOC Vertical Integral, 0-100m
+           diaz_agg_zint                         T    Diazotroph Aggregation Vertical Integral
+           diaz_agg_zint_100m                    T    Diazotroph Aggregation Vertical Integral, 0-100m
+           CaCO3_form_zint                       T    Total CaCO3 Formation Vertical Integral
+           CaCO3_form_zint_100m                  T    Total CaCO3 Formation Vertical Integral, 0-100m
+           zoo_loss_zint                         T    Zooplankton Loss Vertical Integral
+           zoo_loss_zint_100m                    T    Zooplankton Loss Vertical Integral, 0-100m
+           zoo_loss_zint_150m                    T    Zooplankton Loss Vertical Integral, 0-150m
+           zoo_loss_basal_zint                   T    Zooplankton Basal Respiration Vertical Integral
+           zoo_loss_basal_zint_100m              T    Zooplankton Basal Respiration Vertical Integral, 0-100m
+           zoo_loss_poc_zint                     T    Zooplankton Loss to POC Vertical Integral
+           zoo_loss_poc_zint_100m                T    Zooplankton Loss to POC Vertical Integral, 0-100m
+           zoo_loss_doc_zint                     T    Zooplankton Loss to DOC Vertical Integral
+           zoo_loss_doc_zint_100m                T    Zooplankton Loss to DOC Vertical Integral, 0-100m
+           graze_zoo_zint                        T    Zooplankton Grazing Vertical Integral
+           graze_zoo_zint_100m                   T    Zooplankton Grazing Vertical Integral, 0-100m
+           graze_zoo_poc_zint                    T    Zooplankton Grazing to POC Vertical Integral
+           graze_zoo_poc_zint_100m               T    Zooplankton Grazing to POC Vertical Integral, 0-100m
+           graze_zoo_doc_zint                    T    Zooplankton Grazing to DOC Vertical Integral
+           graze_zoo_doc_zint_100m               T    Zooplankton Grazing to DOC Vertical Integral, 0-100m
+           graze_zoo_zoo_zint                    T    Zooplankton Grazing to Zooplankton Vertical Integral
+           graze_zoo_zoo_zint_100m               T    Zooplankton Grazing to Zooplankton Vertical Integral, 0-100m
+           x_graze_zoo_zint                      T    Zooplankton Grazing Gain Vertical Integral
+           x_graze_zoo_zint_100m                 T    Zooplankton Grazing Gain Vertical Integral, 0-100m
+           POC_FLUX_100m                         T    POC Flux at 100m
+           POP_FLUX_100m                         T    POP Flux at 100m
+           CaCO3_FLUX_100m                       T    CaCO3 Flux at 100m
+           SiO2_FLUX_100m                        T    SiO2 Flux at 100m
+           P_iron_FLUX_100m                      T    P_iron Flux at 100m
+           POC_PROD_zint                         T    Vertical Integral of POC Production
+           POC_PROD_zint_100m                    T    Vertical Integral of POC Production, 0-100m
+           POC_REMIN_DOCr_zint                   T    Vertical Integral of POC Remineralization routed to DOCr
+           POC_REMIN_DOCr_zint_100m              T    Vertical Integral of POC Remineralization routed to DOCr, 0-100m
+           POC_REMIN_DIC_zint                    T    Vertical Integral of POC Remineralization routed to DIC
+           POC_REMIN_DIC_zint_100m               T    Vertical Integral of POC Remineralization routed to DIC, 0-100m
+           CaCO3_PROD_zint                       T    Vertical Integral of CaCO3 Production
+           CaCO3_PROD_zint_100m                  T    Vertical Integral of CaCO3 Production, 0-100m
+           CaCO3_REMIN_zint                      T    Vertical Integral of CaCO3 Remineralization
+           CaCO3_REMIN_zint_100m                 T    Vertical Integral of CaCO3 Remineralization, 0-100m
+           insitu_temp                           T    in situ temperature
+           CO3                                   T    Carbonate Ion Concentration
+           HCO3                                  T    Bicarbonate Ion Concentration
+           H2CO3                                 T    Carbonic Acid Concentration
+           pH_3D                                 T    pH
+           CO3_ALT_CO2                           T    Carbonate Ion Concentration, Alternative CO2
+           HCO3_ALT_CO2                          T    Bicarbonate Ion Concentration, Alternative CO2
+           H2CO3_ALT_CO2                         T    Carbonic Acid Concentration, Alternative CO2
+           pH_3D_ALT_CO2                         T    pH, Alternative CO2
+           co3_sat_calc                          T    CO3 concentration at calcite saturation
+           co3_sat_arag                          T    CO3 concentration at aragonite saturation
+           NITRIF                                T    Nitrification
+           DENITRIF                              T    Denitrification
+           O2_PRODUCTION                         T    O2 Production
+           O2_CONSUMPTION                        T    O2 Consumption
+           AOU                                   T    Apparent O2 Utilization
+           PAR_avg                               T    PAR Average over Model Cell
+           graze_auto_TOT                        T    Total Autotroph Grazing
+           photoC_TOT                            T    Total C Fixation
+           photoC_NO3_TOT                        T    Total C Fixation from NO3
+           DOC_prod                              T    DOC Production
+           DOC_remin                             T    DOC Remineralization
+           DOCr_remin                            T    DOCr Remineralization
+           DON_prod                              T    DON Production
+           DON_remin                             T    DON Remineralization
+           DONr_remin                            T    DONr Remineralization
+           DOP_prod                              T    DOP Production
+           DOP_remin                             T    DOP Remineralization
+           DOPr_remin                            T    DOPr Remineralization
+           DOP_loss_P_bal                        T    DOP loss, due to P budget balancing
+           Fe_scavenge                           T    Iron Scavenging
+           Fe_scavenge_rate                      T    Iron Scavenging Rate
+           Lig_prod                              T    Production of Fe-binding Ligand
+           Lig_loss                              T    Loss of Fe-binding Ligand
+           Lig_scavenge                          T    Loss of Fe-binding Ligand from Scavenging
+           Fefree                                T    Fe not bound to Ligand
+           Lig_photochem                         T    Loss of Fe-binding Ligand from UV radiation
+           Lig_deg                               T    Loss of Fe-binding Ligand from Bacterial Degradation
+           FESEDFLUX                             T    Iron Sediment Flux
+           POC_FLUX_IN                           T    POC Flux into Cell
+           POC_sFLUX_IN                          T    POC sFlux into Cell
+           POC_hFLUX_IN                          T    POC hFlux into Cell
+           POC_PROD                              T    POC Production
+           POC_REMIN_DOCr                        T    POC Remineralization routed to DOCr
+           POC_REMIN_DIC                         T    POC Remineralization routed to DIC
+           POP_FLUX_IN                           T    POP Flux into Cell
+           POP_PROD                              T    POP Production
+           POP_REMIN_DOPr                        T    POP Remineralization routed to DOPr
+           POP_REMIN_PO4                         T    POP Remineralization routed to PO4
+           PON_REMIN_DONr                        T    PON Remineralization routed to DONr
+           PON_REMIN_NH4                         T    PON Remineralization routed to NH4
+           CaCO3_FLUX_IN                         T    CaCO3 Flux into Cell
+           CaCO3_PROD                            T    CaCO3 Production
+           CaCO3_REMIN                           T    CaCO3 Remineralization
+           CaCO3_ALT_CO2_FLUX_IN                 T    CaCO3 Flux into Cell, Alternative CO2
+           CaCO3_ALT_CO2_PROD                    T    CaCO3 Production, Alternative CO2
+           CaCO3_ALT_CO2_REMIN                   T    CaCO3 Remineralization, Alternative CO2
+           SiO2_FLUX_IN                          T    SiO2 Flux into Cell
+           SiO2_PROD                             T    SiO2 Production
+           SiO2_REMIN                            T    SiO2 Remineralization
+           dust_FLUX_IN                          T    Dust Flux into Cell
+           dust_REMIN                            T    Dust Remineralization
+           P_iron_FLUX_IN                        T    P_iron Flux into Cell
+           P_iron_PROD                           T    P_iron Production
+           P_iron_REMIN                          T    P_iron Remineralization
+           sp_Qp                                 T    Small Phyto P:C ratio
+           photoC_sp                             T    Small Phyto C Fixation
+           photoC_NO3_sp                         T    Small Phyto C Fixation from NO3
+           photoFe_sp                            T    Small Phyto Fe Uptake
+           photoNO3_sp                           T    Small Phyto NO3 Uptake
+           photoNH4_sp                           T    Small Phyto NH4 Uptake
+           DOP_sp_uptake                         T    Small Phyto DOP Uptake
+           PO4_sp_uptake                         T    Small Phyto PO4 Uptake
+           graze_sp                              T    Small Phyto Grazing
+           graze_sp_poc                          T    Small Phyto Grazing to POC
+           graze_sp_doc                          T    Small Phyto Grazing to DOC
+           graze_sp_zootot                       T    Small Phyto Grazing to ZOO TOT
+           graze_sp_zoo                          T    Small Phyto Grazing to Zooplankton
+           sp_loss                               T    Small Phyto Loss
+           sp_loss_poc                           T    Small Phyto Loss to POC
+           sp_loss_doc                           T    Small Phyto Loss to DOC
+           sp_agg                                T    Small Phyto Aggregation
+           sp_CaCO3_form                         T    Small Phyto CaCO3 Formation
+           diat_Qp                               T    Diatom P:C ratio
+           photoC_diat                           T    Diatom C Fixation
+           photoC_NO3_diat                       T    Diatom C Fixation from NO3
+           photoFe_diat                          T    Diatom Fe Uptake
+           photoNO3_diat                         T    Diatom NO3 Uptake
+           photoNH4_diat                         T    Diatom NH4 Uptake
+           DOP_diat_uptake                       T    Diatom DOP Uptake
+           PO4_diat_uptake                       T    Diatom PO4 Uptake
+           graze_diat                            T    Diatom Grazing
+           graze_diat_poc                        T    Diatom Grazing to POC
+           graze_diat_doc                        T    Diatom Grazing to DOC
+           graze_diat_zootot                     T    Diatom Grazing to ZOO TOT
+           graze_diat_zoo                        T    Diatom Grazing to Zooplankton
+           diat_loss                             T    Diatom Loss
+           diat_loss_poc                         T    Diatom Loss to POC
+           diat_loss_doc                         T    Diatom Loss to DOC
+           diat_agg                              T    Diatom Aggregation
+           diat_bSi_form                         T    Diatom Si Uptake
+           diaz_Qp                               T    Diazotroph P:C ratio
+           photoC_diaz                           T    Diazotroph C Fixation
+           photoC_NO3_diaz                       T    Diazotroph C Fixation from NO3
+           photoFe_diaz                          T    Diazotroph Fe Uptake
+           photoNO3_diaz                         T    Diazotroph NO3 Uptake
+           photoNH4_diaz                         T    Diazotroph NH4 Uptake
+           DOP_diaz_uptake                       T    Diazotroph DOP Uptake
+           PO4_diaz_uptake                       T    Diazotroph PO4 Uptake
+           graze_diaz                            T    Diazotroph Grazing
+           graze_diaz_poc                        T    Diazotroph Grazing to POC
+           graze_diaz_doc                        T    Diazotroph Grazing to DOC
+           graze_diaz_zootot                     T    Diazotroph Grazing to ZOO TOT
+           graze_diaz_zoo                        T    Diazotroph Grazing to Zooplankton
+           diaz_loss                             T    Diazotroph Loss
+           diaz_loss_poc                         T    Diazotroph Loss to POC
+           diaz_loss_doc                         T    Diazotroph Loss to DOC
+           diaz_agg                              T    Diazotroph Aggregation
+           diaz_Nfix                             T    Diazotroph N Fixation
+           bSi_form                              T    Total Si Uptake
+           CaCO3_form                            T    Total CaCO3 Formation
+           Nfix                                  T    Total N Fixation
+           zoo_loss                              T    Zooplankton Loss
+           zoo_loss_basal                        T    Zooplankton Basal Respiration
+           zoo_loss_poc                          T    Zooplankton Loss to POC
+           zoo_loss_doc                          T    Zooplankton Loss to DOC
+           graze_zoo                             T    Zooplankton grazing loss
+           graze_zoo_poc                         T    Zooplankton grazing loss to POC
+           graze_zoo_doc                         T    Zooplankton grazing loss to DOC
+           graze_zoo_zootot                      T    Zooplankton grazing loss to ZOO TOT
+           graze_zoo_zoo                         T    Zooplankton grazing loss to Zooplankton
+           x_graze_zoo                           T    Zooplankton grazing gain
+           PO4_RESTORE_TEND                      T    Dissolved Inorganic Phosphate Restoring Tendency
+           NO3_RESTORE_TEND                      T    Dissolved Inorganic Nitrate Restoring Tendency
+           SiO3_RESTORE_TEND                     T    Dissolved Inorganic Silicate Restoring Tendency
+           NH4_RESTORE_TEND                      T    Dissolved Ammonia Restoring Tendency
+           Fe_RESTORE_TEND                       T    Dissolved Inorganic Iron Restoring Tendency
+           Lig_RESTORE_TEND                      T    Iron Binding Ligand Restoring Tendency
+           O2_RESTORE_TEND                       T    Dissolved Oxygen Restoring Tendency
+           DIC_RESTORE_TEND                      T    Dissolved Inorganic Carbon Restoring Tendency
+           DIC_ALT_CO2_RESTORE_TEND              T    Dissolved Inorganic Carbon, Alternative CO2 Restoring Tendency
+           ALK_RESTORE_TEND                      T    Alkalinity Restoring Tendency
+           ALK_ALT_CO2_RESTORE_TEND              T    Alkalinity, Alternative CO2 Restoring Tendency
+           DOC_RESTORE_TEND                      T    Dissolved Organic Carbon Restoring Tendency
+           DON_RESTORE_TEND                      T    Dissolved Organic Nitrogen Restoring Tendency
+           DOP_RESTORE_TEND                      T    Dissolved Organic Phosphorus Restoring Tendency
+           DOPr_RESTORE_TEND                     T    Refractory DOP Restoring Tendency
+           DONr_RESTORE_TEND                     T    Refractory DON Restoring Tendency
+           DOCr_RESTORE_TEND                     T    Refractory DOC Restoring Tendency
+           zooC_RESTORE_TEND                     T    Zooplankton Carbon Restoring Tendency
+           spChl_RESTORE_TEND                    T    Small Phyto Chlorophyll Restoring Tendency
+           spC_RESTORE_TEND                      T    Small Phyto Carbon Restoring Tendency
+           spP_RESTORE_TEND                      T    Small Phyto Phosphorus Restoring Tendency
+           spFe_RESTORE_TEND                     T    Small Phyto Iron Restoring Tendency
+           spCaCO3_RESTORE_TEND                  T    Small Phyto CaCO3 Restoring Tendency
+           diatChl_RESTORE_TEND                  T    Diatom Chlorophyll Restoring Tendency
+           diatC_RESTORE_TEND                    T    Diatom Carbon Restoring Tendency
+           diatP_RESTORE_TEND                    T    Diatom Phosphorus Restoring Tendency
+           diatFe_RESTORE_TEND                   T    Diatom Iron Restoring Tendency
+           diatSi_RESTORE_TEND                   T    Diatom Silicon Restoring Tendency
+           diazChl_RESTORE_TEND                  T    Diazotroph Chlorophyll Restoring Tendency
+           diazC_RESTORE_TEND                    T    Diazotroph Carbon Restoring Tendency
+           diazP_RESTORE_TEND                    T    Diazotroph Phosphorus Restoring Tendency
+           diazFe_RESTORE_TEND                   T    Diazotroph Iron Restoring Tendency
+           --------------------------------------------------------------
+           TOTAL NO. OF BGC FIELDS: 375
+           FIELDS TO WRITE: 375
+           --------------------------------------------------------------
+       BGC diags allocation :: 179164
+ MARBL SURFACE FLUX SAVED STATE VARIABLE MARBL_PH_SURF
+ surface pH for base biotic tracers  pH
+ MARBL SURFACE FLUX SAVED STATE VARIABLE MARBL_ABIO_PH_SURF
+ surface pH for abiotic tracers  pH
+ MARBL SURFACE FLUX SAVED STATE VARIABLE MARBL_PH_SURF_ALT_CO2
+ surface pH for base biotic tracers (alternate CO2)  pH
+ MARBL INTERIOR TENDENCY SAVED STATE VARIABLE MARBL_PH_3D  3D pH  pH
+ MARBL INTERIOR TENDENCY SAVED STATE VARIABLE MARBL_PH_3D_ALT_CO2
+ 3D pH (alternate CO2)  pH
+       MARBL saved state allocation ::   3   2
+
+ Vertical S-coordinate system (z at W-points):
+
+  level      S-coord        Cs-curve         Z at hmin           at hc        half way         at hmax
+     50   0.0000E+00   0.0000000E+00     0.0000000E+00   0.0000000E+00   0.0000000E+00   0.0000000E+00
+     49  -2.0000E-02  -2.1600046E-04    -2.1600046E+16  -2.5270001E-01   1.0800023E+16   2.1600046E+16
+     48  -4.0000E-02  -8.6683444E-04    -8.6683444E+16  -5.1083543E-01   4.3341722E+16   8.6683444E+16
+     47  -6.0000E-02  -1.9610249E-03    -1.9610249E+17  -7.7451281E-01   9.8051243E+16   1.9610249E+17
+     46  -8.0000E-02  -3.5128600E-03    -3.5128600E+17  -1.0439107E+00   1.7564300E+17   3.5128600E+17
+     45  -1.0000E-01  -5.5425170E-03    -5.5425170E+17  -1.3192815E+00   2.7712585E+17   5.5425170E+17
+     44  -1.2000E-01  -8.0762310E-03    -8.0762310E+17  -1.6009529E+00   4.0381155E+17   8.0762310E+17
+     43  -1.4000E-01  -1.1146507E-02    -1.1146507E+18  -1.8893313E+00   5.5732535E+17   1.1146507E+18
+     42  -1.6000E-01  -1.4792367E-02    -1.4792367E+18  -2.1849046E+00   7.3961834E+17   1.4792367E+18
+     41  -1.8000E-01  -1.9059626E-02    -1.9059626E+18  -2.4882453E+00   9.5298131E+17   1.9059626E+18
+     40  -2.0000E-01  -2.4001189E-02    -2.4001189E+18  -2.8000149E+00   1.2000595E+18   2.4001189E+18
+     39  -2.2000E-01  -2.9677349E-02    -2.9677349E+18  -3.1209669E+00   1.4838674E+18   2.9677349E+18
+     38  -2.4000E-01  -3.6156070E-02    -3.6156070E+18  -3.4519509E+00   1.8078035E+18   3.6156070E+18
+     37  -2.6000E-01  -4.3513242E-02    -4.3513242E+18  -3.7939155E+00   2.1756621E+18   4.3513242E+18
+     36  -2.8000E-01  -5.1832858E-02    -5.1832858E+18  -4.1479107E+00   2.5916429E+18   5.1832858E+18
+     35  -3.0000E-01  -6.1207093E-02    -6.1207093E+18  -4.5150887E+00   3.0603546E+18   6.1207093E+18
+     34  -3.2000E-01  -7.1736228E-02    -7.1736228E+18  -4.8967028E+00   3.5868114E+18   7.1736228E+18
+     33  -3.4000E-01  -8.3528367E-02    -8.3528367E+18  -5.2941046E+00   4.1764184E+18   8.3528367E+18
+     32  -3.6000E-01  -9.6698875E-02    -9.6698875E+18  -5.7087359E+00   4.8349437E+18   9.6698875E+18
+     31  -3.8000E-01  -1.1136944E-01    -1.1136944E+19  -6.1421180E+00   5.5684720E+18   1.1136944E+19
+     30  -4.0000E-01  -1.2766669E-01    -1.2766669E+19  -6.5958336E+00   6.3833346E+18   1.2766669E+19
+     29  -4.2000E-01  -1.4572023E-01    -1.4572023E+19  -7.0715028E+00   7.2860113E+18   1.4572023E+19
+     28  -4.4000E-01  -1.6565994E-01    -1.6565994E+19  -7.5707493E+00   8.2829970E+18   1.6565994E+19
+     27  -4.6000E-01  -1.8761254E-01    -1.8761254E+19  -8.0951567E+00   9.3806268E+18   1.8761254E+19
+     26  -4.8000E-01  -2.1169704E-01    -2.1169704E+19  -8.6462129E+00   1.0584852E+19   2.1169704E+19
+     25  -5.0000E-01  -2.3801922E-01    -2.3801922E+19  -9.2252402E+00   1.1900961E+19   2.3801922E+19
+     24  -5.2000E-01  -2.6666485E-01    -2.6666485E+19  -9.8333106E+00   1.3333242E+19   2.6666485E+19
+     23  -5.4000E-01  -2.9769164E-01    -2.9769164E+19  -1.0471145E+01   1.4884582E+19   2.9769164E+19
+     22  -5.6000E-01  -3.3112002E-01    -3.3112002E+19  -1.1139000E+01   1.6556001E+19   3.3112002E+19
+     21  -5.8000E-01  -3.6692279E-01    -3.6692279E+19  -1.1836535E+01   1.8346139E+19   3.6692279E+19
+     20  -6.0000E-01  -4.0501403E-01    -4.0501403E+19  -1.2562675E+01   2.0250701E+19   4.0501403E+19
+     19  -6.2000E-01  -4.4523774E-01    -4.4523774E+19  -1.3315472E+01   2.2261887E+19   4.4523774E+19
+     18  -6.4000E-01  -4.8735711E-01    -4.8735711E+19  -1.4091964E+01   2.4367856E+19   4.8735711E+19
+     17  -6.6000E-01  -5.3104539E-01    -5.3104539E+19  -1.4888067E+01   2.6552270E+19   5.3104539E+19
+     16  -6.8000E-01  -5.7587989E-01    -5.7587989E+19  -1.5698499E+01   2.8793995E+19   5.7587989E+19
+     15  -7.0000E-01  -6.2134081E-01    -6.2134081E+19  -1.6516760E+01   3.1067041E+19   6.2134081E+19
+     14  -7.2000E-01  -6.6681673E-01    -6.6681673E+19  -1.7335209E+01   3.3340836E+19   6.6681673E+19
+     13  -7.4000E-01  -7.1161865E-01    -7.1161865E+19  -1.8145233E+01   3.5580932E+19   7.1161865E+19
+     12  -7.6000E-01  -7.5500399E-01    -7.5500399E+19  -1.8937550E+01   3.7750199E+19   7.5500399E+19
+     11  -7.8000E-01  -7.9621119E-01    -7.9621119E+19  -1.9702640E+01   3.9810559E+19   7.9621119E+19
+     10  -8.0000E-01  -8.3450416E-01    -8.3450416E+19  -2.0431302E+01   4.1725208E+19   8.3450416E+19
+      9  -8.2000E-01  -8.6922400E-01    -8.6922400E+19  -2.1115300E+01   4.3461200E+19   8.6922400E+19
+      8  -8.4000E-01  -8.9984320E-01    -8.9984320E+19  -2.1748040E+01   4.4992160E+19   8.9984320E+19
+      7  -8.6000E-01  -9.2601541E-01    -9.2601541E+19  -2.2325193E+01   4.6300770E+19   9.2601541E+19
+      6  -8.8000E-01  -9.4761265E-01    -9.4761265E+19  -2.2845158E+01   4.7380632E+19   9.4761265E+19
+      5  -9.0000E-01  -9.6474163E-01    -9.6474163E+19  -2.3309270E+01   4.8237081E+19   9.6474163E+19
+      4  -9.2000E-01  -9.7773318E-01    -9.7773318E+19  -2.3721665E+01   4.8886659E+19   9.7773318E+19
+      3  -9.4000E-01  -9.8710305E-01    -9.8710305E+19  -2.4088788E+01   4.9355152E+19   9.8710305E+19
+      2  -9.6000E-01  -9.9348846E-01    -9.9348846E+19  -2.4418606E+01   4.9674423E+19   9.9348846E+19
+      1  -9.8000E-01  -9.9757092E-01    -9.9757092E+19  -2.4719637E+01   4.9878546E+19   9.9757092E+19
+      0  -1.0000E+00  -1.0000000E+00    -1.0000000E+20  -2.5000000E+01   5.0000000E+19   1.0000000E+20
+
+ Spherical grid detected.
+
+ init buffers
+      get_grid :: read grid data from file 'input_data/example_input_grid.0.nc'.
+ hmin =    5.000000   grdmin = 1.2340032E+02     area = 2.7613819229624033E+08
+ hmax =  263.620089   grdmax = 1.2340038E+02   volume = 2.0206881447349617E+10
+                                           open_cross = 5.8530468865808807E+06
+ Cg_max = 0.7773206   Cg_min = 0.1070522   Cu_Cor = 0.0033170
+
+ Maximum grid stiffness ratios:   rx0 = 0.198563633  rx1 =  28.995891027
+
+ WARNING: Exact restart is requested, but is not possible: initial
+          file 'input_data/example_input_bgc_initial_conditions.0.nc' does not contain sufficient records.
+ riv_umask not found in initial file. Initializing to zero.
+ riv_vmask not found in initial file. Initializing to zero.
+ WARNING: netCDF variable 'hbls' not found in 'input_data/example_input_bgc_initial_conditions.0.nc' ==> initialized to zero state.
+ WARNING: netCDF variable 'hbbl' not found in 'input_data/example_input_bgc_initial_conditions.0.nc' ==> initialized to zero state.
+  --- WARNING: MARBL_PH_SURF not in initial file.  Initialized to 0.0
+  --- WARNING: MARBL_ABIO_PH_SURF not in initial file.  Initialized to 0.0
+  --- WARNING: MARBL_PH_SURF_ALT_CO2 not in initial file.  Initialized to 0.0
+  --- WARNING: MARBL_PH_3D not in initial file.  Initialized to 0.0
+  --- WARNING: MARBL_PH_3D_ALT_CO2 not in initial file.  Initialized to 0.0
+      get_init :: Read initial conditions for day =   3654.0000 record =   1
+ buffer for coarse array:            3
+         set_frc :: swrad            input time (days) =   3654.00     rec =  25
+         set_frc :: swrad            input time (days) =   3654.04     rec =  26
+         set_frc :: lwrad            input time (days) =   3654.00     rec =  25
+         set_frc :: lwrad            input time (days) =   3654.04     rec =  26
+         set_frc :: uwnd             input time (days) =   3654.00     rec =  25
+         set_frc :: uwnd             input time (days) =   3654.04     rec =  26
+         set_frc :: vwnd             input time (days) =   3654.00     rec =  25
+         set_frc :: vwnd             input time (days) =   3654.04     rec =  26
+         set_frc :: Tair             input time (days) =   3654.00     rec =  25
+         set_frc :: Tair             input time (days) =   3654.04     rec =  26
+         set_frc :: qair             input time (days) =   3654.00     rec =  25
+         set_frc :: qair             input time (days) =   3654.04     rec =  26
+         set_frc :: rain             input time (days) =   3654.00     rec =  25
+         set_frc :: rain             input time (days) =   3654.04     rec =  26
+         set_frc :: dust             input time (days) =   3636.75     rec =  12
+         set_frc :: dust             input time (days) =   3668.00     rec =   1
+         set_frc :: iron             input time (days) =   3636.75     rec =  12
+         set_frc :: iron             input time (days) =   3668.00     rec =   1
+         set_frc :: pco2_air         input time (days) =   3636.75     rec =  12
+         set_frc :: pco2_air         input time (days) =   3668.00     rec =   1
+         set_frc :: pco2_air_alt     input time (days) =   3636.75     rec =  12
+         set_frc :: pco2_air_alt     input time (days) =   3668.00     rec =   1
+         set_frc :: nox              input time (days) =   3636.75     rec =  12
+         set_frc :: nox              input time (days) =   3668.00     rec =   1
+         set_frc :: nhy              input time (days) =   3636.75     rec =  12
+         set_frc :: nhy              input time (days) =   3668.00     rec =   1
+ The minimum distance to Release           1 is   34.9414550916611
+ This is on rank:           1
+ at point          41          50
+ The intended release location was Lon:  -120.640000000000      Lat:
+   34.5349000000000
+ The release will take place at Lon:   239.360126328659      Lat:
+   34.5351965035659
+
+       cdr_frc: init cdr locations
+
+         set_frc :: cdr_layer_th     input time (days) =   3653.00     rec =   1
+         set_frc :: cdr_layer_th     input time (days) =   3655.00     rec =   2
+         set_frc :: cdr_trcflx_p     input time (days) =   3653.00     rec =   1
+         set_frc :: cdr_trcflx_p     input time (days) =   3655.00     rec =   2
+
+ Sponge layer =  15 interior grid points.
+
+ main :: initialization complete, started time-stepping.
+
+
+  STEP KINETIC_ENRG     BAROTR_KE        MAX_ADV_CFL     MAX_VERT_CFL
+ 0  3.6229628195672916E-03 1.4392038342093960E-03 1.2766756396452755E-01 7.6511822440025107E-02
+         set_frc :: zeta_east        input time (days) =   3654.00     rec =   2
+         set_frc :: zeta_east        input time (days) =   3655.00     rec =   3
+         set_frc :: zeta_west        input time (days) =   3654.00     rec =   2
+         set_frc :: zeta_west        input time (days) =   3655.00     rec =   3
+         set_frc :: zeta_north       input time (days) =   3654.00     rec =   2
+         set_frc :: zeta_north       input time (days) =   3655.00     rec =   3
+         set_frc :: zeta_south       input time (days) =   3654.00     rec =   2
+         set_frc :: zeta_south       input time (days) =   3655.00     rec =   3
+ 1  3.6229847094371792E-03 1.4391514027566705E-03 1.1212714843525114E-01 9.4223288249830048E-02
+ 2  3.5232389049897825E-03 1.3395759064426859E-03 1.2532218392603622E-01 1.0674197844630126E-01
+ 3  3.4372510914612068E-03 1.2529798220551388E-03 1.3394557294450404E-01 1.1344895907400114E-01
+ 4  3.3983270938127063E-03 1.2125158686642980E-03 1.4586411458954401E-01 1.2109947237829102E-01
+ 5  3.3842189902058171E-03 1.1965656525906579E-03 1.5941030117089924E-01 1.2981045696524490E-01
+ 6  3.3879092010026470E-03 1.1982627947239313E-03 1.7326699203927740E-01 1.3725071012212062E-01
+ 7  3.4022118536562469E-03 1.2104717977263523E-03 1.8186396820594822E-01 1.4262445553540318E-01
+ 8  3.4171777934035624E-03 1.2233053858269909E-03 1.8442689108052798E-01 1.4466549579722118E-01
+ 9  3.4308664829900345E-03 1.2348364233605168E-03 1.8528896061425054E-01 1.4484382679756472E-01
+10  3.4467728882988250E-03 1.2485444019344624E-03 1.8976601757426298E-01 1.4869745842847787E-01
+ Process    0  thread  0  cpu time =       83.31 sec
+ MPI_run_time =   125.262122015000

@@ -17,7 +17,7 @@
 ! areas due to the singularity as Zob approaches Hz  (e.g., Yusuke PV4
 ! configuration in the extreme low-tide phase).
 
-c**           rd(i,j)=rdrg + cff*(vonKar/log(Hz(i,j,1)/Zob))**2
+!**           rd(i,j)=rdrg + cff*(vonKar/log(Hz(i,j,1)/Zob))**2
 
 ! The following formula comes from the finite-volume interpretation of
 ! log-layer in the bottom-most grid box derived WITHOUT using Zob << Hz
@@ -29,11 +29,11 @@ c**           rd(i,j)=rdrg + cff*(vonKar/log(Hz(i,j,1)/Zob))**2
 ! there: setting Zob=Hz makes [vonKar/(2*ln 2-1)]^2 = [vonKar/0.386]^2
 ! upper vs. [vonKar/ln(3/2)]^2 = [vonKar/0.405]^2 lower.
 
-c**           rd(i,j)=rdrg + cff*(  vonKar/(   (1.+Zob/Hz(i,j,1))
-c**                                  *log(1.+Hz(i,j,1)/Zob) -1. ) )**2
+!**           rd(i,j)=rdrg + cff*(  vonKar/(   (1.+Zob/Hz(i,j,1))
+!**                                  *log(1.+Hz(i,j,1)/Zob) -1. ) )**2
 
 !  Removed the addition of a linear 'background' drag
-c             rd(i,j)=rdrg+cff*( vonKar/log(1.+0.5*Hz(i,j,1)/Zob) )**2
+!             rd(i,j)=rdrg+cff*( vonKar/log(1.+0.5*Hz(i,j,1)/Zob) )**2
 
               rd(i,j)= cff*( vonKar/log(1.+0.5*Hz(i,j,1)/Zob) )**2
 # ifdef WEC

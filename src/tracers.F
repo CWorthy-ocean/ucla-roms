@@ -35,7 +35,7 @@
       implicit none
       private
       character(len=7) :: module_name = "tracers"
-      character(len=200) :: error_info = ""
+      character(len=1024) :: error_info = ""
       real,public,allocatable,dimension(:,:,:,:,:) :: t              ! array of tracers
 
                                                                      ! tracer netcdf variables (user input required in init_tracers)
@@ -84,7 +84,7 @@
 ! ----------------------------------------------------------------------
       subroutine set_surf_tracer_flx ![
       ! set tracer flux at surface
-      use error_handling, only: handle_configuration_error
+      use error_handling_mod, only: error_log
       implicit none
       character(len=20) :: sr_name = "set_surf_tracer_flx"
       ! local
@@ -103,21 +103,18 @@
 
         else
 
-          if(mynode==0) then
-             write(error_info, *)
-     &            'Forcing type not supported: t_ana_frc(itrc)= ', t_ana_frc(itrc),
-     &            ', for tracer: ', nc_t(itrc)%vname
-            call handle_configuration_error(
-     &            context=module_name//"/"//sr_name,
-     &            info=error_info)
-          endif
+           write(error_info, *)
+     &          'Forcing type not supported: t_ana_frc(itrc)= ', t_ana_frc(itrc),
+     &          ', for tracer: ', nc_t(itrc)%vname
+           call error_log%raise_global(
+     &          context=module_name//"/"//sr_name,
+     &          info=error_info)
 
         endif ! if(t_ana_frc(itrc)==0)
-
 !       call exchange_xxx(stflx)
 
       enddo
-
+      call error_log%abort_check()
       end subroutine set_surf_tracer_flx  !]
 ! ----------------------------------------------------------------------
       subroutine set_ana_surf_tracer_flx(itrc)  ![

@@ -22,6 +22,9 @@ jobs:
           - example: "Pipes_ana"
           - example: "Flux_frc"
           - example: "Filament"
+          - example: "CDR_3d"
+          - example: "CDR_dp"
+          - example: "CDR_parameterized"
           - example: "bgc_real"
             bgc_mode: "BEC"
           - example: "bgc_real"
@@ -51,51 +54,30 @@ jobs:
       id: cache-input
       uses: actions/cache@v4
       with:
-        path: Examples/input_data
-        key: roms-input-${{ hashFiles('Examples/input_data/get_input_files.sh') }}
+        path: tests/input_data
+        key: roms-input-${{ hashFiles('tests/input_data/get_input_files.sh') }}
 
     - name: Get input data (if not cached)
       if: steps.cache-input.outputs.cache-hit != 'true'
       shell: bash
       run: |
-        cd ${ROMS_ROOT}/Examples/input_data/
+        micromamba run -n roms-ci bash -c '
+        cd ${ROMS_ROOT}/tests/input_data/
         ./get_input_files.sh
+        '
     - name: Update COMPILER arg in make commands
       shell: bash
       run: |
-        sed -i -e "s/make /make COMPILER=gnu USER_FFLAGS=-Werror /g" $ROMS_ROOT/Examples/code_check/do_test_roms.sh
-        sed -i -e "s/make /make COMPILER=gnu USER_FFLAGS=-Werror /g" $ROMS_ROOT/Examples/bgc_real/code_check/do_test_roms.sh
+        sed -i -e "s/make /make COMPILER=gnu USER_FFLAGS=-Werror /g" $ROMS_ROOT/tests/scripts/do_test_roms.sh
+        sed -i -e "s/make /make COMPILER=gnu USER_FFLAGS=-Werror /g" $ROMS_ROOT/tests/bgc_real/do_test_roms.sh
     - name: Run Test for ${{ matrix.example }}
       shell: bash
       run: |
         micromamba run -n roms-ci bash -c '
-        cd ${ROMS_ROOT}/Examples/${{ matrix.example}}/code_check/
+        cd ${ROMS_ROOT}/tests/${{ matrix.example}}/
         if [[ "${{ matrix.example }}" == "bgc_real" ]];then
         ./do_test_roms.sh github_gnu ${{ matrix.bgc_mode }}
         else
         ./do_test_roms.sh github_gnu
         fi
-        '
-    - name: Print compilation logs (in case of failure)
-      if: failure()
-      shell: bash
-      run: |
-        micromamba run -n roms-ci bash -c '
-        cd ci
-        ./print_compilation_logs.sh
-        '
-    - name: Print logs (in case of failure)
-      if: failure()
-      shell: bash
-      run: |
-        micromamba run -n roms-ci bash -c '
-        echo "--------------------------------------------------------------------------------"
-        echo "This step will print the test_old.log files from each case run by"
-        echo "Examples/code_check/do_test_all.sh"
-        echo "If the tests failed but you are confident in your changes,"
-        echo "overwrite the benchmark.result_github files for each case with"
-        echo "the contents of these log files"
-        echo "--------------------------------------------------------------------------------"
-        cd ci
-        ./print_output_logs.sh
         '

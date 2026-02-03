@@ -3,7 +3,7 @@
 ! Compute and add in vertical advection terms:
 
 # define SPLINE_UV
-c--# define NEUMANN_UV
+!#define NEUMANN_UV
 
 # ifdef SPLINE_UV
         do i=istrU,iend
@@ -77,16 +77,16 @@ c--# define NEUMANN_UV
      &                       -0.0625*(We(i+1,j,1)+We(i-2,j,1)))
           FC(i,0)=0.
         enddo
-c*      do k=1,N-1
-c*        do i=istrU,iend
-c*          FC(i,k)=0.25*(u(i,j,k,nrhs)+u(i,j,k+1,nrhs))
-c*     &                        *(We(i,j,k)+We(i-1,j,k))
-c*        enddo
-c*      enddo
-c*      do i=istrU,iend
-c*        FC(i,0)=0.
-c*        FC(i,N)=0.
-c*      enddo
+!*      do k=1,N-1
+!*        do i=istrU,iend
+!*          FC(i,k)=0.25*(u(i,j,k,nrhs)+u(i,j,k+1,nrhs))
+!*     &                        *(We(i,j,k)+We(i-1,j,k))
+!*        enddo
+!*      enddo
+!*      do i=istrU,iend
+!*        FC(i,0)=0.
+!*        FC(i,N)=0.
+!*      enddo
         do k=1,N
           do i=istrU,iend
             ru(i,j,k)=ru(i,j,k)-FC(i,k)+FC(i,k-1)
@@ -168,16 +168,16 @@ c*      enddo
      &                        -0.0625*(We(i,j+1,1)+We(i,j-2,1)))
             FC(i,0)=0.
           enddo
-c*        do k=1,N-1
-c*          do i=istr,iend
-c*            FC(i,k)=0.25*(v(i,j,k,nrhs)+v(i,j,k+1,nrhs))
-c*     &                          *(We(i,j,k)+We(i,j-1,k))
-c*          enddo
-c*        enddo
-c*        do i=istr,iend
-c*          FC(i,0)=0.
-c*          FC(i,N)=0.
-c*        enddo
+!*        do k=1,N-1
+!*          do i=istr,iend
+!*            FC(i,k)=0.25*(v(i,j,k,nrhs)+v(i,j,k+1,nrhs))
+!*     &                          *(We(i,j,k)+We(i,j-1,k))
+!*          enddo
+!*        enddo
+!*        do i=istr,iend
+!*          FC(i,0)=0.
+!*          FC(i,N)=0.
+!*        enddo
           do k=1,N
             do i=istr,iend
               rv(i,j,k)=rv(i,j,k)-FC(i,k)+FC(i,k-1)

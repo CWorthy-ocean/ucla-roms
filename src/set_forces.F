@@ -84,16 +84,6 @@ c***              no code here
 # endif
 #endif
 
-!--> Climatological data
-
-#if defined M2NUDGING && !defined M2_FRC_BRY
-# ifdef ANA_SSH
-      call ana_ssh_tile(istr,iend,jstr,jend)
-# else
-      call set_ssh_tile(istr,iend,jstr,jend, ierr)
-# endif
-#endif
-
                                         !--> Surface fluxes
 
 #ifdef ANA_SMFLUX
@@ -185,7 +175,6 @@ c***              no code here
       call sg_bbl96 ILLEGAL
 #endif
 
-c>>>      if (ierr /= 0) may_day_flag=2
 #ifdef ANA_PSOURCE
       if (ZEROTH_TILE) call ana_psource
 #endif

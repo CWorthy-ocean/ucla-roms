@@ -22,7 +22,7 @@
      &     zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,
      &     w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
       use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive
-      use error_handling, only : handle_configuration_error, handle_netcdf_error
+      use error_handling_mod, only: error_log
 #ifdef DIAGNOSTICS
       use diagnostics, only: wrt_rst_diag_slow
 #endif
@@ -126,7 +126,7 @@
       subroutine init_avg_arrays  ![
       implicit none
       character(len=15) :: sr_name = "init_avg_arrays"
-      character(len=200) :: error_info
+      character(len=1024) :: error_info
 
       if (wrt_file_his .and. mod(output_period_his, dt) /= 0) then
          write(error_info, *)
@@ -134,7 +134,7 @@
      &        "output_period_his (",
      &        output_period_his, ")"
 
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
       endif
@@ -144,11 +144,11 @@
      &        "dt (", dt, ") is not a factor of ",
      &        "output_period_avg (",
      &        output_period_avg, ")"
-         call handle_configuration_error(
+         call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
       endif
-
+      call error_log%abort_check()
 
       if (wrt_file_avg) then
         if (wrt_avg_Z)  then
@@ -1153,18 +1153,15 @@
       start(2)=record ; count(2)=1
 
       ierr=nf90_inq_varid(ncid, 'time_step', var_id_tmp)
-      if (ierr/=0) then
-         call handle_netcdf_error(netcdf_status=ierr,
-     &        context=module_name//"/"//sr_name,
-     &        info="variable: time_step")
-      end if
+      call error_log%check_netcdf_status(netcdf_status=ierr,
+     &     context=module_name//"/"//sr_name,
+     &     info="variable: time_step")
 
       ierr=nf90_put_var(ncid, var_id_tmp, ibuff, start, count) ! & record time step info
-      if (ierr/=0) then
-         call handle_netcdf_error(netcdf_status=ierr,
-     &        context=module_name//"/"//sr_name,
-     &        info="variable: time_step")
-      end if
+      call error_log%check_netcdf_status(netcdf_status=ierr,
+     &     context=module_name//"/"//sr_name,
+     &     info="variable: time_step")
+      call error_log%abort_check()
       ! can't use ncwrite() as ibuff is an integer array not real
 
       end subroutine write_time_step  !]

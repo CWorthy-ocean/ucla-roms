@@ -44,7 +44,7 @@ if src_dir != src_dir2:
 for src_file in files_in_src_dir:
 #for src_file in ['diagnostics.F',]:
   file_name, file_ext = os.path.splitext(src_file)
-  if file_ext in ['.F','.opt']:
+  if file_ext in ['.F90','.F','.opt']:
     try:
       fin = open(os.path.join(src_dir, src_file),"r")
     except:
@@ -61,7 +61,7 @@ for src_file in files_in_src_dir:
         #     so we need to strip away the , to get the module name
         try:
           file_used = line_array[1].split(',')[0]
-          if file_used+'.F' in files_in_src_dir:
+          if (file_used+'.F' in files_in_src_dir) or (file_used+'.F90' in files_in_src_dir):
             # (4) if file hasn't previously been used, add it to list
             if file_used not in depends:
               depends.append(file_used)

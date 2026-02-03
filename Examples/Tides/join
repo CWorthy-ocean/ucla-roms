@@ -1,6 +1,0 @@
-#!/bin/csh
-
-ncjoin --delete river_ana_his*.?.nc
-ncjoin --delete grid.?.nc
-ncview river_ana_his.*.nc
-

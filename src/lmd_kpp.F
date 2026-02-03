@@ -91,7 +91,6 @@
      &         ssgm, z_bl, cff,cff1, cff_up,cff_dn
 
       real Kv0, Kt0, Ks0, wmb,wsb, sgmb,amp
-
       !! When smoothing hbl, we try to not
       !! smooth over the mask and the domain
       !! boundaries
@@ -670,7 +669,7 @@ c--         Vtsq=Vtc*ws*sqrt(max(0., 0.5*(bvf(i,j,k)+bvf(i,j,k-1)) ))
       end
 
 
-      subroutine check_kpp_switches (ierr)
+      subroutine check_kpp_switches
 
 ! This routine is to keep track of the status of CPP-switches defined
 ! locally in this file above. It must be placed here rather than stored
@@ -679,35 +678,55 @@ c--         Vtsq=Vtc*ws*sqrt(max(0., 0.5*(bvf(i,j,k)+bvf(i,j,k-1)) ))
 ! global attribute "CPPS" in output netCDF files.
       use strings, only: cpps, max_opt_size
       use param, only: mynode
+      use error_handling_mod, only: error_log
 
       implicit none
-      integer ierr, is,ie, lenstr
+      integer is,ie, lenstr
+      character(len=19) :: sr_name = "check_kpp_switches"
+      character(len=1024) :: error_info = ""
 
       ie=lenstr(cpps)
       is=ie+2 ; ie=is+10
-      if (ie > max_opt_size) goto 99
+
+      write(error_info,*)
+     &  'Insufficient length of string "cpps" in file "strings".',
+     &        'Increase parameter "max_opt_size" it and recompile.'
+
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
       cpps(is:ie)='<lmd_kpp.F>'
 # ifdef INT_AT_RHO_POINTS
       is=ie+2 ; ie=is+16
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
       cpps(is:ie)='INT_AT_RHO_POINTS'
 # endif
 # ifdef SMOOTH_HBL
       is=ie+2 ; ie=is+9
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
       cpps(is:ie)='SMOOTH_HBL'
 # endif
 # ifdef MERGE_OVERLAP
       is=ie+2 ; ie=is+13
-      if (ie > max_opt_size) goto 99
+      if (ie > max_opt_size) then
+         call error_log%raise_global(
+     &        info=error_info,
+     &        context=sr_name)
+      end if
       cpps(is:ie)='MERGE_OVERLAP'
 # endif
-      return
-  99  mpi_master_only write(*,'(/1x,2A/12x,A/)')      '### ERROR: ',
-     &  'Insufficient length of string "cpps" in file "strings".',
-     &        'Increase parameter "max_opt_size" it and recompile.'
-      ierr=ierr+1
-      end
+      call error_log%abort_check()
+      end subroutine check_kpp_switches
 #else
       subroutine lmd_kpp_empty
       end

@@ -22,7 +22,7 @@
      &     obc_east, obc_north, obc_south, obc_west,
      &     east_exchng, north_exchng, south_exchng, west_exchng,
      &     mynode, np_eta, np_xi
-      use error_handling, only: handle_netcdf_error
+      use error_handling_mod, only: error_log
 
       implicit none
       private
@@ -140,7 +140,7 @@
       subroutine set_pflx ![
       ! Read parent grid baroclinic pressure fluxes from bry file
       ! and interpolate to the correct time
-
+      use error_handling_mod, only: error_log
       use grid, only: rmask
 
       !local
@@ -171,7 +171,7 @@
           if (abs(pflx_north(i))>100) pflx_north(i) = 0.
         enddo
       endif
-
+      call error_log%abort_check()
       end subroutine set_pflx !]
 ! ----------------------------------------------------------------------
       subroutine comp_cflx ![
@@ -300,11 +300,11 @@
 
       ierr=nf90_open(fname, nf90_write, ncid)
       if (ierr/=nf90_noerr) then
-         call handle_netcdf_error(netcdf_status=ierr,
+         call error_log%check_netcdf_status(netcdf_status=ierr,
      &        info="error opening "//fname,
      &        context=module_name//"/"//sr_name)
       end if
-
+      call error_log%abort_check()
       call ncwrite(ncid,'ocean_time',(/time/),(/record/))
 
       ! fluxes and ub coefficients are defined as nx, ny sized arrays
@@ -331,8 +331,7 @@
          write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')      ! confirm work completed
      &    'orlanski_tune :: wrote output, tdays =', tdays,
      &    'step =', iic-1, 'rec =', record
-        endif
-
+      endif
 
       end subroutine write_sp_tune !]
 ! ----------------------------------------------------------------------

@@ -13,6 +13,7 @@
      &     frctype, store_string_att
       use dimensions, only: i0, i1, j0, j1, nz
       use hidden_mpi_vars, only: inode
+      use error_handling_mod, only: error_log
       implicit none
 
       ! Set module to private and make vars explicitly public
@@ -333,7 +334,7 @@
 #   endif
 #  endif
       endif
-
+      call error_log%abort_check()
       end subroutine set_bry_all  !]
 
 !----------------------------------------------------------------------

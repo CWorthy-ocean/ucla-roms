@@ -261,7 +261,7 @@
      &     nf90_global, nf90_nowrite, nf90_open,
      &     nf90_inq_varid, nf90_get_var, nf90_get_att
       use dimensions, only: i0, i1, j0, j1
-      use error_handling, only: handle_netcdf_error, handle_configuration_error
+      use error_handling_mod, only: error_log
       use mpi_exchanges, only: exchange_xxx
       use nc_read_write, only: ncread
       implicit none
@@ -284,7 +284,7 @@
 
         ierr=nf90_open(frcfile(var_file_indx), nf90_nowrite, ncid)
         if(ierr/=0) then
-           call handle_netcdf_error(netcdf_status=ierr,
+           call error_log%check_netcdf_status(netcdf_status=ierr,
      &          context=module_name//"/"//sr_name,
      &          info="error opening tidal forcing file")
         end if
@@ -297,11 +297,11 @@
       enddo
 
       if (found_rec==0) then
-         call handle_configuration_error(
+         call error_log%raise_from_rank(
      &        context=module_name//"/"//sr_name,
      &        info="tide input data not found")
       endif
-
+      call error_log%abort_check()
       start = 1                                                      ! netcdf start indices
 
       do itide = 1,ntides
@@ -309,10 +309,11 @@
         ierr=nf90_inq_varid(ncid, 'omega', var_id)
         ierr=nf90_get_var(ncid,var_id,ftide(itide),(/itide/))
         if(ierr/=0) then
-           call handle_netcdf_error(netcdf_status=ierr,
+           call error_log%check_netcdf_status(netcdf_status=ierr,
      &          info="unable to get var 'omega' from tidal file",
      &          context=module_name//"/"//sr_name)
         end if
+        call error_log%abort_check()
         start(3) = itide
 
         if (bry_tides) then
@@ -334,8 +335,7 @@
           call ncread(ncid,'pot_Im',ptide_i(i0:i1,j0:j1,itide),start)
 !         call exchange_xxx(ptide_r(:,:,itide),ptide_i(:,:,itide))
         endif
-
-      end do ! <-- itide=1,ntides
+      end do                    ! <-- itide=1,ntides
 
       ! add tide info to forcing attributes - embedded in here due to tides init
       if (mynode == 0) then
