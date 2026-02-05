@@ -13,7 +13,7 @@
 
 #include "bulk_frc.opt"
 
-      real,allocatable,public,dimension(:,:) ::  tair             ! air temp
+      real,allocatable,public,dimension(:,:) ::  tair             ! air temp, used in step3d_t to add the heat of rain water
       real,allocatable,public,dimension(:,:) ::     Q             ! SPECIFIC humidity (kg/kg) (not relative), qair in old code
       real,allocatable,public,dimension(:,:) :: prate             ! prate (precipitation rate) - 'rain' variable in old code
       real,allocatable,public,dimension(:,:) :: evap              ! evap (evaporation rate)
@@ -35,13 +35,13 @@
 ! ----------------------------------------------------------------------
       subroutine init_arrays_bulk_frc  ![
       implicit none
-      allocate(  tair(GLOBAL_2D_ARRAY) )
-      allocate(     Q(GLOBAL_2D_ARRAY) )
-      allocate( prate(GLOBAL_2D_ARRAY) )
-      allocate( evap(GLOBAL_2D_ARRAY) )
-      allocate( lwrad(GLOBAL_2D_ARRAY) )
+      allocate(  tair(GLOBAL_2D_ARRAY) ); tair = 0
+      allocate(     Q(GLOBAL_2D_ARRAY) ); Q = 0
+      allocate( prate(GLOBAL_2D_ARRAY) ); prate = 0
+      allocate( evap(GLOBAL_2D_ARRAY) ); evap = 0
+      allocate( lwrad(GLOBAL_2D_ARRAY) ); lwrad = 0
 
-      allocate( wspd_used(GLOBAL_2D_ARRAY) )
+      allocate( wspd_used(GLOBAL_2D_ARRAY) ); wspd_used = 0
 
 !     vdata needs to be of global_2d_array size
       allocate( nc_uwnd%vdata(GLOBAL_2D_ARRAY,2) )
@@ -185,14 +185,14 @@
       ! ----------------
       use surf_flux, only:
      &     srflx, vwnd, uwnd, stflx, sustr_r, svstr_r,
-     &     sustr, svstr, apply_surf_field_corr
+     &     sustr, svstr, apply_surf_field_corr, swflx
       use tracers, only: t
       use grid, only: rmask, umask, vmask
       use mixing, only:
      &     east_exchng, ieast, isalt, itemp, iwest,
      &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
       use ocean_vars, only: u, v
-      use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar
+      use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar, cmday2ms
 
       implicit none
 
@@ -735,8 +735,11 @@
 !  Total surface salt flux
 !
           evap(i,j)=-cp*hflat/Hlv
+
           ! Divide prate by 100.*3600.*24. to convert from [cm/day] to [m/s]
-          stflx(i,j,isalt)=(evap(i,j)- ( prate(i,j)/(100.*3600.*24.) ) )*t(i,j,N,nrhs,isalt)
+          swflx(i,j) = prate(i,j)*cmday2ms-evap(i,j)
+          ! This is the old way of adding salt flux
+!          stflx(i,j,isalt)=(evap(i,j)- ( prate(i,j)/(100.*3600.*24.) ) )*t(i,j,N,nrhs,isalt)
 #endif
 # ifdef MASKING
           stflx(i,j,itemp)=stflx(i,j,itemp)*rmask(i,j)

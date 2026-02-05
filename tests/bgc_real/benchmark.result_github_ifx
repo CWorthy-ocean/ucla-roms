@@ -20,6 +20,7 @@
        UPSTREAM_UV             SPLINE_UV
  <step3d_uv2.F>
        DELTA=0.28              EPSIL=0.36
+./print_output_logs.sh: line 31: bgc_real: command not found
  <step3d_t_ISO.F>
        UPSTREAM_TS             SPLINE_TS
  <set_depth.F>
@@ -314,7 +315,6 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
      27  -4.6000E-01  -1.8761254E-01    -1.8761254E+19  -8.0951567E+00   9.3806268E+18   1.8761254E+19
      26  -4.8000E-01  -2.1169704E-01    -2.1169704E+19  -8.6462129E+00   1.0584852E+19   2.1169704E+19
      25  -5.0000E-01  -2.3801922E-01    -2.3801922E+19  -9.2252402E+00   1.1900961E+19   2.3801922E+19
-./print_output_logs.sh: line 31: bgc_real: command not found
      24  -5.2000E-01  -2.6666485E-01    -2.6666485E+19  -9.8333106E+00   1.3333242E+19   2.6666485E+19
      23  -5.4000E-01  -2.9769164E-01    -2.9769164E+19  -1.0471145E+01   1.4884582E+19   2.9769164E+19
      22  -5.6000E-01  -3.3112002E-01    -3.3112002E+19  -1.1139000E+01   1.6556001E+19   3.3112002E+19
@@ -396,27 +396,27 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
  main :: initialization complete, started time-stepping.
 
 
-  STEP KINETIC_ENRG     BAROTR_KE        MAX_ADV_CFL     MAX_VERT_CFL
- 0  3.6229628195672916E-03 1.4392038342093960E-03 6.3833781982263776E-02 3.8255911220012553E-02
+ STEP KINETIC_ENRG     BAROTR_KE        MAX_ADV_CFL     MAX_VERT_CFL
+ 0  3.6229628195672916E-03 1.4392038342093960E-03 6.3834801906551136E-02 3.8256931144299920E-02
          set_frc :: zeta_west        input time (days) =   3654.00     rec =   2
+         set_frc :: zeta_west        input time (days) =   3655.00     rec =   3
          set_frc :: zeta_east        input time (days) =   3654.00     rec =   2
          set_frc :: zeta_east        input time (days) =   3655.00     rec =   3
-         set_frc :: zeta_west        input time (days) =   3655.00     rec =   3
          set_frc :: zeta_north       input time (days) =   3654.00     rec =   2
          set_frc :: zeta_north       input time (days) =   3655.00     rec =   3
          set_frc :: zeta_south       input time (days) =   3654.00     rec =   2
          set_frc :: zeta_south       input time (days) =   3655.00     rec =   3
        tides :: read all tides
        ecosys_bec2_td:: computing bgc
- 1  3.6230165764642845E-03 1.4392130225301038E-03 5.8786445050160480E-02 4.3313436696380284E-02
+ 1  3.6230165778479949E-03 1.4392130225812207E-03 5.8787661818496532E-02 4.3314678969435728E-02
        ecosys_bec2_td:: computing bgc
- 2  3.5817630447720493E-03 1.3982763514559862E-03 5.6248002498949526E-02 5.0384208675384110E-02
+ 2  3.5817637139088239E-03 1.3982763660205560E-03 5.6249866765230784E-02 5.0386122714690930E-02
        ecosys_bec2_td:: computing bgc
- 3  3.5246779118408354E-03 1.3412033441358880E-03 6.0363773489667129E-02 5.1832771987925970E-02
+ 3  3.5246795966696206E-03 1.3412033738205613E-03 6.0366568966473230E-02 5.1835641479626306E-02
        ecosys_bec2_td:: computing bgc
- 4  3.4755095962035829E-03 1.2918165298361200E-03 6.2988518394322721E-02 5.2819449031078616E-02
+ 4  3.4755128681009956E-03 1.2918166196224151E-03 6.2992522742915377E-02 5.2823545194465991E-02
        ecosys_bec2_td:: computing bgc
- 5  3.4397035904285716E-03 1.2555170187978349E-03 6.5303883452899864E-02 5.4973555686782125E-02
+ 5  3.4397092052149236E-03 1.2555171853521408E-03 6.5309626880531990E-02 5.4979399622185024E-02
        ocean_vars :: wrote history, tdays =   3654.0012  step =      5 rec =   2
        wrt_bgc_tracers :: history , trc =  PO4
        wrt_bgc_tracers :: history , trc =  NO3
@@ -424,23 +424,23 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
        wrt_bgc_tracers :: history , trc =  DIC
        bgc :: wrote history, tdays =   3654.0012  step =      4 rec =   2
        ecosys_bec2_td:: computing bgc
- 6  3.4169376541025123E-03 1.2320458675590677E-03 6.7201664118718363E-02 5.6969813245437595E-02
+ 6  3.4169458265513823E-03 1.2320460911766601E-03 6.7208910212243941E-02 5.6977184941232412E-02
        ecosys_bec2_td:: computing bgc
- 7  3.4015350331162162E-03 1.2158073672640043E-03 7.0599451883313458E-02 5.8685761449694583E-02
+ 7  3.4015462522997415E-03 1.2158076103216454E-03 7.0608293867515715E-02 5.8694765622247541E-02
        ecosys_bec2_td:: computing bgc
- 8  3.3924390268684516E-03 1.2058019444794699E-03 7.3829293387386044E-02 6.0657239353231557E-02
+ 8  3.3924538291388254E-03 1.2058021553132236E-03 7.3840384949926757E-02 6.0668555858555753E-02
        ecosys_bec2_td:: computing bgc
- 9  3.3884364781522694E-03 1.2008132913140831E-03 7.8639432086868355E-02 5.0406010835449259E-02
+ 9  3.3884554971978192E-03 1.2008134173221436E-03 7.8654726003176786E-02 5.0421201110969649E-02
        ecosys_bec2_td:: computing bgc
-10  3.3886049800886148E-03 1.1999646237532018E-03 8.5598031883502360E-02 5.5730054153631102E-02
+10  3.3886276598144721E-03 1.1999646142837194E-03 8.5613847007961735E-02 5.5745722986676363E-02
        ocean_vars :: wrote history, tdays =   3654.0023  step =     10 rec =   3
        wrt_bgc_tracers :: history , trc =  PO4
-roms               0000000000413FA5  Unknown               Unknown         wrt_bgc_tracers :: history , trc =  NO3
+       wrt_bgc_tracers :: history , trc =  NO3
        wrt_bgc_tracers :: history , trc =  O2
        wrt_bgc_tracers :: history , trc =  DIC
        bgc :: wrote history, tdays =   3654.0023  step =      9 rec =   3
- Process    0  thread  0  cpu time =      369.15 sec
+ Process    0  thread  0  cpu time =       68.32 sec
 
  MAIN: DONE - Records written:
 
- MPI_run_time =   548.995890618000
+ MPI_run_time =   103.481573010000
