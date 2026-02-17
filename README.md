@@ -1,9 +1,15 @@
 # The Regional Ocean Modeling System (ROMS)
 ## Overview
 
-ROMS is a free-surface, terrain following, primitive equation ocean model, developed by our collaborators at UCLA. UCLA-ROMS is highly optimized, supports state-of-the-art biogeochemical modelling, and is well-suited for nested regional modelling from ocean basins down to estuaries.
+Welcome to [C]Worthy's fork of UCLA ROMS. We maintain this fork in close collaboration with UCLA, prioritizing marine carbon dioxide removal (mCDR) applications and open-source software practices.
 
-This fork aims to expand support for marine carbon dioxide removal (mCDR) research while adhering to community driven open-source practices.
+<p align="center">
+  <img src="https://github.com/dafyddstephenson/ucla-roms/raw/update_readme/docs/surface_delta_Alkalinity_upscaling.gif" alt="Animation: A nested simulation of an ocean alkalinity perturbation">
+  <br>
+  <i>A demonstration of mCDR-focused features: 6 weeks of transport of an alkalinity perturbation in a nested simulation with ROMS-MARBL, including upscaling at the interface between the two domains </i>
+</p>
+
+ROMS is a free-surface, terrain following, primitive equation ocean model, developed by our collaborators at UCLA. UCLA-ROMS is highly optimized, supports state-of-the-art biogeochemical modelling, and is well-suited for nested regional modelling from ocean basins down to estuaries.
 
 ## Installing and running
 
