@@ -512,7 +512,7 @@
           nc_cdrflx_dp%time_interpolation = .true.
         else
           nc_cdrhz%time_interpolation = .false.
-          nc_cdrflx_dp%time_interpolation = .false. 
+          nc_cdrflx_dp%time_interpolation = .false.
         endif
 
       else if (forcing_3d) then
