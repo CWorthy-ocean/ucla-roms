@@ -13,7 +13,7 @@
      &     vname_marbl_ss_3d
       use bgc_shared_vars, only:
      &     t, bgc_diag_2d, mynode, lm, mm,
-     &     nr_bgc_diag_2d, vname_bgc_diag_2d, t_lname
+     &     nr_bgc_diag_2d, vname_bgc_diag_2d, t_lname, idx_bgc_diag_2d
       use dimensions, only: i0, i1, j0, j1, nx, ny, nz
       use roms_read_write, only:
      &     dn_tm, dn_xr, dn_yr, dn_zr, eta_rho,
@@ -43,7 +43,7 @@
       real :: avg_begin_time, avg_end_time
 
       integer :: navg = 0
-      integer :: iPH, iPH_alt, iFG, iFG_alt
+      integer :: iPH, iPH_alt, iFG, iFG_alt, iFG_idiag, iFG_alt_idiag
       real,allocatable,dimension(:,:,:) :: hALK_tmp
       real,allocatable,dimension(:,:,:) :: hDIC_tmp
       real,allocatable,dimension(:,:,:) :: hALK_alt_tmp
@@ -265,9 +265,11 @@
          itot=itot+1
          if (vname_bgc_diag_2d(1,idx)=='FG_CO2') then
            iFG = itot
+           iFG_idiag = idx_bgc_diag_2d(iFG)
          endif
          if (vname_bgc_diag_2d(1,idx)=='FG_ALT_CO2') then
            iFG_alt = itot
+           iFG_alt_idiag = idx_bgc_diag_2d(iFG_alt)
          endif
       enddo
 
@@ -411,9 +413,9 @@
 
       pH_alt_avg(:,:,:) = pH_alt_avg(:,:,:)*(1-coef) + marbl_saved_state_3d(:,:,:,iPH_alt)*coef
 
-      FG_CO2_avg(:,:) = FG_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,iFG)*coef
+      FG_CO2_avg(:,:) = FG_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,iFG_idiag)*coef
 
-      FG_ALT_CO2_avg(:,:) = FG_ALT_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,iFG_alt)*coef
+      FG_ALT_CO2_avg(:,:) = FG_ALT_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,iFG_alt_idiag)*coef
 
       if (cdr_source) then
         ALK_source_avg(:,:,:) = ALK_source_avg(:,:,:)*(1-coef) + ALK_source(:,:,:)*coef
