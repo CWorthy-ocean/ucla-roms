@@ -510,6 +510,9 @@
         if (time_interpolation) then
           nc_cdrhz%time_interpolation = .true.
           nc_cdrflx_dp%time_interpolation = .true.
+        else
+          nc_cdrhz%time_interpolation = .false.
+          nc_cdrflx_dp%time_interpolation = .false. 
         endif
 
       else if (forcing_3d) then
@@ -521,6 +524,9 @@
         if (time_interpolation) then
           nc_cdrflx_3d_ALK%time_interpolation = .true.
           nc_cdrflx_3d_DIC%time_interpolation = .true.
+        else
+          nc_cdrflx_3d_ALK%time_interpolation = .false.
+          nc_cdrflx_3d_DIC%time_interpolation = .false.
         endif
 
       else
@@ -537,6 +543,9 @@
           if (time_interpolation) then
             nc_cdrvol%time_interpolation = .true.
             nc_cdrtrc%time_interpolation = .true.
+          else
+            nc_cdrvol%time_interpolation = .false.
+            nc_cdrtrc%time_interpolation = .false.
           endif
         else
           allocate(nc_cdrflx%vdata(ncdr,nt,2))
@@ -545,6 +554,8 @@
 
           if (time_interpolation) then
             nc_cdrflx%time_interpolation = .true.
+          else
+            nc_cdrflx%time_interpolation = .false.
           endif
         endif
       endif
