@@ -1,0 +1,7 @@
+      ! The calc_pflx module calculates the baroclinic pressure fluxes that can
+      ! optionally  be saved by the extract_data module when creating child boundaries.
+      !
+      !------------------------------
+
+      logical, parameter, public :: diag_pflx     = .false.   ! Baroclinic pressure fluxes
+      real,parameter :: timescale     = 1*3600*24 ! timescale for filtering pressure fluxes (in seconds)

@@ -55,7 +55,7 @@
       use param, only: isalt, nt, itemp, isw_corn, jsw_corn,
      &     nt_passive, mynode, lm, mm, N
       use scoord, only: theta_s, theta_b, hc
-      use diagnostics, only: diag_pflx, up, vp
+      use calc_pflx, only: diag_pflx, up, vp
       use basic_output, only: vn=>vname
 #ifdef SOLVE3D
      &     ,indxt, indxu, indxv, indxw
@@ -203,14 +203,6 @@
       ! For vertical velocity
       allocate( Wvl(GLOBAL_2D_ARRAY,nz+1))
       if (diag_pflx) then
-#ifndef DIAGNOSTICS
-
-         call error_log%raise_global(
-     &        context=module_name//"/"//sr_name,
-     &        info="Must define CPP key DIAGNOSTICS if `do_extract`" //
-     &        "=.true. and diag_pflux=.true")
-         call error_log%abort_check()
-#endif
         allocate( upe(GLOBAL_2D_ARRAY) ); upe = 0
         allocate( vpe(GLOBAL_2D_ARRAY) ); vpe = 0
       endif
@@ -405,7 +397,6 @@
            if (findstr(variables,'vp'  ) ) obj(iobj)%vp   = .True.
            if (findstr(variables,'bgc'    ) ) obj(iobj)%bgc     = .True.
 
-! DIAGNOSTICS needs to be activated and diag_pflx=.true.
            if (obj(iobj)%up.and. .not.diag_pflx) then
               call error_log%raise_global(
      &             context=module_name//"/"//sr_name,
