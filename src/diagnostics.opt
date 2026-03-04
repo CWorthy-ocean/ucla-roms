@@ -25,9 +25,6 @@
 
       logical, parameter, public :: diag_uv       = .false.   ! Momentum diagnostics
       logical, parameter, public :: diag_trc      = .false.   ! Selected tracers diagnostics
-      logical, parameter, public :: diag_pflx     = .false.   ! Baroclinic pressure fluxes
-
-      real,    parameter         :: timescale     = 1*3600*24 ! timescale for filtering (in seconds)
 
       integer, parameter         :: diag_prec     = nf90_double ! Precision of output variables (nf90_float/nf90_double)
 

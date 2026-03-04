@@ -94,7 +94,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       use frc_output, only: do_frc, init_frc
       use analytical, only: ana_vmix
 #ifdef DIAGNOSTICS
-      use diagnostics, only: diag_uv,diag_trc,diag_pflx, init_diagnostics
+      use diagnostics, only: diag_uv,diag_trc,init_diagnostics
 #endif
 #ifdef ANA_INITIAL
      &     , ana_init
@@ -115,6 +115,8 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
 #endif
       use precheck, only: do_precheck
       use error_handling_mod, only: error_log
+      use calc_pflx, only: init_pflx
+
       implicit none
 
       integer trd, tile, my_first, my_last, range
@@ -182,6 +184,7 @@ C$OMP BARRIER
 #ifdef SPONGE_TUNE
       if (ub_tune) call init_orlanski_tune
 #endif
+      call init_pflx
 
 c--#define CR
 CR      write(*,*) '-11' MYID
@@ -339,7 +342,7 @@ CR      write(*,*)  ' -2' MYID
 #endif
       use tides, only: bry_tides, pot_tides
 #ifdef DIAGNOSTICS
-      use diagnostics, only: diag_uv,diag_trc,diag_pflx, do_diagnostics
+      use diagnostics, only: diag_uv,diag_trc,do_diagnostics
 #endif
       implicit none
 
@@ -485,7 +488,7 @@ CR      write(*,*)  ' -2' MYID
       if (wrt_smflx.or.wrt_stflx) call wrt_sflux
 
 #ifdef DIAGNOSTICS
-      if (diag_uv.or.diag_trc.or.diag_pflx) call do_diagnostics
+      if (diag_uv.or.diag_trc) call do_diagnostics
 #endif
 
       if (do_random) call wrt_random
