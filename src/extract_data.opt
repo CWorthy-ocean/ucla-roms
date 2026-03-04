@@ -7,6 +7,7 @@
       !
       !------------------------------
       logical,parameter,public :: do_extract = .false.
+      real, public             :: extract_period = 1800.0   ! output period (seconds)
       character(len=60)        :: extract_file = 'sample_edata.nc'
       integer,parameter,public :: nrpf_extract = 48    ! number of records per output file
       integer,parameter        :: edat_prec = nf90_double  ! Precision of output variables (nf90_float/nf90_double)
