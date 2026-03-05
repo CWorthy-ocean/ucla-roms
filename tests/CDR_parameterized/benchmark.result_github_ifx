@@ -1501,4 +1501,4 @@ we successfully read and closed       marbl_tracer_output_list
 10  3.4444972153377714E-03 1.2485495242210830E-03 1.8723993039105796E-01 1.4619072092691388E-01
        ocean_vars :: wrote history, tdays =   3654.0046  step =     10 rec =   2
  Process    0  thread  0  cpu time =       78.53 sec
- MPI_run_time =   126.110539694000     
+ MPI_run_time =   126.110539694000
