@@ -21,7 +21,7 @@
 #ifdef BULK_FRC
       use bulk_frc, only: tair, q, lwrad, evap, prate
 #endif
-      use surf_flux, only: stflx, sustr, svstr, srflx, uwnd, vwnd
+      use surf_flux, only: stflx, sustr, svstr, srflx, uwnd, vwnd, swflx
 
       implicit none
       private
@@ -53,13 +53,12 @@
       real,allocatable,dimension(:,:) :: vflux_ALK_ALT_CO2_avg
       real,allocatable,dimension(:,:) :: vflux_DIC_ALT_CO2_avg
 #endif /* MARBL */
-#else
-      real,allocatable,dimension(:,:) :: swflx_avg
 #endif
       real,allocatable,dimension(:,:) :: sustr_avg
       real,allocatable,dimension(:,:) :: svstr_avg
       real,allocatable,dimension(:,:) :: shflx_avg
       real,allocatable,dimension(:,:) :: srflx_avg
+      real,allocatable,dimension(:,:) :: swflx_avg
 
       integer,parameter :: prec = nf90_double  ! Precision of output variables (nf90_float/nf90_double)
 
@@ -117,9 +116,6 @@
         allocate(vflux_DIC_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
         vflux_DIC_ALT_CO2_avg(:,:)=0
 #endif /* MARBL */
-#else
-        allocate(swflx_avg(GLOBAL_2D_ARRAY) )
-        swflx_avg(:,:)=0
 #endif
         allocate(sustr_avg(GLOBAL_2D_ARRAY) )
         sustr_avg(:,:)=0
@@ -129,6 +125,8 @@
         shflx_avg(:,:)=0
         allocate(srflx_avg(GLOBAL_2D_ARRAY) )
         srflx_avg(:,:)=0
+        allocate(swflx_avg(GLOBAL_2D_ARRAY) )
+        swflx_avg(:,:)=0
       endif ! do_avg
       endif ! done
 
@@ -156,6 +154,7 @@
       uwnd_avg(:,:)  = uwnd_avg(:,:)*(1-coef)  + uwnd(:,:)*coef
       vwnd_avg(:,:)  = vwnd_avg(:,:)*(1-coef)  + vwnd(:,:)*coef
       ssflx_avg(:,:) = ssflx_avg(:,:)*(1-coef) + stflx(:,:,isalt)*coef
+      swflx_avg(:,:) = swflx_avg(:,:)*(1-coef) + swflx(:,:)*coef
 #ifdef TAU_CORRECTION
       taux_avg(:,:)  = taux_avg(:,:)*(1-coef)  + taux(:,:)*coef
       tauy_avg(:,:)  = tauy_avg(:,:)*(1-coef)  + tauy(:,:)*coef
@@ -237,9 +236,6 @@
       call ncwrite(ncid,'vflux_DIC_ALT_CO2',vflux_DIC_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
       vflux_DIC_ALT_CO2_avg(:,:) = 0
 #endif /* MARBL */
-#else
-      call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),(/1,1,record/))
-      swflx_avg(:,:) = 0
 #endif
       call ncwrite(ncid,'sustr',sustr_avg(1:i1,j0:j1),(/1,1,record/))
       sustr_avg(:,:) = 0
@@ -249,6 +245,8 @@
       shflx_avg(:,:) = 0
       call ncwrite(ncid,'srflx',srflx_avg(i0:i1,j0:j1),(/1,1,record/))
       srflx_avg(:,:) = 0
+      call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),(/1,1,record/))
+      swflx_avg(:,:) = 0
       else
 #ifdef BULK_FRC
       call ncwrite(ncid,'tair',tair(i0:i1,j0:j1),(/1,1,record/))
@@ -259,6 +257,7 @@
       call ncwrite(ncid,'uwnd',uwnd(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'vwnd',vwnd(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/))
+      call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),(/1,1,record/))
 #ifdef TAU_CORRECTION
       call ncwrite(ncid,'taux',taux(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'tauy',tauy(i0:i1,j0:j1),(/1,1,record/))
@@ -337,7 +336,7 @@
       ierr = nf90_put_att(ncid,varid,'units','kg/kg')
 
       ! Input comes in units of:         cm day-1
-      ! Output is written in units of:   cm day-1
+      ! Output is written in units of:   m s-1
       varid = nccreate(ncid,'prate',(/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/),prec)
       ierr=nf90_put_att(ncid, varid, 'long_name',
      &           'precipitation rate')
@@ -405,6 +404,13 @@
       ierr=nf90_put_att(ncid, varid, 'long_name',
      &           'surface salt flux')
       ierr = nf90_put_att(ncid,varid,'units','psi m s-1')
+
+      ! Input comes in units of:         N/A (calculated)
+      ! Output is written in units of:   m s-1
+      varid = nccreate(ncid,'swflx',(/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/),prec)
+      ierr=nf90_put_att(ncid, varid, 'long_name',
+     &           'surface freshwater flux')
+      ierr = nf90_put_att(ncid,varid,'units','m s-1')
 
       ! Input comes in units of:         N/A (calculated)
       ! Output is written in units of:   m2 s-2

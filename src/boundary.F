@@ -11,8 +11,7 @@
       use roms_read_write, only:
      &     ncforce, bc_options, set_frc_data,
      &     frctype, store_string_att
-      use dimensions, only: i0, i1, j0, j1, nz, npx, npy,
-     &     inode, jnode
+      use dimensions, only: i0, i1, j0, j1, nz, inode, jnode, npx, npy
       use error_handling_mod, only: error_log
 
       implicit none

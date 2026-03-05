@@ -37,7 +37,7 @@
 
       use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
       use dimensions, only: nx, ny, nz
-      use grid, only: pn, pm
+      use grid, only: pn, pm, dn_r, dm_r
       use pipe_frc, only:
      &     pidx, pipe_source, pipe_idx, pipe_prf,
      &     pipe_flx
@@ -50,6 +50,7 @@
       use ocean_vars, only: wi, flxv, flxu, z_w, we, hz
       use scalars, only: n, dt, forw_start, iic, nrhs
       use dimensions, only: inode, jnode
+      use surf_flux, only: swflx
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k, icdr, cidx
@@ -108,6 +109,10 @@ c**     dtau=(1.-1./6.)*dt
             CX(i,k)=max(FlxU(i+1,j,k),0.)-min(FlxU(i,j,k),0.)
      &             +max(FlxV(i,j+1,k),0.)-min(FlxV(i,j,k),0.)
           enddo
+        enddo
+        ! rain water
+        do i=1,nx
+          Wi(i,j,nz) = Wi(i,j,nz) + swflx(i,j)*dm_r(i,j)*dn_r(i,j)
         enddo
         do i=istr,iend
           wrk(i)=Wi(i,j,N)/(z_w(i,j,N)-z_w(i,j,0))

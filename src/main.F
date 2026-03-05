@@ -121,6 +121,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
 #ifdef SPONGE_TUNE
       use sponge_tune, only: init_orlanski_tune
 #endif
+      use precheck, only: do_precheck
       use error_handling_mod, only: error_log
       implicit none
 
@@ -173,6 +174,8 @@ C$OMP MASTER                           ! Setup vertical stretching
 C$OMP END MASTER                       ! system
 C$OMP BARRIER
 #endif
+
+      call do_precheck
 
       call get_grid                  ! can be analytic or from netcdf
 

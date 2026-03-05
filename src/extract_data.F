@@ -112,7 +112,7 @@
 
         !! Initializing record at nrpf will trigger the making of a file
         !! at the first time step
-        integer                        :: record=nrpf   ! record number in file
+        integer                        :: record=nrpf_extract   ! record number in file
 
         real,   dimension(:,:),pointer     :: Hz_par    ! interpolated thickness for parent
         real,   dimension(:,:),pointer     :: Hz_par_u  ! interpolated thickness for parent at u-interface
@@ -605,7 +605,7 @@
 
       if (otime>=extract_period) then
 
-      if (obj(1)%record==nrpf) then
+      if (obj(1)%record==nrpf_extract) then
           call create_edata_file(fname)
           obj(:)%record = 0
       endif

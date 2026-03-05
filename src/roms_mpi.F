@@ -35,6 +35,7 @@
       private
 
       character(len=8) :: module_name = "roms_mpi"
+      character(len=1024) :: error_info = ''
       integer,public :: p_W, p_SW, p_S, p_SE, p_E, p_NE, p_N,p_NW
 
       real,dimension(:),allocatable :: sendW,sendE
@@ -49,7 +50,6 @@
       integer :: szW,szE,szN,szS,szNE,szNW,szSE,szSW
       logical :: init_buffer_done = .false.
       logical,public :: new_part
-      character(len=1024) :: error_info = ''
 
       integer :: hl         ! Exchange halo can be less than the buffer size
       logical :: do_corners ! Argument to modify the some of the exchanges
@@ -88,7 +88,6 @@
       else
         ! Check in gridfile to check if mpi masking is present
         ierr=nf90_open(grdname,nf90_nowrite,ncid)
-!        if (ierr/=nf90_noerr) call handle_ierr(ierr)
         call error_log%check_netcdf_status(
      &         netcdf_status=ierr,
      &         context=module_name//"/"//sr_name,

@@ -125,8 +125,9 @@ C$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
 
       real, parameter :: pi=3.14159265358979323, Eradius=6371315.,
      &              deg2rad=pi/180., rad2deg=180./pi, day2sec=86400.,
-     &                   sec2day=1./86400., Cp=3985., vonKar=0.41
-     &                 , g=9.81 ! m/s^2
+     &                   sec2day=1./86400., Cp=3985., vonKar=0.41,
+     &                   cmday2ms = 0.01/day2sec,
+     &                   g=9.81 ! m/s^2
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       real nmol_cm2_to_mmol_m2
       parameter (nmol_cm2_to_mmol_m2 = 0.01)

@@ -869,6 +869,7 @@
 #endif
 
 #ifndef ANA_GRID
+
       subroutine kwread_grid(unit)
       use dimensions, only: grdname
       implicit none
