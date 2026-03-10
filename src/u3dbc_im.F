@@ -215,15 +215,7 @@
 #  else
         do k=1,N                                ! Eastern edge closed
           do j=jstr,jend                        ! ======= ==== ======
-#   ifdef WEC
-c            u(iend+1,j,k,nnew)=-ust(iend+1,j,k) ! no Lagrangian flux
-            u(iend+1,j,k,nnew)=u(iend,j,k,nnew)  ! gradient (default)
-#    ifdef MASKING
-     &                         *umask(iend+1,j)
-#    endif
-#   else
             u(iend+1,j,k,nnew)=0.               !  (no-flux: default)
-#   endif
           enddo
         enddo
 #  endif
@@ -423,21 +415,6 @@ c            u(iend+1,j,k,nnew)=-ust(iend+1,j,k) ! no Lagrangian flux
      &                                 +u(iend+1,jend,k,nnew))
         enddo
       endif
-# endif
-
-! Daniel add
-!====================================================================
-!       NO LAGRANGIAN FLUX CONDITION AT LAND-SEA INTERFACES
-!====================================================================
-# if defined WEC && defined MASKING
-      do i=istr,iendR
-        do j=jstrR,jendR
-          do k=1,N
-            u(i,j,k,nnew)=u(i,j,k,nnew)*umask(i,j)
-     &                   +ust(i,j,k)*(umask(i,j)-1.0)
-          enddo
-        enddo
-      enddo
 # endif
 
       end

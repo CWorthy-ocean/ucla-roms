@@ -39,6 +39,10 @@ check_srcs.F
 # Netcdf output files
 *.nc
 
+# Other potentially large files
+*.gif
+*.zip
+
 # Work directory
 Work/*
 

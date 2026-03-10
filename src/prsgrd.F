@@ -31,9 +31,6 @@
 # endif
      &                                      dR,dZ, FC,dZx,rx,dRx)
 
-#ifdef WEC
-      use wec_frc, only: cff1 => cff_ext, cff2 => cff_ext2
-#endif
       use grid, only: f, pm, pn, umask, dn_u, vmask, dm_v
       use tides, only: pot_tides, ptide
       use param, only:
@@ -523,58 +520,6 @@ c    &            -0.75*rx(i,j)-0.125*(rx(i,j-1)+rx(i,j+1))
       endif
 #  endif
 # endif /* NHMG */
-
-
-#ifdef WEC
-! ------------------------------------
-!add in wave effect using POM-Jacobian
-! ------------------------------------
-#  define DC rx
-      !! FC contains the vertical vortex force K (eq(5) from uchiyama2010)
-      !! which behaves like a hydrostatic pressure
-      !! JM We should be able to add these term directly to the
-      !! hydrostatic pressure above
-      !! In addition, instead of K, we should compute  ust.u_z in place
-      do k=N,1,-1           !--> irreversible
-        if (k.eq.N) then
-          do j=jstrV-1,jend
-            do i=istrU-1,iend
-              FC(i,j)=-(z_w(i,j,N)-z_r(i,j,N))
-     &                          *(1.5*kvf(i,j,N)-0.5*kvf(i,j,N-1))
-     &          *(z_w(i,j,N)-z_r(i,j,N))/(z_r(i,j,N)-z_r(i,j,N-1))
-              DC(i,j)=-g*sup(i,j)-calP(i,j)+Kapsrf(i,j)  !! additional surface pressure gradient
-            enddo
-          enddo
-        else
-          do j=jstrV-1,jend
-            do i=istrU-1,iend
-              FC(i,j)=FC(i,j)-0.5*(kvf(i,j,k+1)+kvf(i,j,k))
-     &                           *(z_r(i,j,k+1)-z_r(i,j,k))
-            enddo
-          enddo
-        endif
-
-        do j=jstr,jend
-          do i=istrU,iend
-            cff  = 0.5*(Hz(i,j,k)+Hz(i-1,j,k))*dn_u(i,j)
-            cff1 = cff*( FC(i-1,j)-FC(i,j) +0.5*( kvf(i,j,k)
-     &           +kvf(i-1,j,k) )*(z_r(i,j,k)-z_r(i-1,j,k)) )
-            cff2 = cff*(DC(i-1,j)-DC(i,j))
-            ru(i,j,k)=ru(i,j,k) + cff1 + cff2
-          enddo
-        enddo
-        do j=jstrV,jend
-          do i=istr,iend
-            cff  = 0.5*(Hz(i,j,k)+Hz(i,j-1,k))*dm_v(i,j)
-            cff1 = cff*( FC(i,j-1)-FC(i,j) +0.5*( kvf(i,j,k)
-     &           +kvf(i,j-1,k) )*(z_r(i,j,k)-z_r(i,j-1,k)) )
-            cff2 = cff*(DC(i,j-1)-DC(i,j))
-            rv(i,j,k)=rv(i,j,k) + cff1 + cff2
-          enddo
-        enddo
-      enddo   !<-- k
-#  undef DC
-#endif /* WEC */
 
       end
 

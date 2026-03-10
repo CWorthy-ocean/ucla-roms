@@ -8,9 +8,6 @@
       use param, only:
      &     east_exchng, north_exchng, south_exchng,
      &     west_exchng, ieast, iwest, jnorth, jsouth
-#ifdef WEC
-      use wec_frc, only: ust2d
-#endif
       use boundary, only:
      &     zeta_west, ubar_west, zeta_east, ubar_east,
      &     ubar_south, ubar_north
@@ -166,10 +163,6 @@
         enddo
 #  endif
 # else
-! For WEC there was this (talk to delphine)
-! No lagrangian flux
-!      ubar(istr,j,knew)=-ust2d(istr,j)
-!     &                    *umask(istr,j)
         do j=jstr,jend                          ! Western edge closed
           ubar(istr,j,knew)=0.                  ! ======= ==== ======
         enddo                                   !  (no-flux, default)
@@ -296,7 +289,6 @@ c--#endif
         enddo
 #  endif
 # else
-!! See comments for WESTERN boundary WEC (closed BC)
         do j=jstr,jend                       ! Eastern edge closed BC
           ubar(iend+1,j,knew)=0.             ! ======= ==== ====== ==
         enddo
@@ -583,18 +575,6 @@ c****
         ubar(iend+1,jend+1,knew)=0.5*( ubar(iend,jend+1,knew)
      &                                +ubar(iend+1,jend,knew))
       endif
-#endif
-! Daniel add
-!====================================================================
-!       NO LAGRANGIAN FLUX CONDITION AT LAND-SEA INTERFACES
-!====================================================================
-#if defined WEC && defined MASKING
-      do i=istr,iendR
-        do j=jstrR,jendR
-          ubar(i,j,knew)=ubar(i,j,knew)*umask(i,j)
-     &                  +ust2d(i,j)*(umask(i,j)-1.0)
-        enddo
-      enddo
 #endif
 
       end

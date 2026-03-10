@@ -142,10 +142,6 @@
       call init_arrays_bulk_frc
 #endif
 
-# ifdef WEC
-      call init_arrays_wec_tile(istr,iend,jstr,jend)
-# endif
-
 #if defined M2NUDGING && !defined M2_FRC_BRY
       do j=jstrR,jendR
         do i=istrR,iendR

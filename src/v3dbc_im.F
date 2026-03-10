@@ -218,15 +218,7 @@
 #  else
         do k=1,N                               ! Northern edge closed
           do i=istr,iend                       ! ======== ==== ======
-#   ifdef WEC
-cc            v(i,jend+1,k,nnew)=-vst(i,jend+1,k) ! no Lagrangian flux
-            v(i,jend+1,k,nnew)=v(i,jend,k,nnew)  ! gradient (default)
-#    ifdef MASKING
-     &                        *vmask(i,jend+1)
-#    endif
-#   else
             v(i,jend+1,k,nnew)=0.               ! (no-flux, default)
-#   endif
           enddo
         enddo
 #  endif
@@ -433,21 +425,6 @@ cc            v(i,jend+1,k,nnew)=-vst(i,jend+1,k) ! no Lagrangian flux
       endif
 # endif
 
-! Daniel add
-!====================================================================
-!       NO LAGRANGIAN FLUX CONDITION AT LAND-SEA INTERFACES
-!====================================================================
-# if defined WEC && defined MASKING
-      do i=istrR,iendR
-        do j=jstr,jendR
-          do k=1,N
-            v(i,j,k,nnew)=v(i,j,k,nnew)*vmask(i,j)
-     &                   +vst(i,j,k)*(vmask(i,j)-1.0)
-          enddo
-        enddo
-      enddo
-# endif
-!     return
       end
 #else
       subroutine v3dbc_empty

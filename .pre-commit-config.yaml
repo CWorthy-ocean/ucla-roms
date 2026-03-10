@@ -24,3 +24,10 @@ repos:
           ^src/wec_frc\.F$ |
           ^src/mpi_test\.F$
           )
+  - repo: local
+    hooks:
+      - id: block-large-files
+        name: Prevent large files from being committed
+        entry: ci/pre-commit/block_large_files.sh
+        language: system
+        require_serial: true

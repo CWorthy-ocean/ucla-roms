@@ -25,7 +25,6 @@
 /* PierreD's pacific coast model */
 
 !#define BIOLOGY_BEC2
-!#define WEC
 
 /* Basics */
 #define SOLVE3D
@@ -127,21 +126,6 @@
 # define UV_TIDES
 !#define TIDERAMP ! No longer using tideramp
 #endif
-
-#ifdef WEC
-# define BRK0
-# define SURFACE_BREAK
-# undef SPEC_DD
-# undef LOG_BDRAG
-# undef WKB_WWAVE
-# undef BBL
-# define WAVE_OFFLINE
-# define WAVE_FRICTION
-# define BBL_S95
-!#define BBL_F00
-# define SUP_OFF
-# define WAVE_DIFF_FROM_LM
-#endif /* WEC */
 
 #elif defined DUMMY_CASE
 

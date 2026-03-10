@@ -37,9 +37,6 @@
       use mg_namelist, only: surface_neumann
       use mg_grids, only: mggrid => grid
 # endif
-# ifdef WEC
-      use wec_frc, only: compute_wec_rhs_uv_terms
-# endif
       use diagnostics, only: diag_uv, u_prev, v_prev, calc_diag, udiag,
      &  vdiag, icori, dxdyi_u, dxdyi_v, idiss, ipgr, iadv, ivmix,
      &     set_diags_u_4th_adv, set_diags_v_4th_adv
@@ -82,13 +79,6 @@
       real  div,dmax
 !     integer :: ierr !,imx,jmx,kmx
 #endif
-
-! Taken from rhs3d35S.F for WEC, used in compute_horiz_rhs_uv_terms.h
-! but needs to be declared here in declarations section not in
-! the compute_horiz_rhs_uv_terms.h file else wont compile.
-# ifdef WEC
-      real cff1
-# endif
 
 # include "compute_auxiliary_bounds.h"
 
@@ -134,10 +124,6 @@
 # include "compute_horiz_rhs_uv_terms.h"
       enddo
 
-# ifdef WEC
-      call compute_wec_rhs_uv_terms(istr,iend,jstr,jend,ru,rv,wrk1,wrk2)
-# endif
-
 # ifdef DIAGNOSTICS
         if (diag_uv .and. calc_diag) then
           call set_diags_u_4th_adv
@@ -148,22 +134,6 @@
       do j=jstr,jend
 
 # include "compute_vert_rhs_uv_terms.h"
-
-! Apply wave bottom streaming stress as a body force in the bottom-most
-! grid cells only (if !defined BODY_FRICTION)
-!! JM move this bit to inside compute_wec_rhs_uv_terms...
-# ifdef WECXXX
-#  if defined WAVE_FRICTION && !defined BODY_FRICTION
-        !! JM add this somehow like a bustr in a manner like below
-        !! or move into compute_wec_rhs_uv.
-        do i=istrU,iend
-          ru(i,j,1) =ru(i,j,1) + dm_u(i,j)*dn_u(i,j)*frc2dx(i,j)
-        enddo
-        do i=istr,iend
-          rv(i,j,1) =rv(i,j,1) + dm_v(i,j)*dn_v(i,j)*frc2de(i,j)
-        enddo
-#  endif
-# endif
 
 #define IMPLICIT_BOTTOM_DRAG
 # ifdef IMPLICIT_BOTTOM_DRAG

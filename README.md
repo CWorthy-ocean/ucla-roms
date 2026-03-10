@@ -4,7 +4,7 @@
 Welcome to [C]Worthy's fork of UCLA ROMS. We maintain this fork in close collaboration with UCLA, prioritizing marine carbon dioxide removal (mCDR) applications and open-source software practices.
 
 <p align="center">
-  <img src="https://github.com/dafyddstephenson/ucla-roms/raw/update_readme/docs/surface_delta_Alkalinity_upscaling.gif" alt="Animation: A nested simulation of an ocean alkalinity perturbation">
+  <img src="https://github.com/CWorthy-ocean/.github/raw/main/surface_delta_Alkalinity_upscaling.gif" alt="Animation: A nested simulation of an ocean alkalinity perturbation">
   <br>
   <i>A demonstration of mCDR-focused features: 6 weeks of transport of an alkalinity perturbation in a nested simulation with ROMS-MARBL, including upscaling at the interface between the two domains </i>
 </p>

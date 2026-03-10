@@ -217,7 +217,6 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       subroutine roms_step ![
 
       use param
-      use wec_frc
       use tides
       use extract_data
       use diagnostics

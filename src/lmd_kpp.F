@@ -37,9 +37,6 @@
 #ifdef LMD_BKPP
      &     , hbbl
 #endif
-#ifdef WEC
-      use wec_frc, only: akb
-#endif
       use ocean_vars, only: z_w, hz, v, u, z_r
       use scalars, only: n, forw_start, g, iic, nstp, vonkar, zob
 
@@ -250,7 +247,7 @@
 
 c--         Vtsq=Vtc*ws*sqrt(max(0., 0.5*(bvf(i,j,k)+bvf(i,j,k-1)) ))
 
-            Vtsq=Vtc*ws*sqrt(max(0., bvf(i,j,k-1) ))  !<-- fix by Gokhan
+            Vtsq=1.8*Vtc*ws*sqrt(max(1.e-5, bvf(i,j,k-1) ))  !<-- fix by Jeroen
 
             Cr(i,k)=FC(i,k)+Vtsq
 
@@ -438,7 +435,7 @@ c--         Vtsq=Vtc*ws*sqrt(max(0., 0.5*(bvf(i,j,k)+bvf(i,j,k-1)) ))
 
 #  ifdef LMD_NONLOCAL
               if (Bfsfc < 0.) then
-                ghat(i,j,k)=Cg * ssgm*(1.-ssgm)**2
+                ghat(i,j,k)=-Cg * ssgm*(1.-ssgm)**2
               else
                 ghat(i,j,k)=0.
               endif
@@ -523,21 +520,6 @@ c--         Vtsq=Vtc*ws*sqrt(max(0., 0.5*(bvf(i,j,k)+bvf(i,j,k-1)) ))
                 Akt(i,j,k,isalt) = Ks(i,j,k)
 # endif
               enddo
-
-# ifdef WEC
-              do k=1,N      ! Apply wave effects
-                Akv(i,j,k)       =Akv(i,j,k)+Akb(i,j,k)
-                Akt(i,j,k,itemp) =Akt(i,j,k,itemp)+Akb(i,j,k)+Akw(i,j,k)
-#  ifdef SALINITY
-                Akt(i,j,k,isalt) =Akt(i,j,k,isalt)+Akb(i,j,k)+Akw(i,j,k)
-#  endif
-              enddo
-              Akv(i,j,0)       =2.*Akv(i,j,1)-Akv(i,j,2)
-              Akt(i,j,0,itemp) =2.*Akt(i,j,1,itemp)-Akt(i,j,2,itemp)
-#  ifdef SALINITY
-              Akt(i,j,0,isalt) =2.*Akt(i,j,1,isalt)-Akt(i,j,2,isalt)
-#  endif
-# endif
 
             endif  !<-- FIRST_TIME_STEP
 # ifdef MASKING

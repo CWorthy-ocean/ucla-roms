@@ -87,13 +87,6 @@
 # endif
       integer indx, itrc, iAkt
 
-! Taken from rhs3d35S.F for WEC, used in compute_horiz_rhs_uv_terms.h
-! but needs to be declared here in declarations section not in
-! the compute_horiz_rhs_uv_terms.h file else wont compile.
-# ifdef WEC
-      real cff1
-# endif
-
 # include "compute_auxiliary_bounds.h"
 
 ! Preliminary step: initialize computations of the new time step
@@ -185,10 +178,6 @@
 # include "compute_horiz_rhs_uv_terms.h"
 
       enddo !<-- k
-
-#ifdef WEC
-      call compute_wec_rhs_uv_terms(istr,iend,jstr,jend,ru,rv,wrk1,wrk2)
-#endif
 
 
 ! Compute dynamic bottom drag coefficient.  Note that "rd" must be
@@ -293,17 +282,6 @@
 !                      ! ru,rv, and rw are volume integrated and [m4/s2]
 
 # include "compute_vert_rhs_uv_terms.h"
-
-# ifdef WEC
-#  if defined WAVE_FRICTION && !defined BODY_FRICTION
-        do i=istrU,iend
-          ru(i,j,1) =ru(i,j,1) + dm_u(i,j)*dn_u(i,j)*frc2dx(i,j)
-        enddo
-        do i=istr,iend
-          rv(i,j,1) =rv(i,j,1) + dm_v(i,j)*dn_v(i,j)*frc2de(i,j)
-        enddo
-#  endif
-# endif   /* WEC */
 
 # ifdef NHMG
 
@@ -417,11 +395,7 @@
           CF(i,N-1)=cff*(  FC(i,N-1)+max(WC(i,N-1),0.) )
 
           DC(i,N)=cff*( DC(i,N)
-     &                                  +dtau*sustr(i,j)
-#    if defined WEC && defined SURFACE_BREAK
-     &                            + dtau*brk2dx(i,j)
-#    endif
-     &                                                 )
+     &                                  +dtau*sustr(i,j))
         enddo
         do k=N-1,2,-1      !--> forward elimination
           do i=istrU,iend
@@ -484,11 +458,7 @@
             CF(i,N-1)=cff*(  FC(i,N-1)+max(WC(i,N-1),0.) )
 
             DC(i,N)=cff*( DC(i,N)
-     &                                    +dtau*svstr(i,j)
-#    if defined WEC && defined SURFACE_BREAK
-     &                            + dtau*brk2de(i,j)
-#    endif
-     &                                                   )
+     &                                    +dtau*svstr(i,j))
           enddo
           do k=N-1,2,-1      !--> forward elimination
             do i=istr,iend

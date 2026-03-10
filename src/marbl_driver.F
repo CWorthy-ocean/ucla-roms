@@ -258,7 +258,6 @@
 
             close(marbl_settings_in)
          endif ! open_status 0
-         call error_log%abort_check()
 !     2. Now generate a MARBL instance with these settings:
 ! ---------------------------------------------------------
 
@@ -288,7 +287,6 @@
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
       end if
-      call error_log%abort_check()
 
       call print_marbl_log(marbl_instance%StatusLog)
       call marbl_instance%StatusLog%erase()
@@ -531,7 +529,6 @@
      &           trim(marbl_tracer_list_fname)
          end if
       endif
-      call error_log%abort_check()
 
       end subroutine marbldrv_read_tracer_output_list
 
@@ -619,7 +616,6 @@
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
       end if
-      call error_log%abort_check()
 
 !     2. Populate saved state metadata arrays in ROMS using MARBL instance
 !     ----------------------------------------------------------------------
@@ -970,7 +966,6 @@
      &        info=error_info)
 
       end if
-      call error_log%abort_check()
 
 !     2. Fill BGC diagnostics metadata arrays in ROMS from MARBL instance
 !     ----------------------------------------------------------------------
@@ -1163,7 +1158,6 @@
 
          close(marbl_diag_list)
       endif                     !mynode==0
-      call error_log%abort_check()
 
       end subroutine marbldrv_read_diagnostic_output_list
 
@@ -1185,7 +1179,8 @@
       integer, intent(in)                           :: istr,jstr,iend,jend
          real, dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,
      &     intent(in)     :: tracer_array
-      integer :: i,j
+         integer :: i,j
+
       do j=jstr,jend
          do i=istr,iend
             if (rmask(i,j)==0.) cycle
@@ -1196,7 +1191,6 @@
      &           i,j,tracer_array)
             call marbldrv_set_marbl_surface_flux_saved_state_values(i,j)
             call marbldrv_compute_surface_fluxes(i,j)
-
             call marbldrv_set_marbl_column_geometry(i,j)
             call marbldrv_set_marbl_interior_tendency_forcing_values(
      &           i,j,tracer_array)
@@ -1205,7 +1199,6 @@
             call marbldrv_set_marbl_interior_saved_state_values(i,j)
             call marbldrv_set_marbl_bottom_fluxes
             call marbldrv_compute_interior_tendency(i,j)
-
             call marbldrv_update_roms_diagnostics(i,j)
          end do
       end do
@@ -1281,8 +1274,8 @@
 !     ----------------------------------------------------------------------
       do j=jstr,jend
          do i=istr,iend
-
             if (rmask(i,j)==0.) cycle
+
             call marbldrv_set_marbl_surface_flux_forcing_values(
      &           i,j,tracer_array)
             call marbldrv_set_marbl_surface_tracer_values(
@@ -1332,7 +1325,7 @@
 
          end do                 !j=jstr,jend
       end do                    ! i=istr,iend
-
+      call error_log%abort_check()
       end subroutine marbldrv_column_physics
 
       subroutine marbldrv_set_marbl_surface_flux_forcing_values(
@@ -1493,7 +1486,6 @@
      &           "marbl_driver/marbldrv_compute_surface_fluxes")
             call print_marbl_log(marbl_instance%StatusLog,i,j)
          end if
-
          call marbl_instance%StatusLog%erase()
       end subroutine marbldrv_compute_surface_fluxes
 
@@ -1845,40 +1837,9 @@
       accumulated_log = ''
 
       do while (associated(marbl_status_log_pointer))
-         write(message_prefix, "(A,I0,A)") "Task ",mynode,")"
-
-! Check if we know the location of this log message and write
-         if (marbl_status_log_pointer%ElementInd .gt. 0) then
-            if (present(i) .and. present(j)) then
-               write(message_location, "(A,I0,A,I0,A,I0)")
-     &              "Message from (i,j) (", i,",",j,") at level ",
-     &              marbl_status_log_pointer%ElementInd
-            else
-               write(message_location, "(A)")
-     &              "grid cell responsible for message unknown"
-            end if              ! i,j present
-
-
-!     Also write the calling CPU unless on the principal CPU
-            if (mynode==printnode) then
-               write(log_message,"(A)") trim(message_location)
-            else
-               write(log_message,"(A,1X,A)")
-     &              trim(message_prefix), trim(message_location)
-            end if              ! (mynode==printnode)
-            call append_to_log(log_message)
-
-         end if                 ! (ElementInd > 0)
-
-!     Now write the actual statuslog message from MARBL
-         if (mynode==printnode) then
-            write(log_message,"(A)")
-     &           trim(marbl_status_log_pointer%LogMessage)
-         else
-            write(log_message,"(A,1X,A)")
-     &           trim(message_prefix),
-     &           trim(marbl_status_log_pointer%LogMessage)
-         end if                 ! (mynode==printnode)
+!     Write statuslog message from MARBL
+         write(log_message,"(A)")
+     &        trim(marbl_status_log_pointer%LogMessage)
          call append_to_log(log_message)
 
          marbl_status_log_pointer => marbl_status_log_pointer%next
@@ -1895,7 +1856,7 @@
      &        (mynode == printnode)) then
          print *, accumulated_log
       end if
-      call error_log%abort_check()
+
       contains
 
       subroutine append_to_log(line)
