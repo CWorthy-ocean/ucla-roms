@@ -54,7 +54,7 @@
       use diagnostics, only: rho_d, p_int, calc_diag, diag_uv, udiag,
      &  vdiag, ipgr, dxdyi_u, dxdyi_v
 #endif
-      use calc_pflx, only: diag_pflx, calc_diag_pflux
+      use calc_pflx_mod, only: calc_pflx, calc_pressure_flux
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k, imin,imax,jmin,jmax
@@ -477,8 +477,8 @@ c    &            -0.75*rx(i,j)-0.125*(rx(i,j-1)+rx(i,j+1))
             Vdiag(:,:,k,ipgr) = rv(1:nx,1:ny,k)*dxdyi_v*vmask(1:nx,1:ny)
           enddo
         endif
-        if (diag_pflx) then
-          call calc_diag_pflux(p)
+        if (calc_pflx) then
+          call calc_pressure_flux(p)
         endif
       endif
 # endif

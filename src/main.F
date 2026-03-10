@@ -115,7 +115,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
 #endif
       use precheck, only: do_precheck
       use error_handling_mod, only: error_log
-      use calc_pflx, only: init_pflx
+      use calc_pflx_mod, only: init_pflx
 
       implicit none
 

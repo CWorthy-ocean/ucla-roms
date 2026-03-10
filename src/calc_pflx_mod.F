@@ -1,4 +1,4 @@
-      module calc_pflx
+      module calc_pflx_mod
 
 #include "cppdefs.opt"
 
@@ -15,7 +15,7 @@
       implicit none
       private
 
-#include "calc_pflx.opt"
+#include "calc_pflx_mod.opt"
 
             ! Pressure flux terms
       ! --------------
@@ -33,7 +33,7 @@
 
 
       public init_pflx
-      public calc_diag_pflux
+      public calc_pressure_flux
       public get_init_slow
       public wrt_rst_diag_slow
 
@@ -43,7 +43,7 @@
 
       implicit none
 
-      if (diag_pflx) then
+      if (calc_pflx) then
 
         ! Coefficients for exponential smoothing
         alpha = dt / timescale
@@ -78,7 +78,7 @@
 
       end subroutine init_pflx !]
 ! ----------------------------------------------------------------------
-      subroutine calc_diag_pflux(p) ![
+      subroutine calc_pressure_flux(p) ![
       implicit none
       !! W => kg m2 s-3
       !!  p dz => m3 s-2, u*p*dz => m4 s-3, rho0*u*p*dz=> kg m s-3 = W/m
@@ -104,7 +104,7 @@
       ! There's an issue with WEC stokes drift
       ! It's added to flxU,flxV, but not to ubar
 
-      if (diag_pflx) then
+      if (calc_pflx) then
         ! WEC terms can modify the match between
         ! integrated flux and ubar,vbar
 
@@ -168,7 +168,7 @@
         enddo
       endif  ! if pflux
 
-      end subroutine calc_diag_pflux  !]
+      end subroutine calc_pressure_flux  !]
 ! ----------------------------------------------------------------------
       subroutine get_init_slow(ncid,record,tindx )  ![
       ! get initial slow u,v and p
@@ -274,4 +274,4 @@
 
       end subroutine wrt_rst_diag_slow  !]
 ! ----------------------------------------------------------------------
-      end module calc_pflx
+      end module calc_pflx_mod

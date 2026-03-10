@@ -12,7 +12,7 @@
       use nc_read_write, only: nccreate, ncread, ncwrite
       use scalars, only: iic, tdays, time, dt
       use dimensions, only: nx, ny
-      use calc_pflx, only: up, vp, diag_pflx
+      use calc_pflx_mod, only: up, vp, calc_pflx
       use roms_read_write, only:
      &     ncforce, bfx, bfy, dn_tm, dn_xr,
      &     dn_yr, xi_rho, bc_options, create_file, set_frc_data,
@@ -64,7 +64,7 @@
       ! local
       integer :: i
 
-      if (.not.diag_pflx.and.mynode==0) then
+      if (.not.calc_pflx.and.mynode==0) then
         print *,'For Orlanski tuning,'
         print *,'pflx diagnostics must be turned on!'
         stop

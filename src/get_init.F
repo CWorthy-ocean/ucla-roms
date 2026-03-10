@@ -46,7 +46,7 @@
      &     west_exchng, south_exchng, nnodes, n, nt
       use mpi_exchanges, only: exchange_xxx
       use error_handling_mod, only: error_log
-      use calc_pflx, only : diag_pflx, get_init_slow
+      use calc_pflx_mod, only : calc_pflx, get_init_slow
       use sponge_tune, only: ub_tune, get_init_ub
       implicit none
       character(len=8) :: sr_name = "get_init"
@@ -582,7 +582,7 @@ c--#define VERBOSE
 
 #endif /* SOLVE3D */
 
-      if (diag_pflx) call get_init_slow(ncid,record,tindx)
+      if (calc_pflx) call get_init_slow(ncid,record,tindx)
       if (ub_tune)   call get_init_ub(ncid,record)
 
 ! Close input NetCDF file and  write greeting message depending

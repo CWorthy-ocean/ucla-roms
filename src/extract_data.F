@@ -55,7 +55,7 @@
       use param, only: isalt, nt, itemp, isw_corn, jsw_corn,
      &     nt_passive, mynode, lm, mm, N
       use scoord, only: theta_s, theta_b, hc
-      use calc_pflx, only: diag_pflx, up, vp
+      use calc_pflx_mod, only: calc_pflx, up, vp
       use basic_output, only: vn=>vname
 #ifdef SOLVE3D
      &     ,indxt, indxu, indxv, indxw
@@ -202,7 +202,7 @@
 
       ! For vertical velocity
       allocate( Wvl(GLOBAL_2D_ARRAY,nz+1))
-      if (diag_pflx) then
+      if (calc_pflx) then
         allocate( upe(GLOBAL_2D_ARRAY) ); upe = 0
         allocate( vpe(GLOBAL_2D_ARRAY) ); vpe = 0
       endif
@@ -397,15 +397,15 @@
            if (findstr(variables,'vp'  ) ) obj(iobj)%vp   = .True.
            if (findstr(variables,'bgc'    ) ) obj(iobj)%bgc     = .True.
 
-           if (obj(iobj)%up.and. .not.diag_pflx) then
+           if (obj(iobj)%up.and. .not.calc_pflx) then
               call error_log%raise_global(
      &             context=module_name//"/"//sr_name,
-     &             info="diag_pflx is not set for up extraction")
+     &             info="calc_pflx is not set for up extraction")
            endif
-           if (obj(iobj)%vp.and. .not.diag_pflx) then
+           if (obj(iobj)%vp.and. .not.calc_pflx) then
               call error_log%raise_global(
      &             context=module_name//"/"//sr_name,
-     &             info="diag_pflx is not set for vp extraction")
+     &             info="calc_pflx is not set for vp extraction")
            endif
 #if                             !defined(BIOLOGY_BEC2) && !defined(MARBL)
            if (obj(iobj)%bgc) then
@@ -601,7 +601,7 @@
           obj(:)%record = 0
       endif
 
-      if (diag_pflx) then
+      if (calc_pflx) then
         upe(1:nx,1:ny) = up
         vpe(1:nx,1:ny) = vp
 # ifdef EXCHANGE

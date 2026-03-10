@@ -14,7 +14,7 @@
      &     dn_yr, dn_yv, dn_zr, eta_rho, eta_v, xi_rho, xi_u, dn_zw,
      &     avg_output, create_file, sec2date
       use sponge_tune, only: ub_tune, wrt_rst_ub
-      use calc_pflx, only: diag_pflx, wrt_rst_diag_slow
+      use calc_pflx_mod, only: calc_pflx, wrt_rst_diag_slow
       use scalars, only:
      &     NT, iic, knew, nstp, time,
      &     N, dt, start_time, nnew, tdays
@@ -667,7 +667,7 @@
 #ifdef SPONGE_TUNE
         if (ub_tune)   call wrt_rst_ub(ncid,rec_rst)
 #endif
-        if (diag_pflx) call wrt_rst_diag_slow(ncid,rec_rst)
+        if (calc_pflx) call wrt_rst_diag_slow(ncid,rec_rst)
 
         call ncwrite(ncid,'riv_umask',    riv_umask( 1:i1,j0:j1),start)
         call ncwrite(ncid,'riv_vmask',    riv_vmask(i0:i1, 1:j1),start)
@@ -978,7 +978,7 @@
       ierr = nf90_put_att(ncid,varid,'units',vname(3,indxHbbl))
 # endif
 
-      if (diag_pflx) then
+      if (calc_pflx) then
         varid = nccreate(ncid,'u_slow',(/dn_xu,dn_yr,dn_zr,dn_tm/),
      &                               (/xi_u,eta_rho,N,0/),nf90_double)
         ierr = nf90_put_att(ncid,varid,'long_name','time filtered u')
