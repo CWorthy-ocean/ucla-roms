@@ -106,7 +106,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       use bec2_params, only: ecosys2_init
 #endif
       use grid, only: get_grid, dm_r, dn_r
-      use roms_read_write, only: nrrec
+      use roms_read_write, only: nrrec, frc_time
       use param, only:
      &     mynode, nsub_e, nsub_x, lm, mm,
      &     N, np_eta, np_xi, padd_e, padd_x
@@ -225,7 +225,8 @@ CR      write(*,*) ' -6' MYID
 # endif /*BIOLOGY_BEC2*/
 
 #ifdef ANA_INITIAL
-                                    ! Set initial conditions for
+
+      frc_time='1/2 fwd'            ! Set initial conditions for
       call set_forces               ! model prognostic variables,
       call ana_init                 ! may require surface forcing
                                     ! either analytically or read
@@ -253,9 +254,10 @@ CR      write(*,*) ' -6' MYID
       time=start_time             ! moment "start_time" (global scalar)
                                   ! is set by get_init or analytically
                                   ! copy it into threadprivate "time"
-      tdays = (time-0.5*dt)*sec2day
-      call set_forces
+      frc_time='current'
       tdays = time*sec2day
+      call set_forces
+
       call set_depth(0)
 
 !----------------------------------------------------------------------
@@ -344,6 +346,8 @@ CR      write(*,*)  ' -2' MYID
 #ifdef DIAGNOSTICS
       use diagnostics, only: diag_uv,diag_trc,do_diagnostics
 #endif
+      use roms_read_write, only: frc_time
+
       implicit none
 
 
@@ -369,12 +373,13 @@ CR      write(*,*)  ' -2' MYID
       ! set_tides on the other hand work wit time, not adding 0.5*dt
       ! use time at n for surface forcing values
 
-      tdays = (time-0.5*dt)*sec2day
+      frc_time='current'
       call set_forces
       ! use time at n+1/2 for boundary values
       ! we use these values at the end of pre_step, and during step2d
 
-      tdays = (time-0.0*dt)*sec2day
+      tdays = time*sec2day
+      frc_time = '1/2 fwd'
       call set_bry_all
 
       if (bry_tides.or.pot_tides) call set_tides(0)
@@ -415,13 +420,14 @@ CR      write(*,*)  ' -2' MYID
       call omega
       call rho_eos(nrhs)  !!! use the right time index
 
-      tdays = (time-0.0*dt)*sec2day
+!      tdays = (time-0.0*dt)*sec2day
       call set_forces   ! get for time n+1/2
 # if defined LMD_MIXING
       call lmd_vmix(nrhs)
 # endif
 
       tdays = (time+0.5*dt)*sec2day
+      frc_time = 'forward'
       call set_bry_all  ! get for time n+1
       if (bry_tides.or.pot_tides) call set_tides(0)
 
