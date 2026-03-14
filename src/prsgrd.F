@@ -51,7 +51,7 @@
       use dimensions, only:  nx, ny, nz
       use scalars, only: n, g, rho0, nrhs
 #ifdef DIAGNOSTICS
-      use diagnostics, only: calc_diag, diag_uv, udiag,
+      use diagnostics, only: rho_d, p_int, calc_diag, diag_uv, udiag,
      &  vdiag, ipgr, dxdyi_u, dxdyi_v
 #endif
       use calc_pflx_mod, only: calc_pflx, calc_pressure_flux
