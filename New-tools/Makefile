@@ -17,7 +17,7 @@ endif
 # --------------------------------------------------------------------
 
 # Everything
-ALL: depend partit partmap optimal_part ncjoin
+ALL: depend partit partmap optimal_part ncjoin write_tiling
 
 all:	$(info MAKING ROMS TOOLS: ) mpc $(ALL)
 
@@ -48,12 +48,18 @@ OPTIMAL_PART := $(addsuffix $(OBJ_ext), $(OPTIMAL_PART))
 optimal_part: $(OPTIMAL_PART)
 	$(LDR) $(FFLAGS) $(LDFLAGS) -o optimal_part $(OPTIMAL_PART) $(LCDF)
 
+# write_tiling
+WRITE_TILING = write_tiling roms_part nc_read_write
+WRITE_TILING := $(addsuffix $(OBJ_ext), $(WRITE_TILING))
+partit: $(WRITE_TILING)
+	$(LDR) $(FFLAGS) $(LDFLAGS) -o write_tiling $(WRITE_TILING) $(LCDF)
 
 PSRC = partit.F roms_part.F nc_read_write.F
 MSRC = partmap.F roms_part.F nc_read_write.F
 OSRC = optimal_part.F roms_part.F nc_read_write.F
 JSRC = ncjoin.F roms_part.F nc_read_write.F
-SRCS = $(PSRC) $(MSRC) $(OSRC) $(JSRC)
+WSRC = write_tiling.F roms_part.F nc_read_write.F
+SRCS = $(PSRC) $(MSRC) $(OSRC) $(JSRC) $(WSRC)
 
   PCS = $(PSRC:.F=.f)
   PBJS = $(PSRC:.F=.o)
@@ -63,6 +69,8 @@ SRCS = $(PSRC) $(MSRC) $(OSRC) $(JSRC)
   OBJS = $(OSRC:.F=.o)
   JCS = $(JSRC:.F=.f)
   JBJS = $(JSRC:.F=.o)
+  WCS = $(WSRC:.F=.f)
+  WBJS = $(WSRC:.F=.o)
 
 .PHONY: depend
 depend:  # makedepf90 is preferable but does not work on e.g. osx-arm64. Offer python fallback.
