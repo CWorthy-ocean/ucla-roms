@@ -51,7 +51,7 @@ optimal_part: $(OPTIMAL_PART)
 # write_tiling
 WRITE_TILING = write_tiling roms_part nc_read_write
 WRITE_TILING := $(addsuffix $(OBJ_ext), $(WRITE_TILING))
-partit: $(WRITE_TILING)
+write_tiling: $(WRITE_TILING)
 	$(LDR) $(FFLAGS) $(LDFLAGS) -o write_tiling $(WRITE_TILING) $(LCDF)
 
 PSRC = partit.F roms_part.F nc_read_write.F
