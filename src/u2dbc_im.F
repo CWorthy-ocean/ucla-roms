@@ -19,13 +19,26 @@
       real grad(PRIVATE_2D_SCRATCH_ARRAY), cx,cy, cext, cff,
      &                                     dft,dfx,dfy, zx,hx
       real, parameter :: eps=1.D-33
+#ifdef OBC_FLUX_CORR
+      real uv_crss
+#endif
 
 #include "compute_auxiliary_bounds.h"
+
+#ifdef OBC_FLUX_CORR
+      uv_crss=ubar_xs*dtfast/tau_obc
+#endif
 
 #ifndef EW_PERIODIC
       if (WESTERN_EDGE) then
 # ifdef OBC_WEST
-#  if defined OBC_M2FLATHER
+#  ifdef ISWAKE_XXX
+        do j=jstr,jend ! constant flux prescribed at inflow side
+          ubar(istr,j,knew)=ubar_west(j)*(h(istr,j)+zeta_west(j))
+     &                             /(h(istr,j)+zeta(istr,j,knew))
+        enddo
+
+#  elif defined OBC_M2FLATHER
         do j=jstr,jend
           cff=0.5*(h(istr-1,j)+h(istr,j))
           hx=sqrt(g/cff)
@@ -97,6 +110,9 @@
      &                    -max(cy,0.)*grad(istr,j  )
      &                    -min(cy,0.)*grad(istr,j+1)
      &                                   )/(cff+cx)
+#   ifdef OBC_FLUX_CORR
+     &                                    -uv_crss
+#   endif
 
 ! The "attnM2" term below introduces gentle restoring of free surface
 ! toward externally-specified "zeta_west" by applying attenuated
@@ -151,6 +167,10 @@
         enddo                                   !  (no-flux, default)
 # endif           /* OBC_WEST */
       endif     !<-- WESTERN_EDGE
+
+c--#ifdef ISWAKE_XXX
+c--# define OBC_M2ORLANSKI
+c--#endif
 
       if (EASTERN_EDGE) then
 # ifdef OBC_EAST
@@ -226,6 +246,9 @@
      &                      -max(cy,0.)*grad(iend+1,j  )
      &                      -min(cy,0.)*grad(iend+1,j+1)
      &                                       )/(cff+cx)
+#   if defined OBC_FLUX_CORR
+     &                                       +uv_crss
+#   endif
 #   if defined M2_FRC_BRY || defined M2NUDGING
           ubar(iend+1,j,knew)=(1.-cext)*ubar(iend+1,j,knew)
 #    ifdef M2_FRC_BRY
@@ -290,6 +313,43 @@ c****
           grad(i,jstr  )=ubar(i+1,jstr  ,kstp)-ubar(i,jstr  ,kstp)
         enddo
         do i=istrU,iend
+#   ifdef LEGACY_ORLANSKI
+          dft=ubar(i,jstr,kstp)-ubar(i,jstr  ,knew)
+          dfx=ubar(i,jstr,knew)-ubar(i,jstr+1,knew)
+
+#    ifdef OBC_RAD_NORMAL
+          cy=0. ; cff=max(dfx*dfx, eps)
+#    else
+          if (dft*(grad(i-1,jstr)+grad(i,jstr)) > 0.) then
+            dfy=grad(i-1,jstr)
+          else
+            dfy=grad(i  ,jstr)
+          endif
+          cff=max(dfx*dfx+dfy*dfy, eps)
+#     ifdef OBC_RAD_NPO
+          cy=0.
+#     else
+          cy=min(cff,max(dft*dfy,-cff))
+#     endif
+#    endif
+
+          cx=dft*dfx
+          if (cx < 0.) then       !--> cancel, if inflow
+            cx=0. ; cy=0.
+#    if defined M2_FRC_BRY || defined M2NUDGING
+            cext=dtfast*ubind * 0.5*(pn(i-1,jstr-1)+pn(i,jstr-1))
+          else
+            cext=0.
+#    endif
+          endif
+
+          ubar(i,jstr-1,knew)=( cff*ubar(i,jstr-1,kstp)
+     &                             +cx*ubar(i,jstr,knew)
+     &                      -max(cy,0.)*grad(i-1,jstr-1)
+     &                      -min(cy,0.)*grad(i  ,jstr-1)
+     &                                       )/(cff+cx)
+
+#   else
 
           cx=-0.125*dtfast*(vbar(i,jstr,kstp)+vbar(i-1,jstr,kstp))
      &      *(pn(i,jstr-1)+pn(i-1,jstr-1)+pn(i,jstr)+pn(i-1,jstr))
@@ -312,6 +372,7 @@ c****
      &                            -max(cy,0.)*grad(i-1,jstr)
      &                            -min(cy,0.)*grad(i  ,jstr)
      &                                                     )
+#   endif /* LEGACY_ORLANSKI */
 
 #   if defined M2_FRC_BRY || defined M2NUDGING
           ubar(i,jstr-1,knew)=(1.-cext)*ubar(i,jstr-1,knew)
@@ -374,6 +435,44 @@ c****
           grad(i,jend+1)=ubar(i+1,jend+1,kstp)-ubar(i,jend+1,kstp)
         enddo
         do i=istrU,iend
+#   ifdef LEGACY_ORLANSKI
+
+          dft=ubar(i,jend,kstp)-ubar(i,jend  ,knew)
+          dfx=ubar(i,jend,knew)-ubar(i,jend-1,knew)
+
+#    ifdef OBC_RAD_NORMAL
+          cy=0. ; cff=max(dfx*dfx, eps)
+#    else
+          if (dft*(grad(i-1,jend)+grad(i,jend)) > 0.) then
+            dfy=grad(i-1,jend)
+          else
+            dfy=grad(i  ,jend)
+          endif
+          cff=max(dfx*dfx+dfy*dfy, eps)
+#     ifdef OBC_RAD_NPO
+          cy=0.
+#     else
+          cy=min(cff,max(dft*dfy,-cff))
+#     endif
+#    endif
+
+          cx=dft*dfx
+          if (cx < 0.) then       !--> cancel, if inflow
+            cx=0. ; cy=0.
+#    if defined M2_FRC_BRY || defined M2NUDGING
+            cext=dtfast*ubind * 0.5*(pn(i-1,jend+1)+pn(i,jend+1))
+          else
+            cext=0.
+#    endif
+          endif
+
+          ubar(i,jend+1,knew)=( cff*ubar(i,jend+1,kstp)
+     &                             +cx*ubar(i,jend,knew)
+     &                      -max(cy,0.)*grad(i-1,jend+1)
+     &                      -min(cy,0.)*grad(i  ,jend+1)
+     &                                       )/(cff+cx)
+
+#   else
 
           cx=0.125*dtfast*(vbar(i,jend+1,kstp)+vbar(i-1,jend+1,kstp))
      &         *(pn(i,jend)+pn(i-1,jend)+pn(i,jend+1)+pn(i-1,jend+1))
@@ -395,6 +494,7 @@ c****
      &                            -max(cy,0.)*grad(i-1,jend)
      &                            -min(cy,0.)*grad(i  ,jend)
      &                                                     )
+#   endif /* LEGACY_ORLANSKI */
 
 #   if defined M2_FRC_BRY || defined M2NUDGING
           ubar(i,jend+1,knew)=(1.-cext)*ubar(i,jend+1,knew)

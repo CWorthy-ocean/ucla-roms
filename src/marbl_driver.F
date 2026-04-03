@@ -677,7 +677,7 @@
       end subroutine marbldrv_configure_saved_state
 !--------------------------------------------------------------------------------
       subroutine marbldrv_read_ss_vars_from_rst(
-     &     ncid,rec_rst,fname)
+     &     ncid,rec_rst)
 
 !-----------------------------------------------------------------------
 !     SUBROUTINE: marbldrv_read_saved_state_from_restart_file
@@ -708,7 +708,6 @@
       implicit none
 
       integer, intent(in) :: ncid,rec_rst
-      character(len=*)   :: fname
       integer :: ierr,varid,start(4)
       integer :: itrc,k
 
@@ -721,7 +720,7 @@
          ierr=nf90_inq_varid (ncid, vname_marbl_ss_2d(1,itrc), varid)
          if (ierr .eq. nf90_noerr) then
             call ncread(ncid,vname_marbl_ss_2d(1,itrc),
-     &           marbl_saved_state_2d(x0:x1,y0:y1,itrc),start=start,fname=fname)
+     &           marbl_saved_state_2d(x0:x1,y0:y1,itrc),start=start)
 
             marbl_saved_state_2d(x0:x1,y0:y1,itrc)=
      &         marbl_saved_state_2d(x0:x1,y0:y1,itrc)*rmask(x0:x1,y0:y1)
@@ -744,7 +743,7 @@
          ierr=nf90_inq_varid (ncid, vname_marbl_ss_3d(1,itrc), varid)
          if (ierr == nf90_noerr) then
             call ncread(ncid, vname_marbl_ss_3d(1,itrc),
-     &           marbl_saved_state_3d(x0:x1,y0:y1,:,itrc),start=start,fname=fname)
+     &           marbl_saved_state_3d(x0:x1,y0:y1,:,itrc),start=start)
            do k=1,N
               marbl_saved_state_3d(x0:x1,y0:y1,k,itrc)=
      &             marbl_saved_state_3d(x0:x1,y0:y1,k,itrc)*rmask(x0:x1,y0:y1)

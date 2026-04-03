@@ -53,7 +53,8 @@
          call register_keyword(name="bottom_drag",handler=kwread_bottom_drag)
 
 #ifdef SOLVE3D
-!#if !defined LMD_MIXING && !defined MY25_MIXING
+!#if !defined LMD_MIXING && !defined BVF_MIXING && !defined PP_MIXING\
+!         &&                     !defined MY2_MIXING && !defined MY25_MIXING
 
          call register_keyword(name="vertical_mixing",
      &        required=.false., handler=kwread_vertical_mixing)
@@ -694,7 +695,8 @@
       end subroutine kwread_bottom_drag
 
 #ifdef SOLVE3D
-!# if !defined LMD_MIXING && !defined MY25_MIXING
+!# if !defined LMD_MIXING && !defined BVF_MIXING && !defined PP_MIXING \
+!      &&                        !defined MY2_MIXING && !defined MY25_MIXING
 
       subroutine kwread_vertical_mixing(unit)
 !     Background vertical viscosity and mixing coefficients for tracers.
@@ -713,7 +715,8 @@
          return
       end if
 
-#if !defined LMD_MIXING && !defined MY25_MIXING
+#if !defined LMD_MIXING && !defined BVF_MIXING && !defined PP_MIXING \
+      &&                        !defined MY2_MIXING && !defined MY25_MIXING
       mixing_type = "background"
 #else
       mixing_type = "additional"
@@ -742,6 +745,12 @@
       integer :: ios
 
       read(unit,*,iostat=ios) Akq_bak
+#  ifdef Q_DIF2
+     &                       , q2nu2
+#  endif
+#  ifdef Q_DIF4
+     &                       , q2nu4
+#  endif
       if (ios /= 0) then
          call report_read_error('MY_bak_mixing')
          return
@@ -750,6 +759,18 @@
       mpi_master_only write(*,'(1x,A,ES10.3,1x,A)')
      &    'Akq_bak =', Akq_bak,
      &    'Background vertical mixing for TKE, [m^2/s]'
+
+#  ifdef Q_DIF2
+      mpi_master_only write(*,'(1x,A,ES10.3,1x,A)')
+     &    'q2nu2 =', q2nu2,
+     &    'Horizontal Laplacian mixing for TKE, [m^2/s]'
+#  endif
+
+#  ifdef Q_DIF4
+      mpi_master_only write(*,'(1x,A,ES10.3,1x,A)')
+     &    'q2nu4 =', q2nu4,
+     &    'Horizontal biharmonic mixing for TKE, [m^4/s]'
+#  endif
 
       end subroutine kwread_MY_bak_mixing
 #endif

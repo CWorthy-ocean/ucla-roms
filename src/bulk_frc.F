@@ -8,7 +8,11 @@
      &     nc_check_units, set_frc_data, store_string_att
       use dimensions, only: inode, jnode, npx, npy
       use error_handling_mod, only: error_log
-
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_gtype
+      use pio, only : PIO_closefile
+#endif
+      use instant_output, only: wrt_instant
       implicit none
 
       private  ! make all variable private to this module unless public specified
@@ -93,6 +97,11 @@
       ! input/outputs
       integer,intent(in) :: istr,iend,jstr,jend
 
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+      pio_gtype = '2Dr'
+#endif
+
       ! Short/Long radiation:
       ! Thermodynamic forcing: Note that BULK_FLUX requires computing the
       ! short-wave radiation flux first because bulk flux routine performs
@@ -102,17 +111,14 @@
       ! file. The ranges here need to match the sizes in the partitioned files
       call set_frc_data(nc_swrad,srflx,'r')
       call set_frc_data(nc_lwrad,lwrad,'r')
-
       call set_frc_data(nc_uwnd,uwnd,'r')
       call set_frc_data(nc_vwnd,vwnd,'r')
 
       call set_frc_data(nc_tair,tair,'r')
       call set_frc_data(nc_Q,Q,'r')
-
       ! Possibly check units of Q and others
 
       call set_frc_data(nc_prate,prate,'r')
-
 #if defined TAU_CORRECTION
       call set_frc_data(nc_taux,taux,'r')
       call set_frc_data(nc_tauy,tauy,'r')
@@ -137,8 +143,12 @@
      &         frcfile(nc_prate%ifile),nc_prate%vname,'cm/day')
         do_check_units = .false.
       endif
-
-
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
+#endif
       end subroutine set_bulk_frc  !]
 !-----------------------------------------------------------------------
       subroutine calc_all_bulk_forces(istr,iend,jstr,jend)  ![
@@ -797,8 +807,6 @@
 
         enddo
       enddo
-
-
 !---------------------------------------------------------------------
 !  Correct kinematic, surface wind stress (m2/s2) due to surface
 !  current feedback     -----> CFB

@@ -32,6 +32,11 @@
 #ifdef MARBL
       use marbl_driver, only: marbldrv_configure_tracers
 #endif
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc
+      use pio, only : PIO_closefile
+#endif
+
       implicit none
       private
       character(len=7) :: module_name = "tracers"
@@ -91,6 +96,10 @@
       integer           :: itrc       ! tracer number for loop index
       character(len=46) :: t_flx_name ! Tracer time name
 
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
+
       do itrc=iTandS+1,nt
 
         if (t_ana_frc(itrc)==0) then ! Read in forcing data (not analytical)
@@ -114,6 +123,13 @@
 !       call exchange_xxx(stflx)
 
       enddo
+#ifdef PARALLEL_IO
+      if (pio_file_is_open==1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
+#endif
+
       call error_log%abort_check()
       end subroutine set_surf_tracer_flx  !]
 ! ----------------------------------------------------------------------

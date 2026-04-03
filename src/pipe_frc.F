@@ -19,6 +19,11 @@
       use nc_read_write, only: ncread
       use param, only: n, lm, mm, nt, mynode
       use error_handling_mod, only: error_log
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc
+      use pio, only : PIO_closefile
+#endif
+
       implicit none
 
       private
@@ -68,12 +73,18 @@
 
       else
 
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
         call set_frc_data(nc_pvol,pipe_vol)                ! set pipe volume for all pipes at current time
 
         call set_frc_data(nc_ptrc,var2d=pipe_trc)          ! set pipe tracers conc. for all pipes at current time
 
         call set_pipe_vert_prf                             ! set pipe vertical profiles
-
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+      call PIO_closefile(pio_FileDesc)
+#endif
       endif
 
       if (.not. init_pipe_done) call init_pipe_frc

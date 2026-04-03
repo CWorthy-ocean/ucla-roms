@@ -142,13 +142,20 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       use precheck, only: do_precheck
       use error_handling_mod, only: error_log
       use calc_pflx_mod, only: init_pflx
-
+      use mpi_f08, only: mpi_wtime
+      use timers, only: tstart
       implicit none
 
       integer trd, tile, my_first, my_last, range
       character(len=1024) :: error_info = ""
       character(len=9) :: sr_name ="roms_init"
 C$    integer omp_get_thread_num, omp_get_num_threads
+        real :: walltime0 = 0.
+        real :: walltime1 = 0.
+        real :: walltime2 = 0.
+        real :: walltime3 = 0.
+        real :: walltime4 = 0.
+        real :: walltime5 = 0.
 
       numthreads=1 ; trd=0
 C$    numthreads=omp_get_num_threads()
@@ -197,8 +204,11 @@ C$OMP BARRIER
 
       call do_precheck
 
-      call get_grid                  ! can be analytic or from netcdf
+      walltime2 = MPI_Wtime()-tstart
 
+      walltime0 = MPI_Wtime()
+      call get_grid                  ! can be analytic or from netcdf
+      walltime1 = MPI_Wtime() - walltime0
 
 #ifdef DIAGNOSTICS
       call init_diagnostics
@@ -259,12 +269,13 @@ CR      write(*,*) ' -6' MYID
       if (nrrec > 0) then
 #endif
 
-
+      walltime0 = MPI_Wtime()
 #ifdef EXACT_RESTART
         call get_init(nrrec-1,2)
         call set_depth(0)
 #endif
         call get_init(nrrec, 1)
+      walltime3 = MPI_Wtime() - walltime0
 
         call init_restarts
 
@@ -276,7 +287,7 @@ CR      write(*,*) ' -6' MYID
       call ana_vmix
 #endif
 
-      write(*,*) 'Finished inits'
+      walltime0 = MPI_Wtime()
                                   ! Set initial model clock: at this
       time=start_time             ! moment "start_time" (global scalar)
                                   ! is set by get_init or analytically
@@ -284,6 +295,8 @@ CR      write(*,*) ' -6' MYID
       frc_time='current'
       tdays = time*sec2day
       call set_forces
+
+      walltime4 = MPI_Wtime() - walltime0
 
       call set_depth(0)
 
@@ -339,6 +352,15 @@ CR      write(*,*)  ' -2' MYID
 
       call diag  ! log file output of global norms
 
+        if (mynode==0) then
+          write(*,*) "TIMINGS FOR INITIALIZATION"
+
+          write(*,*) "Setup and misc: ", walltime2
+          write(*,*) "Read grid     : ", walltime1
+          write(*,*) "Read initial  : ", walltime3
+          write(*,*) "Set forces    : ", walltime4
+        endif
+
       end subroutine roms_init
 
 
@@ -378,10 +400,11 @@ CR      write(*,*)  ' -2' MYID
       use diagnostics, only: diag_uv,diag_trc,do_diagnostics
 #endif
       use roms_read_write, only: frc_time
-
+      use mpi_f08, only: mpi_wtime
+      use param, only: mynode
       implicit none
 
-
+        real :: walltime0 = 0.
 ! Increment time-step index and set model clock. Note that "time" set
 ! below corresponds to step "n" (denoted here as "nstp"), while counter
 ! "iic" corresponds to "n+1", so normally, assuming that time is
@@ -403,10 +426,8 @@ CR      write(*,*)  ' -2' MYID
       ! get_frc (both versions work with tdays, adding 0.5*dt)
       ! set_tides on the other hand work wit time, not adding 0.5*dt
       ! use time at n for surface forcing values
-
       frc_time='current'
       call set_forces
-
       ! use time at n+1/2 for boundary values
       ! we use these values at the end of pre_step, and during step2d
 
@@ -543,5 +564,10 @@ CR      write(*,*)  ' -2' MYID
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       call wrt_bgc
 #endif
+
+!      if (mynode == 0) then
+!        walltime0 = MPI_Wtime()
+!        write(*,*) "YAY", iic, walltime0
+!      endif
 
       end

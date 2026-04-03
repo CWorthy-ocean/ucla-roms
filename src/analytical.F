@@ -33,6 +33,7 @@
 ! ana_sst_tile      Analytical sea surface temperature and dQdSST
 !                         which are used during heat flux correction.
 ! ana_stflux_tile   Analytical kinematic surface flux of tracer type variables.
+! ana_wwave_tile    Analytical wind induced wave amplitude, direction and period.
 
       public ana_init
       public ana_vmix

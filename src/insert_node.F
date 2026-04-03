@@ -1,3 +1,5 @@
+c--#define TEST_INSERT  ! <-- self testing
+
 #ifdef TIME_INDEX
 # ifdef EXTRACT_INDEX
       subroutine extract_time_index(name, lstr, indx)
@@ -209,5 +211,51 @@
 # ifndef EXTRACT_INDEX
 #  define EXTRACT_INDEX
 #  include "insert_node.F"
+# else
+#  ifdef TEST_INSERT
+      implicit none                       ! Self-testing program
+      character(len=64) fname             ! for the subroutines above
+      integer lstr, i,iout, nnodes, ierr
+      ierr=0
+      fname='his_00_*/.*'
+      fname='../dir/root_name.000.nc'
+      fname='../dir/root_name.*.*.nc'
+      fname='../dir/root_name.0'
+
+      fname='../dir/root_name.123.3459.nc'
+
+      nnodes=23
+
+      lstr=1
+      do while (lstr < 64 .and. fname(lstr:lstr) /= ' ')
+        lstr=lstr+1
+      enddo
+      if (fname(lstr:lstr) == ' ') lstr=lstr-1
+
+      write(*,'(/1x,A/1x,A)') 'Testing insert_node...',
+     &                        '------------------------'
+      do i=0,nnodes-1
+        call insert_node(fname, lstr, i, nnodes, ierr)
+        write(*,'(I4,1x,A,1x,A,I3)') i, fname(1:lstr), 'len =', lstr
+      enddo
+
+      write(*,'(/1x,A/1x,A)') 'Testing insert_time_index...',
+     &                        '------------------------------'
+      do i=0,1000,80
+        call insert_time_index (fname, lstr, i, ierr)
+        write(*,'(1x,A,I4,2x,3A,I3)') 'tindx =', i, 'fname = ''',
+     &                          fname(1:lstr), '''  len =', lstr
+      enddo
+
+      write(*,'(/1x,A/1x,A)') 'Testing extract_time_index...',
+     &                        '-------------------------------'
+      do i=0,1000,75
+        call insert_time_index(fname, lstr, i, ierr)
+        call extract_time_index(fname, lstr, iout, ierr)
+        write(*,'(1x,3A,I8)') 'fname = ''',fname(1:lstr),
+     &                              '''  tindx =', iout
+      enddo
+      end
+#  endif
 # endif
 #endif

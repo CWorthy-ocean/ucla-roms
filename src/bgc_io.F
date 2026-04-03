@@ -53,6 +53,10 @@
       use scalars, only: nstp, nt, time, n, dt, iic, nnew, tdays
       use dimensions, only: i0, i1, j0, j1, xi_rho, eta_rho
       use error_handling_mod, only: error_log
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc
+      use pio, only : PIO_closefile
+#endif
 
       implicit none
 
@@ -127,6 +131,9 @@
 # include "compute_extended_bounds.h"
 #endif
 
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
       call set_frc_data(nc_dust,dust,'r')
       call set_frc_data(nc_iron,iron,'r')
 
@@ -168,6 +175,13 @@
         enddo !<- istrR
       enddo   !<- jstrR
 #endif /* DAILYPAR_PHOTOINHIBITION */
+
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
+#endif
 
       end subroutine set_bgc_surf_frc  !]
 ! ----------------------------------------------------------------------

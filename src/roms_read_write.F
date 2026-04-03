@@ -25,7 +25,9 @@
 #ifdef PARALLEL_IO
      &   ,pio_xi_rho_coarse_start, pio_eta_rho_coarse_start,pio_xi_u_coarse_start, pio_eta_v_coarse_start,
      &   pio_xi_rho_coarse, pio_eta_rho_coarse, pio_xi_u_coarse, pio_eta_v_coarse,
-     &   pio_i0c, pio_i1c, pio_j0c, pio_j1c, pio_initialize_coarse
+     &   pio_i0c, pio_i1c, pio_j0c, pio_j1c, pio_initialize_coarse, pio_IoSystem, pio_FileDesc, pio_type,
+     &   pio_file_is_open, pio_frcfile
+      use pio, only : PIO_openfile
 #endif
       use error_handling_mod, only: error_log ! Note, abort_check should be called by caller of set_frc_data
       use instant_output, only: wrt_instant
@@ -1009,13 +1011,19 @@
      &                         nc%times(it))
 
       ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+#ifdef PARALLEL_IO
+      if ((pio_file_is_open == 0) .and. (pio_gtype /= '---')) then
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
+        pio_file_is_open = 1
+      endif
+#endif
       ! The size of vdata must match the size of the data in the
       ! file. Ensure this in the allocation of vdata
       ! This is in contrast with the _surf version of fill_frc_slice
       if (d1) then
-        call ncread(ncid,vname,nc%vdata(:,1,it),start=(/1,irec/),fname=frcfile(ifile))
+        call ncread(ncid,vname,nc%vdata(:,1,it),start=(/1,irec/))
       else
-        call ncread(ncid,vname,nc%vdata(:,:,it),start=(/1,1,irec/),fname=frcfile(ifile))
+        call ncread(ncid,vname,nc%vdata(:,:,it),start=(/1,1,irec/))
       endif
       ! add force file info to output nc
       if (mynode == 0) then
@@ -1105,6 +1113,12 @@
       call find_new_record(vname,tname,modtime,ifile,irec,
      &                         nc%times(it))
       ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+#ifdef PARALLEL_IO
+      if ((pio_file_is_open == 0) .and. (pio_gtype /= '---')) then
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
+        pio_file_is_open = 1
+      endif
+#endif
       call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,:,it),(/1,1,1,irec/))
       ! add force file info to output nc
       if (mynode == 0) then
@@ -1170,6 +1184,13 @@
      &                         nc%times(it) )
 
       ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+#ifdef PARALLEL_IO
+      if ((pio_file_is_open == 0) .and. (pio_gtype /= '---')) then
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
+        pio_frcfile = frcfile(ifile)
+        pio_file_is_open = 1
+      endif
+#endif
       if (nc%coarse>0) then
         if (.not.allocated(cdata)) then
           call init_coarse
@@ -1177,38 +1198,26 @@
 
         if (gtype=='u') then
           pio_gtype='2Cu'
-          call ncread(ncid,vname,cdata(xc_:xc1,yc0:yc1),start=(/1,1,irec/),fname=frcfile(ifile))
-!        call exchange_xxx(cdata,array_bf=cbf)
-!        call wrt_instant(cdata, vname)
-!        stop
-!          call wrt_instant(cdata, vname)
+          call ncread(ncid,vname,cdata(xc_:xc1,yc0:yc1),start=(/1,1,irec/))
         elseif (gtype=='v') then
           pio_gtype='2Cv'
-          call ncread(ncid,vname,cdata(xc0:xc1,yc_:yc1),start=(/1,1,irec/),fname=frcfile(ifile))
-!        call exchange_xxx(cdata,array_bf=cbf)
-!        call wrt_instant(cdata, vname)
-!        stop
-!          call wrt_instant(cdata, vname)
+          call ncread(ncid,vname,cdata(xc0:xc1,yc_:yc1),start=(/1,1,irec/))
         else
           pio_gtype='2Cr'
-          call ncread(ncid,vname,cdata(xc0:xc1,yc0:yc1),start=(/1,1,irec/),fname=frcfile(ifile))
-!          call wrt_instant(cdata, vname)
+          call ncread(ncid,vname,cdata(xc0:xc1,yc0:yc1),start=(/1,1,irec/))
         endif
-!!! SKIP = USE_PIO ??
         call exchange_xxx(cdata,array_bf=cbf)
-        !call wrt_instant(cdata, vname)
-        !stop
         call coarse2fine(cdata,nc%vdata(:,:,it),gtype)
       else
         if (gtype=='u') then
           pio_gtype = '2Du'
-          call ncread(ncid,vname,nc%vdata(x_:x1,y0:y1,it),start=(/1,1,irec/),fname=frcfile(ifile))
+          call ncread(ncid,vname,nc%vdata(x_:x1,y0:y1,it),start=(/1,1,irec/))
         elseif (gtype=='v') then
           pio_gtype = '2Dv'
-          call ncread(ncid,vname,nc%vdata(x0:x1,y_:y1,it),start=(/1,1,irec/),fname=frcfile(ifile))
+          call ncread(ncid,vname,nc%vdata(x0:x1,y_:y1,it),start=(/1,1,irec/))
         else    ! rho-grid
           pio_gtype = '2Dr'
-          call ncread(ncid,vname,nc%vdata(x0:x1,y0:y1,it),start=(/1,1,irec/),fname=frcfile(ifile))
+          call ncread(ncid,vname,nc%vdata(x0:x1,y0:y1,it),start=(/1,1,irec/))
         endif
       endif
       ! add force file info to output nc
@@ -1226,8 +1235,7 @@
 !      endif
       ierr = nf90_close(ncid)
 
-!!! SKIP = USE_PIO ??
-      call exchange_xxx(nc%vdata(:,:,it))!,skip=use_pio)
+      call exchange_xxx(nc%vdata(:,:,it))
 
       if (mynode==0) then
         call display_read_time_to_log(vname,nc%times(it),irec )
@@ -1762,8 +1770,16 @@
       ierr=nf90_put_att (ncid,nf90_global, 'tnu2_units', 'm^2/s')
 # endif
 # ifdef MY25_MIXING
+#  ifdef Q2_DIF2
+      ierr=nf90_put_att(ncid,nf90_global, 'q2nu2', q2nu2)
+      ierr=nf90_put_att (ncid,nf90_global, 'q2nu2_units', 'm^2/s')
+#  endif
+#  ifdef Q2_DIF4
+      ierr=nf90_put_att(ncid,nf90_global,'q2nu4', q2nu4)
+      ierr=nf90_put_att (ncid,nf90_global,'q2nu4_units', 'm^4/s')
+#  endif
 # endif
-# if !defined LMD_MIXING
+# if !defined LMD_MIXING && !defined BVF_MIXING
 
       ierr=nf90_put_att(ncid, nf90_global, 'Akv_bak', Akv_bak)       ! Background vertical viscosity tracer mixing
       ierr=nf90_put_att (ncid, nf90_global, 'Akv_bak_units', 'm^2/s')

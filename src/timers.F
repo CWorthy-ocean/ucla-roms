@@ -31,18 +31,30 @@
 
 # undef KERNEL_THREADS
 
+# if defined SGI || defined PGI
+#  undef OMP_GET_WTIME
+# else
+#  define OMP_GET_WTIME
+# endif
+
       contains
       subroutine start_timers
 
       implicit none
       integer getpid, trd
 
+# ifdef OMP_GET_WTIME
+C$    real*8 omp_get_wtime
+# endif
 C$    integer omp_get_thread_num, omp_get_num_threads
 
       numthreads=1     ; trd=0
 C$    numthreads=omp_get_num_threads() ; trd=omp_get_thread_num()
       proc(1)=getpid() ; proc(2)=trd
 
+# ifdef OMP_GET_WTIME
+C$    WallClock=omp_get_wtime()
+# endif
       call cpu_time(cpu_init)
 
 C$OMP CRITICAL (start_timers_cr_rgn)
@@ -85,8 +97,14 @@ C$OMP END CRITICAL (start_timers_cr_rgn)
 
       implicit none                       ! for all threads.
 
+# ifdef OMP_GET_WTIME
+C$    real*8 omp_get_wtime
+# endif
       if (proc(1) /= 0) then
         proc(1)=0
+# ifdef OMP_GET_WTIME
+C$      WallClock=omp_get_wtime()-WallClock
+# endif
         call cpu_time(cpu_net) ; cpu_net=cpu_net-cpu_init
 
 C$OMP CRITICAL (stop_timers_cr_rgn)
@@ -119,6 +137,11 @@ C$OMP CRITICAL (stop_timers_cr_rgn)
 C$          write(*,'(29x,A,F14.2)')   'total', cpu_all(1)
 # else
 C$          write(*,'(27x,A,F14.2)') 'maximum', cpu_all(1)
+# endif
+# ifdef OMP_GET_WTIME
+C$          write(*,'(11x,A,F12.2,1x,A,F6.2,A)')
+C$   &           'Wall Clock elapsed time =', WallClock, 'sec (',
+C$   &  100.D0*cpu_all(1)/(WallClock*dble(numthreads)), '% CPUs)'
 # endif
 # ifdef MPI_SILENT_MODE
           endif

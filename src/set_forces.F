@@ -105,7 +105,6 @@ c***              no code here
 # if defined QCORRECTION || defined SFLX_CORR
       call set_surf_field_corr
 # endif
-
 # ifdef BULK_FRC
 #  ifdef LMD_KPP
 #   ifdef ANA_SRFLUX
@@ -114,7 +113,6 @@ c***              no code here
 #  endif
       call set_bulk_frc(istr,iend,jstr,jend)
 # else
-
       ! DevinD not sure what flag to use here to avoid set_flux for purely analytical
 #  ifndef ANA_SMFLUX
       frctype = 'SURF:'
@@ -135,25 +133,36 @@ c***              no code here
 #   endif
 #  endif
 # endif
-
       if(nt>iTandS) call set_surf_tracer_flx
-
       ! BGC surface flux:
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
       call set_bgc_surf_frc(istr,iend,jstr,jend)
 # endif
-
-
       if (river_source) then
         frctype = 'RIVERS:'
         call set_river_frc
       endif
-
       if (pipe_source) call set_pipe_frc
 #if defined(CDR_FORCING)
       if (cdr_source) call set_cdr_frc
 #endif
-
 #endif  /* SOLVE3D */
 
+!--> Bottom boundary fluxes [Styles and Glenn (1996) bottom
+!    boundary layer formulation.  Not implemented in this code]
+
+#if defined ANA_BMFLUX
+      call ana_bmflux ILLEGAL
+#elif defined SG_BBL96
+# ifdef ANA_WWAVE
+      call ana_wwave ILLEGAL
+# else
+      call set_wwave_tile(istr,iend,jstr,jend)
+# endif
+      call sg_bbl96 ILLEGAL
+#endif
+
+#ifdef ANA_PSOURCE
+      if (ZEROTH_TILE) call ana_psource
+#endif
       end

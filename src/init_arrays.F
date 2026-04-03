@@ -143,8 +143,10 @@
       do j=jstrR,jendR
         do i=istrR,iendR
           ssh(i,j)=init0
+# ifndef ANA_SSH
           sshg(i,j,1)=init0
           sshg(i,j,2)=init0
+# endif
         enddo
       enddo
 #endif

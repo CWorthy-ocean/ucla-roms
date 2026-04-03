@@ -1,3 +1,4 @@
+
       module instant_output
       ! Collection of random variables for output
 
@@ -389,3 +390,4 @@
 ! ----------------------------------------------------------------------
 
       end module instant_output
+

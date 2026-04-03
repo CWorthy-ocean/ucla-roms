@@ -25,7 +25,10 @@
      &     inode, jnode
       use error_handling_mod, only: error_log
       use pio_roms, only: pio_gtype
-
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc
+      use pio, only : PIO_closefile
+#endif
       implicit none
 
       ! Set module to private and make vars explicitly public
@@ -242,6 +245,9 @@
 
       integer :: itrc
 
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
 
 #  ifdef ANA_BRY
       return
@@ -393,6 +399,13 @@
       endif
 #ifndef PARALLEL_IO
       endif
+#endif
+
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
 #endif
 
       call error_log%abort_check()

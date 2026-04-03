@@ -66,6 +66,11 @@
           enddo
         enddo
 
+# ifdef OBC_CHECK
+        print *, 'set_depth_tile:'
+        print *, 'DU_avg1(istr,10)=',DU_avg1(istr,10)
+# endif
+
       endif  ! first time
 
       ds=1.D0/dble(N)

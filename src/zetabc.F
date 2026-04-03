@@ -59,6 +59,14 @@ c--#define OBC_Z2ORLANSKI
 # endif
       endif
 
+c*******
+c*******
+# ifdef ISWAKE_XXX
+c--#  define OBC_Z2ORLANSKI
+# endif
+c*******
+c*******
+
       if (EASTERN_EDGE) then
 # if defined OBC_EAST && defined OBC_M2FLATHER
         do j=jstrV-1,jend

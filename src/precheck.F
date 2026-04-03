@@ -24,7 +24,6 @@
       implicit none
 
       call extract_data_precheck
-      call bgc_precheck
 
       end subroutine do_precheck
 !---------------------------------------------------
@@ -53,24 +52,5 @@
       endif
 
       end subroutine extract_data_precheck
-!---------------------------------------------------
-      subroutine bgc_precheck
-
-      implicit none
-
-      character(len=12) :: sr_name = "bgc_precheck"
-      character(len=1024) :: error_info
-
-#if defined MARBL && defined BIOLOGY_BEC2
-          write(error_info,*) "Both MARBL and BEC2 have been enabled"
-     & " in cppdefs.opt, but only one (or none) may be used in any"
-     & " given run."
-          call error_log%raise_global(
-     &      context=module_name//"/"//sr_name,
-     &      info=error_info)
-          call error_log%abort_check()
-#endif
-
-      end subroutine bgc_precheck
 !---------------------------------------------------
       end module precheck

@@ -34,7 +34,7 @@
       contains
 
 !----------------------------------------------------------------------
-      subroutine ncread_1D(ncid,vname,dat,start,fname)  ![
+      subroutine ncread_1D(ncid,vname,dat,start)  ![
       implicit none
       character(len=9) :: sr_name = "ncread_1D"
       ! input
@@ -43,7 +43,6 @@
       real,dimension(:) :: dat
 
       integer,dimension(:),optional :: start
-      character(len=*),optional     :: fname
 
       ! local
       integer              :: varid,ierr
@@ -55,9 +54,9 @@
       if (pio_gtype /= '---') then
         if (present(start)) then
           irec = start(2)
-          call pio_ncread1(fname, vname, dat, irec)
+          call pio_ncread1(vname, dat, irec)
         else
-          call pio_ncread1(fname, vname, dat)
+          call pio_ncread1(vname, dat)
         endif
         return
       else
@@ -87,7 +86,7 @@
 
       end subroutine ncread_1D  !]
 !----------------------------------------------------------------------
-      subroutine ncread_2D(ncid,vname,dat,start,fname)  ![
+      subroutine ncread_2D(ncid,vname,dat,start)  ![
       implicit none
       character(len=9) :: sr_name = "ncread_2D"
       ! input
@@ -96,7 +95,6 @@
       real,dimension(:,:) :: dat
 
       integer,dimension(:),optional :: start
-      character(len=*),optional     :: fname
 
       ! local
       integer              :: varid,ierr
@@ -108,9 +106,9 @@
       if (pio_gtype /= '---') then
         if (present(start)) then
           irec = start(3)
-          call pio_ncread2(fname, vname, dat, irec)
+          call pio_ncread2(vname, dat, irec)
         else
-          call pio_ncread2(fname, vname, dat)
+          call pio_ncread2(vname, dat)
         endif
         return
       else
@@ -140,7 +138,7 @@
 
       end subroutine ncread_2D  !]
 !----------------------------------------------------------------------
-      subroutine ncread_3D(ncid,vname,dat,start,fname)  ![
+      subroutine ncread_3D(ncid,vname,dat,start)  ![
       implicit none
       character(len=9) :: sr_name = "ncread_3D"
 
@@ -151,7 +149,6 @@
 !      real,dimension(:,:,:) :: dat
 
       integer,dimension(:),optional :: start
-      character(len=*),optional     :: fname
       ! local
       integer              :: varid,ierr
       integer              :: irec
@@ -163,9 +160,9 @@
       if (pio_gtype /= '---') then
         if (present(start)) then
           irec = start(4)
-          call pio_ncread3(fname, vname, dat, irec)
+          call pio_ncread3(vname, dat, irec)
         else
-          call pio_ncread3(fname, vname, dat)
+          call pio_ncread3(vname, dat)
         endif
         return
       else

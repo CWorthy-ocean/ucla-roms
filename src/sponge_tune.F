@@ -22,6 +22,10 @@
      &     obc_east, obc_north, obc_south, obc_west,
      &     mynode, np_eta, np_xi
       use error_handling_mod, only: error_log
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc
+      use pio, only : PIO_closefile
+#endif
 
       implicit none
       private
@@ -145,6 +149,9 @@
       !local
       integer:: i,j,ierr
 
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
       if (obc_west.and.inode.eq.0) then
         call set_frc_data(nc_pflx_w,pflx_west)
         do j=1,ny
@@ -170,6 +177,12 @@
           if (abs(pflx_north(i))>100) pflx_north(i) = 0.
         enddo
       endif
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
+#endif
       call error_log%abort_check()
       end subroutine set_pflx !]
 ! ----------------------------------------------------------------------

@@ -5,10 +5,8 @@
 COMPILER ?=gnu
 # Set MPI wrapper (auto, mpifort, mpiifx, mpiifort)
 MPI_WRAPPER ?=auto
-# Configure FFLAGS by setting BUILD_MODE to "debug","strict", or "test"
+# Configure FFLAGS by setting BUILD_MODE to "debug","strict","vtune",or "grof"
 BUILD_MODE ?=regular
-# Include profiling in the compilation by setting PROFILER to "none","gprof","vtune", or "scorep"
-PROFILER?=none
 # Keep pre-processed source code or not:
 KEEP_PPSRC ?=false
 # Allow additional FFLAGS to defaults without overriding them:
@@ -90,16 +88,14 @@ ifeq ($(findstring $(expected_fc),$(MPIVER)),)
 endif
 
 # Set compiler and linker to chosen wrapper
-ifeq ($(PROFILER),scorep)
-   CFT := scorep $(MPI_WRAPPER)
-   LDR := scorep $(MPI_WRAPPER)
-else
-   CFT := $(MPI_WRAPPER)
-   LDR := $(MPI_WRAPPER)
-endif
+CFT := $(MPI_WRAPPER)
+LDR := $(MPI_WRAPPER)
 
-# For BUILD_MODE = "debug", always keep source code
-ifeq ($(BUILD_MODE),debug)
+
+# For BUILD_MODE = "vtune" or "grof" always keep source code:
+ifeq ($(BUILD_MODE),vtune)
+   KEEP_PPSRC=true
+else ifeq ($(BUILD_MODE),grof)
    KEEP_PPSRC=true
 endif
 
@@ -203,7 +199,7 @@ else ifeq ($(COMPILER),intel)
     FFLAGS = -O3      # Do NOT use -ip for ifx
 endif
 
-# Apply debug, strict, vtune, or gprof settings for Intel compilers
+# Apply debug, strict, vtune, or grof settings for Intel compilers
 ifeq ($(COMPILER),$(filter ifort intel, $(COMPILER)))
     ifeq ($(BUILD_MODE),debug)
         FFLAGS = -g -traceback
@@ -212,12 +208,12 @@ ifeq ($(COMPILER),$(filter ifort intel, $(COMPILER)))
 	FFLAGS = -O0
     else ifeq ($(BUILD_MODE),strict)
         FFLAGS += -fp-model strict
-    endif
-    ifeq ($(PROFILER),vtune)
+    else ifeq ($(BUILD_MODE),vtune)
         FFLAGS = -g -debug inline-debug-info -parallel-source-info=2
+    else ifeq ($(BUILD_MODE),grof)
+        FFLAGS += -pg
     endif
 endif
-
 
 # GNU compiler settings
 ifeq ($(COMPILER),gnu)
@@ -227,10 +223,6 @@ ifeq ($(COMPILER),gnu)
     else ifeq ($(BUILD_MODE),test)
 	FFLAGS = -fallow-argument-mismatch -O0
     endif
-endif
-
-ifeq ($(PROFILER),gprof)
-   FFLAGS += -pg
 endif
 
 # Options to link to libraries & modules (NetCDF, etc):

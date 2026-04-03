@@ -16,8 +16,9 @@
       use pio_nf, only : PIO_inq_varid, PIO_inq_dimid
       use pionfatt_mod, only : put_att_desc_text
       use mpi, only: mpi_comm_world
-      use mpi_f08, only: mpi_character
+      use mpi_f08, only: mpi_character, mpi_wtime
       use param, only: LLm, MMm, N, ocean_grid_comm, nt, mynode
+      use timers, only: tstart
       implicit none
 
       private
@@ -25,7 +26,7 @@
 #include "pio_roms.opt"
 
       logical, parameter, public  :: use_pio = .true.
-
+      character(len=50),public :: pio_frcfile
       !> @brief Rank of processor running the code.
       integer, public :: pio_myRank
       !> @brief Number of processors participating in MPI communicator.
@@ -37,16 +38,17 @@
       !> @brief Start index of I/O processors.
       integer :: pio_optBase
       !> @brief The ParallelIO system set up by @ref PIO_init.
-      type(iosystem_desc_t) :: pio_IoSystem
+      type(iosystem_desc_t),public :: pio_IoSystem
       !> @brief Contains data identifying the file.
-      type(file_desc_t)     :: pio_FileDesc
+      type(file_desc_t),public     :: pio_FileDesc
       !> @brief An io descriptor handle that is generated in @ref PIO_initdecomp.
       type(io_desc_t)       :: pio_desc
       !> Grid type
       character(len=3),public      :: pio_gtype
       !> Frame number
       integer(kind=PIO_OFFSET_KIND) :: frame
-
+      !> Marker to track whether PIO has opened a file
+      integer,public :: pio_file_is_open
 
       !> @brief The length of the dimension of the netCDF variable.
       integer, dimension(1) :: pio_dimLen_n1r
@@ -199,8 +201,48 @@
       integer(kind=PIO_OFFSET_KIND), dimension(1) :: pio_start_riv_vol
       integer(kind=PIO_OFFSET_KIND), dimension(1) :: pio_count_riv_vol
 
-      integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_start_riv_trc
-      integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_count_riv_trc
+!      integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_start_riv_trc
+!      integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_count_riv_trc
+
+      type(io_desc_t),public     :: pio_desc_n1r
+      type(io_desc_t),public     :: pio_desc_n1u
+      type(io_desc_t),public     :: pio_desc_n1v
+      type(io_desc_t),public     :: pio_desc_n2r
+      type(io_desc_t),public     :: pio_desc_n2u
+      type(io_desc_t),public     :: pio_desc_n2v
+
+      type(io_desc_t),public     :: pio_desc_s1r
+      type(io_desc_t),public     :: pio_desc_s1u
+      type(io_desc_t),public     :: pio_desc_s1v
+      type(io_desc_t),public     :: pio_desc_s2r
+      type(io_desc_t),public     :: pio_desc_s2u
+      type(io_desc_t),public     :: pio_desc_s2v
+
+      type(io_desc_t),public     :: pio_desc_e1r
+      type(io_desc_t),public     :: pio_desc_e1u
+      type(io_desc_t),public     :: pio_desc_e1v
+      type(io_desc_t),public     :: pio_desc_e2r
+      type(io_desc_t),public     :: pio_desc_e2u
+      type(io_desc_t),public     :: pio_desc_e2v
+
+      type(io_desc_t),public     :: pio_desc_w1r
+      type(io_desc_t),public     :: pio_desc_w1u
+      type(io_desc_t),public     :: pio_desc_w1v
+      type(io_desc_t),public     :: pio_desc_w2r
+      type(io_desc_t),public     :: pio_desc_w2u
+      type(io_desc_t),public     :: pio_desc_w2v
+
+      type(io_desc_t),public     :: pio_desc_2Dr
+      type(io_desc_t),public     :: pio_desc_2Du
+      type(io_desc_t),public     :: pio_desc_2Dv
+
+      type(io_desc_t),public     :: pio_desc_3Dr
+      type(io_desc_t),public     :: pio_desc_3Du
+      type(io_desc_t),public     :: pio_desc_3Dv
+
+      type(io_desc_t),public     :: pio_desc_2Cr
+      type(io_desc_t),public     :: pio_desc_2Cu
+      type(io_desc_t),public     :: pio_desc_2Cv
 
       integer, public :: pio_xi_rho, pio_eta_rho
       integer, public :: pio_xi_u, pio_eta_v
@@ -290,11 +332,6 @@
 
         pio_numAggregator = 0
         pio_optBase       = 1
-        !pio_type          = PIO_iotype_netcdf4p
-        !pio_type        = PIO_iotype_netcdf
-        pio_type          = PIO_iotype_pnetcdf  ! works better when NOT HDF5 / NetCDF4
-
-        call PIO_setdebuglevel(6)
 
         ! NORTH
         pio_dimLen_n1r(1) = LLm+2
@@ -633,6 +670,10 @@
 
         pio_niotasks = MAX(1, int(pio_ntasks / pio_stride))
 
+        if (mynode == 0) then
+          write(*,*) "PIO is using ", pio_niotasks, "tasks for I/O."
+        endif
+
         call PIO_init(pio_myRank,       ! MPI rank
      &       MPI_COMM_WORLD,             ! MPI communicator
      &       pio_niotasks,              ! Number of iotasks (ntasks/stride)
@@ -641,6 +682,8 @@
      &       PIO_rearr_subset,           ! do not use any form of rearrangement (can be BOX or SUBSET)
      &       pio_IoSystem,           ! iosystem
      &       base=pio_optBase)          ! base (optional argument)
+
+      call pio_createDecomps
 
       end subroutine pio_initialize
 ! ----------------------------------------------------------------------
@@ -677,150 +720,96 @@
         pio_count_2Cv(1) = pio_xi_rho_coarse+pio_i0c+pio_i1c
         pio_count_2Cv(2) = pio_eta_v_coarse+pio_j0c+pio_j1c
 
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Cr, pio_start_2Cr, pio_count_2Cr,
+     &       pio_desc_2Cr)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Cu, pio_start_2Cu, pio_count_2Cu,
+     &       pio_desc_2Cu)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Cv, pio_start_2Cv, pio_count_2Cv,
+     &       pio_desc_2Cv)
+
+
       end subroutine pio_initialize_coarse
 !! ----------------------------------------------------------------------
-      subroutine pio_createDecomp
+      subroutine pio_createDecomps
 
         implicit none
 
-          if (pio_gtype=='n1r') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1r, pio_start_n1r, pio_count_n1r,
-     &       pio_desc)
-          elseif (pio_gtype=='n1u') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1u, pio_start_n1u, pio_count_n1u,
-     &       pio_desc)
-          elseif (pio_gtype=='n1v') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1v, pio_start_n1v, pio_count_n1v,
-     &       pio_desc)
-          endif
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1r, pio_start_n1r, pio_count_n1r,
+     &       pio_desc_n1r)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1u, pio_start_n1u, pio_count_n1u,
+     &       pio_desc_n1u)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1v, pio_start_n1v, pio_count_n1v,
+     &       pio_desc_n1v)
 
-          if (pio_gtype=='n2r') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2r, pio_start_n2r, pio_count_n2r,
-     &       pio_desc)
-          elseif (pio_gtype=='n2u') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2u, pio_start_n2u, pio_count_n2u,
-     &       pio_desc)
-          elseif (pio_gtype=='n2v') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2v, pio_start_n2v, pio_count_n2v,
-     &       pio_desc)
-          endif
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2r, pio_start_n2r, pio_count_n2r,
+     &       pio_desc_n2r)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2u, pio_start_n2u, pio_count_n2u,
+     &       pio_desc_n2u)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2v, pio_start_n2v, pio_count_n2v,
+     &       pio_desc_n2v)
 
-          if (pio_gtype=='s1r') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1r, pio_start_s1r, pio_count_s1r,
-     &       pio_desc)
-          elseif (pio_gtype=='s1u') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1u, pio_start_s1u, pio_count_s1u,
-     &       pio_desc)
-          elseif (pio_gtype=='s1v') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1v, pio_start_s1v, pio_count_s1v,
-     &       pio_desc)
-          endif
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1r, pio_start_s1r, pio_count_s1r,
+     &       pio_desc_s1r)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1u, pio_start_s1u, pio_count_s1u,
+     &       pio_desc_s1u)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1v, pio_start_s1v, pio_count_s1v,
+     &       pio_desc_s1v)
 
-          if (pio_gtype=='s2r') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2r, pio_start_s2r, pio_count_s2r,
-     &       pio_desc)
-          elseif (pio_gtype=='s2u') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2u, pio_start_s2u, pio_count_s2u,
-     &       pio_desc)
-          elseif (pio_gtype=='s2v') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2v, pio_start_s2v, pio_count_s2v,
-     &       pio_desc)
-          endif
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2r, pio_start_s2r, pio_count_s2r,
+     &       pio_desc_s2r)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2u, pio_start_s2u, pio_count_s2u,
+     &       pio_desc_s2u)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2v, pio_start_s2v, pio_count_s2v,
+     &       pio_desc_s2v)
 
-          if (pio_gtype=='e1r') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1r, pio_start_e1r, pio_count_e1r,
-     &       pio_desc)
-          elseif (pio_gtype=='e1u') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1u, pio_start_e1u, pio_count_e1u,
-     &       pio_desc)
-          elseif (pio_gtype=='e1v') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1v, pio_start_e1v, pio_count_e1v,
-     &       pio_desc)
-          endif
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1r, pio_start_e1r, pio_count_e1r,
+     &       pio_desc_e1r)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1u, pio_start_e1u, pio_count_e1u,
+     &       pio_desc_e1u)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1v, pio_start_e1v, pio_count_e1v,
+     &       pio_desc_e1v)
 
-          if (pio_gtype=='e2r') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2r, pio_start_e2r, pio_count_e2r,
-     &       pio_desc)
-          elseif (pio_gtype=='e2u') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2u, pio_start_e2u, pio_count_e2u,
-     &       pio_desc)
-          elseif (pio_gtype=='e2v') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2v, pio_start_e2v, pio_count_e2v,
-     &       pio_desc)
-          endif
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2r, pio_start_e2r, pio_count_e2r,
+     &       pio_desc_e2r)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2u, pio_start_e2u, pio_count_e2u,
+     &       pio_desc_e2u)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2v, pio_start_e2v, pio_count_e2v,
+     &       pio_desc_e2v)
 
-          if (pio_gtype=='w1r') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1r, pio_start_w1r, pio_count_w1r,
-     &       pio_desc)
-          elseif (pio_gtype=='w1u') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1u, pio_start_w1u, pio_count_w1u,
-     &       pio_desc)
-          elseif (pio_gtype=='w1v') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1v, pio_start_w1v, pio_count_w1v,
-     &       pio_desc)
-          endif
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1r, pio_start_w1r, pio_count_w1r,
+     &       pio_desc_w1r)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1u, pio_start_w1u, pio_count_w1u,
+     &       pio_desc_w1u)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1v, pio_start_w1v, pio_count_w1v,
+     &       pio_desc_w1v)
 
-          if (pio_gtype=='w2r') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2r, pio_start_w2r, pio_count_w2r,
-     &       pio_desc)
-          elseif (pio_gtype=='w2u') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2u, pio_start_w2u, pio_count_w2u,
-     &       pio_desc)
-          elseif (pio_gtype=='w2v') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2v, pio_start_w2v, pio_count_w2v,
-     &       pio_desc)
-          endif
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2r, pio_start_w2r, pio_count_w2r,
+     &       pio_desc_w2r)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2u, pio_start_w2u, pio_count_w2u,
+     &       pio_desc_w2u)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2v, pio_start_w2v, pio_count_w2v,
+     &       pio_desc_w2v)
 
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dr, pio_start_2Dr, pio_count_2Dr,
+     &       pio_desc_2Dr)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Du, pio_start_2Du, pio_count_2Du,
+     &       pio_desc_2Du)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dv, pio_start_2Dv, pio_count_2Dv,
+     &       pio_desc_2Dv)
 
-          if (pio_gtype=='2Dr') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dr, pio_start_2Dr, pio_count_2Dr,
-     &       pio_desc)
-          elseif (pio_gtype=='2Du') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Du, pio_start_2Du, pio_count_2Du,
-     &       pio_desc)
-          elseif (pio_gtype=='2Dv') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dv, pio_start_2Dv, pio_count_2Dv,
-     &       pio_desc)
-          endif
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dr, pio_start_3Dr, pio_count_3Dr,
+     &       pio_desc_3Dr)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Du, pio_start_3Du, pio_count_3Du,
+     &       pio_desc_3Du)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dv, pio_start_3Dv, pio_count_3Dv,
+     &       pio_desc_3Dv)
 
-          if (pio_gtype=='2Cr') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Cr, pio_start_2Cr, pio_count_2Cr,
-     &       pio_desc)
-          elseif (pio_gtype=='2Cu') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Cu, pio_start_2Cu, pio_count_2Cu,
-     &       pio_desc)
-          elseif (pio_gtype=='2Cv') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Cv, pio_start_2Cv, pio_count_2Cv,
-     &       pio_desc)
-          endif
-
-          if (pio_gtype=='3Dr') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dr, pio_start_3Dr, pio_count_3Dr,
-     &       pio_desc)
-          elseif (pio_gtype=='3Du') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Du, pio_start_3Du, pio_count_3Du,
-     &       pio_desc)
-          elseif (pio_gtype=='3Dv') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dv, pio_start_3Dv, pio_count_3Dv,
-     &       pio_desc)
-          endif
-
-
-          if (pio_gtype=='rvv') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_riv_vol, pio_start_riv_vol, pio_count_riv_vol,
-     &       pio_desc)
-          elseif (pio_gtype=='rtr') then
-            call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_riv_trc, pio_start_riv_trc, pio_count_riv_trc,
-     &       pio_desc)
-          endif
-
-      end subroutine pio_createDecomp
+      end subroutine pio_createDecomps
 ! ----------------------------------------------------------------------
-      subroutine pio_ncread1(fname, varName, arr, irec)
+      subroutine pio_ncread1(varName, arr, irec)
 
         implicit none
 
-        character(len=*) :: fname
         character(len=*) :: varName
         real,dimension(:),intent(inout) :: arr ! array to be filled
         integer,optional,intent(in)       :: irec
@@ -828,26 +817,45 @@
         type(var_desc_t) :: varId
         integer :: ierr
 
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname))
-
         ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
+
         if (present(irec)) then
           frame = irec
           call PIO_setframe(pio_FileDesc, varId, frame)
         endif
-        call pio_createDecomp !(dims)
-        call PIO_read_darray(pio_FileDesc, varId, pio_desc,
-     &  arr, ierr)
 
-        call PIO_closefile(pio_FileDesc)
+        if (pio_gtype == 'n1r') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_n1r, arr, ierr)
+        elseif (pio_gtype == 'n1u') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_n1u, arr, ierr)
+        elseif (pio_gtype == 'n1v') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_n1v, arr, ierr)
+        elseif (pio_gtype == 's1r') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_s1r, arr, ierr)
+        elseif (pio_gtype == 's1u') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_s1u, arr, ierr)
+        elseif (pio_gtype == 's1v') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_s1v, arr, ierr)
+        elseif (pio_gtype == 'e1r') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_e1r, arr, ierr)
+        elseif (pio_gtype == 'e1u') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_e1u, arr, ierr)
+        elseif (pio_gtype == 'e1v') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_e1v, arr, ierr)
+        elseif (pio_gtype == 'w1r') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_w1r, arr, ierr)
+        elseif (pio_gtype == 'w1u') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_w1u, arr, ierr)
+        elseif (pio_gtype == 'w1v') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_w1v, arr, ierr)
+        endif
 
       end subroutine pio_ncread1
 ! ----------------------------------------------------------------------
-      subroutine pio_ncread2(fname, varName, arr, irec)
+      subroutine pio_ncread2(varName, arr, irec)
 
         implicit none
 
-        character(len=*) :: fname
         character(len=*) :: varName
         real,dimension(:,:),intent(inout) :: arr ! array to be filled
         integer,optional,intent(in)       :: irec
@@ -855,28 +863,57 @@
         type(var_desc_t) :: varId
         integer :: ierr
 
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname))
-
         ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
 
         if (present(irec)) then
           frame = irec
           call PIO_setframe(pio_FileDesc, varId, frame)
         endif
-        call pio_createDecomp !(dims)
 
-        call PIO_read_darray(pio_FileDesc, varId, pio_desc,
-     &  arr, ierr)
-
-        call PIO_closefile(pio_FileDesc)
+        if (pio_gtype == 'n2r') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_n2r, arr, ierr)
+        elseif (pio_gtype == 'n2u') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_n2u, arr, ierr)
+        elseif (pio_gtype == 'n2v') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_n2v, arr, ierr)
+        elseif (pio_gtype == 's2r') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_s2r, arr, ierr)
+        elseif (pio_gtype == 's2u') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_s2u, arr, ierr)
+        elseif (pio_gtype == 's2v') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_s2v, arr, ierr)
+        elseif (pio_gtype == 'e2r') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_e2r, arr, ierr)
+        elseif (pio_gtype == 'e2u') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_e2u, arr, ierr)
+        elseif (pio_gtype == 'e2v') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_e2v, arr, ierr)
+        elseif (pio_gtype == 'w2r') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_w2r, arr, ierr)
+        elseif (pio_gtype == 'w2u') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_w2u, arr, ierr)
+        elseif (pio_gtype == 'w2v') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_w2v, arr, ierr)
+        elseif (pio_gtype == '2Dr') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_2Dr, arr, ierr)
+        elseif (pio_gtype == '2Du') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_2Du, arr, ierr)
+        elseif (pio_gtype == '2Dv') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_2Dv, arr, ierr)
+        elseif (pio_gtype == '2Cr') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_2Cr, arr, ierr)
+        elseif (pio_gtype == '2Cu') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_2Cu, arr, ierr)
+        elseif (pio_gtype == '2Cv') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_2Cv, arr, ierr)
+        endif
 
       end subroutine pio_ncread2
 ! ----------------------------------------------------------------------
-      subroutine pio_ncread3(fname, varName, arr, irec)
+      subroutine pio_ncread3(varName, arr, irec)
 
         implicit none
 
-        character(len=*) :: fname
         character(len=*) :: varName
         real,dimension(:,:,:),intent(inout) :: arr ! array to be filled
         integer,optional,intent(in)       :: irec
@@ -884,20 +921,20 @@
         type(var_desc_t) :: varId
         integer :: ierr
 
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname))
-
         ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
 
         if (present(irec)) then
           frame = irec
           call PIO_setframe(pio_FileDesc, varId, frame)
         endif
-        call pio_createDecomp !(dims)
 
-        call PIO_read_darray(pio_FileDesc, varId, pio_desc,
-     &  arr, ierr)
-
-        call PIO_closefile(pio_FileDesc)
+        if (pio_gtype == '3Dr') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_3Dr, arr, ierr)
+        elseif (pio_gtype == '3Du') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_3Du, arr, ierr)
+        elseif (pio_gtype == '3Dv') then
+          call PIO_read_darray(pio_FileDesc, varId, pio_desc_3Dv, arr, ierr)
+        endif
 
       end subroutine pio_ncread3
 ! ----------------------------------------------------------------------
