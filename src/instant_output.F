@@ -11,9 +11,10 @@
      &     nf90_netcdf4, nf90_create, nf90_global, nf90_inq_dimid
       use error_handling_mod, only: error_log
       use nc_read_write, only: nccreate
-      use param, only: mynode, nnodes, isw_corn, iwest, jsouth, jsw_corn
+      use param, only: mynode, nnodes, isw_corn, iwest, jsouth, jsw_corn, np_xi, np_eta
       use scalars, only: time
-      use dimensions, only: i0,i1,j0,j1
+      use dimensions, only: i0,i1,j0,j1,inode,jnode,gnx,gny
+      use roms_mpi, only: new_part
 
       implicit none
 
@@ -45,7 +46,7 @@
 
       contains
 !---------------------------------------------------------
-      subroutine def_vars_instant(ncid, varname, ndim, dimsize,comp)  ![
+      subroutine def_vars_instant(ncid, varname, ndim, dimsize)  ![
       implicit none
 
       ! input
@@ -53,7 +54,6 @@
       character(len=*),intent(in) :: varname
       integer,intent(in) :: ndim
       integer,intent(in),dimension(:) :: dimsize
-      logical, optional :: comp
 
       ! local
       integer :: i, ierr, varid, did, xtype
@@ -64,24 +64,27 @@
 
       integer :: ibuff(4), npart
 
-      if (present(comp)) then
-        if (comp) then
-          npart=4                                    ! Put global attribute 'partition' which identifies subdomain
-          ibuff(1)=mynode                            ! within the processor grid individually for each file.
-          ibuff(2)=nnodes
-          if (WESTERN_MPI_EDGE) then
-            ibuff(3)=iSW_corn+iwest
-          else
-            ibuff(3)=iSW_corn+iwest+1
-          endif
-          if (SOUTHERN_MPI_EDGE) then
-            ibuff(4)=jSW_corn+jsouth
-          else
-            ibuff(4)=jSW_corn+jsouth+1
-          endif
+      npart=4                                    ! Put global attribute 'partition' which identifies subdomain
+      ibuff(1)=mynode                            ! within the processor grid individually for each file.
+      ibuff(2)=nnodes
+      if (WESTERN_MPI_EDGE) then
+        ibuff(3)=iSW_corn+iwest
+      else
+        ibuff(3)=iSW_corn+iwest+1
+      endif
+      if (SOUTHERN_MPI_EDGE) then
+        ibuff(4)=jSW_corn+jsouth
+      else
+        ibuff(4)=jSW_corn+jsouth+1
+      endif
+      ierr=nf90_put_att(ncid, nf90_global, 'partition', ibuff)
 
-          ierr=nf90_put_att(ncid, nf90_global, 'partition', ibuff)
-        endif
+      if (new_part) then
+        ierr=nf90_put_att(ncid, nf90_global, 'ij_nodes', (/NP_XI,NP_ETA/))
+        ierr=nf90_put_att(ncid, nf90_global, 'subdompos', (/inode,jnode/))
+        ierr=nf90_put_att(ncid, nf90_global, 'globaldims', (/gnx+2,gny+2/))
+        ierr=nf90_put_att(ncid, nf90_global, 'global_x', gnx)
+        ierr=nf90_put_att(ncid, nf90_global, 'global_y', gny)
       endif
 
       xtype = default_prec
@@ -110,7 +113,7 @@
 
       end subroutine def_vars_instant  !]
 !----------------------------------------------------------------------
-      subroutine wrt_instant_2D(var, varname, comp) ![
+      subroutine wrt_instant_2D(var, varname) ![
       ! Call wrt_random after completion of the time-step
       ! (After step3d_uv2)
       implicit none
@@ -118,7 +121,6 @@
       ! input
       real,intent(in),dimension(:,:) :: var
       character(len=*),intent(in)    :: varname
-      logical, optional :: comp
 
       character(len=10) :: sr_name = "wrt_instant"
       ! local
@@ -126,33 +128,17 @@
       character(len=99),save :: fname
       integer                :: ncid,ierr
 
-      if (present(comp)) then
-        if (comp) then
-          varsize = shape(var(i0:i1,j0:j1))
-        endif
-      else
-        varsize = shape(var)
-      endif
+      varsize = shape(var)
 
       call create_file('_' // varname,fname)
       ierr=nf90_open(fname,nf90_write,ncid)
-      if (present(comp)) then
-        if (comp) then
-          call def_vars_instant(ncid,varname,2,varsize,comp)
-        endif
-      else
-          call def_vars_instant(ncid,varname,2,varsize)
-      endif
+
+      call def_vars_instant(ncid,varname,2,varsize)
 
       ! always add time
       call ncwrite(ncid,'ocean_time',(/time/),(/1/))
-      if (present(comp)) then
-        if (comp) then
-          call ncwrite(ncid,varname ,var(i0:i1,j0:j1),(/1,1,1/))
-        endif
-      else
-          call ncwrite(ncid,varname ,var(:,:),(/1,1,1/))
-      endif
+
+      call ncwrite(ncid,varname ,var(:,:),(/1,1,1/))
 
       ierr=nf90_close (ncid)
 
@@ -163,13 +149,12 @@
 
       end subroutine wrt_instant_2D !]
 !----------------------------------------------------------------------
-      subroutine wrt_instant_3D(var, varname, comp) ![
+      subroutine wrt_instant_3D(var, varname) ![
       implicit none
 
       ! input
       real,intent(in),dimension(:,:,:) :: var
       character(len=*),intent(in)    :: varname
-      logical, optional :: comp
 
       character(len=10) :: sr_name = "wrt_instant"
       ! local
@@ -177,33 +162,17 @@
       character(len=99),save :: fname
       integer                :: ncid,ierr
 
-      if (present(comp)) then
-        if (comp) then
-          varsize = shape(var(i0:i1,j0:j1,:))
-        endif
-      else
-        varsize = shape(var)
-      endif
+      varsize = shape(var)
 
       call create_file('_' // varname,fname)
       ierr=nf90_open(fname,nf90_write,ncid)
-      if (present(comp)) then
-        if (comp) then
-          call def_vars_instant(ncid,varname,3,varsize,comp)
-        endif
-      else
-          call def_vars_instant(ncid,varname,3,varsize)
-      endif
+
+      call def_vars_instant(ncid,varname,3,varsize)
 
       ! always add time
       call ncwrite(ncid,'ocean_time',(/time/),(/1/))
-      if (present(comp)) then
-        if (comp) then
-          call ncwrite(ncid,varname ,var(i0:i1,j0:j1,:),(/1,1,1,1/))
-        endif
-      else
-          call ncwrite(ncid,varname ,var(:,:,:),(/1,1,1,1/))
-      endif
+
+      call ncwrite(ncid,varname ,var(:,:,:),(/1,1,1,1/))
 
       ierr=nf90_close (ncid)
 
