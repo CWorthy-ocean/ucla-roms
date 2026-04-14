@@ -41,7 +41,7 @@
 ! Usage notes:
 #define UV_COR
 
-----------------------------------------------------------
+!----------------------------------------------------------
 
 ! Rotate the advection and diffusion operators so they are oriented in the isoneutral direction
 ! Usage notes:
@@ -107,7 +107,7 @@
 ! Usage notes: The magnitude is set under the header "v_sponge" in the runtime .in file
 #define SPONGE
 
-----------------------------------------------------------
+!----------------------------------------------------------
 
 ! Analytically prescribe the grid
 ! Usage notes: Hardcoded in analytical.F
@@ -132,7 +132,7 @@
 ! Usage notes: ROMS will use flux forcing if this CPP key is not set and the ANA_ keys are not present
 #define BULK_FRC
 
-----------------------------------------------------------
+!----------------------------------------------------------
 
 ! Analytically prescribe surface momentum flux (with flux forcing)
 ! Usage notes: Hardcoded in analytical.F
@@ -224,7 +224,7 @@
 ! Usage notes: Requires inputs for SSH.
 #define Z_FRC_BRY
 
-----------------------------------------------------------
+!----------------------------------------------------------
 
 ! Analytically prescribe the lateral boundary conditions
 ! Usage notes:  Hardcoded in analytical.F
@@ -289,7 +289,7 @@
 ! Usage notes: Viscosities are specified under the "lateral_visc" header in the runtime .in file
 #define UV_VIS2
 
-----------------------------------------------------------
+!----------------------------------------------------------
 
 ! Analytically prescribe vertical mixing coefficient
 ! Usage notes: Hardcoded in analytical.F
@@ -346,7 +346,7 @@
 ! Usage notes:
 #define PCO2AIR_FORCING
 
-----------------------------------------------------------
+!----------------------------------------------------------
 
 ! Enable BEC biogeochemical model
 ! Usage notes: Only associated with BEC
