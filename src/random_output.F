@@ -4,7 +4,7 @@
 #include "cppdefs.opt"
 
       use param, only: mynode
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
       use dimensions, only: i0, i1, j0, j1, nz, eta_rho, eta_v, xi_rho, xi_u
       use roms_read_write, only:
      &     dn_tm, dn_xr, dn_xu, dn_yr, dn_yv,
@@ -21,8 +21,9 @@
       private
 
       real    :: output_period = 3600 ! in seconds
-      integer :: nrpf   = 10          ! number of frames per file
-      namelist /RANDOM_OUTPUT_SETTINGS/ output_period, nrpf
+      integer :: nrpf   = 10    ! number of frames per file
+      logical,public :: do_random
+      namelist /RANDOM_OUTPUT_SETTINGS/ output_period, nrpf, do_random
 
       character(len=13) :: module_name = "random_output"
       real    :: output_time = 0

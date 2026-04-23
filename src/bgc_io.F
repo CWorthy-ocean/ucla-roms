@@ -11,8 +11,6 @@
 #if defined BIOLOGY_BEC2 || defined MARBL
 
 ! param needed for GLOBAL_2D_array to work. NT = number tracer from param
-      use compile_time_switches, only: wrt_bgc_his, wrt_bgc_avg,
-     &     wrt_bgc_dia_his, wrt_bgc_dia_avg, interp_bgc_frc
       use param, only: ieast, itemp, iwest, jnorth, jsouth
       use tracers, only: t_avg, wrt_t_avg, nt_2_t_avg, t_units
 #ifdef MARBL_DIAGS
@@ -20,6 +18,8 @@
 #endif
 
       use bgc_shared_vars, only:
+     &     wrt_bgc_his, wrt_bgc_avg,
+     &     wrt_bgc_dia_his, wrt_bgc_dia_avg, interp_bgc_frc,
      &     nrpf_avg, nrpf_his, nrpf_avg_dia,
      &     nrpf_his_dia, t, nc_dust, nc_iron, nc_pco2air
 #ifdef MARBL

@@ -5,9 +5,8 @@
 #include "cppdefs.opt"
 
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
-      use compile_time_switches, only: cdr_source, forcing_3d,
-     &     wrt_cdr_avg, cdr_monthly_averages
-      use namelist_mod, only: open_namelist_file
+      use cdr_frc, only: cdr_source, forcing_3d
+      use namelist_open_mod, only: open_namelist_file
       use tracers, only: t_units
       use param, only: itemp, isalt
       use marbl_driver, only:
@@ -35,8 +34,10 @@
       private
 
       real    :: output_period = 3600 ! in seconds
-      integer :: nrpf   = 4          ! number of frames per file
-      namelist /CDR_OUTPUT_SETTINGS/ output_period, nrpf
+      integer :: nrpf   = 4     ! number of frames per file
+      logical, public :: wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
+      namelist /CDR_OUTPUT_SETTINGS/ output_period, nrpf,
+     &     wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
 
       character(len=10) :: module_name = "cdr_output"
       real    :: output_time = 0

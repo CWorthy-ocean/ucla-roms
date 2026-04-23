@@ -27,7 +27,6 @@
 !
 ! Bottom drag is computed using either Styles and Glenn(1996) bottom
 ! boundary layer formulation, or linear/quadratic friction law..
-      use compile_time_switches, only: cdr_source, pipe_source, river_source
       use param, only:
      &     ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, itemp
 #ifdef SALINITY
@@ -36,8 +35,8 @@
       use flux_frc, only: set_flux_frc
       use surf_flux, only: set_surf_field_corr
       use tracers, only: set_surf_tracer_flx, iTandS
-      use river_frc, only:  set_river_frc
-      use pipe_frc, only: set_pipe_frc
+      use river_frc, only:  set_river_frc, river_source
+      use pipe_frc, only: set_pipe_frc, pipe_source
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       use bgc_io, only: set_bgc_surf_frc
 #endif
@@ -45,7 +44,7 @@
       use boundary, only: frctype
       use scalars, only: nt
 #if defined(CDR_FORCING)
-      use cdr_frc, only: set_cdr_frc
+      use cdr_frc, only: set_cdr_frc, cdr_source
 #endif
 # ifdef BULK_FRC
       use bulk_frc, only: set_bulk_frc

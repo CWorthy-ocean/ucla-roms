@@ -23,6 +23,12 @@ Key technical information:
    Installing ROMS <installation/index>
 
 .. toctree::
+   :maxdepth: 2
+   :caption: Customizing ROMS simulations
+
+   ROMS settings <model_settings/index>
+
+.. toctree::
    :maxdepth: 1
    :caption: References
 

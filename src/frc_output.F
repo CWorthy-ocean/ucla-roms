@@ -4,8 +4,7 @@
 ! or thermodynamically forced.
 
 #include "cppdefs.opt"
-      use compile_time_switches, only: wrt_frc_avg
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
       use error_handling_mod, only: error_log
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x,
      &     lm, mm, isalt, itemp, mynode
@@ -31,8 +30,8 @@
       character(len=10) :: module_name = "frc_output"
       real :: output_period = 0.   ! in seconds
       integer :: nrpf   = 0          ! number of frames per file
-
-      namelist /FRC_OUTPUT_SETTINGS/ output_period, nrpf
+      logical, public :: wrt_frc, wrt_frc_avg
+      namelist /FRC_OUTPUT_SETTINGS/ output_period, nrpf, wrt_frc, wrt_frc_avg
 
       real    :: output_time = 0
       integer :: record = 0 ! to trigger the first file creation

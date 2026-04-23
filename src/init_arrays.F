@@ -38,7 +38,6 @@
 
       ! Required modules
       ! ----------------
-      use compile_time_switches, only: pipe_source
       use surf_flux, only: sustr, svstr, stflx, init_arrays_surf_flx
       use tracers, only: iTandS, t, t_avg
       use coupling, only: init_arrays_coupling
@@ -56,7 +55,7 @@
       use param, only: ieast, iwest, jnorth, jsouth, n
       use mess_buffers, only: init_arrays_mess_buffers
       use flux_frc, only: init_arrays_flux_frc
-      use pipe_frc, only: init_arrays_pipes
+      use pipe_frc, only: init_arrays_pipes, pipe_source
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       use bgc_shared_vars, only: init_arrays_bgc_shared_vars
       use bgc_forces, only: init_arrays_bgc_forces

@@ -11,8 +11,7 @@
 #include "cppdefs.opt"
 ! we have no PIPE_SOURCE flag here anymore, since we are moving away from cpp flags.
 !     Variables still need to be visible within code even when pipes are not used.
-      use namelist_mod, only: open_namelist_file
-      use compile_time_switches, only: p_analytical
+      use namelist_open_mod, only: open_namelist_file
       use dimensions, only: i0, i1, j0, j1, nx, ny, grdname
       use roms_read_write, only:
      &     ncforce, pipe_frc_opt,
@@ -25,7 +24,8 @@
       private
 
       integer, public :: npip = 0
-      namelist /PIPE_FRC_SETTINGS/ npip
+      logical, public :: pipe_source, p_analytical
+      namelist /PIPE_FRC_SETTINGS/ pipe_source, p_analytical, npip
       type (ncforce) :: nc_pvol = ncforce(
      &     vname='pipe_volume', tname='pipe_time')
       type (ncforce) :: nc_ptrc = ncforce(

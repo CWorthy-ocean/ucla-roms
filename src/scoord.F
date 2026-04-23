@@ -37,7 +37,8 @@
 ! vertical W- and RHO-point locations.
 
 #ifdef SOLVE3D
-      real theta_s,theta_b, hc, Cs_w(0:N), Cs_r(N)
+      real theta_s,theta_b, hc
+      real(kind=8), allocatable :: Cs_w(:), Cs_r(:)
       namelist /S_COORD/ theta_s, theta_b, hc
       public :: read_nml_scoord
       contains
@@ -45,7 +46,7 @@
 !     ----------------------------------------------------------------------
       subroutine read_nml_scoord
       use error_handling_mod, only: error_log
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
       implicit none
 !     Read the "SCOORD_SETTINGS" section of the namelist file
       integer ::  namelist_unit, ios
@@ -77,7 +78,10 @@
          mpi_master_only write(*,'(9x,A,ES14.5,2x,2A)')
      &        'hc =', hc, 'critical depth [m]'
       end if
-      end subroutine read_nml_scoord
 
+      allocate(Cs_w(0:N))
+      allocate(Cs_r(N))
+
+      end subroutine read_nml_scoord
 #endif
       end module scoord

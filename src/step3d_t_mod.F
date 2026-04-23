@@ -57,17 +57,15 @@ c--# define CONST_TRACERS
 #  endif
 # endif
      &     )
-      use compile_time_switches, only: cdr_source, forcing_3d, diag_trc,
-     &     pipe_source, river_source, do_upscale
       use pipe_frc, only: pidx, pipe_idx, pipe_trc,
-     &     pipe_prf, pipe_flx
+     &     pipe_prf, pipe_flx, pipe_source
       use dimensions, only: inode, jnode, npx, npy
 #if defined CDR_FORCING && defined MARBL
       use cdr_frc, only: cdr_nprf, cdr_icdr, cdr_iloc,
      &      cdr_jloc, cdr_flx, cdr_prf, cdr_flx_3d_ALK, cdr_flx_3d_DIC,
-     &      ncdr
+     &      ncdr, cdr_source, forcing_3d
 #endif
-      use river_frc, only: iriver, riv_depth, riv_uvel, riv_vvel,
+      use river_frc, only: iriver, riv_depth, riv_uvel, riv_vvel, river_source,
      & riv_uflx, riv_vol, riv_trc, riv_vflx
       use surf_flux, only: stflx, srflx
       use tracers, only: t, itands, wrt_t_dia
@@ -93,13 +91,13 @@ c--# define CONST_TRACERS
       use scalars, only: n, dt, nnew, nrhs, nt, nstp
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
       use upscale_output, only:
-     &     calc_forcing_rates, wrt_upscale
+     &     calc_forcing_rates, wrt_upscale, do_upscale
 #endif
 #ifdef ADV_ISONEUTRAL
       use eos_vars, only: drdx, drde, idrz
 #endif
 #ifdef DIAGNOSTICS
-      use diagnostics, only: calc_diag, tdiag, tmixx, tadvx, tadvy,
+      use diagnostics, only: calc_diag, tdiag, tmixx, tadvx, tadvy, diag_trc,
      &  tmixy, tadvy, tadvz, td, vflxd, zflx, tmixz, diag_t_adv_vc4, diag_t_adv_hc4
 #endif
       use bulk_frc, only: tair

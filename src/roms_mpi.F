@@ -85,6 +85,8 @@
       use insert_node_mod, only: insert_node
 #endif
       use utils_mod, only: lenstr
+      use param, only: NP_XI, NP_ETA, LLm, MMm
+      use dimensions, only: npx, npy, gnx, gny
       implicit none
       integer :: ierr,ncid
       integer,dimension(8) :: neighbors
@@ -95,6 +97,11 @@
       character(len=9) :: sr_name = "mpi_setup"
       character(len=256) :: grdname_tile
       integer :: lstr
+
+      npx = NP_XI
+      npy = NP_ETA
+      gnx = LLm
+      gny = MMm
 
       grdname_tile = trim(grdname)
 #ifdef PARALLEL_IO
@@ -197,6 +204,7 @@
 
         ! Check against original weird integer devision
       if (nx.ne.(gnx+npx-1)/npx ) then
+
          call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info='integer division error in mpi_setup')

@@ -1,8 +1,7 @@
       module calc_pflx_mod
 
 #include "cppdefs.opt"
-      use compile_time_switches, only: calc_pflx
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
       use error_handling_mod, only: error_log
       use netcdf, only: nf90_noerr, nf90_inq_varid
       use dimensions, only: nx, ny, nz, i0, i1, j0, j1,x_,x0,x1,y_,y0,y1
@@ -32,8 +31,9 @@
 
       real :: alpha, beta       ! filtering constants (needed for child bry)
 
+      logical, public :: calc_pflx
       real :: timescale     = 0. ! timescale for filtering pressure fluxes (in seconds)
-      namelist /CALC_PFLX_SETTINGS/ timescale
+      namelist /CALC_PFLX_SETTINGS/ timescale, calc_pflx
 
       public init_pflx
       public calc_pressure_flux

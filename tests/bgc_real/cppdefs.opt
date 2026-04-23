@@ -61,7 +61,7 @@
 # define SPONGE
 
                         /* Biology Settings */
-# define MARBL
+!# define MARBL
 
 #ifdef MARBL
 # define MARBL_DIAGS
@@ -69,7 +69,7 @@
 # define NHY_FORCING
 #endif
 
-!# define BIOLOGY_BEC2
+# define BIOLOGY_BEC2
 
 
 #ifdef BIOLOGY_BEC2

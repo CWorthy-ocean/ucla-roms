@@ -8,8 +8,7 @@
       ! in the direction of the unmasked cell.
 
 #include "cppdefs.opt"
-      use namelist_mod, only: open_namelist_file
-      use compile_time_switches, only: river_analytical
+      use namelist_open_mod, only: open_namelist_file
       use roms_read_write, only: ncforce, frcfile, set_frc_data
       use nc_read_write, only: nccreate, ncread, ncwrite
       use scalars, only: nt
@@ -30,7 +29,8 @@
       private
 
       integer, public  :: nriv = 0
-      namelist /RIVER_FRC_SETTINGS/ nriv
+      logical, public  :: river_source, river_analytical
+      namelist /RIVER_FRC_SETTINGS/ nriv, river_source, river_analytical
       ! realistic rivers only: enter netcdf variable name and time name
       type (ncforce) :: nc_rvol = ncforce(
      &     vname='river_volume', tname='river_time')

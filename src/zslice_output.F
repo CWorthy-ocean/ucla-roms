@@ -2,9 +2,7 @@
       ! Collection of zslice variables for output
 
 #include "cppdefs.opt"
-      use compile_time_switches, only:
-     &     zslice_avg, wrt_T_zsl, wrt_U_zsl, wrt_V_zsl
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
       use grid, only: rmask
       use param, only: lm, mm, mynode
       use roms_mpi, only: exchange_xxx
@@ -34,9 +32,12 @@
       real, dimension(max_ndep) :: vecdep = (/0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0/) ! depths slice
       integer        :: nt_z   =  2        ! number of tracers to slice
       integer, dimension(max_nt_z) :: trc2zsc = (/0,0,0,0,0,0,0,0,0,0/) ! index of the tracer to slice
+      logical, public :: do_zslice,
+     &     zslice_avg, wrt_T_zsl, wrt_U_zsl, wrt_V_zsl
 
       namelist /ZSLICE_SETTINGS/ output_period, nrpf, ndep,
-     &     vecdep, nt_z, trc2zsc
+     &     vecdep, nt_z, trc2zsc,
+     &     zslice_avg, wrt_T_zsl, wrt_U_zsl, wrt_V_zsl, do_zslice
 
       real    :: output_time = 0
       integer :: record = 0    ! to trigger the first file creation

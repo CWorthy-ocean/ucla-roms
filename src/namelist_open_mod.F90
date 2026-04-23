@@ -1,6 +1,6 @@
-module namelist_mod
+module namelist_open_mod
   !-----------------------------------------------------------------------
-  !     MODULE: namelist_mod
+  !     MODULE: namelist_open_mod
   !
   !     DESCRIPTION:
   !     This module handles generic namelist-related management, such
@@ -15,7 +15,7 @@ module namelist_mod
   private
 
 
-  character(len=13) :: module_name = "namelist_mod"
+  character(len=18) :: module_name = "namelist_open_mod"
   character(len=256) :: namelist_fname = ""
 
   public :: open_namelist_file
@@ -88,4 +88,4 @@ contains
 
   end subroutine get_namelist_filename
 
-  end module namelist_mod
+  end module namelist_open_mod

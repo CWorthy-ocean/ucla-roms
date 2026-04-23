@@ -4,8 +4,7 @@
       ! Define options in diagnostics.opt
 
 #include "cppdefs.opt"
-      use compile_time_switches, only: diag_avg, diag_uv, diag_trc
-      use namelist_mod, only : open_namelist_file
+      use namelist_open_mod, only : open_namelist_file
       use error_handling_mod, only: error_log
       use netcdf, only:
      &     nf90_double, nf90_global, nf90_nofill,
@@ -40,8 +39,9 @@
       character(len=11) :: module_name = "diagnostics"
       integer          :: output_period =  0       ! output period
       integer          :: nrpf          =  0        ! total recs per file
-
-      namelist /DIAGNOSTICS_SETTINGS/ output_period, nrpf
+      logical, public  :: diag_avg, diag_uv, diag_trc
+      namelist /DIAGNOSTICS_SETTINGS/ output_period, nrpf,
+     &     diag_avg, diag_uv, diag_trc
 
       integer, parameter         :: diag_prec     = nf90_double ! Precision of output variables (nf90_float/nf90_double)
 
@@ -101,7 +101,7 @@
       real,public,allocatable,dimension(:,:,:,:,:) :: Tdiag     ! tracer diagnostic terms
       real,allocatable,dimension(:,:,:,:,:) :: Tdiag_avg ! averages of tracer diagnostic terms
       integer                               :: ntdia     ! number of tracers for which to do diagnostics
-      integer,public,dimension(nt)          :: td = 0   ! inverse translation from itrc to idia
+      integer,public,dimension(:),allocatable          :: td    ! inverse translation from itrc to idia
 
 
       character (len=30),  allocatable, dimension(:) :: tdname
@@ -195,6 +195,9 @@
 
       ! local
       integer :: itrc,idx
+
+      if(.not. allocated(td)) allocate(td(nt))
+      td = 0
 
       if (diag_uv) then
         allocate(Udiag(nx,ny,nz,nmd) )

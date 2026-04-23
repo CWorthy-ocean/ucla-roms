@@ -34,11 +34,11 @@
      &                                            ,rw
 # endif
      &     )
-      use compile_time_switches, only: diag_uv, river_source
+      use diagnostics, only: diag_uv
       use dimensions, only: inode, jnode, npx, npy
       use river_frc, only:
      &     iriver, riv_depth, riv_uvel, riv_vvel,
-     &     riv_uflx, riv_vol, riv_trc, riv_vflx
+     &     riv_uflx, riv_vol, riv_trc, riv_vflx, river_source
 #ifdef NHMG
       use ocean_vars, only:
      &     nhdu, nhdv, nhdw,

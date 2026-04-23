@@ -25,32 +25,65 @@ ninfo = 1
 !================================================================================
 !                              GRID AND INPUT FILES
 !================================================================================
-! Previously set in `roms.in`
-!================================================================================
 &GRID_SETTINGS	                                                    !dimensions.F
-!-------------
+!---------------------------
+! Previously set in `roms.in`
+!---------------------------
 grdname = "input_data/example_input_grid.nc"
 /
 
 &S_COORD                                                                !scoord.F
-!-------
+!---------------------------
+! Previously set in `roms.in`
+!---------------------------
 theta_s = 6.D0
 theta_b = 6.D0
 hc = 25.0D0
 /
 
+&PARAM_SETTINGS
+!------------------------------
+! Previously set in `param.opt`
+!------------------------------
+NP_XI = 3
+NP_ETA = 2
+NSUB_X = 1
+NSUB_E = 1
+LLm = 199
+MMm = 99
+N = 50
+nt_passive = 0
+ntrc_bio = 0
+/
+
 &INITIAL_CONDITIONS                                            !roms_read_write.F
-!------------------
+!---------------------------
+! Previously set in `roms.in`
+!---------------------------
 ininame = "input_data/example_input_bgc_initial_conditions.nc"
 nrrec = 1
 /
 
 &FORCING_FILES                                                 !roms_read_write.F
-!-------------
+!---------------------------
+! Previously set in `roms.in`
+!---------------------------
 frcfile =
 'input_data/example_input_boundary_forcing.nc',
 'input_data/example_input_surface_flux_forcing.nc',
 'input_data/example_input_pipe_forcing.nc'
+/
+
+!================================================================================
+!                             FORCING SETTINGS
+!================================================================================
+&BULK_FRC_SETTINGS
+interp_bulk_frc = .true.
+check_bulk_frc_units = .false.
+/
+
+&FLUX_FRC_SETTINGS
+interp_flux_frc = .true.
 /
 
 !================================================================================
@@ -59,6 +92,8 @@ frcfile =
 ! Previously set in `river_frc.opt`
 !================================================================================
 &RIVER_FRC_SETTINGS                                                  !river_frc.F
+river_source = .false. ! on/off switch for river input
+river_analytical = .false. ! Specify inputs analytically
 nriv = 0
 /
 
@@ -69,7 +104,10 @@ nriv = 0
 ! Requires TIDES cppkey
 !================================================================================
 &TIDES_SETTINGS                                                          !tides.F
-ntides = 10
+bry_tides=.false. ! Barotropic (TPXO) tides at the boundary
+pot_tides=.false. ! Surface tidal potential
+ana_tides=.false. ! Specify tides analytically
+ntides = 0
 /
 
 !================================================================================
@@ -79,6 +117,38 @@ ntides = 10
 !---------------------
 ! Previously set in `ocean_vars.opt`
 !---------------------
+wrt_file_his = .true.   ! Write output as snapshots
+wrt_file_avg = .false.  ! Write output as averages
+wrt_file_rst = .false.  ! Write model restart files
+monthly_restarts = .false.   ! This overrides output_period
+wrt_Z =.true. ! Include `zeta`
+wrt_Ub=.true. ! Include `ubar`
+wrt_Vb=.true.! Include `vbar`
+wrt_U=.true.! Include `u`
+wrt_V=.true.! Include `v`
+wrt_R=.true.! Include `rho`
+wrt_O=.true.! Include `omega`
+wrt_W=.true.! Include `w`
+wrt_Akv=.true.! Include `Akv`
+wrt_Akt=.true.! Include `Akt`
+wrt_Aks=.true.! Include `Aks`
+wrt_Hbls=.true.! Include `hbls`
+wrt_Hbbl=.true.! Include `hbbl`
+
+  ! Control output variables (averages file):
+wrt_avg_Z =.true.! Include `zeta`
+wrt_avg_Ub=.true. ! Inlucde `ubar`
+wrt_avg_Vb=.true.! Include `vbar`
+wrt_avg_U=.true.! Include `u`
+wrt_avg_V=.true.! Include `v`
+wrt_avg_R=.true.! Include `rho`
+wrt_avg_O=.true.! Include `omega`
+wrt_avg_W=.true.! Include `w`
+wrt_avg_Akv=.true.! Include `Akv`
+wrt_avg_Akt=.true.! Include `Akt`
+wrt_avg_Aks=.true. ! Include `Aks`
+wrt_avg_Hbls=.true.! Include `hbls`
+wrt_avg_Hbbl=.true.! Include `hbbl`
 output_period_rst = 2000
 nrpf_rst = 2
 output_period_his = 400
@@ -87,10 +157,19 @@ output_period_avg = 100
 nrpf_avg = 10
 /
 
+&TS_OUTPUT_SETTINGS
+wrt_temp = .false.
+wrt_salt = .false.
+wrt_temp_dia = .false.
+wrt_salt_dia = .false.
+/
+
 &FRC_OUTPUT_SETTINGS                                                !frc_output.F
 !-------------------
 ! Previously set in `frc_output.opt`
 !-------------------
+wrt_frc = .false.    ! forcing output on/off switch
+wrt_frc_avg = .false.! averages(T) or snapshots (F)
 output_period = 0.
 nrpf = 0
 /
@@ -103,7 +182,8 @@ nrpf = 0
 ! Previously set in `extract_data.opt`,
 ! require EXTRACT_DATA cppkey
 !---------------------
-extract_period = 0.0
+do_extract = .false. ! on/off switch for generation
+extract_period = 0
 extract_file = ""
 nrpf_extract = 0
 N_chd = 0
@@ -117,6 +197,9 @@ hc_chd = 0
 ! Previously set in `sponge_tune.opt`
 ! Require SPONGE_TUNE cppkey
 !--------------------
+ub_tune = .false. ! on/off switch for sponge tuning
+wrt_sponge=.false. ! output sponge to file
+spn_avg = .false.  ! write as averages (T) or snapshots (F)
 sp_timscale = 0
 nrpf = 0
 output_period = 0
@@ -126,6 +209,7 @@ output_period = 0
 !---------------------
 ! Previously set in `calc_pflx.opt`
 !---------------------
+calc_pflx     = .false.   ! Baroclinic pressure fluxes
 timescale = 0
 /
 
@@ -135,6 +219,11 @@ timescale = 0
 ! Previously set in `zslice_output.opt`
 !================================================================================
 &ZSLICE_SETTINGS                                                 !zslice_output.F
+do_zslice  = .false. ! on/off switch for sigma-z conversion
+zslice_avg = .false. ! output averages (T) or snapshots (T)
+wrt_T_zsl  = .false.  ! Include tracers
+wrt_U_zsl  = .false.   ! Include u-velocity
+wrt_V_zsl  = .false.   ! Include v-velocity
 output_period = 0
 nrpf = 0
 ndep = 0
@@ -161,15 +250,20 @@ output_period_his_dia = 100
 nrpf_his_dia = 10
 output_period_avg_dia = 100
 nrpf_avg_dia = 10
+wrt_bgc_his = .false.     ! t/f to write tracer history file
+wrt_bgc_avg = .false.     ! t/f to write tracer averages file
+wrt_bgc_dia_his = .false. ! t/f to write diagnostic history file
+wrt_bgc_dia_avg = .false. ! t/f to write diagnostic averages file
+interp_bgc_frc = .true.   ! interpolate forcing from coarser grid
 /
 
 &MARBL_BIOGEOCHEMISTRY_SETTINGS                                  !marbl_driver.F
 !------------------------------
 ! Previously set in `roms.in`
 !------------------------------
-marbl_namelist_fname = "marbl_in"
-marbl_tracer_list_fname = "marbl_tracer_output_list"
-marbl_diag_list_fname = "marbl_diagnostics_output_list"
+marbl_config_file = ""
+marbl_tracers_to_write = ""
+marbl_diagnostics_to_write = ""
 /
 
 !================================================================================
@@ -180,8 +274,16 @@ marbl_diag_list_fname = "marbl_diagnostics_output_list"
 ! Previously set in `cdr_frc.opt`
 ! Requires CDR_FORCING cppkey
 !----------------
-cdr_file = "input_data/cdr_forcing_dp.nc"  ! NetCDF forcing file
-ncdr_parm = 0  !! number of discrete CDR releases; only used with PARAMETERIZED or 3D FORCING
+cdr_source  = .false.  ! on/off switch for CDR forcing
+forcing_depth_profiles = .false. ! T if this file contains depth profiles
+forcing_3d             = .true. ! T if this file contains 3d forcing
+forcing_parameterized  = .false. ! T if forcing with idealized Gaussian profiles
+! Linear time interpolation between records (T), or step changes (F)
+time_interpolation = .false.
+! Prevent errors by relocating single-point CDR forcing locations on land to water
+relocate_to_wet_pts = .false.
+cdr_file = "cdr_forcing_3d.nc"  ! NetCDF forcing file
+ncdr_parm = 1  !! number of discrete CDR releases; only used with PARAMETERIZED or 3D FORCING
 nz_chd = 50
 /
 
@@ -189,6 +291,10 @@ nz_chd = 50
 !-------------------
 ! Previously set in `cdr_output.opt`
 !-------------------
+do_cdr_output   = .false. ! on/off switch for CDR-specific output
+wrt_cdr_avg   = .false. ! Write averages (T) or snapshots(F)
+! Write averages over calendar months:
+cdr_monthly_averages = .false.
 output_period = 0
 nrpf = 0
 /
@@ -198,6 +304,7 @@ nrpf = 0
 ! Previously set in `upscale_output.opt`
 ! Requires UPSCALING cppkey
 !----------------
+do_upscale = .false.
 nrpf_uscl = 0
 output_period_uscl = 0
 /
@@ -298,14 +405,22 @@ dSSTdt = 0.
 ! Previously set in `diagnostics.opt`
 ! Requires DIAGNOSTICS cppkey
 !--------------------
+diag_avg      = .false.  ! averages (T) or snapshots (F)
+diag_uv       = .false. ! Momentum diagnostics
+diag_trc      = .false. ! Selected tracers diagnostics
 output_period = 0.
 nrpf = 0
+/
+
+&STDOUT_DIAG_SETTINGS
+code_check_mode = .true.
 /
 
 &RANDOM_OUTPUT_SETTINGS
 !----------------------
 ! Previously set in `random.opt`
 !----------------------
+do_random = .false. ! on/off switch for custom output
 output_period = 0
 nrpf=0
 /
@@ -314,6 +429,10 @@ nrpf=0
 !-----------------
 ! Previously set in `surf_flx.opt`
 !-----------------
+wrt_smflx = .false. ! output surface momentum flux
+wrt_stflx = .false. ! output surface tracer flux
+wrt_swflx = .false. ! output surface water flux (P-E)
+sflx_avg  = .false. ! write averaged sflx data
 output_period = 0
 nrpf = 0
 /
@@ -324,6 +443,8 @@ nrpf = 0
 ! Formerly in `pipe_frc.opt`
 !================================================================================
 &PIPE_FRC_SETTINGS
+pipe_source  = .true. ! on/off switch for pipe input
+p_analytical = .false. ! Specify inputs analytically
 npip = 1
 /
 
@@ -333,6 +454,8 @@ npip = 1
 ! Formerly in `particles.opt`
 !================================================================================
 &PARTICLES_SETTINGS
+floats = .false.
+full_seed = .false.
 np=0
 extra_space_fac = 0.
 exchange_facx = 0.
@@ -344,5 +467,11 @@ ppm3 = 0.
 pmin = 0
 /
 
-
-
+!================================================================================
+!                            ERROR HANDLING
+!================================================================================
+! Previously set in `error_handling_mod.F90`
+!================================================================================
+&ERROR_HANDLING_SETTINGS
+gather_errors_on_main_rank = .true.
+/

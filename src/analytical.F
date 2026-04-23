@@ -13,9 +13,6 @@
      &     akv_bak, forw_start, iic, ntstart, akt_bak, g, rho0
       use dimensions, only: inode, jnode
       use param, only: isalt, itemp
-#ifdef FILAMENT_IDEAL
-     &     , hd
-#endif
 !     For Filament example case:
 #ifndef NONLIN_EOS
       use eos_vars, only: tcoef
@@ -33,6 +30,9 @@
 ! ana_sst_tile      Analytical sea surface temperature and dQdSST
 !                         which are used during heat flux correction.
 ! ana_stflux_tile   Analytical kinematic surface flux of tracer type variables.
+#ifdef FILAMENT_IDEAL
+      integer, parameter :: hd = 1000.
+#endif
 
       public ana_init
       public ana_vmix

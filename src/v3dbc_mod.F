@@ -12,7 +12,6 @@
 
 ! Set lateral boundary conditions for ETA-component velocity
 ! v(:,:,:,nnew)
-      use compile_time_switches, only: ub_tune
       use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
       use dimensions, only: inode, jnode
       use boundary, only: v_south, v_north, v_west, v_east
@@ -26,7 +25,7 @@
 #endif
       use sponge_tune, only:
      &     ub_south, ub_north, ub_west,
-     &     ub_east
+     &     ub_east, ub_tune
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k

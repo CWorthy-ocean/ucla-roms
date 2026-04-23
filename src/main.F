@@ -2,7 +2,7 @@
 #include "cppdefs.opt"
 #if !defined GRID_LEVEL || GRID_LEVEL == 1
       use add_git_hash_mod, only: git_hash, print_jobid
-      use param, only: mynode, ocean_grid_comm, nsize
+      use param, only: mynode, ocean_grid_comm, nsize, read_nml_param
       use check_switches_mod, only: print_switches
 #ifdef NHMG
       use nhmg, only: nhmg_clean
@@ -34,15 +34,15 @@ C$    ierr=0
       ocean_grid_comm=MPI_COMM_WORLD
       call MPI_Comm_size(ocean_grid_comm, nsize,  ierr)
       call MPI_Comm_rank(ocean_grid_comm, mynode, ierr)
-
+#endif
       call read_namelists
 
-!     Git hash
-      mpi_master_only write(*,'(/1x,2A)') "Git hash: ", git_hash
       call print_jobid
       call print_switches
 
-
+#ifdef MPI
+!     Git hash
+      mpi_master_only write(*,'(/1x,2A)') "Git hash: ", git_hash
       call mpi_setup
 
 #ifdef PARALLEL_IO
@@ -79,13 +79,13 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       contains
 
       subroutine roms_thread
-      use compile_time_switches, only: do_upscale
       use basic_output, only: wrt_his_ocean_vars
       use scalars, only: ntimes, iic, ntstart, diag_sync
       use timers, only: start_timers, stop_timers
       use error_handling_mod, only: error_log
-      use upscale_output, only: wrt_upscale
-
+#ifdef UPSCALING
+      use upscale_output, only: wrt_upscale, do_upscale
+#endif
       implicit none
 
 
@@ -100,10 +100,12 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
         end if
       enddo
 
-      ! This is where we might put a generic "final write" subroutine
+! This is where we might put a generic "final write" subroutine
+#ifdef UPSCALING
       if (do_upscale) then
         call wrt_upscale
       endif
+#endif
 
       call stop_timers()
       return
@@ -111,8 +113,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
 #endif
 
       subroutine roms_init
-      use compile_time_switches, only: do_cdr_output, diag_uv, diag_trc,
-     &     wrt_frc, floats, do_random, ub_tune, do_upscale
+     &
 #ifdef NHMG
       use nhmg, only: nhmg_matrices, nhmg_init, halo
       use ocean_vars, only: dzdeta, dzdxi, hz
@@ -123,11 +124,15 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
      &     diag_sync, dt, iic, iif, knew, kstp,
      &     nnew, nrhs, nstp, numthreads, priv_count, sec2day,
      &     start_time, synchro_flag, tdays, time, proc
-      use particles, only: init_particles
-      use upscale_output, only:  init_upscale
-      use random_output, only:  init_random
-      use cdr_output, only:  init_cdr_output
-      use frc_output, only: init_frc_output
+      use particles, only: init_particles, floats
+#ifdef UPSCALING
+      use upscale_output, only:  init_upscale, do_upscale
+#endif
+      use random_output, only:  init_random, do_random
+#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+      use cdr_output, only:  init_cdr_output, do_cdr_output
+#endif
+      use frc_output, only: init_frc_output, wrt_frc
       use analytical, only: ana_vmix
 #ifdef ANA_INITIAL
      &     , ana_init
@@ -135,7 +140,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       use get_init_mod, only: get_init
       use grid_stiffness_mod, only: grid_stiffness
 #ifdef DIAGNOSTICS
-      use diagnostics, only: init_diagnostics
+      use diagnostics, only: init_diagnostics, diag_uv, diag_trc
 #endif
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
       use bgc_io, only: wrt_bgc
@@ -149,7 +154,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
      &     mynode, nsub_e, nsub_x, lm, mm,
      &     N, np_eta, np_xi, padd_e, padd_x
 #ifdef SPONGE_TUNE
-      use sponge_tune, only: init_orlanski_tune
+      use sponge_tune, only: init_orlanski_tune, ub_tune
 #endif
       use precheck, only: do_precheck
       use error_handling_mod, only: error_log
@@ -352,10 +357,14 @@ CR      write(*,*)  ' -2' MYID
       call wrt_bgc(.true.)
 #endif
       if (do_random) call init_random
+#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
       if (do_cdr_output)  call init_cdr_output
+#endif
+#ifdef UPSCALING
       if (do_upscale) then
         call init_upscale
       endif
+#endif
       if (wrt_frc) call init_frc_output
 
         mpi_master_only write(*,'(/1x,A/)')
@@ -375,27 +384,26 @@ CR      write(*,*)  ' -2' MYID
 
 
       subroutine roms_step
-      use compile_time_switches, only: do_cdr_output, diag_uv, diag_trc, do_extract,
-     &     wrt_frc, floats, do_random, ub_tune, wrt_smflx, wrt_stflx,
-     &     bry_tides, pot_tides, do_zslice, do_cdr_output
       use diag_mod, only: diag
-      use extract_data, only:  do_extract_data
+      use extract_data, only:  do_extract_data, do_extract
       use scalars, only:
      &     dt, iic, iif, knew, kstp, nfast, nnew, nrhs,
      &     nstp, ntstart, sec2day, start_time, tdays, time
 
-      use sponge_tune, only: adjust_orlanski
-      use particles, only: do_particles
-      use surf_flux, only: wrt_sflux
-      use random_output, only: wrt_random
-      use cdr_output, only:  wrt_cdr
-      use frc_output, only:  wrt_frc_output
-      use zslice_output, only: wrt_zslice
+      use sponge_tune, only: adjust_orlanski, ub_tune
+      use particles, only: do_particles, floats
+      use surf_flux, only: wrt_sflux, wrt_smflx, wrt_stflx
+      use random_output, only: wrt_random, do_random
+#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+      use cdr_output, only:  wrt_cdr, do_cdr_output
+#endif
+      use frc_output, only:  wrt_frc_output, wrt_frc
+      use zslice_output, only: wrt_zslice, do_zslice
       use basic_output, only:
      &     calc_avg_ocean_vars, wrt_avg_ocean_vars,
      &     wrt_his_ocean_vars, wrt_rst_ocean_vars
       use boundary, only: set_bry_all
-      use tides, only: set_tides
+      use tides, only: set_tides, pot_tides, bry_tides
       use roms_read_write, only: frc_time
 #ifdef SOLVE3D
       use omega_mod, only: omega

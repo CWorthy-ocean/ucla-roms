@@ -1,7 +1,6 @@
       module nc_read_write
 
 #include "cppdefs.opt"
-      use compile_time_switches, only: nccreate_shuffle
       use netcdf, only:
      &     nf90_float, nf90_noerr, nf90_strerror,
      &     nf90_inq_dimid, nf90_def_dim, nf90_def_var, nf90_inq_varid,
@@ -19,6 +18,8 @@
 
       integer,parameter  :: deflate_level=1 ! Compression level for joined file
       integer,parameter :: default_prec = nf90_float
+
+      logical,parameter  :: nccreate_shuffle=.true. ! Shuffle on for extra conmpression
 
       interface ncwrite
         module procedure  ncwrite_1D, ncwrite_2D, ncwrite_3D

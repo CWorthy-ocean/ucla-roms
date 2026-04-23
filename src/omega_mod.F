@@ -42,17 +42,17 @@
 ! below which vertical advection is fully explicit; "cu_max" is the
 !     maximum CN which the explicit component "We" is allowed to reach.
 
-      use compile_time_switches, only: cdr_source, cdr_volume, pipe_source
       use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
       use dimensions, only: nx, ny, nz, inode, jnode
       use grid, only: pn, pm, dn_r, dm_r, rmask
       use pipe_frc, only:
      &     pidx, pipe_idx, pipe_prf,
-     &     pipe_flx
+     &     pipe_flx, pipe_source
 #if defined(CDR_FORCING)
       use cdr_frc, only:
      &     cdr_nprf, cdr_icdr,
-     &     cdr_iloc, cdr_prf, cdr_vol
+     &     cdr_iloc, cdr_prf, cdr_vol,
+     &     cdr_source, cdr_volume
 #endif
       use roms_mpi, only: exchange_xxx
       use ocean_vars, only: wi, flxv, flxu, z_w, we, hz

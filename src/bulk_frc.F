@@ -1,8 +1,6 @@
       module bulk_frc
 
 #include "cppdefs.opt"
-      use compile_time_switches, only:
-     &     interp_bulk_frc, check_bulk_frc_units
       use param, only: mynode, lm, mm
       use roms_read_write, only:
      &     ncforce, bulk_frc_opt, frcfile,
@@ -37,6 +35,7 @@
       type (ncforce)  :: nc_tauy = ncforce(vname='TauY_corr',tname='time'  )  ! bring bulk force field closer to that of the measured data.
 #endif
 
+      character(len=8) :: module_name = "bulk_frc"
       real,allocatable,public,dimension(:,:) ::  tair             ! air temp, used in step3d_t to add the heat of rain water
       real,allocatable,public,dimension(:,:) ::     Q             ! SPECIFIC humidity (kg/kg) (not relative), qair in old code
       real,allocatable,public,dimension(:,:) :: prate             ! prate (precipitation rate) - 'rain' variable in old code
@@ -50,13 +49,41 @@
 #endif
 
       real,public,allocatable,dimension(:,:) :: wspd_used  ! wind speed at rho point (also used in BGC routines)
+      logical, public :: interp_bulk_frc, check_bulk_frc_units
+      namelist /BULK_FRC_SETTINGS/ interp_bulk_frc, check_bulk_frc_units
 
       public init_arrays_bulk_frc
       public set_bulk_frc
-
+      public read_nml_bulk_frc
       contains
 
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine read_nml_bulk_frc
+      use error_handling_mod, only: error_log
+      use namelist_open_mod, only: open_namelist_file
+!     Read the "BULK_FRC_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_bulk_frc"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=BULK_FRC_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read BULK_FRC_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_bulk_frc
+
+
       subroutine init_arrays_bulk_frc  ![
       implicit none
       allocate(  tair(GLOBAL_2D_ARRAY) ); tair = 0

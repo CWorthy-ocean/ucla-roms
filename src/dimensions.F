@@ -17,12 +17,12 @@
 
 !#include "cppdefs.opt"
 
-      integer,parameter, public :: gnx = LLm
-      integer,parameter, public :: gny = MMm
-      integer,parameter, public ::  nz = N
+      integer, public :: gnx
+      integer, public :: gny
+      integer, public :: nz
 
-      integer,parameter, public :: npx = np_xi
-      integer,parameter, public :: npy = np_eta
+      integer, public :: npx
+      integer, public :: npy
 
       integer,parameter, public ::  bf = 2 ! allocation buffer size
 
@@ -51,7 +51,7 @@
       subroutine read_nml_grid
       use param, only: mynode, nsize
       use error_handling_mod, only: error_log
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
       use utils_mod, only: lenstr
 !     Read the "GRID_SETTINGS" section of the namelist file
       integer ::  namelist_unit, ios, lstr
@@ -95,14 +95,17 @@ c$$$      character(len=256) :: fname
 
       close(namelist_unit)
 
+
       end subroutine read_nml_grid
 
       subroutine init_dimensions  ![
       implicit none
+
       ! need to do this here because Lm, Mm change in mpi_setup and are not known at compile time.
 
 c$$$      nx = Lm
-c$$$      ny = Mm
+c$$$  ny = Mm
+      nz = N
       Lm = nx
       Mm = ny
 

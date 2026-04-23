@@ -56,19 +56,23 @@ module utils_mod
     character(len=*) str                ! are two possible outcomes
     integer lenstr, is,ie               ! of the search for the first
     ie=len(str)
-    do while(ie > 1 .and. str(ie:ie) == ' ')
-       ie=ie-1
-    enddo                               ! non-blank character "is":
-    is=1
-    do while(is < ie .and. str(is:is) == ' ')
-       is=is+1
-    enddo                               ! it either finds one, or
-    if (str(is:is) /= ' ') then         ! the search is terminated
-       if (is > 1) str=str(is:ie)        ! by reaching the condition
-       lenstr=ie-is+1                    ! (is == ie), while the
-    else                                ! character is still blank,
-       lenstr=0                          ! which  means that the
-    endif                               ! whole string consists of
+    if (ie==0) then
+       lenstr = 0
+    else
+       do while(ie > 1 .and. str(ie:ie) == ' ')
+          ie=ie-1
+       enddo                               ! non-blank character "is":
+       is=1
+       do while(is < ie .and. str(is:is) == ' ')
+          is=is+1
+       enddo                               ! it either finds one, or
+       if (str(is:is) /= ' ') then         ! the search is terminated
+          if (is > 1) str=str(is:ie)        ! by reaching the condition
+          lenstr=ie-is+1                    ! (is == ie), while the
+       else                                ! character is still blank,
+          lenstr=0                          ! which  means that the
+       endif                               ! whole string consists of
+    end if
   end function lenstr                        ! blank characters only.
 
 end module utils_mod

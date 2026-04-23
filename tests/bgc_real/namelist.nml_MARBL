@@ -16,8 +16,8 @@ title = "roms_run"
 !================================================================================
 &TIME_STEPPING 							       !scalars.F
 !-------------
-ntimes = 20
-dt = 40
+ntimes = 10
+dt = 20
 ndtfast = 30
 ninfo = 1
 /
@@ -43,7 +43,7 @@ theta_b = 6.D0
 hc = 25.0D0
 /
 
-&PARAM_SETTINGS
+&PARAM_SETTINGS                                                          !param.F
 !------------------------------
 ! Previously set in `param.opt`
 !------------------------------
@@ -109,9 +109,9 @@ nriv = 0
 !================================================================================
 &TIDES_SETTINGS                                                          !tides.F
 bry_tides=.false. ! Barotropic (TPXO) tides at the boundary
-pot_tides=.false. ! Surface tidal potential
+pot_tides=.true. ! Surface tidal potential
 ana_tides=.false. ! Specify tides analytically
-ntides = 0
+ntides = 10
 /
 
 !================================================================================
@@ -154,11 +154,11 @@ wrt_avg_Aks=.true. ! Include `Aks`
 wrt_avg_Hbls=.true.! Include `hbls`
 wrt_avg_Hbbl=.true.! Include `hbbl`
 output_period_rst = 2000
-nrpf_rst = 2
-output_period_his = 400
-nrpf_his = 50
+nrpf_rst = 10
+output_period_his = 100
+nrpf_his = 20
 output_period_avg = 100
-nrpf_avg = 10
+nrpf_avg = 20
 /
 
 &TS_OUTPUT_SETTINGS
@@ -266,8 +266,8 @@ interp_bgc_frc = .true.   ! interpolate forcing from coarser grid
 ! Previously set in `roms.in`
 !------------------------------
 marbl_config_file = "marbl_in"
-marbl_tracers_to_write = ""
-marbl_diagnostics_to_write = ""
+marbl_tracers_to_write = "O2","NO3","Fe"
+marbl_diagnostics_to_write = "DCO2STAR_ALT_CO2","graze_diat_zint","FESEDFLUX"
 /
 
 !================================================================================
@@ -280,14 +280,14 @@ marbl_diagnostics_to_write = ""
 !----------------
 cdr_source  = .false.  ! on/off switch for CDR forcing
 forcing_depth_profiles = .false. ! T if this file contains depth profiles
-forcing_3d             = .true. ! T if this file contains 3d forcing
+forcing_3d             = .false. ! T if this file contains 3d forcing
 forcing_parameterized  = .false. ! T if forcing with idealized Gaussian profiles
 ! Linear time interpolation between records (T), or step changes (F)
 time_interpolation = .false.
 ! Prevent errors by relocating single-point CDR forcing locations on land to water
 relocate_to_wet_pts = .false.
-cdr_file = "cdr_forcing_dp.nc"  ! NetCDF forcing file
-ncdr_parm = 0  !! number of discrete CDR releases; only used with PARAMETERIZED or 3D FORCING
+cdr_file = ""  ! NetCDF forcing file
+ncdr_parm = 1  !! number of discrete CDR releases; only used with PARAMETERIZED or 3D FORCING
 nz_chd = 50
 /
 
@@ -342,7 +342,7 @@ gamma2 = 1.0
 !------------
 ! Requires SOLVE3D and TS_DIF2 cppkeys
 !------------
-tnu=0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+tnu=0.0
 /
 
 &BOTTOM_DRAG_SETTINGS                                                  !scalars.F
@@ -357,7 +357,7 @@ zob = 1.e-2
 !Requires SOLVE3D cppkey (and MY_BAK_MIXING cppkey for akq_bak)
 !------------------------
 akv_bak = 0.0
-akt_bak = 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+akt_bak = 0.0
 !akq_bak = 0. !(if MY_BAK_MIXING)
 /
 
@@ -470,7 +470,6 @@ nrpf = 0
 ppm3 = 0.
 pmin = 0
 /
-
 !================================================================================
 !                            ERROR HANDLING
 !================================================================================

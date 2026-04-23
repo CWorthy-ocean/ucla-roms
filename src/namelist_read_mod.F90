@@ -21,7 +21,7 @@ contains
 
   subroutine read_namelists
 
-      ! Set default input settings filename:
+    use param, only: read_nml_param
 #ifndef ANA_GRID
     use dimensions, only: read_nml_grid           !GRID_SETTINGS
 #endif
@@ -48,6 +48,9 @@ contains
     use sponge_tune, only: read_nml_sponge_tune   !SPONGE_TUNE_SETTINGS
     use surf_flux, only: read_nml_surf_flx        !SURF_FLX_SETTINGS
     use tides, only: read_nml_tides               !TIDES_SETTINGS
+    use bulk_frc, only: read_nml_bulk_frc         !BULK_FRC_SETTINGS
+    use flux_frc, only: read_nml_flux_frc         !FLUX_FRC_SETTINGS
+    use tracers, only: read_nml_tracers           !TS_SETTINGS
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: read_nml_upscale    !UPSCALE_SETTINGS
 #endif
@@ -67,8 +70,9 @@ contains
 #ifdef SOLVE3D
     use scoord, only: read_nml_scoord !SCOORD_SETTINGS
 #endif
+    use diag_mod, only: read_nml_stdout_diag
     implicit none
-
+    call read_nml_param
 #ifndef ANA_GRID
     call read_nml_grid
 #endif
@@ -110,6 +114,10 @@ contains
 #ifdef SOLVE3D
    call read_nml_scoord
 #endif
+   call read_nml_bulk_frc
+   call read_nml_flux_frc
+   call read_nml_tracers
+   call read_nml_stdout_diag
   end subroutine read_namelists
 
   end module namelist_read_mod

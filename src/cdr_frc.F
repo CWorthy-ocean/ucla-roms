@@ -9,10 +9,7 @@
 #include "cppdefs.opt"
 
 #if defined MARBL && defined CDR_FORCING
-      use compile_time_switches, only: cdr_source,
-     &     forcing_depth_profiles, forcing_3d, forcing_parameterized,
-     &     time_interpolation, relocate_to_wet_pts, cdr_volume
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
       use roms_read_write, only:
      &     ncforce, ncforce3d, cdr_frc_opt,
      &     set_frc_data, store_string_att
@@ -70,9 +67,15 @@
      &     vname='cdr_trcflx_3d_DIC', tname='cdr_time')
 
       integer :: nz_chd = 0  ! Number of vertical layers in the forcing file, or, if upscaling,
-                                         ! the number of vertical layers in the child grid.
+! the number of vertical layers in the child grid.
+      logical, public :: cdr_source,
+     &     forcing_depth_profiles, forcing_3d, forcing_parameterized,
+     &     time_interpolation, relocate_to_wet_pts, cdr_volume
 
-      namelist /CDR_FRC_SETTINGS/ cdr_file, ncdr_parm, nz_chd
+      namelist /CDR_FRC_SETTINGS/ cdr_file, ncdr_parm, nz_chd, cdr_source,
+     &     forcing_depth_profiles, forcing_3d, forcing_parameterized,
+     &     time_interpolation, relocate_to_wet_pts, cdr_volume
+
 
       !!! (1) Parameterized releases
       !!! (2) Vertical profiles (upscaling)

@@ -3,7 +3,10 @@
       implicit none
       private
 
-      public :: diag
+      character(len=8) :: module_name = "diag_mod"
+      logical, public :: code_check_mode = .false.
+      namelist /STDOUT_DIAG_SETTINGS/ code_check_mode
+      public :: diag, read_nml_stdout_diag
 
       contains
 
@@ -26,6 +29,31 @@ c--#define MAX_BY_VERT_CFL_ONLY
 
 #define REPORT_MAX_UV
 #define REPORT_POTEN_ENRG
+
+      subroutine read_nml_stdout_diag
+      use error_handling_mod, only: error_log
+      use namelist_open_mod, only: open_namelist_file
+!     Read the "STDOUT_DIAG_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_stdout_diag"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=STDOUT_DIAG_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read STDOUT_DIAG_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_stdout_diag
 
 
       subroutine diag
@@ -61,7 +89,6 @@ c--#define MAX_BY_VERT_CFL_ONLY
      &                            , ke2b, ke3bc, kesrf, ub,vb
 #endif
      &                                                      )
-      use compile_time_switches, only: code_check_mode
       use comm_vars, only: area, first_time, tile_count, volume
       use diag_vars, only:
      &     avke, avke2b, avke3bc, avkesrf, avpe,

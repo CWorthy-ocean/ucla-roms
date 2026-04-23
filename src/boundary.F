@@ -57,28 +57,28 @@
       type (ncforce) :: nc_vb_w = ncforce( vname='vbar_west', tname='bry_time')
       type (ncforce) :: nc_u_w = ncforce( vname='u_west', tname='bry_time')
       type (ncforce) :: nc_v_w = ncforce( vname='v_west', tname='bry_time')
-      type (ncforce), dimension(nt) :: nc_t_w = ncforce( vname=' ', tname='bry_time')
+      type (ncforce), dimension(:), allocatable :: nc_t_w
 
       type (ncforce) :: nc_z_e = ncforce( vname='zeta_east', tname='bry_time')
       type (ncforce) :: nc_ub_e = ncforce( vname='ubar_east', tname='bry_time')
       type (ncforce) :: nc_vb_e = ncforce( vname='vbar_east', tname='bry_time')
       type (ncforce) :: nc_u_e = ncforce( vname='u_east', tname='bry_time')
       type (ncforce) :: nc_v_e = ncforce( vname='v_east', tname='bry_time')
-      type (ncforce), dimension(nt) :: nc_t_e = ncforce( vname=' ', tname='bry_time')
+      type (ncforce), dimension(:), allocatable :: nc_t_e
 
       type (ncforce) :: nc_z_s = ncforce( vname='zeta_south', tname='bry_time')
       type (ncforce) :: nc_ub_s = ncforce( vname='ubar_south', tname='bry_time')
       type (ncforce) :: nc_vb_s = ncforce( vname='vbar_south', tname='bry_time')
       type (ncforce) :: nc_u_s = ncforce( vname='u_south', tname='bry_time')
       type (ncforce) :: nc_v_s = ncforce( vname='v_south', tname='bry_time')
-      type (ncforce), dimension(nt) :: nc_t_s = ncforce( vname=' ', tname='bry_time')
+      type (ncforce), dimension(:), allocatable :: nc_t_s
 
       type (ncforce) :: nc_z_n = ncforce( vname='zeta_north', tname='bry_time')
       type (ncforce) :: nc_ub_n = ncforce( vname='ubar_north', tname='bry_time')
       type (ncforce) :: nc_vb_n = ncforce( vname='vbar_north', tname='bry_time')
       type (ncforce) :: nc_u_n = ncforce( vname='u_north', tname='bry_time')
       type (ncforce) :: nc_v_n = ncforce( vname='v_north', tname='bry_time')
-      type (ncforce), dimension(nt) :: nc_t_n = ncforce( vname=' ', tname='bry_time')
+      type (ncforce), dimension(:), allocatable :: nc_t_n
 
 #ifdef NHMG
       type (ncforce) :: nc_w_w = ncforce( vname='w_west', tname='bry_time')
@@ -96,6 +96,16 @@
 
       ! local
       integer :: itrc
+      allocate(nc_t_w(nt))
+      allocate(nc_t_e(nt))
+      allocate(nc_t_s(nt))
+      allocate(nc_t_n(nt))
+
+      nc_t_w = ncforce( vname=' ', tname='bry_time')
+      nc_t_e = ncforce( vname=' ', tname='bry_time')
+      nc_t_s = ncforce( vname=' ', tname='bry_time')
+      nc_t_n = ncforce( vname=' ', tname='bry_time')
+
       if (obc_west.or.obc_east.or.obc_north.or.obc_south) then
         bc_options = ''
       endif

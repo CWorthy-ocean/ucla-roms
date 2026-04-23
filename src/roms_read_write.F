@@ -209,7 +209,7 @@
       use insert_node_mod, only: insert_node
       use param, only: mynode, nsize
       use error_handling_mod, only: error_log
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
       use utils_mod, only: lenstr
       integer ::  namelist_unit, ios, lstr, testunit
       character(len=25) :: sr_name = "read_nml_roms_read_write"
@@ -292,7 +292,6 @@
 
          fname = trim(frcfile(max_frc+1))
          lstr = lenstr(trim(fname))
-
          if (lstr > 0) then
 # if defined MPI && defined PARALLEL_FILES
 #ifndef PARALLEL_IO

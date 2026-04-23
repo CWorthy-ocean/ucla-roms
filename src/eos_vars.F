@@ -49,7 +49,7 @@
       subroutine read_nml_lin_rho_eos
 #if defined(SOLVE3D) && !defined(NONLIN_EOS)
       use error_handling_mod, only: error_log
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
 !     Read the "LIN_RHO_EOS_SETTINGS" section of the namelist file
       integer ::  namelist_unit, ios
       character(len=21) :: sr_name = "read_nml_lin_rho_eos"

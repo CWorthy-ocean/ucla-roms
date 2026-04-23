@@ -31,7 +31,6 @@
 !            the anisotropic stress tensor for use in models of
 !            the large-scale ocean circulation, JCP, 105, 333-338.
 
-      use compile_time_switches, only: diag_uv
       use coupling, only: rufrc, rvfrc
       use grid, only: pm, pn, dm_r, dn_r, pmask, dm_p, dn_p, nx,ny
       use dimensions, only: inode, jnode
@@ -41,7 +40,7 @@
       use scalars, only: dt, n, nstp
 #ifdef DIAGNOSTICS
       use diagnostics, only: calc_diag, udiag, vdiag,
-     &  dxdyi_u, dxdyi_v, ihmix
+     &  dxdyi_u, dxdyi_v, ihmix, diag_uv
 #endif
       implicit none
       integer istr,iend,jstr,jend, i,j,k, indx

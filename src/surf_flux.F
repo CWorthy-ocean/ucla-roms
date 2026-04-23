@@ -6,9 +6,7 @@
       ! Devin Dollery & Jeroen Molemaker (2020-2022)
 
 #include "cppdefs.opt"
-      use compile_time_switches, only:
-     &     wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
       use param, only: mynode, lm, mm
       use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u
       use roms_read_write, only:
@@ -30,8 +28,10 @@
 
       real           :: output_period = 120       ! output averaging period in seconds
       integer        :: nrpf          = 10 ! total recs per file
-
-      namelist /SURF_FLX_SETTINGS/ output_period, nrpf
+      logical, public ::
+     &     wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg
+      namelist /SURF_FLX_SETTINGS/ output_period, nrpf,
+     &     wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg
 
 #if defined SALINITY
       logical,parameter :: salinity=.true.

@@ -78,10 +78,11 @@ C$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
 !     real :: xl,el
 
 #ifdef SOLVE3D
-      real rho0, tnu2(NT)
+      real rho0
+      real, allocatable :: tnu2(:)
 
       real :: Akv_bak = 0.
-      real :: Akt_bak(NT) = 0.
+      real, allocatable :: Akt_bak(:)
 
 # ifdef MY25_MIXING
       real :: Akq_bak = 0.
@@ -167,7 +168,7 @@ C$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
       subroutine read_nml_scalars
       use param, only: itemp
       use error_handling_mod, only: error_log
-      use namelist_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file
       implicit none
 !     Read the "FRC_OUTPUT_SETTINGS" section of the namelist file
       integer ::  namelist_unit, ios, itrc
@@ -196,7 +197,9 @@ C$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
      &    'free-slip = +1, or no-slip = -1.'
 #endif
 !================================================================================
-! set `tnu2`
+!     set `tnu2`
+      allocate(tnu2(NT))
+      tnu2(:) = 0.
 #if define SOLVE3D && defined TS_DIF2
       rewind(namelist_unit)
       read (unit=namelist_unit, nml=TRACER_DIFF2, iostat=ios, iomsg=msg)
@@ -245,11 +248,17 @@ C$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
       mpi_master_only write(*,'(6x,A,ES10.3,2x,A)')
      &    'rdrg2 =', rdrg2,
      &    'quadratic bottom drag coefficient, nondim'
+#ifdef SOLVE3D
+      mpi_master_only write(*,'(8x,A,ES10.3,2x,A)')
+     &    'Zob =', Zob,
+     &    'bottom roughness height [m]'
+#endif
 
 
 !================================================================================
 !Akv_bak, Akt_bak
 #ifdef SOLVE3D
+      allocate(Akt_bak(NT))
       rewind(namelist_unit)
       read (unit=namelist_unit, nml=VERTICAL_MIXING_SETTINGS, iostat=ios, iomsg=msg)
 

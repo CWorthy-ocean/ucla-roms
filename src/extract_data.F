@@ -39,8 +39,9 @@
       !]
 
 #include "cppdefs.opt"
-      use compile_time_switches, only: calc_pflx, do_extract, wrt_file_rst
-      use namelist_mod, only: open_namelist_file
+      use basic_output, only: wrt_file_rst
+      use calc_pflx_mod, only: calc_pflx
+      use namelist_open_mod, only: open_namelist_file
       use grid, only: angler, rmask, umask, vmask
       use dimensions, only: nx, ny, nz
       use nc_read_write, only: nccreate, ncread, ncwrite
@@ -84,9 +85,10 @@
       real     :: theta_s_chd = 5.0
       real     :: theta_b_chd = 2.0
       real     :: hc_chd      = 250.0
+      logical, public  :: do_extract
 
       namelist /EXTRACT_DATA_SETTINGS/ extract_period, extract_file,
-     &     nrpf_extract, N_chd, theta_s_chd, theta_b_chd, hc_chd
+     &     nrpf_extract, N_chd, theta_s_chd, theta_b_chd, hc_chd, do_extract
 
       integer,parameter        :: edat_prec = nf90_double  ! Precision of output variables (nf90_float/nf90_double)
 

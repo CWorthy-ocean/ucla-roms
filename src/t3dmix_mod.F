@@ -24,7 +24,6 @@
       subroutine t3dmix_s_tile (istr,iend,jstr,jend, itrc, FX,FE,LapT)
 
 ! Computes horizontal mixing of tracers along S-surfaces.
-      use compile_time_switches, only: diag_trc
       use grid, only: nz, umask, pmon_u, vmask, pnom_v, pn, pm
       use roms_mpi, only: exchange_xxx
       use dimensions, only: inode, jnode
@@ -35,7 +34,7 @@
       use tracers, only: t, wrt_t_dia
       use diagnostics, only:
      &     calc_diag, tmixx, tmixy, td,
-     &     tdiag
+     &     tdiag, diag_trc
       use roms_mpi, only: exchange_xxx
 
       implicit none
@@ -281,13 +280,12 @@
       subroutine t3dmix_gp_tile (istr,iend,jstr,jend, itrc, LapT,FX,FE,
      &                               FSC,dTdz, dTdx,dTde,dZdx,dZde)
 
-      use compile_time_switches, only: diag_trc
       use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta, N
       use tracers, only: t, wrt_t_dia
       use dimensions, only: inode, jnode
       use diagnostics, only:
      &     calc_diag, tmixx, tmixy, td,
-     &     tdiag
+     &     tdiag, diag_trc
       use grid, only: nz, umask, pmon_u, vmask, pnom_v, pn, pm, dn_u, dm_v
       use mixing, only: diff2
       use ocean_vars, only: hz, z_r

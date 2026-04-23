@@ -10,7 +10,6 @@
 
 ! Set lateral boundary conditions for XI-component velocity
 ! u(:,:,:,nnew).
-      use compile_time_switches, only: ub_tune
       use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
       use boundary, only: u_west, u_east, u_south, u_north
       use dimensions, only: inode, jnode
@@ -23,7 +22,7 @@
 #endif
       use sponge_tune, only:
      &     ub_west, ub_east, ub_south,
-     &     ub_north
+     &     ub_north, ub_tune
       use dimensions, only: ny, nz
       use grid, only: pmask, pm, umask, pn
 

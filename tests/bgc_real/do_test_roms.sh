@@ -31,6 +31,7 @@ echo "  test compiling, ${BGC_MODEL}..."
 echo "##############################"
 
 cp -p cppdefs_${BGC_MODEL}.opt ./cppdefs.opt
+cp -p namelist.nml_${BGC_MODEL} namelist.nml
 
 cp -p $ROMS_ROOT/tests/scripts/test_roms.py .
 make compile_clean &> /dev/null
