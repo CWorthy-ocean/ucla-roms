@@ -26,7 +26,7 @@
      &                                            ,rw
 # endif
      &                                                              )
-      use dimensions, only: inode, jnode
+      use dimensions, only: inode, jnode, i0,j0,i1,j1
 # ifdef NHMG
       use ocean_vars, only:
      &     nh_ubar, nh_vbar, nh_wcor, nhdu,
@@ -59,6 +59,7 @@
 # if defined ADV_ISONEUTRAL && defined EXCHANGE
       use eos_vars, only: drde, drdx
 #endif
+      use instant_output, only: wrt_instant
       implicit none
       integer istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
       real, dimension(PRIVATE_2D_SCRATCH_ARRAY,N) :: ru,rv
@@ -526,6 +527,9 @@
 # undef r_D
 # if defined ADV_ISONEUTRAL && defined EXCHANGE
        !!!! JM not clear what this does !!!
+!        call wrt_instant(dRdx(i0:i1,j0:j1,:), 'dRdx')
+!        call wrt_instant(dRde(i0:i1,j0:j1,:), 'dRde')
+!        stop
       call exchange_xxx(dRdx,dRde)
 # endif
 

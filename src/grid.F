@@ -29,7 +29,7 @@
       use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
       use pio, only : PIO_openfile, PIO_closefile
 #endif
-
+      use instant_output, only: wrt_instant
       implicit none
 !
 ! h         Model bottom topography (depth [m] at RHO-points.)

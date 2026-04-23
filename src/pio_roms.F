@@ -80,6 +80,7 @@
       integer, dimension(2) :: pio_dimLen_w2v
 
       integer, dimension(2) :: pio_dimLen_2Dr
+      integer, dimension(2) :: pio_dimLen_2Dr_w
       integer, dimension(2) :: pio_dimLen_2Du
       integer, dimension(2) :: pio_dimLen_2Dv
 
@@ -172,6 +173,8 @@
 
       integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_start_2Dr
       integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_count_2Dr
+      integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_start_2Dr_w
+      integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_count_2Dr_w
 
       integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_start_2Du
       integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_count_2Du
@@ -233,6 +236,7 @@
       type(io_desc_t),public     :: pio_desc_w2v
 
       type(io_desc_t),public     :: pio_desc_2Dr
+      type(io_desc_t),public     :: pio_desc_2Dr_w
       type(io_desc_t),public     :: pio_desc_2Du
       type(io_desc_t),public     :: pio_desc_2Dv
 
@@ -273,6 +277,7 @@
       public  :: pio_ncread1
       public  :: pio_ncread2
       public  :: pio_ncread3
+      public  :: pio_ncwrite2
 
 !      public  :: pio_createFile
 !      public  :: pio_createVar
@@ -330,6 +335,7 @@
 
         ! Set up PIO for this object
 
+        call PIO_setdebuglevel(6)
         pio_numAggregator = 0
         pio_optBase       = 1
 
@@ -609,6 +615,17 @@
         pio_count_2Dr(2) = pio_eta_rho+pio_j0+pio_j1
 
 
+        pio_dimLen_2Dr_w(1) = LLm+2
+        pio_dimLen_2Dr_w(2) = MMm+2
+
+        pio_start_2Dr_w(1) = pio_xi_rho_start+pio_i0
+        pio_start_2Dr_w(2) = pio_eta_rho_start+pio_j0
+
+        pio_count_2Dr_w(1) = pio_xi_rho
+        pio_count_2Dr_w(2) = pio_eta_rho
+
+!        write(*,*) "HEY", mynode, (pio_start_2Dr_w(1)+pio_count_2Dr_w(1)-1), (pio_start_2Dr_w(2)+pio_count_2Dr_w(2)-1)
+
         pio_dimLen_2Du(1) = LLm+1
         pio_dimLen_2Du(2) = MMm+2
 
@@ -734,76 +751,82 @@
 
         implicit none
 
+      integer :: i,j,wbuf,tmp_idx
+
+#ifdef OBC_NORTH
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1r, pio_start_n1r, pio_count_n1r,
      &       pio_desc_n1r)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1u, pio_start_n1u, pio_count_n1u,
      &       pio_desc_n1u)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1v, pio_start_n1v, pio_count_n1v,
      &       pio_desc_n1v)
-
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2r, pio_start_n2r, pio_count_n2r,
      &       pio_desc_n2r)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2u, pio_start_n2u, pio_count_n2u,
      &       pio_desc_n2u)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2v, pio_start_n2v, pio_count_n2v,
      &       pio_desc_n2v)
+#endif
 
+#ifdef OBC_SOUTH
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1r, pio_start_s1r, pio_count_s1r,
      &       pio_desc_s1r)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1u, pio_start_s1u, pio_count_s1u,
      &       pio_desc_s1u)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1v, pio_start_s1v, pio_count_s1v,
      &       pio_desc_s1v)
-
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2r, pio_start_s2r, pio_count_s2r,
      &       pio_desc_s2r)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2u, pio_start_s2u, pio_count_s2u,
      &       pio_desc_s2u)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2v, pio_start_s2v, pio_count_s2v,
      &       pio_desc_s2v)
+#endif
 
+#ifdef OBC_EAST
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1r, pio_start_e1r, pio_count_e1r,
      &       pio_desc_e1r)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1u, pio_start_e1u, pio_count_e1u,
      &       pio_desc_e1u)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1v, pio_start_e1v, pio_count_e1v,
      &       pio_desc_e1v)
-
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2r, pio_start_e2r, pio_count_e2r,
      &       pio_desc_e2r)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2u, pio_start_e2u, pio_count_e2u,
      &       pio_desc_e2u)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2v, pio_start_e2v, pio_count_e2v,
      &       pio_desc_e2v)
+#endif
 
+#ifdef OBC_WEST
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1r, pio_start_w1r, pio_count_w1r,
      &       pio_desc_w1r)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1u, pio_start_w1u, pio_count_w1u,
      &       pio_desc_w1u)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1v, pio_start_w1v, pio_count_w1v,
      &       pio_desc_w1v)
-
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2r, pio_start_w2r, pio_count_w2r,
      &       pio_desc_w2r)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2u, pio_start_w2u, pio_count_w2u,
      &       pio_desc_w2u)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2v, pio_start_w2v, pio_count_w2v,
      &       pio_desc_w2v)
+#endif
 
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dr, pio_start_2Dr, pio_count_2Dr,
      &       pio_desc_2Dr)
+        call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dr_w, pio_start_2Dr_w, pio_count_2Dr_w,
+     &       pio_desc_2Dr_w)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Du, pio_start_2Du, pio_count_2Du,
      &       pio_desc_2Du)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dv, pio_start_2Dv, pio_count_2Dv,
      &       pio_desc_2Dv)
-
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dr, pio_start_3Dr, pio_count_3Dr,
      &       pio_desc_3Dr)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Du, pio_start_3Du, pio_count_3Du,
      &       pio_desc_3Du)
         call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dv, pio_start_3Dv, pio_count_3Dv,
      &       pio_desc_3Dv)
-
       end subroutine pio_createDecomps
 ! ----------------------------------------------------------------------
       subroutine pio_ncread1(varName, arr, irec)
@@ -938,6 +961,69 @@
 
       end subroutine pio_ncread3
 ! ----------------------------------------------------------------------
+      subroutine pio_ncwrite2(varName, arr, irec)
+
+        implicit none
+
+        character(len=*) :: varName
+        real,dimension(:,:),intent(inout) :: arr ! array to be filled
+        integer,optional,intent(in)       :: irec
+
+        type(var_desc_t) :: varId
+        integer :: ierr
+
+        ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
+
+        if (present(irec)) then
+          frame = irec
+          call PIO_setframe(pio_FileDesc, varId, frame)
+        endif
+
+        if (pio_gtype == 'n2r') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_n2r, arr, ierr)
+        elseif (pio_gtype == 'n2u') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_n2u, arr, ierr)
+        elseif (pio_gtype == 'n2v') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_n2v, arr, ierr)
+        elseif (pio_gtype == 's2r') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_s2r, arr, ierr)
+        elseif (pio_gtype == 's2u') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_s2u, arr, ierr)
+        elseif (pio_gtype == 's2v') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_s2v, arr, ierr)
+        elseif (pio_gtype == 'e2r') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_e2r, arr, ierr)
+        elseif (pio_gtype == 'e2u') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_e2u, arr, ierr)
+        elseif (pio_gtype == 'e2v') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_e2v, arr, ierr)
+        elseif (pio_gtype == 'w2r') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_w2r, arr, ierr)
+        elseif (pio_gtype == 'w2u') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_w2u, arr, ierr)
+        elseif (pio_gtype == 'w2v') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_w2v, arr, ierr)
+        elseif (pio_gtype == '2Dr') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Dr_w, arr, ierr)
+        elseif (pio_gtype == '2Du') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Du, arr, ierr)
+        elseif (pio_gtype == '2Dv') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Dv, arr, ierr)
+        elseif (pio_gtype == '2Cr') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Cr, arr, ierr)
+        elseif (pio_gtype == '2Cu') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Cu, arr, ierr)
+        elseif (pio_gtype == '2Cv') then
+          call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Cv, arr, ierr)
+        endif
+
+        call PIO_syncfile(pio_FileDesc)
+
+      end subroutine pio_ncwrite2
+! ----------------------------------------------------------------------
+
+
+
 !      subroutine pio_create_file(ftype, fname, nodate)
 !
 !        implicit none

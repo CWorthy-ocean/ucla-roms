@@ -133,6 +133,6 @@ C$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
       parameter (nmol_cm2_to_mmol_m2 = 0.01)
 #endif
 
-      real :: init  !=1.0e+33          ! initialize all arrays. set to huge number to check for bugs.
+      real :: init=0  !=1.0e+33          ! initialize all arrays. set to huge number to check for bugs.
 
       end module scalars

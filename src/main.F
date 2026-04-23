@@ -383,6 +383,7 @@ CR      write(*,*)  ' -2' MYID
       use particles, only: floats, do_particles
       use surf_flux, only: wrt_smflx, wrt_stflx, wrt_sflux
       use random_output, only: do_random, wrt_random
+!      use random_output2, only:  wrt_random2
       use cdr_output, only: do_cdr, wrt_cdr_output
       use frc_output, only: do_frc, wrt_frc
       use zslice_output, only: do_zslice, wrt_zslice
@@ -402,6 +403,7 @@ CR      write(*,*)  ' -2' MYID
       use roms_read_write, only: frc_time
       use mpi_f08, only: mpi_wtime
       use param, only: mynode
+      use pio_roms, only: pio_gtype
       implicit none
 
         real :: walltime0 = 0.
@@ -537,6 +539,8 @@ CR      write(*,*)  ' -2' MYID
 
       call diag  ! log file output of global norms
 
+      pio_gtype = '---'
+
       call wrt_his_ocean_vars
       call wrt_rst_ocean_vars
       call wrt_avg_ocean_vars
@@ -555,6 +559,7 @@ CR      write(*,*)  ' -2' MYID
 #endif
 
       if (do_random) call wrt_random
+!      if (do_random) call wrt_random2
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
       if (do_cdr)  call wrt_cdr_output
 #endif
@@ -565,9 +570,9 @@ CR      write(*,*)  ' -2' MYID
       call wrt_bgc
 #endif
 
-!      if (mynode == 0) then
-!        walltime0 = MPI_Wtime()
-!        write(*,*) "YAY", iic, walltime0
-!      endif
+      if (mynode == 0) then
+        walltime0 = MPI_Wtime()
+        write(*,*) "YAY", iic, walltime0
+      endif
 
       end

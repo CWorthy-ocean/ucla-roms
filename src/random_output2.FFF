@@ -1,4 +1,4 @@
-      module random_output
+      module random_output2
       ! Collection of random variables for output
 
 #include "cppdefs.opt"
@@ -34,30 +34,10 @@
       integer :: record = nrpf ! to trigger the first file creation
 
       ! Public functions
-      public wrt_random,init_random
+      public wrt_random2
 
       contains
 
-!----------------------------------------------------------------------
-      subroutine init_random ![
-      ! Allocate and initialize arrays.
-      implicit none
-
-      ! local
-      logical,save :: done=.false.
-
-      if (done) then
-        return
-      else
-        done = .true.
-      endif
-
-      ! put the relevant part of your code here
-
-
-      if (mynode==0) print *,'init random'
-
-      end subroutine init_random  !]
 !----------------------------------------------------------------------
       subroutine def_vars_random(ncid)  ![
       implicit none
@@ -67,7 +47,7 @@
       ! local
       integer                        :: ierr, varid
 
-      varid = nccreate(ncid,'zeta',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/), nf90_double)
+      varid = nccreate(ncid,'zeta',(/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/), nf90_double)
       ierr = nf90_put_att(ncid,varid,'long_name','sea surface height')
       ierr = nf90_put_att(ncid,varid,'units','m')
 
@@ -81,7 +61,7 @@
 
       end subroutine def_vars_random  !]
 !----------------------------------------------------------------------
-      subroutine wrt_random  ![
+      subroutine wrt_random2  ![
       ! Call wrt_random after completion of the time-step
       ! (After step3d_uv2)
       implicit none
@@ -94,44 +74,18 @@
       output_time = output_time + dt
 
       if (output_time>=output_period) then
-
+        pio_gtype = '---'
         if (record==nrpf) then
-#ifdef PARALLEL_IO
-          if (mynode == 0) then
-          call create_file('_rnd',fname, nonode=.true.)
-#else
-          call create_file('_rnd',fname)
-#endif
+          call create_file('_rnd2',fname)
           ierr=nf90_open(fname,nf90_write,ncid)
           call def_vars_random(ncid)
           ierr = nf90_close(ncid)
 
-#ifdef PARALLEL_IO
-          endif
-          call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
-          call MPI_Barrier(ocean_grid_comm, ierr)
-#endif
           record = 0
         endif
 
         record = record+1
 
-#ifdef PARALLEL_IO
-      if (mynode == 0) then
-        ierr=nf90_open(fname,nf90_write,ncid)
-        if (ierr/=nf90_noerr) then
-           call error_log%check_netcdf_status(netcdf_status=ierr,
-     &          info="error opening "//fname,
-     &          context=module_name//"/"//sr_name)
-        end if
-        ! always add time
-        call ncwrite(ncid,'ocean_time',(/time/),(/record/))
-        ierr=nf90_close (ncid)
-      endif
-      call MPI_Barrier(ocean_grid_comm, ierr)
-
-      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
-#else
         ierr=nf90_open(fname,nf90_write,ncid)
         if (ierr/=nf90_noerr) then
            call error_log%check_netcdf_status(netcdf_status=ierr,
@@ -141,20 +95,14 @@
 
         ! always add time
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
-#endif
 
-        pio_gtype = '2Dr'
-        call ncwrite(ncid,'zeta'  ,zeta(i0:i1,j0:j1,knew),(/1,1,record/), .true.)
+        call ncwrite(ncid,'zeta'  ,zeta(i0:i1,j0:j1,knew),(/1,1,record/))
 !        pio_gtype = '2Du'
 !        call ncwrite(ncid,'u_surf',u( 1:i1,j0:j1,nz,nnew),(/1,1,record/))
 !        pio_gtype = '2Dv'
 !        call ncwrite(ncid,'v_surf',v(i0:i1, 1:j1,nz,nnew),(/1,1,record/))
 
-#ifdef PARALLEL_IO
-        call PIO_closefile(pio_FileDesc)
-#else
         ierr=nf90_close (ncid)
-#endif
 
         if (mynode == 0) then
           write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')
@@ -165,7 +113,7 @@
         output_time=0
       endif
       call error_log%abort_check()
-      end subroutine wrt_random !]
+      end subroutine wrt_random2 !]
 !----------------------------------------------------------------------
 
-      end module random_output
+      end module random_output2

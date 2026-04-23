@@ -73,7 +73,7 @@ river_frc.o : river_frc.F ana_frc_river.h river_frc.opt set_global_definitions.h
 pipe_frc.o : pipe_frc.F ana_pipe_frc.h pipe_frc.opt set_global_definitions.h cppdefs.opt scalars.o nc_read_write.o roms_read_write.o dimensions.o
 add_git_hash.o : add_git_hash.F nc_read_write.o roms_read_write.o
 random_output.o : random_output.F random_output.opt set_global_definitions.h cppdefs.opt diagnostics.o ocean_vars.o scalars.o nc_read_write.o roms_read_write.o dimensions.o param.o
-cstar_output.o : cstar_output.F cstar_output.opt set_global_definitions.h cppdefs.opt diagnostics.o ocean_vars.o scalars.o nc_read_write.o roms_read_write.o dimensions.o param.o
+cdr_output.o : cdr_output.F cdr_output.opt set_global_definitions.h cppdefs.opt diagnostics.o ocean_vars.o scalars.o nc_read_write.o roms_read_write.o dimensions.o param.o
 roms_mpi.o : roms_mpi.F hidden_mpi_vars.o dimensions.o param.o
 zslice_output.o : zslice_output.F zslice_output.opt set_global_definitions.h cppdefs.opt surf_flux.o tracers.o diagnostics.o ocean_vars.o scalars.o nc_read_write.o roms_read_write.o dimensions.o grid.o param.o
 bgc_shared_vars.o : bgc_shared_vars.F bgc_3Ddiagnostics.opt bgc_2Ddiagnostics.opt bgc.opt set_global_definitions.h cppdefs.opt roms_read_write.o tracers.o param.o marbl_driver.o bec2_vars.o

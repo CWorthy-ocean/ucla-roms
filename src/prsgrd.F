@@ -44,14 +44,14 @@
 #ifdef ADV_ISONEUTRAL
       use eos_vars, only: drdx,drde
 #endif
-      use dimensions, only:  nx, ny, nz, inode, jnode
+      use dimensions, only:  nx, ny, nz, inode, jnode,i0,i1,j0,j1
       use scalars, only: n, g, rho0, nrhs
 #ifdef DIAGNOSTICS
       use diagnostics, only: calc_diag, diag_uv, udiag,
      &  vdiag, ipgr, dxdyi_u, dxdyi_v
 #endif
       use calc_pflx_mod, only: calc_pflx, calc_pressure_flux
-
+      use instant_output, only: wrt_instant
       implicit none
       integer istr,iend,jstr,jend, i,j,k, imin,imax,jmin,jmax
       real, dimension(PRIVATE_2D_SCRATCH_ARRAY,N) :: ru,rv, P
@@ -224,6 +224,8 @@ c**         dpth=z_w(i,j,N)-z_r(i,j,k)
 ! Compute XI-component of pressure gradient term:
 !-------- ------------ -- -------- -------- -----
 
+      rx(:,:) = 0.0
+
       do k=N,1,-1
         do j=jstr,jend
           do i=imin,imax
@@ -333,8 +335,15 @@ c    &        -0.75*rx(i,j)-0.125*(rx(i-1,j)+rx(i+1,j))
         endif
 # endif
 
+      enddo
 
-
+!      call wrt_instant(rx(i0:i1,j0:j1), 'FX')
+!      call wrt_instant(rho1(i0:i1,j0:j1,:), 'FE')
+!      call wrt_instant(qp1(i0:i1,j0:j1,:), 'FX2')
+!      call wrt_instant(dRdx(i0:i1,j0:j1,:), 'FE2')
+!      call wrt_instant(z_r(i0:i1,j0:j1,:), 'FE3')
+!      stop
+      do k=N,1,-1
 ! ETA-component of pressure gradient term:
 !-------------- -- -------- -------- -----
 
@@ -450,6 +459,23 @@ c    &            -0.75*rx(i,j)-0.125*(rx(i,j-1)+rx(i,j+1))
 
 
       enddo   !<-- k
+
+!      call wrt_instant(rx(i0:i1,j0:j1), 'FX')
+!      call wrt_instant(rho1(i0:i1,j0:j1,:), 'FE')
+!      call wrt_instant(qp1(i0:i1,j0:j1,:), 'FX2')
+!      call wrt_instant(dRdx(i0:i1,j0:j1,:), 'FE2')
+!      call wrt_instant(z_r(i0:i1,j0:j1,:), 'FE3')
+!      stop
+
+!      call wrt_instant(dRdx(i0:i1,j0:j1,:), 'dRdx')
+!      call wrt_instant(dRde(i0:i1,j0:j1,:), 'dRde')
+!      call wrt_instant(rx(:,:), 'rx')
+!      call wrt_instant(z_r(:,:,:), 'zr')
+!      call wrt_instant(f(:,:), 'f')
+!      call wrt_instant(pn(:,:), 'pn')
+!      stop
+!      call wrt_instant(rx(i0:i1,j0:j1), 'FSC2')
+!      stop
 
 # ifdef DIAGNOSTICS
       if (CORR_STAGE) then
