@@ -522,17 +522,6 @@
 
 # endif /* NHMG */
 
-
-       !!!! JM not clear what this does either
-# undef r_D
-# if defined ADV_ISONEUTRAL && defined EXCHANGE
-       !!!! JM not clear what this does !!!
-!        call wrt_instant(dRdx(i0:i1,j0:j1,:), 'dRdx')
-!        call wrt_instant(dRde(i0:i1,j0:j1,:), 'dRde')
-!        stop
-      call exchange_xxx(dRdx,dRde)
-# endif
-
       end
 
       subroutine check_step_uv1_switches(ierr)

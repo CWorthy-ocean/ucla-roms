@@ -50,8 +50,10 @@
       use diagnostics, only: calc_diag, diag_uv, udiag,
      &  vdiag, ipgr, dxdyi_u, dxdyi_v
 #endif
+#ifdef EXCHANGE
+      use roms_mpi, only: exchange_xxx
+#endif
       use calc_pflx_mod, only: calc_pflx, calc_pressure_flux
-      use instant_output, only: wrt_instant
       implicit none
       integer istr,iend,jstr,jend, i,j,k, imin,imax,jmin,jmax
       real, dimension(PRIVATE_2D_SCRATCH_ARRAY,N) :: ru,rv, P
@@ -325,10 +327,10 @@ c    &                       -0.5*(dRx(i,j)+dRx(i-1,j))
 
 c    &        -0.75*rx(i,j)-0.125*(rx(i-1,j)+rx(i+1,j))
 
-     &                                                )
+     &                                   )*umask(i,j)
 #  else
               dRdx(i,j,k)=0.5*(pm(i,j)+pm(i-1,j))
-     &                 *(z_r(i,j,k)-z_r(i-1,j,k))
+     &                 *(z_r(i,j,k)-z_r(i-1,j,k))*umask(i,j)
 #  endif
             enddo
           enddo
@@ -337,12 +339,6 @@ c    &        -0.75*rx(i,j)-0.125*(rx(i-1,j)+rx(i+1,j))
 
       enddo
 
-!      call wrt_instant(rx(i0:i1,j0:j1), 'FX')
-!      call wrt_instant(rho1(i0:i1,j0:j1,:), 'FE')
-!      call wrt_instant(qp1(i0:i1,j0:j1,:), 'FX2')
-!      call wrt_instant(dRdx(i0:i1,j0:j1,:), 'FE2')
-!      call wrt_instant(z_r(i0:i1,j0:j1,:), 'FE3')
-!      stop
       do k=N,1,-1
 ! ETA-component of pressure gradient term:
 !-------------- -- -------- -------- -----
@@ -447,10 +443,10 @@ c    &                         -0.5*(dRx(i,j)+dRx(i,j-1))
 
 c    &            -0.75*rx(i,j)-0.125*(rx(i,j-1)+rx(i,j+1))
 
-     &                                                    )
+     &                                         )*vmask(i,j)
 #else
               dRde(i,j,k)=0.5*(pn(i,j)+pn(i,j-1))
-     &                 *(z_r(i,j,k)-z_r(i,j-1,k))
+     &                 *(z_r(i,j,k)-z_r(i,j-1,k))*vmask(i,j)
 #endif
             enddo
           enddo
@@ -460,22 +456,9 @@ c    &            -0.75*rx(i,j)-0.125*(rx(i,j-1)+rx(i,j+1))
 
       enddo   !<-- k
 
-!      call wrt_instant(rx(i0:i1,j0:j1), 'FX')
-!      call wrt_instant(rho1(i0:i1,j0:j1,:), 'FE')
-!      call wrt_instant(qp1(i0:i1,j0:j1,:), 'FX2')
-!      call wrt_instant(dRdx(i0:i1,j0:j1,:), 'FE2')
-!      call wrt_instant(z_r(i0:i1,j0:j1,:), 'FE3')
-!      stop
-
-!      call wrt_instant(dRdx(i0:i1,j0:j1,:), 'dRdx')
-!      call wrt_instant(dRde(i0:i1,j0:j1,:), 'dRde')
-!      call wrt_instant(rx(:,:), 'rx')
-!      call wrt_instant(z_r(:,:,:), 'zr')
-!      call wrt_instant(f(:,:), 'f')
-!      call wrt_instant(pn(:,:), 'pn')
-!      stop
-!      call wrt_instant(rx(i0:i1,j0:j1), 'FSC2')
-!      stop
+# ifdef ADV_ISONEUTRAL
+      call exchange_xxx(dRdx,dRde)
+# endif
 
 # ifdef DIAGNOSTICS
       if (CORR_STAGE) then
