@@ -12,7 +12,7 @@ Restart output frequency should be equal to, or a multiplier of your history and
 
     output_period_rst = output_period_his * nrpf_his / a
 
-where ``a`` is a integer positive integer
+where ``a`` is a integer positive integer.
 
 When joining partial files (including using ``extract_data_join``), we recommend reading in only one file at a time, to avoid post-processing errors. I.e. avoid commands like::
 
