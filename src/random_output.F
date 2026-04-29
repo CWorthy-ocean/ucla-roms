@@ -143,7 +143,7 @@
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
 #endif
 
-        pio_gtype = '2Dr'
+        pio_gtype = '2Dw'
         call ncwrite(ncid,'zeta'  ,zeta(i0:i1,j0:j1,knew),(/1,1,record/), .true.)
 !        pio_gtype = '2Du'
 !        call ncwrite(ncid,'u_surf',u( 1:i1,j0:j1,nz,nnew),(/1,1,record/))

@@ -115,7 +115,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       use sponge_tune, only: ub_tune
       use particles, only: floats, init_particles
       use upscale_output, only: do_upscale, init_upscale
-      use random_output, only: do_random, init_random
+      use random_output, only: do_random, init_random, wrt_random
       use cdr_output, only: do_cdr, init_cdr_output
       use frc_output, only: do_frc, init_frc
       use analytical, only: ana_vmix
@@ -346,6 +346,8 @@ CR      write(*,*)  ' -2' MYID
       endif
       if (do_frc) call init_frc
 
+      call wrt_random
+      stop
 
         mpi_master_only write(*,'(/1x,A/)')
      &     'main :: initialization complete, started time-stepping.'

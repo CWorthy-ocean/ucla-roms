@@ -1003,7 +1003,7 @@
           call PIO_write_darray(pio_FileDesc, varId, pio_desc_w2u, arr, ierr)
         elseif (pio_gtype == 'w2v') then
           call PIO_write_darray(pio_FileDesc, varId, pio_desc_w2v, arr, ierr)
-        elseif (pio_gtype == '2Dr') then
+        elseif (pio_gtype == '2Dw') then
           call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Dr_w, arr, ierr)
         elseif (pio_gtype == '2Du') then
           call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Du, arr, ierr)

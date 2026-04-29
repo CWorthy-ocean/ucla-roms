@@ -256,19 +256,20 @@
       integer,dimension(3) :: count
       integer :: irec
 
-!#ifdef PARALLEL_IO
-!      if (present(PP)) then
-!      if (pio_gtype /= '---') then
-!        if (present(start)) then
-!          irec = start(3)
-!          call pio_ncwrite2(vname, dat, irec)
-!        else
-!          call pio_ncwrite2(vname, dat)
-!        endif
-!        return
-!      endif
-!      else
-!#endif
+#ifdef PARALLEL_IO
+      if (present(PP)) then
+      if (pio_gtype /= '---') then
+        write(*,*) "YAY0"
+        if (present(start)) then
+          irec = start(3)
+          call pio_ncwrite2(vname, dat, irec)
+        else
+          call pio_ncwrite2(vname, dat)
+        endif
+        return
+      endif
+      else
+#endif
 
       dims = shape(dat)
 
@@ -296,9 +297,9 @@
      &        info="error writing variable "//trim(vname),
      &        context=module_name//"/"//sr_name)
       end if
-!#ifdef PARALLEL_IO
-!      endif
-!#endif
+#ifdef PARALLEL_IO
+      endif
+#endif
 
       end subroutine ncwrite_2D  !]
 !----------------------------------------------------------------------
