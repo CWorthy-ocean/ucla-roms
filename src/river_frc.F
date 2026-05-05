@@ -83,7 +83,7 @@
         call set_ana_river_frc ! cppflags needed else won't link without the analytical.F
 
       else
-      pio_gtype='---'
+      pio_gtype='----'
 #ifdef PARALLEL_IO
       pio_file_is_open = 0
 #endif
@@ -163,7 +163,7 @@
          ierr = ierr * nf90_inq_varid(ncid, "river_fraction", varid) ! ... and fraction variables
 
          if (ierr == nf90_noerr) then ! Found the variables in the forcing file
-            pio_gtype = '2Dr'
+            pio_gtype = '2Drr'
 #ifdef PARALLEL_IO
       ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(nc_rvol%ifile))
 #endif
@@ -219,7 +219,7 @@
      &              context=module_name//"/"//sr_name,
      &              info=error_info)
             else
-               pio_gtype='2Dr'
+               pio_gtype='2Drr'
 #ifdef PARALLEL_IO
       ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, grdname)
 #endif

@@ -715,7 +715,7 @@
 !     vname indices: 1=short name, 2=long name, 3=units
       start=1; start(3)=rec_rst ! Set "start" index to 1 for all dimensions except time (3) which starts at current record
 !     Read in 2D saved state variables (for surface_flux_saved_state)
-      pio_gtype='2Dr'
+      pio_gtype='2Drr'
       do itrc=1,nr_marbl_ss_2d
          ierr=nf90_inq_varid (ncid, vname_marbl_ss_2d(1,itrc), varid)
          if (ierr .eq. nf90_noerr) then
@@ -738,7 +738,7 @@
       start=1; start(4)=rec_rst                                       ! 3D vars
 
 !     Read in 3d saved state variables (for interior_tendency_saved_state)
-      pio_gtype='3Dr'
+      pio_gtype='3Drr'
       do itrc=1,nr_marbl_ss_3d
          ierr=nf90_inq_varid (ncid, vname_marbl_ss_3d(1,itrc), varid)
          if (ierr == nf90_noerr) then

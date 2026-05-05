@@ -99,7 +99,7 @@
 
 #ifdef PARALLEL_IO
       pio_file_is_open = 0
-      pio_gtype = '2Dr'
+      pio_gtype = '2Drr'
 #endif
 
       ! Short/Long radiation:

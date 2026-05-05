@@ -226,9 +226,6 @@
           jSW_corn = jnode*ny - offy/2
         endif
 
-!        write(*,*) "YAY", mynode, jSW_corn, jnode, ny, gny, npy
-!        stop
-
         if (jnode == 0) then
           ny = ny - offy/2
         endif
@@ -362,8 +359,6 @@
           pio_eta_rho_start_bry= jSW_corn+jsouth+1
           pio_eta_v_start_bry  = jSW_corn+jsouth
         endif
-!          write(*,*) "YAY", pio_eta_rho_start, jSW_corn, jsouth, pio_j0
-!          stop
         pio_s_start = 1
 
         ! Identify domain edges
@@ -372,10 +367,6 @@
         PIO_SOUTHERN_EDGE = (jnode == 0)
         PIO_NORTHERN_EDGE = (jnode == npy-1)
 
-!        if (inode == npx-1) then
-!          write(*,*) "YAY", mynode, pio_xi_rho_start, iSW_corn, iwest, pio_i0
-!        endif
-!        stop
 #endif
 
       end subroutine mpi_setup !]

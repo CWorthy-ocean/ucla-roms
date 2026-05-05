@@ -469,7 +469,7 @@
       ! The i0,i1,j0,j1 indices are needed because the netcdf files do
       ! include 1 more row/column for subdomains at the physical boundary
 
-      pio_gtype = '2Dr'
+      pio_gtype = '2Drr'
       call ncread(ncid,'h',h(x0:x1,y0:y1))!,fname=grdname)         ! Bathymetry
       call exchange_xxx(h)!,skip=use_pio)                         ! (2,.true.)
 

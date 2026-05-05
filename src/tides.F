@@ -324,21 +324,21 @@
 #endif
 
         if (bry_tides) then
-          pio_gtype = '2Dr'
+          pio_gtype = '2Drr'
           call ncread(ncid,'ssh_Re',ztide_r(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
           call ncread(ncid,'ssh_Im',ztide_i(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
 
-          pio_gtype = '2Du'
+          pio_gtype = '2Dur'
           call ncread(ncid,'u_Re',utide_r(x_:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
           call ncread(ncid,'u_Im',utide_i(x_:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
 
-          pio_gtype = '2Dv'
+          pio_gtype = '2Dvr'
           call ncread(ncid,'v_Re',vtide_r(x0:x1,y_:y1,itide),start=start)!,fname=frcfile(var_file_indx))
           call ncread(ncid,'v_Im',vtide_i(x0:x1,y_:y1,itide),start=start)!,fname=frcfile(var_file_indx))
         endif
 
         if (pot_tides) then
-          pio_gtype = '2Dr'
+          pio_gtype = '2Drr'
           call ncread(ncid,'pot_Re',ptide_r(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
           call ncread(ncid,'pot_Im',ptide_i(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
         endif

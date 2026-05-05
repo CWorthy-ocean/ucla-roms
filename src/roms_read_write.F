@@ -1023,7 +1023,7 @@
 
 !      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
-      if ((pio_file_is_open == 0) .and. (pio_gtype /= '---')) then
+      if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
         ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
         pio_file_is_open = 1
       endif
@@ -1138,7 +1138,7 @@
 #endif
 !      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
-      if ((pio_file_is_open == 0) .and. (pio_gtype /= '---')) then
+      if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
         ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
         pio_file_is_open = 1
       endif
@@ -1226,7 +1226,7 @@
 
 !      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
-      if ((pio_file_is_open == 0) .and. (pio_gtype /= '---')) then
+      if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
         ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
         pio_frcfile = frcfile(ifile)
         pio_file_is_open = 1
@@ -1240,26 +1240,26 @@
         endif
 
         if (gtype=='u') then
-          pio_gtype='2Cu'
+          pio_gtype='2Cur'
           call ncread(ncid,vname,cdata(xc_:xc1,yc0:yc1),start=(/1,1,irec/))
         elseif (gtype=='v') then
-          pio_gtype='2Cv'
+          pio_gtype='2Cvr'
           call ncread(ncid,vname,cdata(xc0:xc1,yc_:yc1),start=(/1,1,irec/))
         else
-          pio_gtype='2Cr'
+          pio_gtype='2Crr'
           call ncread(ncid,vname,cdata(xc0:xc1,yc0:yc1),start=(/1,1,irec/))
         endif
         call exchange_xxx(cdata,array_bf=cbf)
         call coarse2fine(cdata,nc%vdata(:,:,it),gtype)
       else
         if (gtype=='u') then
-          pio_gtype = '2Du'
+          pio_gtype = '2Dur'
           call ncread(ncid,vname,nc%vdata(x_:x1,y0:y1,it),start=(/1,1,irec/))
         elseif (gtype=='v') then
-          pio_gtype = '2Dv'
+          pio_gtype = '2Dvr'
           call ncread(ncid,vname,nc%vdata(x0:x1,y_:y1,it),start=(/1,1,irec/))
         else    ! rho-grid
-          pio_gtype = '2Dr'
+          pio_gtype = '2Drr'
           call ncread(ncid,vname,nc%vdata(x0:x1,y0:y1,it),start=(/1,1,irec/))
         endif
       endif
@@ -1743,7 +1743,7 @@
       endif
 
      ! Add 4 main x and y dimensions so that ncjoin will work,
-      if (pio_gtype == '---') then
+      if (pio_gtype == '----') then
       ierr=nf90_def_dim(ncid,'xi_rho', xi_rho, dimid)
       ierr=nf90_def_dim(ncid,'xi_u',   xi_u,   dimid)
       ierr=nf90_def_dim(ncid,'eta_rho',eta_rho,dimid)

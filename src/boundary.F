@@ -257,21 +257,21 @@
       if (inode==0) then
 #endif
 #  ifdef Z_FRC_BRY
-        pio_gtype='w1r'
+        pio_gtype='w1rr'
         call set_frc_data( nc_z_w, zeta_west(j0:j1), obry=2 )
 !       call exch_bry_EW_tile(1, ny, zeta_west, 1)      ! DevinD - exchange did not make a difference
 #  endif
 #  ifdef M2_FRC_BRY
-        pio_gtype='w1u'
+        pio_gtype='w1ur'
         call set_frc_data( nc_ub_w, ubar_west(j0:j1), obry=1 )
-        pio_gtype='w1v'
+        pio_gtype='w1vr'
         call set_frc_data( nc_vb_w, vbar_west( 1:j1), obry=1 )
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
-        pio_gtype='w2u'
+        pio_gtype='w2ur'
         call set_frc_data( nc_u_w, var2d=u_west(j0:j1,:), obry=1 )
-        pio_gtype='w2v'
+        pio_gtype='w2vr'
         call set_frc_data( nc_v_w, var2d=v_west( 1:j1,:), obry=1 )
 #     ifdef NHMG
 !       call set_frc_data( nc_w_w, var2d=w_west(j0:j1,:), obry=1 )
@@ -279,7 +279,7 @@
 #     endif
 #   endif
 #   ifdef T_FRC_BRY
-        pio_gtype='w2r'
+        pio_gtype='w2rr'
         do itrc=1,nt
           call set_frc_data( nc_t_w(itrc), var2d=t_west(j0:j1,:,itrc), obry=1 )
         enddo
@@ -295,20 +295,20 @@
       if (inode==npx-1) then
 #endif
 #  ifdef Z_FRC_BRY
-        pio_gtype='e1r'
+        pio_gtype='e1rr'
         call set_frc_data( nc_z_e, zeta_east(j0:j1), obry=2 )
 #  endif
 #  ifdef M2_FRC_BRY
-        pio_gtype='e1u'
+        pio_gtype='e1ur'
         call set_frc_data( nc_ub_e, ubar_east(j0:j1), obry=1 )
-        pio_gtype='e1v'
+        pio_gtype='e1vr'
         call set_frc_data( nc_vb_e, vbar_east( 1:j1), obry=1 )
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
-        pio_gtype='e2u'
+        pio_gtype='e2ur'
         call set_frc_data( nc_u_e, var2d=u_east(j0:j1,:), obry=1 )
-        pio_gtype='e2v'
+        pio_gtype='e2vr'
         call set_frc_data( nc_v_e, var2d=v_east( 1:j1,:), obry=1 )
 #     ifdef NHMG
 !       call set_frc_data( nc_w_e, var2d=w_east(j0:j1,:), obry=1 )
@@ -316,7 +316,7 @@
 #     endif
 #   endif
 #   ifdef T_FRC_BRY
-        pio_gtype='e2r'
+        pio_gtype='e2rr'
         do itrc=1,NT
           call set_frc_data( nc_t_e(itrc), var2d=t_east(j0:j1,:,itrc), obry=1 )
         enddo
@@ -332,20 +332,20 @@
       if (jnode==0) then
 #endif
 #  ifdef Z_FRC_BRY
-        pio_gtype='s1r'
+        pio_gtype='s1rr'
         call set_frc_data( nc_z_s, zeta_south(i0:i1), obry=2 )
 #  endif
 #  ifdef M2_FRC_BRY
-        pio_gtype='s1u'
+        pio_gtype='s1ur'
         call set_frc_data( nc_ub_s, ubar_south( 1:i1), obry=1 )
-        pio_gtype='s1v'
+        pio_gtype='s1vr'
         call set_frc_data( nc_vb_s, vbar_south(i0:i1), obry=1 )
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
-        pio_gtype='s2u'
+        pio_gtype='s2ur'
         call set_frc_data( nc_u_s, var2d=u_south( 1:i1,:), obry=1 )
-        pio_gtype='s2v'
+        pio_gtype='s2vr'
         call set_frc_data( nc_v_s, var2d=v_south(i0:i1,:), obry=1 )
 #     ifdef NHMG
 !       call set_frc_data( nc_w_s, var2d=w_south(i0:i1,:), obry=1 )
@@ -353,7 +353,7 @@
 #     endif
 #   endif
 #   ifdef T_FRC_BRY
-        pio_gtype='s2r'
+        pio_gtype='s2rr'
         do itrc=1,nt
           call set_frc_data( nc_t_s(itrc), var2d=t_south(i0:i1,:,itrc), obry=1 )
         enddo
@@ -369,20 +369,20 @@
       if (jnode==npy-1) then
 #endif
 #  ifdef Z_FRC_BRY
-        pio_gtype='n1r'
+        pio_gtype='n1rr'
         call set_frc_data( nc_z_n, zeta_north(i0:i1), obry=2 )
 #  endif
 #  ifdef M2_FRC_BRY
-        pio_gtype='n1u'
+        pio_gtype='n1ur'
         call set_frc_data( nc_ub_n, ubar_north( 1:i1), obry=1 )
-        pio_gtype='n1v'
+        pio_gtype='n1vr'
         call set_frc_data( nc_vb_n, vbar_north(i0:i1), obry=1 )
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
-        pio_gtype='n2u'
+        pio_gtype='n2ur'
         call set_frc_data( nc_u_n, var2d=u_north( 1:i1,:), obry=1 )
-        pio_gtype='n2v'
+        pio_gtype='n2vr'
         call set_frc_data( nc_v_n, var2d=v_north(i0:i1,:), obry=1 )
 #     ifdef NHMG
 !       call set_frc_data( nc_w_n, var2d=w_north(i0:i1,:), obry=1 )
@@ -390,7 +390,7 @@
 #     endif
 #   endif
 #   ifdef T_FRC_BRY
-        pio_gtype='n2r'
+        pio_gtype='n2rr'
         do itrc=1,NT
           call set_frc_data( nc_t_n(itrc), var2d=t_north(i0:i1,:,itrc), obry=1 )
         enddo
