@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from ._assertions import computed_results
 from ._roms_input_file_generation import create_roms_inputs
 
 
@@ -47,3 +48,23 @@ def input_dir(tmp_path_factory) -> Path:
     target = tmp_path_factory.mktemp("roms_inputs")
     create_roms_inputs(target)
     return target
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """At the end of the session, dump the collected hashes as JSON.
+
+    Only tests that actually ran appear in the dump, so a subset run
+    produces a partial dict rather than entries with missing values.
+    The dump goes to the terminal reporter so it isn't swallowed by
+    pytest's output capture.
+    """
+    if not computed_results:
+        return
+
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is None:
+        return
+
+    current_environ = session.config.getoption("--environ")
+    reporter.write_sep("=", f"computed results (paste into $ROMS_ROOT/results/results_{current_environ}.json to update if you understand the reason for - and expect - this discrepancy.)")
+    reporter.write_line(json.dumps(computed_results, indent=2))
