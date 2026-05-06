@@ -5,7 +5,7 @@ With the necessary dependencies installed, instructions for obtaining and compil
 
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    dependencies
    compilation
