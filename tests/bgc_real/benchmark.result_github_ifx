@@ -1,4 +1,5 @@
 
+
  Activated CPP configuration switches:
  <cppdefs.opt>
        RIVERS                  TIDES                   BULK_FRC
@@ -20,7 +21,6 @@
        UPSTREAM_UV             SPLINE_UV
  <step3d_uv2.F>
        DELTA=0.28              EPSIL=0.36
-./print_output_logs.sh: line 31: bgc_real: command not found
  <step3d_t_ISO.F>
        UPSTREAM_TS             SPLINE_TS
  <set_depth.F>
@@ -345,6 +345,7 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
 
  init buffers
       get_grid :: read grid data from file 'input_data/example_input_grid.0.nc'.
+ allocating pflux vars
  hmin =    5.000000   grdmin = 1.2340032E+02     area = 2.7613819229624033E+08
  hmax =  263.620089   grdmax = 1.2340038E+02   volume = 2.0206881447349617E+10
                                            open_cross = 5.8530468865808807E+06
@@ -359,6 +360,10 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
  riv_vmask not found in initial file. Initializing to zero.
  WARNING: netCDF variable 'hbls' not found in 'input_data/example_input_bgc_initial_conditions.0.nc' ==> initialized to zero state.
  WARNING: netCDF variable 'hbbl' not found in 'input_data/example_input_bgc_initial_conditions.0.nc' ==> initialized to zero state.
+ getting u,v,p slow
+  --- WARNING: u_slow not in initial file.  Initialized to u
+  --- WARNING: v_slow not in initial file.  Initialized to v
+  --- WARNING: p_slow not in initial file.  Initialized to 0.0
       get_init :: Read initial conditions for day =   3654.0000 record =   1
  buffer for coarse array:            3
          set_frc :: swrad            input time (days) =   3654.00     rec =  25
@@ -395,13 +400,13 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
 
  main :: initialization complete, started time-stepping.
 
+         set_frc :: zeta_east        input time (days) =   3654.00     rec =   2
+         set_frc :: zeta_east        input time (days) =   3655.00     rec =   3
 
   STEP KINETIC_ENRG     BAROTR_KE        MAX_ADV_CFL     MAX_VERT_CFL
  0  3.6229628195672916E-03 1.4392038342093960E-03 6.3834801906551136E-02 3.8256931144299920E-02
          set_frc :: zeta_west        input time (days) =   3654.00     rec =   2
          set_frc :: zeta_west        input time (days) =   3655.00     rec =   3
-         set_frc :: zeta_east        input time (days) =   3654.00     rec =   2
-         set_frc :: zeta_east        input time (days) =   3655.00     rec =   3
          set_frc :: zeta_north       input time (days) =   3654.00     rec =   2
          set_frc :: zeta_north       input time (days) =   3655.00     rec =   3
          set_frc :: zeta_south       input time (days) =   3654.00     rec =   2
@@ -410,13 +415,13 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
        ecosys_bec2_td:: computing bgc
  1  3.6230165750740432E-03 1.4392130217819633E-03 5.8642140337756346E-02 4.3167628802411769E-02
        ecosys_bec2_td:: computing bgc
- 2  3.5816401302092163E-03 1.3982750553212225E-03 5.5749042078102121E-02 4.9895567160747369E-02
+ 2  3.5816401302091717E-03 1.3982750553212049E-03 5.5749027178710428E-02 4.9895552625351676E-02
        ecosys_bec2_td:: computing bgc
- 3  3.5244118109463061E-03 1.3412011131202902E-03 5.9598634440240009E-02 5.1085155939086795E-02
+ 3  3.5244117932574075E-03 1.3412011130454612E-03 5.9598578472836596E-02 5.1085101456542520E-02
        ecosys_bec2_td:: computing bgc
- 4  3.4750785268927173E-03 1.2918136377609046E-03 6.2014603335864671E-02 5.1868817573402622E-02
+ 4  3.4750784911369383E-03 1.2918136375725479E-03 6.2014473586428594E-02 5.1868691711387596E-02
        ecosys_bec2_td:: computing bgc
- 5  3.4390989584093591E-03 1.2555136864878594E-03 6.4187725694048889E-02 5.3887554655726720E-02
+ 5  3.4390988897209200E-03 1.2555136861341987E-03 6.4187509644489160E-02 5.3887345607529828E-02
        ocean_vars :: wrote history, tdays =   3654.0012  step =      5 rec =   2
        wrt_bgc_tracers :: history , trc =  PO4
        wrt_bgc_tracers :: history , trc =  NO3
@@ -424,20 +429,20 @@ WARNING: unregistered keyword encountered: MARBL_biogeochemistry
        wrt_bgc_tracers :: history , trc =  DIC
        bgc :: wrote history, tdays =   3654.0012  step =      4 rec =   2
        ecosys_bec2_td:: computing bgc
- 6  3.4161610563823333E-03 1.2320422296905047E-03 6.5940160420263419E-02 5.5741315994775359E-02
+ 6  3.4161609506603648E-03 1.2320422292036515E-03 6.5939917630643607E-02 5.5741080418259398E-02
        ecosys_bec2_td:: computing bgc
- 7  3.4005908608914716E-03 1.2158035098500004E-03 6.9216054639995944E-02 5.7336703216966295E-02
+ 7  3.4005907048383051E-03 1.2158035091626700E-03 6.9215794954502446E-02 5.7336450365579716E-02
        ecosys_bec2_td:: computing bgc
- 8  3.3913353173382391E-03 1.2057978903414319E-03 7.2391442972166126E-02 5.9254353448463519E-02
+ 8  3.3913351153292766E-03 1.2057978897591784E-03 7.2391183797087089E-02 5.9254100249328451E-02
        ecosys_bec2_td:: computing bgc
- 9  3.3871820389662142E-03 1.2008090282279984E-03 7.8237619887916526E-02 5.0006545165673606E-02
+ 9  3.3871817833141045E-03 1.2008090275871502E-03 7.8237581607083273E-02 5.0006506319579404E-02
        ecosys_bec2_td:: computing bgc
-10  3.3872101286056724E-03 1.1999601274600041E-03 8.5215126231892771E-02 5.5347950162933743E-02
+10  3.3872098101112437E-03 1.1999601269727859E-03 8.5215082723593460E-02 5.5347905975526655E-02
        ocean_vars :: wrote history, tdays =   3654.0023  step =     10 rec =   3
        wrt_bgc_tracers :: history , trc =  PO4
        wrt_bgc_tracers :: history , trc =  NO3
        wrt_bgc_tracers :: history , trc =  O2
        wrt_bgc_tracers :: history , trc =  DIC
        bgc :: wrote history, tdays =   3654.0023  step =      9 rec =   3
- Process    0  thread  0  cpu time =       64.93 sec
- MPI_run_time =   98.4220855850000
+ Process    0  thread  0  cpu time =       67.68 sec
+ MPI_run_time =   98.3323647240000

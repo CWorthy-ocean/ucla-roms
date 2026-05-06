@@ -277,7 +277,7 @@ marbl_diagnostics_to_write = ""
 ! Previously set in `cdr_frc.opt`
 ! Requires CDR_FORCING cppkey
 !----------------
-cdr_source  = .false.  ! on/off switch for CDR forcing
+cdr_source  = .true.  ! on/off switch for CDR forcing
 forcing_depth_profiles = .false. ! T if this file contains depth profiles
 forcing_3d             = .false. ! T if this file contains 3d forcing
 forcing_parameterized  = .true. ! T if forcing with idealized Gaussian profiles

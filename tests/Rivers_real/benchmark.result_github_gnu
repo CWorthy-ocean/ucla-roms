@@ -28,13 +28,16 @@
        INT_AT_RHO_POINTS       SMOOTH_HBL
  <set_global_definitions.h>
        CORR_COUPLED_MODE       EXTRAP_BAR_FLUXES       IMPLCT_NO_SLIP_BTTM_BC
+
  Git hash: xxx
 No SLURM or PBS job ID found.
+
     USWC sample domain - realistic river test 2020/12/02.
      ntimes =        20   total number of 3D timesteps
          dt =    40.0000  time step [sec] for 3D equations
     ndtfast =        30   mode-splitting ratio
       ninfo =         1   number of steps between runtime diagnostics
+
     theta_s = 6.0000000  vertical S-coordinate surface
     theta_b = 6.0000000  and bottom stretching parameters
          hc =  25.00000  critical depth [m]
@@ -44,72 +47,48 @@ No SLURM or PBS job ID found.
                        input_data/example_input_boundary_forcing.0.nc
  initial condition :: rec =  1  file = 'input_data/example_input_bgc_initial_conditions.0.nc'
       visc2 = 0.000E+00  horizontal Laplacian kinematic viscosity [m^2/s]
-       rho0 = 1027.5000  Boussinesq reference density [kg/m^3].
-   v_sponge =      1.00  maximum viscosity in sponge layer [m^2/s]
-   tnu2( 1) = 0.000E+00  horizontal Laplacian kinematic heat conductivity [m^2/s]
-   tnu2( 2) = 0.000E+00  horizontal Laplacian diffusion for tracer  2, [m^2/s]
-       rdrg = 0.000E+00  linear bottom drag coefficient [m/s]
-      rdrg2 = 1.000E-03  quadratic bottom drag coefficient, nondim
-        Zob = 1.000E-02  bottom roughness height [m]
-     gamma2 = 1.000E+00  slipperiness parameter: free-slip = +1, or no-slip = -1.
-      ubind = 1.000E-01  open boundary binding velcity [m/s]
- Mode splitting: ndtfast = 30    nfast =  41        p,q,r =  2.0  4.0   0.2500
- metadata about            2  tracers:
- -----------
-      get_init :: Read initial conditions for day =   3654.0000 record =   1
- buffer for coarse array:            3
-         set_frc :: sustr            input time (days) =   3654.00     rec =  25
-         set_frc :: sustr            input time (days) =   3654.04     rec =  26
-         set_frc :: svstr            input time (days) =   3654.00     rec =  25
-         set_frc :: svstr            input time (days) =   3654.04     rec =  26
-         set_frc :: shflux           input time (days) =   3654.00     rec =  25
-         set_frc :: shflux           input time (days) =   3654.04     rec =  26
-         set_frc :: swrad            input time (days) =   3654.00     rec =  25
-         set_frc :: swrad            input time (days) =   3654.04     rec =  26
-         set_frc :: swflux           input time (days) =   3654.00     rec =  25
-         set_frc :: swflux           input time (days) =   3654.04     rec =  26
-         set_frc :: river_volume     input time (days) =   3600.00     rec = 360
-         set_frc :: river_volume     input time (days) =   3960.00     rec =   1
-         set_frc :: river_tracer     input time (days) =   3600.00     rec = 360
-         set_frc :: river_tracer     input time (days) =   3960.00     rec =   1
-       river_frc: init river locations
- Sponge layer =  15 interior grid points.
- Writing initial history file
  Reference time used for simulation is: 2000/01/01
        created new netcdf file rivers_his.20100102000000.0.nc
+         set_frc :: zeta_east        input time (days) =   3654.00     rec =   2
+         set_frc :: zeta_east        input time (days) =   3655.00     rec =   3
+
  main :: initialization complete, started time-stepping.
 
+         set_frc :: zeta_north       input time (days) =   3654.00     rec =   2
+         set_frc :: zeta_north       input time (days) =   3655.00     rec =   3
 
   STEP KINETIC_ENRG     BAROTR_KE        MAX_ADV_CFL     MAX_VERT_CFL
  0  3.6229628195672916E-03 1.4392038342093960E-03 1.2766756350308084E-01 7.6511821978578379E-02
-         set_frc :: zeta_east        input time (days) =   3654.00     rec =   2
          set_frc :: zeta_west        input time (days) =   3654.00     rec =   2
          set_frc :: zeta_west        input time (days) =   3655.00     rec =   3
-         set_frc :: zeta_east        input time (days) =   3655.00     rec =   3
-         set_frc :: zeta_north       input time (days) =   3654.00     rec =   2
-         set_frc :: zeta_north       input time (days) =   3655.00     rec =   3
          set_frc :: zeta_south       input time (days) =   3654.00     rec =   2
          set_frc :: zeta_south       input time (days) =   3655.00     rec =   3
  1  3.6229847001455575E-03 1.4391513968282025E-03 1.1220673951748206E-01 9.4158597478407824E-02
- 2  3.5235570808040714E-03 1.3397582997198394E-03 1.2556933102607704E-01 1.0703533279542302E-01
- 3  3.4378685479756880E-03 1.2533229458510729E-03 1.3485053074773859E-01 1.1441667439517066E-01
- 4  3.3992995886789478E-03 1.2129891142651365E-03 1.4754549790877972E-01 1.2272123869219369E-01
- 5  3.3855876737145436E-03 1.1971533832758645E-03 1.6299474400678959E-01 1.3345923510409335E-01
- 6  3.3897629868285895E-03 1.1989613618224066E-03 1.7808581175614355E-01 1.4196857553562212E-01
- 7  3.4045851582133412E-03 1.2112826883388878E-03 1.8797677715506236E-01 1.4877582829310765E-01
- 8  3.4201455955615505E-03 1.2242353137572573E-03 1.9164751536883096E-01 1.5191152190910079E-01
- 9  3.4344684179126493E-03 1.2358933405990796E-03 1.9369743635791301E-01 1.5303049957236453E-01
-10  3.4510658340756147E-03 1.2497377946485493E-03 1.9914108601671149E-01 1.5781873018752768E-01
-11  3.4674761227713969E-03 1.2633198401910725E-03 2.0677522696020398E-01 1.6306496016280347E-01
-12  3.4807516282614700E-03 1.2736859630861112E-03 2.0742795021854049E-01 1.6556470693873884E-01
-13  3.4889964104903204E-03 1.2789014973976127E-03 2.3378262859706475E-01 2.1219522745780375E-01
-14  3.4901707943120414E-03 1.2768657211318329E-03 3.1349277412794191E-01 2.9172984903768295E-01
-15  3.4851979909230960E-03 1.2685894114312917E-03 2.1456394464883882E-01 1.9021236192116014E-01
-16  3.4800316588908349E-03 1.2600064086270982E-03 2.1389077222224195E-01 1.2888536095046058E-01
-17  3.4783997962675737E-03 1.2548199686955798E-03 2.1825365869140953E-01 1.3688451939635871E-01
-18  3.4783759931456284E-03 1.2511806712892221E-03 2.1367367369430518E-01 1.4105602320256361E-01
-19  3.4784742278893598E-03 1.2476059248991811E-03 2.1439670827067603E-01 1.4599927965382817E-01
-20  3.4779788356050210E-03 1.2433874649973571E-03 2.1566099581973103E-01 1.4891181670209327E-01
+ 2  3.5235570808040714E-03 1.3397582997198394E-03 1.2556933104111090E-01 1.0703533280999157E-01
+ 3  3.4378685479772380E-03 1.2533229458510176E-03 1.3485053078991613E-01 1.1441667443586803E-01
+ 4  3.3992995886848844E-03 1.2129891142650070E-03 1.4754549798800970E-01 1.2272123876894342E-01
+ 5  3.3855876737263172E-03 1.1971533832756862E-03 1.6299474406229256E-01 1.3345923515875632E-01
+ 6  3.3897629868480752E-03 1.1989613618222457E-03 1.7808581184655720E-01 1.4196857562561951E-01
+ 7  3.4045851582413826E-03 1.2112826883388353E-03 1.8797677727197451E-01 1.4877582841043061E-01
+ 8  3.4201455955992430E-03 1.2242353137573313E-03 1.9164751550546288E-01 1.5191152204644293E-01
+ 9  3.4344684179608109E-03 1.2358933405992934E-03 1.9369743651038362E-01 1.5303049972559324E-01
+10  3.4510658341348221E-03 1.2497377946488592E-03 1.9914108618400364E-01 1.5781873035557858E-01
+11  3.4674761228422547E-03 1.2633198401914634E-03 2.0677522714879448E-01 1.6306496035212861E-01
+12  3.4807516283445893E-03 1.2736859630865399E-03 2.0742795043303358E-01 1.6556470715400759E-01
+13  3.4889964105861483E-03 1.2789014973980501E-03 2.3378262861855120E-01 2.1219522747643843E-01
+14  3.4901707944214109E-03 1.2768657211322083E-03 3.1349277415103149E-01 2.9172984905702315E-01
+15  3.4851979910465155E-03 1.2685894114315445E-03 2.1456394467252532E-01 1.9021236194046226E-01
+16  3.4800316590294332E-03 1.2600064086271971E-03 2.1389077222876521E-01 1.2888536095679784E-01
+17  3.4783997964216262E-03 1.2548199686955865E-03 2.1825365869860208E-01 1.3688451940337276E-01
+18  3.4783759933159526E-03 1.2511806712891182E-03 2.1367367370206872E-01 1.4105602321017549E-01
+19  3.4784742280764389E-03 1.2476059248990371E-03 2.1439670827881388E-01 1.4599927966179893E-01
+20  3.4779788358093801E-03 1.2433874649972047E-03 2.1566099582770681E-01 1.4891181670994239E-01
        ocean_vars :: wrote history, tdays =   3654.0093  step =     20 rec =   2
- Process    0  thread  0  cpu time =       24.47 sec
- MPI_run_time =   37.118004629000097
+ Process    0  thread  0  cpu time =       24.37 sec
+ MPI_run_time =   36.047689818999970
+Note: The following floating-point exceptions are signalling: IEEE_DENORMAL
+Note: The following floating-point exceptions are signalling: IEEE_DENORMAL
+Note: The following floating-point exceptions are signalling: IEEE_DENORMAL
+Note: The following floating-point exceptions are signalling: IEEE_DENORMAL
+Note: The following floating-point exceptions are signalling: IEEE_DENORMAL
+Note: The following floating-point exceptions are signalling: IEEE_DENORMAL

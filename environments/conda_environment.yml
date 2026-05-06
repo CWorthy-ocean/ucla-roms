@@ -5,6 +5,9 @@ dependencies:
   - python=3.10
   - numpy
   - xarray
+  - ipykernel
+  - jupyter
+  - roms-tools
   - compilers
   - netcdf-fortran
   - mpich

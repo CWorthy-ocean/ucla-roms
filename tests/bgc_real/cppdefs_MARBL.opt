@@ -1,15 +1,3 @@
-/* This is "cppdefs.opt": MODEL CONFIGURATION FILE
-   ==== == ============ ===== ============= ==== */
-
-/*
- * CHOOSE ONLY ONE PRIMARY FLAG FOR SWITCH LIST BELOW
- */
-
-#define RIVERS
-
-
-#if defined RIVERS
-
 !#define DIAGNOSTICS
 # define TIDES
 # define BULK_FRC
@@ -85,10 +73,6 @@
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
 # define PCO2AIR_FORCING
 #endif
-
-
-#endif
-
 
 #include "set_global_definitions.h"
 

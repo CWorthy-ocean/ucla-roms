@@ -1,5 +1,4 @@
 
-
  Activated CPP configuration switches:
  <cppdefs.opt>
        RIVERS                  BULK_FRC                SPONGE_TUNE
@@ -51,9 +50,9 @@ No SLURM or PBS job ID found.
                        input_data/example_input_surface_forcing.0.nc
                        input_data/example_input_tides.0.nc
  initial condition :: rec =  1  file = 'input_data/example_input_bgc_initial_conditions.0.nc'
- MARBL namelist file                     marbl_in
- MARBL tracer output list file           marbl_tracer_output_list
- MARBL diagnostic output list                  file       marbl_diagnostic_output_list
+ MARBL namelist file               marbl_in
+ MARBL tracer output list                file     marbl_tracer_output_list
+ MARBL diagnostic output list                 file marbl_diagnostic_output_list
       visc2 = 0.000E+00  horizontal Laplacian kinematic viscosity [m^2/s]
        rho0 = 1027.5000  Boussinesq reference density [kg/m^3].
    v_sponge =      1.00  maximum viscosity in sponge layer [m^2/s]
@@ -134,7 +133,7 @@ No SLURM or PBS job ID found.
 
  Mode splitting: ndtfast = 30    nfast =  41        p,q,r =  2.0  4.0   0.2500
 
-Successfully read       marbl_in to end of file
+Successfully read marbl_in to end of file
  --------------------
 MARBL Tracer indices
 --------------------
@@ -713,10 +712,10 @@ grazing_relationship_settings(
 grazing_relationship_settings(3,1)%z_umax_
  0 =   0.38194444444444444E-04 (value computed from grazing_relationship_setting
  s(3,1)%z_umax_0_per_day)
-NO REQUESTED TRACERS FOUND IN       marbl_tracer_output_list
+NO REQUESTED TRACERS FOUND IN marbl_tracer_output_list
 . Defaulting to  writing all BGC tracers to output file.
 Successfully read marbl_tracer_output_list to end of file
-we successfully read and closed       marbl_tracer_output_list
+we successfully read and closed marbl_tracer_output_list
  Here are the SF forcings MARBL requested
  var: u10_sqr
  units:m^2/s^2
@@ -960,6 +959,29 @@ we successfully read and closed       marbl_tracer_output_list
  -----------
 
  NUMBER OF NODES:   6( 3 x  2) THREADS:   1 TILING: 1 x  1 GRID: 199 x  99 x 50
+
+       ocean_vars :: history file output_period = 400.0  recs/file =  50
+         his fields to be saved: (T/F)
+         --------------------------------------------------------------
+           Name    Write (T/F)     Long name
+         --------------------------------------------------------------
+
+           zeta              T     free-surface elevation
+           ubar              T     vertically averaged u-momentum component
+           vbar              T     vertically averaged v-momentum component
+           u                 T     u-momentum component
+           v                 T     v-momentum component
+           rho               T     density anomaly
+           Omega             T     S-coordinate vertical velocity
+           W                 T     vertical velocity
+           Akv               T     vertical viscosity coefficient
+           Akt               T     vertical thermal conductivity coefficient
+           Aks               T     salinity vertical diffusion coefficient
+           hbls              T     Thickness of KPP surface boundary layer
+           hbbl              T     Thickness of KPP bottom boundary layer
+           t( 1)             T     temp
+           t( 2)             T     salt
+         --------------------------------------------------------------
          bgc fields to be saved (T/F)
            --------------------------------------------------------------
            Name                        Write (T/F)             Long name
@@ -1415,6 +1437,7 @@ we successfully read and closed       marbl_tracer_output_list
 
  init buffers
       get_grid :: read grid data from file 'input_data/example_input_grid.0.nc'.
+ allocating pflux vars
  hmin =    5.000000   grdmin = 1.2340032E+02     area = 2.7613819229624033E+08
  hmax =  263.620089   grdmax = 1.2340038E+02   volume = 2.0206881447349617E+10
                                            open_cross = 5.8530468865808807E+06
@@ -1433,6 +1456,10 @@ we successfully read and closed       marbl_tracer_output_list
   --- WARNING: MARBL_PH_SURF_ALT_CO2 not in initial file.  Initialized to 0.0
   --- WARNING: MARBL_PH_3D not in initial file.  Initialized to 0.0
   --- WARNING: MARBL_PH_3D_ALT_CO2 not in initial file.  Initialized to 0.0
+ getting u,v,p slow
+  --- WARNING: u_slow not in initial file.  Initialized to u
+  --- WARNING: v_slow not in initial file.  Initialized to v
+  --- WARNING: p_slow not in initial file.  Initialized to 0.0
       get_init :: Read initial conditions for day =   3654.0000 record =   1
  buffer for coarse array:            3
          set_frc :: swrad            input time (days) =   3654.00     rec =  25
@@ -1475,6 +1502,9 @@ we successfully read and closed       marbl_tracer_output_list
          set_frc :: cdr_trcflx       input time (days) =   3655.00     rec =   2
 
  Sponge layer =  15 interior grid points.
+ Writing initial history file
+ Reference time used for simulation is: 2000/01/01
+       created new netcdf file cdr_his.20100102000000.0.nc
 
  main :: initialization complete, started time-stepping.
 
@@ -1485,20 +1515,20 @@ we successfully read and closed       marbl_tracer_output_list
          set_frc :: zeta_west        input time (days) =   3654.00     rec =   2
          set_frc :: zeta_west        input time (days) =   3655.00     rec =   3
          set_frc :: zeta_east        input time (days) =   3655.00     rec =   3
-         set_frc :: zeta_south       input time (days) =   3654.00     rec =   2
-         set_frc :: zeta_south       input time (days) =   3655.00     rec =   3
          set_frc :: zeta_north       input time (days) =   3654.00     rec =   2
          set_frc :: zeta_north       input time (days) =   3655.00     rec =   3
+         set_frc :: zeta_south       input time (days) =   3654.00     rec =   2
+         set_frc :: zeta_south       input time (days) =   3655.00     rec =   3
  1  3.6229847042420242E-03 1.4391514016565878E-03 1.1165224049039330E-01 9.3750659306282624E-02
- 2  3.5229647158794525E-03 1.3395713686267401E-03 1.2372861635213549E-01 1.0518841480622171E-01
- 3  3.4366434397651111E-03 1.2529726413876342E-03 1.3169096924668072E-01 1.1125237085352641E-01
- 4  3.3973837059495275E-03 1.2125070059053455E-03 1.4310028017607102E-01 1.1839779925104529E-01
- 5  3.3829668211468964E-03 1.1965554129641075E-03 1.5672067574802795E-01 1.2715633478507612E-01
- 6  3.3864126158906971E-03 1.1982511137143526E-03 1.7045149474133914E-01 1.3446285468871777E-01
- 7  3.4004788013686843E-03 1.2104582147028499E-03 1.7907240875746644E-01 1.3985654971159323E-01
- 8  3.4152468239220398E-03 1.2232902518384281E-03 1.8167258449599236E-01 1.4193213673737098E-01
- 9  3.4287405131614825E-03 1.2348203435709527E-03 1.8262808247329088E-01 1.4220288811673318E-01
-10  3.4444755655710368E-03 1.2485277776676930E-03 1.8723961236954850E-01 1.4619042633740237E-01
+ 2  3.5229647158791615E-03 1.3395713686266159E-03 1.2372851594151658E-01 1.0518831686837468E-01
+ 3  3.4366434117474309E-03 1.2529726412828545E-03 1.3169067519111238E-01 1.1125208469875346E-01
+ 4  3.3973836101681264E-03 1.2125070056303699E-03 1.4309991337222019E-01 1.1839744034228801E-01
+ 5  3.3829666343106854E-03 1.1965554125458128E-03 1.5672055497639512E-01 1.2715621464290985E-01
+ 6  3.3864123012280496E-03 1.1982511136995552E-03 1.7045132694054896E-01 1.3446268692852220E-01
+ 7  3.4004783556328307E-03 1.2104582153880808E-03 1.7907219923120257E-01 1.3985634010256398E-01
+ 8  3.4152462211209499E-03 1.2232902536244187E-03 1.8167234470658783E-01 1.4193189716774249E-01
+ 9  3.4287398658446630E-03 1.2348203469255263E-03 1.8262780931061337E-01 1.4220261576320395E-01
+10  3.4444748690860114E-03 1.2485277831128236E-03 1.8723929890160906E-01 1.4619011454131839E-01
        ocean_vars :: wrote history, tdays =   3654.0046  step =     10 rec =   2
- Process    0  thread  0  cpu time =       86.96 sec
- MPI_run_time =   125.391816678000
+ Process    0  thread  0  cpu time =       81.98 sec
+ MPI_run_time =   124.207740889000

@@ -303,7 +303,7 @@ forcing_depth_profiles = .false. ! Apply CDR forcing from a depth profile
 forcing_3d = .false.             ! Apply CDR forcing from a fully 3D distribution
 forcing_parameterized = .false.  ! Apply CDR forcing from Guassian parameters
 time_interpolation = .false.     ! Interpolate linearly between forcing records
-relocate_to_wet_points = .false. ! Relocate CDR perturbation to sea if on land
+relocate_to_wet_pts = .false. ! Relocate CDR perturbation to sea if on land
 cdr_volume = .false.             ! Read in volume flux/tracer concentration
 /
 

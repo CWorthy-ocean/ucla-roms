@@ -278,15 +278,15 @@ marbl_diagnostics_to_write = ""
 ! Previously set in `cdr_frc.opt`
 ! Requires CDR_FORCING cppkey
 !----------------
-cdr_source  = .false.  ! on/off switch for CDR forcing
-forcing_depth_profiles = .false. ! T if this file contains depth profiles
-forcing_3d             = .true. ! T if this file contains 3d forcing
+cdr_source  = .true.  ! on/off switch for CDR forcing
+forcing_depth_profiles = .true. ! T if this file contains depth profiles
+forcing_3d             = .false. ! T if this file contains 3d forcing
 forcing_parameterized  = .false. ! T if forcing with idealized Gaussian profiles
 ! Linear time interpolation between records (T), or step changes (F)
 time_interpolation = .false.
 ! Prevent errors by relocating single-point CDR forcing locations on land to water
 relocate_to_wet_pts = .false.
-cdr_file = "cdr_forcing_dp.nc"  ! NetCDF forcing file
+cdr_file = "input_data/cdr_forcing_dp.nc"  ! NetCDF forcing file
 ncdr_parm = 0  !! number of discrete CDR releases; only used with PARAMETERIZED or 3D FORCING
 nz_chd = 50
 /
