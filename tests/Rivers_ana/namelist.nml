@@ -47,7 +47,7 @@ hc = 25.0D0
 !------------------------------
 ! Previously set in `param.opt`
 !------------------------------
-NP_XI = 3
+NP_XI = 2
 NP_ETA = 2
 NSUB_X = 1
 NSUB_E = 1
@@ -442,8 +442,8 @@ nrpf = 0
 ! Formerly in `pipe_frc.opt`
 !================================================================================
 &PIPE_FRC_SETTINGS
-pipe_source  = .true. ! on/off switch for pipe input
-p_analytical = .true. ! Specify inputs analytically
+pipe_source  = .false. ! on/off switch for pipe input
+p_analytical = .false. ! Specify inputs analytically
 npip = 1
 /
 
@@ -474,3 +474,4 @@ pmin = 0
 &ERROR_HANDLING_SETTINGS
 gather_errors_on_main_rank = .true.
 /
+

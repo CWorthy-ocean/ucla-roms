@@ -5,8 +5,8 @@
 !================================================================================
 &SIMULATION_NAME_SETTINGS                                      !roms_read_write.F
 !------------------------
-output_root_name = "roms"
-title = "roms_run"
+output_root_name = 'roms' ! output file prefix (e.g. `roms_bgc.20120101120000.nc`)
+title = 'roms_run'        ! title used in output metadata
 /
 
 !================================================================================
@@ -14,12 +14,12 @@ title = "roms_run"
 !================================================================================
 ! Previously set in `roms.in`
 !================================================================================
-&TIME_STEPPING 							       !scalars.F
+&TIME_STEPPING							       !scalars.F
 !-------------
-ntimes = 20
-dt = 60
-ndtfast = 30
-ninfo = 1
+ntimes = 20               ! Number of time steps in this run
+dt = 60                   ! Time step (seconds)
+ndtfast = 30              ! Number of fast time-steps per slow timestep
+ninfo = 1                 ! Number of steps between runtime diagnostics (STDOUT)
 /
 
 !================================================================================
@@ -29,58 +29,71 @@ ninfo = 1
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
-grdname = ""
+grdname = '' ! grid filepath
 /
 
 &S_COORD                                                                !scoord.F
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
-theta_s = 6.D0
-theta_b = 6.D0
-hc = 25.0D0
+theta_s = 6.0                  ! S-coordinate surface stretching parameter
+theta_b = 6.0                  ! S-coordinate bottom stretching parameter
+hc = 25.0                     ! Critical depth (m)
 /
 
-&PARAM_SETTINGS
+&PARAM_SETTINGS                                                          !param.F
 !------------------------------
 ! Previously set in `param.opt`
-!-----------------------------
-NP_XI = 3
-NP_ETA = 2
-NSUB_X = 1
-NSUB_E = 1
-LLm = 100
-MMm = 100
-N = 10
-nt_passive = 0
-ntrc_bio = 0
+!------------------------------
+NP_XI = 2                      ! Number of processors following X
+NP_ETA = 2                     ! Number of processors following Y
+NSUB_X = 1                     ! Number of shared-memory subdomains in X
+NSUB_E = 1                     ! Number of shared-memory subdomains in Y
+LLm = 100                      ! Number of grid points in X
+MMm = 100                       ! Number of grid points in Y
+N = 10                         ! Number of vertical levels
+nt_passive = 0                 ! Number of passive tracers
+ntrc_bio = 0                   ! Number of BGC tracers
 /
+
 
 &INITIAL_CONDITIONS                                            !roms_read_write.F
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
-ininame = ""
-nrrec = 0
+ininame = '' ! Initial conditions (IC) file path
+nrrec = 1                            ! Number of time records in IC file
 /
 
 &FORCING_FILES                                                 !roms_read_write.F
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
-frcfile = ""
+frcfile =
+''
+
+
+
+
+! Comma-separated list of forcing files
 /
 
 !================================================================================
 !                             FORCING SETTINGS
 !================================================================================
 &BULK_FRC_SETTINGS
-interp_bulk_frc = .true.
-check_bulk_frc_units = .false.
+!---------------------------------
+! Previously set in `bulk_frc.opt`
+!---------------------------------
+interp_bulk_frc = .true.       ! Interpolate forcing from coarser input grid if T
+check_bulk_frc_units = .false. ! Check units of input vars if T
 /
 
 &FLUX_FRC_SETTINGS
-interp_flux_frc = .true.
+!---------------------------------
+! Previously set in `flux_frc.opt`
+!---------------------------------
+interp_flux_frc = .true.       ! Interpolate forcing from coarser input grid if T
 /
 
 !================================================================================
@@ -89,9 +102,9 @@ interp_flux_frc = .true.
 ! Previously set in `river_frc.opt`
 !================================================================================
 &RIVER_FRC_SETTINGS                                                  !river_frc.F
-river_source = .false. ! on/off switch for river input
-river_analytical = .false. ! Specify inputs analytically
-nriv = 0
+river_source = .false.              ! T if river inputs used, else F
+river_analytical = .false.          ! T if river inputs specified analytically
+nriv = 1                            ! Number of rivers
 /
 
 !================================================================================
@@ -101,10 +114,10 @@ nriv = 0
 ! Requires TIDES cppkey
 !================================================================================
 &TIDES_SETTINGS                                                          !tides.F
-bry_tides=.false. ! Barotropic (TPXO) tides at the boundary
-pot_tides=.false. ! Surface tidal potential
-ana_tides=.false. ! Specify tides analytically
-ntides = 0
+bry_tides = .false.                ! Barotropic tides at domain boundaries
+pot_tides = .false.                ! Surface potential tides
+ana_tides = .false.                ! Tidal forcing specified analytically
+ntides = 10                        ! Number of tidal constituents
 /
 
 !================================================================================
@@ -114,61 +127,71 @@ ntides = 0
 !---------------------
 ! Previously set in `ocean_vars.opt`
 !---------------------
-wrt_file_his = .true.   ! Write output as snapshots
-wrt_file_avg = .false.  ! Write output as averages
-wrt_file_rst = .false.  ! Write model restart files
-monthly_restarts = .false.   ! This overrides output_period
-wrt_Z =.true. ! Include `zeta`
-wrt_Ub=.true. ! Include `ubar`
-wrt_Vb=.true.! Include `vbar`
-wrt_U=.true.! Include `u`
-wrt_V=.true.! Include `v`
-wrt_R=.true.! Include `rho`
-wrt_O=.true.! Include `omega`
-wrt_W=.true.! Include `w`
-wrt_Akv=.true.! Include `Akv`
-wrt_Akt=.true.! Include `Akt`
-wrt_Aks=.true.! Include `Aks`
-wrt_Hbls=.true.! Include `hbls`
-wrt_Hbbl=.true.! Include `hbbl`
-
-  ! Control output variables (averages file):
-wrt_avg_Z =.true.! Include `zeta`
-wrt_avg_Ub=.true. ! Inlucde `ubar`
-wrt_avg_Vb=.true.! Include `vbar`
-wrt_avg_U=.true.! Include `u`
-wrt_avg_V=.true.! Include `v`
-wrt_avg_R=.true.! Include `rho`
-wrt_avg_O=.true.! Include `omega`
-wrt_avg_W=.true.! Include `w`
-wrt_avg_Akv=.true.! Include `Akv`
-wrt_avg_Akt=.true.! Include `Akt`
-wrt_avg_Aks=.true. ! Include `Aks`
-wrt_avg_Hbls=.true.! Include `hbls`
-wrt_avg_Hbbl=.true.! Include `hbbl`
-output_period_rst = 80
-nrpf_rst = 10
-output_period_his = 1200
-nrpf_his = 10
-output_period_avg = 100
-nrpf_avg = 10
+!
+! INSTANTANEOUS OUTPUT (history files)
+!
+wrt_file_his = .true.      ! Write instantaneous ocean physical state to output
+output_period_his = 1200     ! Frequency of instantaneous output (s)
+nrpf_his = 20               ! Number of time records in instantaneous output file
+wrt_Z =.true.               ! Include `zeta`
+wrt_Ub=.true.               ! Include `ubar`
+wrt_Vb=.true.               ! Include `vbar`
+wrt_U=.true.                ! Include `u`
+wrt_V=.true.                ! Include `v`
+wrt_R=.true.                ! Include `rho`
+wrt_O=.true.                ! Include `omega`
+wrt_W=.true.                ! Include `w`
+wrt_Akv=.true.              ! Include `Akv`
+wrt_Akt=.true.              ! Include `Akt`
+wrt_Aks=.true.              ! Include `Aks`
+wrt_Hbls=.true.             ! Include `hbls`
+wrt_Hbbl=.true.             ! Include `hbbl`
+!
+! AVERAGE OUTPUT
+!
+wrt_file_avg = .false.      ! Write averages of ocean physical state to output
+output_period_avg = 100     ! Frequency of averaged output/averaging period (s)
+nrpf_avg = 20               ! Number of time records in averaged output file
+wrt_avg_Z =.true.           ! Include `zeta`
+wrt_avg_Ub=.true.           ! Inlucde `ubar`
+wrt_avg_Vb=.true.           ! Include `vbar`
+wrt_avg_U=.true.            ! Include `u`
+wrt_avg_V=.true.            ! Include `v`
+wrt_avg_R=.true.            ! Include `rho`
+wrt_avg_O=.true.            ! Include `omega`
+wrt_avg_W=.true.            ! Include `w`
+wrt_avg_Akv=.true.          ! Include `Akv`
+wrt_avg_Akt=.true.          ! Include `Akt`
+wrt_avg_Aks=.true.          ! Include `Aks`
+wrt_avg_Hbls=.true.         ! Include `hbls`
+wrt_avg_Hbbl=.true.         ! Include `hbbl`
+!
+! RESTART FILES
+!
+wrt_file_rst = .false.      ! Write restart files (containing full model state)
+monthly_restarts = .false.  ! Write restart files at start of calendar month
+output_period_rst = 2000    ! Write restart files at regular frequency (s)
+nrpf_rst = 10               ! Number of time records in restart files
 /
 
 &TS_OUTPUT_SETTINGS
-wrt_temp = .false.
-wrt_salt = .false.
-wrt_temp_dia = .false.
-wrt_salt_dia = .false.
+!------------------------------
+! Previously set in tracers.opt
+!------------------------------
+wrt_temp = .false.          ! Include temperature in output fields
+wrt_salt = .false.          ! Include salinity in output fields
+wrt_temp_dia = .false.      ! Include temperature diagnostics in output fields
+wrt_salt_dia = .false.      ! Include salinity diagnostics in output fields
 /
 
 &FRC_OUTPUT_SETTINGS                                                !frc_output.F
 !-------------------
 ! Previously set in `frc_output.opt`
 !-------------------
-wrt_frc = .false.    ! forcing output on/off switch
-wrt_frc_avg = .false.! averages(T) or snapshots (F)
-output_period = 0.
-nrpf = 0
+wrt_frc = .false.           ! Write model forcing to its own output file
+wrt_frc_avg = .false.       ! Forcing output averaged (T) or instantaneous (F)
+output_period = 3600.0       ! Frequency/averaging period of forcing output
+nrpf = 4                    ! Number of time records in forcing files
 /
 
 !================================================================================
@@ -179,14 +202,14 @@ nrpf = 0
 ! Previously set in `extract_data.opt`,
 ! require EXTRACT_DATA cppkey
 !---------------------
-do_extract = .false. ! on/off switch for generation
-extract_period = 0
-extract_file = ""
-nrpf_extract = 0
-N_chd = 0
-theta_s_chd = 0
-theta_b_chd = 0
-hc_chd = 0
+do_extract = .false.              ! Generate boundary files for a nested domain
+extract_period = 1800.0           ! How often to output these files
+nrpf_extract = 48                 ! Number of time records per file
+extract_file = 'sample_edata.nc'  ! File path containing nesting info
+N_chd = 90                        ! Number of vertical levels in nested domain
+theta_s_chd = 5.0                 ! `theta_s` of nested domain
+theta_b_chd = 2.0                 ! `theta_b` of nested domain
+hc_chd = 250.0                    ! `hc` of nested domain
 /
 
 &SPONGE_TUNE_SETTINGS                                              !sponge_tune.F
@@ -194,20 +217,20 @@ hc_chd = 0
 ! Previously set in `sponge_tune.opt`
 ! Require SPONGE_TUNE cppkey
 !--------------------
-ub_tune = .false. ! on/off switch for sponge tuning
-wrt_sponge=.false. ! output sponge to file
-spn_avg = .false.  ! write as averages (T) or snapshots (F)
-sp_timscale = 0
-nrpf = 0
-output_period = 0
+ub_tune = .false.      ! Tune boundary "sponge" to match parent bry conditions
+sp_timscale = 86400    ! Filtering time scale (s)
+wrt_sponge = .true.    ! Write out sponge tuning values
+spn_avg = .true.       ! Sponge tuning output averaged (T) or instantaneous (F)
+nrpf = 7               ! Number of records per sponge file
+output_period = 86400  ! Output frequency of sponge tuning file
 /
 
 &CALC_PFLX_SETTINGS                                              !calc_pflx_mod.F
 !---------------------
 ! Previously set in `calc_pflx.opt`
 !---------------------
-calc_pflx     = .false.   ! Baroclinic pressure fluxes
-timescale = 0
+calc_pflx = .false.     ! Enable baroclinic pressure flux calculation
+timescale = 0      ! timescale for filtering pressure fluxes (s)
 /
 
 !================================================================================
@@ -216,22 +239,22 @@ timescale = 0
 ! Previously set in `zslice_output.opt`
 !================================================================================
 &ZSLICE_SETTINGS                                                 !zslice_output.F
-do_zslice  = .false. ! on/off switch for sigma-z conversion
-zslice_avg = .false. ! output averages (T) or snapshots (T)
-wrt_T_zsl  = .false.  ! Include tracers
-wrt_U_zsl  = .false.   ! Include u-velocity
-wrt_V_zsl  = .false.   ! Include v-velocity
-output_period = 0
-nrpf = 0
-ndep = 0
-vecdep = -0,0
-nt_z = 0
-trc2zsc = 0, 0
+do_zslice = .false.   ! Output certain variables on regular z-levels
+zslice_avg = .false.  ! Averaged output (T) or instantaneous (F)
+wrt_T_zsl = .false.   ! Write tracers to z-level output
+wrt_U_zsl = .false.   ! Write zonal velocity to z-level output
+wrt_V_zsl = .false.   ! Write meridional velocity to z-level output
+output_period = 1200  ! Frequency of z-level ouput
+nrpf = 72             ! Number of records per file
+ndep = 2              ! Number of depth levels on which to write
+vecdep = -2.0, -15.0  ! Depths of levels on which to write
+nt_z = 2              ! Number of tracers to include
+trc2zsc = 1, 2        ! Indices of tracers to include
 /
 
 
 !================================================================================
-!                                BIOGEOCHEMISTRY
+!                              BIOGEOCHEMISTRY (BGC)
 !================================================================================
 ! Requires MARBL or BIOLOGY_BEC2 cpp keys
 !================================================================================
@@ -239,28 +262,32 @@ trc2zsc = 0, 0
 !------------
 ! Previously set in `bgc.opt`
 !------------
-output_period_his = 100
-nrpf_his = 10
-output_period_avg = 100
-nrpf_avg = 10
-output_period_his_dia = 100
-nrpf_his_dia = 10
-output_period_avg_dia = 100
-nrpf_avg_dia = 10
-wrt_bgc_his = .false.     ! t/f to write tracer history file
-wrt_bgc_avg = .false.     ! t/f to write tracer averages file
-wrt_bgc_dia_his = .false. ! t/f to write diagnostic history file
-wrt_bgc_dia_avg = .false. ! t/f to write diagnostic averages file
-interp_bgc_frc = .false.   ! interpolate forcing from coarser grid
+interp_bgc_frc = .true.    ! Interpolate forcing from coarser input grid if T
+!
+wrt_bgc_his = .true.       ! Write instantaneous BGC tracers to output
+output_period_his = 400     ! Frequency of instantaneous BGC output (s)
+nrpf_his = 10               ! Number of time records per BGC output file
+!
+wrt_bgc_avg = .false.       ! Write averaged BGC tracers to output
+output_period_avg = 100     ! Output frequency/averaging period (s)
+nrpf_avg = 10               ! Number of time records per BGC average file
+!
+wrt_bgc_dia_his = .false.   ! Write instantaneous BGC diagnostics to output
+output_period_his_dia = 100 ! Frequency of diagnostics output (s)
+nrpf_his_dia = 10           ! Number of time records per BGC diagnostics file
+!
+wrt_bgc_dia_avg = .false.   ! Write averaged BGC diagnostics to output
+output_period_avg_dia = 100 ! Frequency/period of averaged diagnostic output
+nrpf_avg_dia = 10           ! Number of time records per BGC diagnostics file
 /
 
 &MARBL_BIOGEOCHEMISTRY_SETTINGS                                  !marbl_driver.F
 !------------------------------
 ! Previously set in `roms.in`
 !------------------------------
-marbl_config_file = ""
-marbl_tracers_to_write = ""
-marbl_diagnostics_to_write = ""
+marbl_config_file = 'marbl_in'  ! MARBL configuration file
+marbl_tracers_to_write = ''     ! MARBL tracers to include in BGC output
+marbl_diagnostics_to_write = '' ! MARBL diagnostics to include in BGC output
 /
 
 !================================================================================
@@ -271,29 +298,27 @@ marbl_diagnostics_to_write = ""
 ! Previously set in `cdr_frc.opt`
 ! Requires CDR_FORCING cppkey
 !----------------
-cdr_source  = .false.  ! on/off switch for CDR forcing
-forcing_depth_profiles = .false. ! T if this file contains depth profiles
-forcing_3d             = .false. ! T if this file contains 3d forcing
-forcing_parameterized  = .false. ! T if forcing with idealized Gaussian profiles
-! Linear time interpolation between records (T), or step changes (F)
-time_interpolation = .false.
-! Prevent errors by relocating single-point CDR forcing locations on land to water
-relocate_to_wet_pts = .false.
-cdr_file = ""  ! NetCDF forcing file
-ncdr_parm = 0  !! number of discrete CDR releases; only used with PARAMETERIZED or 3D FORCING
-nz_chd = 0
+cdr_source = .false.             ! Apply CDR perturbation (T) or not (F)
+cdr_file = 'cdr_release.nc'      ! File path to CDR perturbation
+ncdr_parm = 1                    ! number of CDR releases if `3D`/`parameterized`
+nz_chd = 50                      ! Number of vertical levels in CDR forcing
+forcing_depth_profiles = .false. ! Apply CDR forcing from a depth profile
+forcing_3d = .false.             ! Apply CDR forcing from a fully 3D distribution
+forcing_parameterized = .false.  ! Apply CDR forcing from Guassian parameters
+time_interpolation = .false.     ! Interpolate linearly between forcing records
+relocate_to_wet_pts = .false. ! Relocate CDR perturbation to sea if on land
+cdr_volume = .false.             ! Read in volume flux/tracer concentration
 /
 
 &CDR_OUTPUT_SETTINGS                                               !cdr_output.F
 !-------------------
 ! Previously set in `cdr_output.opt`
 !-------------------
-do_cdr_output   = .false. ! on/off switch for CDR-specific output
-wrt_cdr_avg   = .false. ! Write averages (T) or snapshots(F)
-! Write averages over calendar months:
-cdr_monthly_averages = .false.
-output_period = 0
-nrpf = 0
+do_cdr_output = .false.        ! Output CDR-relevant fields
+wrt_cdr_avg = .true.           ! Write averaged (T) or instantaneous (F) output
+cdr_monthly_averages = .false. ! Write averaged outputs per calendar month
+output_period = 3600           ! Frequency of CDR-relevant output
+nrpf = 4                       ! Time records per output file
 /
 
 &UPSCALE_SETTINGS                                              !upscale_output.F
@@ -301,9 +326,9 @@ nrpf = 0
 ! Previously set in `upscale_output.opt`
 ! Requires UPSCALING cppkey
 !----------------
-do_upscale = .false.
-nrpf_uscl = 0
-output_period_uscl = 0
+do_upscale = .false.           ! Record CDR tracer fluxes thru domain boundaries
+nrpf_uscl = 48                 ! Number of records per file
+output_period_uscl = 100       ! Output frequency
 /
 
 !================================================================================
@@ -312,67 +337,69 @@ output_period_uscl = 0
 ! Previously set in `roms.in`
 !================================================================================
 &LIN_RHO_EOS_SETTINGS                                                  !scalars.F
-!--------------------
-Tcoef = 0.2
-T0 = 1.0
-!Scoef = 0.822
-!S0 = 1.0
+!-----------------------------------
+! Unused if NONLIN_EOS cppkey active
+!-----------------------------------
+Tcoef = 0.2      ! Thermal expansion coefficient    (kg/m2/K)
+T0 = 1.0         ! Reference temperature            (*C)
+Scoef = 0.822    ! Saline contraction coefficient   (kg/m3/psu)
+S0 = 1.0         ! Reference salinity               (psu)
 /
 
 &RHO0_SETTINGS                                                         !scalars.F
 !-------------
 ! Requires SOLVE3D cppkey
 !-------------
-rho0 = 1027.5
+rho0 = 1027.5    ! Boussinesq reference density (kg/m3)
 /
 
 &GAMMA2_SETTINGS                                                       !scalars.F
 !---------------
-gamma2 = 1.0
+gamma2 = 1.0 ! Sliperiness parameter (free-slip = +1, no-slip = -1)
 /
 
 &TRACER_DIFF2                                                          !scalars.F
 !------------
 ! Requires SOLVE3D and TS_DIF2 cppkeys
 !------------
-tnu=0.0 0.0
+tnu2=0.0 0.0 ! Horizontal Laplacian diffusion (m2/s) for each tracer
 /
 
 &BOTTOM_DRAG_SETTINGS                                                  !scalars.F
 !--------------------
-rdrg = 0.e-4
-rdrg2 = 1.0e-3
-zob = 1.e-2
+rdrg = 0.0   ! Linear bottom drag co-efficient (m/s)
+rdrg2 = 0.001 ! Quadratic bottom drag co-efficient (dimensionless)
+zob = 0.01    ! Bottom roughness height (m)
 /
 
 &VERTICAL_MIXING_SETTINGS                                              !scalars.F
 !------------------------
 !Requires SOLVE3D cppkey (and MY_BAK_MIXING cppkey for akq_bak)
 !------------------------
-akv_bak = 0.0
-akt_bak = 0.0
-!akq_bak = 0. !(if MY_BAK_MIXING)
+akv_bak = 0.0        ! Vertical viscosity (m2/s)
+akt_bak = 0.0 0.0    ! Vertical mixing (m2/s) for each tracer
+!akq_bak = 0.        ! Background vertical mixing for TKE (m2/s, if MY_BAK_MIXING)
 /
 
 &LATERAL_VISC_SETTINGS                                                 !scalars.F
 !---------------------
 ! Requires UV_VIS2 cppkey
 !---------------------
-visc2 = 0.
+visc2 = 0.0 ! Horizontal Laplacian kinematic viscosity (m2/s)
 /
 
 &UBIND_SETTINGS                                                        !scalars.F
 !--------------
 !Requires T_FRC_BRY, M2_FRC_BRY, Z_FRC_BRY, M3_FRC_BRY, or M2NUDGING cppkeys
 !--------------
-ubind = 0.1
+ubind = 0.1 ! Open boundary binding velocity (m/s)
 /
 
 &V_SPONGE_SETTINGS                                                     !scalars.F
 !-----------------
 !Requires SPONGE cppkey
 !-----------------
-v_sponge = 1.0
+v_sponge = 1.0 ! Maximum viscosity in sponge layer (m2/s)
 /
 
 !================================================================================
@@ -384,54 +411,59 @@ v_sponge = 1.0
 !--------------
 ! Requires SFLX_CORR and SALINITY cppkeys
 !--------------
-dSSSdt = 0.
+dSSSdt = 0.0 ! SSS correction co-efficient as piston velocity (cm/day)
 /
 
 &SST_CORRECTION                                                       !surf_flx.F
 !--------------
 ! Requires QCORRECTION cppkey
 !--------------
-dSSTdt = 0.
+dSSTdt = 0.0 ! SST correction co-efficient as piston velocity (cm/day)
 /
 
 !================================================================================
 !                           OTHER OUTPUT CONTROLS
 !================================================================================
-&DIAGNOSTICS_SETTINGS
+&DIAGNOSTICS_SETTINGS                                              !diagnostics.F
 !--------------------
 ! Previously set in `diagnostics.opt`
 ! Requires DIAGNOSTICS cppkey
 !--------------------
-diag_avg      = .false.  ! averages (T) or snapshots (F)
-diag_uv       = .false. ! Momentum diagnostics
-diag_trc      = .false. ! Selected tracers diagnostics
-output_period = 0.
-nrpf = 0
+diag_avg = '.false'          ! Output physics diags as avgs (T) or snapshots (F)
+diag_uv = .false.          ! Output momentum diagnostics
+diag_trc = .false.         ! Output tracer diagnostics
+output_period = 3600       ! Output frequency (s)
+nrpf = 4                   ! Number of records per output file
+code_check_mode = .false.  ! diagnostics in stdout formatted for code testing
 /
 
 &STDOUT_DIAG_SETTINGS
+!-----------------------------
+! Previously set in `diag.opt`
+!-----------------------------
 code_check_mode = .true.
 /
 
+
 &RANDOM_OUTPUT_SETTINGS
 !----------------------
-! Previously set in `random.opt`
+! Previously set in `random_output.opt`
 !----------------------
-do_random = .false. ! on/off switch for custom output
-output_period = 0
-nrpf=0
+do_random = .false.        ! Output user-customized output fields
+output_period = 3600       ! Frequency of custom output (s)
+nrpf=10                    ! Number of records per output file
 /
 
 &SURF_FLX_SETTINGS
 !-----------------
 ! Previously set in `surf_flx.opt`
 !-----------------
-wrt_smflx = .false. ! output surface momentum flux
-wrt_stflx = .false. ! output surface tracer flux
-wrt_swflx = .false. ! output surface water flux (P-E)
-sflx_avg  = .false. ! write averaged sflx data
-output_period = 0
-nrpf = 0
+wrt_smflx = .false.        ! Output surface momentum flux
+wrt_stflx = .false.        ! Output surface tracer flux
+wrt_swflx = .false.        ! Output surface water flux (P-E)
+sflx_avg = .false.         ! Output average (T) or instantaneous (F) fields
+output_period = 120        ! Frequency of surface flux output (s)
+nrpf = 10                  ! Number of records per surface flux file
 /
 
 !================================================================================
@@ -440,9 +472,9 @@ nrpf = 0
 ! Formerly in `pipe_frc.opt`
 !================================================================================
 &PIPE_FRC_SETTINGS
-pipe_source  = .true. ! on/off switch for pipe input
-p_analytical = .true. ! Specify inputs analytically
-npip = 1
+pipe_source = .true.     ! T if pipe inputs used, else F
+p_analytical = .true.    ! T if pipe inputs specified analytically
+npip = 1                  ! Number of pipe inputs
 /
 
 !================================================================================
@@ -451,24 +483,17 @@ npip = 1
 ! Formerly in `particles.opt`
 !================================================================================
 &PARTICLES_SETTINGS
-floats = .false.
-full_seed = .false.
-np=0
-extra_space_fac = 0.
-exchange_facx = 0.
-exchange_facy = 0.
-exchange_facc = 0.
-output_period = 0
-nrpf = 0
-ppm3 = 0.
-pmin = 0
+floats = .false.         ! Release Lagrangian particles (T) or not (F)
+np=50                    ! Local number of particles
+extra_space_fac = 1.5    ! Buffer space to receive extra exchanged particles
+exchange_facx = 0.1      ! Maximum number of particles for transfer in N-S
+exchange_facy = 0.1      ! Maximum number of particles for transfer in E-W
+exchange_facc = 0.01     ! Maximum number of particles for transfer in corners
+output_period = 400      ! Frequency of outputs
+nrpf = 100               ! Number of records per file
+ppm3 = 1e-06              ! Target particles per cubic meter
+pmin = 200               ! Minimum of allocated space for particle array
 /
 
-!================================================================================
-!                            ERROR HANDLING
-!================================================================================
-! Previously set in `error_handling_mod.F90`
-!================================================================================
-&ERROR_HANDLING_SETTINGS
-gather_errors_on_main_rank = .true.
-/
+
+

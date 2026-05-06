@@ -376,6 +376,7 @@ def create_roms_inputs(target_dir: Path):
     subprocess.run("partit 2 2 cdr_forcing_3d.nc",text=True,shell=True,cwd=target_dir)
 
 
+
 def create_roms_grid():
     grid=rt.Grid(
         theta_s=6.0,
@@ -537,12 +538,12 @@ def create_roms_cdr_forcing_dp(grid,release_lon,release_lat,alk_pert,target_dir)
     )
 
     coords = {
-        "s_rho": grid_ds.s_rho,
+        "s_rho": grid_ds.s_rho.astype("int32"),
         "cdr_time": cdr_time,
-        "ncdr_prof": ("ncdr_prof", np.arange(1)),
-        "nt": ("nt", np.arange(nt)),
-        "one": ("one", np.arange(1)),   # scalar dimension used for a string flag
-        "two": ("two", np.arange(2)),
+        "ncdr_prof": ("ncdr_prof", np.arange(1).astype("int32")),
+        "nt": ("nt", np.arange(nt).astype("int32")),
+        "one": ("one", np.arange(1).astype("int32")),   # scalar dimension used for a string flag
+        "two": ("two", np.arange(2).astype("int32")),
     }
 
     # depth_profiles – a single‑character flag stored as a bytestring (S1)
@@ -607,8 +608,8 @@ def create_roms_cdr_forcing_parm(grid, release_lon, release_lat, release_dep, al
 
     coords = {
         "cdr_time": cdr_time,
-        "ncdr_parm": ("ncdr_parm", np.arange(1)),
-        "nt": ("nt", np.arange(nt)),
+        "ncdr_parm": ("ncdr_parm", np.arange(1).astype("int32")),
+        "nt": ("nt", np.arange(nt).astype("int32")),
     }
 
 
@@ -852,4 +853,5 @@ def create_flux_forcing_from_bulk(bulk_file):
 
     forcing.to_netcdf(bulk_file.parent/"example_input_surface_flux_forcing.nc")
 
-create_roms_inputs(Path("input_data"))
+if __name__ == "__main__":
+    create_roms_inputs(Path("input_data"))

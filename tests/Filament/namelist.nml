@@ -47,7 +47,7 @@ hc = 25.0D0
 !------------------------------
 ! Previously set in `param.opt`
 !------------------------------
-NP_XI = 3
+NP_XI = 2
 NP_ETA = 2
 NSUB_X = 1
 NSUB_E = 1

@@ -40,11 +40,7 @@
       do j= 0,ny+1
         do i=0,nx+1
           f(i,j)=f0+beta*( yr(i,j)-y0 )
-# if defined NONTRAD_COR
-!         feta(i,j) = f0*cos(pi/4)
-!         fxi(i,j)  = f0*sin(pi/4)
-# endif
-        enddo
+      enddo
       enddo
 
       shelf=size_eta/5 ! shelf location in meters from south
@@ -85,17 +81,3 @@
           endif
         enddo
       enddo
-
-!     This happens in river_frc.F
-!     riv_cells = nint( (riv_east - riv_west)/dx) !number of cells in this river
-!     do j= 0,ny+1
-!       do i= 0,nx+1
-!         if (xr(i,j)>riv_west .and. xr(i,j)<riv_east) then
-!           ! find 'coastline' masked cells
-!           if (rmask(i,j)==0 .and. rmask(i,j+1)==1) then
-!             rflx(i,j) = 1.0+1.0/riv_cells
-!           endif
-!         endif
-!       enddo
-!     enddo
-

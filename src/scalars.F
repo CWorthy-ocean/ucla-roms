@@ -259,6 +259,7 @@ C$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
 !Akv_bak, Akt_bak
 #ifdef SOLVE3D
       allocate(Akt_bak(NT))
+      akt_bak(:) = 0.
       rewind(namelist_unit)
       read (unit=namelist_unit, nml=VERTICAL_MIXING_SETTINGS, iostat=ios, iomsg=msg)
 

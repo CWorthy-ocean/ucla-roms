@@ -69,10 +69,10 @@ nrrec = 1                            ! Number of time records in IC file
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
-frcfile =                            ! Comma-separated list of forcing files
+frcfile =
 'input_data/example_input_boundary_forcing.nc',
 'input_data/example_input_surface_flux_forcing.nc',
-'input_data/example_input_river_forcing.nc'
+'input_data/example_input_river_forcing.nc',
 /
 
 !================================================================================
@@ -426,7 +426,7 @@ dSSTdt = 0. ! SST correction co-efficient as piston velocity (cm/day)
 ! Previously set in `diagnostics.opt`
 ! Requires DIAGNOSTICS cppkey
 !--------------------
-diag_avg = .false          ! Output physics diags as avgs (T) or snapshots (F)
+diag_avg = .false.          ! Output physics diags as avgs (T) or snapshots (F)
 diag_uv = .false.          ! Output momentum diagnostics
 diag_trc = .false.         ! Output tracer diagnostics
 output_period = 3600       ! Output frequency (s)

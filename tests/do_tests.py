@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import shutil
 import json
@@ -28,48 +29,41 @@ marbl_cpp_keys = ["MARBL","MARBL_DIAGS","NOX_FORCING","NHY_FORCING"]
 roms_nml=nl.read(roms_root/"src/namelist.nml")
 
 def create_test_namelist_dict(input_dir):
-    return {
-    "TIME_STEPPING": {
-        "ntimes" : 20,
-        "dt" : 40
-    },
-    "GRID_SETTINGS": {
-        "grdname": str(input_dir/"example_input_grid.nc"),
-    },
-    "S_COORD": {
-        "theta_s": 6.0,
-        "theta_b": 6.0,
-        "hc": 25.0
-    },
-    "PARAM_SETTINGS": {
-        "NP_XI": 2,
-        "NP_ETA": 2,
-        "LLm": 39,
-        "MMm": 19,
-        "N": 10,
-    },
-    "INITIAL_CONDITIONS": {
-        "ininame": str(input_dir/"example_input_bgc_initial_conditions.nc")
-    },
-    "FORCING_FILES": {
-        "frcfile": [
-            str(input_dir/"example_input_boundary_forcing.nc"),
-            str(input_dir/"example_input_surface_flux_forcing.nc"),
-        ]
-    },
-    "CALC_PFLX_SETTINGS": {
-        "calc_pflx": False, "timescale": 0
-    },
-    "BASIC_OUTPUT_SETTINGS": {
-        "wrt_file_his": True,
-        "output_period_his": 800
-    },
-    "BGC_SETTINGS": {
-        "wrt_bgc_his": True,
-        "interp_bgc_frc": True,
-        "output_period_his": 400
-    }
-}
+
+    this_nml = copy.deepcopy(roms_nml)
+    this_nml["TIME_STEPPING"]["ntimes"] = 20
+    this_nml["TIME_STEPPING"]["dt"] = 40
+
+    this_nml["GRID_SETTINGS"]["grdname"] = str(input_dir/"example_input_grid.nc")
+
+    this_nml["S_COORD"]["theta_s"] = 6.0
+    this_nml["S_COORD"]["theta_b"] = 6.0
+    this_nml["S_COORD"]["hc"] = 25.0
+
+    this_nml["PARAM_SETTINGS"]["NP_XI"] = 2
+    this_nml["PARAM_SETTINGS"]["NP_ETA"] = 2
+    this_nml["PARAM_SETTINGS"]["LLm"] = 39
+    this_nml["PARAM_SETTINGS"]["MMm"] = 19
+    this_nml["PARAM_SETTINGS"]["N"] = 10
+
+    this_nml["INITIAL_CONDITIONS"]["ininame"] = str(input_dir/"example_input_bgc_initial_conditions.nc")
+
+    this_nml["FORCING_FILES"]["frcfile"] = [
+        str(input_dir/"example_input_boundary_forcing.nc"),
+        str(input_dir/"example_input_surface_flux_forcing.nc"),
+    ]
+
+    this_nml["CALC_PFLX_SETTINGS"]["calc_pflx"] = False
+    this_nml["CALC_PFLX_SETTINGS"]["timescale"] = 0
+
+    this_nml["BASIC_OUTPUT_SETTINGS"]["wrt_file_his"] = True
+    this_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 800
+
+    this_nml["BGC_SETTINGS"]["wrt_bgc_his"] = True
+    this_nml["BGC_SETTINGS"]["interp_bgc_frc"] = True
+    this_nml["BGC_SETTINGS"]["output_period_his"] = 400
+
+    return this_nml
 
 class ROMSConfiguration():
     def __init__(self,
@@ -84,11 +78,8 @@ class ROMSConfiguration():
         (self.location/"Makefile").symlink_to(roms_root/"Work/Makefile")
 
         with open(self.location/"cppdefs.opt","w") as f:
-            f.write("#define ROMS\n")
-            f.write("#ifdef ROMS\n")
             for k in self.cpp_keys:
                 f.write(f"#define {k}\n")
-            f.write("#endif /* ROMS */\n")
             f.write('#include "set_global_definitions.h"')
 
     def compile(self):
@@ -99,11 +90,10 @@ class ROMSConfiguration():
         )
 
     def run(self, namelist_dict: dict):
-        nl.patch(
-            roms_root/"src/namelist.nml",
+        nl.write(
             namelist_dict,
-            self.location/"namelist.nml"
-        )
+            self.location/"namelist.nml",
+            force=True)
         this_nml = nl.read(self.location/"namelist.nml")
         np_xi = this_nml["PARAM_SETTINGS"]["NP_XI"]
         np_eta = this_nml["PARAM_SETTINGS"]["NP_ETA"]
@@ -149,20 +139,25 @@ def test_rivers_real(test_dir: Path, input_dir: Path) -> int:
 
 def test_rivers_ana(test_dir: Path, input_dir: Path) -> int:
     rivers_ana_cpp = (universal_cpp_keys + ocean_physics_cpp_keys + analytical_cpp_keys +
-                      ["LMD_CONVEC"])
+                      ["LMD_CONVEC","ANA_RIVER_USWC"])
 
     rivers_ana_conf = ROMSConfiguration(
         cpp_keys = rivers_ana_cpp,
         location = test_dir
     )
+    additional_files_path=Path("additional_files").absolute()
+    Path(test_dir/"ana_grid.h").symlink_to(additional_files_path/"rivers_ana_grid.h")
+    Path(test_dir/"ana_init.h").symlink_to(additional_files_path/"rivers_ana_init.h")
+    Path(test_dir/"ana_frc_river.h").symlink_to(additional_files_path/"rivers_ana_frc_river.h")
 
     rivers_ana_conf.compile()
     rivers_ana_nml = create_test_namelist_dict(input_dir)
-    rivers_ana_nml["TIME_STEPPING"] = {"dt" : 20}
+    rivers_ana_nml["TIME_STEPPING"]["dt"] = 20
+    rivers_ana_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     rivers_ana_nml["GRID_SETTINGS"] = {"grdname" : ""}
     rivers_ana_nml["INITIAL_CONDITIONS"] = {"ininame" : ""}
     rivers_ana_nml["FORCING_FILES"] = {"frcfile" : ""}
-    rivers_ana_nml["PARAM_SETTINGS"] = {"NP_XI": 2, "NP_ETA": 2,"LLm" : 100, "MMm": 100, "N":10}
+    rivers_ana_nml["PARAM_SETTINGS"].update({"NP_XI": 2, "NP_ETA": 2,"LLm" : 100, "MMm": 100, "N":10})
     rivers_ana_nml["RIVER_FRC_SETTINGS"] = {
         "river_source": True,
         "river_analytical": True,
@@ -192,7 +187,8 @@ def test_pipes_real(test_dir: Path, input_dir: Path) -> int:
     pipes_conf.compile()
 
     pipes_nml = create_test_namelist_dict(input_dir)
-    pipes_nml["TIME_STEPPING"] = {"dt" : 20}
+    pipes_nml["TIME_STEPPING"]["dt"] = 20
+    pipes_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     pipes_nml["FORCING_FILES"]["frcfile"].append(str(input_dir/"example_input_pipe_forcing.nc"))
     pipes_nml["PIPE_FRC_SETTINGS"] = {
         "pipe_source": True,
@@ -215,21 +211,25 @@ def test_pipes_real(test_dir: Path, input_dir: Path) -> int:
 
 def test_pipes_ana(test_dir: Path, input_dir: Path) -> int:
     pipes_ana_cpp = (universal_cpp_keys + ocean_physics_cpp_keys + analytical_cpp_keys +
-                      ["LMD_CONVEC"])
+                      ["LMD_CONVEC","ANA_PIPES"])
 
     pipes_ana_conf = ROMSConfiguration(
         cpp_keys = pipes_ana_cpp,
         location = test_dir
     )
+    additional_files_path=Path("additional_files").absolute()
+    Path(test_dir/"ana_grid.h").symlink_to(additional_files_path/"pipes_ana_grid.h")
+    Path(test_dir/"ana_init.h").symlink_to(additional_files_path/"pipes_ana_init.h")
+    Path(test_dir/"ana_pipe_frc.h").symlink_to(additional_files_path/"pipes_ana_pipe_frc.h")
 
     pipes_ana_conf.compile()
     pipes_ana_nml = create_test_namelist_dict(input_dir)
-    pipes_ana_nml["TIME_STEPPING"] = {"dt" : 60}
-    pipes_ana_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 600
+    pipes_ana_nml["TIME_STEPPING"]["dt"] = 60
+    pipes_ana_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 1200
     pipes_ana_nml["GRID_SETTINGS"] = {"grdname" : ""}
     pipes_ana_nml["INITIAL_CONDITIONS"] = {"ininame" : ""}
     pipes_ana_nml["FORCING_FILES"] = {"frcfile" : ""}
-    pipes_ana_nml["PARAM_SETTINGS"] = {"NP_XI":2, "NP_ETA":2, "LLm" : 100, "MMm": 100, "N":10}
+    pipes_ana_nml["PARAM_SETTINGS"].update({"NP_XI":2, "NP_ETA":2, "LLm" : 100, "MMm": 100, "N":10})
     pipes_ana_nml["PIPE_FRC_SETTINGS"] = {
         "pipe_source": True,
         "p_analytical": True,
@@ -258,6 +258,7 @@ def test_flux_frc(test_dir: Path, input_dir: Path) -> int:
 
     flux_frc_conf.compile()
     flux_frc_nml = create_test_namelist_dict(input_dir)
+    flux_frc_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     flux_frc_conf.run(flux_frc_nml)
 
     pv = get_summary_value(test_dir, prefix="roms_his.20100101000000")
@@ -271,22 +272,30 @@ def test_flux_frc(test_dir: Path, input_dir: Path) -> int:
 
 def test_filament(test_dir: Path, input_dir: Path) -> int:
     filament_cpps = (universal_cpp_keys + analytical_cpp_keys +
-                     ["ANA_VMIX","NS_PERIODIC","EW_PERIODIC"])
+                     ["ANA_VMIX","NS_PERIODIC","EW_PERIODIC","FILAMENT_IDEAL"])
 
     filament_conf = ROMSConfiguration(
         cpp_keys = filament_cpps,
         location = test_dir
     )
+    additional_files_path=Path("additional_files").absolute()
+    Path(test_dir/"ana_grid.h").symlink_to(additional_files_path/"filament_grid.h")
+    Path(test_dir/"ana_init.h").symlink_to(additional_files_path/"filament_init.h")
+    Path(test_dir/"ana_vmix.h").symlink_to(additional_files_path/"filament_vmix.h")
+
 
     filament_conf.compile()
     filament_nml = create_test_namelist_dict(input_dir)
-    filament_nml["TIME_STEPPING"] = {"dt" : 5}
+    filament_nml["TIME_STEPPING"].update({"dt": 5, "ndtfast": 60})
+    filament_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 50
     filament_nml["GRID_SETTINGS"] = {"grdname" : ""}
     filament_nml["INITIAL_CONDITIONS"] = {"ininame" : ""}
     filament_nml["FORCING_FILES"] = {"frcfile" : ""}
-    filament_nml["PARAM_SETTINGS"] = {"NP_XI":2,"NP_ETA":2,"LLm" : 64, "MMm": 64, "N":32}
+    filament_nml["PARAM_SETTINGS"].update({"NP_XI":2,"NP_ETA":2,"LLm" : 64, "MMm": 64, "N":32})
     filament_nml["VERTICAL_MIXING_SETTINGS"] = {"akv_bak" : 0., "akt_bak": 0.}
     filament_nml["LIN_RHO_EOS_SETTINGS"] = {"Tcoef" : 0.2, "T0": 1.0}
+    filament_nml["RHO0_SETTINGS"]["rho0"] = 1000
+    filament_nml["S_COORD"]["theta_b"] = 2.0
     filament_conf.run(filament_nml)
 
     pv = get_summary_value(test_dir, prefix="roms_his.20000101000000")
@@ -311,7 +320,9 @@ def test_cdr(test_dir: Path, input_dir: Path) -> int:
     cdr_conf.compile()
 
     cdr_nml = create_test_namelist_dict(input_dir)
-    cdr_nml["TIME_STEPPING"] = {"dt" : 40}
+    cdr_nml["TIME_STEPPING"]["dt"] = 40
+    cdr_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
+    cdr_nml["BGC_SETTINGS"]["output_period_his"] = 400
     cdr_nml["FORCING_FILES"] = {
         "frcfile": [
             str(input_dir/"example_input_boundary_forcing.nc"),
@@ -325,10 +336,12 @@ def test_cdr(test_dir: Path, input_dir: Path) -> int:
     counter = 0
 
     # CDR_3d test
-    cdr_3d_nml = cdr_nml.copy()
+    subprocess.run("rm *.nc",cwd=test_dir,shell=True,text=True)
+    cdr_3d_nml = copy.deepcopy(cdr_nml)
     cdr_3d_nml["FORCING_FILES"]["frcfile"] += [str(input_dir/"cdr_forcing_3d.nc")]
     cdr_3d_nml["CDR_FRC_SETTINGS"] = {"cdr_source": True,
-                                   "forcing_3d": True}
+                                      "forcing_3d": True,
+                                      "relocate_to_wet_pts": True}
     cdr_conf.run(cdr_3d_nml)
 
     pv = get_summary_value(test_dir, prefix="roms_his.20100101000000")
@@ -348,11 +361,15 @@ def test_cdr(test_dir: Path, input_dir: Path) -> int:
     counter = counter+retval
 
     # CDR_dp test
-    cdr_dp_nml = cdr_nml.copy()
-    cdr_dp_nml["FORCING_FILES"]["frcfile"] += [str(input_dir/"cdr_forcing_dp.nc")]
-    cdr_dp_nml["CDR_FRC_SETTINGS"] = {"cdr_source": True,
-                                      "forcing_dp": True}
-    cdr_conf.run(cdr_3d_nml)
+    subprocess.run("rm *.nc",cwd=test_dir,shell=True,text=True)
+    cdr_dp_nml = copy.deepcopy(cdr_nml)
+    cdr_dp_nml["BGC_SETTINGS"]["output_period_his"] = 200
+    cdr_dp_nml["CDR_FRC_SETTINGS"].update({"cdr_source": True,
+                                           "forcing_depth_profiles": True,
+                                           "cdr_file": str(input_dir/"cdr_forcing_dp.nc"),
+                                           "relocate_to_wet_pts": True,
+                                           "nz_chd" : 10})
+    cdr_conf.run(cdr_dp_nml)
 
     pv = get_summary_value(test_dir, prefix="roms_his.20100101000000")
     bv = get_summary_value(test_dir, prefix="roms_bgc.20100101000000")
@@ -370,13 +387,14 @@ def test_cdr(test_dir: Path, input_dir: Path) -> int:
     retval = 0 if ( (test_value_phys == pv) and (test_value_bgc == bv)) else 1
     counter = counter+retval
 
-    # CDR_parm test
-    cdr_parm_nml = cdr_nml.copy()
-    cdr_parm_nml["FORCING_FILES"]["frcfile"] += [str(input_dir/"cdr_forcing_parm.nc")]
-    cdr_parm_nml["CDR_FRC_SETTINGS"] = {"cdr_source": True,
-                                      "forcing_parameterized": True}
-    cdr_conf.run(cdr_3d_nml)
-
+    # # CDR_parm test
+    subprocess.run("rm *.nc",cwd=test_dir,shell=True,text=True)
+    cdr_parm_nml = copy.deepcopy(cdr_nml)
+    cdr_parm_nml["CDR_FRC_SETTINGS"].update({"cdr_source": True,
+                                             "forcing_parameterized": True,
+                                             "relocate_to_wet_pts": True,
+                                             "cdr_file": str(input_dir/"cdr_forcing_parm.nc")})
+    cdr_conf.run(cdr_parm_nml)
     pv = get_summary_value(test_dir, prefix="roms_his.20100101000000")
     bv = get_summary_value(test_dir, prefix="roms_bgc.20100101000000")
 
@@ -407,15 +425,20 @@ def test_bgc_real_bec(test_dir: Path, input_dir: Path) -> int:
 
     bec_conf.compile()
     bec_nml = create_test_namelist_dict(input_dir)
-    bec_nml["TIME_STEPPING"] = {"dt" : 20, "ntimes": 10}
+    bec_nml["TIME_STEPPING"]["dt"] = 20
+    bec_nml["TIME_STEPPING"]["ntimes"] = 10
+    bec_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 100
+    bec_nml["BGC_SETTINGS"]["output_period_his"] = 400
     bec_nml["PARAM_SETTINGS"]["ntrc_bio"] = 26
+    bec_nml["TIDES_SETTINGS"].update({"pot_tides": True, "ntides": 2})
     bec_nml["FORCING_FILES"] = {
         "frcfile": [
             str(input_dir/"example_input_boundary_forcing.nc"),
             str(input_dir/"example_input_surface_forcing.nc"),
             str(input_dir/"example_input_bgc_surface_forcing.nc"),
             str(input_dir/"example_input_river_forcing.nc"),
-            str(input_dir/"example_input_bgc_boundary_forcing.nc")
+            str(input_dir/"example_input_bgc_boundary_forcing.nc"),
+            str(input_dir/"example_input_tides.nc")
         ]}
 
     bec_conf.run(bec_nml)
@@ -446,7 +469,14 @@ def test_bgc_real_marbl(test_dir: Path, input_dir: Path) -> int:
     )
 
     marbl_conf.compile()
+    additional_files_path=Path("additional_files").absolute()
+    Path(test_dir/"marbl_in").symlink_to(additional_files_path/"marbl_in")
     marbl_nml = create_test_namelist_dict(input_dir)
+    marbl_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 100
+    marbl_nml["BGC_SETTINGS"]["output_period_his"] = 100
+    marbl_nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_diagnostics_to_write"] = ["DCO2STAR_ALT_CO2","graze_diat_zint","FESEDFLUX"]
+    marbl_nml["TIME_STEPPING"].update({"dt":  20, "ntimes": 10})
+    marbl_nml["TIDES_SETTINGS"].update({"pot_tides": True, "ntides": 2})
     marbl_nml["PARAM_SETTINGS"]["ntrc_bio"] = 32
     marbl_nml["FORCING_FILES"] = {
         "frcfile": [
@@ -454,7 +484,8 @@ def test_bgc_real_marbl(test_dir: Path, input_dir: Path) -> int:
             str(input_dir/"example_input_surface_forcing.nc"),
             str(input_dir/"example_input_bgc_surface_forcing.nc"),
             str(input_dir/"example_input_river_forcing.nc"),
-            str(input_dir/"example_input_bgc_boundary_forcing.nc")
+            str(input_dir/"example_input_bgc_boundary_forcing.nc"),
+            str(input_dir/"example_input_tides.nc")
         ]}
 
     marbl_conf.run(marbl_nml)
@@ -489,6 +520,8 @@ def get_summary_value(test_dir: Path, prefix: str):
     for name in sorted(ds.data_vars):  # sort for determinism
         h.update(ds[name].values.tobytes())
     return h.hexdigest()
+
+
 
 if __name__ == "__main__":
     environ = "laptop"
@@ -529,13 +562,13 @@ if __name__ == "__main__":
         input_dir = inp_dir
     )
     if result != 0: failures.append("flux_frc")
-    # Filament
+    #Filament
     result = test_filament(
         test_dir = my_dir/"filament",
         input_dir = inp_dir
     )
     if result != 0: failures.append("filament")
-    # CDR
+    #CDR
     result = test_cdr(
         test_dir = my_dir/"cdr",
         input_dir = inp_dir

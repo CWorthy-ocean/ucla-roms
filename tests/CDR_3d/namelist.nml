@@ -16,7 +16,7 @@ title = "roms_run"
 !================================================================================
 &TIME_STEPPING 							       !scalars.F
 !-------------
-ntimes = 10
+ntimes = 20
 dt = 40
 ndtfast = 30
 ninfo = 1
@@ -45,13 +45,13 @@ hc = 25.0D0
 !------------------------------
 ! Previously set in `param.opt`
 !------------------------------
-NP_XI = 3
+NP_XI = 2
 NP_ETA = 2
 NSUB_X = 1
 NSUB_E = 1
-LLm = 199
-MMm = 99
-N = 50
+LLm = 39
+MMm = 19
+N = 10
 nt_passive = 0
 ntrc_bio = 32
 /
@@ -69,8 +69,8 @@ nrrec = 1
 ! Previously set in `roms.in`
 !---------------------------
 frcfile =
-'input_data/example_input_bgc_surface_forcing_clim.nc',
-'input_data/example_input_bgc_boundary_forcing_clim.nc',
+'input_data/example_input_bgc_surface_forcing.nc',
+'input_data/example_input_bgc_boundary_forcing.nc',
 'input_data/example_input_boundary_forcing.nc',
 'input_data/example_input_surface_forcing.nc',
 'input_data/example_input_tides.nc',
@@ -245,7 +245,7 @@ trc2zsc = 0, 0
 !------------
 ! Previously set in `bgc.opt`
 !------------
-output_period_his = 100
+output_period_his = 400
 nrpf_his = 10
 output_period_avg = 100
 nrpf_avg = 10
@@ -253,7 +253,7 @@ output_period_his_dia = 100
 nrpf_his_dia = 10
 output_period_avg_dia = 100
 nrpf_avg_dia = 10
-wrt_bgc_his = .false.     ! t/f to write tracer history file
+wrt_bgc_his = .true.     ! t/f to write tracer history file
 wrt_bgc_avg = .false.     ! t/f to write tracer averages file
 wrt_bgc_dia_his = .false. ! t/f to write diagnostic history file
 wrt_bgc_dia_avg = .false. ! t/f to write diagnostic averages file
