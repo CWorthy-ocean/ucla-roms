@@ -438,7 +438,7 @@ code_check_mode = .false.  ! diagnostics in stdout formatted for code testing
 !-----------------------------
 ! Previously set in `diag.opt`
 !-----------------------------
-code_check_mode = .true.
+code_check_mode = .false.
 /
 
 
