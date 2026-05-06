@@ -59,4 +59,5 @@ bibtex_reference_style = "author_year"
 html_theme_options = {
     "repository_url": "https://github.com/CWorthy-ocean/ucla-roms.git",
     "use_repository_button": True,
+    "show_navbar_depth": 3
 }
