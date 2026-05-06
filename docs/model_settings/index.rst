@@ -6,3 +6,4 @@ ROMS settings are now predominantly controlled at runtime via a namelist, which 
    :maxdepth: 1
 
    runtime_settings
+   compile_time_settings
