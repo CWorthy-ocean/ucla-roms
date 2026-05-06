@@ -17,13 +17,13 @@ Key technical information:
 
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Getting Started
 
    Installing ROMS <installation/index>
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 3
    :caption: Tutorials
 
    ROMS Tutorials <tutorials/index>
