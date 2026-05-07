@@ -32,6 +32,9 @@
       use error_handling_mod, only: error_log
 #ifdef MARBL
       use marbl_driver, only: marbldrv_configure_tracers
+#ifdef SFLX_CORR
+     &     , iALK, iDIC
+#endif
 #endif
       implicit none
       private
@@ -56,7 +59,13 @@
       type (ncforce)    :: nc_t( NT ) ! array of ncvs for each tracer
       ! edit variable name and time name to match input netcdf file if necessary:
       type (ncforce) :: nc_sst  = ncforce(vname='sst',tname='sst_time' )       ! sea-surface temperature (SST) data
-      type (ncforce) :: nc_sss  = ncforce(vname='sss',tname='sss_time' )       ! sea-surface salinity (SSS) data
+      type (ncforce) :: nc_sss  = ncforce(vname='sss',tname='sss_time' ) ! sea-surface salinity (SSS) data
+#if defined(MARBL) && defined(SFLX_CORR)
+      type (ncforce) :: nc_ssdic  = ncforce(
+     &     vname='DIC_surf',tname='dic_time' ) ! sea-surface temperature (SST) data
+      type (ncforce) :: nc_ssalk  = ncforce(
+     &     vname='Alk_surf',tname='alk_time' ) ! sea-surface salinity (SSS) data
+#endif
 
       integer,public :: iTandS                                       ! combined index of temperature and salinity
                                                                      ! public as used in set_forces.F. Need to be parameter
@@ -80,6 +89,10 @@
       real,public :: dSSTdt
       real,public,allocatable,dimension(:,:) :: sss
       real,public :: dSSSdt                                ! input units (cm/day)
+      real,public,allocatable,dimension(:,:) :: alk_surf
+      real,public :: dAlkdt                                ! input units (cm/day)
+      real,public,allocatable,dimension(:,:) :: dic_surf
+      real,public :: dDICdt                                ! input units (cm/day)
 
       public set_surf_tracer_flx
       public set_surf_field_corr
@@ -181,6 +194,13 @@
       call error_log%abort_check()
 #endif
 
+#if defined SFLX_CORR && defined MARBL
+      ! Sea-surface salinity (SSS) data
+      call set_frc_data(nc_ssdic,dic_surf,'r')
+      call set_frc_data(nc_ssalk,alk_surf,'r')
+      call error_log%abort_check()
+#endif
+
       end subroutine set_surf_field_corr  !]
 ! ----------------------------------------------------------------------
       subroutine apply_surf_field_corr  ![
@@ -197,8 +217,8 @@
 ! term drift. dSSTdt below is "piston velocity" expressed in [m/s].
       do j=j0,j1
         do i=i0,i1
-          stflx(i,j,itemp)=
-     &       -dSSTdt*(t(i,j,nz,nrhs,itemp)-sst(i,j))
+          stflx(i,j,itemp)=stflx(i,j,itemp)
+     &       -dSSTdt*(t(i,j,N,nrhs,itemp)-sst(i,j))
         enddo
       enddo
 #endif
@@ -213,6 +233,17 @@
      &         ( t(i,j,N,nrhs,isalt)-sss(i,j) )
         enddo
       enddo
+#endif
+
+#if defined SFLX_CORR && defined MARBL
+      do j=j0,j1
+         do i=i0,i1
+            stflx(i,j,iALK)=
+     &           -dALKdt*(t(i,j,N,nrhs,iALK) - alk_surf(i,j))
+            stflx(i,j,iDIC)=
+     &           -dDICdt*(t(i,j,N,nrhs,iDIC) - dic_surf(i,j))
+         end do
+      end do
 #endif
 
       end subroutine apply_surf_field_corr  !]

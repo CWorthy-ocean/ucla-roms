@@ -67,6 +67,12 @@
 #ifdef QCORRECTION
          call register_keyword(name="SST_correction",handler=kwread_sst_correction)
 #endif
+#if defined SFLX_CORR && defined MARBL
+         call register_keyword(
+     &        name="BGC_surface_correction",
+     &        handler=kwread_bgc_surface_correction)
+#endif
+
 #endif /* SOLVE3D */
 
 #if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
@@ -779,6 +785,42 @@
 
       end subroutine kwread_SSS_correction
 #endif
+
+
+#if defined SFLX_CORR && defined MARBL
+      subroutine kwread_BGC_surface_correction(unit)
+      use tracers, only: dDICdt, dALKdt
+      use scalars, only: day2sec
+      implicit none
+
+      integer, intent(in)    :: unit
+      integer :: ios
+
+      read(unit,*,iostat=ios) dDICdt
+      read(unit,*,iostat=ios) dALKdt
+      if (ios /= 0) then
+         call report_read_error('BGC_surface_correction')
+         return
+      end if
+
+      mpi_master_only write(*,'(5x,A,ES10.3,2x,2A/38x,A)')
+     &   'dDICdt =', dDICdt,
+     &   'Sea-Surface DIC correction ',
+     &   'coefficient expressed',
+     &   'kinematically as "piston velocity" [cm/day]'
+
+      mpi_master_only write(*,'(5x,A,ES10.3,2x,2A/38x,A)')
+     &   'dALKdt =', dALKdt,
+     &   'Sea-Surface ALK correction ',
+     &   'coefficient expressed',
+     &   'kinematically as "piston velocity" [cm/day]'
+
+      dALKdt = dALKdt / (100*day2sec)
+      dDICdt = dDICdt / (100*day2sec)
+
+      end subroutine kwread_BGC_surface_correction
+#endif
+
 
 # ifdef QCORRECTION
       subroutine kwread_SST_correction(unit)
