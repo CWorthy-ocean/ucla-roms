@@ -52,7 +52,7 @@
      &     xi_rho, create_file, set_frc_data
       use netcdf, only:
      &     nf90_write, nf90_open, nf90_close,
-     &     nf90_put_att, nf90_enddef
+     &     nf90_put_att, nf90_enddef, nf90_double
       use scalars, only: nstp, nt, time, n, dt, iic, nnew, tdays
       use dimensions, only: i0, i1, j0, j1
       use error_handling_mod, only: error_log
@@ -496,7 +496,7 @@
           if (wrt_t_avg(itrc)) then
              text_lname='avg_'/ /t_lname(itrc)
              varid = nccreate(ncid,t_vname(itrc),
-     &         (/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/))
+     &         (/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/), nf90_double)
 
              ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
              ierr = nf90_put_att(ncid,varid,'units',t_units(itrc))
@@ -507,7 +507,7 @@
           if (wrt_t(itrc)) then
              text_lname=t_lname(itrc)
              varid = nccreate(ncid,t_vname(itrc),
-     &         (/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/))
+     &         (/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/), nf90_double)
              ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
              ierr = nf90_put_att(ncid,varid,'units',t_units(itrc))
           endif
@@ -597,7 +597,7 @@
       do idiag=1,nr_bgc_diag_2d
         if (wrt_bgc_diag_2d(idiag)) then
           varid = nccreate(ncid,vname_bgc_diag_2d(1,idiag),
-     &            (/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/))
+     &            (/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/), nf90_double)
           ierr = nf90_put_att(ncid,varid,'long_name',vname_bgc_diag_2d(2,idiag))
           ierr = nf90_put_att(ncid,varid,'units',vname_bgc_diag_2d(3,idiag))
         endif
@@ -607,7 +607,7 @@
       do idiag=1,nr_bgc_diag_3d
         if (wrt_bgc_diag_3d(idiag)) then
           varid = nccreate(ncid,vname_bgc_diag_3d(1,idiag),
-     &            (/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/))
+     &            (/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/), nf90_double)
           ierr = nf90_put_att(ncid,varid,'long_name',vname_bgc_diag_3d(2,idiag))
           ierr = nf90_put_att(ncid,varid,'units',vname_bgc_diag_3d(3,idiag))
         endif

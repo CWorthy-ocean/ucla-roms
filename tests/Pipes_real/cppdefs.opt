@@ -1,35 +1,3 @@
-/* This is "cppdefs.opt": MODEL CONFIGURATION FILE
-   ==== == ============ ===== ============= ==== */
-
-/*
- * CHOOSE ONLY ONE PRIMARY FLAG FOR SWITCH LIST BELOW
- */
-
-#define USWC_sample
-
-/*
-    Embedded (nested) grid configuration segment
-*/
-
-!--#ifndef MAX_GRID_LEVEL
-!#define MAX_GRID_LEVEL 2
-!--# include "redefs.X"
-!--#endif
-
-/*
-   Main switch starts here: model configuration choice.
-*/
-
-#if defined USWC_sample
-
-/* Include standard CPP switches for UP ETH Zurich */
-!-dd#include "cppdefs_UP.h"
-
-/*
-   Standard UP ETH Zurich Settings for Regional and Basin Configurations
-   #### PLEASE do not change but use undef in cppdefs.opt to undefine
-   #### what as needed e.g., put #undef SPONGE in your personal cppdefs.opt
-*/
                      /* Basics */
 #define SOLVE3D
 #define UV_ADV
@@ -117,9 +85,6 @@
 
 !#define BULK_FRC
 !#define BULK_FLUX_OUTPUT /* DevinD added this for sustr and svstr outputs in new code */
-
-
-#endif
 
 
 #include "set_global_definitions.h"

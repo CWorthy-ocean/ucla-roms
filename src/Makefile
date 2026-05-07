@@ -10,7 +10,7 @@ include Makedefs.inc
    SRCS_F90 = $(wildcard *$(UPF90_ext))
    SRCS = $(SRCS_F77) $(SRCS_F90)
 # Exclude files that are not part of main build (just f77 for now)
-   EXCL = mpi_test cppcheck srcscheck
+   EXCL = mpi_test srcscheck
    EXCL += check_alfabeta check_rho_eos int_r3d sediment t3dmix_GP transp_nodes u3dbc_new visc3d_GP visc3d_S_FS
    EXCL := $(addsuffix $(UPF77_ext), $(EXCL))
    SRCS_F77 := $(filter-out $(EXCL), $(SRCS_F77))
@@ -77,14 +77,11 @@ mpi_test: $(MPI_TEST_OBJ)
 
 # Auxiliary utility programs
 # --------- ------- --------
- TOOLS = cppcheck srcscheck redefs
+ TOOLS = srcscheck redefs
 
 tools: $(TOOLS)
 
     TMP = .
-
-cppcheck: cppcheck$(OBJ_ext)
-	$(CFT) $(FFLAGS) $(LDFLAGS) -o cppcheck cppcheck$(OBJ_ext)
 
 srcscheck: srcscheck$(OBJ_ext)
 	$(CFT) $(FFLAGS) $(LDFLAGS) -o srcscheck srcscheck$(OBJ_ext)
@@ -97,13 +94,14 @@ redefs: redefs$(OBJ_ext)
 
 checkdefs: check_switches1$(UPF77_ext)
 
-check_switches1$(UPF77_ext): cppcheck cppdefs.opt
-	./cppcheck cppdefs.opt
+check_switches1$(UPF77_ext): cppdefs.opt
+	@${ROMS_ROOT}/Tools-Roms/cppcheck.py
 check_srcs$(UPF77_ext): srcscheck Makefile
 	./srcscheck
 
 .PHONY: depend
-depend:  # makedepf90 is preferable but does not work on e.g. osx-arm64. Offer python fallback.
+depend: check_switches1$(UPF77_ext)
+        # makedepf90 is preferable but does not work on e.g. osx-arm64. Offer python fallback.
 	@${ROMS_ROOT}/Tools-Roms/makedepf90 $(SRCS) > Make.depend  || \
 	(echo "failed to generate dependency list with makedepf90, using python fallback"; \
 	 ${ROMS_ROOT}/Tools-Roms/makedep.py  Make.depend)

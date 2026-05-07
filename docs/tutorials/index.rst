@@ -9,7 +9,11 @@ The former tutorial aims to explain in greater detail how ROMS is set up in a ty
 that new users step through both tutorials.
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    1. Nested multi-simulation workflow with CDR <nested_cdr_tutorial/index>
+
+.. toctree::
+   :maxdepth: 1
+
    2. From-scratch simulation template <from_scratch_bgc_simulation>
