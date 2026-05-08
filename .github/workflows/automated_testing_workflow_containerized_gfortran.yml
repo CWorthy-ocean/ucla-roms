@@ -33,12 +33,13 @@ jobs:
         cd Work/
         cd ${ROMS_ROOT}/Tools-Roms/
         make partit COMPILER=gnu
+        make ncjoin COMPILER=gnu
         '
 
     - name: Run tests
       shell: bash
       run: |
         micromamba run -n roms-ci bash -c '
-        cd ${ROMS_ROOT}/tests/${{ matrix.example}}/
-        pytest . --environ=ifx
+        cd ${ROMS_ROOT}/tests/
+        pytest . --environ=github_gnu
         '
