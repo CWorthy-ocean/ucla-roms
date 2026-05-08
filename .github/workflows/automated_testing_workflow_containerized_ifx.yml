@@ -41,5 +41,6 @@ jobs:
         run: |
           source $GITHUB_ENV
           cd $ROMS_ROOT/tests/
-          pytest . --environ=ifx
+          sed -i -e "s/make BUILD_MODE=test/make COMPILER=intel BUILD_MODE=test/g" _helpers.py
+          pytest . --environ=github_ifx
 
