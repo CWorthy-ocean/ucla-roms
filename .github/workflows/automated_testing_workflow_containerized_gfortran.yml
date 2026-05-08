@@ -11,7 +11,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cworthy-ocean/marbl_gnu_mpich:0.0
+      image: ghcr.io/cworthy-ocean/marbl_gnu_mpich:0.1
     strategy:
       fail-fast: false
     name: pytest_gnu
