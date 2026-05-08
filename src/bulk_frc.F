@@ -186,13 +186,13 @@
       use surf_flux, only:
      &     srflx, vwnd, uwnd, stflx, sustr_r, svstr_r,
      &     sustr, svstr, swflx, wrt_rstflx, rstflx
-#ifdef SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
+#if defined(SFLX_CORR) && defined SALINITY && !defined ANA_SSFLUX
      &     , sss, dSSSdt
 #endif
-#ifdef QCORRECTION & !defined ANA_SST
+#if defined(QCORRECTION) && !defined(ANA_SST)
      &     , sst, dSSTdt
 #endif
-#ifdef MARBL && defined CFLX_CORR
+#if defined(MARBL) && defined(CFLX_CORR)
      &     , sDIC, sALK, dCdt
 #endif
 
