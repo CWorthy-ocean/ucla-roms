@@ -34,7 +34,7 @@
      &     , isalt
 #endif
       use flux_frc, only: set_flux_frc
-      use surf_flux, only: set_surf_field_corr
+      use surf_flux, only: set_surf_field_corr, set_carbonate_sensitivity
       use tracers, only: set_surf_tracer_flx, iTandS
       use river_frc, only: river_source, set_river_frc
       use pipe_frc, only: pipe_source, set_pipe_frc
@@ -105,7 +105,9 @@ c***              no code here
 # if defined QCORRECTION || defined SFLX_CORR
       call set_surf_field_corr
 # endif
-
+# if defined ANTITRACER
+      call set_carbonate_sensitivity
+# endif
 # ifdef BULK_FRC
 #  ifdef LMD_KPP
 #   ifdef ANA_SRFLUX
@@ -136,7 +138,7 @@ c***              no code here
 #  endif
 # endif
 
-      if(nt>iTandS) call set_surf_tracer_flx
+      if(nt>iTandS) call set_surf_tracer_flx(istr,iend,jstr,jend)
 
       ! BGC surface flux:
 # if defined(BIOLOGY_BEC2) || defined(MARBL)

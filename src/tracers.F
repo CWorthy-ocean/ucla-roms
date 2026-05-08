@@ -21,7 +21,12 @@
 
       use param, only: isalt, itemp, lm, mm, mynode, nt_passive
       use dimensions, only: i0, i1, j0, j1, nx, ny
-      use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rather?
+      use surf_flux, only: stflx
+#ifdef ANTITRACER
+     &     , ddic_dco2, ddic_dalk, k_gas, uwnd, vwnd
+      use ocean_vars, only: Hz
+#endif
+
       use scalars, only: n, nstp, nnew, forw_start, iic, nt
 ! for 'FIRST_TIME_STEP' and nstp, only:
       use nc_read_write, only: nccreate, ncwrite
@@ -47,7 +52,11 @@
       logical, dimension(nt), public      :: wrt_t_avg               ! t/f output avg tracer.
       logical, dimension(nt), public      :: wrt_t_dia = .false.     ! t/f diagnostics tracer.
 
-      integer, dimension(nt)              :: t_ana_frc               ! whether surface flux is read in (0), or analytical (1)
+      integer, dimension(nt)              :: t_ana_frc               ! 0 = Read in forcing data
+                                                                     ! 1 = Analytical forcing (set_ana_surf_tracer_flx)
+                                                                     ! 2 = Read in forcing + online computed air-sea gas exchange (Antitracer)
+
+      integer, dimension(nt), public      :: itrc_alk_pair = 0       ! Pairing logic
 
       !-- Tracer netcdf variables as arrays/matrices of 'NT' length:
       ! Final tracer concentrations live in 't' in ocean3d
@@ -82,35 +91,46 @@
       contains
 
 ! ----------------------------------------------------------------------
-      subroutine set_surf_tracer_flx ![
+      subroutine set_surf_tracer_flx(istr, iend, jstr, jend)
+
       ! set tracer flux at surface
       use error_handling_mod, only: error_log
       implicit none
       character(len=20) :: sr_name = "set_surf_tracer_flx"
       ! local
-      integer           :: itrc       ! tracer number for loop index
-      character(len=46) :: t_flx_name ! Tracer time name
+      integer           :: itrc ! tracer number for loop index
 
+      integer, intent(in) :: istr, iend,jstr,jend
+#ifdef ANTITRACER
+      call exchange_xxx(t(:,:,nz,nrhs,itemp) )
+      call set_gas_transfer_velocity(istr,iend,jstr,jend)
+#endif
       do itrc=iTandS+1,nt
+         ! t_ana_frc == 0 for non-analytical, 2 for antitracer
+         if (t_ana_frc(itrc)/=1) then  ! Read in forcing data
+            call set_frc_data(nc_t(itrc), stflx(:,:,itrc), 'r' )
+         end if
+#ifdef ANTITRACER
+         if (t_ana_frc(itrc)==2) then
+            call set_frc_data(nc_t(itrc), stflx(:,:,itrc), 'r' )
+            call exchange_xxx(stflx(:,:,itrc))
 
-        if (t_ana_frc(itrc)==0) then ! Read in forcing data (not analytical)
+            call exchange_xxx(t(:,:,nz,nrhs,itrc) )
+            call subtract_gas_exchange_from_tracer_flx(itrc,istr,iend,jstr,jend)
+            call exchange_xxx(stflx(:,:,itrc))
+         end if
+#endif
+         if (t_ana_frc(itrc)==1) then ! Analytical forcing
+            call set_ana_surf_tracer_flx(itrc)
+         else
+            write(error_info, *)
+     &           'Forcing type not supported: t_ana_frc(itrc)= ', t_ana_frc(itrc),
+     &           ', for tracer: ', nc_t(itrc)%vname
+            call error_log%raise_global(
+     &           context=module_name//"/"//sr_name,
+     &           info=error_info)
 
-          call set_frc_data(nc_t(itrc), stflx(:,:,itrc),'r' )
-
-        elseif(t_ana_frc(itrc)==1) then ! Analytical forcing
-
-          call set_ana_surf_tracer_flx(itrc)
-
-        else
-
-           write(error_info, *)
-     &          'Forcing type not supported: t_ana_frc(itrc)= ', t_ana_frc(itrc),
-     &          ', for tracer: ', nc_t(itrc)%vname
-           call error_log%raise_global(
-     &          context=module_name//"/"//sr_name,
-     &          info=error_info)
-
-        endif ! if(t_ana_frc(itrc)==0)
+         endif                  ! if(t_ana_frc(itrc)==0)
 !       call exchange_xxx(stflx)
 
       enddo
@@ -153,6 +173,81 @@
 !     endif
 
       end subroutine set_ana_surf_tracer_flx  !]
+! ----------------------------------------------------------------------
+      subroutine set_gas_transfer_velocity(istr,iend,jstr,jend) ![
+
+      implicit none
+      integer istr, iend, jstr, jend
+
+#if defined ANTITRACER
+      ! coefficients to compute Schmidt number
+      real, parameter :: a = 2116.8
+      real, parameter :: b = -136.25
+      real, parameter :: c = 4.7353
+      real, parameter :: d = -0.092307
+      real, parameter :: e = 0.0007555
+      real, parameter :: xkw_coef = 6.97e-07
+      real schmidt_nr, sst
+      integer i, j
+
+      do j=jstr,jend
+        do i=istr,iend+1
+
+          sst = t(i,j,nz,nrhs,itemp)
+          schmidt_nr = a + sst * (b + sst * (c + sst * (d + e * sst)))
+          k_gas(i,j) = xkw_coef * (uwnd(i,j)**2 + vwnd(i,j)**2) * sqrt(660.0 / schmidt_nr)
+#ifdef SEA_ICE_NOFLUX
+          if( sst .le. -1.8 ) then
+              k_gas(i,j)=0.                    ! If SST colder than -1.8 C, assume zero piston velocity due to sea ice
+          endif
+#endif
+        enddo
+      enddo
+
+#endif /* defined ANTITRACER */
+
+      end subroutine set_gas_transfer_velocity  !]
+! ----------------------------------------------------------------------
+      subroutine subtract_gas_exchange_from_tracer_flx(itrc,istr,iend,jstr,jend)  ![
+      ! Modify surface tracer flux by subtracting the air-sea gas exchange term
+
+      implicit none
+
+      integer itrc ! Current tracer index number
+      integer istr, iend, jstr, jend
+
+#ifdef ANTITRACER
+
+      ! local
+      integer i, j, iALK
+      real beta, eta, cALK
+
+      iALK = itrc_alk_pair(itrc) ! Identify if this tracer has a pair
+
+      do j=jstr,jend
+        do i=istr,iend+1
+          beta = max(ddic_dco2(i,j), 1.0e-5) ! avoid division by zero
+          eta = ddic_dalk(i,j)
+          if (iALK > 0) then
+             cALK = t(i,j,nz,nrhs,iALK)
+          else
+             cALK = 0.0
+          endif
+
+          ! Implementation: Flux = Flux - (k / beta) * (C_dic - ddic_dalk * C_alk)
+          stflx(i,j,itrc) = stflx(i,j,itrc) -
+     &      ( k_gas(i,j) / beta ) * ( t(i,j,nz,nrhs,itrc) - eta * cALK )
+
+          ! Here, stflx is stored as (stflx * Hz) to maintain consistency
+          ! with t, which is also in (t * Hz) form. This ensures the units match
+          ! when stflx is added to t in step3d_t_ISO.
+          ! After the implicit vertical mixing step in step3d_t_ISO, (t * Hz)
+          ! is divided by Hz to yield the updated tracer t.
+        enddo
+      enddo
+#endif
+      end subroutine subtract_gas_exchange_from_tracer_flx  !]
+
 ! ----------------------------------------------------------------------
       subroutine def_his_trc( ncid )  ![
       ! Define history file variables in def_his.F
@@ -353,7 +448,7 @@
 
       ! initialize read in forcing data arrays
       do itrc=iTandS+1,NT
-        if (t_ana_frc(itrc)==0) then
+        if (t_ana_frc(itrc)==0 .or. t_ana_frc(itrc)==2) then
 
           allocate( nc_t(itrc)%vdata( GLOBAL_2D_ARRAY,2) )
 

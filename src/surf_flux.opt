@@ -15,6 +15,11 @@
       type (ncforce) :: nc_sst  = ncforce(vname='sst',tname='sst_time' )       ! sea-surface temperature (SST) data
       type (ncforce) :: nc_sss  = ncforce(vname='sss',tname='sss_time' )       ! sea-surface salinity (SSS) data
 
+#if defined ANTITRACER
+      type (ncforce) :: nc_ddic_dco2 = ncforce(vname='ddic_dco2',tname='ddic_dco2_time' )  ! carbonate sensitivity
+      type (ncforce) :: nc_ddic_dalk = ncforce(vname='ddic_dalk',tname='ddic_dalk_time' )  ! carbonate sensitivity
+#endif
+
       ! interpolate forcing from coarser input grid (=1) or not (=0)
       integer :: interp_frc = 0 ! For SST and SSS correction
 
