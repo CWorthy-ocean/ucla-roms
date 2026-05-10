@@ -42,5 +42,6 @@ jobs:
           source $GITHUB_ENV
           cd $ROMS_ROOT/tests/
           sed -i -e "s/make BUILD_MODE=test/make COMPILER=intel BUILD_MODE=test/g" _helpers.py
+          sed -i -e "s/mpirun/mpirun --oversubscribe/g" _helpers.py
           pytest . --environ=github_ifx
 
