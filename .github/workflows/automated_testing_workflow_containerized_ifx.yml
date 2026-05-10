@@ -35,6 +35,7 @@ jobs:
           cd Work/
           cd ${ROMS_ROOT}/Tools-Roms/
           make partit COMPILER=intel
+          make ncjoin COMPILER=intel
 
       - name: Run tests
         shell: bash
