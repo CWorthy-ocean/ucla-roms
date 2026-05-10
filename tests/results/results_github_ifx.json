@@ -20,7 +20,7 @@
     "bgc": "45e5e0612c2b07cce0eb4f9abb3f7074fc14f8fc9950c9e5623ce69d3062ed51"
   },
   "filament": {
-    "physics": "7290c3b120d85d9364583fff462819de220e803a8b0f7a0c5a6d9f7097fa261e"
+    "physics": "7059d91c3ee811ede3ad3b6da9638b9b82f87e9af2aa9f1feb2a34c164dda749"
   },
   "flux_frc": {
     "physics": "391d4e611756aab97f44d758b53d92e4ea72181307a9551f2160a1383be416c7"
@@ -29,12 +29,12 @@
     "physics": "f8e6fa96ab90f4e8926a0c5ce4e873b7914bd8d6ea97055af5b33f5ec1d109e3"
   },
   "pipes_ana": {
-    "physics": "17a58286d266296726ee38fbc267c6c8df9553764baa7c3e506dcd9e2b6067df"
+    "physics": "18d14782a6695345112a084f032708213679e77b2c8c806f350baba8e6658122"
   },
   "rivers_real": {
     "physics": "f8e876adf5a79f85b84b529fd0d9fcabe29871a5655aef2b775031fa9e740159"
   },
   "rivers_ana": {
-    "physics": "f29666eacfd399c28403e71698c76f78cf735ceaa045c8fe1b87fc3c4f201734"
+    "physics": "c8949e422ea8feac31d9a582da073b5d1ca78f39fd2ed9bbcd2d34dfba3c1149"
   }
 }
