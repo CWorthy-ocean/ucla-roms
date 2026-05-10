@@ -20,9 +20,21 @@
     "bgc": "45e5e0612c2b07cce0eb4f9abb3f7074fc14f8fc9950c9e5623ce69d3062ed51"
   },
   "filament": {
-    "physics": "42baf452c997f0cd697251dd4641d12a868dd6a3f9bb077bbb7352bce9a87c1d"
+    "physics": "7290c3b120d85d9364583fff462819de220e803a8b0f7a0c5a6d9f7097fa261e"
   },
   "flux_frc": {
     "physics": "391d4e611756aab97f44d758b53d92e4ea72181307a9551f2160a1383be416c7"
+  },
+  "pipes_real": {
+    "physics": "f8e6fa96ab90f4e8926a0c5ce4e873b7914bd8d6ea97055af5b33f5ec1d109e3"
+  },
+  "pipes_ana": {
+    "physics": "17a58286d266296726ee38fbc267c6c8df9553764baa7c3e506dcd9e2b6067df"
+  },
+  "rivers_real": {
+    "physics": "f8e876adf5a79f85b84b529fd0d9fcabe29871a5655aef2b775031fa9e740159"
+  },
+  "rivers_ana": {
+    "physics": "f29666eacfd399c28403e71698c76f78cf735ceaa045c8fe1b87fc3c4f201734"
   }
 }
