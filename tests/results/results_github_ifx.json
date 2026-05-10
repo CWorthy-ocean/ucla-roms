@@ -1,40 +1,27 @@
 {
   "bgc_real_bec": {
-    "physics": "81454db9ccf15fab79d99339600c81bf4dc330aa7956640c9b7f5e2f7731ac34",
+    "physics": "fdb13872569bd0bc957d50b598796b1690dae5330ce79cce8e81c8cd2ab3fc55",
     "bgc": "c0211b70e8474599fb0af07da22d0836f0056608be9e5e1246f6b792b9389545"
   },
   "bgc_real_marbl": {
-    "physics": "c53725ebe301bf4e2b63d55ece165acef887c6cc13ad5f518fa617ecbc91b079",
-    "bgc": "0a30c3e60ff4bffdc88ae5986c50ad614b564022f663ab02a470ff844aa4f41f"
+    "physics": "a242d5e8fecc13e78b4abe733b4a930833ef3d2634e459b4c3ebffdc573f1ead",
+    "bgc": "4db02ad2ddcfeccf475c7fe4a3732b35e193ca7d73f2de5d78c0edf9a2de4544"
   },
   "cdr_3d": {
-    "physics": "3ced07ef000db7a6e33fbca7e3d79aa9f58a193e94b290482dcb8f847da39163",
-    "bgc": "a6baba0dacb4767feda6f97ea976ef01b47ef6b462828f9b01251cfba07256d3"
+    "physics": "be08b6fa7defd1aa7b8bda27492a6befc47d58c30162854e5e9f79540d999251",
+    "bgc": "c5263d487a21f5745d0394f902a24103b305729d5859d66e43d25e167b899e24"
   },
   "cdr_dp": {
-    "physics": "3ced07ef000db7a6e33fbca7e3d79aa9f58a193e94b290482dcb8f847da39163",
-    "bgc": "a40eba0aa5f754ee6b41ffa772eb23474d88d4f82b0c890f91231479ef2b5283"
+    "physics": "be08b6fa7defd1aa7b8bda27492a6befc47d58c30162854e5e9f79540d999251",
+    "bgc": "bf03ad4daaff44490c9ef9ad66c2c59521b30eb296298f2989ba96bc8c29b3ed"
   },
   "cdr_parameterized": {
-    "physics": "3ced07ef000db7a6e33fbca7e3d79aa9f58a193e94b290482dcb8f847da39163",
-    "bgc": "1af376aee75f1094b8bf80e501a139f115ecb3ba29b7564e059bf1d491853dc1"
+    "physics": "be08b6fa7defd1aa7b8bda27492a6befc47d58c30162854e5e9f79540d999251",
+    "bgc": "45e5e0612c2b07cce0eb4f9abb3f7074fc14f8fc9950c9e5623ce69d3062ed51"
   },
   "filament": {
-    "physics": "b67126f7c3dd8fd78b7d7e6bf53e0487f63ca17b159b87ab5c8762fc0bc2652e"
+    "physics": "42baf452c997f0cd697251dd4641d12a868dd6a3f9bb077bbb7352bce9a87c1d"
   },
   "flux_frc": {
-    "physics": "32b69d9f6fde194bd54b082633ce385f42b040c09756a68042246e85f942fc1d"
-  },
-  "pipes_real": {
-    "physics": "f8e6fa96ab90f4e8926a0c5ce4e873b7914bd8d6ea97055af5b33f5ec1d109e3"
-  },
-  "pipes_ana": {
-    "physics": "ba2d71c561ee00c2c599666825f017d4d2db86c758b9993ca7782fb570700a73"
-  },
-  "rivers_real": {
-    "physics": "29dc587b2abb1b61efbbea37400b653427e6bde3e422ac920067e25adfb16fbd"
-  },
-  "rivers_ana": {
-    "physics": "e9e48eaade05d746137b23622cd48abaade9211a0effbb698ecf76b9f8ee0591"
+    "physics": "391d4e611756aab97f44d758b53d92e4ea72181307a9551f2160a1383be416c7"
   }
-}
