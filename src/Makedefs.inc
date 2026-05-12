@@ -212,7 +212,7 @@ ifeq ($(COMPILER),$(filter ifort intel, $(COMPILER)))
         FFLAGS = -g -traceback
 # -check all
     else ifeq ($(BUILD_MODE),test)
-	FFLAGS = -O0 -init=zero -init=arrays -init=snan
+	FFLAGS = -O0 -init=zero -init=arrays
     else ifeq ($(BUILD_MODE),strict)
         FFLAGS += -fp-model strict
     endif
