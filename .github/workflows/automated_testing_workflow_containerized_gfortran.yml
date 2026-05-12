@@ -41,5 +41,5 @@ jobs:
       run: |
         micromamba run -n roms-ci bash -c '
         cd ${ROMS_ROOT}/tests/
-        pytest . --environ=github_gnu
+        pytest -svvv . --environ=github_gnu
         '
