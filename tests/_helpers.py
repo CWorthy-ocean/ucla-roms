@@ -79,6 +79,8 @@ def create_test_namelist_dict(input_dir: Path) -> dict:
     this_nml["BGC_SETTINGS"]["interp_bgc_frc"] = True
     this_nml["BGC_SETTINGS"]["output_period_his"] = 400
 
+    this_nml["STDOUT_DIAG_SETTINGS"]["code_check_mode"] = True
+
     return this_nml
 
 
