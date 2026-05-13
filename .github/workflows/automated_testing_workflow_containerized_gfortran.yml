@@ -11,25 +11,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cworthy-ocean/marbl_gnu_mpich:0.0
+      image: ghcr.io/cworthy-ocean/marbl_gnu_mpich:0.1
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - example: "Rivers_real"
-          - example: "Rivers_ana"
-          - example: "Pipes_real"
-          - example: "Pipes_ana"
-          - example: "Flux_frc"
-          - example: "Filament"
-          - example: "CDR_3d"
-          - example: "CDR_dp"
-          - example: "CDR_parameterized"
-          - example: "bgc_real"
-            bgc_mode: "BEC"
-          - example: "bgc_real"
-            bgc_mode: "MARBL"
-    name: Test ${{ matrix.example }}${{ matrix.bgc_mode && format(' ({0})', matrix.bgc_mode) || '' }}
+    name: pytest_gnu
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
@@ -48,49 +33,13 @@ jobs:
         cd Work/
         cd ${ROMS_ROOT}/Tools-Roms/
         make partit COMPILER=gnu
+        make ncjoin COMPILER=gnu
         '
-    - name: Cache input_data
-      id: cache-input
-      uses: actions/cache@v4
-      with:
-        path: tests/input_data
-        key: roms-input-${{ hashFiles('tests/input_data/get_input_files.sh') }}
 
-    - name: Get input data (if not cached)
-      if: steps.cache-input.outputs.cache-hit != 'true'
+    - name: Run tests
       shell: bash
       run: |
         micromamba run -n roms-ci bash -c '
-        cd ${ROMS_ROOT}/tests/input_data/
-        ./get_input_files.sh
-        '
-    - name: Update COMPILER arg in make commands
-      shell: bash
-      run: |
-        sed -i -e "s/make /make COMPILER=gnu USER_FFLAGS=-Werror PROFILER=scorep /g" $ROMS_ROOT/tests/scripts/do_test_roms.sh
-        sed -i -e "s/make /make COMPILER=gnu USER_FFLAGS=-Werror PROFILER=scorep /g" $ROMS_ROOT/tests/bgc_real/do_test_roms.sh
-    - name: Run Test for ${{ matrix.example }}
-      shell: bash
-      run: |
-        micromamba run -n roms-ci bash -c '
-        cd ${ROMS_ROOT}/tests/${{ matrix.example}}/
-        if [[ "${{ matrix.example }}" == "bgc_real" ]];then
-        ./do_test_roms.sh github_gnu ${{ matrix.bgc_mode }}
-        else
-        ./do_test_roms.sh github_gnu
-        fi
-        '
-    - name: Print profiling report
-      shell: bash
-      run : |
-        micromamba run -n roms-ci bash -c '
-        cd ${ROMS_ROOT}/tests/${{ matrix.example}}/
-        scorep-score -r scorep-*/profile.cubex > scorep.out
-        python3 - <<"EOF"
-        s=open("scorep.out").read().rstrip("\n").split("\n\n")
-        k=lambda L: sorted(L, key=lambda x: float(x.split()[4]), reverse=True)
-        print(s[0]); print()
-        print("\n".join([s[1].splitlines()[0]] + k(s[1].splitlines()[1:]))); print("-"*74)
-        print("\n".join(k(s[2].splitlines())))
-        EOF
+        cd ${ROMS_ROOT}/tests/
+        pytest -svvv . --environ=github_gnu
         '
