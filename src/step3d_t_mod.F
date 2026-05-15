@@ -22,15 +22,16 @@ c--# define CONST_TRACERS
 #  define SW_TRIADS
 #  define STABILIZE
 # endif
-                                  ! Note that arrays A2d(1,1:4) within
-      subroutine step3d_t(tile)   ! the list of agruments in call below
+                                        ! Note that arrays A2d(1,1:4) within
+      subroutine step3d_t(tile,tstep)   ! the list of agruments in call below
 
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
       use private_scratch, only: a2d, a3d
 
       implicit none               ! are repeated to use the same memory
       integer tile                ! for vertical and horizontal scratch
-                                  ! arrays.
+! arrays.
+      integer, intent(in) :: tstep ! the current time-step in the model run
 
 # include "compute_tile_bounds.h"
 
@@ -44,6 +45,7 @@ c--# define CONST_TRACERS
      &                                                    , A3d(1,2)
 #  endif
 # endif
+     &                                                     ,   tstep
      &                                                             )
       end subroutine step3d_t
 
@@ -56,6 +58,7 @@ c--# define CONST_TRACERS
      &                                                         ,  Akz
 #  endif
 # endif
+     &                                                         , tstep
      &     )
       use pipe_frc, only: pidx, pipe_idx, pipe_trc,
      &     pipe_prf, pipe_flx, pipe_source
@@ -70,7 +73,8 @@ c--# define CONST_TRACERS
       use surf_flux, only: stflx, srflx
       use tracers, only: t, itands, wrt_t_dia
 #ifdef MARBL
-      use marbl_driver, only: marbldrv_column_physics, iALK, iDIC
+      use marbl_driver, only: marbldrv_column_physics, iALK, iDIC,
+     &     marbl_timestep_ratio
 #endif
       use grid, only: umask, vmask, pn, pm, rmask, nx, ny, nz, dn_u, dm_v
       use param, only: mynode, np_eta, np_xi
@@ -130,6 +134,7 @@ c--# define CONST_TRACERS
      &           cffE, s2_XLL,s2_XRL, s2_ELL,s2_ERL
 #  endif
 # endif
+      integer, intent(in) :: tstep
 
 # include "compute_auxiliary_bounds.h"
 
@@ -1163,7 +1168,9 @@ c??         enddo
       enddo     !<-- itrc
 
 # if defined(MARBL)
-      call marbldrv_column_physics(istr,iend,jstr,jend,t)
+      if (MODULO(tstep, marbl_timestep_ratio) == 0) then
+         call marbldrv_column_physics(istr,iend,jstr,jend,t)
+      end if
 # elif defined(BIOLOGY_BEC2)
       call ecosys_bec2_tile(istr,iend,jstr,jend) ! BEC, 2014
 # endif

@@ -66,6 +66,7 @@
       integer                     :: idx            ! Looping variable
 
 !     MARBL config:
+      integer, public :: marbl_timestep_ratio = 1
       character(len=256), public :: marbl_config_file='marbl_in'
       character(len=32), public ::
      &     marbl_tracers_to_write(40) = ""
@@ -75,7 +76,7 @@
 #endif
 
       namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,
-     &     marbl_tracers_to_write
+     &     marbl_timestep_ratio, marbl_tracers_to_write
 #ifdef MARBL_DIAGS
      &     , marbl_diagnostics_to_write
 #endif
@@ -1469,7 +1470,8 @@
            if ( marbl_instance%surface_fluxes(1,m) .ne. 0) then
               tracer_array(i,j,nz,nnew, m+(NT-nt_marbl) ) =
      &             tracer_array(i,j,nz,nnew, m+(NT-nt_marbl) ) +
-     &             marbl_instance%surface_fluxes(1,m)*dt/Hz(i,j,nz)
+     &             marbl_instance%surface_fluxes(1,m)*
+     &             (dt*marbl_timestep_ratio)/Hz(i,j,nz)
 
               if ( (i==printi) .and. (j==printj)
      &             .and. (mynode==printnode)
@@ -1645,7 +1647,8 @@
       do m=1,nt_marbl
          tracer_array(i,j,:,nnew, m+(NT-nt_marbl) ) =
      &        tracer_array(i,j,:,nnew, m+(NT-nt_marbl) ) +
-     &        marbl_instance%interior_tendencies(m,nz:1:-1)*dt
+     &        marbl_instance%interior_tendencies(m,nz:1:-1)
+     &        *(dt*marbl_timestep_ratio)
       end do
       end subroutine marbldrv_update_roms_tracers_interior
 !-----------------------------------------------------------------------
