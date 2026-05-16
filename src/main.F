@@ -394,6 +394,9 @@ CR      write(*,*)  ' -2' MYID
       use particles, only: do_particles, floats
       use surf_flux, only: wrt_sflux, wrt_smflx, wrt_stflx
       use random_output, only: wrt_random, do_random
+#ifdef MARBL
+      use marbl_driver, only: marbl_timestep_ratio
+#endif
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
       use cdr_output, only:  wrt_cdr, do_cdr_output
 #endif
@@ -548,7 +551,7 @@ CR      write(*,*)  ' -2' MYID
 
       call omega
 
-      call step3d_t(0)
+      call step3d_t(0, tstep=iic)
 #endif
 !GOOD
 # if defined TS_DIF2 || defined TS_DIF4
