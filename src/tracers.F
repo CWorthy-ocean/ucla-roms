@@ -21,6 +21,7 @@
 
       use param, only: isalt, itemp, lm, mm, mynode, nt_passive
       use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho
+     & , ds_xr, ds_yr, ds_zr
       use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rather?
       use scalars, only: n, nstp, nnew, forw_start, iic, nt
 ! for 'FIRST_TIME_STEP' and nstp, only:
@@ -28,7 +29,7 @@
       use roms_read_write, only:
      &     ncforce, dn_tm, dn_xr, dn_yr, dn_zr,
      &    set_frc_data
-      use netcdf, only: nf90_put_att
+      use netcdf, only: nf90_put_att, nf90_double
 #ifdef MARBL
       use marbl_driver, only: marbldrv_configure_tracers
 #endif
@@ -183,7 +184,7 @@
       do itrc=1,iTandS+nt_passive
         if (wrt_t(itrc)) then
           varid = nccreate(ncid,t_vname(itrc),
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/))
+     &      (/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/),nf90_double)
           ierr = nf90_put_att(ncid,varid,'long_name',t_lname(itrc))
           ierr = nf90_put_att(ncid,varid,'units',t_units(itrc))
         endif
@@ -204,7 +205,7 @@
         if (wrt_t_avg(itrc)) then
           long_name='averaged '/ /t_lname(itrc) ! Add averaged to long name
           varid = nccreate(ncid,t_vname(itrc),
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/))
+     &      (/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/),nf90_double)
           ierr = nf90_put_att(ncid,varid,'long_name',long_name)
           ierr = nf90_put_att(ncid,varid,'units',t_units(itrc))
         endif
@@ -224,7 +225,7 @@
       integer :: itrc
 
       do itrc=1,iTandS+nt_passive
-        if (wrt_t(itrc)) call ncwrite(ncid,t_vname(itrc),t(i0:i1,j0:j1,:,nnew,itrc),start)
+        if (wrt_t(itrc)) call ncwrite(ncid,t_vname(itrc),t(i0:i1,j0:j1,:,nnew,itrc),start, .true.)
       enddo
 
       end subroutine wrt_his_trc  !]
@@ -243,7 +244,7 @@
       do itrc=1,iTandS+nt_passive
         if (wrt_t_avg(itrc)) then
           itavg = NT_2_t_avg(itrc)                                   ! get respective index for t_avg(itavg) -> t(itrc)
-          call ncwrite(ncid,t_vname(itrc),t_avg(i0:i1,j0:j1,:,itavg),start)
+          call ncwrite(ncid,t_vname(itrc),t_avg(i0:i1,j0:j1,:,itavg),start, .true.)
         endif
       enddo
 
@@ -259,8 +260,9 @@
       integer,dimension(:),intent(in) :: start
       ! local
       integer :: itrc
+
       do itrc=1,NT
-        call ncwrite(ncid,t_vname(itrc),t(i0:i1,j0:j1,:,nnew,itrc),start)
+        call ncwrite(ncid,t_vname(itrc),t(i0:i1,j0:j1,:,nnew,itrc),start,.true.)
       enddo
 
       end subroutine wrt_rst_trc  !]

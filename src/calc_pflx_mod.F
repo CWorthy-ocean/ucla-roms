@@ -11,6 +11,7 @@
       use nc_read_write, only: ncwrite, ncread
       use diagnostics, only: dxdyi
       use roms_mpi, only: exchange_xxx
+      use pio_roms, only: pio_gtype
 
       implicit none
       private
@@ -280,10 +281,18 @@
       integer,intent(in) :: ncid
       integer,intent(in) :: record
 
+#ifdef PARALLEL_IO
+      pio_gtype = '3Duw'
+      call ncwrite(ncid,'u_slow',u_slow( 1:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      pio_gtype = '3Dvw'
+      call ncwrite(ncid,'v_slow',v_slow(i0:i1, 1:j1,:),(/1,1,1,record/),.true.)
+      pio_gtype = '3Drw'
+      call ncwrite(ncid,'p_slow',p_slow(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+#else
       call ncwrite(ncid,'u_slow',u_slow( 1:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'v_slow',v_slow(i0:i1, 1:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'p_slow',p_slow(i0:i1,j0:j1,:),(/1,1,1,record/))
-
+#endif
 
       end subroutine wrt_rst_diag_slow  !]
 ! ----------------------------------------------------------------------

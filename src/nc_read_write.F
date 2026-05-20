@@ -9,7 +9,7 @@
       use error_handling_mod, only: error_log
 #ifdef PARALLEL_IO
       use pio_roms, only: pio_ncread1, pio_ncread2, pio_ncread3, pio_gtype
-     &   , pio_ncwrite2, pio_ncwrite3
+     &   , pio_ncwrite1, pio_ncwrite2, pio_ncwrite3
 #endif
       use param, only: mynode
 
@@ -201,13 +201,14 @@
 
       end subroutine ncread_3D  !]
 !----------------------------------------------------------------------
-      subroutine ncwrite_1D(ncid,vname,dat,start)  ![
+      subroutine ncwrite_1D(ncid,vname,dat,start,PP)  ![
       implicit none
       character(len=10) :: sr_name = "ncwrite_1D"
       ! input
       integer           :: ncid
       character(len=*)  :: vname
       real,dimension(:) :: dat
+      logical, optional  :: PP
 
       integer,dimension(:),optional :: start
 
@@ -215,6 +216,21 @@
       integer              :: varid,ierr
       integer,dimension(1) :: dims
       integer,dimension(2) :: count
+      integer :: irec
+
+#ifdef PARALLEL_IO
+      if (present(PP)) then
+      if (pio_gtype /= '----') then
+        if (present(start)) then
+          irec = start(2)
+          call pio_ncwrite1(vname, dat, irec)
+        else
+          call pio_ncwrite1(vname, dat)
+        endif
+        return
+      endif
+      else
+#endif
 
       dims = shape(dat)
 
@@ -237,6 +253,9 @@
      &        context=module_name//'/'//sr_name,
      &        info="ncwrite write var="//trim(vname))
       end if
+#ifdef PARALLEL_IO
+      endif
+#endif
 
       end subroutine ncwrite_1D  !]
 !----------------------------------------------------------------------

@@ -848,6 +848,19 @@
       integer :: start(4)
       integer :: itrc
 
+#ifdef PARALLEL_IO
+        ! Add MARBL saved_state variables to restart file
+        start=1; start(4)=rec_rst
+        do itrc=1,nr_marbl_ss_3d
+           call ncwrite(ncid,vname_marbl_ss_3d(1,itrc),
+     &          marbl_saved_state_3d(i0:i1,j0:j1,:,itrc),start,.true.)
+        enddo
+        start=1;start(3)=rec_rst        ! back to 2D vars
+        do itrc=1,nr_marbl_ss_2d
+           call ncwrite(ncid,vname_marbl_ss_2d(1,itrc),
+     &          marbl_saved_state_2d(i0:i1,j0:j1,itrc),start,.true.)
+        enddo
+#else
         ! Add MARBL saved_state variables to restart file
         start=1; start(4)=rec_rst
         do itrc=1,nr_marbl_ss_3d
@@ -859,7 +872,7 @@
            call ncwrite(ncid,vname_marbl_ss_2d(1,itrc),
      &          marbl_saved_state_2d(i0:i1,j0:j1,itrc),start)
         enddo
-
+#endif
 
       end subroutine marbldrv_write_ss_vars_to_rst
 

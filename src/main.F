@@ -346,8 +346,8 @@ CR      write(*,*)  ' -2' MYID
       endif
       if (do_frc) call init_frc
 
-      call wrt_random
-      stop
+!      call wrt_random
+!      stop
 
         mpi_master_only write(*,'(/1x,A/)')
      &     'main :: initialization complete, started time-stepping.'
@@ -541,7 +541,7 @@ CR      write(*,*)  ' -2' MYID
 
       call diag  ! log file output of global norms
 
-      pio_gtype = '----'
+!      pio_gtype = '----'
 
       call wrt_his_ocean_vars
       call wrt_rst_ocean_vars
