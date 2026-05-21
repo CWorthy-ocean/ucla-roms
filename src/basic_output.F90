@@ -596,9 +596,9 @@ contains                  !]
 
         ierr=nf90_close(ncid)
         if (mynode == 0) then
-          write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&  ! confirm work completed
+          write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
           &'ocean_vars :: wrote averages, tdays =', tdays,&
-          &'step =', iic, 'rec =', rec_avg, '/', total_rec_avg&  !
+          &'step =', iic, 'rec =', rec_avg, '/', total_rec_avg&
           &MYID
         endif
       endif
@@ -1235,7 +1235,7 @@ contains                  !]
     &context=module_name//"/"//sr_name,&
     &info="variable: time_step")
 
-    ierr=nf90_put_var(ncid, var_id_tmp, ibuff, start, count) ! & record time step info
+    ierr=nf90_put_var(ncid, var_id_tmp, ibuff, start, count) !  record time step info
     call error_log%check_netcdf_status(netcdf_status=ierr,&
     &context=module_name//"/"//sr_name,&
     &info="variable: time_step")
@@ -1251,10 +1251,10 @@ contains                  !]
     ! local
     integer(kind=4) :: itrc
     if (mynode==0) then
-      write(*,'(/7x,2A,F6.1,2x,A,I4)')& ! write to terminal output in simulation pre-amble text which
-      &'ocean_vars :: history file ',& ! result variables are being stored
+      write(*,'(/7x,2A,F6.1,2x,A,I4)')&
+      &'ocean_vars :: history file ',&
       &'output_period =', output_period_his,&
-      &'recs/file =', nrpf_his
+      &'recs/file =', nrpf_his ! write to terminal output in simulation pre-amble text which result variables are being stored
 
       write(*,'(9x,A)')&
       &'his fields to be saved: (T/F)' ! T20 moves to the 20th character on line
@@ -1262,7 +1262,8 @@ contains                  !]
       write(*, '(11x,A,T20,A,T36,A)')&
       &"Name","Write (T/F)","Long name"
       write(*,'(9x,A)')  repeat('-',62)
-      write(*,'(13(/11x,A,T30,L1,T36,A,A))')& ! 13(....) repeats formatting 11 times.
+      ! 13(....) repeats formatting 11 times:
+      write(*,'(13(/11x,A,T30,L1,T36,A,A))')&
       &'zeta',   wrt_Z,    vname(2,indxZ)&
       &, 'ubar',   wrt_Ub,   vname(2,indxUb)&
       &, 'vbar',   wrt_Vb,   vname(2,indxVb)&
@@ -1303,8 +1304,9 @@ contains                  !]
       ! local
       integer(kind=4) :: itrc
       if (mynode==0) then
-        write(*,'(/7x,2A,F6.1,2x,A,I4)')& ! write to terminal output in simulation pre-amble text which
-        &'ocean_vars :: average file ',& ! result variables are being stored
+         ! write to terminal output in simulation pre-amble text which result variables are being stored
+        write(*,'(/7x,2A,F6.1,2x,A,I4)')&
+        &'ocean_vars :: average file ',&
         &'output_period =', output_period_avg,&
         &'recs/file =', nrpf_avg
 
@@ -1314,7 +1316,8 @@ contains                  !]
         write(*, '(11x,A,T20,A,T36,A)')&
         &"Name","Write (T/F)","Long name"
         write(*,'(9x,A)')  repeat('-',62)
-        write(*,'(13(/11x,A,T30,L1,T36,A,A))')& ! 13(....) repeats formatting 11 times.
+        ! 13(....) repeats formatting 11 times.
+        write(*,'(13(/11x,A,T30,L1,T36,A,A))')&
         &'zeta',   wrt_avg_Z,    vname(2,indxZ)&
         &, 'ubar',   wrt_avg_Ub,   vname(2,indxUb)&
         &, 'vbar',   wrt_avg_Vb,   vname(2,indxVb)&
@@ -1353,7 +1356,7 @@ contains                  !]
         character(len=120) :: period_info
         if (mynode==0) then
           write(stdout_str,'(7x,A,2x,A,I4)')&
-          &'ocean_vars :: restart file ',& ! result variables are being stored
+          &'ocean_vars :: restart file ',&
           &'recs/file = 2'
           if (monthly_restarts) then
             write(period_info,'(A,1L)')&
