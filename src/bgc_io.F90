@@ -17,6 +17,14 @@ module bgc_io
   use marbl_driver, only: marbldrv_compute_init_diagnostics
 #endif
 
+! imports from bgc_shared_vars  
+  use bgc_shared_vars, only: wrt_bgc_his, wrt_bgc_avg,&
+       & wrt_bgc_dia_his, wrt_bgc_dia_avg, interp_bgc_frc,&
+       & nrpf_avg, nrpf_his, nrpf_avg_dia,&
+       & nrpf_his_dia, t, nc_dust, nc_iron, nc_pco2air,&
+       & bgc_idx, t_idx, lm, mm, itands,&
+       & mynode, nt_passive, output_period_avg, output_period_his,&
+       & t_vname, wrt_t, t_lname
 #ifdef MARBL
        use bgc_shared_vars, only: nc_pco2air_alt
 #endif
@@ -26,26 +34,19 @@ module bgc_io
 #ifdef NHY_FORCING
   use bgc_shared_vars, only: nc_nhy
 #endif
-  use bgc_shared_vars, only: &
+
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
-       &nc_swrad_avg,&
+  use bgc_shared_vars, only: nc_swrad_avg
 #endif
 #if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
-       &bgc_diag_2d_avg, bgc_diag_3d_avg,&
+  use bgc_shared_vars, only: bgc_diag_2d_avg, bgc_diag_3d_avg,&
        &bgc_diag_2d, bgc_diag_3d, nr_bgc_diag_2d, nr_bgc_diag_3d,&
        &nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d, output_period_avg_dia,&
        &output_period_his_dia,&
        &wrt_bgc_diag_2d, idx_bgc_diag_2d, vname_bgc_diag_2d,&
-       &wrt_bgc_diag_3d, idx_bgc_diag_3d, vname_bgc_diag_3d, &
+       &wrt_bgc_diag_3d, idx_bgc_diag_3d, vname_bgc_diag_3d
 #endif
-       & wrt_bgc_his, wrt_bgc_avg,&
-       & wrt_bgc_dia_his, wrt_bgc_dia_avg, interp_bgc_frc,&
-       & nrpf_avg, nrpf_his, nrpf_avg_dia,&
-       & nrpf_his_dia, t, nc_dust, nc_iron, nc_pco2air,&
-       & bgc_idx, t_idx, lm, mm, itands,&
-       & mynode, nt_passive, output_period_avg, output_period_his,&
-       & t_vname, wrt_t, t_lname
-
+! /bgc_shared_vars
   use nc_read_write, only: nccreate, ncwrite
   use roms_read_write, only:&
   &dn_tm, dn_xr, dn_yr, dn_zr,&
