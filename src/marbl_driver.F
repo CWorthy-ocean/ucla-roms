@@ -36,7 +36,7 @@
      &                                        ocean_grid_comm
       use dimensions                  , only: nz
       use surf_flux                   , only: uwnd, vwnd
-      use bgc_forces                  , only: pco2air,pco2air_alt,
+      use bgc_forces                  , only: xco2air,xco2air_alt,
      &                                        dust,iron
       use surf_flux                   , only: srflx
       use scalars                     , only: nstp,nnew,dt,iic,ntstart,
@@ -1370,16 +1370,16 @@
 !     &              press(i,j) !(atm)
             if (print_values) call sf_test_print(atmpress_ind,i,j)
          end if
-!     pco2
+!     xco2
          if (xco2_ind > 0) then
             marbl_instance%surface_flux_forcings(xco2_ind)%field_0d(1)=
-     &           pco2air(i,j)   !(ppm)
+     &           xco2air(i,j)   !(ppm)
             if (print_values) call sf_test_print(xco2_ind,i,j)
          end if
-!     pco2 (alternative co2 forcing)
+!     xco2 (alternative co2 forcing)
          if (xco2_alt_ind > 0) then
             marbl_instance%surface_flux_forcings(xco2_alt_ind)%field_0d(1)=
-     &           pco2air_alt(i,j) !(ppm)
+     &           xco2air_alt(i,j) !(ppm)
             if (print_values) call sf_test_print(xco2_alt_ind,i,j)
          end if
 !     dust
