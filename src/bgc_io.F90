@@ -17,7 +17,7 @@ module bgc_io
   use marbl_driver, only: marbldrv_compute_init_diagnostics
 #endif
 
-! imports from bgc_shared_vars  
+! imports from bgc_shared_vars
   use bgc_shared_vars, only: wrt_bgc_his, wrt_bgc_avg,&
        & wrt_bgc_dia_his, wrt_bgc_dia_avg, interp_bgc_frc,&
        & nrpf_avg, nrpf_his, nrpf_avg_dia,&
