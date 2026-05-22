@@ -64,7 +64,11 @@ c--# define CONST_TRACERS
       use surf_flux, only: stflx, srflx
       use tracers, only: t, itands, wrt_t_dia
 #ifdef MARBL
+# ifdef MARBL_TILE_VERIFY
+      use marbl_driver, only: marbldrv_verify_tiling, iALK, iDIC
+# else
       use marbl_driver, only: marbldrv_column_physics, iALK, iDIC
+# endif
 #endif
       use grid, only: umask, vmask, pn, pm, rmask, nx, ny, nz, dn_u, dm_v
       use param, only: mynode
@@ -1159,7 +1163,11 @@ c??         enddo
       enddo     !<-- itrc
 
 # if defined(MARBL)
+#  if defined(MARBL_TILE_VERIFY)
+      call marbldrv_verify_tiling(istr,iend,jstr,jend,t)
+#  else
       call marbldrv_column_physics(istr,iend,jstr,jend,t)
+#  endif
 # elif defined(BIOLOGY_BEC2)
       call ecosys_bec2_tile(istr,iend,jstr,jend) ! BEC, 2014
 # endif

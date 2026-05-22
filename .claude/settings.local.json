@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -rn 'NSUB\\\\|nsub\\\\|omp\\\\|OMP\\\\|OPENMP\\\\|openmp\\\\|$omp\\\\|\\\\!omp' /Users/blsaenz/Projects/git/ucla-roms/src/step3d_t_ISO.F)",
+      "Bash(grep -n 'C$OMP\\\\|C$\\\\s\\\\|step3d_t\\\\b\\\\|do tile\\\\|my_tile' /Users/blsaenz/Projects/git/ucla-roms/src/main.F)"
+    ]
+  }
+}
