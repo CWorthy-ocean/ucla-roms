@@ -24,9 +24,9 @@
 # define jnorth Mm
 #endif
 
-integer(kind=4) istrR,iendR&
+integer(kind=4) istrR,iendR
 #ifndef XI_ONLY
-&, jstrR,jendR
+integer(kind=4) jstrR,jendR
 #endif
 
 if (istr == iwest) then
