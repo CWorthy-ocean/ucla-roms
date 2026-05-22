@@ -17,16 +17,16 @@ module bgc_io
   use marbl_driver, only: marbldrv_compute_init_diagnostics
 #endif
 
-  use bgc_shared_vars, only:&
 #ifdef MARBL
-       nc_pco2air_alt,&
+       use bgc_shared_vars, only: nc_pco2air_alt
 #endif
 #ifdef NOX_FORCING
-       &nc_nox,&
+  use bgc_shared_vars, only: nc_nox
 #endif
 #ifdef NHY_FORCING
-       &nc_nhy,&
+  use bgc_shared_vars, only: nc_nhy
 #endif
+  use bgc_shared_vars, only: &
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
        &nc_swrad_avg,&
 #endif
