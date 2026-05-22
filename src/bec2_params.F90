@@ -228,17 +228,12 @@ module bec2_params
   real(kind=8) caco3_poc_min, spc_poc_fac, f_graze_sp_poc_lim,&
   &f_photosp_CaCO3, f_graze_CaCO3_remin, f_graze_si_remin
   parameter(&
-  &caco3_poc_min    = 0.4_8,&  ! minimum proportionality between
-  &&!   QCaCO3 and grazing losses to POC
-  &&!   (mmol C/mmol CaCO3)
+  &caco3_poc_min    = 0.4_8,&  ! minimum proportionality between QCaCO3 and grazing losses to POC (mmol C/mmol CaCO3)
   &spc_poc_fac      = 0.14_8,& ! small phyto grazing factor (1/mmolC)
   &f_graze_sp_poc_lim = 0.36_8,&
-  &f_photosp_CaCO3  = 0.4_8,&  ! proportionality between small phyto
-  &&! production and CaCO3 production
-  &f_graze_CaCO3_remin = 0.33_8,& ! fraction of spCaCO3 grazing
-  &&!          which is remin
-  &f_graze_si_remin    = 0.35_8&  ! fraction of diatom Si grazing
-  &&!          which is remin
+  &f_photosp_CaCO3  = 0.4_8,&  ! proportionality between small phyto production and CaCO3 production
+  &f_graze_CaCO3_remin = 0.33_8,& ! fraction of spCaCO3 grazing which is remin
+  &f_graze_si_remin    = 0.35_8&  ! fraction of diatom Si grazing which is remin
   &)
 
 !----------------------------------------------------------------------------
@@ -263,8 +258,7 @@ module bec2_params
   &gQsi_0        = 0.137_8,&   !initial Si/C ratio
   &gQsi_max      = 0.8_8,&     !max Si/C ratio
   &gQsi_min      = 0.0429_8,&  !min Si/C ratio
-  &QCaCO3_max    = 0.4_8,&     !max QCaCO3
-  &&! carbon:nitrogen ratio for denitrification
+  &QCaCO3_max    = 0.4_8,&     !max QCaCO3 carbon:nitrogen ratio for denitrification
   &denitrif_C_N  = parm_Red_D_C_P/136.0_8,&
   &denitrif_NO3_C  = 472.0_8 / 2.0_8 / 106.0_8,& ! need to comment on that and check
   &denitrif_NO2_C  = 472.0_8 / 2.0_8 / 106.0_8,&
