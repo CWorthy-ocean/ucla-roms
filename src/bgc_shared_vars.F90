@@ -9,14 +9,14 @@ module bgc_shared_vars
   use error_handling_mod, only: error_log
   use param, only: mynode, nt_passive, ntrc_bio, lm, mm, n
   use roms_read_write, only: ncforce
-  use tracers, only:&
+  use tracers, only: itands, t_vname, wrt_t, t_lname, t
 #if defined(BIOLOGY_BEC2)
-       & ialk, idic, ife, io2, ipo4, isio3, idoc,&
+  use tracers, only: ialk, idic, ife, io2, ipo4, isio3, idoc,&
        &idofe, idon, idonr, idop, idopr, inh4, ino3, izooc, idiatc,&
        &idiatchl, idiatfe, idiatsi, idiazc, idiazchl, idiazfe, ispc,&
-       &ispcaco3, ispchl, ispfe, &
+       &ispcaco3, ispchl, ispfe
 #endif
-       &itands, t_vname, wrt_t, t_lname, t
+
 
 #if defined(BIOLOGY_BEC2)
   use bec2_vars, only:&
