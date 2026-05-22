@@ -64,7 +64,7 @@ module extract_data
 #endif
   &indxvb, indxub,indxz,&
 #ifdef SALINITY
-  & indxs,
+  & indxs, &
 #endif
   &vn=>vname, output_period_rst
   use vertical_remapping, only: remap_src_to_grid
