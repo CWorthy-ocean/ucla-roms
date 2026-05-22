@@ -1262,7 +1262,7 @@ contains                  !]
       &"Name","Write (T/F)","Long name"
       write(*,'(9x,A)')  repeat('-',62)
       ! 13(....) repeats formatting 11 times:
-      write(*,'(13(/11x,A,T30,L1,T36,A,A))')&
+      write(*,'(13(/11x,A,T30,L1,T36,A))')&
       &'zeta',   wrt_Z,    vname(2,indxZ)&
       &, 'ubar',   wrt_Ub,   vname(2,indxUb)&
       &, 'vbar',   wrt_Vb,   vname(2,indxVb)&
@@ -1316,7 +1316,7 @@ contains                  !]
         &"Name","Write (T/F)","Long name"
         write(*,'(9x,A)')  repeat('-',62)
         ! 13(....) repeats formatting 11 times.
-        write(*,'(13(/11x,A,T30,L1,T36,A,A))')&
+        write(*,'(13(/11x,A,T30,L1,T36,A))')&
         &'zeta',   wrt_avg_Z,    vname(2,indxZ)&
         &, 'ubar',   wrt_avg_Ub,   vname(2,indxUb)&
         &, 'vbar',   wrt_avg_Vb,   vname(2,indxVb)&
