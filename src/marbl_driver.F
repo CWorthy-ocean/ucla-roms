@@ -44,7 +44,7 @@
       use grid                        , only : rmask
 #ifdef MPI
       use mpi_f08                     , only: MPI_CHARACTER, MPI_INTEGER, mpi_bcast
-!      use hidden_mpi_vars
+!      use dimensions
 #endif
 #ifdef NOX_FORCING
       use bgc_forces                  , only: nox
@@ -65,15 +65,21 @@
       integer                     :: nt_marbl       ! number of marbl tracers (according to MARBL)
       integer                     :: idx            ! Looping variable
 
-!     MARBL namelist file names:
-      character(len=256), public :: marbl_namelist_fname='marbl_in'
-      character(len=256), public ::marbl_tracer_list_fname=
-     &                   'marbl_tracer_output_list'
+!     MARBL config:
+      integer, public :: marbl_timestep_ratio = 1
+      character(len=256), public :: marbl_config_file='marbl_in'
+      character(len=32), public ::
+     &     marbl_tracers_to_write(40) = ""
 #ifdef MARBL_DIAGS
-      character(len=256), public :: marbl_diag_list_fname=
-     &                   'marbl_diagnostic_output_list'
+      character(len=400), public ::
+     &     marbl_diagnostics_to_write(64) = ""
 #endif
 
+      namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,
+     &     marbl_timestep_ratio, marbl_tracers_to_write
+#ifdef MARBL_DIAGS
+     &     , marbl_diagnostics_to_write
+#endif
 
 !     Surface flux forcing variable indices (-1 means unused,default)
       integer,public ::    u10_sqr_ind=-1,       sss_ind=-1,      sst_ind=-1,
@@ -182,7 +188,36 @@
       public :: marbldrv_verify_tiling
 #endif
 
+      public :: read_nml_marbl
       contains
+
+      subroutine read_nml_marbl
+      use error_handling_mod, only: error_log
+      use namelist_open_mod, only: open_namelist_file
+!     Read the "MARBL_BIOGEOCHEMISTRY_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios, tidx
+      character(len=21) :: sr_name = "read_nml_marbl"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=MARBL_BIOGEOCHEMISTRY_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read MARBL_BIOGEOCHEMISTRY_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      mpi_master_only write(*,'(1x,A,15x,A)')
+     &     'MARBL config file',trim(marbl_config_file)
+
+      close(namelist_unit)
+
+      end subroutine read_nml_marbl
 
       subroutine marbldrv_configure_tracers(
      &     itot,t_vname,t_lname,t_units,t_tname,wrt_t,wrt_t_avg,t_ana_frc)
@@ -239,11 +274,11 @@
 
 !     read the marbl_in into buffer
       if (mynode==0) then
-         open(unit=marbl_settings_in, file=marbl_namelist_fname,
+         open(unit=marbl_settings_in, file=marbl_config_file,
      &        iostat=open_status)
          if (open_status .ne. 0) then ! can't find namelist file, skip
             write(*, '(A, I0, 3A)') "IO WARNING ", open_status,
-     &           "could not open namelist file : ", trim(marbl_namelist_fname)
+     &           "could not open namelist file : ", trim(marbl_config_file)
      &           ,". attempting to proceed with default MARBL settings"
 
          end if
@@ -271,7 +306,7 @@
                   call marbl_instance%put_setting(namelist_line)
                   if ( (mynode==printnode)
      &                 .and. (namelist_line(1:1) /= '!') ) then
-                      write(*,'(A,": ",A)') trim(marbl_namelist_fname),trim(namelist_line)
+                      write(*,'(A,": ",A)') trim(marbl_config_file),trim(namelist_line)
                   end if
                end if
 
@@ -280,13 +315,13 @@
             if (is_iostat_end(read_status)) then
                if (mynode==printnode) then
                   write(*, '(A)') "Successfully read " //
-     &             trim(marbl_namelist_fname) //
+     &             trim(marbl_config_file) //
      &                 " to end of file"
                end if
             else
                write(error_info, *)
      &              "error reading MARBL settings file ",
-     &              trim(marbl_namelist_fname)," (read status ",
+     &              trim(marbl_config_file)," (read status ",
      &              read_status, ")"
                call error_log%raise_global(
      &              context=module_name//"/"//sr_name,
@@ -319,7 +354,7 @@
      &        ,' does not match no. expected by MARBL: '
      &        ,nt_marbl
      &        ,' set ntrc_bio = ',nt_marbl
-     &        ,' in param.opt and recompile'
+     &        ,' in namelist and re-run'
          call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
@@ -439,6 +474,7 @@
 
       end subroutine marbldrv_configure_tracers
 
+
       subroutine marbldrv_read_tracer_output_list(t_vname,wrt_t,wrt_t_avg)
 
 !-----------------------------------------------------------------------
@@ -457,115 +493,63 @@
 !     - The possible options are listed in STDOUT or can be found with
 !      $MARBL_ROOT/tests/regression_tests/requested_tracers/requested_tracers.py
 !-----------------------------------------------------------------------
+      use utils_mod, only: lenstr
+
+      implicit none
 
       character(len=33) :: sr_name ="marbldrv_read_tracer_output_list"
+      character(len=32) :: trcname
       character*42, dimension(nt), intent(inout) :: t_vname
-      character(len=256)                         :: file_line
       logical , dimension(nt)    , intent(inout) :: wrt_t
       logical , dimension(nt)    , intent(inout) :: wrt_t_avg
 
-      integer :: marbl_tracer_list, open_status, read_status,idx,ierr
       logical :: recognized_tracer, no_tracers_requested
-
-      marbl_tracer_list = 1111
-      no_tracers_requested = .true. ! If we find any requested tracers, flip to false
+      integer :: tidx, lidx, lstr
 
 !     1. Read in MARBL tracer list file "marbl_tracer_output_list"
 !     ------------------------------------------------------------------
+      no_tracers_requested = .true.
+      recognized_tracer = .false.
+      lstr = 1
+      lidx = 1
+      do while (lstr>0) ! Outer loop over namelist tracers list
+         trcname = trim(marbl_tracers_to_write(lidx))
+         lidx=lidx+1
+         lstr = lenstr(trcname)
+         if (lstr == 0) exit
+         do tidx=1,NT ! Inner loop over all possible tracers to check
+            if (trim(t_vname(tidx)) == trim(trcname)) then
+               wrt_t(tidx) =.true.
+               wrt_t_avg(tidx) =.true.
+               if (mynode==printnode) then
+                  write(*,'(2A)')
+     &                 'REQUESTED MARBL TRACER OUTPUT: ' // trim(t_vname(tidx))
+               end if
+               recognized_tracer=.true.
+               no_tracers_requested=.false.
+               cycle
+            end if
+         end do                 ! tidx
+         if ( (.not. recognized_tracer) .and. (mynode==printnode))
+     &        then
+            write(*,'(A)') 'REQUESTED TRACER ' // trim(trcname) //
+     &           ' NOT RECOGNIZED. See tracer metadata section' //
+     &           ' of this output log for ' //
+     &           ' a list of valid entries.'
+         end if
+      end do
+      if (no_tracers_requested) then ! Write all of them to output
 
-      if (mynode==0) then
-         open(unit=marbl_tracer_list, file=marbl_tracer_list_fname,
-     &        iostat=open_status)
+         wrt_t(:)=.true.
+         wrt_t_avg(:)=.true.
 
-         if (open_status .ne. 0) then ! can't find namelist file, skip and output all tracers
-            write(*, '(A, I0, 3A)') "IO WARNING ", read_status,
-     &           "could not open tracer list file : ",
-     &           trim(marbl_tracer_list_fname),
-     &           ". All MARBL tracers will be written to output"
+         if (mynode==0) then
+            write(*,'(A)') 'NO REQUESTED TRACERS FOUND IN ' //
+     &           'namelist. Defaulting to ' //
+     &           ' writing all BGC tracers to output file.'
          end if
       end if
-#ifdef MPI
-      call MPI_Bcast(open_status,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
-#endif
-      if (open_status==0) then
-         file_line = ''
-         do                     !line-by-line read
-            if (mynode==0) then
-               read(marbl_tracer_list,"(A)",iostat=read_status)
-     &              file_line
-            end if
-#ifdef MPI
-            call MPI_Bcast(read_status,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
-#endif
-            if (read_status .ne. 0) then
-               exit             !loop
-            else
-#ifdef MPI
-               call MPI_Bcast(file_line,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
-#endif
-!     Check if the line is a comment
-               file_line=trim(adjustl(file_line))
-               if (file_line(1:1) == '!') cycle ! Skip this iteration if it's a comment
-!     Set the "wrt_t" variable
-               recognized_tracer=.false.
-               do idx=1,NT
-                  if (trim(t_vname(idx)) == trim(file_line)) then
-                     wrt_t(idx) =.true.
-                     wrt_t_avg(idx) =.true.
-                     if (mynode==printnode) then
-                        write(*,'(2A)')
-     &                       'REQUESTED MARBL TRACER OUTPUT: ' // trim(t_vname(idx))
-                     end if
-                     recognized_tracer=.true.
-                     no_tracers_requested=.false.
-                     cycle
-                  end if
-               end do           ! idx
-               if ( (.not. recognized_tracer) .and. (mynode==printnode))
-     &              then
-                  write(*,'(A)') 'REQUESTED TRACER ' // trim(file_line) //
-     &                 ' NOT RECOGNIZED. See tracer metadata section' //
-     &                 ' of this output log for ' //
-     &                 ' a list of valid entries.'
-               end if
-            end if              ! read_status=/=0
 
-         end do                 !/namelist line-by-line read
-
-         if (no_tracers_requested) then ! Write all of them to output
-
-            wrt_t(:)=.true.
-            wrt_t_avg(:)=.true.
-
-            if (mynode==0) then
-               write(*,'(A)') 'NO REQUESTED TRACERS FOUND IN ' //
-     &              trim(marbl_tracer_list_fname),'. Defaulting to ' //
-     &              ' writing all BGC tracers to output file.'
-            end if
-         end if
-
-         if (is_iostat_end(read_status)) then
-            if (mynode==printnode) then
-               write(*, '(3A)') "Successfully read ",
-     &              "marbl_tracer_output_list",
-     &              " to end of file"
-            end if
-         else
-               write(error_info, *)
-     &              "error reading MARBL tracer list file ",
-     &              trim(marbl_tracer_list_fname)," (read status ",
-     &           read_status, ")"
-               call error_log%raise_global(
-     &              context=module_name//"/"//sr_name,
-     &              info=error_info)
-         end if
-
-         close(marbl_tracer_list)
-         if (mynode==printnode) then
-            write(*,'(2A)') 'we successfully read and closed ',
-     &           trim(marbl_tracer_list_fname)
-         end if
-      endif
 
       end subroutine marbldrv_read_tracer_output_list
 
@@ -762,7 +746,7 @@
       end subroutine marbldrv_configure_saved_state
 !--------------------------------------------------------------------------------
       subroutine marbldrv_read_ss_vars_from_rst(
-     &     ncid,rec_rst)
+     &     ncid,rec_rst,fname)
 
 !-----------------------------------------------------------------------
 !     SUBROUTINE: marbldrv_read_saved_state_from_restart_file
@@ -785,12 +769,15 @@
 
       use nc_read_write, only: ncread
       use netcdf, only: nf90_noerr, nf90_inq_varid
-      use dimensions, only : i0,i1,j0,j1
-      use mpi_exchanges, only : exchange_xxx
+      use dimensions, only : i0,i1,j0,j1,x0,x1,y0,y1
+      use roms_mpi, only : exchange_xxx
       use param, only : N
+      use pio_roms, only: use_pio, pio_gtype
+      use instant_output, only: wrt_instant
       implicit none
 
       integer, intent(in) :: ncid,rec_rst
+      character(len=*)   :: fname
       integer :: ierr,varid,start(4)
       integer :: itrc,k
 
@@ -798,15 +785,16 @@
 !     vname indices: 1=short name, 2=long name, 3=units
       start=1; start(3)=rec_rst ! Set "start" index to 1 for all dimensions except time (3) which starts at current record
 !     Read in 2D saved state variables (for surface_flux_saved_state)
+      pio_gtype='2Dr'
       do itrc=1,nr_marbl_ss_2d
          ierr=nf90_inq_varid (ncid, vname_marbl_ss_2d(1,itrc), varid)
          if (ierr .eq. nf90_noerr) then
             call ncread(ncid,vname_marbl_ss_2d(1,itrc),
-     &           marbl_saved_state_2d(i0:i1,j0:j1,itrc),start)
+     &           marbl_saved_state_2d(x0:x1,y0:y1,itrc),start=start,fname=fname)
 
-            marbl_saved_state_2d(i0:i1,j0:j1,itrc)=
-     &         marbl_saved_state_2d(i0:i1,j0:j1,itrc)*rmask(i0:i1,j0:j1)
-            call exchange_xxx(marbl_saved_state_2d(:,:,itrc))
+            marbl_saved_state_2d(x0:x1,y0:y1,itrc)=
+     &         marbl_saved_state_2d(x0:x1,y0:y1,itrc)*rmask(x0:x1,y0:y1)
+            call exchange_xxx(marbl_saved_state_2d(:,:,itrc))!,skip=use_pio)
          else
             marbl_saved_state_2d(GLOBAL_2D_ARRAY,itrc) = 0.0
             if(mynode==0) write(*,*) ' --- WARNING: '
@@ -815,18 +803,20 @@
             ierr=nf90_noerr
 
          endif
+         !call wrt_instant(marbl_saved_state_2d(:,:,itrc),vname_marbl_ss_2d(1,itrc))
       end do
       start=1; start(4)=rec_rst                                       ! 3D vars
 
 !     Read in 3d saved state variables (for interior_tendency_saved_state)
+      pio_gtype='3Dr'
       do itrc=1,nr_marbl_ss_3d
          ierr=nf90_inq_varid (ncid, vname_marbl_ss_3d(1,itrc), varid)
          if (ierr == nf90_noerr) then
             call ncread(ncid, vname_marbl_ss_3d(1,itrc),
-     &           marbl_saved_state_3d(i0:i1,j0:j1,:,itrc),start)
+     &           marbl_saved_state_3d(x0:x1,y0:y1,:,itrc),start=start,fname=fname)
            do k=1,N
-              marbl_saved_state_3d(i0:i1,j0:j1,k,itrc)=
-     &             marbl_saved_state_3d(i0:i1,j0:j1,k,itrc)*rmask(i0:i1,j0:j1)
+              marbl_saved_state_3d(x0:x1,y0:y1,k,itrc)=
+     &             marbl_saved_state_3d(x0:x1,y0:y1,k,itrc)*rmask(x0:x1,y0:y1)
            enddo
            call exchange_xxx(marbl_saved_state_3d(:,:,:,itrc) )
          else
@@ -836,6 +826,7 @@
      &         , ' not in initial file.  Initialized to 0.0'
             ierr=nf90_noerr
          endif
+         !call wrt_instant(marbl_saved_state_3d(:,:,:,itrc),vname_marbl_ss_3d(1,itrc))
       end do
 
 
@@ -867,7 +858,8 @@
 
       use netcdf, only: nf90_double, nf90_put_att
       use nc_read_write, only: nccreate
-      use roms_read_write, only: dn_xr,dn_yr,dn_zr,dn_tm,xi_rho,eta_rho
+      use roms_read_write, only: dn_xr,dn_yr,dn_zr,dn_tm
+      use dimensions, only: xi_rho,eta_rho
       use param, only : N
 
       implicit none
@@ -1111,15 +1103,13 @@
       end do
 
 !     Read user file to determine which diagnostics to write out
-      call marbldrv_read_diagnostic_output_list(
+      call marbldrv_parse_diagnostic_output_list(
      &     vname_marbl_diag_2d,vname_marbl_diag_3d
      &     )                    !
       end subroutine marbldrv_configure_diagnostics
 
 !-----------------------------------------------------------------------
-
-
-      subroutine marbldrv_read_diagnostic_output_list(
+      subroutine marbldrv_parse_diagnostic_output_list(
      &     vname_marbl_diag_2d,vname_marbl_diag_3d
      &     )                    !
 !-----------------------------------------------------------------------
@@ -1138,113 +1128,73 @@
 !     - The possible options are listed in STDOUT or can be found with
 !     $MARBL_ROOT/tests/regression_tests/requested_diagnostics/requested_diagnostics.py
 !-----------------------------------------------------------------------
+      use utils_mod, only : lenstr
+
+      implicit none
+
       character(len=37) :: sr_name =
      &     "marbldrv_read_diagnostic_output_list"
+      character(len=64) :: diagname
       character*72, dimension(:,:), intent(inout) :: vname_marbl_diag_2d
       character*72, dimension(:,:), intent(inout) :: vname_marbl_diag_3d
 
-      character(len=256)                         :: file_line
-      integer :: marbl_diag_list, read_status,open_status,idx,ierr
+      integer :: lstr, lidx, didx
       logical :: recognized_diag, no_diags_requested
 
-      marbl_diag_list = 11
       no_diags_requested = .true. ! If we find any requested tracers, flip to false
-
+      recognized_diag = .false.
+      lidx = 1
+      lstr = 1
 !     1. Read in MARBL diagnostics list file "marbl_diagnostic_output_list"
 !     ------------------------------------------------------------------
 
-      if (mynode==0) then
-         open(unit=marbl_diag_list, file=marbl_diag_list_fname,
-     &        iostat=open_status)
-
-         if (open_status .ne. 0) then ! can't find file, skip and output all diags
-            write(*, '(A, I0, 3A)') "IO WARNING ", open_status,
-     &           "could not open diagnostics list file : ",
-     &           trim(marbl_diag_list_fname),
-     &           ". All MARBL diagnostics will be written to output"
-         end if
-      end if
-#ifdef MPI
-      call MPI_Bcast(open_status,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
-#endif
-      if (open_status==0) then
-         file_line = ''
-         do                     !line-by-line read
-            if (mynode==0) then
-               read(marbl_diag_list,"(A)",iostat=read_status)
-     &              file_line
-            end if
-#ifdef MPI
-            call MPI_Bcast(read_status,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
-#endif
-            if (read_status .ne. 0) then
-               exit             !loop
-            else
-#ifdef MPI
-               call MPI_Bcast(file_line,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
-#endif
-!     Check if the line is a comment
-               file_line=trim(adjustl(file_line))
-               if (file_line(1:1) == '!') cycle ! Skip this iteration if it's a comment
-!     Set the "wrt_t" variable
-               recognized_diag=.false.
-               do idx=1,size(vname_marbl_diag_2d(1,:))
-                  if (trim(vname_marbl_diag_2d(1,idx)) == trim(file_line))
-     &                 then
-                     wrt_marbl_diag_2d(idx) =.true.
-                     recognized_diag=.true.
-                     no_diags_requested=.false.
-                     cycle
-                  end if
-               end do           ! idx
-
-               do idx=1,size(vname_marbl_diag_3d(1,:))
-                  if (trim(vname_marbl_diag_3d(1,idx)) == trim(file_line))
-     &                 then
-                     wrt_marbl_diag_3d(idx) =.true.
-                     recognized_diag=.true.
-                     no_diags_requested=.false.
-                     cycle
-                  end if
-               end do           ! idx
-
-               if ( (.not. recognized_diag) .and. (mynode==printnode))
-     &              then
-
-                  write(*,'(A)') 'REQUESTED DIAGNOSTIC ' //
-     &                 trim(file_line) //
-     &                 ' NOT RECOGNIZED. See ' //
-     &                 ' $MARBL_ROOT/tests/regression_tests/' //
-     &                 'requested_diagnostics/requested_diagnostics.py ' //
-     &                 'for a list of available diagnostics,' //
-     &                 ' or run without the file ' //
-     &                 trim(marbl_diag_list_fname) //
-     &                 ' to write all diags'
+      do while (lstr>0) ! outer loop over namelist diagnostics list
+         diagname = trim(marbl_diagnostics_to_write(lidx))
+         lidx=lidx+1
+         lstr = lenstr(diagname)
+         if (lstr == 0) exit
+         recognized_diag = .false.
+         do didx = 1,size(vname_marbl_diag_2d(1,:)) !Inner loop over all 2D diags
+            if (trim(vname_marbl_diag_2d(1,didx)) == trim(diagname))
+     &           then
+               wrt_marbl_diag_2d(didx) = .true.
+               recognized_diag = .true.
+               no_diags_requested = .false.
+               if (mynode==printnode) then
+                  write(*,'(2A)')
+     &                 'REQUESTED MARBL DIAGNOTICS OUTPUT: ' // diagname
                end if
-            end if              ! read_status=/=0
-
-         end do                 !/namelist line-by-line read
-
-         if (no_diags_requested) then ! Write all of them to output
-
-            wrt_marbl_diag_2d(:)=.true.
-            wrt_marbl_diag_3d(:)=.true.
+               cycle
+            end if
+         end do
+         do didx = 1,size(vname_marbl_diag_3d(1,:)) !Inner loop over all 2D diags
+            if (trim(vname_marbl_diag_3d(1,didx)) == trim(diagname))
+     &           then
+               wrt_marbl_diag_3d(didx) = .true.
+               recognized_diag = .true.
+               no_diags_requested = .false.
+               cycle
+            end if
+         end do
+         if ( (.not. recognized_diag) .and. (mynode==printnode) ) then
+            write(*,'(A)') 'REQUESTED DIAGNOSTIC ' //
+     &           trim(diagname) //
+     &           ' NOT RECOGNIZED. See ' //
+     &           ' $MARBL_ROOT/tests/regression_tests/' //
+     &           'requested_diagnostics/requested_diagnostics.py ' //
+     &           'for a list of available diagnostics,' //
+     &           ' or run with marbl_diagnostics_to_write = "" ' //
+     &           ' in ROMS namelist to write all diags'
          end if
+      end do
+      if (no_diags_requested) then ! Write all of them to output
 
-         if (.not. is_iostat_end(read_status)) then
-               write(error_info, *)
-     &              "error reading MARBL diagnostic list file ",
-     &              trim(marbl_diag_list_fname)," (read status ",
-     &           read_status, ")"
-               call error_log%raise_global(
-     &              context=module_name//"/"//sr_name,
-     &              info=error_info)
-         end if
+         wrt_marbl_diag_2d(:)=.true.
+         wrt_marbl_diag_3d(:)=.true.
+      end if
 
-         close(marbl_diag_list)
-      endif                     !mynode==0
+      end subroutine marbldrv_parse_diagnostic_output_list
 
-      end subroutine marbldrv_read_diagnostic_output_list
 
 
       subroutine marbldrv_compute_init_diagnostics(istr,iend,jstr,jend,tracer_array)
@@ -2117,7 +2067,8 @@
            if ( marbl_instance%surface_fluxes(1,m) .ne. 0) then
               tracer_array(i,j,nz,nnew, m+(NT-nt_marbl) ) =
      &             tracer_array(i,j,nz,nnew, m+(NT-nt_marbl) ) +
-     &             marbl_instance%surface_fluxes(1,m)*dt/Hz(i,j,nz)
+     &             marbl_instance%surface_fluxes(1,m)*
+     &             (dt*marbl_timestep_ratio)/Hz(i,j,nz)
 
               if ( (i==printi) .and. (j==printj)
      &             .and. (mynode==printnode)
@@ -2271,7 +2222,8 @@
       do m=1,nt_marbl
          tracer_array(i,j,:,nnew, m+(NT-nt_marbl) ) =
      &        tracer_array(i,j,:,nnew, m+(NT-nt_marbl) ) +
-     &        marbl_instance%interior_tendencies(m,nz:1:-1)*dt
+     &        marbl_instance%interior_tendencies(m,nz:1:-1)
+     &        *(dt*marbl_timestep_ratio)
       end do
       end subroutine marbldrv_update_roms_tracers_interior
 !-----------------------------------------------------------------------

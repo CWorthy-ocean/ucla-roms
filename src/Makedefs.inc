@@ -107,7 +107,7 @@ endif
 ifeq ($(wildcard cppdefs.opt),cppdefs.opt)
 	USEMARBL := $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*MARBL' cppdefs.opt && echo true || echo false )
 	USENHMG :=  $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*NHMG' cppdefs.opt && echo true || echo false )
-
+        USEPIO := $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*PARALLEL_IO' cppdefs.opt && echo true || echo false )
 endif
 
 # C-preprocessor (cpp):
@@ -146,6 +146,11 @@ endif
 	NETCDFC_INC=$(or $(shell nc-config --cflags), -I$(NETCDFHOME)include)
 	NETCDFC_LIB=$(or $(shell nc-config --libs),   -L$(NETCDFHOME)lib -lnetcdf)
 
+ifeq ($(USEPIO),true)
+        PNETCDF_INC= -I$(PNETCDFHOME)include
+        PNETCDF_LIB= -L$(PNETCDFHOME)lib -lpnetcdf
+endif
+
 # MARBL
 ifeq ($(USEMARBL),true)
     ifeq ($(COMPILER),gnu)
@@ -157,6 +162,20 @@ ifeq ($(USEMARBL),true)
     else ifeq ($(COMPILER),ifort)
         MARBL_INC = -I$(MARBL_ROOT)/include/intel-mpi
         MARBL_LIB = -L$(MARBL_ROOT)/lib -lmarbl-intel-mpi
+    endif
+endif
+
+# PIO
+ifeq ($(USEPIO),true)
+    ifeq ($(COMPILER),gnu)
+        PIO_INC = -I/$(PIO_ROOT)/build/src/flib/ -I/$(PIO_ROOT)/build/src/clib/
+        PIO_LIB = -L/$(PIO_ROOT)/build/src/flib/ -L/$(PIO_ROOT)/build/src/clib/ -lpiof -lpioc
+    else ifeq ($(COMPILER),intel)
+        PIO_INC = -I/$(PIO_ROOT)/build/src/flib/ -I/$(PIO_ROOT)/build/src/clib/
+        PIO_LIB = -L/$(PIO_ROOT)/build/src/flib/ -L/$(PIO_ROOT)/build/src/clib/ -lpiof -lpioc
+    else ifeq ($(COMPILER),ifort)
+        PIO_INC = -I/$(PIO_ROOT)/build/src/flib/ -I/$(PIO_ROOT)/build/src/clib/
+        PIO_LIB = -L/$(PIO_ROOT)/build/src/flib/ -L/$(PIO_ROOT)/build/src/clib/ -lpiof -lpioc
     endif
 endif
 
@@ -190,9 +209,10 @@ endif
 # Apply debug, strict, vtune, or gprof settings for Intel compilers
 ifeq ($(COMPILER),$(filter ifort intel, $(COMPILER)))
     ifeq ($(BUILD_MODE),debug)
-        FFLAGS = -g -traceback -check all
+        FFLAGS = -g -traceback
+# -check all
     else ifeq ($(BUILD_MODE),test)
-	FFLAGS = -O0
+	FFLAGS = -O0 -init=zero -init=arrays
     else ifeq ($(BUILD_MODE),strict)
         FFLAGS += -fp-model strict
     endif
@@ -218,6 +238,9 @@ endif
 
 # Options to link to libraries & modules (NetCDF, etc):
         LCDF =  $(NETCDFF_LIB) $(NETCDFC_LIB)
+ifeq ($(USEPIO),true)
+        LCDF +=  $(PNETCDF_LIB)
+endif
 ifeq ($(USEMARBL),true)
 	LCDF += $(MARBL_LIB)
 endif
@@ -225,11 +248,21 @@ ifeq ($(USENHMG),true)
 	LCDF += $(NHMG_LIB)
 endif
 	LCDF +=$(NETCDFF_INC) $(NETCDFC_INC)
+ifeq ($(USEPIO),true)
+        LCDF +=$(PNETCDF_INC)
+endif
 ifeq ($(USEMARBL),true)
 	LCDF += $(MARBL_INC)
 endif
 ifeq ($(USENHMG),true)
 	LCDF += $(NHMG_INC)
+endif
+
+ifeq ($(USEPIO),true)
+        LCDF += $(PIO_LIB)
+endif
+ifeq ($(USEPIO),true)
+        LCDF += $(PIO_INC)
 endif
 
 FFLAGS+=$(USER_FFLAGS)

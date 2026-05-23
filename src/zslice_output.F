@@ -2,14 +2,14 @@
       ! Collection of zslice variables for output
 
 #include "cppdefs.opt"
-
+      use namelist_open_mod, only: open_namelist_file
       use grid, only: rmask
       use param, only: lm, mm, mynode
-      use mpi_exchanges, only: exchange_xxx
-      use dimensions, only: nx, ny, nz
+      use roms_mpi, only: exchange_xxx
+      use dimensions, only: nx, ny, nz, eta_rho, eta_v, xi_rho, xi_u
       use roms_read_write, only:
      &     bfx, bfy, dn_tm, dn_xr, dn_xu, dn_yr,
-     &     dn_yv, eta_rho, eta_v, xi_rho, xi_u, create_file
+     &     dn_yv, create_file
       use nc_read_write, only: nccreate, ncwrite
       use netcdf, only:
      &     nf90_noerr, nf90_write, nf90_open,
@@ -23,10 +23,24 @@
 
       private
       character(len=13) :: module_name = "zslice_output"
-#include "zslice_output.opt"
+      integer,parameter :: max_ndep = 20
+      integer,parameter :: max_nt_z = 10
+
+      real           :: output_period = 1200 ! in seconds
+      integer        :: nrpf   = 72          ! number of frames per file
+      integer        :: ndep   =  6          ! number of depth slice
+      real, dimension(max_ndep) :: vecdep = (/0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0/) ! depths slice
+      integer        :: nt_z   =  2        ! number of tracers to slice
+      integer, dimension(max_nt_z) :: trc2zsc = (/0,0,0,0,0,0,0,0,0,0/) ! index of the tracer to slice
+      logical, public :: do_zslice,
+     &     zslice_avg, wrt_T_zsl, wrt_U_zsl, wrt_V_zsl
+
+      namelist /ZSLICE_SETTINGS/ output_period, nrpf, ndep,
+     &     vecdep, nt_z, trc2zsc,
+     &     zslice_avg, wrt_T_zsl, wrt_U_zsl, wrt_V_zsl, do_zslice
 
       real    :: output_time = 0
-      integer :: record = nrpf    ! to trigger the first file creation
+      integer :: record = 0    ! to trigger the first file creation
       integer :: navg = 0         ! number of samples in average
       real    :: FillValue=1.E+33 !
 
@@ -41,21 +55,46 @@
       real,allocatable,dimension(:,:) :: var_zlv
 
       ! Public functions
-      public wrt_zslice
+      public wrt_zslice, read_nml_zslice
 
       contains
 
 !----------------------------------------------------------------------
+      subroutine read_nml_zslice
+
+!     Read the "ZSLICE_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_zslice"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=ZSLICE_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read ZSLICE_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+      record = nrpf
+      end subroutine read_nml_zslice
+
       subroutine init_zslice ![
       ! Allocate and initialize arrays.
       implicit none
 
       integer m
 
+
       if (wrt_T_zsl)  then
           allocate( Tz(GLOBAL_2D_ARRAY,ndep,nt_z) )
           Tz=0.
-          if (do_avg)  then
+          if (zslice_avg)  then
              allocate( Tz_avg(GLOBAL_2D_ARRAY,ndep,nt_z) )
              Tz_avg=0.
           endif
@@ -64,7 +103,7 @@
       if (wrt_U_zsl)  then
           allocate( Uz(GLOBAL_2D_ARRAY,ndep) )
           Uz=0.
-          if (do_avg)  then
+          if (zslice_avg)  then
              allocate( Uz_avg(GLOBAL_2D_ARRAY,ndep) )
              Uz_avg=0.
           endif
@@ -73,7 +112,7 @@
       if (wrt_V_zsl)  then
           allocate( Vz(GLOBAL_2D_ARRAY,ndep) )
           Vz=0.
-          if (do_avg)  then
+          if (zslice_avg)  then
              allocate( Vz_avg(GLOBAL_2D_ARRAY,ndep) )
              Vz_avg=0.
           endif
@@ -88,10 +127,10 @@
      &    nt_z , ' tracers '
       if (mynode==0) then
          do m=1,ndep
-         write(*,'(7x,A,I2,A,F7.2)') 'zslice : dep(',m,')=',vecdep(m)
+         write(*,'(7x,A,I2,A,F8.2)') 'depth(',m,')=',vecdep(m)
          enddo
          do m=1,nt_z
-         write(*,'(7x,A,I2,A,A)') 'zslice : tracers(',trc2zsc(m),')=',t_vname(trc2zsc(m))
+         write(*,'(7x,A,I2,A,A)') 'tracers(',trc2zsc(m),')=',t_vname(trc2zsc(m))
          enddo
       endif
 
@@ -295,7 +334,7 @@
       do n=1,nt_z
       varid = nccreate(ncid,t_vname(trc2zsc(n)),
      &         (/dn_xr,dn_yr,'depth',dn_tm/),(/xi_rho,eta_rho,ndep,0/))
-      if (do_avg) then
+      if (zslice_avg) then
         ierr = nf90_put_att(ncid,varid,'long_name','averaged'//t_lname(trc2zsc(n)))
       else
         ierr = nf90_put_att(ncid,varid,'long_name',t_lname(trc2zsc(n)))
@@ -306,7 +345,7 @@
 
       if (wrt_U_zsl) then
       varid = nccreate(ncid,'u',(/dn_xu,dn_yr,'depth',dn_tm/),(/xi_u,eta_rho,ndep,0/))
-      if (do_avg) then
+      if (zslice_avg) then
         ierr = nf90_put_att(ncid,varid,'long_name','averaged u-momentum component')
       else
         ierr = nf90_put_att(ncid,varid,'long_name','u-momentum component')
@@ -316,7 +355,7 @@
 
       if (wrt_V_zsl) then
       varid = nccreate(ncid,'v',(/dn_xr,dn_yv,'depth',dn_tm/),(/xi_rho,eta_v,ndep,0/))
-      if (do_avg) then
+      if (zslice_avg) then
          ierr = nf90_put_att(ncid,varid,'long_name','averaged v-momentum component')
       else
          ierr = nf90_put_att(ncid,varid,'long_name','v-momentum component')
@@ -343,8 +382,8 @@
         call init_zslice
       endif
 
-      if (do_avg) call calc_zslice
-      if (do_avg) call calc_average
+      if (zslice_avg) call calc_zslice
+      if (zslice_avg) call calc_average
 
       output_time = output_time + dt
 
@@ -354,12 +393,12 @@
           call create_file('_zsl',fname)
           ierr=nf90_open(fname,nf90_write,ncid)
           call def_vars_zslice(ncid)
-          call ncwrite(ncid,'depth',vecdep)
+          call ncwrite(ncid,'depth',vecdep(1:ndep))
           ierr = nf90_close(ncid)
           record = 0
         endif
 
-        if (.not. do_avg) call calc_zslice
+        if (.not. zslice_avg) call calc_zslice
         record = record+1
 
         ierr=nf90_open(fname,nf90_write,ncid)
@@ -372,7 +411,7 @@
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
         if (wrt_T_zsl) then
           do n=1,nt_z
-          if (do_avg) then
+          if (zslice_avg) then
           call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz_avg(1:nx,1:ny,:,n),
      &        (/bfx,bfy,1,record/))
           else
@@ -381,14 +420,14 @@
           enddo
         endif
         if (wrt_U_zsl) then
-          if (do_avg) then
+          if (zslice_avg) then
           call ncwrite(ncid,'u',Uz_avg(1:nx,1:ny,:),(/1,bfy,1,record/))
           else
           call ncwrite(ncid,'u',Uz(1:nx,1:ny,:),(/1,bfy,1,record/))
           endif
         endif
         if (wrt_V_zsl) then
-          if (do_avg) then
+          if (zslice_avg) then
           call ncwrite(ncid,'v',Vz_avg(1:nx,1:ny,:),(/bfx,1,1,record/))
           else
           call ncwrite(ncid,'v',Vz(1:nx,1:ny,:),(/bfx,1,1,record/))

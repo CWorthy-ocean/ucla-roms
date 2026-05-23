@@ -5,7 +5,8 @@ c # TODO marbldrve_configure_diagnostics for pointers example
 
 #include "cppdefs.opt"
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
-
+      use namelist_open_mod, only: open_namelist_file
+      use error_handling_mod, only: error_log
       use param, only: mynode, nt_passive, ntrc_bio, lm, mm, n
       use roms_read_write, only: ncforce
       use tracers, only:
@@ -77,10 +78,61 @@ c # TODO marbldrve_configure_diagnostics for pointers example
 #endif
 
       implicit none
+      character(len=18) :: module_name = "bgc_shared_vars.F"
+! BGC forcing file settings
+      type (ncforce) :: nc_dust = ncforce(
+     &     vname='dust', tname='dust_time' ) ! dust forcing
+      type (ncforce) :: nc_iron = ncforce(
+     &     vname='iron', tname='iron_time' ) ! iron forcing
+#ifdef PCO2AIR_FORCING
+      type (ncforce) :: nc_pco2air = ncforce(
+     &     vname='pco2_air',   tname='pco2_time' )
+#ifdef MARBL
+      type (ncforce) :: nc_pco2air_alt = ncforce(
+     &     vname='pco2_air_alt',   tname='pco2_time' )
+#endif
+#endif
+#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
+      type (ncforce) :: nc_swrad_avg = ncforce(
+     &     vname='swrad_davg', tname='srf_davg_time' )
+#endif
+#ifdef NOX_FORCING
+      type (ncforce) :: nc_nox = ncforce(
+     &     vname='nox', tname='nox_time' )
+#endif
+#ifdef NHY_FORCING
+      type (ncforce) :: nc_nhy = ncforce(
+     &     vname='nhy', tname='nhy_time' )
+#endif
 
-#include "bgc.opt"
+      ! note: choice of bgc tracers to output is still selected in tracers.opt.
 
+      real    :: output_period_his = 0.        ! output period in seconds
+      integer :: nrpf_his          = 0                  ! total recs per file
 
+      real    :: output_period_avg = 0.        ! output averaging period in seconds
+      integer :: nrpf_avg          = 0                  ! total recs per file
+
+      real    :: output_period_his_dia = 0.  ! output period in seconds
+      integer :: nrpf_his_dia          = 0             ! total recs per file
+
+      real    :: output_period_avg_dia = 0.    ! output period in seconds
+      integer :: nrpf_avg_dia          = 0              ! total recs per file
+
+      integer :: nbgc_flx = 0                   ! number of surface bgc flux forcings
+
+      logical, public :: wrt_bgc_his, wrt_bgc_avg,
+     &     wrt_bgc_dia_his, wrt_bgc_dia_avg,
+     &     interp_bgc_frc
+
+      namelist /BGC_SETTINGS/
+     &     wrt_bgc_his, wrt_bgc_avg, wrt_bgc_dia_his, wrt_bgc_dia_avg,
+     &     interp_bgc_frc,
+     &     output_period_his, nrpf_his,
+     &     output_period_avg, nrpf_avg,
+     &     output_period_his_dia, nrpf_his_dia,
+     &     output_period_avg_dia, nrpf_avg_dia,
+     &     nbgc_flx
 #if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
 !
 ! Diagnostic variables appearing in average and history files:
@@ -113,7 +165,29 @@ c # TODO marbldrve_configure_diagnostics for pointers example
 
 #endif /* BEC2_DIAG  || MARBL_DIAGS */
 
+      public bgc_precheck, read_nml_bgc
+
       contains
+
+      subroutine bgc_precheck
+
+      implicit none
+
+      character(len=12) :: sr_name = "bgc_precheck"
+      character(len=1024) :: error_info
+
+#if defined MARBL && defined BIOLOGY_BEC2
+          write(error_info,*) "Both MARBL and BEC2 have been enabled"
+     & " in cppdefs.opt, but only one (or none) may be used in any"
+     & " given run."
+          call error_log%raise_global(
+     &      context=module_name//"/"//sr_name,
+     &      info=error_info)
+          call error_log%abort_check()
+#endif
+
+      end subroutine bgc_precheck
+
 
       integer function bgc_idx(t_idx)
       ! Takes a tracer array tracer index t(:,:,:,:,t_idx) and returns
@@ -159,8 +233,8 @@ c # TODO marbldrve_configure_diagnostics for pointers example
       vname_bec2_diag_2d => vname_bgc_diag_2d
       vname_bec2_diag_3d => vname_bgc_diag_3d
 
-#include "bgc_2Ddiagnostics.opt"
-#include "bgc_3Ddiagnostics.opt"
+#include "BEC_2Ddiagnostics.h"
+#include "BEC_3Ddiagnostics.h"
 
 #endif /* MARBL_DIAGS */
 
@@ -189,12 +263,41 @@ c # TODO marbldrve_configure_diagnostics for pointers example
       end subroutine find_write_bgc_diag  !]
 #endif /* BEC2_DIAG || MARBL_DIAGS */
 
+      subroutine read_nml_bgc
+
+!     Read the "BGC_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=13) :: sr_name = "read_nml_bgc"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=BGC_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read BGC_SETTINGS section of namelist file: '
+     &   //trim(msg)
+     &      )
+      end if
+      nbgc_flx = nbgc_flx
+#ifdef PCO2AIR_FORCING
+     &                                +1
+#endif
+#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
+     &                                +1
+#endif
+      close(namelist_unit)
+
+      end subroutine read_nml_bgc
+
 
       subroutine init_arrays_bgc_shared_vars
       implicit none
 
 #if defined(BEC2_DIAG) || defined (MARBL_DIAGS)
-
       call find_write_bgc_diag
       call display_bgc_output_settings_to_terminal
 
@@ -211,7 +314,7 @@ c # TODO marbldrve_configure_diagnostics for pointers example
       bec2_diag_3d => bgc_diag_3d
 #endif
 
-      if (wrt_avg_dia) then
+      if (wrt_bgc_dia_avg) then
         allocate( bgc_diag_3d_avg(GLOBAL_2D_ARRAY,N,nr_bgc_wrdiag_3d) )
         allocate( bgc_diag_2d_avg(GLOBAL_2D_ARRAY,nr_bgc_wrdiag_2d) )
         bgc_diag_2d_avg=0.0
@@ -286,13 +389,13 @@ c # TODO marbldrve_configure_diagnostics for pointers example
 #endif /* BEC2_DIAG || MARBL_DIAGS */
 
       if (mynode==0) then
-         if (wrt_his) then
+         if (wrt_bgc_his) then
             write(*,'(/7x,2A,F6.1,2x,A,I4)') ! write to terminal output in simulation pre-amble text which
      &           'bgc :: history file ', ! result variables are being stored
      &           'output_period =', output_period_his,
      &           'recs/file =', nrpf_his
          end if
-         if (wrt_avg) then
+         if (wrt_bgc_avg) then
             write(*,'(/7x,2A,F6.1,2x,A,I4)') ! write to terminal output in simulation pre-amble text which
      &        'bgc :: average file ', ! result variables are being stored
      &        'output_period =', output_period_avg,

@@ -17,12 +17,15 @@
      &     nf90_open, nf90_strerror, nf90_inq_varid, nf90_get_var,
      &     nf90_close
       use nc_read_write, only: ncread
-      use dimensions, only: i0, i1, j0, j1, gnx, gny, nx, ny, nz
+      use dimensions, only:
+     &     i0, i1, j0, j1, gnx, gny, nx, ny, nz, eta_rho, xi_rho, grdname,
+     &     x0,x1,y0,y1
       use roms_read_write, only:
-     &     grdname, dn_xr, dn_yr, eta_rho,
-     &     xi_rho, dn_tm, particle_opt, nrrec, create_file, store_string_att
-      use scalars, only:  init
-      use mpi_exchanges, only: exchange_xxx
+     &     dn_xr, dn_yr, dn_tm, particle_opt, nrrec, create_file, store_string_att
+      use scalars, only: init
+      use roms_mpi, only: exchange_xxx
+      use pio_roms, only: use_pio, pio_gtype
+
       implicit none
 !
 ! h         Model bottom topography (depth [m] at RHO-points.)
@@ -181,7 +184,7 @@
       subroutine ana_grid ![
 !     Provide analytical definition of coordinates, grid scale, coriolis, and depth
 #ifdef ANA_PIPES
-      use pipe_frc, only: pipe_source, pipe_fraction, pipe_idx
+      use pipe_frc, only: pipe_fraction, pipe_idx, pipe_source
 #elif defined(ANA_RIVER_USWC)
       use param, only: llm, mmm
 #endif
@@ -435,16 +438,104 @@
       implicit none
 
       character*1 char1
-      integer :: ierr, ncid, varid, lstr, checkdims
+      integer :: ierr, ncid, varid, lstr
       integer,dimension(4) :: start
       character(len=8) :: sr_name = "get_grid"
       character(len=1024) :: error_info = ''
-
 
 #ifdef ANA_GRID
       call ana_grid
       call wrt_ana_grid
 #else
+
+#ifndef PARALLEL_IO
+      call precheck
+#endif
+
+      ierr=nf90_open(grdname, nf90_nowrite, ncid)
+! Read in grid arrays.
+!===== == ==== =======
+
+      start=1; start(3)=0      ! starting indices in netcdf file. Might not be needed here
+
+      ! The i0,i1,j0,j1 indices are needed because the netcdf files do
+      ! include 1 more row/column for subdomains at the physical boundary
+
+      pio_gtype = '2Dr'
+      call ncread(ncid,'h',h(x0:x1,y0:y1),fname=grdname)         ! Bathymetry
+      call exchange_xxx(h)!,skip=use_pio)                         ! (2,.true.)
+
+! Coordinate transformation metrics (m,n) associated with
+! differential distances in XI- and ETA-directions.
+
+      call ncread(ncid,'pm',pm(x0:x1,y0:y1),fname=grdname)
+      call ncread(ncid,'pn',pn(x0:x1,y0:y1),fname=grdname)
+      call exchange_xxx(pm,pn)!,skip=use_pio)
+
+# ifdef SPHERICAL
+      call ncread(ncid,'lon_rho',lonr(x0:x1,y0:y1),fname=grdname)  ! Coordinates (lon,lat [degrees]) or (x,y [meters]) at RHO-points.
+      call ncread(ncid,'lat_rho',latr(x0:x1,y0:y1),fname=grdname)
+      call exchange_xxx(lonr,latr)!,skip=use_pio)
+# else
+      ! check this with analytical filament example
+      call ncread(ncid,'x_rho',xr(x0:x1,y0:y1),fname=grdname)
+      call ncread(ncid,'y_rho',yr(x0:x1,y0:y1),fname=grdname)
+
+      ! Only use if non-spherical grid, otherwise computed in setup_grid1
+      call ncread(ncid,'f',f(x0:x1,y0:y1),fname=grdname)         ! Coriolis parameter.
+      call exchange_xxx(xr,yr,f)!,skip=use_pio)
+
+# endif
+# ifdef CURVGRID
+      ! grid angle is used to compute non-traditional coriolis components
+      ! and for in-place rotation for data extraction
+      call ncread(ncid,'angle',angler(x0:x1,y0:y1),fname=grdname)  ! Angle (radians) between XI-axis and EAST at RHO-points.
+      call exchange_xxx(angler)!,skip=use_pio)
+# endif
+# ifdef MASKING
+      call ncread(ncid,'mask_rho',rmask(x0:x1,y0:y1),fname=grdname)! Mask at RHO-points.
+      call exchange_xxx(rmask)!,skip=use_pio)
+# endif
+      ierr=nf90_close(ncid)
+      if (ierr==nf90_noerr) then
+#ifdef MPI_SILENT_MODE
+        if (mynode==0) then
+#endif
+          write(*,'(6x,4A,1x,A,I4)') 'get_grid :: read grid data ',
+     &            'from file ''',  trim(grdname), '''.' MYID
+#ifdef MPI_SILENT_MODE
+        endif
+#endif
+      else
+        write(error_info, *)
+     &                'Cannot close file ''', trim(grdname), '''.',
+     &        nf90_strerror(ierr) MYID
+        call error_log%check_netcdf_status(
+     &       netcdf_status=ierr,
+     &       context=sr_name,
+     &       info=error_info)
+
+      endif
+      call error_log%abort_check()
+      return                                     !--> NORMAL RETURN
+
+#endif /* ifdef ANA_GRID */
+
+      end subroutine get_grid  !]
+
+!----------------------------------------------------------------------
+      subroutine precheck  ![
+      use error_handling_mod, only: error_log
+      use checkdims_mod, only: checkdims
+      implicit none
+
+      character*1 char1
+      integer :: ierr, ncid, varid, lstr
+      integer,dimension(4) :: start
+      character(len=17) :: sr_name = "get_grid/precheck"
+      character(len=1024) :: error_info = ''
+
+
 ! Open grid netCDF file for reading. Check that dimensions in the file
 ! are consistent with the model, then read all necessary variables.
 
@@ -539,6 +630,7 @@
      &        info=error_info)
         endif
 
+
         ierr=nf90_inq_varid (ncid, 'el', varid)
         if (ierr == nf90_noerr) then
           ierr=nf90_get_var(ncid, varid, el)
@@ -569,76 +661,9 @@
       endif                     !char1 = t/T
       call error_log%abort_check()
 
-! Read in grid arrays.
-!===== == ==== =======
-
-      start=1; start(3)=0      ! starting indices in netcdf file. Might not be needed here
-
-      ! The i0,i1,j0,j1 indices are needed because the netcdf files do
-      ! include 1 more row/column for subdomains at the physical boundary
-
-      call ncread(ncid,'h',h(i0:i1,j0:j1))         ! Bathymetry
-      call exchange_xxx(h)                         ! (2,.true.)
-
-
-! Coordinate transformation metrics (m,n) associated with
-! differential distances in XI- and ETA-directions.
-
-      call ncread(ncid,'pm',pm(i0:i1,j0:j1),start)
-      call ncread(ncid,'pn',pn(i0:i1,j0:j1),start)
-      call exchange_xxx(pm,pn)
-
-# ifdef SPHERICAL
-      call ncread(ncid,'lon_rho',lonr(i0:i1,j0:j1),start)  ! Coordinates (lon,lat [degrees]) or (x,y [meters]) at RHO-points.
-      call ncread(ncid,'lat_rho',latr(i0:i1,j0:j1),start)
-      call exchange_xxx(lonr,latr)
-# else
-      ! check this with analytical filament example
-      call ncread(ncid,'x_rho',xr(i0:i1,j0:j1),start)
-      call ncread(ncid,'y_rho',yr(i0:i1,j0:j1),start)
-
-      ! Only use if non-spherical grid, otherwise computed in  setup_grid1
-      call ncread(ncid,'f',f(i0:i1,j0:j1))         ! Coriolis parameter.
-      call exchange_xxx(xr,yr,f)
-
-# endif
-# ifdef CURVGRID
-      ! grid angle is used to compute non-traditional coriolis components
-      ! and for in-place rotation for data extraction
-      call ncread(ncid,'angle',angler(i0:i1,j0:j1),start)  ! Angle (radians) between XI-axis and EAST at RHO-points.
-      call exchange_xxx(angler)
-# endif
-# ifdef MASKING
-      call ncread(ncid,'mask_rho',rmask(i0:i1,j0:j1),start)! Mask at RHO-points.
-      call exchange_xxx(rmask)
-# endif
       ierr=nf90_close(ncid)
-      if (ierr==nf90_noerr) then
-#ifdef MPI_SILENT_MODE
-        if (mynode==0) then
-#endif
-          write(*,'(6x,4A,1x,A,I4)') 'get_grid :: read grid data ',
-     &            'from file ''',  trim(grdname), '''.' MYID
-#ifdef MPI_SILENT_MODE
-        endif
-#endif
-      else
-        write(error_info, *)
-     &                'Cannot close file ''', trim(grdname), '''.',
-     &        nf90_strerror(ierr) MYID
-        call error_log%check_netcdf_status(
-     &       netcdf_status=ierr,
-     &       context=sr_name,
-     &       info=error_info)
 
-      endif
-      call error_log%abort_check()
-      return                                     !--> NORMAL RETURN
-
-#endif /* ifdef ANA_GRID */
-
-      end subroutine get_grid  !]
-
+      end subroutine precheck  !]
 !----------------------------------------------------------------------
 
       end module grid

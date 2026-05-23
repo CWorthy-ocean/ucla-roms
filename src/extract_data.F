@@ -39,7 +39,9 @@
       !]
 
 #include "cppdefs.opt"
-
+      use basic_output, only: wrt_file_rst
+      use calc_pflx_mod, only: calc_pflx
+      use namelist_open_mod, only: open_namelist_file
       use grid, only: angler, rmask, umask, vmask
       use dimensions, only: nx, ny, nz
       use nc_read_write, only: nccreate, ncread, ncwrite
@@ -55,8 +57,8 @@
       use param, only: isalt, nt, itemp, isw_corn, jsw_corn,
      &     nt_passive, mynode, lm, mm, N
       use scoord, only: theta_s, theta_b, hc
-      use calc_pflx_mod, only: calc_pflx, up, vp
-      use basic_output, only: vn=>vname
+      use calc_pflx_mod, only:  up, vp
+      use basic_output, only: vn=>vname, output_period_rst
 #ifdef SOLVE3D
      &     ,indxt, indxu, indxv, indxw
 #endif
@@ -65,8 +67,8 @@
      &     , indxs
 #endif
       use vertical_remapping, only: remap_src_to_grid
+      use roms_mpi, only: exchange_xxx
       use error_handling_mod, only: error_log
-      use mpi_exchanges, only: exchange_xxx
 
       ! TODO: add averaging
 
@@ -74,7 +76,22 @@
       implicit none
       private
 
-#include "extract_data.opt"
+      real,public              :: extract_period = 0.   ! output period (seconds)
+      character(len=60)        :: extract_file = 'sample_edata.nc'
+      integer,public :: nrpf_extract = 0    ! number of records per output file
+
+      ! S-coordinate parameters for child grid
+      integer  :: N_chd       = 0
+      real     :: theta_s_chd = 5.0
+      real     :: theta_b_chd = 2.0
+      real     :: hc_chd      = 250.0
+      logical, public  :: do_extract
+
+      namelist /EXTRACT_DATA_SETTINGS/ extract_period, extract_file,
+     &     nrpf_extract, N_chd, theta_s_chd, theta_b_chd, hc_chd, do_extract
+
+      integer,parameter        :: edat_prec = nf90_double  ! Precision of output variables (nf90_float/nf90_double)
+
 
       character(len=12) :: module_name = "extract_data"
       integer :: total_rec=0 ! total records
@@ -112,7 +129,7 @@
 
         !! Initializing record at nrpf will trigger the making of a file
         !! at the first time step
-        integer                        :: record=nrpf_extract   ! record number in file
+        integer                        :: record=0   ! record number in file
 
         real,   dimension(:,:),pointer     :: Hz_par    ! interpolated thickness for parent
         real,   dimension(:,:),pointer     :: Hz_par_u  ! interpolated thickness for parent at u-interface
@@ -160,9 +177,55 @@
         module procedure  interpolate_2D, interpolate_3D
       end interface
 
-      public do_extract_data
+      public do_extract_data, extract_data_precheck, read_nml_extract
       contains
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine extract_data_precheck
+
+      implicit none
+
+      character(len=21) :: sr_name = "extract_data_precheck"
+      character(len=1024) :: error_info
+      real :: extract_newfile_freq
+
+
+      if (wrt_file_rst .and. do_extract) then
+        extract_newfile_freq = nrpf_extract * extract_period
+
+        if (mod(output_period_rst,extract_newfile_freq) /= 0) then
+          write(error_info,*) "Extract data frequency = ", extract_newfile_freq,
+     & ". Restart freuency = ", output_period_rst, ". The frequency of",
+     & " writing the extract_data file must evenly divide the restart ",
+     & "frequency (this prevents writing partial extract_data files)."
+          call error_log%raise_global(
+     &      context=module_name//"/"//sr_name,
+     &      info=error_info)
+          call error_log%abort_check()
+        endif
+
+      endif
+
+      end subroutine extract_data_precheck
+
+
+      subroutine read_nml_extract
+!     Read the "EXTRACT_DATA_SETTINGS" section of the namelist file
+
+      integer ::  namelist_unit, ios
+      character(len=17) :: sr_name = "read_nml_extract"
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      read (unit=namelist_unit, nml=EXTRACT_DATA_SETTINGS, iostat=ios)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context=module_name//'/'//sr_name, info=
+     &   'could not read EXTRACT_DATA_SETTINGS section of namelist file'
+     &     )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_extract
+
       subroutine init_extract_data  ![
       ! Allocate space and compute interpolation coefficients
       ! for rho,u,and v variables.
@@ -563,7 +626,8 @@
       subroutine do_extract_data ![
       ! extract data for all objects, for all vars
       ! and write to file
-      use mpi_exchanges, only: exchange_xxx
+      use roms_mpi, only: exchange_xxx
+      use wvlcty_mod, only: wvlcty
       implicit none
 
       ! local
@@ -583,246 +647,258 @@
       real, dimension(1:N_chd) :: tmpp
 
       if (.not.allocated(obj)) then
-        call init_extract_data
+         call init_extract_data
+         obj(:)%record = nrpf_extract
       endif
 
       otime = otime + dt
 
       if (otime>=extract_period) then
 
-      if (obj(1)%record==nrpf_extract) then
-          call create_edata_file(fname)
-          obj(:)%record = 0
-      endif
+         if (obj(1)%record==nrpf_extract) then
+            call create_edata_file(fname)
+            obj(:)%record = 0
+         endif
 
-      if (calc_pflx) then
-        upe(1:nx,1:ny) = up
-        vpe(1:nx,1:ny) = vp
+         if (calc_pflx) then
+            upe(1:nx,1:ny) = up
+            vpe(1:nx,1:ny) = vp
 # ifdef EXCHANGE
-        call exchange_xxx(upe,vpe)
+            call exchange_xxx(upe,vpe)
 # endif
-      endif
+         endif
 
-      ierr=nf90_open(fname,nf90_write,ncid)
+         ierr=nf90_open(fname,nf90_write,ncid)
 !     ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
 
-      !! We have to update the object records regardless of whether
-      !! there are points in the sub-domain to ensure correct file
-      !! names for all
-      do i = 1,nobj
-          obj(i)%record = obj(i)%record+1
-          if (i==1) total_rec = total_rec+1
-          if (obj(i)%np>0) then
+!! We have to update the object records regardless of whether
+!! there are points in the sub-domain to ensure correct file
+!! names for all
+         do i = 1,nobj
+            obj(i)%record = obj(i)%record+1
+            if (i==1) total_rec = total_rec+1
+            if (obj(i)%np>0) then
 
-            record = obj(i)%record
-            start1D = (/1, record/)
-            start2D = (/1,1,record/)
+               record = obj(i)%record
+               start1D = (/1, record/)
+               start2D = (/1,1,record/)
 
-            coef => obj(i)%coef
-            ip   => obj(i)%ip
-            jp   => obj(i)%jp
+               coef => obj(i)%coef
+               ip   => obj(i)%ip
+               jp   => obj(i)%jp
 
-            if (.not.obj(i)%scalar) then
-              ui => obj(i)%ui
-              vi => obj(i)%vi
-              cfu=> obj(i)%cfu
-              cfv=> obj(i)%cfv
-              ipu=> obj(i)%ipu
-              ipv=> obj(i)%ipv
-              jpu=> obj(i)%jpu
-              jpv=> obj(i)%jpv
-            endif
+               if (.not.obj(i)%scalar) then
+                  ui => obj(i)%ui
+                  vi => obj(i)%vi
+                  cfu=> obj(i)%cfu
+                  cfv=> obj(i)%cfv
+                  ipu=> obj(i)%ipu
+                  ipv=> obj(i)%ipv
+                  jpu=> obj(i)%jpu
+                  jpv=> obj(i)%jpv
+               endif
+               tname = trim(obj(i)%set)//'_time'
+               call ncwrite(ncid,tname,(/time/),(/record/))
+!if (mynode==0) print *,'writing extract: ',time,mynode,tname
 
-            tname = trim(obj(i)%set)//'_time'
-            call ncwrite(ncid,tname,(/time/),(/record/))
-            !if (mynode==0) print *,'writing extract: ',time,mynode,tname
+!     rho variables --------------------------------------------------------
 
-! rho variables --------------------------------------------------------
-
-            if (parent_child_grid_mismatch) then
-              ! Get thickness and depth at interpolated location
-              call interpolate(Hz(:,:,:),obj(i)%Hz_par,coef,ip,jp)
-              obj(i)%h_par(:) = 0
-              do j=1,obj(i)%np
-                do k=1,nz
-                  obj(i)%h_par(j) = obj(i)%h_par(j) + obj(i)%Hz_par(j,k)
-                enddo
-              enddo
-
-              do j=1,obj(i)%np
-                call get_child_thickness(obj(i)%h_par(j), obj(i)%Hz_chd(j,:))
-              enddo
-            endif
-
-            if (obj(i)%zeta) then
-              oname = trim(obj(i)%set)//'_zeta'//trim(obj(i)%bnd)
-              call interpolate(zeta(:,:,knew),obj(i)%vari(:,1),coef,ip,jp)
-              call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
-            endif
-
-            if (obj(i)%temp) then
-              oname = trim(obj(i)%set)//'_temp'//trim(obj(i)%bnd)
-              call interpolate(t(:,:,:,nstp,itemp),obj(i)%vari,coef,ip,jp)
-              if (parent_child_grid_mismatch) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D)
-              endif
-            endif
-#ifdef SALINITY
-            if (obj(i)%salt) then
-              oname = trim(obj(i)%set)//'_salt'//trim(obj(i)%bnd)
-              call interpolate(t(:,:,:,nstp,isalt),obj(i)%vari,coef,ip,jp)
-              if (parent_child_grid_mismatch) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D)
-              endif
-            endif
-#endif
-            if (obj(i)%bgc) then
-              do indt=isalt+nt_passive+1,NT
-              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
-              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (parent_child_grid_mismatch) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D)
-              endif
-              enddo
-            endif
-
-! w variables --------------------------------------------------------
-
-            if (obj(i)%w) then
-              call wvlcty (0,Wvl)
-              oname = trim(obj(i)%set)//'_w'//trim(obj(i)%bnd)
-              call interpolate(Wvl(-1:nx+2,-1:ny+2,1:nz),obj(i)%vari,coef,ip,jp)
-              if (parent_child_grid_mismatch) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D)
-              endif
-              call ncwrite(ncid,oname,obj(i)%vari,start2D)
-            endif
-
-! u variables --------------------------------------------------------
-
-            if (parent_child_grid_mismatch) then
-              if ((obj(i)%u) .or. (obj(i)%up)) then
-                ! Get thickness and depth at interpolated location
-                call interpolate(Hz_u(:,:,:),obj(i)%Hz_par_u,cfu,ipu,jpu)
-                obj(i)%h_par_u(:) = 0
-                do j=1,obj(i)%np
-                  do k=1,nz
-                    obj(i)%h_par_u(j) = obj(i)%h_par_u(j) + obj(i)%Hz_par_u(j,k)
+               if (parent_child_grid_mismatch) then
+! Get thickness and depth at interpolated location
+                  call interpolate(Hz(:,:,:),obj(i)%Hz_par,coef,ip,jp)
+                  obj(i)%h_par(:) = 0
+                  do j=1,obj(i)%np
+                     do k=1,nz
+                        obj(i)%h_par(j) = obj(i)%h_par(j) + obj(i)%Hz_par(j,k)
+                     enddo
                   enddo
-                enddo
 
-                do j=1,obj(i)%np
-                  call get_child_thickness(obj(i)%h_par_u(j), obj(i)%Hz_chd_u(j,:))
-                enddo
-              endif
-            endif
+                  do j=1,obj(i)%np
+                     call get_child_thickness(obj(i)%h_par(j), obj(i)%Hz_chd(j,:))
+                  enddo
+               endif
 
-            if (obj(i)%ubar) then
-              oname = trim(obj(i)%set)//'_ubar'//trim(obj(i)%bnd)
-              call interpolate(ubar(:,:,knew),ui(:,1),cfu,ipu,jpu)
-              call interpolate(vbar(:,:,knew),vi(:,1),cfv,ipv,jpv)
-              obj(i)%vari(:,1) = obj(i)%cosa*ui(:,1) - obj(i)%sina*vi(:,1)
-              call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
-            endif
-            if (obj(i)%u) then
-              call interpolate(u(:,:,:,nstp),ui,cfu,ipu,jpu)
-              call interpolate(v(:,:,:,nstp),vi,cfv,ipv,jpv)
-              obj(i)%vari = ui
-              do k=1,nz
-                obj(i)%vari(:,k) = obj(i)%cosa*ui(:,k) - obj(i)%sina*vi(:,k)
-              enddo
-              oname = trim(obj(i)%set)//'_u'//trim(obj(i)%bnd)
-              if (parent_child_grid_mismatch) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par_u(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd_u(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D)
-              endif
-            endif
-            if (obj(i)%up) then
-              call interpolate(upe,ui(:,1),cfu,ipu,jpu)
-              call interpolate(vpe,vi(:,1),cfv,ipv,jpv)
-              obj(i)%vari(:,1) = obj(i)%cosa*ui(:,1) - obj(i)%sina*vi(:,1)
-              oname = trim(obj(i)%set)//'_up'//trim(obj(i)%bnd)
-              call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
-            endif
+               if (obj(i)%zeta) then
+                  oname = trim(obj(i)%set)//'_zeta'//trim(obj(i)%bnd)
+                  call interpolate(zeta(:,:,knew),obj(i)%vari(:,1),coef,ip,jp)
+                  call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
+               endif
 
-! v variables --------------------------------------------------------
+               if (obj(i)%temp) then
+                  oname = trim(obj(i)%set)//'_temp'//trim(obj(i)%bnd)
+                  call interpolate(t(:,:,:,nstp,itemp),obj(i)%vari,coef,ip,jp)
+                  if (parent_child_grid_mismatch) then
+                     do j=1,obj(i)%np
+                        call remap_src_to_grid(N, obj(i)%Hz_par(j,:),
+     &                       obj(i)%vari(j,:), N_chd,
+     &                       obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                     enddo
+                     call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+                  else
+                     call ncwrite(ncid,oname,obj(i)%vari,start2D)
+                  endif
+               endif
+#ifdef SALINITY
+               if (obj(i)%salt) then
+                  oname = trim(obj(i)%set)//'_salt'//trim(obj(i)%bnd)
+                  call interpolate(t(:,:,:,nstp,isalt),obj(i)%vari,coef,ip,jp)
+                  if (parent_child_grid_mismatch) then
+                     do j=1,obj(i)%np
+                        call remap_src_to_grid(N, obj(i)%Hz_par(j,:),
+     &                       obj(i)%vari(j,:), N_chd,
+     &                       obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                     enddo
+                     call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+                  else
+                     call ncwrite(ncid,oname,obj(i)%vari,start2D)
+                  endif
+               endif
+#endif
+               if (obj(i)%bgc) then
+                  do indt=isalt+nt_passive+1,NT
+                     oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
+                     call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
+                     if (parent_child_grid_mismatch) then
+                        do j=1,obj(i)%np
+                           call remap_src_to_grid(N, obj(i)%Hz_par(j,:),
+     &                          obj(i)%vari(j,:), N_chd,
+     &                          obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                        enddo
+                        call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+                     else
+                        call ncwrite(ncid,oname,obj(i)%vari,start2D)
+                     endif
+                  enddo
+               endif
 
-            if (parent_child_grid_mismatch) then
-              if ((obj(i)%v) .or. (obj(i)%vp)) then
-              ! Get thickness and depth at interpolated location
-              call interpolate(Hz_v(:,:,:),obj(i)%Hz_par_v,cfv,ipv,jpv)
-              obj(i)%h_par_v(:) = 0
-              do j=1,obj(i)%np
-                do k=1,nz
-                  obj(i)%h_par_v(j) = obj(i)%h_par_v(j) + obj(i)%Hz_par_v(j,k)
-                enddo
-              enddo
+!     w variables --------------------------------------------------------
 
-              do j=1,obj(i)%np
-                call get_child_thickness(obj(i)%h_par_v(j), obj(i)%Hz_chd_v(j,:))
-              enddo
-              endif
-            endif
+               if (obj(i)%w) then
+                  call wvlcty (0,Wvl)
+                  oname = trim(obj(i)%set)//'_w'//trim(obj(i)%bnd)
+                  call interpolate(Wvl(-1:nx+2,-1:ny+2,1:nz),obj(i)%vari,coef,ip,jp)
+                  if (parent_child_grid_mismatch) then
+                     do j=1,obj(i)%np
+                        call remap_src_to_grid(N, obj(i)%Hz_par(j,:),
+     &                       obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:),
+     &                       obj(i)%vari_chd(j,:))
+                     enddo
+                     call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+                  else
+                     call ncwrite(ncid,oname,obj(i)%vari,start2D)
+                  endif
+                  call ncwrite(ncid,oname,obj(i)%vari,start2D)
+               endif
 
-            if (obj(i)%vbar) then
-              oname = trim(obj(i)%set)//'_vbar'//trim(obj(i)%bnd)
-              call interpolate(ubar(:,:,knew),ui(:,1),cfu,ipu,jpu)
-              call interpolate(vbar(:,:,knew),vi(:,1),cfv,ipv,jpv)
-              obj(i)%vari(:,1) = obj(i)%sina*ui(:,1) + obj(i)%cosa*vi(:,1)
-              call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
-            endif
-            if (obj(i)%v) then
-              call interpolate(u(:,:,:,nstp),ui,cfu,ipu,jpu)
-              call interpolate(v(:,:,:,nstp),vi,cfv,ipv,jpv)
-              do k=1,nz
-                obj(i)%vari(:,k) = obj(i)%sina*ui(:,k) + obj(i)%cosa*vi(:,k)
-              enddo
-              oname = trim(obj(i)%set)//'_v'//trim(obj(i)%bnd)
-              if (parent_child_grid_mismatch) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par_v(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd_v(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D)
-              endif
-              call ncwrite(ncid,oname,obj(i)%vari,start2D)
-            endif
-            if (obj(i)%vp) then
-              call interpolate(upe,ui(:,1),cfu,ipu,jpu)
-              call interpolate(vpe,vi(:,1),cfv,ipv,jpv)
-              obj(i)%vari(:,1) = obj(i)%sina*ui(:,1) + obj(i)%cosa*vi(:,1)
-              oname = trim(obj(i)%set)//'_vp'//trim(obj(i)%bnd)
-              call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
-            endif
+!     u variables --------------------------------------------------------
 
-          endif
-        !endif
-      enddo
+               if (parent_child_grid_mismatch) then
+                  if ((obj(i)%u) .or. (obj(i)%up)) then
+! Get thickness and depth at interpolated location
+                     call interpolate(Hz_u(:,:,:),obj(i)%Hz_par_u,cfu,ipu,jpu)
+                     obj(i)%h_par_u(:) = 0
+                     do j=1,obj(i)%np
+                        do k=1,nz
+                           obj(i)%h_par_u(j) = obj(i)%h_par_u(j) + obj(i)%Hz_par_u(j,k)
+                        enddo
+                     enddo
+
+                     do j=1,obj(i)%np
+                        call get_child_thickness(obj(i)%h_par_u(j), obj(i)%Hz_chd_u(j,:))
+                     enddo
+                  endif
+               endif
+
+               if (obj(i)%ubar) then
+                  oname = trim(obj(i)%set)//'_ubar'//trim(obj(i)%bnd)
+                  call interpolate(ubar(:,:,knew),ui(:,1),cfu,ipu,jpu)
+                  call interpolate(vbar(:,:,knew),vi(:,1),cfv,ipv,jpv)
+                  obj(i)%vari(:,1) = obj(i)%cosa*ui(:,1) - obj(i)%sina*vi(:,1)
+                  call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
+               endif
+               if (obj(i)%u) then
+                  call interpolate(u(:,:,:,nstp),ui,cfu,ipu,jpu)
+                  call interpolate(v(:,:,:,nstp),vi,cfv,ipv,jpv)
+                  obj(i)%vari = ui
+                  do k=1,nz
+                     obj(i)%vari(:,k) = obj(i)%cosa*ui(:,k) - obj(i)%sina*vi(:,k)
+                  enddo
+                  oname = trim(obj(i)%set)//'_u'//trim(obj(i)%bnd)
+                  if (parent_child_grid_mismatch) then
+                     do j=1,obj(i)%np
+                        call remap_src_to_grid(N, obj(i)%Hz_par_u(j,:),
+     &                       obj(i)%vari(j,:), N_chd,
+     &                       obj(i)%Hz_chd_u(j,:), obj(i)%vari_chd(j,:))
+                     enddo
+                     call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+                  else
+                     call ncwrite(ncid,oname,obj(i)%vari,start2D)
+                  endif
+               endif
+               if (obj(i)%up) then
+                  call interpolate(upe,ui(:,1),cfu,ipu,jpu)
+                  call interpolate(vpe,vi(:,1),cfv,ipv,jpv)
+                  obj(i)%vari(:,1) = obj(i)%cosa*ui(:,1) - obj(i)%sina*vi(:,1)
+                  oname = trim(obj(i)%set)//'_up'//trim(obj(i)%bnd)
+                  call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
+               endif
+
+!     v variables --------------------------------------------------------
+
+               if (parent_child_grid_mismatch) then
+                  if ((obj(i)%v) .or. (obj(i)%vp)) then
+! Get thickness and depth at interpolated location
+                     call interpolate(Hz_v(:,:,:),obj(i)%Hz_par_v,cfv,ipv,jpv)
+                     obj(i)%h_par_v(:) = 0
+                     do j=1,obj(i)%np
+                        do k=1,nz
+                           obj(i)%h_par_v(j) = obj(i)%h_par_v(j) + obj(i)%Hz_par_v(j,k)
+                        enddo
+                     enddo
+
+                     do j=1,obj(i)%np
+                        call get_child_thickness(obj(i)%h_par_v(j), obj(i)%Hz_chd_v(j,:))
+                     enddo
+                  endif
+               endif
+
+               if (obj(i)%vbar) then
+                  oname = trim(obj(i)%set)//'_vbar'//trim(obj(i)%bnd)
+                  call interpolate(ubar(:,:,knew),ui(:,1),cfu,ipu,jpu)
+                  call interpolate(vbar(:,:,knew),vi(:,1),cfv,ipv,jpv)
+                  obj(i)%vari(:,1) = obj(i)%sina*ui(:,1) + obj(i)%cosa*vi(:,1)
+                  call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
+               endif
+               if (obj(i)%v) then
+                  call interpolate(u(:,:,:,nstp),ui,cfu,ipu,jpu)
+                  call interpolate(v(:,:,:,nstp),vi,cfv,ipv,jpv)
+                  do k=1,nz
+                     obj(i)%vari(:,k) = obj(i)%sina*ui(:,k) + obj(i)%cosa*vi(:,k)
+                  enddo
+                  oname = trim(obj(i)%set)//'_v'//trim(obj(i)%bnd)
+                  if (parent_child_grid_mismatch) then
+                     do j=1,obj(i)%np
+                        call remap_src_to_grid(N, obj(i)%Hz_par_v(j,:),
+     &                       obj(i)%vari(j,:), N_chd,
+     &                       obj(i)%Hz_chd_v(j,:), obj(i)%vari_chd(j,:))
+                     enddo
+                     call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+                  else
+                     call ncwrite(ncid,oname,obj(i)%vari,start2D)
+                  endif
+                  call ncwrite(ncid,oname,obj(i)%vari,start2D)
+               endif
+               if (obj(i)%vp) then
+                  call interpolate(upe,ui(:,1),cfu,ipu,jpu)
+                  call interpolate(vpe,vi(:,1),cfv,ipv,jpv)
+                  obj(i)%vari(:,1) = obj(i)%sina*ui(:,1) + obj(i)%cosa*vi(:,1)
+                  oname = trim(obj(i)%set)//'_vp'//trim(obj(i)%bnd)
+                  call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
+               endif
+
+            endif
+!endif
+         enddo
 
       ierr=nf90_close(ncid)
 

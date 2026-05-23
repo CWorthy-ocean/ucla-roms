@@ -10,11 +10,11 @@
 
 #include "cppdefs.opt"
 ! we have no PIPE_SOURCE flag here anymore, since we are moving away from cpp flags.
-! Variables still need to be visible within code even when pipes are not used.
-
-      use dimensions, only: i0, i1, j0, j1, nx, ny
+!     Variables still need to be visible within code even when pipes are not used.
+      use namelist_open_mod, only: open_namelist_file
+      use dimensions, only: i0, i1, j0, j1, nx, ny, grdname
       use roms_read_write, only:
-     &     ncforce, pipe_frc_opt, grdname,
+     &     ncforce, pipe_frc_opt,
      &     set_frc_data, store_string_att
       use nc_read_write, only: ncread
       use param, only: n, lm, mm, nt, mynode
@@ -23,7 +23,13 @@
 
       private
 
-#include "pipe_frc.opt"
+      integer, public :: npip = 0
+      logical, public :: pipe_source, p_analytical
+      namelist /PIPE_FRC_SETTINGS/ pipe_source, p_analytical, npip
+      type (ncforce) :: nc_pvol = ncforce(
+     &     vname='pipe_volume', tname='pipe_time')
+      type (ncforce) :: nc_ptrc = ncforce(
+     &     vname='pipe_tracer', tname='pipe_time')
       character(len=8) :: module_name = "pipe_frc"
       ! Variables used in the evolution equations
       integer,public  :: pidx ! Pipe index for looping through pipes
@@ -31,9 +37,9 @@
       real   ,public,allocatable,dimension(:,:) :: pidx_real ! Pipe indices (read as real by ncread)
       real   ,public,allocatable,dimension(:,:) :: pipe_fraction ! pipe fractional flux at grid points
       real   ,public,allocatable,dimension(:,:) :: pipe_flx      ! pipe flux
-      real   ,public, dimension(npip,N)         :: pipe_prf      ! Pipe vertical profile
+      real   ,public, allocatable,dimension(:,:)         :: pipe_prf      ! Pipe vertical profile
       real,public,allocatable,dimension(:,:)    :: pipe_trc      ! Pipe tracer conc.
-      real   ,public, dimension(npip)           :: pipe_vol      ! Pipe volume
+      real,public,allocatable, dimension(:)     :: pipe_vol      ! Pipe volume
 
      ! Netcdf names
       character(len=9)  :: pipe_flx_name = 'pipe_flux'  !! stored in the grid file
@@ -48,8 +54,27 @@
 
       public set_pipe_frc
       public init_arrays_pipes
+      public read_nml_pipe
 
       contains
+
+      subroutine read_nml_pipe
+!     Read the "PIPE_FRC_SETTINGS" section of the namelist file
+
+      integer ::  namelist_unit, ios
+      character(len=14) :: sr_name = "read_nml_pipe"
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      read (unit=namelist_unit, nml=PIPE_FRC_SETTINGS, iostat=ios)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context=module_name//'/'//sr_name, info=
+     &   'could not read PIPE_FRC_SETTINGS section of namelist file'
+     &     )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_pipe
 
 ! ----------------------------------------------------------------------
       subroutine set_pipe_frc  ![
@@ -62,6 +87,7 @@
 
       ! local
       integer :: i,j
+
       if (p_analytical) then                                ! Set pipe flux volumes and tracer data
 
         call set_ana_pipe_frc
@@ -191,11 +217,14 @@
       implicit none
 
       character(len=30) :: string
+
       allocate( pipe_idx(GLOBAL_2D_ARRAY) );      pipe_idx=0.
       allocate( pidx_real(GLOBAL_2D_ARRAY) );     pidx_real=0.
       allocate( pipe_fraction(GLOBAL_2D_ARRAY) ); pipe_fraction=0.
       allocate( pipe_flx(GLOBAL_2D_ARRAY) );      pipe_flx=0.
       allocate( pipe_trc(npip,nt) ) ;             pipe_trc=0.
+      allocate( pipe_vol(npip)) ;                 pipe_vol=0.
+      allocate( pipe_prf(npip,N) );               pipe_prf=0.
 
       if (.not. p_analytical) then
         allocate(nc_pvol%vdata(npip,1 ,2))

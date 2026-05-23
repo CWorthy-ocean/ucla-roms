@@ -1,18 +1,41 @@
       module bulk_frc
 
 #include "cppdefs.opt"
-
       use param, only: mynode, lm, mm
       use roms_read_write, only:
      &     ncforce, bulk_frc_opt, frcfile,
      &     nc_check_units, set_frc_data, store_string_att
+      use dimensions, only: inode, jnode, npx, npy
       use error_handling_mod, only: error_log
+
       implicit none
 
       private  ! make all variable private to this module unless public specified
 
-#include "bulk_frc.opt"
+      ! Type ncforce contains all required netcdf variables and input data array for frc variable.
+      ! Set the name and tname of variable to match what is in the input forcing files.
+      ! Use same name as bulk_frc variable name, e.g. uwnd has nc_uwnd for netcdf vars.
+      type (ncforce) :: nc_uwnd  = ncforce(
+     &     vname='uwnd', tname='time' ) ! u-wind (input data in m/s at 10m)
+      type (ncforce) :: nc_vwnd  = ncforce(
+     &     vname='vwnd', tname='time' ) ! v-wind (input data in m/s at 10m)
+      type (ncforce) :: nc_tair  = ncforce(
+     &     vname='Tair', tname='time' ) ! Air temp (input data Degrees C at 2m)
+      type (ncforce) :: nc_Q     = ncforce(
+     &     vname='qair', tname='time' ) ! Q (Specific humidity (kg/kg)
+      type (ncforce) :: nc_prate = ncforce(
+     &     vname='rain', tname='time' ) ! Precipitation rate (cm/day)
+      type (ncforce) :: nc_lwrad = ncforce(
+     &     vname='lwrad',tname='time' ) ! Downward longwave radiation [W/m^2]
+      type (ncforce) :: nc_swrad = ncforce(
+     &     vname='swrad',tname='time' ) ! net shortwave radiation [W/m^2]
 
+#if defined TAU_CORRECTION
+      type (ncforce)  :: nc_taux = ncforce(vname='TauX_corr',tname='time'  )  ! The TAU_CORRECTION flag is used to active a correction term to
+      type (ncforce)  :: nc_tauy = ncforce(vname='TauY_corr',tname='time'  )  ! bring bulk force field closer to that of the measured data.
+#endif
+
+      character(len=8) :: module_name = "bulk_frc"
       real,allocatable,public,dimension(:,:) ::  tair             ! air temp, used in step3d_t to add the heat of rain water
       real,allocatable,public,dimension(:,:) ::     Q             ! SPECIFIC humidity (kg/kg) (not relative), qair in old code
       real,allocatable,public,dimension(:,:) :: prate             ! prate (precipitation rate) - 'rain' variable in old code
@@ -26,13 +49,41 @@
 #endif
 
       real,public,allocatable,dimension(:,:) :: wspd_used  ! wind speed at rho point (also used in BGC routines)
+      logical, public :: interp_bulk_frc, check_bulk_frc_units
+      namelist /BULK_FRC_SETTINGS/ interp_bulk_frc, check_bulk_frc_units
 
       public init_arrays_bulk_frc
       public set_bulk_frc
-
+      public read_nml_bulk_frc
       contains
 
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine read_nml_bulk_frc
+      use error_handling_mod, only: error_log
+      use namelist_open_mod, only: open_namelist_file
+!     Read the "BULK_FRC_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_bulk_frc"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=BULK_FRC_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read BULK_FRC_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_bulk_frc
+
+
       subroutine init_arrays_bulk_frc  ![
       implicit none
       allocate(  tair(GLOBAL_2D_ARRAY) ); tair = 0
@@ -61,7 +112,7 @@
       allocate( nc_tauy%vdata(GLOBAL_2D_ARRAY,2) )
 #endif
 
-      if (interp_frc==1) then
+      if (interp_bulk_frc) then
         nc_uwnd%coarse = 1
         nc_vwnd%coarse = 1
         nc_tair%coarse = 1
@@ -74,7 +125,7 @@
       ! Print user options (bulk_frc.opt) to netcdf attributes
       ! Note: to turn bulk forces off, edit cppdefs!
       bulk_frc_opt = ''
-      if (interp_frc==1) then
+      if (interp_bulk_frc) then
         call store_string_att(bulk_frc_opt, 'Interpolation ON')
       else
         call store_string_att(bulk_frc_opt, 'Interpolation OFF')
@@ -128,12 +179,12 @@
       ! CALCULATE FLUX INTERACTIONS:
       call calc_all_bulk_forces(istr,iend,jstr,jend)
 
-      if (do_check_units) then
+      if (check_bulk_frc_units) then
         if(mynode==0) print *,'Checking Bulk force units'
         call nc_check_units(frcfile(nc_Q%ifile),nc_Q%vname,'kg/kg')
         call nc_check_units(
      &         frcfile(nc_prate%ifile),nc_prate%vname,'cm/day')
-        do_check_units = .false.
+        check_bulk_frc_units = .false.
       endif
 
 
@@ -188,9 +239,7 @@
      &     sustr, svstr, apply_surf_field_corr, swflx
       use tracers, only: t
       use grid, only: rmask, umask, vmask
-      use mixing, only:
-     &     east_exchng, ieast, isalt, itemp, iwest,
-     &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
+      use mixing, only: ieast, isalt, itemp, iwest, jnorth, jsouth
       use ocean_vars, only: u, v
       use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar, cmday2ms
 

@@ -2,9 +2,7 @@
 
 #include "cppdefs.opt"
 
-      use param, only:
-     &     lm, mm, east_exchng, north_exchng, south_exchng,
-     &     west_exchng
+      use param, only: lm, mm
       implicit none
 
 ! File "coupling":  Declare 2D arrays associated with coupling

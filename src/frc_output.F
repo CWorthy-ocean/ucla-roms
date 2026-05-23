@@ -4,13 +4,15 @@
 ! or thermodynamically forced.
 
 #include "cppdefs.opt"
+      use namelist_open_mod, only: open_namelist_file
+      use error_handling_mod, only: error_log
       use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x,
      &     lm, mm, isalt, itemp, mynode
-      use dimensions, only: i0, i1, j0, j1
+      use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u
       use nc_read_write, only: nccreate, ncwrite
       use roms_read_write, only:
      &     dn_tm, dn_xr, dn_xu, dn_yr, dn_yv,
-     &     eta_rho, eta_v, xi_rho, xi_u, dn_zr, create_file
+     &     dn_zr, create_file
       use netcdf, only:
      &     nf90_double, nf90_write, nf90_put_att,
      &     nf90_open, nf90_close
@@ -25,11 +27,14 @@
 
       implicit none
       private
-
-#include "frc_output.opt"
+      character(len=10) :: module_name = "frc_output"
+      real :: output_period = 0.   ! in seconds
+      integer :: nrpf   = 0          ! number of frames per file
+      logical, public :: wrt_frc, wrt_frc_avg
+      namelist /FRC_OUTPUT_SETTINGS/ output_period, nrpf, wrt_frc, wrt_frc_avg
 
       real    :: output_time = 0
-      integer :: record = nrpf ! to trigger the first file creation
+      integer :: record = 0 ! to trigger the first file creation
 
       integer :: navg = 0
 
@@ -63,11 +68,35 @@
       integer,parameter :: prec = nf90_double  ! Precision of output variables (nf90_float/nf90_double)
 
       ! Misc:
-      public :: init_frc, wrt_frc
+      public :: init_frc_output, wrt_frc_output, read_nml_frc_output
 
       contains
-! ----------------------------------------------------------------------
-      subroutine init_frc ![
+!     ----------------------------------------------------------------------
+      subroutine read_nml_frc_output
+
+!     Read the "FRC_OUTPUT_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_frc_output"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=FRC_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read FRC_OUTPUT_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+      record = nrpf
+      end subroutine read_nml_frc_output
+
+      subroutine init_frc_output ![
       ! Allocate and initialize arrays.
       implicit none
 
@@ -80,7 +109,7 @@
         return
       else
 
-      if (do_avg) then
+      if (wrt_frc_avg) then
 #ifdef BULK_FRC
         allocate(tair_avg(GLOBAL_2D_ARRAY) )
         tair_avg(:,:)=0
@@ -127,10 +156,10 @@
         srflx_avg(:,:)=0
         allocate(swflx_avg(GLOBAL_2D_ARRAY) )
         swflx_avg(:,:)=0
-      endif ! do_avg
+      endif ! wrt_frc_avg
       endif ! done
 
-      end subroutine init_frc  !]
+      end subroutine init_frc_output  !]
 !----------------------------------------------------------------------
       subroutine calc_average ![
       ! Update averages
@@ -175,7 +204,7 @@
 
       end subroutine calc_average !]
 !----------------------------------------------------------------------!
-      subroutine wrt_frc ![
+      subroutine wrt_frc_output ![
       ! extract data for all objects, for all vars
       ! and write to file
 
@@ -194,7 +223,7 @@
       prate_ms(:,:) = prate(:,:)/(100.*3600.*24.)
 #endif
 
-      if (do_avg) call calc_average
+      if (wrt_frc_avg) call calc_average
       output_time = output_time + dt
 
       if (output_time>=output_period) then
@@ -202,7 +231,7 @@
       record = record+1
       call ncwrite(ncid,'ocean_time',(/time/),(/record/))
 
-      if (do_avg) then
+      if (wrt_frc_avg) then
 #ifdef BULK_FRC
       call ncwrite(ncid,'tair',tair_avg(i0:i1,j0:j1),(/1,1,record/))
       tair_avg(:,:) = 0
@@ -275,7 +304,7 @@
 
       if (mynode == 0) then
         write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')
-     &   'wrt_frc :: wrote frc, tdays =', tdays,
+     &   'wrt_frc_output :: wrote frc, tdays =', tdays,
      &   'step =', iic-1, 'rec =', record
       endif
 
@@ -284,7 +313,7 @@
 
       endif
 
-      end subroutine wrt_frc  !]
+      end subroutine wrt_frc_output  !]
 ! ----------------------------------------------------------------------
       subroutine create_frc_file(fname) ![
       implicit none
@@ -309,7 +338,7 @@
 ! ----------------------------------------------------------------------
       subroutine create_frc_vars(ncid)  ![
 
-      use hidden_mpi_vars, only: inode, jnode
+      use dimensions, only: inode, jnode
       implicit none
 
       !import/export

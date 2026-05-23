@@ -10,16 +10,16 @@
 
 #if defined BIOLOGY_BEC2 || defined MARBL
 
-      ! param needed for GLOBAL_2D_array to work. NT = number tracer from param
-      use param, only:
-     &     east_exchng, ieast, itemp, iwest, jnorth,
-     &     jsouth, north_exchng, south_exchng, west_exchng
+! param needed for GLOBAL_2D_array to work. NT = number tracer from param
+      use param, only: ieast, itemp, iwest, jnorth, jsouth
       use tracers, only: t_avg, wrt_t_avg, nt_2_t_avg, t_units
 #ifdef MARBL_DIAGS
       use marbl_driver, only: marbldrv_compute_init_diagnostics
 #endif
 
       use bgc_shared_vars, only:
+     &     wrt_bgc_his, wrt_bgc_avg,
+     &     wrt_bgc_dia_his, wrt_bgc_dia_avg, interp_bgc_frc,
      &     nrpf_avg, nrpf_his, nrpf_avg_dia,
      &     nrpf_his_dia, t, nc_dust, nc_iron, nc_pco2air
 #ifdef MARBL
@@ -34,28 +34,28 @@
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
      &     , nc_swrad_avg
 #endif
-     &     , bgc_idx, t_idx, wrt_avg, wrt_his, interp_frc, lm, mm, itands,
+     &     , bgc_idx, t_idx, lm, mm, itands,
      &     mynode, nt_passive, output_period_avg, output_period_his,
      &     t_vname, wrt_t, t_lname
 #if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
      &     , bgc_diag_2d_avg, bgc_diag_3d_avg,
      &     bgc_diag_2d, bgc_diag_3d, nr_bgc_diag_2d, nr_bgc_diag_3d,
      &     nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d, output_period_avg_dia,
-     &     output_period_his_dia, wrt_avg_dia, wrt_his_dia,
+     &     output_period_his_dia,
      &     wrt_bgc_diag_2d, idx_bgc_diag_2d, vname_bgc_diag_2d,
      &     wrt_bgc_diag_3d, idx_bgc_diag_3d, vname_bgc_diag_3d
 #endif
       use nc_read_write, only: nccreate, ncwrite
-      use roms_read_write, only: max_name_size
       use roms_read_write, only:
-     &     dn_tm, dn_xr, dn_yr, dn_zr, eta_rho,
-     &     xi_rho, create_file, set_frc_data
+     &     dn_tm, dn_xr, dn_yr, dn_zr,
+     &     create_file, set_frc_data, max_name_size
       use netcdf, only:
      &     nf90_write, nf90_open, nf90_close,
      &     nf90_put_att, nf90_enddef, nf90_double
       use scalars, only: nstp, nt, time, n, dt, iic, nnew, tdays
-      use dimensions, only: i0, i1, j0, j1
+      use dimensions, only: i0, i1, j0, j1, xi_rho, eta_rho
       use error_handling_mod, only: error_log
+
       implicit none
 
       private ! Make all variable private to this module unless public specified
@@ -69,10 +69,10 @@
       real    :: t_avg_dia_bgc=0
       integer,save :: navg_bgc = 0               ! number of samples in average
       integer,save :: navg_dia_bgc = 0           ! number of samples in average
-      integer :: record_avg = nrpf_avg           ! Triggers making of initial file
-      integer :: record_his = nrpf_his
-      integer :: record_dia_avg = nrpf_avg_dia   ! Triggers making of initial file
-      integer :: record_dia_his = nrpf_his_dia
+      integer :: record_avg = 0           ! Triggers making of initial file
+      integer :: record_his = 0
+      integer :: record_dia_avg = 0   ! Triggers making of initial file
+      integer :: record_dia_his = 0
       real,save :: output_time_his = 0
       real,save :: output_time_avg = 0
       real,save :: output_time_dia_his = 0
@@ -99,6 +99,7 @@
       ! this routine is called by # if defined BIOLOGY_BEC2 in set_forces.F of ETH code
 
       use scalars, only: cp, nrhs, rho0
+      use dimensions, only: inode, jnode
       use bgc_forces, only: dust, iron, pco2air
 #ifdef MARBL
      &     , pco2air_alt
@@ -112,7 +113,7 @@
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
      &     , swrad_avg
 #endif
-
+      use dimensions, only: npx, npy
       implicit none
 
 ! Needed for iron and dust variables, not yet ported to this module. Should do.
@@ -133,7 +134,6 @@
 
 
 #ifdef PCO2AIR_FORCING
-!     call set_frc_var_tile( istr, iend, jstr, jend, nc_pco2air, pco2air, interp_frc )
       call set_frc_data(nc_pco2air,pco2air,'r')
 #ifdef MARBL
       call set_frc_data(nc_pco2air_alt,pco2air_alt,'r')
@@ -150,7 +150,6 @@
       call error_log%abort_check()
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
       ! Daily average Short wave radiation
-!     call set_frc_var_tile( istr, iend, jstr, jend, nc_swrad_avg, swrad_avg, interp_frc )
       call set_frc_data(nc_swrad_avg,swrad_avg,'r')
       call error_log%abort_check()
       do j=jstrR,jendR
@@ -197,7 +196,7 @@
       logical,save           :: first_step_avg=.true.
       logical,save           :: first_step_his=.true.
 
-      if (wrt_his .and. mod(output_period_his, dt) /= 0) then
+      if (wrt_bgc_his .and. mod(output_period_his, dt) /= 0) then
          write(error_info, *)
      &        "dt (", dt, ") is not a factor of ",
      &        "output_period_his (",
@@ -208,7 +207,7 @@
      &        info=error_info)
       endif
 
-      if (wrt_avg .and. mod(output_period_avg,dt) /= 0) then
+      if (wrt_bgc_avg .and. mod(output_period_avg,dt) /= 0) then
          write(error_info, *)
      &        "dt (", dt, ") is not a factor of ",
      &        "output_period_avg (",
@@ -218,6 +217,16 @@
      &        context=module_name//"/"//sr_name,
      &        info=error_info)
       endif
+
+      if (first_step_his) then
+         record_his = nrpf_his
+         record_dia_his = nrpf_his_dia
+      end if
+      if (first_step_avg) then
+         record_avg = nrpf_avg
+         record_dia_avg = nrpf_avg_dia
+      end if
+
       call error_log%abort_check()
       if (avg) then
 
@@ -300,7 +309,7 @@
      &       'bgc :: wrote history, tdays =', tdays,
      &       'step =', iic-1, 'rec =', record_his
           endif
-        endif  ! <-- wrt_file_his
+        endif
 
       endif
 
@@ -319,7 +328,7 @@
       logical,save           :: first_step_dia_avg=.true.
       logical,save           :: first_step_dia_his=.true.
 
-      if (wrt_his_dia .and. mod(output_period_his_dia, dt) /= 0) then
+      if (wrt_bgc_dia_his .and. mod(output_period_his_dia, dt) /= 0) then
          write(error_info, *)
      &        "dt (", dt, ") is not a factor of ",
      &        "output_period_his_dia (",
@@ -330,7 +339,7 @@
      &        info=error_info)
       endif
 
-      if (wrt_avg_dia .and. mod(output_period_avg_dia,dt) /= 0) then
+      if (wrt_bgc_dia_avg .and. mod(output_period_avg_dia,dt) /= 0) then
          write(error_info, *)
      &        "dt (", dt, ") is not a factor of ",
      &        "output_period_avg_dia (",
@@ -342,7 +351,7 @@
       endif
       call error_log%abort_check()
 
-      if (wrt_avg_dia) then
+      if (wrt_bgc_dia_avg) then
 
 !         if (.not. first_step_dia_avg) then
             call calc_avg_dia_bgc                              ! don't include t=0 in averaging
@@ -383,7 +392,7 @@
 
       endif
 
-      if (wrt_his_dia) then
+      if (wrt_bgc_dia_his) then
 
         if (.not. first_step_dia_his) then
            output_time_dia_his = output_time_dia_his + dt
@@ -420,7 +429,7 @@
      &       'bgc diag :: wrote history, tdays =', tdays,
      &       'step =', iic, 'rec =', record_dia_his
           endif
-        endif  ! <-- wrt_file_his
+        endif
 
       endif
 
@@ -620,38 +629,38 @@
       implicit none
 
       allocate( nc_dust%vdata( GLOBAL_2D_ARRAY,2) )
-      if (interp_frc==1) nc_dust%coarse = 1
+      if (interp_bgc_frc) nc_dust%coarse = 1
       allocate( nc_iron%vdata( GLOBAL_2D_ARRAY,2) )
-      if (interp_frc==1) nc_iron%coarse = 1
+      if (interp_bgc_frc) nc_iron%coarse = 1
 
 #ifdef PCO2AIR_FORCING
       allocate( nc_pco2air%vdata( GLOBAL_2D_ARRAY,2) )
-      if (interp_frc==1) nc_pco2air%coarse = 1
+      if (interp_bgc_frc) nc_pco2air%coarse = 1
 #ifdef MARBL
       allocate( nc_pco2air_alt%vdata( GLOBAL_2D_ARRAY,2) )
-      if (interp_frc==1) nc_pco2air_alt%coarse = 1
+      if (interp_bgc_frc) nc_pco2air_alt%coarse = 1
 #endif
 #endif
 
 #ifdef NOX_FORCING
       allocate( nc_nox%vdata( GLOBAL_2D_ARRAY,2) )
-      if (interp_frc==1) nc_nox%coarse = 1
+      if (interp_bgc_frc) nc_nox%coarse = 1
 #endif
 #ifdef NHY_FORCING
       allocate( nc_nhy%vdata( GLOBAL_2D_ARRAY,2) )
-      if (interp_frc==1) nc_nhy%coarse = 1
+      if (interp_bgc_frc) nc_nhy%coarse = 1
 #endif
 
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
       allocate( nc_swrad_avg%vdata( GLOBAL_2D_ARRAY,2) )
-      if (interp_frc==1) nc_swrad_avg%coarse = 1
+      if (interp_bgc_frc) nc_swrad_avg%coarse = 1
 #endif
 
       end subroutine  init_arrays_bgc_frc !]
 ! ----------------------------------------------------------------------
       subroutine wrt_bgc(init)  ![
 #ifdef MARBL_DIAGS
-      use hidden_mpi_vars, only: inode, jnode
+      use dimensions, only: inode, jnode
       use param, only: nsub_e, nsub_x
 #endif
       implicit none
@@ -663,12 +672,12 @@
 #include "compute_tile_bounds.h"
 #endif
       ! initialisation writting
-      if (wrt_his.and.present(init)) then
+      if (wrt_bgc_his.and.present(init)) then
          call wrt_bgc_tracers(.false.) ! write his data
       else
       ! local
-         if (wrt_his)     call wrt_bgc_tracers(.false.) ! write his data
-         if (wrt_avg)     call wrt_bgc_tracers(.true.) ! write avg data
+         if (wrt_bgc_his)     call wrt_bgc_tracers(.false.) ! write his data
+         if (wrt_bgc_avg)     call wrt_bgc_tracers(.true.) ! write avg data
       endif
 
 #if defined BEC2_DIAG || defined MARBL_DIAGS

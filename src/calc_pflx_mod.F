@@ -1,24 +1,24 @@
       module calc_pflx_mod
 
 #include "cppdefs.opt"
-
+      use namelist_open_mod, only: open_namelist_file
+      use error_handling_mod, only: error_log
       use netcdf, only: nf90_noerr, nf90_inq_varid
-      use dimensions, only: nx, ny, nz, i0, i1, j0, j1
+      use dimensions, only: nx, ny, nz, i0, i1, j0, j1,x_,x0,x1,y_,y0,y1
       use scalars, only: dt, knew, nrhs
       use param, only: lm, mm, mynode
       use grid, only: pn, pm, umask, vmask, rmask
       use ocean_vars, only: flxu, flxv, u, v, z_w, hz
       use nc_read_write, only: ncwrite, ncread
       use diagnostics, only: dxdyi
-      use mpi_exchanges, only: exchange_xxx
+      use roms_mpi, only: exchange_xxx
 
       implicit none
       private
 
-#include "calc_pflx.opt"
-
             ! Pressure flux terms
-      ! --------------
+! --------------
+      character(len=14) :: module_name = "calc_pflx_mod"
       real,public,allocatable,dimension(:,:,:) :: p_slow        ! filtered pressure
       real,public,allocatable,dimension(:,:,:) :: u_slow,v_slow
 
@@ -29,16 +29,38 @@
       real,public,allocatable,dimension(:,:)  :: dzt ! dzeta/dt
       real,public,allocatable,dimension(:,:)  :: Uflx,Vflx
 
-      real :: alpha, beta              ! filtering constants (needed for child bry)
+      real :: alpha, beta       ! filtering constants (needed for child bry)
 
+      logical, public :: calc_pflx
+      real :: timescale     = 0. ! timescale for filtering pressure fluxes (in seconds)
+      namelist /CALC_PFLX_SETTINGS/ timescale, calc_pflx
 
       public init_pflx
       public calc_pressure_flux
       public get_init_slow
       public wrt_rst_diag_slow
+      public read_nml_pflx
 
       contains
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine read_nml_pflx
+!     Read the "CALC_PFLX_SETTINGS" section of the namelist file
+
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_pflx"
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      read (unit=namelist_unit, nml=CALC_PFLX_SETTINGS, iostat=ios)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context=module_name//'/'//sr_name, info=
+     &   'could not read CALC_PFLX_SETTINGS section of namelist file'
+     &     )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_pflx
+
       subroutine init_pflx  ![
 
       implicit none
@@ -54,26 +76,43 @@
           allocate(p_slow(GLOBAL_2D_ARRAY,nz) )     ! global 2D needed for exchange in get_init.F
           p_slow = 0
         endif
-        allocate(p_fast(0:nx,0:ny) )
+!        allocate(p_fast(0:nx,0:ny) )
+        allocate(p_fast(GLOBAL_2D_ARRAY))
+        p_fast = 0
 
-        allocate( up(nx,ny) )
-        allocate( vp(nx,ny) )
+!        allocate( up(nx,ny) )
+!        allocate( vp(nx,ny) )
+        allocate(up(GLOBAL_2D_ARRAY))
+        allocate(vp(GLOBAL_2D_ARRAY))
+        up = 0
+        vp = 0
 
         if (.not. allocated( u_slow )) then         ! in case already read in with get_init
-          allocate(u_slow(1:nx+1,0:ny+1,nz) )
+!          allocate(u_slow(1:nx+1,0:ny+1,nz) )
+          allocate(u_slow(GLOBAL_2D_ARRAY,nz))
           u_slow = 0
         endif
         if (.not. allocated( v_slow )) then
-          allocate(v_slow(0:nx+1,1:ny+1,nz) )
+!          allocate(v_slow(0:nx+1,1:ny+1,nz) )
+          allocate(v_slow(GLOBAL_2D_ARRAY,nz))
           v_slow = 0
         endif
-        allocate(u_fast(nx+1,ny) )
-        allocate(v_fast(nx,ny+1) )
-        allocate( Uflx(nx+1,ny) )
-        allocate( Vflx(nx,ny+1) )
+!        allocate(u_fast(nx+1,ny) )
+        allocate(u_fast(GLOBAL_2D_ARRAY))
+        u_fast = 0
+!        allocate(v_fast(nx,ny+1) )
+        allocate(v_fast(GLOBAL_2D_ARRAY))
+        v_fast = 0
+!        allocate( Uflx(nx+1,ny) )
+        allocate(Uflx(GLOBAL_2D_ARRAY))
+        Uflx = 0
+!        allocate( Vflx(nx,ny+1) )
+        allocate(Vflx(GLOBAL_2D_ARRAY))
+        Vflx = 0
 
         ! strictly speaking for barotropic/baroclinic balance only
-        allocate( dzt(nx,ny) )
+!        allocate( dzt(nx,ny) )
+        allocate(dzt(GLOBAL_2D_ARRAY))
       endif
 
       end subroutine init_pflx !]
@@ -101,13 +140,7 @@
       if (kbak < 1) kbak=4
 # endif
 
-      ! There's an issue with WEC stokes drift
-      ! It's added to flxU,flxV, but not to ubar
-
       if (calc_pflx) then
-        ! WEC terms can modify the match between
-        ! integrated flux and ubar,vbar
-
         Uflx =  sum(Flxu(1:nx+1,1:ny,:),dim=3)
         Vflx =  sum(Flxv(1:nx,1:ny+1,:),dim=3)
 
@@ -136,24 +169,24 @@
         do k=1,nz
           do j=0,ny
             do i=0,nx
-              p_slow(i,j,k) = beta*p_slow(i,j,k) + alpha*p(i,j,k)
-              p_fast(i,j)   = p(i,j,k) - p_slow(i,j,k)
+              p_slow(i,j,k) = (beta*p_slow(i,j,k) + alpha*p(i,j,k))*rmask(i,j)
+              p_fast(i,j)   = (p(i,j,k) - p_slow(i,j,k))*rmask(i,j)
             enddo
           enddo
           ! u_slow, and u_fast are baroclinic velocities
           do j=1,ny
             do i=1,nx+1
-              u_slow(i,j,k) = beta*u_slow(i,j,k)
-     &            + alpha*( u(i,j,k,nrhs)-Uflx(i,j))
-              u_fast(i,j) = u(i,j,k,nrhs)-Uflx(i,j)- u_slow(i,j,k)
+              u_slow(i,j,k) = (beta*u_slow(i,j,k)
+     &            + alpha*( u(i,j,k,nrhs)-Uflx(i,j)))*umask(i,j)
+              u_fast(i,j) = (u(i,j,k,nrhs)-Uflx(i,j)- u_slow(i,j,k))*umask(i,j)
             enddo
           enddo
           ! v_slow, and v_fast are baroclinic velocities
           do j=1,ny+1
             do i=1,nx
-              v_slow(i,j,k) = beta*v_slow(i,j,k)
-     &            + alpha*( v(i,j,k,nrhs)-Vflx(i,j) )
-              v_fast(i,j) = v(i,j,k,nrhs)-Vflx(i,j)- v_slow(i,j,k)
+              v_slow(i,j,k) = (beta*v_slow(i,j,k)
+     &            + alpha*( v(i,j,k,nrhs)-Vflx(i,j) ))*vmask(i,j)
+              v_fast(i,j) = (v(i,j,k,nrhs)-Vflx(i,j)- v_slow(i,j,k))*vmask(i,j)
             enddo
           enddo
 
@@ -187,11 +220,13 @@
 
       if (mynode==0) print *,'getting u,v,p slow'
       if (.not. allocated(u_slow)) then
-        allocate(u_slow(nx+1,0:ny+1,nz ))
+!        allocate(u_slow(nx+1,0:ny+1,nz ))
+        allocate(u_slow(GLOBAL_2D_ARRAY,nz))
         u_slow = 0
       endif
       if (.not. allocated(v_slow)) then
-        allocate( v_slow(0:nx+1,ny+1,nz ))
+!        allocate( v_slow(0:nx+1,ny+1,nz ))
+        allocate(v_slow(GLOBAL_2D_ARRAY,nz))
         v_slow = 0
       endif
       if (.not. allocated(p_slow)) then
@@ -201,17 +236,17 @@
 
       ierr=nf90_inq_varid (ncid, 'u_slow', varid)
       if (ierr == nf90_noerr) then
-        call ncread(ncid,'u_slow', u_slow(1:i1,j0:j1,:),start)
+        call ncread(ncid,'u_slow', u_slow(x_:x1,y0:y1,:),start)
 #ifdef MASKING
-        do j = j0,j1
-          do i = 1,i1
+        do j = y0,y1
+          do i = x_,x1
             if (umask(i,j)<1) u_slow(i,j,:) = 0
           enddo
         enddo
 #endif
       else
 !       u_slow = 0.0
-        u_slow(1:i1,j0:j1,:) = u(1:i1,j0:j1,:,tindx)
+        u_slow(x_:x1,y0:y1,:) = u(x_:x1,y0:y1,:,tindx)
         mpi_master_only write(*,*) ' --- WARNING: '
      &    ,'u_slow not in initial file.'
      &    ,'  Initialized to u'
@@ -220,17 +255,17 @@
 
       ierr=nf90_inq_varid (ncid, 'v_slow', varid)
       if (ierr == nf90_noerr) then
-        call ncread(ncid,'v_slow', v_slow(i0:i1,1:j1,:),start)
+        call ncread(ncid,'v_slow', v_slow(x0:x1,y_:y1,:),start)
 #ifdef MASKING
-        do j = 1,j1
-          do i = i0,i1
+        do j = y_,y1
+          do i = x0,x1
             if (vmask(i,j)<1) v_slow(i,j,:) = 0
           enddo
         enddo
 #endif
       else
 !       v_slow = 0.0
-        v_slow(i0:i1,1:j1,:) = v(i0:i1,1:j1,:,tindx)
+        v_slow(x0:x1,y_:y1,:) = v(x0:x1,y_:y1,:,tindx)
         mpi_master_only write(*,*) ' --- WARNING: '
      &    ,'v_slow not in initial file.'
      &    ,'  Initialized to v'
@@ -239,11 +274,11 @@
 
       ierr=nf90_inq_varid (ncid, 'p_slow', varid)
       if (ierr == nf90_noerr) then
-        call ncread(ncid, 'p_slow', p_slow(i0:i1,j0:j1,:), start)
+        call ncread(ncid, 'p_slow', p_slow(x0:x1,y0:y1,:), start)
         call exchange_xxx(p_slow)  ! need exchange since r2u to get u'p'
 #ifdef MASKING
-        do j = 0,ny
-          do i = 0,nx
+        do j = y0,y1
+          do i = x0,x1
             if (rmask(i,j)<1) p_slow(i,j,:) = 0
           enddo
         enddo

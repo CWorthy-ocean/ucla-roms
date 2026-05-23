@@ -60,7 +60,6 @@ module error_handling_mod
 
 #include "cppdefs.opt"
 
-  use timers, only: stop_timers
   use param, only: mynode, nnodes, ocean_grid_comm
   use utils_mod, only: replace_string
 #ifdef MPI
@@ -71,6 +70,11 @@ module error_handling_mod
   private
   save
 
+  !==============================
+  ! User settings
+  !==============================
+  logical :: gather_errors_on_main_rank = .false.
+  namelist /ERROR_HANDLING_SETTINGS/ gather_errors_on_main_rank
   !==============================
   ! Public symbols
   !==============================
@@ -89,15 +93,6 @@ module error_handling_mod
   integer, parameter :: SCOPE_GLOBAL = 0
   integer, parameter :: SCOPE_RANK   = 1
   integer, parameter :: SCOPE_POINT  = 2
-
-  !==============================
-  ! Module-level options
-  !==============================
-  ! GATHER_ERRORS_ON_MAIN_RANK ensures MPI synchronization before abort.
-  ! This can add runtime bottlenecks due to the use of MPI collectives,
-  ! But guarantees all ranks are able to report, and groups identical errors
-  ! spanning multiple ranks for more human-readable output:
-  logical :: GATHER_ERRORS_ON_MAIN_RANK = .false.
 
   !--------------------------------------------------------------------------------
   ! DERIVED TYPES
@@ -164,6 +159,7 @@ module error_handling_mod
   type(error_log_type) :: error_log
 
 contains
+
   !=========================================================
   !    Public API (error_log_type)
   !=========================================================
@@ -332,7 +328,7 @@ contains
     integer :: local_abort, global_abort
     character(len=:), allocatable :: local_serialized_log, global_serialized_log
 
-    if (GATHER_ERRORS_ON_MAIN_RANK) then
+    if (gather_errors_on_main_rank) then
        local_abort = merge(1, 0, this%abort_requested)
        call MPI_Allreduce(local_abort, global_abort, 1, MPI_INTEGER, MPI_MAX, ocean_grid_comm)
 
@@ -347,26 +343,24 @@ contains
           call print_error_log_entry_groups(grouped_error_log_entries)
        end if
 
-       call stop_timers()
        call MPI_Barrier(ocean_grid_comm)
        call MPI_Abort(ocean_grid_comm, 1)
        call sleep(30) ! stop further output leaking through
-    else ! GATHER_ERRORS_ON_MAIN_RANK
+    else ! gather_errors_on_main_rank
        if (this%abort_requested) then
           call group_error_log_entries(this, grouped_error_log_entries)
           call print_error_log_entry_groups(grouped_error_log_entries)
-          write(*,*) "WARNING: GATHER_ERRORS_ON_MAIN_RANK=.false. in error_handling_mod.F90. ", &
-               "Some ranks may fail to report errors before abort. ",&
-               "For a full error log, set to .true. and recompile."
-          call stop_timers()
+          ! write(*,*) "WARNING: gather_errors_on_main_rank=.false. in error_handling_mod.F90.", &
+          !      "Some ranks may fail to report errors before abort. ",&
+          !      "For a full error log, set to .true. and compile again ",&
+          !      "(performance will be impacted)"
           call MPI_Abort(ocean_grid_comm,1)
        end if !
-    end if !GATHER_ERRORS_ON_MAIN_RANK
+    end if !gather_errors_on_main_rank
 #else /* MPI*/
     if (this%abort_requested) then
        call group_error_log_entries(this, grouped_error_log_entries)
        call print_error_log_entry_groups(grouped_error_log_entries)
-       call stop_timers()
        error stop
     end if
 #endif /* MPI */
@@ -982,6 +976,68 @@ contains
 
   end subroutine deserialize_log_entry
 
+
 #endif /* MPI */
+
+      subroutine read_nml_error_handling
+!-----------------------------------------------------------------------
+!     SUBROUTINE: read_nml_error_handling
+!     DESCRIPTION:
+!     Read the `ERROR_HANDLING_SETTINGS` section of the namelist file
+!
+!     METHOD:
+!     - Gets the name of the namelist file from the first arg to ROMS
+!     - Opens the file and rewinds to the beginning
+!     - Reads the relevant section
+!     - Sets any variables owned by this module that depend on nml vars
+!     - Close the fle
+!
+!     NOTES:
+!     Unlike other `read_nml_` subroutines elsewhere in the code, this
+!     does not call helper functions (to avoid circular dependencies).
+!     The namelist opening code thus repeats `open_namelist_file` and
+!     `get_namelist_fname` from `namelist_open_mod.F90`.
+!-----------------------------------------------------------------------
+
+      use mpi_f08, only: MPI_BYTE, MPI_Bcast
+!     Read the "FRC_OUTPUT_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios, is, ierr
+      character(len=20) :: sr_name = "read_nml_frc_output"
+      character(len=512) :: msg = ""
+      character(len=256) :: nml_fname = ""
+
+! Get the name of the namelist file
+#ifdef MPI
+      if (mynode == 0) then
+#endif
+         is=iargc() ; if (is == 1) call getarg(is,nml_fname)
+#ifdef MPI
+      endif
+      call MPI_Bcast(nml_fname,256,MPI_BYTE, 0, ocean_grid_comm, ierr)
+#endif
+
+! Open the namelist file
+      open (newunit=namelist_unit, file=nml_fname, status="old", &
+           action="read", iostat=ios)
+      if (ios/=0) then
+         call error_log%raise_global(context="error_handling_mod/read_nml_error_handling", &
+              info="Could not open namelist file")
+      end if
+! Go back to the beginning and find PARAM_SETTINGS section
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=ERROR_HANDLING_SETTINGS, iostat=ios, iomsg=msg)
+
+      ! Abort if not found
+      if (ios /= 0) then
+         call error_log%raise_global(&
+              context="error_handling_mod/read_nml_error_handling", &
+              info="Could not read ERROR_HANDLING_SETTINGS section "//&
+                     "of namelist file.")
+      end if
+! Close the namelist file
+      close(namelist_unit)
+
+    end subroutine read_nml_error_handling
+
 
 end module error_handling_mod

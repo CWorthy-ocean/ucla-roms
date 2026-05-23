@@ -4,7 +4,9 @@
       ! output_root_name is used as prefix of all output files
       ! Length is limited to 18 characters, because output_file_names
       ! are appended with frame and node number and are limited to 32
+#include "cppdefs.opt"
 
+      use add_git_hash_mod, only: add_git_hash, git_hash
       use netcdf, only:
      &     nf90_noerr, nf90_nowrite, nf90_double,
      &     nf90_netcdf4, nf90_global, nf90_enotatt, nf90_open,
@@ -13,15 +15,23 @@
      &     nf90_get_var
       use scalars, only: time, dt, sec2day, tdays, akt_bak, akv_bak
       use nc_read_write, only: nccreate, ncread
-      use dimensions, only: bf, nx, ny, gnx, gny, i0, i1, j0, j1
+      use dimensions, only:
+     &     bf, nx, ny, gnx, gny, i0, i1, j0, j1,
+     &     eta_rho, xi_rho, xi_u, eta_v,
+     &     x_,x0,x1,y_,y0,y1
       use param, only: mynode, nnodes
-      use hidden_mpi_vars, only: inode, jnode
-      use mpi_exchanges, only: exchange_xxx
+      use dimensions, only: inode, jnode
+      use roms_mpi, only: exchange_xxx, new_part
+      use pio_roms, only: use_pio, pio_gtype
+#ifdef PARALLEL_IO
+     &   ,pio_xi_rho_coarse_start, pio_eta_rho_coarse_start,pio_xi_u_coarse_start, pio_eta_v_coarse_start,
+     &   pio_xi_rho_coarse, pio_eta_rho_coarse, pio_xi_u_coarse, pio_eta_v_coarse,
+     &   pio_i0c, pio_i1c, pio_j0c, pio_j1c, pio_initialize_coarse
+#endif
       use error_handling_mod, only: error_log ! Note, abort_check should be called by caller of set_frc_data
-
+      use instant_output, only: wrt_instant, instant_root_name
       implicit none
       character(len=15) :: module_name="roms_read_write"
-#include "cppdefs.opt"
 
       private
 
@@ -85,8 +95,6 @@
       integer, target :: test_var
       integer, parameter, public :: max_name_size=256
       character(len=max_name_size), public  :: output_root_name
-      character(len=41), public  :: git_hash= "xxx"
-
       ! Dimension names for in and output in netcdf files
       ! All dimension names need to be strings of 7 characters
 !     character(len=7), public,parameter  :: xdim = 'xi_rho '
@@ -102,6 +110,7 @@
 
       ! index ranges for coarse netcdf input
       integer :: ic0,ic1,jc0,jc1
+      integer :: xc_,xc0,xc1,yc_,yc0,yc1
       integer :: iSWc,jSWc
       integer :: nxc,nyc
       real,dimension(:,:),allocatable   :: cdata     ! Array to read in coarse surface forcing data
@@ -119,6 +128,8 @@
       character(len=max_options_string),public::particle_opt='OFF'
       character(len=max_options_string),public::cdr_frc_opt  ='OFF'
       ! forcing file specifications
+      character(len=max_options_string),public::grid_files='N/A'
+      character(len=max_options_string),public::ini_files='N/A'
       character(len=max_options_string),public::force_files='N/A'
       character(len=max_options_string),public::force_info='N/A'
       character(len=100),public::frctype ! variable across netcdf files (forcing module)
@@ -147,15 +158,25 @@
       integer, public :: ifile_max_recs(max_frc_files)
 
 #if defined MPI && defined PARALLEL_FILES
-      integer, public ::  xi_rho, xi_u, eta_rho, eta_v
+!      integer, public ::  xi_rho, xi_u, eta_rho, eta_v
 #else
-      integer, parameter, public :: xi_rho=LLm+2, eta_rho=MMm+2,
-     &                              xi_u=xi_rho-1, eta_v=eta_rho-1
+!      integer, parameter, public :: xi_rho=LLm+2, eta_rho=MMm+2,
+!     &                              xi_u=xi_rho-1, eta_v=eta_rho-1
 #endif
 
-      character, public :: date_str*44, title*80
-      character(len=max_name_size), public :: ininame, grdname, frcfile(max_frc_files)
-
+      character, public :: date_str*44
+      character(len=80), public :: title = "my roms run"
+!     character(len=max_name_size), public :: ininame, grdname, frcfile(max_frc_files)
+      character(len=max_name_size), public :: ininame = ""
+      character(len=max_name_size), public ::
+     &     frcfile(max_frc_files) = ""
+      character(len=max_name_size), public ::
+     &     frcfile_full(max_frc_files) = ""
+      namelist /SIMULATION_NAME_SETTINGS/ output_root_name, title
+#ifndef ANA_INITIAL
+      namelist /INITIAL_CONDITIONS/ nrrec, ininame
+#endif
+      namelist /FORCING_FILES/ frcfile
 
       public :: insert_nodes
       public :: findstr,append_date_node
@@ -170,6 +191,7 @@
       public :: offset
       public :: sec2date
       public :: init_refdate
+      public :: read_nml_roms_read_write
 
       interface set_frc_data
         module procedure
@@ -182,7 +204,154 @@
 
       contains
 
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine read_nml_roms_read_write
+      use insert_node_mod, only: insert_node
+      use param, only: mynode, nsize
+      use error_handling_mod, only: error_log
+      use namelist_open_mod, only: open_namelist_file
+      use utils_mod, only: lenstr
+      integer ::  namelist_unit, ios, lstr, testunit
+      character(len=25) :: sr_name = "read_nml_roms_read_write"
+      character(len=512) :: msg = ""
+      character(len=max_name_size) :: fname
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+!     Read the "SIMULATION_NAME_SETTINGS", "INITIAL_CONDITIONS" section of the namelist file
+      read (unit=namelist_unit, nml=SIMULATION_NAME_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read SIMULATION_NAME_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      output_root_name=trim(output_root_name)
+      instant_root_name = output_root_name
+      mpi_master_only write(*,'(/1x,A)') trim(title)
+!==========================================================================================
+#ifndef ANA_INITIAL
+      read (unit=namelist_unit, nml=INITIAL_CONDITIONS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read INITIAL_CONDITIONS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+
+
+         lstr = lenstr(ininame)
+
+# if defined MPI && defined PARALLEL_FILES
+#ifndef PARALLEL_IO
+         call insert_node(ininame, lstr, mynode, nsize)
+#endif
+# endif
+         open(newunit=testunit, file=trim(ininame), status='old',
+     &        iostat=ios)
+         if (ios /= 0) then
+            call error_log%raise_from_rank(
+     &           info="Cannot find input file '" // trim(ininame) // "'",
+     &           context=module_name)
+            return
+         end if
+         close(testunit)
+         ininame = trim(ininame)
+         mpi_master_only write(*,'(1x,A,I3,2x,3A)')
+     &        'initial condition :: rec =', nrrec,
+     &        'file = ''', trim(ininame), ''''
+
+#endif /*ANA_INITIAL*/
+!==========================================================================================
+      read (unit=namelist_unit, nml=FORCING_FILES, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read FORCING_FILES'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+!     Reset forcing storage.
+
+      force_files = ''
+      force_info  = ''
+      max_frc     = 0
+      lstr        = 1
+
+
+!  Read filenames until a blank line or max_frc_files reached.
+      do while (lstr > 0 .and. max_frc < max_frc_files)
+
+         fname = trim(frcfile(max_frc+1))
+         lstr = lenstr(trim(fname))
+         if (lstr > 0) then
+# if defined MPI && defined PARALLEL_FILES
+#ifndef PARALLEL_IO
+            call insert_node(fname, lstr, mynode, nsize)
+#endif
+# endif
+! Test file availability
+
+            open(newunit=testunit, file=fname,
+     &           status='old', iostat=ios)
+            if (ios /= 0) then
+               call error_log%raise_from_rank(
+     &         info="Cannot find input file '" // fname // "'",
+     &         context=module_name
+     &              )
+               return
+            end if
+            close(testunit)
+
+! Store file if within limit of allowed no. of forcing files
+
+            if (max_frc < max_frc_files) then
+
+               max_frc = max_frc + 1
+               frcfile(max_frc) = trim(fname)
+! Write file info to output stream
+# ifdef MPI_SILENT_MODE
+                if (mynode == 0) then
+# endif
+                  if (max_frc == 1) then
+                    write(*,'(1x,2A)') 'forcing data file(s): ',
+     &                                 trim(frcfile(max_frc))
+                  else
+                    write(*,'(23x,A)') trim(frcfile(max_frc))
+                 endif
+
+! Add to attributes
+# ifdef MPI_SILENT_MODE
+               end if
+# endif
+               call store_string_att(force_files,
+     &              frcfile(max_frc)(1:lstr))
+
+            else !(if max_frc < max_frc_files )
+               write(error_info,*)
+     &              'Too many forcing files are ',
+     &              'specified in input script.',  'Increase parameter ',
+     &              '''max_frc_files'' in ',
+     &              'roms_read_write and recompile.'
+               call error_log%raise_global(
+     &              info=error_info,
+     &              context=module_name//"/"//sr_name)
+            end if !(max_frc < max_frc_files)
+         end if   ! lstr > 0
+      end do      ! filename loop
+!================================================================================
+
+      close(namelist_unit)
+
+      end subroutine read_nml_roms_read_write
       subroutine init_output_indices  ![
       ! these indices also relate to reading input fields!
       !
@@ -221,7 +390,7 @@
       ! Used so we can read in coarse surface
       ! forcing data
       !
-      use hidden_mpi_vars, only: np_eta, np_xi
+      use param, only: np_eta, np_xi
       implicit none
 
       integer :: gnxc,gnyc
@@ -231,6 +400,7 @@
       integer :: nxc_left,nxc_righ,nx_righ,nx_left,dfx
       integer :: nyc_left,nyc_righ,ny_righ,ny_left,dfy
       integer :: off_x,off_y
+      integer :: iwestc, ieastc, jsouthc, jnorthc
 
       gnxc = gnx/2
       gnyc = gny/2
@@ -263,6 +433,7 @@
         nyc = nyc - (off_yc+1)/2
       endif
 
+      iwestc=1; ieastc=nxc; jsouthc=1; jnorthc=nyc
       ic0=1; ic1=nxc; jc0=1; jc1=nyc
 
       if (inode==0)        ic0=0
@@ -287,16 +458,74 @@
       nyc_righ = ceiling(1.0*gnyc/np_eta) - floor(off_yc/2.0)
       ny_righ  = ceiling(1.0*gny/np_eta)  - floor(off_y/2.0)
       dfy  = max(ny_left - nyc_left*2, ny_righ-nyc_righ*2)
-!     print *, 'dfx: ', dfx
-!     print *, 'dfx: ', dfx
       cbf = max(ceiling(0.5*dfx)+1,2)
       cbf = max(ceiling(0.5*dfy)+1,cbf)
       cbf = cbf + 1
-      if (mynode==0) then
-        print *,'buffer for coarse array: ',cbf
+
+      allocate(cdata(1-cbf:nxc+cbf,1-cbf:nyc+cbf) ); cdata(:,:) = 0
+
+#ifdef PARALLEL_IO
+      if (inode==0) then
+        pio_i0c=0
+      else
+        pio_i0c=cbf
       endif
 
-      allocate(cdata(1-cbf:nxc+cbf,1-cbf:nyc+cbf) );cdata = 0
+      if (inode==NP_XI-1) then
+        pio_i1c=0
+      else
+        pio_i1c=cbf
+      endif
+
+      if (jnode==0) then
+        pio_j0c=0
+      else
+        pio_j0c=cbf
+      endif
+
+      if (jnode==NP_ETA-1) then
+        pio_j1c=0
+      else
+        pio_j1c=cbf
+      endif
+
+      pio_xi_rho_coarse = ic1-ic0+1
+      pio_eta_rho_coarse = jc1-jc0+1
+      pio_xi_u_coarse = ic1
+      pio_eta_v_coarse = jc1
+
+      if (inode == 0) then
+        pio_xi_rho_coarse_start = iSWc+iwestc-pio_i0c
+        pio_xi_u_coarse_start   = iSWc+iwestc-pio_i0c !?
+      else
+        pio_xi_rho_coarse_start = iSWc+iwestc+1-pio_i0c
+        pio_xi_u_coarse_start   = iSWc+iwestc-pio_i0c
+      endif
+
+      if (jnode == 0) then
+        pio_eta_rho_coarse_start= jSWc+jsouthc-pio_j0c
+        pio_eta_v_coarse_start  = jSWc+jsouthc-pio_j0c !?
+      else
+        pio_eta_rho_coarse_start= jSWc+jsouthc+1-pio_j0c
+        pio_eta_v_coarse_start  = jSWc+jsouthc-pio_j0c
+      endif
+
+      xc_ = 1-pio_i0c
+      xc0 = ic0-pio_i0c
+      xc1 = ic1+pio_i1c
+      yc_ = 1-pio_j0c
+      yc0 = jc0-pio_j0c
+      yc1 = jc1+pio_j1c
+
+      call pio_initialize_coarse
+#else
+      xc_ = 1
+      xc0 = ic0
+      xc1 = ic1
+      yc_ = 1
+      yc0 = jc0
+      yc1 = jc1
+#endif
 
       end subroutine init_coarse !]
 ! ----------------------------------------------------------------------
@@ -938,9 +1167,9 @@
       ! file. Ensure this in the allocation of vdata
       ! This is in contrast with the _surf version of fill_frc_slice
       if (d1) then
-        call ncread(ncid,vname,nc%vdata(:,1,it),(/1,irec/))
+        call ncread(ncid,vname,nc%vdata(:,1,it),start=(/1,irec/),fname=frcfile(ifile))
       else
-        call ncread(ncid,vname,nc%vdata(:,:,it),(/1,1,irec/))
+        call ncread(ncid,vname,nc%vdata(:,:,it),start=(/1,1,irec/),fname=frcfile(ifile))
       endif
       ! add force file info to output nc
       if (mynode == 0) then
@@ -1099,40 +1328,60 @@
         if (.not.allocated(cdata)) then
           call init_coarse
         endif
+
         if (gtype=='u') then
-          call ncread(ncid,vname,cdata(1:ic1,jc0:jc1),(/1,1,irec/))
+          pio_gtype='2Cu'
+          call ncread(ncid,vname,cdata(xc_:xc1,yc0:yc1),start=(/1,1,irec/),fname=frcfile(ifile))
+!        call exchange_xxx(cdata,array_bf=cbf)
+!        call wrt_instant(cdata, vname)
+!        stop
+!          call wrt_instant(cdata, vname)
         elseif (gtype=='v') then
-          call ncread(ncid,vname,cdata(ic0:ic1,1:jc1),(/1,1,irec/))
+          pio_gtype='2Cv'
+          call ncread(ncid,vname,cdata(xc0:xc1,yc_:yc1),start=(/1,1,irec/),fname=frcfile(ifile))
+!        call exchange_xxx(cdata,array_bf=cbf)
+!        call wrt_instant(cdata, vname)
+!        stop
+!          call wrt_instant(cdata, vname)
         else
-          call ncread(ncid,vname,cdata(ic0:ic1,jc0:jc1),(/1,1,irec/))
+          pio_gtype='2Cr'
+          call ncread(ncid,vname,cdata(xc0:xc1,yc0:yc1),start=(/1,1,irec/),fname=frcfile(ifile))
+!          call wrt_instant(cdata, vname)
         endif
+!!! SKIP = USE_PIO ??
         call exchange_xxx(cdata,array_bf=cbf)
+        !call wrt_instant(cdata, vname)
+        !stop
         call coarse2fine(cdata,nc%vdata(:,:,it),gtype)
       else
         if (gtype=='u') then
-          call ncread(ncid,vname,nc%vdata(1:i1,j0:j1,it),(/1,1,irec/))
+          pio_gtype = '2Du'
+          call ncread(ncid,vname,nc%vdata(x_:x1,y0:y1,it),start=(/1,1,irec/),fname=frcfile(ifile))
         elseif (gtype=='v') then
-          call ncread(ncid,vname,nc%vdata(i0:i1,1:j1,it),(/1,1,irec/))
+          pio_gtype = '2Dv'
+          call ncread(ncid,vname,nc%vdata(x0:x1,y_:y1,it),start=(/1,1,irec/),fname=frcfile(ifile))
         else    ! rho-grid
-          call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,it),(/1,1,irec/))
+          pio_gtype = '2Dr'
+          call ncread(ncid,vname,nc%vdata(x0:x1,y0:y1,it),start=(/1,1,irec/),fname=frcfile(ifile))
         endif
       endif
       ! add force file info to output nc
-      if (mynode == 0) then
-        ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
+!      if (mynode == 0) then
+      ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
         ! if forcing netcdf has information
-        if (len(trim(forcing_version)) /= 0) then
+      if (len(trim(forcing_version)) /= 0) then
           ! if attribute has not been set yet
-          if (index(force_info,forcing_version) == 0) then
-            write(frcstr,'(2A)') trim(adjustl(frctype)),trim(adjustl(forcing_version))
-            frcstr = trim(adjustl(frcstr))
-            call store_string_att(force_info,frcstr)
-          endif
+        if (index(force_info,forcing_version) == 0) then
+          write(frcstr,'(2A)') trim(adjustl(frctype)),trim(adjustl(forcing_version))
+          frcstr = trim(adjustl(frcstr))
+          call store_string_att(force_info,frcstr)
         endif
       endif
+!      endif
       ierr = nf90_close(ncid)
 
-      call exchange_xxx(nc%vdata(:,:,it))
+!!! SKIP = USE_PIO ??
+      call exchange_xxx(nc%vdata(:,:,it))!,skip=use_pio)
 
       if (mynode==0) then
         call display_read_time_to_log(vname,nc%times(it),irec )
@@ -1171,27 +1420,23 @@
 
       ! local
       integer :: ierr,ncid,varid
-
       fname=trim(adjustl(output_root_name)) / / trim(ftype)
       if (present(nodate)) then
-        call append_date_node(fname,nodate)
+         call append_date_node(fname,nodate)
       else
-        call append_date_node(fname)
+         call append_date_node(fname)
       endif
-
       ierr=nf90_create(trim(fname),nf90_netcdf4,ncid)
       if (ierr/=nf90_noerr) then
          call error_log%check_netcdf_status(netcdf_status=ierr,
      &        context=module_name//"/"//sr_name,
      &        info="unable to create file "//trim(fname))
       end if
-
       if (.not.present(nodate)) then
         varid = nccreate(ncid,'ocean_time',(/dn_tm/),(/0/),nf90_double)
         ierr = nf90_put_att(ncid,varid,'long_name', refdatestr)
         ierr = nf90_put_att(ncid,varid,'units','second' )
       endif
-
       call put_global_atts(ncid, ierr)                     ! put global attributes in file
       if (ierr/=nf90_noerr) then
          call error_log%check_netcdf_status(netcdf_status=ierr,
@@ -1210,7 +1455,7 @@
       subroutine coarse2fine(cdata,fdata,gtype) ![
       ! interpolates from (possibly partitioned) coarse to fine surface forcing data
       ! NOT correct for u-grid or v-grid variables
-      use hidden_mpi_vars, only: isw_corn, jsw_corn
+      use param, only: isw_corn, jsw_corn
       implicit none
 
       ! input/output
@@ -1555,8 +1800,7 @@
      & , v_sponge
 #endif
       use scoord, only:
-     &     cs_r, cs_w, hc, isw_corn, iwest, jsouth,
-     &     jsw_corn, theta_b, theta_s
+     &     cs_r, cs_w, hc, theta_b, theta_s
 #ifndef NONLIN_EOS
       use eos_vars, only: T0, Tcoef
 #ifdef SALINITY
@@ -1565,6 +1809,7 @@
 #endif
       use strings, only: cpps, srcs
       use netcdf, only: nf90_def_dim
+      use param, only: np_eta, np_xi, isw_corn, iwest, jsouth, jsw_corn
 
       implicit none
       character(len=15) :: sr_name = "put_global_atts"
@@ -1596,6 +1841,13 @@
 
       ierr=nf90_put_att(ncid, nf90_global, 'partition', ibuff)
 #endif
+!     ierr=nf90_put_att(ncid, nf90_global, 'global_x', gnx)
+!     ierr=nf90_put_att(ncid, nf90_global, 'global_y', gny)
+      if (new_part) then
+        ierr=nf90_put_att(ncid, nf90_global, 'ij_nodes', (/NP_XI,NP_ETA/))
+        ierr=nf90_put_att(ncid, nf90_global, 'subdompos', (/inode,jnode/))
+      endif
+      ierr=nf90_put_att(ncid, nf90_global, 'globaldims', (/gnx+2,gny+2/))
 
       ierr=nf90_put_att(ncid, nf90_global, 'global_x', gnx)
       ierr=nf90_put_att(ncid, nf90_global, 'global_y', gny)
@@ -1603,15 +1855,13 @@
       ierr=nf90_put_att(ncid, nf90_global, 'title',title)         ! Title of the run
 
 #ifndef ANA_GRID
-      ierr=nf90_put_att(ncid, nf90_global, 'grid_file',grdname)
+      ierr=nf90_put_att(ncid, nf90_global, 'grid_file',grid_files)
 #endif
 #ifndef ANA_GRID
       ierr=nf90_put_att (ncid, nf90_global, 'forcing_files', force_files)
       ierr=nf90_put_att (ncid, nf90_global, 'forcing_info', adjustl(force_info))
 #endif
-#ifndef ANA_INITIAL
-      ierr=nf90_put_att(ncid, nf90_global, 'init_file',ininame)
-#endif
+      ierr=nf90_put_att(ncid, nf90_global, 'init_file',ini_files)
 
       ierr=nf90_put_att(ncid, nf90_global, 'ntimes', ntimes)         ! Time stepping parameters
       ierr=nf90_put_att(ncid, nf90_global, 'ndtfast',ndtfast)
