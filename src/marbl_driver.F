@@ -130,7 +130,7 @@
 !     via storage_size() so it automatically adapts to single/double builds
 !     (ROMS precision is controlled externally by DBLEPREC / mpc).
 #ifndef MARBL_TILE_TARGET_MB
-# define MARBL_TILE_TARGET_MB 3.22
+# define MARBL_TILE_TARGET_MB 1.5
 #endif
       real, parameter :: marbl_tile_target_mb = MARBL_TILE_TARGET_MB
       integer :: tile_ni, tile_nj
@@ -2219,16 +2219,6 @@
          do m=1,nt_marbl
             marbl_instance%tracers(m,:)=
      &           tracer_array(i,j,nz:1:-1,nnew, m+(NT-nt_marbl) )
-
-!     Print bottom value at a desired location if requested:
-            if ( (i==printi) .and. (j==printj)
-     &           .and. (mynode==printnode) .and. (print_values) ) then
-               print *, 'We just set bottom ',
-     &              (trim(MARBL_instance%tracer_metadata(m)%short_name)),
-     &              ' as ',marbl_instance%tracers(m,nz),
-     &              (trim(MARBL_instance%tracer_metadata(m)%units))
-            end if
-
          end do
       end subroutine marbldrv_set_marbl_interior_tracer_values
 !-----------------------------------------------------------------------
@@ -2247,18 +2237,6 @@
             do m=1,MARBL_instance%interior_tendency_saved_state%saved_state_cnt
                MARBL_instance%interior_tendency_saved_state%state(m)%field_3d(:,1)
      &              =marbl_saved_state_3d(i,j,nz:1:-1,m)
-
-!     Print interior tendency saved state bottom values at a chosen location if desired:
-               if ( (i==printi) .and. (j==printj)
-     &              .and. (mynode==printnode) .and. (print_values) ) then
-                  print *, 'MARBL driver: bottom ',
-     &                 trim(MARBL_instance%
-     &                 interior_tendency_saved_state%state(m)%long_name)
-     &                 ,' set as ',marbl_instance%
-     &                 interior_tendency_saved_state%state(m)%field_3d(nz,1)
-     &                 ,trim(MARBL_instance%interior_tendency_saved_state%state(m)%units)
-               end if
-
             end do
       end subroutine marbldrv_set_marbl_interior_saved_state_values
 !-----------------------------------------------------------------------
