@@ -3,7 +3,7 @@
 #include "cppdefs.opt"
 
 #ifdef PARALLEL_IO
-      use pio, only : PIO_init, PIO_rearr_subset, iosystem_desc_t, file_desc_t
+      use pio, only : PIO_init, PIO_rearr_subset, PIO_rearr_box, iosystem_desc_t, file_desc_t
       use pio, only : PIO_finalize, PIO_noerr, PIO_iotype_netcdf, PIO_createfile
       use pio, only : PIO_int, PIO_real, PIO_double, var_desc_t, PIO_redef, PIO_def_dim, PIO_def_var, PIO_enddef
       use pio, only : PIO_closefile, io_desc_t, PIO_initdecomp, PIO_write_darray
@@ -513,9 +513,9 @@
 
         ! Set up PIO for this object
 
-        call PIO_setdebuglevel(6)
+!        call PIO_setdebuglevel(6)
         pio_numAggregator = 0
-        pio_optBase       = 1
+        pio_optBase       = 0
 
 
         ! NORTH 1R
@@ -1455,7 +1455,7 @@
           call PIO_write_darray(pio_FileDesc, varId, pio_desc_w1v_w, arr, ierr)
         endif
 
-        call PIO_syncfile(pio_FileDesc)
+!        call PIO_syncfile(pio_FileDesc)
 
       end subroutine pio_ncwrite1
 ! ----------------------------------------------------------------------
@@ -1515,7 +1515,7 @@
           call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Cv_w, arr, ierr)
         endif
 
-        call PIO_syncfile(pio_FileDesc)
+!        call PIO_syncfile(pio_FileDesc)
 
       end subroutine pio_ncwrite2
 ! ----------------------------------------------------------------------
@@ -1547,7 +1547,7 @@
           call PIO_write_darray(pio_FileDesc, varId, pio_desc_3Dw_w, arr, ierr)
         endif
 
-        call PIO_syncfile(pio_FileDesc)
+!        call PIO_syncfile(pio_FileDesc)
 
       end subroutine pio_ncwrite3
 ! ----------------------------------------------------------------------

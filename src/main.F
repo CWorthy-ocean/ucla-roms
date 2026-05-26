@@ -298,8 +298,8 @@ CR      write(*,*) ' -6' MYID
 
       walltime4 = MPI_Wtime() - walltime0
 
-      call set_depth(0)
 
+      call set_depth(0)
 !----------------------------------------------------------------------
 !  Set NHMG horizontal and vertical grids
 !  then set matrices coefficients for the elliptic problem
@@ -326,7 +326,6 @@ CR      write(*,*)  ' -2' MYID
       if (floats) then
         call init_particles
       endif
-
       ! we should have a grid and z_r by now
 
 #if defined SPONGE
@@ -348,7 +347,6 @@ CR      write(*,*)  ' -2' MYID
 
 !      call wrt_random
 !      stop
-
         mpi_master_only write(*,'(/1x,A/)')
      &     'main :: initialization complete, started time-stepping.'
 

@@ -1,8 +1,12 @@
 
       ! Options for netcdf input and output
 
+      ! deflate/shuffle are NetCDF-4 (HDF5) only. Set use_netcdf4_var_opts=.false.
+      ! when creating classic/CDF-5 files (nf90_64bit_data in create_file).
+      logical,parameter  :: use_netcdf4_var_opts = .false.
+
       integer,parameter  :: deflate_level=1 ! Compression level for joined file
-      logical,parameter  :: shuffle=.true.  ! Shuffle on for extra conmpression
+      logical,parameter  :: shuffle=.true.  ! Shuffle on for extra compression
 
       integer,parameter :: default_prec = nf90_float
 

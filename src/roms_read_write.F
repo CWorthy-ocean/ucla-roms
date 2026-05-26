@@ -11,7 +11,7 @@
      &     nf90_netcdf4, nf90_global, nf90_enotatt, nf90_open,
      &     nf90_inq_varid, nf90_get_att, nf90_close, nf90_create,
      &     nf90_put_att, nf90_inquire_variable, nf90_inquire_dimension,
-     &     nf90_get_var
+     &     nf90_get_var, nf90_clobber, nf90_64bit_data
       use scalars, only: time, dt, sec2day, tdays, akt_bak, akv_bak
       use nc_read_write, only: nccreate, ncread
       use dimensions, only:
@@ -1331,7 +1331,12 @@
         call append_date_node(fname)
       endif
 
-      ierr=nf90_create(trim(fname),nf90_netcdf4,ncid)
+#ifdef PARALLEL_IO
+      ierr = nf90_create(trim(fname), ior(nf90_clobber, nf90_64bit_data), ncid)
+#else
+      ierr = nf90_create(trim(fname), nf90_netcdf4, ncid)
+#endif
+!      ierr=nf90_create(trim(fname),nf90_netcdf4,ncid)
       if (ierr/=nf90_noerr) then
          call error_log%check_netcdf_status(netcdf_status=ierr,
      &        context=module_name//"/"//sr_name,

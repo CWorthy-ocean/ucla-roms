@@ -7,7 +7,7 @@
       use netcdf, only:
      &     nf90_double, nf90_int, nf90_global, nf90_write,
      &     nf90_inq_varid, nf90_put_var, nf90_put_att, nf90_open, nf90_close,
-     &     nf90_nofill, nf90_set_fill
+     &     nf90_nofill, nf90_set_fill, nf90_redef, nf90_enddef
       use nc_read_write, only: nccreate, ncwrite
       use dimensions, only:  eta_rho, eta_v, xi_rho, xi_u
      & , ds_xr, ds_yr, ds_zr, ds_xu, ds_yv, ds_zw
@@ -1023,6 +1023,7 @@
 #endif
 
       ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_redef(ncid)
 
       if (avg) then
         call def_vars_ocean_vars(  .true.  )
@@ -1033,6 +1034,7 @@
         ierr=nf90_put_att(ncid,nf90_global,'type','ROMS history file')
       endif
 
+      ierr=nf90_enddef(ncid)
       ierr=nf90_close(ncid)
 
       end subroutine create_file_ocean_vars !]
@@ -1051,11 +1053,13 @@
         call create_file('_rst',fname, nonode=.true.)
 
         ierr=nf90_open(fname,nf90_write,ncid)
+        ierr=nf90_redef(ncid)
 
         ierr=nf90_put_att(ncid,nf90_global,'type','ROMS restart file')
 
         call def_vars_rst_ocean_vars
 
+        ierr=nf90_enddef(ncid)
         ierr=nf90_close(ncid)
       endif
       call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
@@ -1064,11 +1068,13 @@
       call create_file('_rst',fname)
 
       ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_redef(ncid)
 
       ierr=nf90_put_att(ncid,nf90_global,'type','ROMS restart file')
 
       call def_vars_rst_ocean_vars
 
+      ierr=nf90_enddef(ncid)
       ierr=nf90_close(ncid)
 #endif
 

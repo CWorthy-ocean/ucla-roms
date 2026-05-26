@@ -430,8 +430,12 @@
         dimid(i) = did
       enddo
       if (varname /= '') then
-      ierr=nf90_def_var(ncid,varname,xtype,dimid,varid,
-     &                  deflate_level=deflate_level, shuffle=shuffle)
+        if (use_netcdf4_var_opts) then
+          ierr=nf90_def_var(ncid,varname,xtype,dimid,varid,
+     &                      deflate_level=deflate_level, shuffle=shuffle)
+        else
+          ierr=nf90_def_var(ncid,varname,xtype,dimid,varid)
+        endif
       if (ierr/=nf90_noerr) then
          call error_log%check_netcdf_status(netcdf_status=ierr,
      &        context=module_name//"/"//fn_name,

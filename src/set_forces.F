@@ -135,9 +135,11 @@ c***              no code here
 # endif
       if(nt>iTandS) call set_surf_tracer_flx
       ! BGC surface flux:
+
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
       call set_bgc_surf_frc(istr,iend,jstr,jend)
 # endif
+
       if (river_source) then
         frctype = 'RIVERS:'
         call set_river_frc
