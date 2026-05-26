@@ -21,9 +21,12 @@
 
       use bgc_shared_vars, only:
      &     nrpf_avg, nrpf_his, nrpf_avg_dia,
-     &     nrpf_his_dia, t, nc_dust, nc_iron, nc_xco2air
+     &     nrpf_his_dia, t, nc_dust, nc_iron
+#ifdef PCO2AIR_FORCING
+     &     , nc_xco2air
 #ifdef MARBL
      &     , nc_xco2air_alt
+#endif
 #endif
 #ifdef NOX_FORCING
      &     , nc_nox
@@ -99,9 +102,12 @@
       ! this routine is called by # if defined BIOLOGY_BEC2 in set_forces.F of ETH code
 
       use scalars, only: cp, nrhs, rho0
-      use bgc_forces, only: dust, iron, xco2air
+      use bgc_forces, only: dust, iron
+#ifdef PCO2AIR_FORCING
+     &     , xco2air
 #ifdef MARBL
      &     , xco2air_alt
+#endif
 #endif
 #ifdef NOX_FORCING
      &     , nox

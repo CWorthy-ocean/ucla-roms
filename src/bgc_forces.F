@@ -25,6 +25,8 @@ CSDISTRIBUTE_RESHAPE  xco2airg(BLOCK_PATTERN,*) BLOCK_CLAUSE
       integer :: xco2air_ncycle,  xco2air_rec, itxco2air, ntxco2air,
      &           xco2air_file_id, xco2air_id,  xco2air_tid
 # endif
+#else
+      real, parameter :: xco2air_default = 284.7   ! pre-industrial [micromol/mol]
 #endif /* PCO2AIR_FORCING */
 
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
