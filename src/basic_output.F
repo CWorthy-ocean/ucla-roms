@@ -451,8 +451,7 @@
           ierr=nf90_open(fname_his,nf90_write,ncid)
           ! always add time
           call ncwrite(ncid,'ocean_time',(/time/),(/rec_his/))
-          call write_time_step( ncid, rec_his, total_rec_his,
-     &                        defer_abort_check=.true.)
+          call write_time_step( ncid, rec_his, total_rec_his)
           ierr=nf90_close (ncid)
         endif
         ! abort_check uses MPI collectives; must not run only on rank 0
@@ -901,7 +900,7 @@
 
           call ncwrite(ncid,'ocean_time',(/time/),(/rec_rst/))
 
-          call write_time_step( ncid, rec_rst, total_rec_rst, defer_abort_check=.true.)
+          call write_time_step( ncid, rec_rst, total_rec_rst)
           ierr=nf90_close (ncid)
         endif
         call error_log%abort_check()
@@ -1554,17 +1553,13 @@
 
       end subroutine calc_avg_ocean_vars  !]
 ! ----------------------------------------------------------------------
-      subroutine write_time_step( ncid, record, total_recs,
-     &                            defer_abort_check )  ![
+      subroutine write_time_step( ncid, record, total_recs)  ![
       implicit none
       character(len=16) :: sr_name = "write_time_step"
       ! inputs
       integer, intent(in) :: ncid
       integer, intent(in) :: record                        ! current file record number
       integer, intent(in) :: total_recs                    ! total records for variable
-      logical, intent(in), optional :: defer_abort_check
-      ! If true, skip abort_check here so the caller can invoke error_log%abort_check
-      ! on all MPI ranks (required — abort_check contains MPI_Allreduce).
 
       ! local
       integer :: ibuff(iaux), start(2), count(2)           ! iaux = 6 from wrt_his.F
@@ -1585,9 +1580,6 @@
       call error_log%check_netcdf_status(netcdf_status=ierr,
      &     context=module_name//"/"//sr_name,
      &     info="variable: time_step")
-      if (.not.(present(defer_abort_check).and.defer_abort_check)) then
-        call error_log%abort_check()
-      endif
       ! can't use ncwrite() as ibuff is an integer array not real
 
       end subroutine write_time_step  !]
