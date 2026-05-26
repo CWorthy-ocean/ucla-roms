@@ -26,7 +26,7 @@
 
 #define USE_VARD 0
 
-#define PIO_HAS_PAR_FILTERS 
+#define PIO_HAS_PAR_FILTERS
 /* Does netCDF support netCDF/HDF5 files? */
 #define HAVE_NETCDF4
 

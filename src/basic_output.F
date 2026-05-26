@@ -4,6 +4,7 @@
       ! his, avg, and rst files
 
 #include "cppdefs.opt"
+      use namelist_open_mod, only: open_namelist_file
       use netcdf, only:
      &     nf90_double, nf90_int, nf90_global, nf90_write,
      &     nf90_inq_varid, nf90_put_var, nf90_put_att, nf90_open, nf90_close,
@@ -15,8 +16,8 @@
      &     max_name_size, dn_tm, dn_xr, dn_xu,
      &     dn_yr, dn_yv, dn_zr, dn_zw,
      &     avg_output, create_file, sec2date
-      use sponge_tune, only: ub_tune, wrt_rst_ub
-      use calc_pflx_mod, only: calc_pflx, wrt_rst_diag_slow
+      use sponge_tune, only:  wrt_rst_ub, ub_tune
+      use calc_pflx_mod, only: wrt_rst_diag_slow, calc_pflx
       use scalars, only:
      &     NT, iic, knew, nstp, time,
      &     N, dt, start_time, nnew, tdays
@@ -35,7 +36,35 @@
       implicit none
       private
 
-#include "ocean_vars.opt"
+      real, public :: output_period_rst = 100        ! output period in seconds
+      real    :: nrpf_rst          = 10
+
+      real    :: output_period_his = 100         ! output period in seconds
+      integer :: nrpf_his          = 20          ! total recs per file
+
+      real    :: output_period_avg = 100         ! output averaging period in seconds
+      integer :: nrpf_avg          = 20          ! total recs per file
+
+      logical, public ::
+     &     wrt_file_rst, wrt_file_avg, wrt_file_his, monthly_restarts,
+     &     wrt_Z, wrt_Ub, wrt_Vb, wrt_U, wrt_V, wrt_R, wrt_O, wrt_W,
+     &     wrt_Akv, wrt_Akt, wrt_aks, wrt_Hbls, wrt_Hbbl,
+     &     wrt_avg_Z, wrt_avg_Ub, wrt_avg_Vb, wrt_avg_U, wrt_avg_V,
+     &     wrt_avg_R, wrt_avg_O, wrt_avg_W, wrt_avg_Akv, wrt_avg_Akt,
+     &     wrt_avg_Aks, wrt_avg_Hbls, wrt_avg_Hbbl
+
+      namelist /BASIC_OUTPUT_SETTINGS/
+     &     output_period_rst, nrpf_rst,
+     &     output_period_his, nrpf_his,
+     &     output_period_avg, nrpf_avg,
+     &     wrt_file_rst, wrt_file_avg, wrt_file_his, monthly_restarts,
+     &     wrt_Z, wrt_Ub, wrt_Vb, wrt_U, wrt_V, wrt_R, wrt_O, wrt_W,
+     &     wrt_Akv, wrt_Akt, wrt_aks, wrt_Hbls, wrt_Hbbl,
+     &     wrt_avg_Z, wrt_avg_Ub, wrt_avg_Vb, wrt_avg_U, wrt_avg_V,
+     &     wrt_avg_R, wrt_avg_O, wrt_avg_W, wrt_avg_Akv, wrt_avg_Akt,
+     &     wrt_avg_Aks, wrt_avg_Hbls, wrt_avg_Hbbl
+
+
       character(len=12) :: module_name = "basic_output"
 # ifdef SOLVE3D
       real,allocatable,dimension(:,:,:) :: akv_avg
@@ -60,25 +89,25 @@
 # ifdef SALINITY
      &                    , indxS=indxT+1
 # endif
-     &                    , indxAkv=indxT+NT,   indxAkt=indxAkv+1
+      integer, public :: indxAkv
+     &                    , indxAkt
 # ifdef SALINITY
-     &                    , indxAks=indxAkt+1
+     &                    , indxAks
 # endif
 # ifdef LMD_KPP
 #  ifdef SALINITY
-     &                    , indxHbls=indxAks+1
+     &                    , indxHbls
 #  else
-     &                    , indxHbls=indxAkt+1
+     &                    , indxHbls
 #  endif
 # ifdef LMD_BKPP
-     &                    , indxHbbl=indxHbls+1
+     &                    , indxHbbl
 # endif
 # else
 # ifdef LMD_BKPP
-     &                    , indxHbbl=indxAks+1
+     &                    , indxHbbl
 # endif
 # endif
-
 #endif
       !]
 
@@ -102,8 +131,60 @@
       public :: wrt_rst_ocean_vars
       public :: init_avg_arrays
       public :: init_restarts
+      public :: read_nml_basic_output
 
-      contains  !]
+      contains                  !]
+
+      subroutine read_nml_basic_output
+
+!     Read the "BASIC_OUTPUT_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_basic_output"
+      character(len=512) :: msg = ""
+
+      ! initialize indxAkv
+      indxAkv = indxT + NT
+
+#ifdef SOLVE3D
+      indxAkv = indxT + NT
+      indxAkt = indxAkv + 1
+# ifdef SALINITY
+      indxAks = indxAkt + 1
+# endif
+# ifdef LMD_KPP
+#  ifdef SALINITY
+      indxHbls = indxAks + 1
+#  else
+      indxHbls = indxAkt + 1
+#  endif
+# ifdef LMD_BKPP
+      indxHbbl = indxHbls + 1
+# endif
+# else
+# ifdef LMD_BKPP
+      indxHbbl = indxAks + 1
+# endif
+# endif
+#endif
+
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=BASIC_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read BASIC_OUTPUT_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_basic_output
+
 !----------------------------------------------------------------------
       subroutine init_restarts  ![
 
@@ -124,6 +205,7 @@
       implicit none
       character(len=15) :: sr_name = "init_avg_arrays"
       character(len=1024) :: error_info
+
 
       if (wrt_file_his .and. mod(output_period_his, dt) /= 0) then
          write(error_info, *)
@@ -301,6 +383,7 @@
       use grid, only: pn, pm
       use dimensions, only: i0,i1,j0,j1
       use tracers, only: wrt_his_trc
+      use wvlcty_mod, only: wvlcty
 
       implicit none
 
@@ -308,15 +391,20 @@
       logical,optional       :: special !! for blowup and initial history file
       ! local
       integer,dimension(4)   :: start
-      integer,save           :: rec_his=nrpf_his                     ! current file output record
-      integer,save           :: total_rec_his=0                      ! total his output records so far
-      real,save              :: output_time_his=output_period_his+10
+      integer,save           :: rec_his                     ! current file output record
+      integer                :: total_rec_his=0                      ! total his output records so far
+      real,save              :: output_time_his=0
       logical,save           :: first_step=.true.
       character(len=max_name_size),save :: fname_his
       integer                :: tile, ierr, i, j, k
       logical,save           :: supress=.false.
       logical                :: blowup,initial
 
+      if (first_step) then
+         output_time_his=output_period_his+10
+         rec_his = nrpf_his
+         first_step = .false.
+      end if
 
       blowup = .false.
       initial= .false.
@@ -331,8 +419,8 @@
 
       if (wrt_file_his.or.blowup) then
 
-        if (.not.present(special)) then
-         output_time_his = output_time_his + dt
+         if (.not.present(special)) then
+            output_time_his = output_time_his + dt
         endif
 
 
@@ -499,9 +587,6 @@
           call ncwrite(ncid,vname(1,indxO),work(i0:i1,j0:j1,:),start)
         endif
         if (wrt_W) then                              ! true vertical velocity (m/s).
-!         do tile=0,NSUB_X*NSUB_E-1
-!           call wvlcty (tile, work)
-!         enddo
           call wvlcty (0, work)
           call ncwrite(ncid,vname(1,indxW),work(i0:i1,j0:j1,1:N),start)
         endif
@@ -519,12 +604,11 @@
 # endif
 #endif
         ierr=nf90_close(ncid)
-        if (mynode == 0 .and. (.not.code_check)) then                 ! supress output for code_check
+        if (mynode == 0) then
           write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')
      &     'ocean_vars :: wrote history, tdays =', tdays,
      &     'step =', iic, 'rec =', rec_his
         endif
-        code_check=.false.
 
         output_time_his=0
       endif
@@ -549,14 +633,19 @@
 
       ! local
       integer,dimension(4)   :: start
-      integer,save           :: rec_avg=nrpf_avg
+      integer                :: rec_avg
       integer,save           :: total_rec_avg=0                      ! total avg output records so far
       real,save              :: output_time_avg=0                    ! time since last output
-      logical,save           :: first_step=.true.
       character(len=max_name_size),save :: fname_avg
       character(len=99)      :: output_time_string
       character(len=99)      :: formatted_string
       integer :: tile, tn, ierr, k
+      logical, save          :: first_step
+
+      if (first_step) then
+         rec_avg = nrpf_avg
+         first_step = .false.
+      end if
 
       if (wrt_file_avg) then
 
@@ -1395,6 +1484,7 @@
       use private_scratch, only: a2d
       use dimensions, only: i0, i1, j0, j1, nx, ny
       use tracers, only: set_avg_trc
+      use wvlcty_mod, only: wvlcty_tile
       implicit none
 
       ! local

@@ -9,7 +9,7 @@
 #include "cppdefs.opt"
 
 #if defined MARBL && defined CDR_FORCING
-
+      use namelist_open_mod, only: open_namelist_file
       use roms_read_write, only:
      &     ncforce, ncforce3d, cdr_frc_opt,
      &     set_frc_data, store_string_att
@@ -34,7 +34,48 @@
       private
       character(len=7) :: module_name="cdr_frc"
       character(len=1024) :: error_info=""
-#include "cdr_frc.opt"
+      character(len=128) :: cdr_file = 'cdr_release.nc'
+      integer,public :: ncdr_parm=0
+
+      ! Forcing file settings:
+      ! Use either volume flux [m3/s] and tracer concentrations [mmol/m3], or use tracer flux [mmol/s]
+      type (ncforce) :: nc_cdrvol = ncforce(
+     &     vname='cdr_volume', tname='cdr_time')
+      type (ncforce) :: nc_cdrtrc = ncforce(
+     &     vname='cdr_tracer', tname='cdr_time')
+      type (ncforce) :: nc_cdrflx = ncforce(
+     &     vname='cdr_trcflx', tname='cdr_time')
+
+      character(len=9)  :: cdr_loc_lon = 'cdr_lon'  !!  longitude at center of CDR release [degrees East]
+      character(len=9)  :: cdr_loc_lat = 'cdr_lat'  !!  latitude at center of CDR release  [degrees North]
+      character(len=9)  :: cdr_loc_dep = 'cdr_dep'  !!  depth of CDR release [m]
+      character(len=9)  :: cdr_scl_hor = 'cdr_hsc'  !!  horizontal scale of CDR release [m]
+      character(len=9)  :: cdr_scl_vrt = 'cdr_vsc'  !!  vertical scale of CDR release [m]
+
+      ! VERTICAL PROFILES FROM FILE ****************************
+      ! Layer thicknesses for a vertical profile [m]
+      type (ncforce)   :: nc_cdrhz  = ncforce(
+     &     vname='cdr_layer_thickness', tname='cdr_time')
+      ! Layerwise additionality
+      type (ncforce3d) :: nc_cdrflx_dp = ncforce3d(
+     &     vname='cdr_trcflx_profile', tname='cdr_time')
+
+      ! 3D FORCING FROM FILE *************************************
+      type (ncforce3d) :: nc_cdrflx_3d_ALK = ncforce3d(
+     &     vname='cdr_trcflx_3d_ALK', tname='cdr_time')
+      type (ncforce3d) :: nc_cdrflx_3d_DIC = ncforce3d(
+     &     vname='cdr_trcflx_3d_DIC', tname='cdr_time')
+
+      integer :: nz_chd = 0  ! Number of vertical layers in the forcing file, or, if upscaling,
+! the number of vertical layers in the child grid.
+      logical, public :: cdr_source,
+     &     forcing_depth_profiles, forcing_3d, forcing_parameterized,
+     &     time_interpolation, relocate_to_wet_pts, cdr_volume
+
+      namelist /CDR_FRC_SETTINGS/ cdr_file, ncdr_parm, nz_chd, cdr_source,
+     &     forcing_depth_profiles, forcing_3d, forcing_parameterized,
+     &     time_interpolation, relocate_to_wet_pts, cdr_volume
+
 
       !!! (1) Parameterized releases
       !!! (2) Vertical profiles (upscaling)
@@ -62,12 +103,12 @@
       real, allocatable, dimension(:)             :: cdr_lat      ! latitude of cdr location
 
 
-      !!! Variables used only for (1)
-      real,public,dimension(ncdr_parm)           :: cdr_vol       ! cdr volume
-      real,public,dimension(ncdr_parm,nt)        :: cdr_trc       ! cdr tracer concentration
-      real,dimension(ncdr_parm)                  :: cdr_hsc       ! cdr horizontal scale
-      real,dimension(ncdr_parm)                  :: cdr_vsc       ! cdr vertical scale
-      real,dimension(ncdr_parm)                  :: cdr_dep       ! cdr depth
+!!! Variables used only for (1)
+      real,public,allocatable,dimension(:)           :: cdr_vol       ! cdr volume
+      real,public,allocatable,dimension(:,:)         :: cdr_trc ! cdr tracer concentration
+      real, allocatable, dimension(:)                :: cdr_hsc       ! cdr horizontal scale
+      real,allocatable,dimension(:)                  :: cdr_vsc       ! cdr vertical scale
+      real,allocatable,dimension(:)                  :: cdr_dep       ! cdr depth
 
       !!! Variables used only for (2)
       real, allocatable, dimension(:,:,:)        :: cdr_flx_dp    ! cdr tracer flux (depth profile)
@@ -80,7 +121,7 @@
       real,public,allocatable,dimension(:,:,:)   :: cdr_flx_3d_ALK    ! 3d cdr tracer flux for ALK
       real,public,allocatable,dimension(:,:,:)   :: cdr_flx_3d_DIC    ! 3d cdr tracer flux for DIC
 
-      public set_cdr_frc
+      public set_cdr_frc, read_nml_cdr_frc
 
       contains
 
@@ -130,6 +171,26 @@
       call error_log%abort_check()
 
       end subroutine set_cdr_frc !]
+
+      subroutine read_nml_cdr_frc
+
+!     Read the "CDR_FRC_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=17) :: sr_name = "read_nml_cdr_frc"
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      read (unit=namelist_unit, nml=CDR_FRC_SETTINGS, iostat=ios)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info=
+     &   'could not read CDR_FRC_SETTINGS section of namelist file'
+     &        )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_cdr_frc
+
 ! ----------------------------------------------------------------------
       subroutine init_cdr_frc  ![
 
@@ -221,6 +282,7 @@
 
       allocate(cdr_flx_dp(ncdr,2,N_src));  cdr_flx_dp(:,:,:) = 0
       allocate(cdr_hz(ncdr,N_src));        cdr_hz(:,:) = 0
+      allocate(cdr_hsc(ncdr));             cdr_hsc(:) = 0
       allocate(cdr_lon(ncdr));             cdr_lon(:) = 0
       allocate(cdr_lat(ncdr));             cdr_lat(:) = 0
       allocate(cdr_flx(ncdr,nt));          cdr_flx(:,:) = 0
@@ -270,7 +332,11 @@
       ! local
 
       ncdr = ncdr_parm
-
+      allocate(cdr_vol(ncdr_parm)) ; cdr_vol(:) = 0
+      allocate(cdr_trc(ncdr_parm,nt)); cdr_trc(:,:) = 0
+      allocate(cdr_vsc(ncdr_parm)); cdr_vsc(:) = 0
+      allocate(cdr_dep(ncdr_parm)); cdr_vsc(:) = 0
+      allocate(cdr_hsc(ncdr));      cdr_hsc(:) = 0
       allocate(cdr_lon(ncdr));      cdr_lon(:) = 0
       allocate(cdr_lat(ncdr));      cdr_lat(:) = 0
       allocate(cdr_flx(ncdr,nt));   cdr_flx(:,:) = 0
@@ -343,7 +409,7 @@
 
 
         ! Handler for single-point release
-        if ((cdr_hsc(icdr) == 0) .or. (forcing_depth_profiles)) then
+        if ((forcing_depth_profiles) .or. (cdr_hsc(icdr) == 0)) then
           if (mynode == global_minloc(2)) then
             frac(lmi(1),lmi(2),icdr) = 1
             cidx = cidx+1
@@ -624,7 +690,6 @@
 
       private
       character(len=9) :: module_name="cdr_frc"
-#include "cdr_frc.opt"
 
       ! Public functions
       public set_cdr_frc

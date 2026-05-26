@@ -188,7 +188,7 @@
       subroutine ana_grid ![
 !     Provide analytical definition of coordinates, grid scale, coriolis, and depth
 #ifdef ANA_PIPES
-      use pipe_frc, only: pipe_source, pipe_fraction, pipe_idx
+      use pipe_frc, only: pipe_fraction, pipe_idx, pipe_source
 #elif defined(ANA_RIVER_USWC)
       use param, only: llm, mmm
 #endif
@@ -442,7 +442,7 @@
       implicit none
 
       character*1 char1
-      integer :: ierr, ncid, varid, lstr, checkdims
+      integer :: ierr, ncid, varid, lstr
       integer,dimension(4) :: start
       character(len=8) :: sr_name = "get_grid"
       character(len=1024) :: error_info = ''
@@ -537,10 +537,11 @@
 !----------------------------------------------------------------------
       subroutine precheck  ![
       use error_handling_mod, only: error_log
+      use checkdims_mod, only: checkdims
       implicit none
 
       character*1 char1
-      integer :: ierr, ncid, varid, lstr, checkdims
+      integer :: ierr, ncid, varid, lstr
       integer,dimension(4) :: start
       character(len=17) :: sr_name = "get_grid/precheck"
       character(len=1024) :: error_info = ''

@@ -2,9 +2,9 @@
 
 #include "cppdefs.opt"
 
-      use param, only: nt, N
+      use param, only: nt, N, mynode
       implicit none
-
+      character(len=7) :: module_name = "scalars"
 ! This is include file "scalars"
 !----- -- ------- ---- -----------
 ! The following common block contains time variables and indices for
@@ -78,12 +78,15 @@ C$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
 !     real :: xl,el
 
 #ifdef SOLVE3D
-      real rho0, tnu2(NT)
+      real rho0
+      real, allocatable :: tnu2(:)
 
-      real Akv_bak, Akt_bak(NT)
+      real :: Akv_bak = 0.
+      real, allocatable :: Akt_bak(:)
 
 # ifdef MY25_MIXING
-      real Akq_bak,   q2nu2,   q2nu4
+      real :: Akq_bak = 0.
+      real q2nu2,   q2nu4
 # endif
 #endif
 #ifdef SPONGE
@@ -133,6 +136,261 @@ C$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
       parameter (nmol_cm2_to_mmol_m2 = 0.01)
 #endif
 
-      real :: init=0  !=1.0e+33          ! initialize all arrays. set to huge number to check for bugs.
+      real :: init = 0.  !=1.0e+33          ! initialize all arrays. set to huge number to check for bugs.
+#if !defined EW_PERIODIC || !defined NS_PERIODIC
+      namelist /GAMMA2_SETTINGS/ gamma2
+#endif
+#if define SOLVE3D && defined TS_DIF2
+      namelist /TRACER_DIFF2/ tnu2
+#endif
+      namelist /BOTTOM_DRAG_SETTINGS/ rdrg, rdrg2
+#ifdef SOLVE3D
+     &     , zob
+      namelist /VERTICAL_MIXING_SETTINGS/ akv_bak, akt_bak
+#ifdef MY25_MIXING
+     &     ,akq_bak
+#endif
+#endif
+#ifdef UV_VIS2
+      namelist /LATERAL_VISC_SETTINGS/ visc2
+#endif
+      namelist /TIME_STEPPING/ dt, ndtfast, ntimes, ninfo
+#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING || defined M3NUDGING  || defined WKB_FRC_BRY
+      namelist /UBIND_SETTINGS/ ubind
+#endif
+#ifdef SPONGE
+      namelist /V_SPONGE_SETTINGS/ v_sponge
+#endif
+      namelist /RHO0_SETTINGS/ rho0
+      public read_nml_scalars
+      contains
+
+      subroutine read_nml_scalars
+      use param, only: itemp
+      use error_handling_mod, only: error_log
+      use namelist_open_mod, only: open_namelist_file
+      implicit none
+!     Read the "FRC_OUTPUT_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios, itrc
+      character(len=10) :: mixing_type
+      character(len=20) :: sr_name = "read_nml_scalars"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+
+!================================================================================
+! set `gamma2`
+#if !defined EW_PERIODIC || !defined NS_PERIODIC
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=GAMMA2_SETTINGS, iostat=ios, iomsg=msg)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read GAMMA2_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      mpi_master_only write(*,'(5x,A,ES10.3,2x,2A)')
+     &    'gamma2 =', gamma2,
+     &    'slipperiness parameter: ',
+     &    'free-slip = +1, or no-slip = -1.'
+#endif
+!================================================================================
+!     set `tnu2`
+      allocate(tnu2(NT))
+      tnu2(:) = 0.
+#if define SOLVE3D && defined TS_DIF2
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=TRACER_DIFF2, iostat=ios, iomsg=msg)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read TRACER_DIFF2'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      do itrc = 1, NT
+         if (itrc == itemp) then
+            mpi_master_only write(*,
+     & '(3x,A,I2,A,ES10.3,2x,2A,I2,A)')
+     &    'tnu2(',itrc,') =', tnu2(itrc),
+     &    'horizontal Laplacian ',
+     &    'kinematic heat conductivity [m^2/s]'
+         else
+            mpi_master_only write(*,
+     & '(3x,A,I2,A,ES10.3,2x,2A,I2,A)')
+     &    'tnu2(',itrc,') =', tnu2(itrc),
+     &    'horizontal Laplacian ',
+     &    'diffusion for tracer ', itrc, ', [m^2/s]'
+         end if
+      end do
+
+#endif
+!================================================================================
+! set rdrg, rdrg2
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=BOTTOM_DRAG_SETTINGS, iostat=ios, iomsg=msg)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read BOTTOM_DRAG_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+
+      mpi_master_only write(*,'(7x,A,ES10.3,2x,A)')
+     &    'rdrg =', rdrg,
+     &    'linear bottom drag coefficient [m/s]'
+
+      mpi_master_only write(*,'(6x,A,ES10.3,2x,A)')
+     &    'rdrg2 =', rdrg2,
+     &    'quadratic bottom drag coefficient, nondim'
+#ifdef SOLVE3D
+      mpi_master_only write(*,'(8x,A,ES10.3,2x,A)')
+     &    'Zob =', Zob,
+     &    'bottom roughness height [m]'
+#endif
+
+
+!================================================================================
+!Akv_bak, Akt_bak
+#ifdef SOLVE3D
+      allocate(Akt_bak(NT))
+      akt_bak(:) = 0.
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=VERTICAL_MIXING_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read VERTICAL_MIXING_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+#if !defined LMD_MIXING && !defined MY25_MIXING
+      mixing_type = "background"
+#else
+      mixing_type = "additional"
+#endif
+
+      mpi_master_only write(*,'(4x,A,ES10.3,2x,2A)')
+     &    'Akv_bak =', Akv_bak,
+     &    mixing_type, ' vertical viscosity [m^2/s]'
+
+      do itrc = 1, NT
+         mpi_master_only write(*,'(1x,A,I1,A,ES10.3,2x,2A,I0)')
+     &       'Akt_bak(', itrc, ') =', Akt_bak(itrc),
+     &       mixing_type,' vertical mixing [m^2/s] for tracer #',
+     &       itrc
+      end do
+#ifdef MY25_MIXING
+      mpi_master_only write(*,'(1x,A,ES10.3,1x,A)')
+     &    'Akq_bak =', Akq_bak,
+     &    'Background vertical mixing for TKE, [m^2/s]'
+#endif
+#endif
+!===============================================================================
+!visc2
+#ifdef UV_VIS2
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=LATERAL_VISC_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read LATERAL_VISC_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      mpi_master_only write(*,'(6x,A,ES10.3,2x,A)')
+     &    'visc2 =', visc2,
+     &    'horizontal Laplacian kinematic viscosity [m^2/s]'
+#endif
+!===============================================================================
+!dt, dtfast, ndtfast, ntimes ninfo
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=TIME_STEPPING, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read TIME_STEPPING'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &        )
+      end if
+      mpi_master_only write(*,
+     &  '(5x,A,I10,3x,A/9x,A,F11.4,2x,A/4x,A,I10,3x,A/6x,A,I10,3x,2A)'
+     &    ) 'ntimes =',  ntimes, 'total number of 3D timesteps',
+     &          'dt =',     dt,  'time step [sec] for 3D equations',
+     &     'ndtfast =', ndtfast, 'mode-splitting ratio',
+     &       'ninfo =',   ninfo, 'number of steps between runtime ',
+     &                                              'diagnostics'
+
+      dtfast = dt/dble(ndtfast)
+!===============================================================================
+! ubind
+#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING || defined M3NUDGING  || defined WKB_FRC_BRY
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=UBIND_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read UBIND_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      mpi_master_only write(*,'(6x,A,ES10.3,2x,A)')
+     &    'ubind =', ubind,
+     &    'open boundary binding velcity [m/s]'
+#endif
+!===============================================================================
+!v_sponge
+#ifdef SPONGE
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=V_SPONGE_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read V_SPONGE_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      mpi_master_only write(*,'(3x,A,F10.2,2x,A)')
+     &      'v_sponge =', v_sponge,
+     &      'maximum viscosity in sponge layer [m^2/s]'
+
+#endif
+!===============================================================================
+! rho0
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=RHO0_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read RHO0_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &        )
+      mpi_master_only write(*,'(7x,A,F10.4,2x,A)')  'rho0 =',
+     &     rho0, 'Boussinesq reference density [kg/m^3].'
+
+      end if
+
+!===============================================================================
+
+      close(namelist_unit)
+      end subroutine read_nml_scalars
+
 
       end module scalars

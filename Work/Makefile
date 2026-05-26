@@ -21,7 +21,7 @@ all:
 	@rsync -a $(ROMS_ROOT)/src/Make.depend Compile
 	@rsync -a $(ROMS_ROOT)/src/Makefile Compile
 	@rm Compile/*.f	2>/dev/null || :
-	cp -p *.h *.F *.opt Makedefs.inc Compile 2>/dev/null || :
+	cp -p *.h *.F *.F90 *.opt Makedefs.inc Compile 2>/dev/null || :
 	cd Compile; make depend 2>/dev/null || :
 	cd Compile; make -j6; mv roms ..
 
@@ -35,7 +35,7 @@ all:
 # for adding git hash:
 tag := $(shell git rev-parse HEAD)
 show_tag:
-	@perl -i -pe 's/git_hash=.*/git_hash="$(tag)"/' Compile/add_git_hash.*
+	@perl -i -pe 's/git_hash=.*/git_hash="$(tag)"/' Compile/add_git_hash_mod.*
 
 compile_clean:
 	rm -r Compile/ roms 2>/dev/null || :

@@ -8,12 +8,14 @@
 
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
 
-      use param, only: jnorth, jsouth, ieast, iwest, nsub_e, nsub_x
+      use param, only: jnorth, jsouth, ieast, iwest, nsub_e, nsub_x, np_xi, np_eta
+      use namelist_open_mod, only: open_namelist_file
+      use error_handling_mod, only: error_log
       use tracers, only: t_units
       use dimensions, only: i0, i1, j0, j1, eta_rho, xi_rho, inode, jnode
       use grid, only: latr, lonr
       use nc_read_write, only: nccreate, ncwrite
-      use roms_read_write, only: dn_tm, dn_xr, dn_yr, dn_zr, create_file
+      use roms_read_write, only: create_file, dn_tm, dn_xr, dn_yr, dn_zr, eta_rho, xi_rho
       use netcdf, only:
      &     nf90_double, nf90_write, nf90_put_att,
      &     nf90_open, nf90_close
@@ -21,14 +23,20 @@
       use ocean_vars, only: hz
       use basic_output, only: vn=>vname
       use scalars, only: n, dt, time
+      use hidden_mpi_vars, only: inode, jnode
 
       implicit none
       private
 
-#include "upscale_output.opt"
+      integer :: nrpf_uscl = 48                  ! number of records per output file
+      real    :: output_period_uscl = 100         ! output period in seconds
+
+      logical, public :: do_upscale
+      namelist /UPSCALE_SETTINGS/ nrpf_uscl, output_period_uscl, do_upscale
+      integer :: uscl_prec = nf90_double  ! Precision of output variables (nf90_float/nf90_double)
       character(len=15) :: module_name = "upscale_output"
-      integer                        :: record_uscl=nrpf_uscl   ! record number in file
-      real                           :: otime=output_period_uscl   ! time since last output; setting the initial
+      integer                        :: record_uscl=0   ! record number in file
+      real                           :: otime=0   ! time since last output; setting the initial
                                               ! value to output_period should make it write a record upon startup (which
                                               ! is desired)
       integer :: navg = 0
@@ -97,15 +105,39 @@
 
 #endif
 
-      public init_upscale, wrt_upscale, calc_forcing_rates
+      public init_upscale, wrt_upscale, calc_forcing_rates, read_nml_upscale
 
       contains
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine read_nml_upscale
+
+!     Read the "UPSCALE_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_upscale"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=UPSCALE_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read UPSCALE_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+      record_uscl = nrpf_uscl
+      otime = output_period_uscl
+      end subroutine read_nml_upscale
+
       subroutine init_upscale ![
       ! Allocate and initialize arrays.
 
       use param, only: lm, mm, mynode
-      use dimensions, only: inode, jnode
 
       implicit none
 
@@ -120,7 +152,6 @@
       if (done) then
         return
       else
-
 #ifndef OBC_TSPECIFIED
         if (mynode == 0) then
           print *, 'WARNING: Upscale output is requested, but ',
@@ -619,10 +650,10 @@
 
 !----------------------------------------------------------------------
       use netcdf, only: nf90_double
+      use error_handling_mod, only: error_log
       implicit none
       character(len=15) :: module_name = "upscale_output"
       private
-#include "upscale_output.opt"
 
       ! Public functions
       public init_upscale, wrt_upscale
@@ -630,7 +661,6 @@
       contains
 
       subroutine init_upscale   ![
-      use error_handling_mod, only: error_log
       ! Allocate and initialize arrays.
       implicit none
       character(len=13) :: sr_name

@@ -16,7 +16,15 @@
 #  ifdef SALINITY
       real Scoef, S0
 #  endif
+
+      namelist /LIN_RHO_EOS_SETTINGS/ Tcoef, T0
+#ifdef SALINITY
+     &     , Scoef, S0
+#endif
+
 # endif
+
+
 
 # ifdef SPLIT_EOS
       real,allocatable,dimension(:,:,:) :: rho1
@@ -31,10 +39,39 @@
       real,allocatable,dimension(:,:,:) :: idRz
 # endif
 #endif
+      character(len=8) :: module_name = "eos_vars"
+
+      public :: read_nml_lin_rho_eos
 
       contains
 
 !----------------------------------------------------------------------
+      subroutine read_nml_lin_rho_eos
+#if defined(SOLVE3D) && !defined(NONLIN_EOS)
+      use error_handling_mod, only: error_log
+      use namelist_open_mod, only: open_namelist_file
+!     Read the "LIN_RHO_EOS_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=21) :: sr_name = "read_nml_lin_rho_eos"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=LIN_RHO_EOS_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read LIN_RHO_EOS_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+#endif
+      end subroutine read_nml_lin_rho_eos
+
       subroutine init_arrays_eos_vars  ![
       use scalars, only: n, init
       implicit none

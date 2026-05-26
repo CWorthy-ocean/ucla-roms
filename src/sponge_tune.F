@@ -5,14 +5,15 @@
 
 #include "cppdefs.opt"
 
-
+      use calc_pflx_mod, only: calc_pflx
+      use namelist_open_mod, only: open_namelist_file
       use netcdf, only:
      &     nf90_noerr, nf90_write, nf90_inq_varid,
      &     nf90_open, nf90_put_att, nf90_close
       use nc_read_write, only: nccreate, ncread, ncwrite
       use scalars, only: iic, tdays, time, dt
       use dimensions, only: nx, ny, xi_rho, npx, npy
-      use calc_pflx_mod, only: up, vp, calc_pflx
+      use calc_pflx_mod, only: up, vp
       use roms_read_write, only:
      &     ncforce, bfx, bfy, dn_tm, dn_xr,
      &     dn_yr, bc_options, create_file, set_frc_data,
@@ -30,13 +31,30 @@
       implicit none
       private
       character(len=11) :: module_name = "sponge_tune"
-#include "sponge_tune.opt"
+      type (ncforce) :: nc_pflx_w = ncforce(
+     &     vname='up_west', tname='bry_time')
+      type (ncforce) :: nc_pflx_e = ncforce(
+     &     vname='up_east', tname='bry_time')
+      type (ncforce) :: nc_pflx_s = ncforce(
+     &     vname='vp_south',tname='bry_time')
+      type (ncforce) :: nc_pflx_n = ncforce(
+     &     vname='vp_north',tname='bry_time')
+
+
+      real    :: sp_timscale = 24*3600 ! filtering time scale
+
+      integer :: nrpf = 7              ! Number of records per file
+      real    :: output_period = 24*3600 ! time between outputs in seconds
+      logical, public ::
+     &     ub_tune, wrt_sponge, spn_avg
+      namelist /SPONGE_TUNE_SETTINGS/ sp_timscale, nrpf, output_period,
+     &     ub_tune, wrt_sponge, spn_avg
 
       logical   :: tune_init = .true.
 
       real      :: output_time = 0
       real      :: navg = 0
-      integer   :: record=nrpf     ! triggers creation of initial file
+      integer   :: record=0     ! triggers creation of initial file
 
 
       real,allocatable,dimension(:) :: pflx_west,pflx_east,pflx_north,pflx_south
@@ -56,10 +74,37 @@
       public init_orlanski_tune
       public wrt_rst_ub
       public get_init_ub
+      public read_nml_sponge_tune
 
       contains
 
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine read_nml_sponge_tune
+
+!     Read the "SPONGE_TUNE_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_sponge_tun"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=SPONGE_TUNE_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read SPONGE_TUNE_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+
+      record = nrpf
+
+      end subroutine read_nml_sponge_tune
+
       subroutine init_orlanski_tune ![
       ! Initialize sponge tuning
       implicit none

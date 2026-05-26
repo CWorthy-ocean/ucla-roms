@@ -6,7 +6,7 @@
       ! Devin Dollery & Jeroen Molemaker (2020-2022)
 
 #include "cppdefs.opt"
-
+      use namelist_open_mod, only: open_namelist_file
       use param, only: mynode, lm, mm
       use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u
       use roms_read_write, only:
@@ -21,12 +21,21 @@
       use pio_roms, only: pio_file_is_open, pio_FileDesc
       use pio, only : PIO_closefile
 #endif
-
+      use error_handling_mod, only: error_log
       implicit none
 
       private
+      character(len=9) :: module_name = "surf_flx"
+      ! edit variable name and time name to match input netcdf file if necessary:
+      type (ncforce) :: nc_sst  = ncforce(vname='sst',tname='sst_time' )       ! sea-surface temperature (SST) data
+      type (ncforce) :: nc_sss  = ncforce(vname='sss',tname='sss_time' )       ! sea-surface salinity (SSS) data
 
-#include "surf_flux.opt"
+      real           :: output_period = 120       ! output averaging period in seconds
+      integer        :: nrpf          = 10 ! total recs per file
+      logical, public ::
+     &     wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg
+      namelist /SURF_FLX_SETTINGS/ output_period, nrpf,
+     &     wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg
 
 #if defined SALINITY
       logical,parameter :: salinity=.true.
@@ -63,13 +72,13 @@
 
       ! Sea-surface temperature (SST) and salinity (SSS) data for restoring
       real,public,allocatable,dimension(:,:) :: sst
-      real,public :: dSSTdt
+      real,public :: dSSTdt = 0.
       real,public,allocatable,dimension(:,:) :: sss
-      real,public :: dSSSdt                                ! input units (cm/day)
+      real,public :: dSSSdt = 0.                           ! input units (cm/day)
 
       ! Netcdf outputting:
       real    :: output_time = 0
-      integer :: record = nrpf     ! to trigger the first file creation
+      integer :: record = 0     ! to trigger the first file creation
       integer :: ncid = -1, prev_fill_mode
 
       ! Public functions
@@ -77,10 +86,60 @@
       public set_surf_field_corr
       public wrt_sflux
       public apply_surf_field_corr
+      public read_nml_surf_flx
 
       contains
 
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine read_nml_surf_flx
+
+!     Read the "SURF_FLX_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_surf_flx"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=SURF_FLX_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read SURF_FLX_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+
+#if defined SFLX_CORR && defined SALINITY
+      read (unit=namelist_unit, nml=SSS_CORRECTION, iostat=ios, iomsg=msg)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read SSS_CORRECTION'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+#endif
+
+#ifdef QCORRECTION
+      read (unit=namelist_unit, nml=SST_CORRECTION, iostat=ios, iomsg=msg)
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read SST_CORRECTION'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+#endif
+
+
+      close(namelist_unit)
+      record = nrpf
+      end subroutine read_nml_surf_flx
+
       subroutine init_arrays_surf_flx ![
       use error_handling_mod, only: error_log
       use scalars, only: init, nt

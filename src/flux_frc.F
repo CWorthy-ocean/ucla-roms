@@ -7,7 +7,7 @@
 
 #include "cppdefs.opt"
 
-      ! Modules needed:
+! Modules needed:
       use tracers, only: t
       use surf_flux, only: sustr, svstr, stflx, srflx, sss, sst,
      &       apply_surf_field_corr, swflx
@@ -26,18 +26,55 @@
 
       implicit none
 
-      private ! All variables private to module unless public specified
+      private                   ! All variables private to module unless public specified
 
+      character(len=8) :: module_name = "flux_frc"
       ! Includes:
-#include "flux_frc.opt"
+      type (ncforce) :: nc_sustr  = ncforce(
+     &     vname='sustr', tname='sms_time') ! sustr - surface u-momentum stress flux (input data in N/m^2)
+      type (ncforce) :: nc_svstr  = ncforce(
+     &     vname='svstr', tname='sms_time') ! svstr - surface v-momentum stress flux (input data in N/m^2)
 
+      type (ncforce) :: nc_shflx  = ncforce(
+     &     vname='shflux',tname='shf_time' ) ! stflx(itemp) - surface heat flux (input data in W/m^2)
+      type (ncforce) :: nc_swflux = ncforce(
+     &     vname='swflux',tname='swf_time' ) ! stflx(isalt) - surface freshwater flux (input data in cm/day). Might want to use #if def SALINITY?
+      type (ncforce) :: nc_swrad  = ncforce(
+     &     vname='swrad', tname='srf_time' ) ! swrad - surface short-wave radiation flux (input data in W/m^2)
 
+      logical, public :: interp_flux_frc
+      namelist /FLUX_FRC_SETTINGS/ interp_flux_frc
       public set_flux_frc
       public init_arrays_flux_frc
-
+      public read_nml_flux_frc
       contains
 
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine read_nml_flux_frc
+      use error_handling_mod, only: error_log
+      use namelist_open_mod, only: open_namelist_file
+!     Read the "FLUX_FRC_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_flux_frc"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=FLUX_FRC_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read FLUX_FRC_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_flux_frc
+
       subroutine init_arrays_flux_frc  ![
       implicit none
 
@@ -47,7 +84,7 @@
       allocate( nc_swflux%vdata(GLOBAL_2D_ARRAY,2) );nc_swflux%vdata = 0
       allocate( nc_swrad%vdata(GLOBAL_2D_ARRAY,2) ) ;nc_swrad%vdata = 0
 
-      if (interp_frc==1) then
+      if (interp_flux_frc) then
         nc_sustr%coarse=1
         nc_svstr%coarse=1
         nc_shflx%coarse=1
@@ -58,7 +95,7 @@
       ! Print user options (flux_frc.opt) to netcdf attributes
       ! Note: to turn flux forces off, edit cppdefs!
       flux_frc_opt = ''
-      if (interp_frc==1) then
+      if (interp_flux_frc) then
         call store_string_att(flux_frc_opt, 'Interpolation ON')
       else
         call store_string_att(flux_frc_opt, 'Interpolation OFF')
