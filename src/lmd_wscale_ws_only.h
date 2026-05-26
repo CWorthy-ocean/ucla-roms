@@ -15,33 +15,33 @@
 ! output: ws (volatile scalar)
 
 # ifdef LIMIT_UNSTABLE_ONLY
-          if (Bfsfc < 0.) zscale=min(zscale, hbl(i,j)*epssfc)
+if (Bfsfc < 0._8) zscale=min(zscale, hbl(i,j)*epssfc)
 # else
-          zscale=min(zscale, hbl(i,j)*epssfc)
+zscale=min(zscale, hbl(i,j)*epssfc)
 # endif
 # ifdef MASKING
-          zscale=zscale*rmask(i,j)
+zscale=zscale*rmask(i,j)
 # endif
-          zetahat=vonKar*zscale*Bfsfc
-          ustar3=ustar(i,j)**3
+zetahat=vonKar*zscale*Bfsfc
+ustar3=ustar(i,j)**3
 
 ! Stable regime.
 
-          if (zetahat >= 0.) then
-            ws=vonKar*ustar(i,j)*ustar3/max(ustar3+5.*zetahat, 1.E-20)
+if (zetahat >= 0._8) then
+  ws=vonKar*ustar(i,j)*ustar3/max(ustar3+5._8*zetahat, 1.D-20)
 
 ! Unstable regime: note that zetahat is always negative here, also
 ! negative is constant "zeta_s", hence "ustar" must be positive and
 ! bounded away from zero for this condition to be held.
 
-          elseif (zetahat > zeta_s*ustar3) then
-            ws=vonKar*( (ustar3-16.*zetahat)/ustar(i,j) )**r2
+elseif (zetahat > zeta_s*ustar3) then
+  ws=vonKar*( (ustar3-16._8*zetahat)/ustar(i,j) )**r2
 
 ! Convective regime: note that unlike the two cases above, this
-! results in non-zero "ws" even in the case when ustar==0.
+! results in non-zero "ws" even in the case when ustar==0._8
 
-          else
-            ws=vonKar*(a_s*ustar3-c_s*zetahat)**r3
-          endif
-                     !--> discard zetahat, ustar3
+else
+  ws=vonKar*(a_s*ustar3-c_s*zetahat)**r3
+endif
+ !--> discard zetahat, ustar3
 
