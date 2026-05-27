@@ -470,8 +470,7 @@ contains
     if (mynode == 0) then
       write(*,'(6x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
       &'particles :: wrote output, tdays =', tdays,&
-      &'step =', iic-1, 'rec =', record, '/', total_rec&
-      &MYID
+      &'step =', iic-1, 'rec =', record, '/', total_rec MYID
     endif
 !     print *, 'n_sur,n_bot: ',n_sur,n_bot,mynode
 

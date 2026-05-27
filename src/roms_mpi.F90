@@ -67,7 +67,7 @@ module roms_mpi
   ! Default values are halo=bf, do_corners = .true., and bl = bf
 
   interface exchange_xxx
-    module procedure&
+    module procedure &
     &exchange_2,exchange_22,exchange_222,exchange_2222&
     &,exchange_3,exchange_33,exchange_333,exchange_3333&
     &,exchange_32,exchange_332

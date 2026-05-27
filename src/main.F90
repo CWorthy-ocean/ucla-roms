@@ -112,8 +112,7 @@ contains
   end subroutine roms_thread
 #endif
 
-  subroutine roms_init&
-  &
+  subroutine roms_init
 #ifdef NHMG
     use nhmg, only: nhmg_matrices, nhmg_init, halo
     use ocean_vars, only: dzdeta, dzdxi, hz
