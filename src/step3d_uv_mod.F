@@ -626,12 +626,10 @@
       use ocean_vars, only: u, ubar, v, vbar, hz, flxu, flxv, z_w
       use scalars, only: n, knew, nnew, nstp, g, rho0, dt
       use roms_mpi, only: exchange_xxx
-#ifdef SOLVE3D
       use u3dbc_mod, only: u3dbc_tile
       use v3dbc_mod, only: v3dbc_tile
 #ifdef NHMG
       use w3dbc_mod, only: w3dbc_tile
-#endif
 #endif
 
       implicit none
@@ -1336,9 +1334,7 @@ c             idRz(i,j,k)=ALPHA_MAX/max(ALPHA_MAX*dRz,dRx_max,epsil)
 !--------------------------------------------------------------------
 ! Update physical boundary values
 !--------------------------------------------------------------------
-#ifdef SOLVE3D
       call w3dbc_tile (Istr,Iend,Jstr,Jend, DC)
-#endif
 
 #  ifdef DIAGNOSTICS_NHMG
       if (calc_diag) call set_diags_w_at_bc( istr, iend, jstr, jend )

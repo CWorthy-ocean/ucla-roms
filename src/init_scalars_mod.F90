@@ -25,7 +25,9 @@ contains
     &max_frc_files, ncfrc,&
     &init_output_indices
     use dimensions, only: init_dimensions
-
+#ifdef SOLVE3D
+    use set_weights_mod, only: set_weights
+#endif
     use, intrinsic :: ieee_arithmetic, only: IEEE_Value, IEEE_QUIET_NAN
     use, intrinsic :: iso_fortran_env, only: real32
 
