@@ -4,7 +4,8 @@
       ! Define options in diagnostics.opt
 
 #include "cppdefs.opt"
-
+      use namelist_open_mod, only : open_namelist_file
+      use error_handling_mod, only: error_log
       use netcdf, only:
      &     nf90_double, nf90_global, nf90_nofill,
      &     nf90_put_att, nf90_set_fill, nf90_noerr,
@@ -37,7 +38,14 @@
       implicit none
       private
 
-#include "diagnostics.opt"
+      character(len=11) :: module_name = "diagnostics"
+      integer          :: output_period =  0       ! output period
+      integer          :: nrpf          =  0        ! total recs per file
+      logical, public  :: diag_avg, diag_uv, diag_trc
+      namelist /DIAGNOSTICS_SETTINGS/ output_period, nrpf,
+     &     diag_avg, diag_uv, diag_trc
+
+      integer, parameter         :: diag_prec     = nf90_double ! Precision of output variables (nf90_float/nf90_double)
 
       ![ Potential issues:
       !  - Since we don't have pressure in the boundary buffer, we can't get u'p' at the bry.
@@ -95,7 +103,7 @@
       real,public,allocatable,dimension(:,:,:,:,:) :: Tdiag     ! tracer diagnostic terms
       real,allocatable,dimension(:,:,:,:,:) :: Tdiag_avg ! averages of tracer diagnostic terms
       integer                               :: ntdia     ! number of tracers for which to do diagnostics
-      integer,public,dimension(nt)          :: td = 0   ! inverse translation from itrc to idia
+      integer,public,dimension(:),allocatable          :: td    ! inverse translation from itrc to idia
 
 
       character (len=30),  allocatable, dimension(:) :: tdname
@@ -110,7 +118,7 @@
       ! Netcdf outputting:
       ! -----------------
       real    :: output_time = 0         ! record number of output. 0 indicates we need new file
-      integer :: record = nrpf           ! to trigger the first file creation
+      integer :: record = 0           ! to trigger the first file creation
       integer :: ncid=-1, prev_fill_mode
 
       real, public,allocatable, dimension(:,:) :: dxdyi_u, dxdyi_v,dxdyi ! 1/ surface of cells
@@ -159,9 +167,28 @@
       public do_diagnostics
       public set_diags_u_4th_adv
       public set_diags_v_4th_adv
+      public read_nml_diagnostics
            !]
 
       contains
+
+      subroutine read_nml_diagnostics
+!     Read the "DIAGNOSTICS_SETTINGS" section of the namelist file
+
+      integer ::  namelist_unit, ios
+      character(len=21) :: sr_name = "read_nml_diagnostics"
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      read (unit=namelist_unit, nml=DIAGNOSTICS_SETTINGS, iostat=ios)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context=module_name//'/'//sr_name, info=
+     &   'could not read DIAGNOSTICS_SETTINGS section of namelist file'
+     &     )
+      end if
+      close(namelist_unit)
+      record = nrpf
+      end subroutine read_nml_diagnostics
 
 ! ----------------------------------------------------------------------
       subroutine init_diagnostics ![
@@ -171,6 +198,8 @@
       ! local
       integer :: itrc,idx
 
+      if(.not. allocated(td)) allocate(td(nt))
+      td = 0
 
       if (diag_uv) then
         allocate(Udiag(nx,ny,nz,nmd) )

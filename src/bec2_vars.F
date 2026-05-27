@@ -142,9 +142,6 @@ C
 !!
       real,allocatable,dimension(:,:) :: ph_srf
 
-      ! misc from porting ETH code:
-      character(len=40) tclm_name(NT) ! Taken from ETH code ncvars
-
 
       contains
 !----------------------------------------------------------------------

@@ -1,7 +1,8 @@
       module calc_pflx_mod
 
 #include "cppdefs.opt"
-
+      use namelist_open_mod, only: open_namelist_file
+      use error_handling_mod, only: error_log
       use netcdf, only: nf90_noerr, nf90_inq_varid
       use dimensions, only: nx, ny, nz, i0, i1, j0, j1,x_,x0,x1,y_,y0,y1
       use scalars, only: dt, knew, nrhs
@@ -16,10 +17,9 @@
       implicit none
       private
 
-#include "calc_pflx.opt"
-
             ! Pressure flux terms
-      ! --------------
+! --------------
+      character(len=14) :: module_name = "calc_pflx_mod"
       real,public,allocatable,dimension(:,:,:) :: p_slow        ! filtered pressure
       real,public,allocatable,dimension(:,:,:) :: u_slow,v_slow
 
@@ -30,16 +30,38 @@
       real,public,allocatable,dimension(:,:)  :: dzt ! dzeta/dt
       real,public,allocatable,dimension(:,:)  :: Uflx,Vflx
 
-      real :: alpha, beta              ! filtering constants (needed for child bry)
+      real :: alpha, beta       ! filtering constants (needed for child bry)
 
+      logical, public :: calc_pflx
+      real :: timescale     = 0. ! timescale for filtering pressure fluxes (in seconds)
+      namelist /CALC_PFLX_SETTINGS/ timescale, calc_pflx
 
       public init_pflx
       public calc_pressure_flux
       public get_init_slow
       public wrt_rst_diag_slow
+      public read_nml_pflx
 
       contains
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine read_nml_pflx
+!     Read the "CALC_PFLX_SETTINGS" section of the namelist file
+
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_pflx"
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      read (unit=namelist_unit, nml=CALC_PFLX_SETTINGS, iostat=ios)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context=module_name//'/'//sr_name, info=
+     &   'could not read CALC_PFLX_SETTINGS section of namelist file'
+     &     )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_pflx
+
       subroutine init_pflx  ![
 
       implicit none

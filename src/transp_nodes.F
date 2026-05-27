@@ -88,6 +88,7 @@
 #ifdef MPI
 
       use param
+      use utils_mod, only: lenstr
       implicit none
       integer, parameter :: iin=11, iout=12
       character(len=14), parameter :: machinefile = 'machines.LINUX'
@@ -97,7 +98,7 @@
       integer,          allocatable :: lhost(:), jhost(:), jrpts(:)
       integer nhosts, nunique, npnode, max_str_size, max_name_size,
      &        is,ie, ierr, inode, jnode,  n_xi_rpt, n_eta_rpt, jinc,
-     &                        i,j, ii,jj, lstr, lbfr, lfnm, lenstr
+     &                        i,j, ii,jj, lstr, lbfr, lfnm
       logical lswitch
 
 ! Function "iargc" is viewed as intrinsic by most modern compilers
@@ -363,7 +364,7 @@ c**         write(*,*) j, jhost(j)
       endif
       end
 # undef str
-# include "lenstr.F"
+!# include "lenstr.F"
 #else
       end
 #endif   /* MPI */

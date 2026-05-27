@@ -1,0 +1,41 @@
+{
+  "bgc_real_bec": {
+    "physics": "401b553e34febb537e6f5d0999404b63cf267a8b806d01fd012048964bdb5b71",
+    "bgc": "c0211b70e8474599fb0af07da22d0836f0056608be9e5e1246f6b792b9389545"
+  },
+  "bgc_real_marbl": {
+    "physics": "401b553e34febb537e6f5d0999404b63cf267a8b806d01fd012048964bdb5b71",
+    "bgc": "0a5a53abbd6d2a7d25b2caf0f87fa23c1aa11faa237f4bad9aaf99d667ce830f"
+  },
+  "cdr_3d": {
+    "physics": "6cad9df264263d2596fab2f029ebb4fdf179efb733579a342c77773c2ea94e24",
+    "bgc": "cb4f7c0dc8be7eaf602d6cc1bb745db8bbff2d5c5277b6facd0962c22e9382bc"
+  },
+  "cdr_dp": {
+    "physics": "6cad9df264263d2596fab2f029ebb4fdf179efb733579a342c77773c2ea94e24",
+    "bgc": "7fb52032db84423a8cba22095d21ca15f5f5a32d9d5647c92851fc2e852e5c14"
+  },
+  "cdr_parameterized": {
+    "physics": "6cad9df264263d2596fab2f029ebb4fdf179efb733579a342c77773c2ea94e24",
+    "bgc": "2a225b514e7979cc37316e7c11c404a4bd3b4c0fa9fa87f84454c79158b62db5"
+  },
+  "filament": {
+    "physics": "894152c5cd8299dbd043d20ae188f7b44569c1b226246c0dfa6f9aed96c8e714"
+  },
+  "flux_frc": {
+    "physics": "a532f74d31e9b0e2efe162f6cd0c21bff38e2ea0301505845f6ee2415dbb0a50"
+  },
+  "pipes_real": {
+    "physics": "7e1bd571f4ae1a43b252e49d449f0f0588aa912cc5f7fe414ee723840bee795d"
+  },
+  "pipes_ana": {
+    "physics": "fc2c80abd4b87c14cd060d5e36736181aa94189a98ce2f2289d36e14e68c168f"
+  },
+  "rivers_real": {
+    "physics": "5cbf55853b25445761a3730b563693419b7261775aa8cb9cb60fbf6591c5244f"
+  },
+  "rivers_ana": {
+    "physics": "0ad5e8fcdb33c3de9596833ccc7a9d781e685eed40a1c51103f2012622d7a596"
+  }
+}
+

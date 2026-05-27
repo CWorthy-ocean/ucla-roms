@@ -1,17 +1,18 @@
+      program main              ! Open MP version of ROMS driver
 #include "cppdefs.opt"
 #if !defined GRID_LEVEL || GRID_LEVEL == 1
-
-!!    program main               ! Open MP version of ROMS driver
-
-      use param, only: mynode, ocean_grid_comm, nsize
+      use add_git_hash_mod, only: git_hash, print_jobid
+      use param, only: mynode, ocean_grid_comm, nsize, read_nml_param
+      use check_switches_mod, only: print_switches
 #ifdef NHMG
       use nhmg, only: nhmg_clean
 #endif
       use tracers, only: init_tracers
       use mpi_f08, only: mpi_wtime, mpi_comm_world
       use timers, only: tstart, tend
-      use read_inp_mod, only: read_inp
       use roms_mpi, only: mpi_setup
+      use init_scalars_mod, only: init_scalars
+      use namelist_read_mod, only: read_namelists
 #ifdef PARALLEL_IO
       use pio_roms, only: pio_initialize, pio_myRank, pio_ntasks
 #endif
@@ -33,9 +34,15 @@ C$    ierr=0
       ocean_grid_comm=MPI_COMM_WORLD
       call MPI_Comm_size(ocean_grid_comm, nsize,  ierr)
       call MPI_Comm_rank(ocean_grid_comm, mynode, ierr)
+#endif
+      call read_namelists
 
-      call read_inp
+      call print_jobid
+      call print_switches
 
+#ifdef MPI
+!     Git hash
+      mpi_master_only write(*,'(/1x,2A)') "Git hash: ", git_hash
       call mpi_setup
 
 #ifdef PARALLEL_IO
@@ -50,7 +57,7 @@ C$    ierr=0
 # endif
       call init_scalars         ! Initialize global scalars,
       call init_tracers
-C$        call omp_set_dynamic(.false.)
+C     $        call omp_set_dynamic(.false.)
 C$OMP PARALLEL                           ! fast-time averaging weights
       call roms_thread          ! for barotropic mode, and
 C$OMP END PARALLEL                       ! launch the model in OpenMP
@@ -68,16 +75,17 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
 # endif
 
       stop
-      end
 
+      contains
 
       subroutine roms_thread
       use basic_output, only: wrt_his_ocean_vars
       use scalars, only: ntimes, iic, ntstart, diag_sync
       use timers, only: start_timers, stop_timers
       use error_handling_mod, only: error_log
-      use upscale_output, only: do_upscale, wrt_upscale
-
+#ifdef UPSCALING
+      use upscale_output, only: wrt_upscale, do_upscale
+#endif
       implicit none
 
 
@@ -92,10 +100,12 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
         end if
       enddo
 
-      ! This is where we might put a generic "final write" subroutine
+! This is where we might put a generic "final write" subroutine
+#ifdef UPSCALING
       if (do_upscale) then
         call wrt_upscale
       endif
+#endif
 
       call stop_timers()
       return
@@ -103,27 +113,37 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
 #endif
 
       subroutine roms_init
+     &
 #ifdef NHMG
       use nhmg, only: nhmg_matrices, nhmg_init, halo
       use ocean_vars, only: dzdeta, dzdxi, hz
 #endif
+      use diag_mod, only: diag
       use basic_output, only: init_restarts, wrt_his_ocean_vars
       use scalars, only:
      &     diag_sync, dt, iic, iif, knew, kstp,
      &     nnew, nrhs, nstp, numthreads, priv_count, sec2day,
      &     start_time, synchro_flag, tdays, time, proc
-      use sponge_tune, only: ub_tune
-      use particles, only: floats, init_particles
-      use upscale_output, only: do_upscale, init_upscale
-      use random_output, only: do_random, init_random, wrt_random
-      use cdr_output, only: do_cdr, init_cdr_output
-      use frc_output, only: do_frc, init_frc
-      use analytical, only: ana_vmix
 #ifdef DIAGNOSTICS
       use diagnostics, only: diag_uv,diag_trc,init_diagnostics
 #endif
+      use particles, only: init_particles, floats
+#ifdef UPSCALING
+      use upscale_output, only:  init_upscale, do_upscale
+#endif
+      use random_output, only:  init_random, do_random, wrt_random
+#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+      use cdr_output, only:  init_cdr_output, do_cdr_output
+#endif
+      use frc_output, only: init_frc_output, wrt_frc
+      use analytical, only: ana_vmix
 #ifdef ANA_INITIAL
      &     , ana_init
+#endif
+      use get_init_mod, only: get_init
+      use grid_stiffness_mod, only: grid_stiffness
+#ifdef DIAGNOSTICS
+      use diagnostics, only: init_diagnostics, diag_uv, diag_trc
 #endif
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
       use bgc_io, only: wrt_bgc
@@ -137,13 +157,27 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
      &     mynode, nsub_e, nsub_x, lm, mm,
      &     N, np_eta, np_xi, padd_e, padd_x
 #ifdef SPONGE_TUNE
-      use sponge_tune, only: init_orlanski_tune
+      use sponge_tune, only: init_orlanski_tune, ub_tune
 #endif
       use precheck, only: do_precheck
       use error_handling_mod, only: error_log
       use calc_pflx_mod, only: init_pflx
       use mpi_f08, only: mpi_wtime
       use timers, only: tstart
+#ifdef LMD_KPP
+      use lmd_swr_frac_mod, only: swr_frac
+#endif
+#ifdef SOLVE3D
+      use omega_mod, only: omega
+      use rho_eos_mod, only: rho_eos
+      use set_depth_mod, only: set_depth, set_HUV, set_HUV1
+      use set_scoord_mod, only: set_scoord
+#endif
+#ifdef SPONGE
+      use set_nudgcof_mod, only: set_nudgcof
+#endif
+      use setup_grid_mod, only: setup_grid1, setup_grid2
+
       implicit none
 
       integer trd, tile, my_first, my_last, range
@@ -203,7 +237,6 @@ C$OMP BARRIER
 #endif
 
       call do_precheck
-
       walltime2 = MPI_Wtime()-tstart
 
       walltime0 = MPI_Wtime()
@@ -270,6 +303,7 @@ CR      write(*,*) ' -6' MYID
 #endif
 
       walltime0 = MPI_Wtime()
+
 #ifdef EXACT_RESTART
         call get_init(nrrec-1,2)
         call set_depth(0)
@@ -310,17 +344,19 @@ CR      write(*,*) ' -6' MYID
      &                   dn_r(0:Lm+1,0:Mm+1)    )
 #endif
 
+
+#ifdef SOLVE3D
 CR      write(*,*)  ' -4' MYID
       do tile=my_tile_range
         call set_HUV
       enddo
 C$OMP BARRIER
-CR      write(*,*)  ' -3' MYID
+C     R      write(*,*)  ' -3' MYID
 
       call omega
 
       call rho_eos(nrhs)
-
+#endif
 CR      write(*,*)  ' -2' MYID
 
       if (floats) then
@@ -333,20 +369,21 @@ CR      write(*,*)  ' -2' MYID
 #endif
       ! The optional argument refers to
       ! blowup if true, and initial if false.
-      ! Come up with a better name!
+! Come up with a better name!
       call wrt_his_ocean_vars(.false.)
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       call wrt_bgc(.true.)
 #endif
       if (do_random) call init_random
-      if (do_cdr)  call init_cdr_output
+#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+      if (do_cdr_output)  call init_cdr_output
+#endif
+#ifdef UPSCALING
       if (do_upscale) then
         call init_upscale
       endif
-      if (do_frc) call init_frc
-
-!      call wrt_random
-!      stop
+#endif
+      if (wrt_frc) call init_frc_output
         mpi_master_only write(*,'(/1x,A/)')
      &     'main :: initialization complete, started time-stepping.'
 
@@ -374,36 +411,58 @@ CR      write(*,*)  ' -2' MYID
 
 
       subroutine roms_step
-
-      use extract_data, only: do_extract, do_extract_data
+      use diag_mod, only: diag
+      use extract_data, only:  do_extract_data, do_extract
       use scalars, only:
      &     dt, iic, iif, knew, kstp, nfast, nnew, nrhs,
      &     nstp, ntstart, sec2day, start_time, tdays, time
-      use sponge_tune, only: ub_tune, adjust_orlanski
-      use particles, only: floats, do_particles
-      use surf_flux, only: wrt_smflx, wrt_stflx, wrt_sflux
-      use random_output, only: do_random, wrt_random
-!      use random_output2, only:  wrt_random2
-      use cdr_output, only: do_cdr, wrt_cdr_output
-      use frc_output, only: do_frc, wrt_frc
-      use zslice_output, only: do_zslice, wrt_zslice
+      use sponge_tune, only: adjust_orlanski, ub_tune
+      use particles, only: do_particles, floats
+      use surf_flux, only: wrt_sflux, wrt_smflx, wrt_stflx
+      use random_output, only: wrt_random, do_random
+#ifdef MARBL
+      use marbl_driver, only: marbl_timestep_ratio
+#endif
+#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+      use cdr_output, only:  wrt_cdr, do_cdr_output
+#endif
+      use frc_output, only:  wrt_frc_output, wrt_frc
+      use zslice_output, only: wrt_zslice, do_zslice
       use basic_output, only:
      &     calc_avg_ocean_vars, wrt_avg_ocean_vars,
      &     wrt_his_ocean_vars, wrt_rst_ocean_vars
       use boundary, only: set_bry_all
-      use tides, only: set_tides
+      use tides, only: set_tides, pot_tides, bry_tides
       use roms_read_write, only: frc_time
+#ifdef SOLVE3D
+      use omega_mod, only: omega
+      use pre_step3d_mod, only: pre_step3d
+      use prsgrd_mod, only: prsgrd
+      use rho_eos_mod, only: rho_eos
+      use set_depth_mod, only: set_huv, set_huv1
+# if defined TS_DIF2 || defined TS_DIF4
+      use t3dmix_mod, only: t3dmix => t3dmix_s
+#endif
+#endif
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
       use bgc_io, only: wrt_bgc
 #endif
-      use tides, only: bry_tides, pot_tides
 #ifdef DIAGNOSTICS
-      use diagnostics, only: diag_uv,diag_trc,do_diagnostics
+      use diagnostics, only: do_diagnostics
 #endif
       use roms_read_write, only: frc_time
       use mpi_f08, only: mpi_wtime
       use param, only: mynode
       use pio_roms, only: pio_gtype
+#ifdef LMD_MIXING
+      use lmd_vmix_mod, only: lmd_vmix
+#endif
+      use step2d_mod, only: step2d
+      use step3d_t_mod, only: step3d_t
+      use step3d_uv_mod, only: step3d_uv1, step3d_uv2
+#  ifdef UV_VIS2
+      use visc3d_mod, only: visc3d => visc3d_s
+#endif
       implicit none
 
         real :: walltime0 = 0.
@@ -439,6 +498,7 @@ CR      write(*,*)  ' -2' MYID
 
       if (bry_tides.or.pot_tides) call set_tides(0)
 
+#ifdef SOLVE3D
       ! currrently, rho_eos works with t(nrhs), nrhs==nstp => time n
       call rho_eos(nrhs)
 
@@ -450,6 +510,7 @@ CR      write(*,*)  ' -2' MYID
       ! Here, omega corresponds to time n
       ! Should be already available from previous time-step
       call omega
+#endif
 
 # if defined LMD_MIXING
       call lmd_vmix(nstp)
@@ -462,7 +523,7 @@ CR      write(*,*)  ' -2' MYID
 
       !! nnew ==n+1/2
 
-
+#ifdef SOLVE3D
       !! set_HUV1 is like set_HUV, but first removes the barotr/barocl mismatch
       !! set_HUV1 works with nnew, which here is time n+1/2
       ! It's using the Hz from time n though
@@ -476,7 +537,7 @@ CR      write(*,*)  ' -2' MYID
       call omega
 
       call rho_eos(nrhs)  !!! use the right time index
-
+#endif
       call set_forces   ! get for time n+1/2
 # if defined LMD_MIXING
       call lmd_vmix(nrhs)
@@ -490,8 +551,9 @@ CR      write(*,*)  ' -2' MYID
       ! All of this seems to happen with Hz's from time n
       ! Corrector step
       call prsgrd
-
+#ifdef SOLVE3D
       call step3d_uv1(0)  ! update u/v(nnew) with dt*ru/rv
+#endif
 
 #  ifdef UV_VIS2
       call visc3d
@@ -510,13 +572,14 @@ CR      write(*,*)  ' -2' MYID
         call step2d
 
       enddo
-
+#ifdef SOLVE3D
       ! step3d_uv2 re-computes FlxU,FlV but still for n+1/2
       call step3d_uv2(0)
 
       call omega
 
-      call step3d_t(0)
+      call step3d_t(0, tstep=iic)
+#endif
 !GOOD
 # if defined TS_DIF2 || defined TS_DIF4
       call t3dmix
@@ -561,10 +624,10 @@ CR      write(*,*)  ' -2' MYID
       if (do_random) call wrt_random
 !      if (do_random) call wrt_random2
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
-      if (do_cdr)  call wrt_cdr_output
+      if (do_cdr_output)  call wrt_cdr
 #endif
       if (do_zslice) call wrt_zslice
-      if (do_frc)    call wrt_frc
+      if (wrt_frc)    call wrt_frc_output
 
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       call wrt_bgc
@@ -575,4 +638,8 @@ CR      write(*,*)  ' -2' MYID
         write(*,*) "YAY", iic, walltime0
       endif
 
-      end
+      end subroutine roms_step
+
+
+      end program main
+

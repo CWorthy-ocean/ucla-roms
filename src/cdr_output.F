@@ -5,6 +5,8 @@
 #include "cppdefs.opt"
 
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+      use cdr_frc, only: cdr_source, forcing_3d
+      use namelist_open_mod, only: open_namelist_file
       use tracers, only: t_units
       use param, only: itemp, isalt
       use marbl_driver, only:
@@ -26,15 +28,20 @@
       use error_handling_mod, only: error_log
       use cdr_frc, only: cdr_flx_3d_ALK, cdr_flx_3d_DIC, cdr_prf,
      &                   cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,
-     &                   cdr_jloc, cdr_source, forcing_3d
+     &                   cdr_jloc
       implicit none
 
       private
 
-#include "cdr_output.opt"
+      real    :: output_period = 3600 ! in seconds
+      integer :: nrpf   = 4     ! number of frames per file
+      logical, public :: wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
+      namelist /CDR_OUTPUT_SETTINGS/ output_period, nrpf,
+     &     wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
+
       character(len=10) :: module_name = "cdr_output"
       real    :: output_time = 0
-      integer :: record = nrpf ! to trigger the first file creation
+      integer :: record = 0 ! to trigger the first file creation
 
       integer,dimension(6) :: date
       character(len=15)  :: datestr
@@ -86,12 +93,31 @@
       type(CStarOutputVariable), allocatable, save :: cdr_varlist(:) ! TODO save? nah
 
       ! Public functions
-      public wrt_cdr_output,init_cdr_output
-
+      public :: wrt_cdr,init_cdr_output
+      public :: read_cdr_output_nml
 
 !----------------------------------------------------------------------
 
       contains
+
+      subroutine read_cdr_output_nml
+!     Read the "CDR_OUTPUT_SETTINGS" section of the namelist file
+
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_cdr_output_nml"
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      read (unit=namelist_unit, nml=CDR_OUTPUT_SETTINGS, iostat=ios)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context=module_name//'/'//sr_name, info=
+     &   'could not read CDR_OUTPUT_SETTINGS section of namelist file'
+     &     )
+      end if
+      close(namelist_unit)
+      record = nrpf
+      end subroutine read_cdr_output_nml
+
       subroutine add_cdr_output_variable(list, name, dimnames, dims,
      &                                     long_name, units)
         type(CStarOutputVariable), allocatable, intent(inout) :: list(:)
@@ -212,7 +238,7 @@
      &        'alt DIC source from CDR module','mmol/s')
       endif
 
-      if (do_avg) then
+      if (wrt_cdr_avg) then
        call add_cdr_output_variable(cdr_varlist, 'hDIC_avg',
      &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
      &      'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),
@@ -236,21 +262,24 @@
       integer :: itot=0
       integer :: idx
 
+      call read_cdr_output_nml
+
       if (done) then
         return
       else
         done = .true.
       endif
 
-      if (monthly_averages .and. .not. do_avg) then
+      if (cdr_monthly_averages .and. .not. wrt_cdr_avg) then
          call error_log%raise_global(
      &        context=module_name//"/"//sr_name,
-     &        info="`monthly_avg` is .true., but `do_avg` is .false.")
+     &        info=
+     &     "`cdr_monthly_avg` is .true., but `wrt_cdr_avg` is .false.")
       endif
 
       ! Look one timestep ahead to initialize the "previous month", so that
       ! when we restart we don't immediately write out a file.
-      if (monthly_averages) then
+      if (cdr_monthly_averages) then
           call sec2date(time+dt,date)
           month_at_prev_timestep = date(2)
       endif
@@ -294,7 +323,7 @@
           allocate(DIC_alt_source(GLOBAL_2D_ARRAY,1:N) )
         endif
 
-      if (do_avg) then
+      if (wrt_cdr_avg) then
         allocate(zeta__avg(GLOBAL_2D_ARRAY) )
         zeta__avg(:,:)=0
         allocate(temp_avg(GLOBAL_2D_ARRAY,1:N) )
@@ -377,7 +406,7 @@
 
       if (coef==1) then                                    ! this refreshes average (1-coef)=0
         if (mynode==0) then
-          if (monthly_averages) then
+          if (cdr_monthly_averages) then
             print *, 'cdr :: started monthly averaging.'
           else
             print *, 'cdr :: started averaging. ',
@@ -513,9 +542,9 @@
 
       if (cdr_source) call calc_cdr_source
 
-      if (do_avg) call calc_average
+      if (wrt_cdr_avg) call calc_average
 
-      if (monthly_averages) then
+      if (cdr_monthly_averages) then
         call sec2date(time+dt,date)
 
         if ((date(2) - month_at_prev_timestep) /= 0) call wrt_cdr_output
@@ -671,7 +700,7 @@
         ! always add time
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
 
-        if (do_avg) then
+        if (wrt_cdr_avg) then
           call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
           call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
           call ncwrite(ncid,'zeta'  ,zeta__avg(i0:i1,j0:j1),(/1,1,record/))
@@ -758,7 +787,7 @@
         character(len=120) :: stdout_str
         integer :: idx
         if (mynode==0) then
-           if (.not. do_avg) then
+           if (.not. wrt_cdr_avg) then
               write(stdout_str,'(7x,A)')
      &             'cdr_output :: history file '
            else
@@ -769,15 +798,15 @@
            write(stdout_str,'(2(A,2x),I4)')
      &          trim(stdout_str), 'recs/file = ', nrpf
 
-           if (monthly_averages) then
+           if (cdr_monthly_averages) then
               write(stdout_str,'(2(A,2x),1L)')
-     &             trim(stdout_str), 'monthly_averages= ', monthly_averages
+     &             trim(stdout_str), 'cdr_monthly_averages= ', cdr_monthly_averages
            else
               write(stdout_str,'(2(A,2x),F6.1)')
      &             trim(stdout_str), 'output_period =', output_period
            end if
            write(*, '(7x,A)') trim(stdout_str)
-           if (.not. do_avg) then
+           if (.not. wrt_cdr_avg) then
               write(*, '(/7x,A)') 'his fields to be saved: (T/F)'
            else
               write(*, '(/7x,A)') 'avg fields to be saved: (T/F)'
@@ -808,10 +837,9 @@
       character(len=10) :: module_name = "cdr_output"
       private
 
-#include "cdr_output.opt"
 
       ! Public functions
-      public init_cdr_output, wrt_cdr_output
+      public init_cdr_output, wrt_cdr
 
       contains
 
@@ -840,11 +868,11 @@
         call error_log%abort_check()
       end subroutine init_cdr_output !]
 
-      subroutine wrt_cdr_output ![
+      subroutine wrt_cdr ![
 !     Allocate and initialize arrays.
       implicit none
 !     Nothing happening here!
-      end subroutine wrt_cdr_output !]
+      end subroutine wrt_cdr !]
 !----------------------------------------------------------------------
 
 #endif /* MARBL && MARBL_DIAGS && CDR_FORCING */

@@ -8,7 +8,7 @@
       ! in the direction of the unmasked cell.
 
 #include "cppdefs.opt"
-
+      use namelist_open_mod, only: open_namelist_file
       use roms_read_write, only: ncforce, frcfile, set_frc_data
       use nc_read_write, only: nccreate, ncread, ncwrite
       use scalars, only: nt
@@ -29,7 +29,14 @@
 
       private
 
-#include "river_frc.opt"
+      integer, public  :: nriv = 0
+      logical, public  :: river_source, river_analytical
+      namelist /RIVER_FRC_SETTINGS/ nriv, river_source, river_analytical
+      ! realistic rivers only: enter netcdf variable name and time name
+      type (ncforce) :: nc_rvol = ncforce(
+     &     vname='river_volume', tname='river_time')
+      type (ncforce) :: nc_rtrc = ncforce(
+     &     vname='river_tracer', tname='river_time')
       character(len=9) :: module_name = "river_frc"
       ! Variables used for equation system calculations
       real,public,allocatable,dimension(:,:) :: riv_uflx
@@ -39,8 +46,8 @@
       real   ,public,allocatable,dimension(:,:) :: ridx_real ! River indices (read as real by ncread)
       integer,public,allocatable,dimension(:,:) :: ridx ! River indices (stored as int by ROMS)
 
-      real,public,dimension(nriv)    :: riv_vol                      ! river volume
-      real,public,dimension(nriv,nt) :: riv_trc                      ! river tracer conc.
+      real, public, allocatable, dimension(:)   :: riv_vol
+      real, public, allocatable, dimension(:,:) :: riv_trc
 
       integer,public :: iriver                                       ! river index for looping through rivers
       real,   public :: riv_depth
@@ -58,8 +65,10 @@
       ! Misc:
       logical, public :: init_riv_done = .false.                     ! if river variables have been initialized yet
 
+
       public set_river_frc
       public init_river_frc
+      public read_nml_river
 
       contains
 
@@ -74,11 +83,13 @@
       implicit none
 
       if (.not. init_riv_done) then
+         allocate(riv_vol(nriv));    riv_vol = 0.0
+         allocate(riv_trc(nriv,nt)); riv_trc = 0.0
          allocate(nc_rvol%vdata(nriv,1 ,2))
          allocate(nc_rtrc%vdata(nriv,nt,2))
       end if
       ! set river flux volumes and tracer data:
-      if(analytical) then
+      if(river_analytical) then
 
         call set_ana_river_frc ! cppflags needed else won't link without the analytical.F
 
@@ -98,7 +109,27 @@
       endif
       if(.not. init_riv_done) call init_river_frc ! initialize once river flux locations & arrays
       end subroutine set_river_frc  !]
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+
+      subroutine read_nml_river
+!     Read the "RIVER_FRC_SETTINGS" section of the namelist file
+
+      integer ::  namelist_unit, ios
+      character(len=15) :: sr_name = "read_nml_river"
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      read (unit=namelist_unit, nml=RIVER_FRC_SETTINGS, iostat=ios)
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context=module_name//"/"//sr_name,
+     &   info=
+     &   "could not read RIVER_FRC_SETTINGS section of namelist file"
+     &        )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_river
+
       subroutine init_river_frc  ![
       ! Initialize river forcing:
       ! Read in a grid file with locations of river mouths and flux contribution per cell.
@@ -126,7 +157,7 @@
       allocate( ridx_real(GLOBAL_2D_ARRAY) )    ; ridx_real = 0.
       allocate( rfrc(GLOBAL_2D_ARRAY) )    ; rfrc = 0.
 
-      if (analytical) then
+      if (river_analytical) then
         riv_west=xl*0.4 ! River west bank at 40% from west
         riv_east=xl*0.6 ! River west bank at 60% from west
         ! pm is constant for this case

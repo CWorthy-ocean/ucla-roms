@@ -1,7 +1,6 @@
       module nc_read_write
 
 #include "cppdefs.opt"
-
       use netcdf, only:
      &     nf90_float, nf90_noerr, nf90_strerror,
      &     nf90_inq_dimid, nf90_def_dim, nf90_def_var, nf90_inq_varid,
@@ -18,7 +17,11 @@
 
       character(len=13) :: module_name = "nc_read_write"
 
-#include "nc_read_write.opt"
+      integer,parameter  :: deflate_level=1 ! Compression level for joined file
+      integer,parameter :: default_prec = nf90_float
+
+      logical,parameter  :: nccreate_shuffle=.true. ! Shuffle on for extra conmpression
+      logical,parameter :: use_netcdf4_var_opts = .true.
 
       interface ncwrite
         module procedure  ncwrite_1D, ncwrite_2D, ncwrite_3D
@@ -432,7 +435,8 @@
       if (varname /= '') then
         if (use_netcdf4_var_opts) then
           ierr=nf90_def_var(ncid,varname,xtype,dimid,varid,
-     &                      deflate_level=deflate_level, shuffle=shuffle)
+     &          deflate_level=deflate_level,
+     &          shuffle=nccreate_shuffle)
         else
           ierr=nf90_def_var(ncid,varname,xtype,dimid,varid)
         endif

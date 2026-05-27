@@ -18,7 +18,6 @@
       !]
 
 #include "cppdefs.opt"
-
       use param, only: isalt, itemp, lm, mm, mynode, nt_passive
       use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho
      & , ds_xr, ds_yr, ds_zr
@@ -45,20 +44,20 @@
       real,public,allocatable,dimension(:,:,:,:,:) :: t              ! array of tracers
 
                                                                      ! tracer netcdf variables (user input required in init_tracers)
-      character*42, dimension(nt), public :: t_vname                 ! short name
-      character*60, dimension(nt), public :: t_lname                 ! long name
-      character*42, dimension(nt), public :: t_units                 ! tracer units
-      character*47, dimension(nt), public :: t_tname                 ! tracer input time variable name
-      logical, dimension(nt), public      :: wrt_t                   ! t/f output tracer.
-      logical, dimension(nt), public      :: wrt_t_avg               ! t/f output avg tracer.
-      logical, dimension(nt), public      :: wrt_t_dia = .false.     ! t/f diagnostics tracer.
+      character*42, dimension(:), public, allocatable :: t_vname                 ! short name
+      character*60, dimension(:), public, allocatable :: t_lname                 ! long name
+      character*42, dimension(:), public, allocatable :: t_units                 ! tracer units
+      character*47, dimension(:), public, allocatable :: t_tname                 ! tracer input time variable name
+      logical, dimension(:), public, allocatable      :: wrt_t                   ! t/f output tracer.
+      logical, dimension(:), public, allocatable      :: wrt_t_avg               ! t/f output avg tracer.
+      logical, dimension(:), public, allocatable      :: wrt_t_dia      ! t/f diagnostics tracer.
 
-      integer, dimension(nt)              :: t_ana_frc               ! whether surface flux is read in (0), or analytical (1)
+      integer, dimension(:), allocatable              :: t_ana_frc               ! whether surface flux is read in (0), or analytical (1)
 
       !-- Tracer netcdf variables as arrays/matrices of 'NT' length:
       ! Final tracer concentrations live in 't' in ocean3d
       ! Surface tracer flux lives in 'stflx' in surf_flux.F module.
-      type (ncforce)    :: nc_t( NT )                                   ! array of ncvs for each tracer
+      type (ncforce), allocatable    :: nc_t( : )                                   ! array of ncvs for each tracer
       integer,public :: iTandS                                       ! combined index of temperature and salinity
                                                                      ! public as used in set_forces.F. Need to be parameter
 !     integer,public :: nt_passive=0                                 ! total number of passive tracers
@@ -69,11 +68,13 @@
       real, public, allocatable, dimension(:,:,:,:) :: t_avg         ! tracer averages. Memory only allocated for tracers of interest.
       integer,      allocatable, dimension(:)       :: t_avg_2_NT    ! convert index from t_avg(itavg) to t(itrc) since averages array may be smaller
 
-      integer,dimension(NT),public :: NT_2_t_avg                     ! convert index from t(itrc) to t_avg(itavg) since averages array may be smaller
+      integer,dimension(:),public, allocatable :: NT_2_t_avg                     ! convert index from t(itrc) to t_avg(itavg) since averages array may be smaller
       integer,public        :: n_t_avg                               ! number of tracer averages to output <= NT
 
+      logical, public :: wrt_temp, wrt_salt, wrt_temp_dia, wrt_salt_dia
+      namelist /TS_OUTPUT_SETTINGS/ wrt_temp, wrt_salt, wrt_temp_dia, wrt_salt_dia
 #if defined(BIOLOGY_BEC2) && !defined(MARBL)
-# include "bgc_tracers_indx.opt"
+# include "BEC_tracers_indx.h"
 #endif
 
       public set_surf_tracer_flx
@@ -84,10 +85,35 @@
       public def_avg_trc
       public wrt_avg_trc
       public set_avg_trc
-
+      public read_nml_tracers
       contains
 
-! ----------------------------------------------------------------------
+!     ----------------------------------------------------------------------
+      subroutine read_nml_tracers
+      use error_handling_mod, only: error_log
+      use namelist_open_mod, only: open_namelist_file
+!     Read the "TS_OUTPUT_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_tracers"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=TS_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read TS_OUTPUT_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+
+      end subroutine read_nml_tracers
+
       subroutine set_surf_tracer_flx ![
       ! set tracer flux at surface
       use error_handling_mod, only: error_log
@@ -309,21 +335,37 @@
 
       ! local
       integer :: cnt=0, itrc
+      allocate(t_vname(nt))
+      allocate(t_lname(nt))
+      allocate(t_units(nt))
+      allocate(t_tname(nt))
+      allocate(wrt_t(nt))
+      allocate(wrt_t_avg(nt))
+      allocate(wrt_t_dia(nt))
+      allocate(t_ana_frc(nt))
+      allocate(nc_t(nt))
+      allocate(NT_2_t_avg(nt))
+      wrt_t_dia(:) = .false.
 
       ! Core tracers - temp and salt:
       t_vname(itemp)='temp';        t_units(itemp)='Celsius'
       t_lname(itemp)='potential temperature'
-      iTandS = 1         ! if only temp, no salt.
+      if(wrt_temp) wrt_t(itemp) = .true.
+      if(wrt_temp_dia) wrt_t_dia(itemp) = .true.
+      iTandS = 1                ! if only temp, no salt.
 #ifdef SALINITY
       t_vname(isalt)='salt';        t_units(isalt)='PSU'
       t_lname(isalt)='salinity'
+      if(wrt_salt) wrt_t(isalt) = .true.
+      if(wrt_salt_dia) wrt_t_dia(isalt) = .true.
       iTandS = 2         ! if both temp and salt.
 #endif
       itot=iTandS        ! set up counting for additional tracers
 
       ! Additional passive tracers:
-#include "tracers.opt"
-
+#ifdef BIOLOGY_BEC2
+#include "BEC_tracers.h"
+#endif
 
 #ifdef MARBL
       call marbldrv_configure_tracers(

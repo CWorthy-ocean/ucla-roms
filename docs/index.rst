@@ -1,11 +1,12 @@
-The Regional Ocean Modeling System (ROMS)
-=========================================
+===========================================
+ The Regional Ocean Modeling System (ROMS)
+===========================================
 ROMS is a free-surface, terrain following, primitive equation ocean model, developed by our collaborators at UCLA. UCLA-ROMS is highly optimized, supports state-of-the-art biogeochemical modelling, and is well-suited for nested regional modelling from ocean basins down to estuaries.
 
 This fork aims to expand support for marine carbon dioxide removal (mCDR) research while adhering to community driven open-source practices.
 
 Key technical information:
---------------------------
+==========================
 
 - Terrain-following S-coordinates (vertical) with parameterized stretching enhancing resolution near surface and bottom
 - staggered Arakawa-C grid (horizontal) supporting spherical or Cartesian curvilinear coordinates
@@ -17,10 +18,23 @@ Key technical information:
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Getting Started
 
    Installing ROMS <installation/index>
+
+.. toctree::
+
+   :maxdepth: 1
+   :caption: Customizing ROMS simulations
+
+   ROMS settings <model_settings/index>
+
+
+   :maxdepth: 1
+   :caption: Tutorials
+
+   ROMS Tutorials <tutorials/index>
 
 .. toctree::
    :maxdepth: 1

@@ -4,6 +4,7 @@
 #include "cppdefs.opt"
 
       use param, only: mynode, ocean_grid_comm
+      use namelist_open_mod, only: open_namelist_file
       use dimensions, only: i0, i1, j0, j1, nz, eta_rho, eta_v, xi_rho, xi_u,
      &   ds_xr, ds_xu, ds_yr, ds_yv, ds_zr, ds_zw
       use roms_read_write, only:
@@ -29,17 +30,45 @@
 
       private
 
-#include "random_output.opt"
+      real    :: output_period = 3600 ! in seconds
+      integer :: nrpf   = 10    ! number of frames per file
+      logical,public :: do_random
+      namelist /RANDOM_OUTPUT_SETTINGS/ output_period, nrpf, do_random
+
       character(len=13) :: module_name = "random_output"
       real    :: output_time = 0
-      integer :: record = nrpf ! to trigger the first file creation
+      integer :: record = 0 ! to trigger the first file creation
 
       ! Public functions
-      public wrt_random,init_random
+      public wrt_random,init_random, read_nml_random
 
       contains
 
 !----------------------------------------------------------------------
+      subroutine read_nml_random
+
+!     Read the "RANDOM_OUTPUT_SETTINGS" section of the namelist file
+      integer ::  namelist_unit, ios
+      character(len=20) :: sr_name = "read_nml_random"
+      character(len=512) :: msg = ""
+      ! Read namelist
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+
+      read (unit=namelist_unit, nml=RANDOM_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+
+      if (ios /= 0) then
+         call error_log%raise_global(
+     &   context = module_name//'/'//sr_name,
+     &   info='could not read RANDOM_OUTPUT_SETTINGS'
+     &        //' section of namelist file: '
+     &        //trim(msg)
+     &      )
+      end if
+      close(namelist_unit)
+      record = nrpf
+      end subroutine read_nml_random
+
       subroutine init_random ![
       ! Allocate and initialize arrays.
       implicit none
@@ -54,7 +83,6 @@
       endif
 
       ! put the relevant part of your code here
-
 
       if (mynode==0) print *,'init random'
 

@@ -142,8 +142,11 @@ endif
 	NETCDFC_INC=$(or $(shell nc-config --cflags), -I$(NETCDFHOME)include)
 	NETCDFC_LIB=$(or $(shell nc-config --libs),   -L$(NETCDFHOME)lib -lnetcdf)
 
+ifeq ($(USEPIO),true)
         PNETCDF_INC= -I$(PNETCDFHOME)include
         PNETCDF_LIB= -L$(PNETCDFHOME)lib -lpnetcdf
+endif
+
 # MARBL
 ifeq ($(USEMARBL),true)
     ifeq ($(COMPILER),gnu)
@@ -205,7 +208,7 @@ ifeq ($(COMPILER),$(filter ifort intel, $(COMPILER)))
         FFLAGS = -g -traceback
 # -check all
     else ifeq ($(BUILD_MODE),test)
-	FFLAGS = -O0
+	FFLAGS = -O0 -init=zero -init=arrays
     else ifeq ($(BUILD_MODE),strict)
         FFLAGS += -fp-model strict
     else ifeq ($(BUILD_MODE),vtune)
@@ -227,7 +230,9 @@ endif
 
 # Options to link to libraries & modules (NetCDF, etc):
         LCDF =  $(NETCDFF_LIB) $(NETCDFC_LIB)
+ifeq ($(USEPIO),true)
         LCDF +=  $(PNETCDF_LIB)
+endif
 ifeq ($(USEMARBL),true)
 	LCDF += $(MARBL_LIB)
 endif
@@ -235,7 +240,9 @@ ifeq ($(USENHMG),true)
 	LCDF += $(NHMG_LIB)
 endif
 	LCDF +=$(NETCDFF_INC) $(NETCDFC_INC)
+ifeq ($(USEPIO),true)
         LCDF +=$(PNETCDF_INC)
+endif
 ifeq ($(USEMARBL),true)
 	LCDF += $(MARBL_INC)
 endif
