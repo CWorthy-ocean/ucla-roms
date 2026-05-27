@@ -1,156 +1,156 @@
-      module random_output
-      ! Collection of random variables for output
+module random_output
+  ! Collection of random variables for output
 
 #include "cppdefs.opt"
 
-      use param, only: mynode
-      use namelist_open_mod, only: open_namelist_file
-      use dimensions, only: i0, i1, j0, j1, nz, eta_rho, eta_v, xi_rho, xi_u
-      use roms_read_write, only:
-     &     dn_tm, dn_xr, dn_xu, dn_yr, dn_yv,
-     &      create_file
-      use nc_read_write, only: nccreate, ncwrite
-      use netcdf, only:
-     &     nf90_noerr, nf90_write, nf90_open,
-     &     nf90_put_att, nf90_close
-      use scalars, only: dt, iic, knew, nnew, tdays, time
-      use ocean_vars, only: zeta, u, v
-      use error_handling_mod, only: error_log
-      implicit none
+  use param, only: mynode
+  use namelist_open_mod, only: open_namelist_file
+  use dimensions, only: i0, i1, j0, j1, nz, eta_rho, eta_v, xi_rho, xi_u
+  use roms_read_write, only:&
+  &dn_tm, dn_xr, dn_xu, dn_yr, dn_yv,&
+  &create_file
+  use nc_read_write, only: nccreate, ncwrite
+  use netcdf, only:&
+  &nf90_noerr, nf90_write, nf90_open,&
+  &nf90_put_att, nf90_close
+  use scalars, only: dt, iic, knew, nnew, tdays, time
+  use ocean_vars, only: zeta, u, v
+  use error_handling_mod, only: error_log
+  implicit none
 
-      private
+  private
 
-      real    :: output_period = 3600 ! in seconds
-      integer :: nrpf   = 10    ! number of frames per file
-      logical,public :: do_random
-      namelist /RANDOM_OUTPUT_SETTINGS/ output_period, nrpf, do_random
+  real(kind=8)    :: output_period = 3600 ! in seconds
+  integer(kind=4) :: nrpf   = 10    ! number of frames per file
+  logical,public :: do_random
+  namelist /RANDOM_OUTPUT_SETTINGS/ output_period, nrpf, do_random
 
-      character(len=13) :: module_name = "random_output"
-      real    :: output_time = 0
-      integer :: record = 0 ! to trigger the first file creation
+  character(len=13) :: module_name = "random_output"
+  real(kind=8)    :: output_time = 0
+  integer(kind=4) :: record = 0 ! to trigger the first file creation
 
-      ! Public functions
-      public wrt_random,init_random, read_nml_random
+  ! Public functions
+  public wrt_random,init_random, read_nml_random
 
-      contains
+contains
 
 !----------------------------------------------------------------------
-      subroutine read_nml_random
+  subroutine read_nml_random
 
 !     Read the "RANDOM_OUTPUT_SETTINGS" section of the namelist file
-      integer ::  namelist_unit, ios
-      character(len=20) :: sr_name = "read_nml_random"
-      character(len=512) :: msg = ""
-      ! Read namelist
-      call open_namelist_file(namelist_unit)
-      rewind(namelist_unit)
+    integer(kind=4) ::  namelist_unit, ios
+    character(len=20) :: sr_name = "read_nml_random"
+    character(len=512) :: msg = ""
+    ! Read namelist
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
 
-      read (unit=namelist_unit, nml=RANDOM_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+    read (unit=namelist_unit, nml=RANDOM_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
 
-      if (ios /= 0) then
-         call error_log%raise_global(
-     &   context = module_name//'/'//sr_name,
-     &   info='could not read RANDOM_OUTPUT_SETTINGS'
-     &        //' section of namelist file: '
-     &        //trim(msg)
-     &      )
-      end if
-      close(namelist_unit)
-      record = nrpf
-      end subroutine read_nml_random
+    if (ios /= 0) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='could not read RANDOM_OUTPUT_SETTINGS'&
+      &//' section of namelist file: '&
+      &//trim(msg)&
+      &)
+    end if
+    close(namelist_unit)
+    record = nrpf
+  end subroutine read_nml_random
 
-      subroutine init_random ![
-      ! Allocate and initialize arrays.
-      implicit none
+  subroutine init_random ![
+    ! Allocate and initialize arrays.
+    implicit none
 
-      ! local
-      logical,save :: done=.false.
+    ! local
+    logical,save :: done=.false.
 
-      if (done) then
-        return
-      else
-        done = .true.
+    if (done) then
+      return
+    else
+      done = .true.
+    endif
+
+    ! put the relevant part of your code here
+
+    if (mynode==0) print *,'init random'
+
+  end subroutine init_random  !]
+!----------------------------------------------------------------------
+  subroutine def_vars_random(ncid)  ![
+    implicit none
+
+    ! input
+    integer(kind=4),intent(in) :: ncid
+    ! local
+    integer(kind=4)                        :: ierr, varid
+
+    varid = nccreate(ncid,'zeta',(/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/))
+    ierr = nf90_put_att(ncid,varid,'long_name','sea surface heigth')
+    ierr = nf90_put_att(ncid,varid,'units','m')
+
+    varid = nccreate(ncid,'u_surf',(/dn_xu,dn_yr,dn_tm/),(/xi_u,eta_rho,0/))
+    ierr = nf90_put_att(ncid,varid,'long_name','surface x velocity')
+    ierr = nf90_put_att(ncid,varid,'units','m/s')
+
+    varid = nccreate(ncid,'v_surf',(/dn_xr,dn_yv,dn_tm/),(/xi_rho,eta_v,0/))
+    ierr = nf90_put_att(ncid,varid,'long_name','surface y velocity')
+    ierr = nf90_put_att(ncid,varid,'units','m/s')
+
+  end subroutine def_vars_random  !]
+!----------------------------------------------------------------------
+  subroutine wrt_random  ![
+    ! Call wrt_random after completion of the time-step
+    ! (After step3d_uv2)
+    implicit none
+    character(len=10) :: sr_name = "wrt_random"
+    ! local
+    character(len=99),save :: fname
+    integer(kind=4),dimension(3)   :: start
+    integer(kind=4)                :: ncid,ierr
+
+    output_time = output_time + dt
+
+    if (output_time>=output_period) then
+
+      if (record==nrpf) then
+        call create_file('_rnd',fname)
+        ierr=nf90_open(fname,nf90_write,ncid)
+        call def_vars_random(ncid)
+        ierr = nf90_close(ncid)
+        record = 0
       endif
 
-      ! put the relevant part of your code here
+      record = record+1
 
-      if (mynode==0) print *,'init random'
-
-      end subroutine init_random  !]
-!----------------------------------------------------------------------
-      subroutine def_vars_random(ncid)  ![
-      implicit none
-
-      ! input
-      integer,intent(in) :: ncid
-      ! local
-      integer                        :: ierr, varid
-
-      varid = nccreate(ncid,'zeta',(/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/))
-      ierr = nf90_put_att(ncid,varid,'long_name','sea surface heigth')
-      ierr = nf90_put_att(ncid,varid,'units','m')
-
-      varid = nccreate(ncid,'u_surf',(/dn_xu,dn_yr,dn_tm/),(/xi_u,eta_rho,0/))
-      ierr = nf90_put_att(ncid,varid,'long_name','surface x velocity')
-      ierr = nf90_put_att(ncid,varid,'units','m/s')
-
-      varid = nccreate(ncid,'v_surf',(/dn_xr,dn_yv,dn_tm/),(/xi_rho,eta_v,0/))
-      ierr = nf90_put_att(ncid,varid,'long_name','surface y velocity')
-      ierr = nf90_put_att(ncid,varid,'units','m/s')
-
-      end subroutine def_vars_random  !]
-!----------------------------------------------------------------------
-      subroutine wrt_random  ![
-      ! Call wrt_random after completion of the time-step
-      ! (After step3d_uv2)
-      implicit none
-      character(len=10) :: sr_name = "wrt_random"
-      ! local
-      character(len=99),save :: fname
-      integer,dimension(3)   :: start
-      integer                :: ncid,ierr
-
-      output_time = output_time + dt
-
-      if (output_time>=output_period) then
-
-        if (record==nrpf) then
-          call create_file('_rnd',fname)
-          ierr=nf90_open(fname,nf90_write,ncid)
-          call def_vars_random(ncid)
-          ierr = nf90_close(ncid)
-          record = 0
-        endif
-
-        record = record+1
-
-        ierr=nf90_open(fname,nf90_write,ncid)
-        if (ierr/=nf90_noerr) then
-           call error_log%check_netcdf_status(netcdf_status=ierr,
-     &          info="error opening "//fname,
-     &          context=module_name//"/"//sr_name)
-        end if
+      ierr=nf90_open(fname,nf90_write,ncid)
+      if (ierr/=nf90_noerr) then
+        call error_log%check_netcdf_status(netcdf_status=ierr,&
+        &info="error opening "//fname,&
+        &context=module_name//"/"//sr_name)
+      end if
 !       ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)     ! set fill value - nf90_nofill for optimized writing
 
-        ! always add time
-        call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+      ! always add time
+      call ncwrite(ncid,'ocean_time',(/time/),(/record/))
 
-        call ncwrite(ncid,'zeta'  ,zeta(i0:i1,j0:j1,knew),(/1,1,record/))
-        call ncwrite(ncid,'u_surf',u( 1:i1,j0:j1,nz,nnew),(/1,1,record/))
-        call ncwrite(ncid,'v_surf',v(i0:i1, 1:j1,nz,nnew),(/1,1,record/))
+      call ncwrite(ncid,'zeta'  ,zeta(i0:i1,j0:j1,knew),(/1,1,record/))
+      call ncwrite(ncid,'u_surf',u( 1:i1,j0:j1,nz,nnew),(/1,1,record/))
+      call ncwrite(ncid,'v_surf',v(i0:i1, 1:j1,nz,nnew),(/1,1,record/))
 
-        ierr=nf90_close (ncid)
+      ierr=nf90_close (ncid)
 
-        if (mynode == 0) then
-          write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')
-     &     'wrt_random :: wrote random, tdays =', tdays,
-     &     'step =', iic-1, 'rec =', record
-        endif
-
-        output_time=0
+      if (mynode == 0) then
+        write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
+        &'wrt_random :: wrote random, tdays =', tdays,&
+        &'step =', iic-1, 'rec =', record
       endif
-      call error_log%abort_check()
-      end subroutine wrt_random !]
+
+      output_time=0
+    endif
+    call error_log%abort_check()
+  end subroutine wrt_random !]
 !----------------------------------------------------------------------
 
-      end module random_output
+end module random_output
