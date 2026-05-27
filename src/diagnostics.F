@@ -23,14 +23,16 @@
       use dimensions, only:
      &     nz, nx, ny, i0, i1, j0, j1, eta_v, xi_u, eta_rho, xi_rho,
      &     inode, jnode, npx, npy
+     &     , ds_xr, ds_yr, ds_zr, ds_xu, ds_yv, ds_zw
       use param, only: lm, mm, ieast, iwest, jnorth, jsouth, mynode,
-     &    ew_periodic, ns_periodic
+     &    ew_periodic, ns_periodic, ocean_grid_comm
       use grid, only:
      &     pn, pm,
      &     umask
       use roms_mpi, only: exchange_xxx
       use grid, only: vmask, rmask
       use pio_roms, only: use_pio, pio_gtype
+      use mpi_f08, only: MPI_CHARACTER, mpi_bcast
 
       implicit none
       private
@@ -761,10 +763,20 @@
         endif
         record = record + 1
 
+#ifdef PARALLEL_IO
+        if (mynode == 0) then
+          ierr=nf90_open(fname,nf90_write,ncid)
+          ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
+
+          call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+        endif
+#else
         ierr=nf90_open(fname,nf90_write,ncid)
         ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
 
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+#endif
+
         if (diag_avg) then
           if (diag_uv)  call wrt_diag_uv(ncid,record,Udiag_avg,Vdiag_avg)
           if (diag_trc) call wrt_diag_trc(ncid,record,Tdiag_avg)
@@ -809,7 +821,8 @@
 
       if (diag_uv) then
         dimnames = (/dn_xu,dn_yr,dn_zr, dn_tm/)
-        dimsizes = (/ xi_u,  eta_rho,  nz,      0/)
+!        dimsizes = (/ xi_u,  eta_rho,  nz,      0/)
+        dimsizes = (/ ds_xu,  ds_yr,  ds_zr,      0/)
 
         varid = nccreate(ncid,'u_pgr',dimnames,dimsizes,diag_prec)
         ierr = nf90_put_att(ncid,varid,'long_name'
@@ -847,7 +860,8 @@
         ierr = nf90_put_att(ncid,varid,'units','m^2/s^2' )
 
         dimnames = (/dn_xr,dn_yv,dn_zr, dn_tm/)
-        dimsizes = (/ xi_rho,  eta_v,  nz,    0/)
+!        dimsizes = (/ xi_rho,  eta_v,  nz,    0/)
+        dimsizes = (/ ds_xr,  ds_yv,  ds_zr,    0/)
 
         varid = nccreate(ncid,'v_pgr',dimnames,dimsizes,diag_prec)
         ierr = nf90_put_att(ncid,varid,'long_name'
@@ -888,7 +902,8 @@
 
       if (diag_trc) then
         dimnames = (/dn_xr,dn_yr,dn_zr, dn_tm/)
-        dimsizes = (/ xi_rho,  eta_rho,  nz,    0/)
+!        dimsizes = (/ xi_rho,  eta_rho,  nz,    0/)
+        dimsizes = (/ ds_xr,  ds_yr,  ds_zr,    0/)
         do it=1,nt
           if (wrt_t_dia(it)) then
            vname = trim(t_vname(it)) // '_advx'
@@ -937,24 +952,24 @@
         if (inode.eq.0) ud(1,:,:,:) = 0
         start = (/1, bfy, 1, record/)
 
-        call ncwrite(ncid,'u_pgr',ud(:,:,:,1),start)
-        call ncwrite(ncid,'u_cor',ud(:,:,:,2),start)
-        call ncwrite(ncid,'u_adv',ud(:,:,:,3),start)
-        call ncwrite(ncid,'u_dis',ud(:,:,:,4),start)
-        call ncwrite(ncid,'u_hmx',ud(:,:,:,5),start)
-        call ncwrite(ncid,'u_vmx',ud(:,:,:,6),start)
-        call ncwrite(ncid,'u_cpl',ud(:,:,:,7),start)
+        call ncwrite(ncid,'u_pgr',ud(:,:,:,1),start,.true.)
+        call ncwrite(ncid,'u_cor',ud(:,:,:,2),start,.true.)
+        call ncwrite(ncid,'u_adv',ud(:,:,:,3),start,.true.)
+        call ncwrite(ncid,'u_dis',ud(:,:,:,4),start,.true.)
+        call ncwrite(ncid,'u_hmx',ud(:,:,:,5),start,.true.)
+        call ncwrite(ncid,'u_vmx',ud(:,:,:,6),start,.true.)
+        call ncwrite(ncid,'u_cpl',ud(:,:,:,7),start,.true.)
 
         if (jnode.eq.0) vd(:,1,:,:) = 0
         start = (/bfx, 1, 1, record/)
 
-        call ncwrite(ncid,'v_pgr',vd(:,:,:,1),start)
-        call ncwrite(ncid,'v_cor',vd(:,:,:,2),start)
-        call ncwrite(ncid,'v_adv',vd(:,:,:,3),start)
-        call ncwrite(ncid,'v_dis',vd(:,:,:,4),start)
-        call ncwrite(ncid,'v_hmx',vd(:,:,:,5),start)
-        call ncwrite(ncid,'v_vmx',vd(:,:,:,6),start)
-        call ncwrite(ncid,'v_cpl',vd(:,:,:,7),start)
+        call ncwrite(ncid,'v_pgr',vd(:,:,:,1),start,.true.)
+        call ncwrite(ncid,'v_cor',vd(:,:,:,2),start,.true.)
+        call ncwrite(ncid,'v_adv',vd(:,:,:,3),start,.true.)
+        call ncwrite(ncid,'v_dis',vd(:,:,:,4),start,.true.)
+        call ncwrite(ncid,'v_hmx',vd(:,:,:,5),start,.true.)
+        call ncwrite(ncid,'v_vmx',vd(:,:,:,6),start,.true.)
+        call ncwrite(ncid,'v_cpl',vd(:,:,:,7),start,.true.)
 
       end subroutine wrt_diag_uv  !]
 ! ----------------------------------------------------------------------
@@ -976,12 +991,12 @@
         if (wrt_t_dia(it)) then
           start = (/1, 1, 1, record/)
 
-          call ncwrite(ncid,trim(t_vname(it))//'_advx' ,trcd(i0:i1,j0:j1,:,1,td(it)),start)
-          call ncwrite(ncid,trim(t_vname(it))//'_advy' ,trcd(i0:i1,j0:j1,:,2,td(it)),start)
-          call ncwrite(ncid,trim(t_vname(it))//'_advz' ,trcd(i0:i1,j0:j1,:,3,td(it)),start)
-          call ncwrite(ncid,trim(t_vname(it))//'_mixx' ,trcd(i0:i1,j0:j1,:,4,td(it)),start)
-          call ncwrite(ncid,trim(t_vname(it))//'_mixy' ,trcd(i0:i1,j0:j1,:,5,td(it)),start)
-          call ncwrite(ncid,trim(t_vname(it))//'_mixz' ,trcd(i0:i1,j0:j1,:,6,td(it)),start)
+          call ncwrite(ncid,trim(t_vname(it))//'_advx' ,trcd(i0:i1,j0:j1,:,1,td(it)),start,.true.)
+          call ncwrite(ncid,trim(t_vname(it))//'_advy' ,trcd(i0:i1,j0:j1,:,2,td(it)),start,.true.)
+          call ncwrite(ncid,trim(t_vname(it))//'_advz' ,trcd(i0:i1,j0:j1,:,3,td(it)),start,.true.)
+          call ncwrite(ncid,trim(t_vname(it))//'_mixx' ,trcd(i0:i1,j0:j1,:,4,td(it)),start,.true.)
+          call ncwrite(ncid,trim(t_vname(it))//'_mixy' ,trcd(i0:i1,j0:j1,:,5,td(it)),start,.true.)
+          call ncwrite(ncid,trim(t_vname(it))//'_mixz' ,trcd(i0:i1,j0:j1,:,6,td(it)),start,.true.)
         endif
       enddo
 
@@ -996,6 +1011,25 @@
       !local
       integer :: ncid,ierr
 
+#ifdef PARALLEL_IO
+      if (mynode == 0) then
+        call create_file('_dia',fname, nonode=.true.)
+
+        ierr=nf90_open(fname,nf90_write,ncid)
+
+        ! Diagnostics options
+        ierr=nf90_put_att (ncid, nf90_global, 'diagnostic_options', adjustl(diagnostic_opt))
+        if (diag_avg) then
+          ierr=nf90_put_att (ncid, nf90_global, 'diag_avg_time', adjustl(diag_avg_output))
+        endif
+
+        call create_diagvars(ncid)
+
+        ierr = nf90_close(ncid)
+      endif
+      call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+      call MPI_Barrier(ocean_grid_comm, ierr)
+#else
       call create_file('_dia',fname)
 
       ierr=nf90_open(fname,nf90_write,ncid)
@@ -1009,6 +1043,7 @@
       call create_diagvars(ncid)
 
       ierr = nf90_close(ncid)
+#endif
 
       end subroutine create_diagnostics_file !]
 ! ----------------------------------------------------------------------
