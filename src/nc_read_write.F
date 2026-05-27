@@ -21,7 +21,7 @@
       integer,parameter :: default_prec = nf90_float
 
       logical,parameter  :: nccreate_shuffle=.true. ! Shuffle on for extra conmpression
-      logical,parameter :: use_netcdf4_var_opts = .false.
+      logical,parameter :: use_netcdf4_var_opts = .true.
 
       interface ncwrite
         module procedure  ncwrite_1D, ncwrite_2D, ncwrite_3D
