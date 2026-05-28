@@ -124,9 +124,6 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
      &     diag_sync, dt, iic, iif, knew, kstp,
      &     nnew, nrhs, nstp, numthreads, priv_count, sec2day,
      &     start_time, synchro_flag, tdays, time, proc
-#ifdef DIAGNOSTICS
-      use diagnostics, only: diag_uv,diag_trc,init_diagnostics
-#endif
       use particles, only: init_particles, floats
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
       use upscale_output, only:  init_upscale, do_upscale
@@ -162,8 +159,6 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       use precheck, only: do_precheck
       use error_handling_mod, only: error_log
       use calc_pflx_mod, only: init_pflx
-      use mpi_f08, only: mpi_wtime
-      use timers, only: tstart
 #ifdef LMD_KPP
       use lmd_swr_frac_mod, only: swr_frac
 #endif
@@ -237,9 +232,6 @@ C$OMP BARRIER
 #endif
 
       call do_precheck
-      walltime2 = MPI_Wtime()-tstart
-
-      walltime0 = MPI_Wtime()
       call get_grid                  ! can be analytic or from netcdf
       walltime1 = MPI_Wtime() - walltime0
 
@@ -301,8 +293,6 @@ CR      write(*,*) ' -6' MYID
                                     ! either analytically or read
       if (nrrec > 0) then
 #endif
-
-      walltime0 = MPI_Wtime()
 
 #ifdef EXACT_RESTART
         call get_init(nrrec-1,2)
@@ -388,16 +378,6 @@ CR      write(*,*)  ' -2' MYID
      &     'main :: initialization complete, started time-stepping.'
 
       call diag  ! log file output of global norms
-
-        if (mynode==0) then
-          write(*,*) "TIMINGS FOR INITIALIZATION"
-
-          write(*,*) "Setup and misc: ", walltime2
-          write(*,*) "Read grid     : ", walltime1
-          write(*,*) "Read initial  : ", walltime3
-          write(*,*) "Set forces    : ", walltime4
-        endif
-
       end subroutine roms_init
 
 
@@ -448,12 +428,9 @@ CR      write(*,*)  ' -2' MYID
       use bgc_io, only: wrt_bgc
 #endif
 #ifdef DIAGNOSTICS
-      use diagnostics, only: do_diagnostics, diag_uv, diag_trc
+      use diagnostics, only: do_diagnostics
 #endif
       use roms_read_write, only: frc_time
-      use mpi_f08, only: mpi_wtime
-      use param, only: mynode
-      use pio_roms, only: pio_gtype
 #ifdef LMD_MIXING
       use lmd_vmix_mod, only: lmd_vmix
 #endif
@@ -632,14 +609,5 @@ CR      write(*,*)  ' -2' MYID
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       call wrt_bgc
 #endif
-
-      if (mynode == 0) then
-        walltime0 = MPI_Wtime()
-        write(*,*) "YAY", iic, walltime0
-      endif
-
       end subroutine roms_step
-
-
       end program main
-
