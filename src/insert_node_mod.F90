@@ -1,15 +1,15 @@
-      module insert_node_mod
+module insert_node_mod
 
-      implicit none
-      private
+  implicit none
+  private
 
-      public :: extract_time_index
-      public :: insert_time_index
-      public :: insert_node
+  public :: extract_time_index
+  public :: insert_time_index
+  public :: insert_node
 
-      contains
+contains
 
-      subroutine insert_node(name, lstr, node, nnodes)
+  subroutine insert_node(name, lstr, node, nnodes)
 
 ! Insert MPI-node number "node" into character string "name" and
 ! adjust the length of the string "lstr" to accommodate the inserted
@@ -34,50 +34,50 @@
 !
 ! output: name    modified string with node number inserted.
 !         lstr    length of the modified string
-      use param, only: mynode
-      use error_handling_mod, only: error_log
-      implicit none
-      character(len=*) name
-      integer lstr, i,j,k, lsffx, ndots, idot(3)
-     &                                , node,  nnodes
-     &                                , power
-      character(len=16) sffx
-      integer, parameter :: digits=5
-      character(len=1), parameter :: filesep='/'
-      integer fname_start, last_dot, digit
+    use param, only: mynode
+    use error_handling_mod, only: error_log
+    implicit none
+    character(len=*) name
+    integer(kind=4) lstr, i,j,k, lsffx, ndots, idot(3)&
+    &, node,  nnodes&
+    &, power
+    character(len=16) sffx
+    integer(kind=4), parameter :: digits=5
+    character(len=1), parameter :: filesep='/'
+    integer(kind=4) fname_start, last_dot, digit
 
-      character(len=12) :: sr_name = "insert_node"
-      character(len=1024) :: error_info = ""
+    character(len=12) :: sr_name = "insert_node"
+    character(len=1024) :: error_info = ""
 
-      ! Find the last filesep to isolate just the filename
-      fname_start = 1
-      do i = 1, lstr
-        if (name(i:i) == filesep) then
-          fname_start = i + 1
-        endif
-      enddo
-
-      ! Find the last dot in the filename (potential extension)
-      last_dot = 0
-      do i = fname_start, lstr
-        if (name(i:i) == '.') then
-          last_dot = i
-        endif
-      enddo
-
-      ! Determine suffix (extension) if last dot exists
-      lsffx = 0
-      if (last_dot > 0) then
-        ! Check if characters after last dot are non-numeric (likely extension)
-        i = last_dot + 1
-        do while (i <= lstr)
-          if (name(i:i) < '0' .or. name(i:i) > '9') then
-            lsffx = lstr - last_dot + 1
-            exit
-          endif
-          i = i + 1
-        enddo
+    ! Find the last filesep to isolate just the filename
+    fname_start = 1
+    do i = 1, lstr
+      if (name(i:i) == filesep) then
+        fname_start = i + 1
       endif
+    enddo
+
+    ! Find the last dot in the filename (potential extension)
+    last_dot = 0
+    do i = fname_start, lstr
+      if (name(i:i) == '.') then
+        last_dot = i
+      endif
+    enddo
+
+    ! Determine suffix (extension) if last dot exists
+    lsffx = 0
+    if (last_dot > 0) then
+      ! Check if characters after last dot are non-numeric (likely extension)
+      i = last_dot + 1
+      do while (i <= lstr)
+        if (name(i:i) < '0' .or. name(i:i) > '9') then
+          lsffx = lstr - last_dot + 1
+          exit
+        endif
+        i = i + 1
+      enddo
+    endif
 
 
 
@@ -115,64 +115,64 @@
 ! segment (if there is one, and there is no suffix); or both segment
 ! and suffix.
 
-      ! Determine insertion point: before extension if it exists, otherwise at end
-      if (lsffx > 0) then
-        ! Insert before the extension (after last_dot, which is the dot)
-        ! The dot at last_dot stays, we insert digits after it, then append extension
-        i = last_dot  ! Start at the dot position (we'll write digits after it)
-        ! Save extension (without the dot) for later appending
-        if (last_dot < lstr) then
-          sffx(1:lstr-last_dot) = name(last_dot+1:lstr)
-          lsffx = lstr - last_dot  ! Length of extension without the dot
-        else
-          lsffx = 0
-        endif
+    ! Determine insertion point: before extension if it exists, otherwise at end
+    if (lsffx > 0) then
+      ! Insert before the extension (after last_dot, which is the dot)
+      ! The dot at last_dot stays, we insert digits after it, then append extension
+      i = last_dot  ! Start at the dot position (we'll write digits after it)
+      ! Save extension (without the dot) for later appending
+      if (last_dot < lstr) then
+        sffx(1:lstr-last_dot) = name(last_dot+1:lstr)
+        lsffx = lstr - last_dot  ! Length of extension without the dot
       else
-        ! No extension, insert at end of filename
-        i = lstr + 1
-        name(i:i) = '.'
+        lsffx = 0
       endif
+    else
+      ! No extension, insert at end of filename
+      i = lstr + 1
+      name(i:i) = '.'
+    endif
 
 ! Load Time Index or MPI-node (rank) into temporal variable "k".
 ! This variable will be written into digital segment. Also specify
 ! the maximum allowed number, which sets the number of digits in the
 ! segment.
 
-      k=node
-      power=10                           ! Determine how many digits
-      do while(nnodes > power)           ! are needed to accommodate
-        power=10*power                   ! the largest possible MPI-
-      enddo                              ! node number (rank).
-      if (power >= 10**digits) then
-         write(error_info,*)
-     &      'Possible ambiguity between MPI-node segment length ',
-     &        'and time index segment length. ',
-     &        'To fix: increase parameter',
-     &        '''digits'' in file "insert_node_mod.F" and recompile.'
-         call error_log%raise_from_rank(
-     &     context=sr_name,
-     &     info=error_info)
-        return
-      endif
-      call error_log%abort_check()
+    k=node
+    power=10                           ! Determine how many digits
+    do while(nnodes > power)           ! are needed to accommodate
+      power=10*power                   ! the largest possible MPI-
+    enddo                              ! node number (rank).
+    if (power >= 10**digits) then
+      write(error_info,*)&
+      &'Possible ambiguity between MPI-node segment length ',&
+      &'and time index segment length. ',&
+      &'To fix: increase parameter',&
+      &'''digits'' in file "insert_node_mod.F" and recompile.'
+      call error_log%raise_from_rank(&
+      &context=sr_name,&
+      &info=error_info)
+      return
+    endif
+    call error_log%abort_check()
 
-      do while(power > 9)              ! Insert time index or MPI node
-        power=power/10                 ! number (rank) into the string,
-        digit=k/power                  ! then attach suffix, if needed.
-        i=i+1
-        name(i:i)=char(48+digit)
-        k=k-digit*power
-      enddo
-      if (lsffx > 0) then
-        name(i+1:i+1) = '.'            ! Add dot before extension
-        name(i+2:i+1+lsffx) = sffx(1:lsffx)  ! Append extension
-        lstr = i + 1 + lsffx
-      else
-        lstr = i
-      endif
-      end subroutine
+    do while(power > 9)              ! Insert time index or MPI node
+      power=power/10                 ! number (rank) into the string,
+      digit=k/power                  ! then attach suffix, if needed.
+      i=i+1
+      name(i:i)=char(48+digit)
+      k=k-digit*power
+    enddo
+    if (lsffx > 0) then
+      name(i+1:i+1) = '.'            ! Add dot before extension
+      name(i+2:i+1+lsffx) = sffx(1:lsffx)  ! Append extension
+      lstr = i + 1 + lsffx
+    else
+      lstr = i
+    endif
+  end subroutine insert_node
 
-      subroutine   insert_time_index(name, lstr, indx)
+  subroutine   insert_time_index(name, lstr, indx)
 
 ! Insert MPI-node number "node" into character string "name" and
 ! adjust the length of the string "lstr" to accommodate the inserted
@@ -198,48 +198,48 @@
 ! output: name    modified string with node number inserted.
 !         lstr    length of the modified string
 
-      use error_handling_mod, only: error_log
-      implicit none
-      character(len=*) name
-      integer lstr, i,j,k, lsffx, ndots, idot(3)
-     &                                , indx
-     &                                , power
-      character(len=16) sffx
-      integer, parameter :: digits=5
-      character(len=1), parameter :: filesep='/'
-      integer fname_start, last_dot, digit
+    use error_handling_mod, only: error_log
+    implicit none
+    character(len=*) name
+    integer(kind=4) lstr, i,j,k, lsffx, ndots, idot(3)&
+    &, indx&
+    &, power
+    character(len=16) sffx
+    integer(kind=4), parameter :: digits=5
+    character(len=1), parameter :: filesep='/'
+    integer(kind=4) fname_start, last_dot, digit
 
-      character(len=18) :: sr_name = "insert_time_index"
-      character(len=1024) :: error_info = ""
-      ! Find the last filesep to isolate just the filename
-      fname_start = 1
-      do i = 1, lstr
-        if (name(i:i) == filesep) then
-          fname_start = i + 1
-        endif
-      enddo
-
-      ! Find the last dot in the filename (potential extension)
-      last_dot = 0
-      do i = fname_start, lstr
-        if (name(i:i) == '.') then
-          last_dot = i
-        endif
-      enddo
-
-      ! Determine suffix (extension) if last dot exists
-      lsffx = 0
-      if (last_dot > 0) then
-        ! Check if characters after last dot are non-numeric (likely extension)
-        i = last_dot + 1
-        do while (i <= lstr)
-          if (name(i:i) < '0' .or. name(i:i) > '9') then
-            lsffx = lstr - last_dot + 1
-            exit
-          endif
-          i = i + 1
-        enddo
+    character(len=18) :: sr_name = "insert_time_index"
+    character(len=1024) :: error_info = ""
+    ! Find the last filesep to isolate just the filename
+    fname_start = 1
+    do i = 1, lstr
+      if (name(i:i) == filesep) then
+        fname_start = i + 1
       endif
+    enddo
+
+    ! Find the last dot in the filename (potential extension)
+    last_dot = 0
+    do i = fname_start, lstr
+      if (name(i:i) == '.') then
+        last_dot = i
+      endif
+    enddo
+
+    ! Determine suffix (extension) if last dot exists
+    lsffx = 0
+    if (last_dot > 0) then
+      ! Check if characters after last dot are non-numeric (likely extension)
+      i = last_dot + 1
+      do while (i <= lstr)
+        if (name(i:i) < '0' .or. name(i:i) > '9') then
+          lsffx = lstr - last_dot + 1
+          exit
+        endif
+        i = i + 1
+      enddo
+    endif
 
 
 ! Determine where to put Time Index and/or MPI-node number (rank).
@@ -276,49 +276,49 @@
 ! segment (if there is one, and there is no suffix); or both segment
 ! and suffix.
 
-      ! Determine insertion point: before extension if it exists, otherwise at end
-      if (lsffx > 0) then
-        ! Insert before the extension (after last_dot, which is the dot)
-        ! The dot at last_dot stays, we insert digits after it, then append extension
-        i = last_dot  ! Start at the dot position (we'll write digits after it)
-        ! Save extension (without the dot) for later appending
-        if (last_dot < lstr) then
-          sffx(1:lstr-last_dot) = name(last_dot+1:lstr)
-          lsffx = lstr - last_dot  ! Length of extension without the dot
-        else
-          lsffx = 0
-        endif
+    ! Determine insertion point: before extension if it exists, otherwise at end
+    if (lsffx > 0) then
+      ! Insert before the extension (after last_dot, which is the dot)
+      ! The dot at last_dot stays, we insert digits after it, then append extension
+      i = last_dot  ! Start at the dot position (we'll write digits after it)
+      ! Save extension (without the dot) for later appending
+      if (last_dot < lstr) then
+        sffx(1:lstr-last_dot) = name(last_dot+1:lstr)
+        lsffx = lstr - last_dot  ! Length of extension without the dot
       else
-        ! No extension, insert at end of filename
-        i = lstr + 1
-        name(i:i) = '.'
+        lsffx = 0
       endif
+    else
+      ! No extension, insert at end of filename
+      i = lstr + 1
+      name(i:i) = '.'
+    endif
 
 ! Load Time Index or MPI-node (rank) into temporal variable "k".
 ! This variable will be written into digital segment. Also specify
 ! the maximum allowed number, which sets the number of digits in the
 ! segment.
 
-      k=indx
-      power=10**digits
-      do while(power > 9)              ! Insert time index or MPI node
-        power=power/10                 ! number (rank) into the string,
-        digit=k/power                  ! then attach suffix, if needed.
-        i=i+1
-        name(i:i)=char(48+digit)
-        k=k-digit*power
-      enddo
-      if (lsffx > 0) then
-        name(i+1:i+1) = '.'            ! Add dot before extension
-        name(i+2:i+1+lsffx) = sffx(1:lsffx)  ! Append extension
-        lstr = i + 1 + lsffx
-      else
-        lstr = i
-      endif
-      end subroutine
+    k=indx
+    power=10**digits
+    do while(power > 9)              ! Insert time index or MPI node
+      power=power/10                 ! number (rank) into the string,
+      digit=k/power                  ! then attach suffix, if needed.
+      i=i+1
+      name(i:i)=char(48+digit)
+      k=k-digit*power
+    enddo
+    if (lsffx > 0) then
+      name(i+1:i+1) = '.'            ! Add dot before extension
+      name(i+2:i+1+lsffx) = sffx(1:lsffx)  ! Append extension
+      lstr = i + 1 + lsffx
+    else
+      lstr = i
+    endif
+  end subroutine insert_time_index
 
 
-      subroutine extract_time_index(name, lstr, indx)
+  subroutine extract_time_index(name, lstr, indx)
 
 ! Insert MPI-node number "node" into character string "name" and
 ! adjust the length of the string "lstr" to accommodate the inserted
@@ -344,60 +344,60 @@
 ! output: name    modified string with node number inserted.
 !         lstr    length of the modified string
 
-      use error_handling_mod, only: error_log
-      implicit none
-      character(len=*) name
-      integer lstr, i,j,k, lsffx, ndots, idot(3)
-     &                                , indx
-      integer, parameter :: digits=5
-      character(len=1), parameter :: filesep='/'
-      integer fname_start, last_dot, digit
+    use error_handling_mod, only: error_log
+    implicit none
+    character(len=*) name
+    integer(kind=4) lstr, i,j,k, lsffx, ndots, idot(3)&
+    &, indx
+    integer(kind=4), parameter :: digits=5
+    character(len=1), parameter :: filesep='/'
+    integer(kind=4) fname_start, last_dot, digit
 
-      character(len=19) :: sr_name = "extract_time_index"
-      character(len=1024) :: error_info = ""
-      ! Find the last filesep to isolate just the filename
-      fname_start = 1
-      do i = 1, lstr
-        if (name(i:i) == filesep) then
-          fname_start = i + 1
-        endif
-      enddo
-
-      ! Find the last dot in the filename (potential extension)
-      last_dot = 0
-      do i = fname_start, lstr
-        if (name(i:i) == '.') then
-          last_dot = i
-        endif
-      enddo
-
-      ! Determine suffix (extension) if last dot exists
-      lsffx = 0
-      if (last_dot > 0) then
-        ! Check if characters after last dot are non-numeric (likely extension)
-        i = last_dot + 1
-        do while (i <= lstr)
-          if (name(i:i) < '0' .or. name(i:i) > '9') then
-            lsffx = lstr - last_dot + 1
-            exit
-          endif
-          i = i + 1
-        enddo
+    character(len=19) :: sr_name = "extract_time_index"
+    character(len=1024) :: error_info = ""
+    ! Find the last filesep to isolate just the filename
+    fname_start = 1
+    do i = 1, lstr
+      if (name(i:i) == filesep) then
+        fname_start = i + 1
       endif
+    enddo
 
-      if (ndots == 1 .and. lsffx == 0) then   ! Read the digital
-        i=idot(1)+1 ; j=lstr                  ! segment in the file
-      elseif (ndots > 1) then                 ! name which contains
-        i=idot(1)+1 ; j=idot(2)-1             ! time index (identified
-      else                                    ! as the leftmost segment
-        i=0 ; j=0                             ! which has length larger
-      endif                                   ! or equal to the value
-      indx=0                                  ! of parameter "digits"
-      if (j-i+1 >= digits) then               ! specified above).
-        do k=i,j
-          indx=10*indx + ichar(name(k:k))-48
-        enddo
+    ! Find the last dot in the filename (potential extension)
+    last_dot = 0
+    do i = fname_start, lstr
+      if (name(i:i) == '.') then
+        last_dot = i
       endif
+    enddo
 
-      end subroutine
-      end module insert_node_mod
+    ! Determine suffix (extension) if last dot exists
+    lsffx = 0
+    if (last_dot > 0) then
+      ! Check if characters after last dot are non-numeric (likely extension)
+      i = last_dot + 1
+      do while (i <= lstr)
+        if (name(i:i) < '0' .or. name(i:i) > '9') then
+          lsffx = lstr - last_dot + 1
+          exit
+        endif
+        i = i + 1
+      enddo
+    endif
+
+    if (ndots == 1 .and. lsffx == 0) then   ! Read the digital
+      i=idot(1)+1 ; j=lstr                  ! segment in the file
+    elseif (ndots > 1) then                 ! name which contains
+      i=idot(1)+1 ; j=idot(2)-1             ! time index (identified
+    else                                    ! as the leftmost segment
+      i=0 ; j=0                             ! which has length larger
+    endif                                   ! or equal to the value
+    indx=0                                  ! of parameter "digits"
+    if (j-i+1 >= digits) then               ! specified above).
+      do k=i,j
+        indx=10*indx + ichar(name(k:k))-48
+      enddo
+    endif
+
+  end subroutine extract_time_index
+end module insert_node_mod

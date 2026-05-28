@@ -1,9 +1,9 @@
-      module comm_vars
+module comm_vars
 
 #include "cppdefs.opt"
 
-      use param, only: nt
-      implicit none
+  use param, only: nt
+  implicit none
 
 ! The following common block contains a set of globally accessible
 ! variables needed for data exchange between OpenMP threads working
@@ -26,9 +26,9 @@
 ! well as changing the sequence of variables in the common block may
 ! cause violation of alignment.
 
-      real*QUAD area, volume, bc_crss
-      real hmin,hmax, grdmin,grdmax, rx0,rx1, Cg_min,Cg_max, Cu_Cor
-      real*4 cpu_all(2)
-      integer trd_count, tile_count, bc_count, mcheck, first_time
+  real(kind=QUAD) area, volume, bc_crss
+  real(kind=8) hmin,hmax, grdmin,grdmax, rx0,rx1, Cg_min,Cg_max, Cu_Cor
+  real(kind=4) cpu_all(2)
+  integer(kind=4) trd_count, tile_count, bc_count, mcheck, first_time
 
-      end module comm_vars
+end module comm_vars
