@@ -102,9 +102,9 @@ check_srcs$(UPF77_ext): srcscheck Makefile
 .PHONY: depend
 depend: check_switches1$(UPF77_ext)
         # makedepf90 is preferable but does not work on e.g. osx-arm64. Offer python fallback.
-	@${ROMS_ROOT}/Tools-Roms/makedepf90 $(SRCS) > Make.depend  || \
-	(echo "failed to generate dependency list with makedepf90, using python fallback"; \
-	 ${ROMS_ROOT}/Tools-Roms/makedep.py  Make.depend)
+	@${ROMS_ROOT}/Tools-Roms/makedep.py  Make.depend  || \
+	(echo "failed to generate dependency list with makedep.py, attempting to use makedepf90"; \
+	${ROMS_ROOT}/Tools-Roms/makedepf90 $(SRCS) > Make.depend)
 	@echo 'Updated Make.depend (dependency list)'
 
 # Target to create tar file.
