@@ -144,8 +144,11 @@
 #endif
 
       use grid, only: rmask
-      use param, only: ieast, iwest, jnorth, jsouth, itemp, isalt
-# if defined LMD_MIXING  || defined LMD_KPP || defined MY25_MIXING || defined LMD_BKPP
+      use param, only: ieast, isalt, itemp, iwest, jnorth, jsouth
+
+# if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
+  || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
+  || defined LMD_BKPP
       use mixing, only: bvf
 #endif
       use ocean_vars, only: z_r, hz, z_w
@@ -260,7 +263,7 @@
             rho(i,j,k)=rho(i,j,k)*rmask(i,j)
 #   endif
 #  endif
-#  if defined LMD_MIXING  || defined LMD_KPP
+#  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP
 #   ifndef SPLIT_EOS
             dpth=-z_w(i,j,k)
             K_up(i,k)=K0+dpth*(K1+K2*dpth)
@@ -304,8 +307,8 @@ c**         dpth=z_w(i,j,N)-0.5*(z_r(i,j,k+1)+z_r(i,j,k))
 #  endif
           enddo
         enddo
-#  if defined LMD_MIXING  || defined LMD_KPP \
-   || defined MY25_MIXING
+#  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
+   || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING
         do i=istrR,iendR
           bvf(i,j,N)=bvf(i,j,N-1)
           bvf(i,j,0)=bvf(i,j,  1)
@@ -343,8 +346,8 @@ c**         dpth=z_w(i,j,N)-0.5*(z_r(i,j,k+1)+z_r(i,j,k))
 #  endif
           enddo
         enddo
-#  if defined LMD_MIXING  || defined LMD_KPP \
-   || defined MY25_MIXING
+#  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
+   || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING
         cff=g/rho0
         do k=1,N-1
           do i=istrR,iendR

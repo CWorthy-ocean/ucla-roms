@@ -33,7 +33,7 @@
       use grid, only: h, hinv, dn_u, dm_v, pn, pm
       use param, only: ieast, jnorth, lm, mm, np_eta, np_xi
       use roms_mpi, only: exchange_xxx
-      use dimensions, only: inode, jnode, npx,npy
+      use dimensions, only: inode, jnode, npx,npy, i0, i1, j0, j1
       use ocean_vars, only:
      &     ubar, zeta, vbar, z_w, z_r, hz, z_w0, z_r0, hz0
 # if defined NHMG || defined NONTRAD_COR
@@ -42,6 +42,7 @@
       use scalars, only: iic, knew
       use scoord, only: hc, iwest, jsouth, n, cs_w, cs_r
       use pio_roms, only: use_pio
+      use instant_output, only: wrt_instant
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k
@@ -76,6 +77,11 @@
      &            +zeta(i,j-1,1) )*dm_v(i,j)*( vbar(i,j,1))
           enddo
         enddo
+
+# ifdef OBC_CHECK
+        print *, 'set_depth_tile:'
+        print *, 'DU_avg1(istr,10)=',DU_avg1(istr,10)
+# endif
 
       endif  ! first time
 
@@ -133,6 +139,8 @@
         enddo
       endif
 
+!            call wrt_instant(z_r(i0:i1,j0:j1,:), 'zr')
+!           stop
 !!! SKIP = USE_PIO ??
 # ifdef EXCHANGE
 !      if (iic == 0) then
@@ -146,8 +154,6 @@
       endif
       call exchange_xxx(z_w,z_r,Hz)
 # endif
-
-!            call wrt_instant(z_r, 'zr')
 
 #if defined NHMG || defined NONTRAD_COR
 !     Compute slopes

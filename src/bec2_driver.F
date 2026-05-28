@@ -183,6 +183,11 @@
 !
 ! Gas exchange:
 !
+#ifdef ICEOBS
+# define IFRAC sic /* Ice fraction has different name in this case */
+#endif
+       FICE_USED(istr:iend,jstr:jend) = IFRAC(istr:iend,jstr:jend)
+
 # ifdef BULK_FRC
        ws_used(istr:iend,jstr:jend) = wspd_used(istr:iend,jstr:jend)
 # else

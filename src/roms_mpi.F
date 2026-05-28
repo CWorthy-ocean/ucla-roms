@@ -21,11 +21,12 @@
      &     ieast, iwest, jnorth, jsouth, llm,
      &     lm, mm, mmm, ocean_grid_comm,
      &     np_xi, np_eta, mynode, nnodes, nsize,
-     &     iSW_corn, jSW_corn, ew_periodic, ns_periodic
+     &     iSW_corn, jSW_corn, ew_periodic, ns_periodic, N
       use mpi_f08, only: mpi_comm_world
       use dimensions, only: bf, i0, i1, j0, j1, nz, npx, npy,
      &     inode, jnode, eta_rho, eta_v, xi_rho, xi_u, grdname, nx, ny,
-     &     gnx, gny, analytical_grid
+     &     gnx, gny, analytical_grid,
+     &     ds_xr, ds_xu, ds_yr, ds_yv, ds_zr, ds_zw
       use mpi_f08, only: mpi_double_precision, mpi_status_size
       use error_handling_mod, only: error_log
       use netcdf, only: nf90_nowrite, nf90_open, nf90_global, nf90_noerr,
@@ -236,6 +237,7 @@
         else
           jSW_corn = jnode*ny - offy/2
         endif
+
         if (jnode == 0) then
           ny = ny - offy/2
         endif
@@ -278,6 +280,23 @@
           eta_rho = ny+1
           eta_v   = ny+1
         endif
+
+#ifdef PARALLEL_IO
+        ds_xr = LLm+2
+        ds_yr = MMm+2
+        ds_xu = LLm+1
+        ds_yv = MMm+1
+        ds_zr = N
+        ds_zw = N+1
+#else
+        ds_xr = xi_rho
+        ds_yr = eta_rho
+        ds_xu = xi_u
+        ds_yv = eta_v
+        ds_zr = N
+        ds_zw = N+1
+#endif
+
 
 #ifdef PARALLEL_IO
         ! Set basic tile sizes
@@ -359,6 +378,7 @@
         PIO_EASTERN_EDGE = (inode == npx-1)
         PIO_SOUTHERN_EDGE = (jnode == 0)
         PIO_NORTHERN_EDGE = (jnode == npy-1)
+
 #endif
 
       end subroutine mpi_setup !]

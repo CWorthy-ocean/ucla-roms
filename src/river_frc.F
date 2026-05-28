@@ -18,11 +18,12 @@
       use dimensions, only: i0, i1, j0, j1, nx, ny, xi_rho, eta_rho,
      &   x0,x1,y0,y1
       use pio_roms, only: use_pio, pio_gtype
-!#ifdef PARALLEL_IO
-!     &     , pio_nriv, pio_initialize_rivers
-!#endif
       use param, only: lm, mm, mynode, ocean_grid_comm
       use error_handling_mod, only: error_log
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_IoSystem, pio_type
+      use pio, only : PIO_openfile, PIO_closefile
+#endif
 
       implicit none
 
@@ -87,21 +88,26 @@
          allocate(nc_rvol%vdata(nriv,1 ,2))
          allocate(nc_rtrc%vdata(nriv,nt,2))
       end if
-
       ! set river flux volumes and tracer data:
       if(river_analytical) then
 
         call set_ana_river_frc ! cppflags needed else won't link without the analytical.F
 
       else
-        pio_gtype='---'
+      pio_gtype='----'
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
         call set_frc_data(nc_rvol,riv_vol) ! set river volume flux for all rivers at current time
         call set_frc_data(nc_rtrc,var2d=riv_trc)           ! set river tracers flux for all rivers at current time
-
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
       endif
-
+      pio_file_is_open = 0
+#endif
+      endif
       if(.not. init_riv_done) call init_river_frc ! initialize once river flux locations & arrays
-
       end subroutine set_river_frc  !]
 !     ----------------------------------------------------------------------
 
@@ -188,9 +194,15 @@
          ierr = ierr * nf90_inq_varid(ncid, "river_fraction", varid) ! ... and fraction variables
 
          if (ierr == nf90_noerr) then ! Found the variables in the forcing file
-            pio_gtype = '2Dr'
-            call ncread(ncid,"river_index",ridx_real(x0:x1,y0:y1),fname=frcfile(nc_rvol%ifile))
-            call ncread(ncid,"river_fraction",rfrc(x0:x1,y0:y1),fname=frcfile(nc_rvol%ifile))
+            pio_gtype = '2Drr'
+#ifdef PARALLEL_IO
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(nc_rvol%ifile))
+#endif
+            call ncread(ncid,"river_index",ridx_real(x0:x1,y0:y1))
+            call ncread(ncid,"river_fraction",rfrc(x0:x1,y0:y1))
+#ifdef PARALLEL_IO
+      call PIO_closefile(pio_FileDesc)
+#endif
             ierr = nf90_close(ncid)
 
             ! Check if any river indices are greater than the chosen
@@ -238,8 +250,14 @@
      &              context=module_name//"/"//sr_name,
      &              info=error_info)
             else
-               pio_gtype='2Dr'
-               call ncread(ncid,riv_flx_name,rflx(x0:x1,y0:y1),fname=grdname)
+               pio_gtype='2Drr'
+#ifdef PARALLEL_IO
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, grdname)
+#endif
+               call ncread(ncid,riv_flx_name,rflx(x0:x1,y0:y1))
+#ifdef PARALLEL_IO
+      call PIO_closefile(pio_FileDesc)
+#endif
                ierr = nf90_close(ncid)
                where (rflx(i0:i1, j0:j1) > 0)
                   ridx(i0:i1, j0:j1) = floor(rflx(i0:i1, j0:j1) - 1e-5)

@@ -17,6 +17,10 @@
      &     nf90_global, nf90_write, nf90_nofill,
      &     nf90_open, nf90_put_att, nf90_close, nf90_set_fill
       use scalars, only: dt, iic, tdays, time
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc
+      use pio, only : PIO_closefile
+#endif
       use error_handling_mod, only: error_log
       implicit none
 
@@ -174,6 +178,11 @@
       ! Set surface fields that will be restored towards
 
       implicit none
+
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
+
 #if defined(QCORRECTION) && !defined(ANA_SST)
       ! Sea-surface temperature (SST) data
       call set_frc_data(nc_sst,sst,'r')
@@ -184,6 +193,13 @@
       ! Sea-surface salinity (SSS) data
       call set_frc_data(nc_sss,sss,'r')
       call error_log%abort_check()
+#endif
+
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
 #endif
 
       end subroutine set_surf_field_corr  !]

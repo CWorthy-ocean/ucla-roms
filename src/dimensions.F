@@ -35,6 +35,14 @@
       integer,public :: inode,jnode     ! location of subdomain in the grid
       integer,public :: x0,x1,y0,y1,x_,y_
 
+      ! Dimension sizes for netcdf files
+      integer, public :: ds_xr
+      integer, public :: ds_yr
+      integer, public :: ds_xu
+      integer, public :: ds_yv
+      integer, public :: ds_zr
+      integer, public :: ds_zw
+
 # ifdef ANA_GRID
       logical,parameter,public :: analytical_grid = .true.
 # else

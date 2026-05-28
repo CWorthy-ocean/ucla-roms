@@ -11,6 +11,10 @@
      &     force_info, frctype, max_frc,
      &     tide_opt, frcfile, store_string_att
       use grid, only: xr, yr
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
+      use pio, only : PIO_openfile, PIO_closefile
+#endif
       use error_handling_mod, only: error_log
 
       implicit none
@@ -344,24 +348,28 @@
         call error_log%abort_check()
         start(3) = itide
 
+#ifdef PARALLEL_IO
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(var_file_indx))
+#endif
+
         if (bry_tides) then
-          pio_gtype = '2Dr'
-          call ncread(ncid,'ssh_Re',ztide_r(x0:x1,y0:y1,itide),start=start,fname=frcfile(var_file_indx))
-          call ncread(ncid,'ssh_Im',ztide_i(x0:x1,y0:y1,itide),start=start,fname=frcfile(var_file_indx))
+          pio_gtype = '2Drr'
+          call ncread(ncid,'ssh_Re',ztide_r(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
+          call ncread(ncid,'ssh_Im',ztide_i(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
 
-          pio_gtype = '2Du'
-          call ncread(ncid,'u_Re',utide_r(x_:x1,y0:y1,itide),start=start,fname=frcfile(var_file_indx))
-          call ncread(ncid,'u_Im',utide_i(x_:x1,y0:y1,itide),start=start,fname=frcfile(var_file_indx))
+          pio_gtype = '2Dur'
+          call ncread(ncid,'u_Re',utide_r(x_:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
+          call ncread(ncid,'u_Im',utide_i(x_:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
 
-          pio_gtype = '2Dv'
-          call ncread(ncid,'v_Re',vtide_r(x0:x1,y_:y1,itide),start=start,fname=frcfile(var_file_indx))
-          call ncread(ncid,'v_Im',vtide_i(x0:x1,y_:y1,itide),start=start,fname=frcfile(var_file_indx))
+          pio_gtype = '2Dvr'
+          call ncread(ncid,'v_Re',vtide_r(x0:x1,y_:y1,itide),start=start)!,fname=frcfile(var_file_indx))
+          call ncread(ncid,'v_Im',vtide_i(x0:x1,y_:y1,itide),start=start)!,fname=frcfile(var_file_indx))
         endif
 
         if (pot_tides) then
-          pio_gtype = '2Dr'
-          call ncread(ncid,'pot_Re',ptide_r(x0:x1,y0:y1,itide),start=start,fname=frcfile(var_file_indx))
-          call ncread(ncid,'pot_Im',ptide_i(x0:x1,y0:y1,itide),start=start,fname=frcfile(var_file_indx))
+          pio_gtype = '2Drr'
+          call ncread(ncid,'pot_Re',ptide_r(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
+          call ncread(ncid,'pot_Im',ptide_i(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
         endif
       end do                    ! <-- itide=1,ntides
 
@@ -388,6 +396,10 @@
       endif
 
       if(mynode==0) write(*,'(7x,A)')'tides :: read all tides'
+
+#ifdef PARALLEL_IO
+      call PIO_closefile(pio_FileDesc)
+#endif
 
       end subroutine read_tides  !]
 !-----------------------------------------------------------------------

@@ -19,6 +19,11 @@
       use grid, only: nz
       use error_handling_mod, only: error_log
       use instant_output, only: wrt_instant
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc
+      use pio, only : PIO_closefile
+#endif
+
       implicit none
 
       private                   ! All variables private to module unless public specified
@@ -108,6 +113,10 @@
       ! local
       integer :: i, j,ierr
 
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
+
       ! 1) set surface momentum flux
       call set_frc_data(nc_sustr,sustr,'u')
       call set_frc_data(nc_svstr,svstr,'v')
@@ -152,6 +161,13 @@
 
       ! 5) Apply sst and sss corrections, if desired
       call apply_surf_field_corr
+
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
+#endif
 
       end subroutine set_flux_frc  !]
 ! ----------------------------------------------------------------------

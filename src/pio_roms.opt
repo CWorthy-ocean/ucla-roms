@@ -2,12 +2,11 @@
       ! ****************************************************************
       ! user inputs
 
-      integer, parameter        :: pio_stride=1         ! Stride in the mpi rank between io tasks.
+      integer, parameter          :: pio_stride=1       ! Stride in the mpi rank between io tasks.
                                                         ! It appears that this can't be greater than
                                                         ! the number of MPI tasks, or ROMS will crash
 
-      integer, public           :: pio_type = PIO_iotype_pnetcdf  ! Which NetCDF library to use for I/O?
-                             ! pio_type = PIO_iotype_netcdf4p
-
+      integer,public              :: pio_type = PIO_iotype_netcdf4p  ! Which NetCDF library to use for I/O?
+                             ! pio_type = PIO_iotype_pnetcdf
       ! end user inputs
       ! ****************************************************************

@@ -515,6 +515,10 @@
 #ifdef BEC2_DIAG
       bec2_diag_2d = c0
       bec2_diag_3d = c0
+#  ifdef AVERAGES
+      bec2_diag_3d_avg = c0
+      bec2_diag_2d_avg = c0
+#  endif /* AVERAGES */
 #endif /* BEC2_DIAG */
 
       !---------------------------------------------------------------------------

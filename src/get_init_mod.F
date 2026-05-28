@@ -57,6 +57,10 @@
       use calc_pflx_mod, only : get_init_slow, calc_pflx
       use sponge_tune, only: get_init_ub, ub_tune
       use pio_roms, only: use_pio, pio_gtype
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
+      use pio, only : PIO_openfile, PIO_closefile
+#endif
       use checkdims_mod, only: checkdims
 
       implicit none
@@ -403,12 +407,16 @@ c--#define VERBOSE
 !---------------------
 ! River mask (needed for exact restarts)
 
+#ifdef PARALLEL_IO
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, ininame)
+#endif
+
       start=1; start(3)=record                                       ! 2D vars
 
       ierr=nf90_inq_varid(ncid, 'riv_umask', varid)
       if (ierr == nf90_noerr) then
-        pio_gtype = '2Du'
-        call ncread(ncid,'riv_umask',riv_umask(x_:x1,y0:y1),start=start,fname=ininame)
+        pio_gtype = '2Dur'
+        call ncread(ncid,'riv_umask',riv_umask(x_:x1,y0:y1),start=start)!,fname=ininame)
       else
         if (mynode == 0) then
         write(*,*) 'riv_umask not found in initial file. Initializing ',
@@ -417,8 +425,8 @@ c--#define VERBOSE
       endif
       ierr=nf90_inq_varid(ncid, 'riv_vmask', varid)
       if (ierr == nf90_noerr) then
-        pio_gtype = '2Dv'
-        call ncread(ncid,'riv_vmask',riv_vmask(x0:x1,y_:y1),start=start,fname=ininame)
+        pio_gtype = '2Dvr'
+        call ncread(ncid,'riv_vmask',riv_vmask(x0:x1,y_:y1),start=start)!,fname=ininame)
       else
         if (mynode == 0) then
         write(*,*) 'riv_vmask not found in initial file. Initializing ',
@@ -428,19 +436,19 @@ c--#define VERBOSE
 
 ! Free-surface and barotropic 2D momentuma, XI- and ETA-components
 
-      pio_gtype = '2Dr'
-      call ncread(ncid,'zeta',zeta(x0:x1,y0:y1,1),start=(/1,1,record/),fname=ininame)
+      pio_gtype = '2Drr'
+      call ncread(ncid,'zeta',zeta(x0:x1,y0:y1,1),start=(/1,1,record/))!,fname=ininame)
       zeta(x0:x1,y0:y1,1)=zeta(x0:x1,y0:y1,1)*rmask(x0:x1,y0:y1)
       call exchange_xxx(zeta(:,:,1))
 
-      pio_gtype = '2Du'
-      call ncread(ncid,'ubar',ubar(x_:x1,y0:y1,1),start=(/1,1,record/),fname=ininame)
+      pio_gtype = '2Dur'
+      call ncread(ncid,'ubar',ubar(x_:x1,y0:y1,1),start=(/1,1,record/))!,fname=ininame)
       ubar(x_:x1,y0:y1,1) = ubar(x_:x1,y0:y1,1)*
      &  (umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
       call exchange_xxx(ubar(:,:,1))
 
-      pio_gtype = '2Dv'
-      call ncread(ncid,'vbar',vbar(x0:x1,y_:y1,1),start=(/1,1,record/),fname=ininame)
+      pio_gtype = '2Dvr'
+      call ncread(ncid,'vbar',vbar(x0:x1,y_:y1,1),start=(/1,1,record/))!,fname=ininame)
       vbar(x0:x1,y_:y1,1) = vbar(x0:x1,y_:y1,1)*
      &  (vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
       call exchange_xxx(vbar(:,:,1))
@@ -470,18 +478,18 @@ c--#define VERBOSE
       if (ierr /= nf90_noerr) exact_succes = .false.
 
       if (exact_succes) then
-        pio_gtype = '2Du'
-        call ncread(ncid,'DU_avg1',DU_avg1(x_:x1,y0:y1),start=start,fname=ininame)
-        pio_gtype = '2Dv'
-        call ncread(ncid,'DV_avg1',DV_avg1(x0:x1,y_:y1),start=start,fname=ininame)
-        pio_gtype = '2Du'
-        call ncread(ncid,'DU_avg2',DU_avg2(x_:x1,y0:y1),start=start,fname=ininame)
-        pio_gtype = '2Dv'
-        call ncread(ncid,'DV_avg2',DV_avg2(x0:x1,y_:y1),start=start,fname=ininame)
-        pio_gtype = '2Du'
-        call ncread(ncid,'DU_avg_bak',DU_avg_bak(x_:x1,y0:y1),start=start,fname=ininame)
-        pio_gtype = '2Dv'
-        call ncread(ncid,'DV_avg_bak',DV_avg_bak(x0:x1,y_:y1),start=start,fname=ininame)
+        pio_gtype = '2Dur'
+        call ncread(ncid,'DU_avg1',DU_avg1(x_:x1,y0:y1),start=start)!,fname=ininame)
+        pio_gtype = '2Dvr'
+        call ncread(ncid,'DV_avg1',DV_avg1(x0:x1,y_:y1),start=start)!,fname=ininame)
+        pio_gtype = '2Dur'
+        call ncread(ncid,'DU_avg2',DU_avg2(x_:x1,y0:y1),start=start)!,fname=ininame)
+        pio_gtype = '2Dvr'
+        call ncread(ncid,'DV_avg2',DV_avg2(x0:x1,y_:y1),start=start)!,fname=ininame)
+        pio_gtype = '2Dur'
+        call ncread(ncid,'DU_avg_bak',DU_avg_bak(x_:x1,y0:y1),start=start)!,fname=ininame)
+        pio_gtype = '2Dvr'
+        call ncread(ncid,'DV_avg_bak',DV_avg_bak(x0:x1,y_:y1),start=start)!,fname=ininame)
       else
         forw_start=ntstart    !--> cancel exact restart
         iic = 0 ! set back to zero
@@ -493,10 +501,10 @@ c--#define VERBOSE
         ierr=nf90_inq_varid(ncid,  'rvfrc_bak', varid)
         if (ierr == nf90_noerr) then
 
-          pio_gtype = '2Du'
-          call ncread(ncid,'rufrc_bak',rufrc_bak(x_:x1,y0:y1,tindx),start=start,fname=ininame)
-          pio_gtype = '2Dv'
-          call ncread(ncid,'rvfrc_bak',rvfrc_bak(x0:x1,y_:y1,tindx),start=start,fname=ininame)
+          pio_gtype = '2Dur'
+          call ncread(ncid,'rufrc_bak',rufrc_bak(x_:x1,y0:y1,tindx),start=start)!,fname=ininame)
+          pio_gtype = '2Dvr'
+          call ncread(ncid,'rvfrc_bak',rvfrc_bak(x0:x1,y_:y1,tindx),start=start)!,fname=ininame)
           if (ierr/=nf90_noerr) then
              call error_log%check_netcdf_status(
      &        netcdf_status=ierr,
@@ -518,16 +526,16 @@ c--#define VERBOSE
 
       start=1; start(4)=record                                       ! 3D vars
 
-      pio_gtype = '3Du'
-      call ncread(ncid,vname(1,indxU),u(x_:x1,y0:y1,:,tindx),start=start,fname=ininame)
+      pio_gtype = '3Dur'
+      call ncread(ncid,vname(1,indxU),u(x_:x1,y0:y1,:,tindx),start=start)!,fname=ininame)
       do k=1,nz
         u(x_:x1,y0:y1,k,tindx) = u(x_:x1,y0:y1,k,tindx)*
      &  (umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
       enddo
       call exchange_xxx(u(:,:,:,tindx))
 
-      pio_gtype = '3Dv'
-      call ncread(ncid,vname(1,indxV),v(x0:x1,y_:y1,:,tindx),start=start,fname=ininame)
+      pio_gtype = '3Dvr'
+      call ncread(ncid,vname(1,indxV),v(x0:x1,y_:y1,:,tindx),start=start)!,fname=ininame)
       do k=1,nz
         v(x0:x1,y_:y1,k,tindx) = v(x0:x1,y_:y1,k,tindx)*
      &  (vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
@@ -541,8 +549,8 @@ c--#define VERBOSE
 
         ierr=nf90_inq_varid(ncid, t_vname(itrc), varid)
         if (ierr == nf90_noerr) then
-          pio_gtype = '3Dr'
-          call ncread(ncid,t_vname(itrc),t(x0:x1,y0:y1,:,tindx,itrc),start=start,fname=ininame)
+          pio_gtype = '3Drr'
+          call ncread(ncid,t_vname(itrc),t(x0:x1,y0:y1,:,tindx,itrc),start=start)!,fname=ininame)
           do k=1,N
             t(x0:x1,y0:y1,k,tindx,itrc)=t(x0:x1,y0:y1,k,tindx,itrc)*rmask(x0:x1,y0:y1)
           enddo
@@ -579,9 +587,9 @@ c--#define VERBOSE
 # ifdef LMD_KPP
       ierr=nf90_inq_varid(ncid, vname(1,indxHbls), varid)
       if (ierr == nf90_noerr) then
-        pio_gtype = '2Dr'
-        call ncread(ncid,vname(1,indxHbls),hbls(x0:x1,y0:y1),start=start,fname=ininame)
-        hbls(i0:i1,j0:j1)=hbls(i0:i1,j0:j1)*rmask(i0:i1,j0:j1)     ! output mask 0, rather than random numbers
+        pio_gtype = '2Drr'
+        call ncread(ncid,vname(1,indxHbls),hbls(x0:x1,y0:y1),start=start)!,fname=ininame)
+        hbls(x0:x1,y0:y1)=hbls(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
         call exchange_xxx(hbls(:,:))
       else
         mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',
@@ -593,9 +601,9 @@ c--#define VERBOSE
 # ifdef LMD_BKPP
       ierr=nf90_inq_varid(ncid, vname(1,indxHbbl), varid)
       if (ierr == nf90_noerr) then
-        pio_gtype = '2Dr'
-        call ncread(ncid,vname(1,indxHbbl),hbbl(x0:x1,y0:y1),start=start,fname=ininame)
-        hbbl(i0:i1,j0:j1)=hbbl(i0:i1,j0:j1)*rmask(i0:i1,j0:j1)     ! output mask 0, rather than random numbers
+        pio_gtype = '2Drr'
+        call ncread(ncid,vname(1,indxHbbl),hbbl(x0:x1,y0:y1),start=start)!,fname=ininame)
+        hbbl(x0:x1,y0:y1)=hbbl(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
         call exchange_xxx(hbbl(:,:))                               ! confirmed needs an exchange, not sure why
       else
         mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',
@@ -607,7 +615,7 @@ c--#define VERBOSE
 
 #ifdef MARBL
 !     Read in MARBL saved_state variables here
-      call marbldrv_read_ss_vars_from_rst(ncid,record,ininame)
+      call marbldrv_read_ss_vars_from_rst(ncid,record)
 #endif /* MARBL */
 
 #endif /* SOLVE3D */
@@ -650,6 +658,11 @@ c--#define VERBOSE
 #ifdef MPI_SILENT_MODE
       endif
 #endif
+
+#ifdef PARALLEL_IO
+      call PIO_closefile(pio_FileDesc)
+#endif
+
       call error_log%abort_check()
       ! Here we catch an initial file that does not have the boundary values of u/v
       ! set to zero, even though we prescribed a closed boundary. This is necessary

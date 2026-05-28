@@ -31,8 +31,8 @@
 # else
       real,allocatable,dimension(:,:,:,:) :: Akt
 # endif
-# if defined LMD_MIXING  || defined LMD_KPP \
-  || defined MY25_MIXING \
+# if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
+  || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
   || defined LMD_BKPP
       real,allocatable,dimension(:,:,:) :: bvf
 # endif
@@ -108,8 +108,8 @@
 # else
       allocate( Akt(GLOBAL_2D_ARRAY,0:N,itemp) ); Akt=init
 # endif
-# if defined LMD_MIXING  || defined LMD_KPP \
-  || defined MY25_MIXING \
+# if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
+  || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
   || defined LMD_BKPP
       allocate( bvf(GLOBAL_2D_ARRAY,0:N) ); bvf=init
 # endif
@@ -167,19 +167,21 @@
 ! vertical mixing coefficients are those specified by the background
 ! values.
 
-# if !defined LMD_MIXING && !defined MY25_MIXING
+# if !defined LMD_MIXING && !defined BVF_MIXING && !defined PP_MIXING\
+                         && !defined MY2_MIXING && !defined MY25_MIXING
       Akv=Akv_bak
 # else
       Akv=0.
 # endif
-# if defined LMD_MIXING  || defined LMD_KPP \
-  || defined MY25_MIXING \
+# if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
+  || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING \
   || defined LMD_BKPP
       bvf=0.
 # endif
 
       do itrc=1,iTandS
-# if !defined LMD_MIXING && !defined MY25_MIXING
+# if !defined LMD_MIXING && !defined BVF_MIXING && !defined PP_MIXING\
+                         && !defined MY2_MIXING && !defined MY25_MIXING
         Akt(:,:,:,itrc)=Akt_bak(itrc)
 # else
         Akt(:,:,:,itrc)=0.

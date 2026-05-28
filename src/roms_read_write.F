@@ -12,13 +12,14 @@
      &     nf90_netcdf4, nf90_global, nf90_enotatt, nf90_open,
      &     nf90_inq_varid, nf90_get_att, nf90_close, nf90_create,
      &     nf90_put_att, nf90_inquire_variable, nf90_inquire_dimension,
-     &     nf90_get_var
+     &     nf90_get_var, nf90_clobber, nf90_64bit_data
       use scalars, only: time, dt, sec2day, tdays, akt_bak, akv_bak
       use nc_read_write, only: nccreate, ncread
       use dimensions, only:
      &     bf, nx, ny, gnx, gny, i0, i1, j0, j1,
      &     eta_rho, xi_rho, xi_u, eta_v,
      &     x_,x0,x1,y_,y0,y1
+      use dimensions, only: ds_xr, ds_xu, ds_yr, ds_yv, ds_zr, ds_zw
       use param, only: mynode, nnodes
       use dimensions, only: inode, jnode
       use roms_mpi, only: exchange_xxx, new_part
@@ -26,7 +27,9 @@
 #ifdef PARALLEL_IO
      &   ,pio_xi_rho_coarse_start, pio_eta_rho_coarse_start,pio_xi_u_coarse_start, pio_eta_v_coarse_start,
      &   pio_xi_rho_coarse, pio_eta_rho_coarse, pio_xi_u_coarse, pio_eta_v_coarse,
-     &   pio_i0c, pio_i1c, pio_j0c, pio_j1c, pio_initialize_coarse
+     &   pio_i0c, pio_i1c, pio_j0c, pio_j1c, pio_initialize_coarse, pio_IoSystem, pio_FileDesc, pio_type,
+     &   pio_file_is_open, pio_frcfile
+      use pio, only : PIO_openfile
 #endif
       use error_handling_mod, only: error_log ! Note, abort_check should be called by caller of set_frc_data
       use instant_output, only: wrt_instant, instant_root_name
@@ -185,6 +188,7 @@
       public :: find_new_record
       public :: nc_check_units
       public :: put_global_atts
+      public :: refdatestr
       public :: store_string_att
       public :: create_file
 
@@ -1159,19 +1163,38 @@
         call MPI_Bcast(nc%vdata(:,:,it),msg_size,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
       else
 
+#ifdef PARALLEL_IO
+      if (mynode == 0) then
       call find_new_record(vname,tname,modtime,ifile,irec,
-     &                         nc%times(it))
+     &                         nc%times(it) )
+      endif
+      call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
+#else
+      call find_new_record(vname,tname,modtime,ifile,irec,
+     &                         nc%times(it) )
+#endif
 
+!      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+#ifdef PARALLEL_IO
+      if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
+        pio_file_is_open = 1
+      endif
+#else
       ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+#endif
       ! The size of vdata must match the size of the data in the
       ! file. Ensure this in the allocation of vdata
       ! This is in contrast with the _surf version of fill_frc_slice
       if (d1) then
-        call ncread(ncid,vname,nc%vdata(:,1,it),start=(/1,irec/),fname=frcfile(ifile))
+        call ncread(ncid,vname,nc%vdata(:,1,it),start=(/1,irec/))
       else
-        call ncread(ncid,vname,nc%vdata(:,:,it),start=(/1,1,irec/),fname=frcfile(ifile))
+        call ncread(ncid,vname,nc%vdata(:,:,it),start=(/1,1,irec/))
       endif
       ! add force file info to output nc
+#ifndef PARALLEL_IO
       if (mynode == 0) then
         ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
         ! if forcing netcdf has information
@@ -1186,6 +1209,7 @@
         endif
       endif
       ierr = nf90_close(ncid)
+#endif
       endif ! ungridded
 
       if (bry==0) then
@@ -1255,12 +1279,30 @@
         call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
         call MPI_Bcast(nc%vdata(:,:,:,it),msg_size,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
       else
-
+#ifdef PARALLEL_IO
+      if (mynode == 0) then
       call find_new_record(vname,tname,modtime,ifile,irec,
-     &                         nc%times(it))
+     &                         nc%times(it) )
+      endif
+      call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
+#else
+      call find_new_record(vname,tname,modtime,ifile,irec,
+     &                         nc%times(it) )
+#endif
+!      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+#ifdef PARALLEL_IO
+      if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
+        pio_file_is_open = 1
+      endif
+#else
       ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+#endif
       call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,:,it),(/1,1,1,irec/))
       ! add force file info to output nc
+#ifndef PARALLEL_IO
       if (mynode == 0) then
         ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
         ! if forcing netcdf has information
@@ -1275,6 +1317,7 @@
         endif
       endif
       ierr = nf90_close(ncid)
+#endif
       endif ! ungridded
 
       if (bry==0) then
@@ -1298,6 +1341,9 @@
 ! ----------------------------------------------------------------------
       subroutine fill_frc_slice_surf(nc,modtime,it,gtype) ![
       ! Fill a time slice of forcing data
+      use param, only: ocean_grid_comm
+      use mpi_f08, only: mpi_double_precision, mpi_integer, mpi_bcast, mpi_barrier
+
       implicit none
 
       ! input/outputs
@@ -1320,51 +1366,59 @@
       vname = nc%vname
       tname = nc%tname
 
+#ifdef PARALLEL_IO
+      if (mynode == 0) then
       call find_new_record(vname,tname,modtime,ifile,irec,
      &                         nc%times(it) )
+      endif
+      call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
+#else
+      call find_new_record(vname,tname,modtime,ifile,irec,
+     &                         nc%times(it) )
+#endif
 
+!      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+#ifdef PARALLEL_IO
+      if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
+        pio_frcfile = frcfile(ifile)
+        pio_file_is_open = 1
+      endif
+#else
       ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+#endif
       if (nc%coarse>0) then
         if (.not.allocated(cdata)) then
           call init_coarse
         endif
 
         if (gtype=='u') then
-          pio_gtype='2Cu'
-          call ncread(ncid,vname,cdata(xc_:xc1,yc0:yc1),start=(/1,1,irec/),fname=frcfile(ifile))
-!        call exchange_xxx(cdata,array_bf=cbf)
-!        call wrt_instant(cdata, vname)
-!        stop
-!          call wrt_instant(cdata, vname)
+          pio_gtype='2Cur'
+          call ncread(ncid,vname,cdata(xc_:xc1,yc0:yc1),start=(/1,1,irec/))
         elseif (gtype=='v') then
-          pio_gtype='2Cv'
-          call ncread(ncid,vname,cdata(xc0:xc1,yc_:yc1),start=(/1,1,irec/),fname=frcfile(ifile))
-!        call exchange_xxx(cdata,array_bf=cbf)
-!        call wrt_instant(cdata, vname)
-!        stop
-!          call wrt_instant(cdata, vname)
+          pio_gtype='2Cvr'
+          call ncread(ncid,vname,cdata(xc0:xc1,yc_:yc1),start=(/1,1,irec/))
         else
-          pio_gtype='2Cr'
-          call ncread(ncid,vname,cdata(xc0:xc1,yc0:yc1),start=(/1,1,irec/),fname=frcfile(ifile))
-!          call wrt_instant(cdata, vname)
+          pio_gtype='2Crr'
+          call ncread(ncid,vname,cdata(xc0:xc1,yc0:yc1),start=(/1,1,irec/))
         endif
-!!! SKIP = USE_PIO ??
         call exchange_xxx(cdata,array_bf=cbf)
-        !call wrt_instant(cdata, vname)
-        !stop
         call coarse2fine(cdata,nc%vdata(:,:,it),gtype)
       else
         if (gtype=='u') then
-          pio_gtype = '2Du'
-          call ncread(ncid,vname,nc%vdata(x_:x1,y0:y1,it),start=(/1,1,irec/),fname=frcfile(ifile))
+          pio_gtype = '2Dur'
+          call ncread(ncid,vname,nc%vdata(x_:x1,y0:y1,it),start=(/1,1,irec/))
         elseif (gtype=='v') then
-          pio_gtype = '2Dv'
-          call ncread(ncid,vname,nc%vdata(x0:x1,y_:y1,it),start=(/1,1,irec/),fname=frcfile(ifile))
+          pio_gtype = '2Dvr'
+          call ncread(ncid,vname,nc%vdata(x0:x1,y_:y1,it),start=(/1,1,irec/))
         else    ! rho-grid
-          pio_gtype = '2Dr'
-          call ncread(ncid,vname,nc%vdata(x0:x1,y0:y1,it),start=(/1,1,irec/),fname=frcfile(ifile))
+          pio_gtype = '2Drr'
+          call ncread(ncid,vname,nc%vdata(x0:x1,y0:y1,it),start=(/1,1,irec/))
         endif
       endif
+#ifndef PARALLEL_IO
       ! add force file info to output nc
 !      if (mynode == 0) then
       ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
@@ -1379,9 +1433,8 @@
       endif
 !      endif
       ierr = nf90_close(ncid)
-
-!!! SKIP = USE_PIO ??
-      call exchange_xxx(nc%vdata(:,:,it))!,skip=use_pio)
+#endif
+      call exchange_xxx(nc%vdata(:,:,it))
 
       if (mynode==0) then
         call display_read_time_to_log(vname,nc%times(it),irec )
@@ -1407,7 +1460,7 @@
       end subroutine display_read_time_to_log  !]
 ! ----------------------------------------------------------------------
 
-      subroutine create_file(ftype,fname,nodate)  ![
+      subroutine create_file(ftype,fname,nodate,nonode)  ![
       ! Creates a file using the root_name plus the extension
       ! It appends a date/time string and, if neccesary, a node number
       ! It puts the global attributes and creates an ocean_time variable
@@ -1417,16 +1470,27 @@
       character(len=*), intent(in) :: ftype     ! desired netcdf file extension
       character(len=*), intent(out):: fname     ! desired netcdf file name
       logical,optional, intent(in) :: nodate    ! optional argument to skip date label and time variable
+      logical,optional, intent(in) :: nonode    ! optional argument to skip node
 
       ! local
       integer :: ierr,ncid,varid
       fname=trim(adjustl(output_root_name)) / / trim(ftype)
-      if (present(nodate)) then
-         call append_date_node(fname,nodate)
+      if (present(nodate) .and. present(nonode)) then
+        call append_date_node(fname,nodate=nodate,nonode=nonode)
+      else if (present(nodate)) then
+        call append_date_node(fname,nodate=nodate)
+      else if (present(nonode)) then
+        call append_date_node(fname,nonode=nonode)
       else
          call append_date_node(fname)
       endif
-      ierr=nf90_create(trim(fname),nf90_netcdf4,ncid)
+
+#ifdef PARALLEL_IO
+      ierr = nf90_create(trim(fname), ior(nf90_clobber, nf90_64bit_data), ncid)
+#else
+      ierr = nf90_create(trim(fname), nf90_netcdf4, ncid)
+#endif
+!      ierr=nf90_create(trim(fname),nf90_netcdf4,ncid)
       if (ierr/=nf90_noerr) then
          call error_log%check_netcdf_status(netcdf_status=ierr,
      &        context=module_name//"/"//sr_name,
@@ -1438,13 +1502,13 @@
         ierr = nf90_put_att(ncid,varid,'units','second' )
       endif
       call put_global_atts(ncid, ierr)                     ! put global attributes in file
-      if (ierr/=nf90_noerr) then
-         call error_log%check_netcdf_status(netcdf_status=ierr,
-     &        context=module_name//"/"//sr_name,
-     &        info="unable to create attributes in file"//trim(fname))
-      end if
+!      if (ierr/=nf90_noerr) then
+!         call error_log%check_netcdf_status(netcdf_status=ierr,
+!     &        context=module_name//"/"//sr_name,
+!     &        info="unable to create attributes in file"//trim(fname))
+!      end if
       ierr = nf90_close(ncid)
-      call error_log%abort_check()
+!      call error_log%abort_check()
       if (mynode == 0) then
         write(*,'(7x,2A)')
      &    'created new netcdf file ', trim(fname)
@@ -1631,7 +1695,7 @@
 
       end subroutine init_refdate !]
 ! ----------------------------------------------------------------------
-      subroutine append_date_node(fname,nodate) ![
+      subroutine append_date_node(fname,nodate,nonode) ![
       ! Insert date and node number string into filename
       ! If the nodate argument is present, only add the node number
       implicit none
@@ -1639,6 +1703,7 @@
       ! import/export
       character(len=*),intent(inout):: fname
       logical,optional,intent(in)   :: nodate    ! leave out date extention
+      logical,optional,intent(in)   :: nonode    ! leave out node
 
       ! Local
       integer,dimension(6) :: date
@@ -1667,6 +1732,7 @@
         fname = trim(fname) //datestr
       endif
 
+      if (.not. present(nonode)) then
 #if defined MPI && defined PARALLEL_FILES
       if (nnodes<10) then
         write(indxstr,'(A,I0.1)') '.',mynode
@@ -1686,7 +1752,7 @@
       endif
       fname = trim(fname) //trim(indxstr)
 #endif
-
+      endif
       fname = trim(fname) // '.nc'
 
       end subroutine append_date_node !]
@@ -1833,12 +1899,18 @@
         ibuff(4)=jSW_corn+jsouth+1
       endif
 
-      ! Add 4 main x and y dimensions so that ncjoin will work,
+     ! Add 4 main x and y dimensions so that ncjoin will work,
+      if (pio_gtype == '----') then
       ierr=nf90_def_dim(ncid,'xi_rho', xi_rho, dimid)
       ierr=nf90_def_dim(ncid,'xi_u',   xi_u,   dimid)
       ierr=nf90_def_dim(ncid,'eta_rho',eta_rho,dimid)
       ierr=nf90_def_dim(ncid,'eta_v',  eta_v,  dimid)
-
+      else
+      ierr=nf90_def_dim(ncid,'xi_rho', ds_xr, dimid)
+      ierr=nf90_def_dim(ncid,'xi_u',   ds_xu,   dimid)
+      ierr=nf90_def_dim(ncid,'eta_rho',ds_yr,dimid)
+      ierr=nf90_def_dim(ncid,'eta_v',  ds_yv,  dimid)
+      endif
       ierr=nf90_put_att(ncid, nf90_global, 'partition', ibuff)
 #endif
 !     ierr=nf90_put_att(ncid, nf90_global, 'global_x', gnx)
@@ -1912,8 +1984,16 @@
       ierr=nf90_put_att (ncid,nf90_global, 'tnu2_units', 'm^2/s')
 # endif
 # ifdef MY25_MIXING
+#  ifdef Q2_DIF2
+      ierr=nf90_put_att(ncid,nf90_global, 'q2nu2', q2nu2)
+      ierr=nf90_put_att (ncid,nf90_global, 'q2nu2_units', 'm^2/s')
+#  endif
+#  ifdef Q2_DIF4
+      ierr=nf90_put_att(ncid,nf90_global,'q2nu4', q2nu4)
+      ierr=nf90_put_att (ncid,nf90_global,'q2nu4_units', 'm^4/s')
+#  endif
 # endif
-# if !defined LMD_MIXING
+# if !defined LMD_MIXING && !defined BVF_MIXING
 
       ierr=nf90_put_att(ncid, nf90_global, 'Akv_bak', Akv_bak)       ! Background vertical viscosity tracer mixing
       ierr=nf90_put_att (ncid, nf90_global, 'Akv_bak_units', 'm^2/s')

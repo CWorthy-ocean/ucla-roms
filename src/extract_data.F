@@ -426,6 +426,12 @@
            obj(iobj)%set = objname
         endif
 
+        ierr = nf90_get_att(ncid,iobj,'output_period',extract_period)
+        call error_log%check_netcdf_status(netcdf_status=ierr,
+     &       info="error when getting `output_period` attribute",
+     &       context=module_name//"/"//sr_name)
+        call error_log%abort_check()
+
         if (obj(iobj)%np>0) then
 !! only for objects with a presences in this subdomain
 

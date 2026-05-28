@@ -12,7 +12,7 @@
       use namelist_open_mod, only: open_namelist_file
       use error_handling_mod, only: error_log
       use tracers, only: t_units
-      use dimensions, only: i0, i1, j0, j1
+      use dimensions, only: i0, i1, j0, j1, eta_rho, xi_rho, inode, jnode
       use grid, only: latr, lonr
       use nc_read_write, only: nccreate, ncwrite
       use roms_read_write, only: create_file, dn_tm, dn_xr, dn_yr, dn_zr, eta_rho, xi_rho

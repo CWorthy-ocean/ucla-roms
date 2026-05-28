@@ -23,6 +23,10 @@
      &     obc_east, obc_north, obc_south, obc_west,
      &     mynode, np_eta, np_xi
       use error_handling_mod, only: error_log
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_gtype
+      use pio, only : PIO_closefile
+#endif
 
       implicit none
       private
@@ -190,6 +194,9 @@
       !local
       integer:: i,j,ierr
 
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
       if (obc_west.and.inode.eq.0) then
         call set_frc_data(nc_pflx_w,pflx_west)
         do j=1,ny
@@ -215,6 +222,12 @@
           if (abs(pflx_north(i))>100) pflx_north(i) = 0.
         enddo
       endif
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
+#endif
       call error_log%abort_check()
       end subroutine set_pflx !]
 ! ----------------------------------------------------------------------
@@ -437,6 +450,24 @@
       if (mynode==0) print *,'writing ub in restart file'
       if (tune_init) call init_orlanski_tune
 
+#ifdef PARALLEL_IO
+      pio_gtype = 's1rw'
+      if (obc_south.and.(jnode==0)) then
+        call ncwrite(ncid,'ub_south',ub_south,(/bfx,record/),.true.)
+      endif
+      pio_gtype = 'n1rw'
+      if (obc_north.and.(jnode==np_eta-1)) then
+        call ncwrite(ncid,'ub_north',ub_north,(/bfx,record/),.true.)
+      endif
+      pio_gtype = 'e1rw'
+      if (obc_east.and.(inode==np_xi-1)) then
+        call ncwrite(ncid,'ub_east' ,ub_east ,(/bfy,record/),.true.)
+      endif
+      pio_gtype = 'w1rw'
+      if (obc_west.and.(inode==0)) then
+        call ncwrite(ncid,'ub_west' ,ub_west ,(/bfy,record/),.true.)
+      endif
+#else
       if (obc_south.and.(jnode==0)) then
         call ncwrite(ncid,'ub_south',ub_south,(/bfx,record/))
       endif
@@ -449,6 +480,7 @@
       if (obc_west.and.(inode==0)) then
         call ncwrite(ncid,'ub_west' ,ub_west ,(/bfy,record/))
       endif
+#endif
 
       end subroutine wrt_rst_ub !]
 ! ----------------------------------------------------------------------

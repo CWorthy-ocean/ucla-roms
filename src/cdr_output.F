@@ -573,6 +573,113 @@
       integer,dimension(3)   :: start
       integer                :: idx,ncid,ierr
 
+#ifdef PARALLEL_IO
+      if (record==nrpf) then
+        if (mynode == 0) then
+          call create_file('_cdr',fname, nonode=.true.)
+          ierr=nf90_open(fname,nf90_write,ncid)
+          call create_cdr_output_variables(ncid)
+          ierr = nf90_close(ncid)
+        endif
+          record = 0
+      endif
+
+        record = record+1
+
+        if (mynode == 0) then
+        ierr=nf90_open(fname,nf90_write,ncid)
+!        call error_log%check_netcdf_status(netcdf_status=ierr,
+!     &       info="error opening "//fname,
+!     &       context=module_name//"/"//sr_name)
+!        call error_log%abort_check()
+        ! always add time
+        call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+        ierr=nf90_close (ncid)
+        endif
+
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+
+        call multiply_by_thickness
+        if (do_avg) then
+          call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
+          call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
+          call ncwrite(ncid,'zeta'  ,zeta__avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+          zeta__avg(:,:)=0
+          call ncwrite(ncid,'temp',temp_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          temp_avg(:,:,:)=0
+          call ncwrite(ncid,'salt',salt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          salt_avg(:,:,:)=0
+          call ncwrite(ncid,'ALK',ALK_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          ALK_avg(:,:,:)=0
+          call ncwrite(ncid,'DIC',DIC_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          DIC_avg(:,:,:)=0
+          call ncwrite(ncid,'ALK_ALT_CO2',ALK_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          ALK_alt_avg(:,:,:)=0
+          call ncwrite(ncid,'DIC_ALT_CO2',DIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          DIC_alt_avg(:,:,:)=0
+          call ncwrite(ncid,'hALK',hALK_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          hALK_avg(:,:,:)=0
+          call ncwrite(ncid,'hDIC_avg',hDIC_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          hDIC_avg(:,:,:)=0
+          call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          hALK_alt_avg(:,:,:)=0
+          call ncwrite(ncid,'hDIC_ALT_CO2_avg',hDIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          hDIC_alt_avg(:,:,:)=0
+          call ncwrite(ncid,'pH',pH_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          pH_avg(:,:,:)=0
+          call ncwrite(ncid,'pH_ALT_CO2',pH_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          pH_alt_avg(:,:,:)=0
+          call ncwrite(ncid,'FG_CO2'  ,FG_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+          FG_CO2_avg(:,:)=0
+          call ncwrite(ncid,'FG_ALT_CO2'  ,FG_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+          FG_ALT_CO2_avg(:,:)=0
+          if (cdr_source) then
+            call ncwrite(ncid,'ALK_source',ALK_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+            ALK_source_avg(:,:,:)=0
+            call ncwrite(ncid,'ALK_ALT_source',ALK_alt_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+            ALK_alt_source_avg(:,:,:)=0
+            call ncwrite(ncid,'DIC_source',DIC_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+            DIC_source_avg(:,:,:)=0
+            call ncwrite(ncid,'DIC_ALT_source',DIC_alt_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+            DIC_alt_source_avg(:,:,:)=0
+          endif
+        else
+          call ncwrite(ncid,'zeta'  ,zeta(i0:i1,j0:j1,knew),(/1,1,record/),.true.)
+          call ncwrite(ncid,'temp',t(i0:i1,j0:j1,:,nnew,itemp),(/1,1,1,record/),.true.)
+          call ncwrite(ncid,'salt',t(i0:i1,j0:j1,:,nnew,isalt),(/1,1,1,record/),.true.)
+          call ncwrite(ncid,'ALK',t(i0:i1,j0:j1,:,nnew,iALK),(/1,1,1,record/),.true.)
+          call ncwrite(ncid,'DIC',t(i0:i1,j0:j1,:,nnew,iDIC),(/1,1,1,record/),.true.)
+          call ncwrite(ncid,'ALK_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iALK_alt),(/1,1,1,record/),.true.)
+          call ncwrite(ncid,'DIC_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iDIC_alt),(/1,1,1,record/),.true.)
+          call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          call ncwrite(ncid,'pH',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH),(/1,1,1,record/),.true.)
+          call ncwrite(ncid,'pH_ALT_CO2',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH_alt),(/1,1,1,record/),.true.)
+          call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG),(/1,1,record/),.true.)
+          call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt),(/1,1,record/),.true.)
+          if (cdr_source) then
+            call ncwrite(ncid,'ALK_source',ALK_source(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+            call ncwrite(ncid,'ALK_ALT_source',ALK_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+            call ncwrite(ncid,'DIC_source',DIC_source(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+            call ncwrite(ncid,'DIC_ALT_source',DIC_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+          endif
+       endif
+       ! Always write instantaneous hDIC vars
+       call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+       call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),
+     &      (/1,1,1,record/),.true.)
+
+       call PIO_closefile(pio_FileDesc)
+
+        if (mynode == 0) then
+          write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')
+     &     'wrt_cdr :: wrote cdr, tdays =', tdays,
+     &     'step =', iic-1, 'rec =', record
+        endif
+
+        navg = 0
+
+#else ! PARALLEL_IO
       if (record==nrpf) then
           call create_file('_cdr',fname)
           ierr=nf90_open(fname,nf90_write,ncid)
@@ -671,7 +778,7 @@
         endif
 
         navg = 0
-
+#endif ! PARALLEL_IO
 !
         end subroutine wrt_cdr_output !]
 

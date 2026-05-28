@@ -53,11 +53,14 @@
 #ifdef ADV_ISONEUTRAL
       use eos_vars, only: drdx,drde
 #endif
-      use dimensions, only:  nx, ny, nz, inode, jnode
+      use dimensions, only:  nx, ny, nz, inode, jnode,i0,i1,j0,j1
       use scalars, only: n, g, rho0, nrhs
 #ifdef DIAGNOSTICS
       use diagnostics, only: calc_diag, udiag,
      &  vdiag, ipgr, dxdyi_u, dxdyi_v, diag_uv
+#endif
+#ifdef EXCHANGE
+      use roms_mpi, only: exchange_xxx
 #endif
       use calc_pflx_mod, only: calc_pressure_flux, calc_pflx
 
@@ -233,6 +236,8 @@ c**         dpth=z_w(i,j,N)-z_r(i,j,k)
 ! Compute XI-component of pressure gradient term:
 !-------- ------------ -- -------- -------- -----
 
+      rx(:,:) = 0.0
+
       do k=N,1,-1
         do j=jstr,jend
           do i=imin,imax
@@ -332,18 +337,19 @@ c    &                       -0.5*(dRx(i,j)+dRx(i-1,j))
 
 c    &        -0.75*rx(i,j)-0.125*(rx(i-1,j)+rx(i+1,j))
 
-     &                                                )
+     &                                   )*umask(i,j)
 #  else
               dRdx(i,j,k)=0.5*(pm(i,j)+pm(i-1,j))
-     &                 *(z_r(i,j,k)-z_r(i-1,j,k))
+     &                 *(z_r(i,j,k)-z_r(i-1,j,k))*umask(i,j)
 #  endif
             enddo
           enddo
         endif
 # endif
 
+      enddo
 
-
+      do k=N,1,-1
 ! ETA-component of pressure gradient term:
 !-------------- -- -------- -------- -----
 
@@ -447,10 +453,10 @@ c    &                         -0.5*(dRx(i,j)+dRx(i,j-1))
 
 c    &            -0.75*rx(i,j)-0.125*(rx(i,j-1)+rx(i,j+1))
 
-     &                                                    )
+     &                                         )*vmask(i,j)
 #else
               dRde(i,j,k)=0.5*(pn(i,j)+pn(i,j-1))
-     &                 *(z_r(i,j,k)-z_r(i,j-1,k))
+     &                 *(z_r(i,j,k)-z_r(i,j-1,k))*vmask(i,j)
 #endif
             enddo
           enddo
@@ -459,6 +465,10 @@ c    &            -0.75*rx(i,j)-0.125*(rx(i,j-1)+rx(i,j+1))
 
 
       enddo   !<-- k
+
+# ifdef ADV_ISONEUTRAL
+      call exchange_xxx(dRdx,dRde)
+# endif
 
 # ifdef DIAGNOSTICS
       if (CORR_STAGE) then

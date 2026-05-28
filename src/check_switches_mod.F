@@ -307,10 +307,19 @@
 #ifdef ANA_VMIX
       nAk=nAk+1
 #endif
+#ifdef BVF_MIXING
+      nAk=nAk+1
+#endif
 #ifdef LMD_MIXING
       nAk=nAk+1
 #endif
+#ifdef MY2_MIXING
+      nAk=nAk+1
+#endif
 #ifdef MY25_MIXING
+      nAk=nAk+1
+#endif
+#ifdef PP_MIXING
       nAk=nAk+1
 #endif
       if (nAk>1) then

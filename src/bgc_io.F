@@ -10,8 +10,8 @@
 
 #if defined BIOLOGY_BEC2 || defined MARBL
 
-! param needed for GLOBAL_2D_array to work. NT = number tracer from param
-      use param, only: ieast, itemp, iwest, jnorth, jsouth
+      ! param needed for GLOBAL_2D_array to work. NT = number tracer from param
+      use param, only: ieast, itemp, iwest, jnorth, jsouth, ocean_grid_comm
       use tracers, only: t_avg, wrt_t_avg, nt_2_t_avg, t_units
 #ifdef MARBL_DIAGS
       use marbl_driver, only: marbldrv_compute_init_diagnostics
@@ -50,11 +50,18 @@
      &     dn_tm, dn_xr, dn_yr, dn_zr,
      &     create_file, set_frc_data, max_name_size
       use netcdf, only:
-     &     nf90_write, nf90_open, nf90_close,
-     &     nf90_put_att, nf90_enddef, nf90_double
+     &     nf90_write, nf90_open, nf90_close, nf90_redef, nf90_enddef,
+     &     nf90_double, nf90_put_att
       use scalars, only: nstp, nt, time, n, dt, iic, nnew, tdays
       use dimensions, only: i0, i1, j0, j1, xi_rho, eta_rho
+     & , ds_xr, ds_yr, ds_zr, ds_xu, ds_yv, ds_zw
       use error_handling_mod, only: error_log
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_IoSystem,
+     &  pio_type, pio_gtype
+      use pio, only : PIO_openfile, PIO_closefile, PIO_write
+#endif
+      use mpi_f08, only: MPI_CHARACTER, mpi_bcast
 
       implicit none
 
@@ -129,6 +136,9 @@
 # include "compute_extended_bounds.h"
 #endif
 
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
       call set_frc_data(nc_dust,dust,'r')
       call set_frc_data(nc_iron,iron,'r')
 
@@ -168,6 +178,13 @@
         enddo !<- istrR
       enddo   !<- jstrR
 #endif /* DAILYPAR_PHOTOINHIBITION */
+
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
+#endif
 
       end subroutine set_bgc_surf_frc  !]
 ! ----------------------------------------------------------------------
@@ -228,6 +245,118 @@
       end if
 
       call error_log%abort_check()
+
+#ifdef PARALLEL_IO
+      if (avg) then
+
+!        if (.not. first_step_avg) then
+           call calc_avg_bgc                          ! don't include t=0 in averaging
+           output_time_avg = output_time_avg + dt     ! only start count after first timestep
+!        endif
+!        first_step_avg=.false.
+
+
+!        if (mynode == 0) then
+!           write(*,'(7x,A,1x,F11.4,2x,A,F11.4,1x,A,I4)')
+!     &       'wrt_bgc_tracers :: average, time =', output_time_avg,
+!     &       'period =', output_period_avg, 'rec =', record_avg
+!        endif
+
+        if (output_time_avg>=output_period_avg) then  ! time for an output
+          if (mod(record_avg,nrpf_avg)==0) then
+            if (mynode == 0) then
+              call create_bgc_file(fname_avg,avg)
+            endif
+            call MPI_Bcast(fname_avg,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+            call MPI_Barrier(ocean_grid_comm, ierr)
+            record_avg = 0
+          endif
+          record_avg = record_avg + 1
+          output_time_avg = 0
+          navg_bgc = 0
+          if (mynode == 0) then
+            ierr=nf90_open(fname_avg,nf90_write,ncid)
+            call ncwrite(ncid,'ocean_time',(/time/),(/record_avg/))
+            ierr=nf90_close(ncid)
+          endif
+
+          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_avg), PIO_write)
+
+          pio_gtype = '3Drw'
+          do itrc=iTandS+nt_passive+1, nt
+             if (wrt_t_avg(itrc)) then
+                if (mynode == 0) then
+                   write(*,'(7x,A,1x,A)')
+     &             'wrt_bgc_tracers :: average, trc = ', t_vname(itrc)
+                endif
+             itavg = NT_2_t_avg(itrc)                         ! get respective index for t_avg(itavg) -> t(itrc)
+             call ncwrite(ncid,t_vname(itrc),t_avg(i0:i1,j0:j1,:,itavg),(/1,1,1,record_avg/),.true.)
+             endif
+          enddo
+          if (mynode == 0) then
+!           write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')
+            write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4)')
+     &       'bgc :: wrote average, tdays =', tdays,
+     &       'step =', iic, 'rec =', record_avg
+          endif
+        endif
+        call PIO_closefile(pio_FileDesc)
+
+      else
+
+        if (.not. first_step_his) then
+           output_time_his = output_time_his + dt
+        endif
+        first_step_his=.false.
+
+!        if (mynode == 0) then
+!           write(*,'(7x,A,1x,F11.4,2x,A,F11.4,1x,A,I4)')
+!     &       'wrt_bgc_tracers :: history, time =', output_time_his,
+!     &       'period =', output_period_his, 'rec =', record_his
+!        endif
+
+        if (output_time_his>=output_period_his .or.
+     &      output_time_his==0                 ) then  ! time for an output
+          if (mod(record_his,nrpf_his)==0) then
+            if (mynode == 0) then
+             call create_bgc_file(fname_his,avg)
+            endif
+            call MPI_Bcast(fname_his,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+            call MPI_Barrier(ocean_grid_comm, ierr)
+             record_his = 0
+          endif
+          record_his = record_his + 1
+          output_time_his=0
+          if (mynode == 0) then
+            ierr=nf90_open(fname_his,nf90_write,ncid)
+            call ncwrite(ncid,'ocean_time',(/time/),(/record_his/))
+            ierr=nf90_close(ncid)
+          endif
+          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_his), PIO_write)
+          pio_gtype = '3Drw'
+          do itrc=iTandS+nt_passive+1, nt
+            if (wrt_t(itrc)) then
+                if (mynode == 0) then
+                   write(*,'(7x,A,1x,A)')
+     &             'wrt_bgc_tracers :: history , trc = ', t_vname(itrc)
+                endif
+!            call ncwrite(ncid,t_vname(itrc),t(i0:i1,j0:j1,:,nstp,itrc),(/1,1,1,record_his/))
+            call ncwrite(ncid,t_vname(itrc),t(i0:i1,j0:j1,:,nnew,itrc),(/1,1,1,record_his/),.true.)
+            endif
+          enddo
+          if (mynode == 0) then
+            write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4)')
+     &       'bgc :: wrote history, tdays =', tdays,
+     &       'step =', iic-1, 'rec =', record_his
+          endif
+        endif  ! <-- wrt_file_his
+
+        call PIO_closefile(pio_FileDesc)
+
+      endif
+
+#else ! PARALLEL_IO
+
       if (avg) then
 
 !        if (.not. first_step_avg) then
@@ -314,7 +443,7 @@
       endif
 
       ierr=nf90_close(ncid)
-
+#endif
       end subroutine wrt_bgc_tracers  !]
 ! ----------------------------------------------------------------------
       subroutine wrt_bgc_diags ![
@@ -353,6 +482,59 @@
 
       if (wrt_bgc_dia_avg) then
 
+#ifdef PARALLEL_IO
+!         if (.not. first_step_dia_avg) then
+            call calc_avg_dia_bgc                              ! don't include t=0 in averaging
+            output_time_dia_avg = output_time_dia_avg + dt     ! only start count after first timestep
+!         endif
+!         first_step_dia_avg=.false.
+
+        if (output_time_dia_avg>=output_period_avg_dia) then  ! time for an output
+          if (mod(record_dia_avg,nrpf_avg_dia)==0) then
+             if (mynode == 0) then
+               call create_bgc_dia_file(fname_avg,.true.)
+             endif
+             call MPI_Bcast(fname_avg,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+             call MPI_Barrier(ocean_grid_comm, ierr)
+             record_dia_avg = 0
+          endif
+          record_dia_avg = record_dia_avg + 1
+          output_time_dia_avg = 0
+          navg_dia_bgc = 0
+          if (mynode == 0) then
+            ierr=nf90_open(fname_avg,nf90_write,ncid)
+            call ncwrite(ncid,'ocean_time',(/time/),(/record_dia_avg/))
+            ierr=nf90_close(ncid)
+          endif
+
+          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_avg), PIO_write)
+
+          pio_gtype = '2Drw'
+          do itrc=1,nr_bgc_diag_2d
+            if (wrt_bgc_diag_2d(itrc)) then
+            idiag = idx_bgc_diag_2d(itrc)
+            call ncwrite(ncid,vname_bgc_diag_2d(1,itrc),
+     &           bgc_diag_2d_avg(i0:i1,j0:j1,idiag),(/1,1,record_dia_avg/),.true.)
+            endif
+          enddo
+          pio_gtype = '3Drw'
+          do itrc=1,nr_bgc_diag_3d
+            if (wrt_bgc_diag_3d(itrc)) then
+            idiag = idx_bgc_diag_3d(itrc)
+            call ncwrite(ncid,vname_bgc_diag_3d(1,itrc),
+     &           bgc_diag_3d_avg(i0:i1,j0:j1,:,idiag),(/1,1,1,record_dia_avg/),.true.)
+            endif
+          enddo
+
+          call PIO_closefile(pio_FileDesc)
+
+          if (mynode == 0) then
+            write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4)')
+     &       'bgc diag :: wrote average, tdays =', tdays,
+     &       'step =', iic, 'rec =', record_dia_avg
+          endif
+        endif
+#else ! PARALLEL_IO
 !         if (.not. first_step_dia_avg) then
             call calc_avg_dia_bgc                              ! don't include t=0 in averaging
             output_time_dia_avg = output_time_dia_avg + dt     ! only start count after first timestep
@@ -389,10 +571,66 @@
      &       'step =', iic, 'rec =', record_dia_avg
           endif
         endif
-
+        ierr=nf90_close(ncid)
+#endif ! PARALLEL_IO
       endif
 
       if (wrt_bgc_dia_his) then
+
+#ifdef PARALLEL_IO
+        if (.not. first_step_dia_his) then
+           output_time_dia_his = output_time_dia_his + dt
+        endif
+        first_step_dia_his=.false.
+
+        if (output_time_dia_his>=output_period_his_dia .or.
+     &      output_time_dia_his==0                     ) then  ! time for an output
+          if (mod(record_dia_his,nrpf_his_dia)==0) then
+            if (mynode == 0) then
+             call create_bgc_dia_file(fname_his,.false.)
+            endif
+            call MPI_Bcast(fname_his,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+            call MPI_Barrier(ocean_grid_comm, ierr)
+            record_dia_his = 0
+          endif
+          record_dia_his = record_dia_his + 1
+          output_time_dia_his = 0
+          if (mynode == 0) then
+            ierr=nf90_open(fname_his,nf90_write,ncid)
+            call ncwrite(ncid,'ocean_time',(/time/),(/record_dia_his/))
+            ierr=nf90_close(ncid)
+          endif
+
+          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_his), PIO_write)
+
+          pio_gtype = '2Drw'
+          do itrc=1,nr_bgc_diag_2d
+            if (wrt_bgc_diag_2d(itrc)) then
+            idiag = idx_bgc_diag_2d(itrc)
+            call ncwrite(ncid,vname_bgc_diag_2d(1,itrc),
+     &           bgc_diag_2d(i0:i1,j0:j1,idiag),(/1,1,record_dia_his/),.true.)
+            endif
+          enddo
+          pio_gtype = '3Drw'
+          do itrc=1,nr_bgc_diag_3d
+            if (wrt_bgc_diag_3d(itrc)) then
+
+            idiag = idx_bgc_diag_3d(itrc)
+            call ncwrite(ncid,vname_bgc_diag_3d(1,itrc),
+     &           bgc_diag_3d(i0:i1,j0:j1,:,idiag),(/1,1,1,record_dia_his/),.true.)
+            endif
+          enddo
+
+          call PIO_closefile(pio_FileDesc)
+
+          if (mynode == 0) then
+            write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4)')
+     &       'bgc diag :: wrote history, tdays =', tdays,
+     &       'step =', iic, 'rec =', record_dia_his
+          endif
+        endif  ! <-- wrt_file_his
+
+#else ! PARALLEL_IO
 
         if (.not. first_step_dia_his) then
            output_time_dia_his = output_time_dia_his + dt
@@ -429,11 +667,15 @@
      &       'bgc diag :: wrote history, tdays =', tdays,
      &       'step =', iic, 'rec =', record_dia_his
           endif
-        endif
+
+          ierr=nf90_close(ncid)
+
+        endif  ! <-- wrt_file_his
+
+#endif ! PARALLEL_IO
 
       endif
 
-      ierr=nf90_close(ncid)
 #endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
 
       end subroutine wrt_bgc_diags  !]
@@ -448,18 +690,25 @@
       ! local
       integer :: ncid,ierr,varid
 
+#ifdef PARALLEL_IO
+      if (avg) then
+        call create_file('_bgc_avg',fname, nonode=.true.)
+      else
+        call create_file('_bgc',fname, nonode=.true.)
+      endif
+#else
       if (avg) then
         call create_file('_bgc_avg',fname)
       else
         call create_file('_bgc',fname)
       endif
-
+#endif
       ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_redef(ncid)
 
       call def_vars_bgc( ncid,avg )
 
       ierr = nf90_enddef(ncid)
-
       end subroutine create_bgc_file !]
 !----------------------------------------------------------------------
 #if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
@@ -473,18 +722,25 @@
       ! local
       integer :: ncid,ierr,varid
 
+#ifdef PARALLEL_IO
+      if (avg) then
+        call create_file('_bgc_dia_avg',fname,nonode=.true.)
+      else
+        call create_file('_bgc_dia',fname,nonode=.true.)
+      endif
+#else
       if (avg) then
         call create_file('_bgc_dia_avg',fname)
       else
         call create_file('_bgc_dia',fname)
       endif
-
+#endif
       ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_redef(ncid)
 
       call def_bgc_diag(ncid,avg)
 
       ierr = nf90_enddef(ncid)
-
       end subroutine create_bgc_dia_file !]
 #endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
 ! ----------------------------------------------------------------------
@@ -505,7 +761,7 @@
           if (wrt_t_avg(itrc)) then
              text_lname='avg_'/ /t_lname(itrc)
              varid = nccreate(ncid,t_vname(itrc),
-     &         (/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/), nf90_double)
+     &         (/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/), nf90_double)
 
              ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
              ierr = nf90_put_att(ncid,varid,'units',t_units(itrc))
@@ -516,7 +772,7 @@
           if (wrt_t(itrc)) then
              text_lname=t_lname(itrc)
              varid = nccreate(ncid,t_vname(itrc),
-     &         (/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/), nf90_double)
+     &         (/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/), nf90_double)
              ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
              ierr = nf90_put_att(ncid,varid,'units',t_units(itrc))
           endif

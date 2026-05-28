@@ -32,8 +32,8 @@
 # ifdef NHMG
      &                                            ,rw
 # endif
-     &     )
-      use dimensions, only: inode, jnode
+     &                                                              )
+      use dimensions, only: inode, jnode, i0,j0,i1,j1
 # ifdef NHMG
       use ocean_vars, only:
      &     nh_ubar, nh_vbar, nh_wcor, nhdu,
@@ -66,6 +66,7 @@
 # if defined ADV_ISONEUTRAL && defined EXCHANGE
       use eos_vars, only: drde, drdx
 #endif
+      use instant_output, only: wrt_instant
       implicit none
       integer istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
       real, dimension(PRIVATE_2D_SCRATCH_ARRAY,N) :: ru,rv
@@ -1120,6 +1121,13 @@
 # ifdef MASKING
      &                                  *umask(i,j)
 # endif
+c--# define TR
+# ifdef TR
+! Daniel add, can proably clean this up with & +ust(i,j,k) instead of
+! double repeated line, but wait for testing
+            ! DC_ik = dz*dy -> is the flux
+            CF(i,k)=0.5*DC(i,k)*(u(i,j,k,nstp)+u(i,j,k,nnew))
+# else
 c--#define EPSIL 0.125
 c--#define DELTA 0.75
 
@@ -1131,6 +1139,7 @@ c>># define DELTA 0.5790
 
             CF(i,k)=DELTA*FlxU(i,j,k) + EPSIL*DC(i,k)
      &                         *(u(i,j,k,nstp)+u(i,j,k,nnew))
+# endif
             CF(i,0)=CF(i,0)+CF(i,k)    !<-- vertical integration
           enddo
         enddo
@@ -1175,8 +1184,14 @@ c>># define DELTA 0.5790
 # ifdef MASKING
      &                                    *vmask(i,j)
 
+! Daniel add, mask-1  again, remember to check with Yusuke
+# endif
+# ifdef TR
+              CF(i,k)=0.5*DC(i,k)*(v(i,j,k,nstp)+v(i,j,k,nnew))
+# else
               CF(i,k)=DELTA*FlxV(i,j,k) + EPSIL*DC(i,k)
      &                           *(v(i,j,k,nstp)+v(i,j,k,nnew))
+# endif
               CF(i,0)=CF(i,0)+CF(i,k)
             enddo
           enddo
