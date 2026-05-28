@@ -20,8 +20,13 @@
       integer,parameter  :: deflate_level=1 ! Compression level for joined file
       integer,parameter :: default_prec = nf90_float
 
-      logical,parameter  :: nccreate_shuffle=.true. ! Shuffle on for extra conmpression
+      logical,parameter  :: nccreate_shuffle=.true. ! Shuffle on for extra compression
+#ifdef PARALLEL_IO
+      ! create_file uses nf90_64bit_data (classic CDF-5); no deflate/shuffle
+      logical,parameter :: use_netcdf4_var_opts = .false.
+#else
       logical,parameter :: use_netcdf4_var_opts = .true.
+#endif
 
       interface ncwrite
         module procedure  ncwrite_1D, ncwrite_2D, ncwrite_3D

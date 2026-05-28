@@ -198,6 +198,10 @@
       use ocean_vars, only: z_r, u, v, hz
       use scalars, only: dt, nstp
       use dimensions, only: inode, jnode
+#ifdef DIAGNOSTICS
+      use diagnostics, only: calc_diag, udiag, vdiag,
+     &  dxdyi_u, dxdyi_v, ihmix, diag_uv
+#endif
 
       implicit none
       integer istr,iend,jstr,jend, i,j,k, k1,k2, indx

@@ -179,6 +179,7 @@
       character(len=21) :: sr_name = "read_nml_diagnostics"
       ! Read namelist
       call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
       read (unit=namelist_unit, nml=DIAGNOSTICS_SETTINGS, iostat=ios)
       if (ios /= 0) then
          call error_log%raise_global(
