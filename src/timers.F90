@@ -1,16 +1,16 @@
-      module timers
+module timers
 
-      use param, only:
-     &     llm, mmm, mynode, nnodes, np_eta, np_xi, nsub_e,
-     &     nsub_x
-      use comm_vars, only: trd_count
-      use scalars, only: cpu_init, n, numthreads, proc
+  use param, only:&
+  &llm, mmm, mynode, nnodes, np_eta, np_xi, nsub_e,&
+  &nsub_x
+  use comm_vars, only: trd_count
+  use scalars, only: cpu_init, n, numthreads, proc
 
-      implicit none
+  implicit none
 
 ! Make them globally visible
-      real :: tstart = 0.
-      real :: tend   = 0.
+  real(kind=8) :: tstart = 0._8
+  real(kind=8) :: tend   = 0._8
 #include "cppdefs.opt"
 #ifndef NO_COMPILER_SUPPORT_FOR_TIMING
 ! Most modern compilers recognize "cpu_time" and OpenMP "omp_get_wtime"
@@ -25,108 +25,108 @@
 ! others they are USER-LEVEL threads (as mandated by POSIX standard),
 ! hence it is no longer possible to distinguish PIDs and CPU times
 ! consumed by individual threads. Report the maximum instead of sum.
-! Additionally, Open MP (standard v. 2.0) function "omp_get_wtime" may
+! Additionally, Open MP (standard v. 2.0_8) function "omp_get_wtime" may
 ! not be implemented on some platforms, so its use is conditionally
 ! avoided.
 
 # undef KERNEL_THREADS
 
-      contains
-      subroutine start_timers
+contains
+  subroutine start_timers
 
-      implicit none
-      integer getpid, trd
+    implicit none
+    integer(kind=4) getpid, trd
 
-C$    integer omp_get_thread_num, omp_get_num_threads
+!$  integer omp_get_thread_num, omp_get_num_threads
 
-      numthreads=1     ; trd=0
-C$    numthreads=omp_get_num_threads() ; trd=omp_get_thread_num()
-      proc(1)=getpid() ; proc(2)=trd
+    numthreads=1     ; trd=0
+!$  numthreads=omp_get_num_threads() ; trd=omp_get_thread_num()
+    proc(1)=getpid() ; proc(2)=trd
 
-      call cpu_time(cpu_init)
+    call cpu_time(cpu_init)
 
-C$OMP CRITICAL (start_timers_cr_rgn)
-      if (trd_count == 0) then
+!$  OMP CRITICAL (start_timers_cr_rgn)
+    if (trd_count == 0) then
 # ifdef MPI
-        if (mynode == 0) then
-          write(*,'(/1x,2(A,I4,A,I2,A,I3),2(A,I4),A,I3)')
-     &      'NUMBER OF NODES:', NNODES, '(', NP_XI, ' x', NP_ETA,
-     &      ') THREADS:',  numthreads,  ' TILING:',
-     &       NSUB_X,' x', NSUB_E, ' GRID:',  LLm,' x',MMm,' x',N
-        endif
-# else
-        write(*,'(/3(1x,A,I3),4x,2(A,I4),A,I3)')
-     &       'NUMBER OF THREADS:',     numthreads,     'TILING:',
-     &        NSUB_X,'x',NSUB_E, 'GRID SIZE:', Lm,' x',Mm,' x',N
-# endif
+      if (mynode == 0) then
+        write(*,'(/1x,2(A,I4,A,I2,A,I3),2(A,I4),A,I3)')&
+        &'NUMBER OF NODES:', NNODES, '(', NP_XI, ' x', NP_ETA,&
+        &') THREADS:',  numthreads,  ' TILING:',&
+        &NSUB_X,' x', NSUB_E, ' GRID:',  LLm,' x',MMm,' x',N
       endif
-      trd_count=trd_count+1
+# else
+      write(*,'(/3(1x,A,I3),4x,2(A,I4),A,I3)')&
+      &'NUMBER OF THREADS:',     numthreads,     'TILING:',&
+      &NSUB_X,'x',NSUB_E, 'GRID SIZE:', Lm,' x',Mm,' x',N
+# endif
+    endif
+    trd_count=trd_count+1
 # ifdef MPI
 #  ifndef MPI_SILENT_MODE
-      write(*,'(4x,A,I4,1x,A,I3,1x,A,I10,A)') 'Process', mynode,
-     &        'thread', proc(2), '(pid=', proc(1), ') is active.'
+    write(*,'(4x,A,I4,1x,A,I3,1x,A,I10,A)') 'Process', mynode,&
+    &'thread', proc(2), '(pid=', proc(1), ') is active.'
 #  endif
 # else
-      write(*,'(8x,A,I3,1x,A,i10,A)') 'Thread #', proc(2),
-     &                           '(pid=', proc(1), ') is active.'
+    write(*,'(8x,A,I3,1x,A,i10,A)') 'Thread #', proc(2),&
+    &'(pid=', proc(1), ') is active.'
 # endif
-      if (trd_count == numthreads) then
-        trd_count=0
-C$      mpi_master_only write(*,'(1x,2A/)') 'This code was ',
-C$   &               'built using Open MP enabled compiler.'
-      endif
-C$OMP END CRITICAL (start_timers_cr_rgn)
-      end
+    if (trd_count == numthreads) then
+      trd_count=0
+!$    mpi_master_only write(*,'(1x,2A/)') 'This code was ',&
+!$    &'built using Open MP enabled compiler.'
+    endif
+!$  OMP END CRITICAL (start_timers_cr_rgn)
+  end subroutine start_timers
 
-      subroutine stop_timers()            ! Finalize timing
+  subroutine stop_timers()            ! Finalize timing
 
-      use comm_vars, only: cpu_all
-      use scalars, only: cpu_net
+    use comm_vars, only: cpu_all
+    use scalars, only: cpu_net
 
-      implicit none                       ! for all threads.
+    implicit none                       ! for all threads.
 
-      if (proc(1) /= 0) then
-        proc(1)=0
-        call cpu_time(cpu_net) ; cpu_net=cpu_net-cpu_init
+    if (proc(1) /= 0) then
+      proc(1)=0
+      call cpu_time(cpu_net) ; cpu_net=cpu_net-cpu_init
 
-C$OMP CRITICAL (stop_timers_cr_rgn)
+!$    OMP CRITICAL (stop_timers_cr_rgn)
 # ifdef MPI
 #  ifdef MPI_SILENT_MODE
-        if (mynode == 0) then
+      if (mynode == 0) then
 #  endif
-          write(*,'(1x,A,I5,2x,A,I3,2x,A,F12.2,1x,A)') 'Process',
-     &    mynode, 'thread', proc(2), 'cpu time =', cpu_net, 'sec'
+        write(*,'(1x,A,I5,2x,A,I3,2x,A,F12.2,1x,A)') 'Process',&
+        &mynode, 'thread', proc(2), 'cpu time =', cpu_net, 'sec'
 #  ifdef MPI_SILENT_MODE
-        endif
+      endif
 #  endif
 # else
-        if (trd_count == 0) write(*,*)
-        write(*,'(13x,A,I3,2x,A,F12.2,1x,A)') 'thread #', proc(2),
-     &                                'cpu time =', cpu_net, 'sec'
+      if (trd_count == 0) write(*,*)
+      write(*,'(13x,A,I3,2x,A,F12.2,1x,A)') 'thread #', proc(2),&
+      &'cpu time =', cpu_net, 'sec'
 # endif
 # ifdef KERNEL_THREADS
-        cpu_all(1)=cpu_all(1)      +cpu_net
+      cpu_all(1)=cpu_all(1)      +cpu_net
 # else
-        cpu_all(1)=max(cpu_all(1), cpu_net)
+      cpu_all(1)=max(cpu_all(1), cpu_net)
 # endif
-        trd_count=trd_count+1
-        if (trd_count == numthreads) then
-          trd_count=0
+      trd_count=trd_count+1
+      if (trd_count == numthreads) then
+        trd_count=0
 # ifdef MPI_SILENT_MODE
-          if (mynode == 0) then
+        if (mynode == 0) then
 # endif
 # ifdef KERNEL_THREADS
-C$          write(*,'(29x,A,F14.2)')   'total', cpu_all(1)
+!$        write(*,'(29x,A,F14.2)')   'total', cpu_all(1)
 # else
-C$          write(*,'(27x,A,F14.2)') 'maximum', cpu_all(1)
+!$        write(*,'(27x,A,F14.2)') 'maximum', cpu_all(1)
 # endif
 # ifdef MPI_SILENT_MODE
-          endif
-# endif
         endif
-C$OMP END CRITICAL (stop_timers_cr_rgn)
+# endif
       endif
-      end
+!$    OMP END CRITICAL (stop_timers_cr_rgn)
+    endif
+  end subroutine stop_timers
 
 ! The following routine is to catch loss of synchronization in Open
 ! MP mode. Calls to "sync_trap" are not hardcoded into the model, but
@@ -142,38 +142,38 @@ C$OMP END CRITICAL (stop_timers_cr_rgn)
 ! value after the previous synchronization event.  As the result,
 ! "itest" computed below must always match "priv_count".
 
-      subroutine sync_trap(ibarr)
-      use scalars, only: priv_count, barr_count
-      implicit none
-      integer ibarr, indx, itest
+  subroutine sync_trap(ibarr)
+    use scalars, only: priv_count, barr_count
+    implicit none
+    integer(kind=4) ibarr, indx, itest
 
-      indx=1+mod(ibarr-1,16)
-      priv_count(indx)=priv_count(indx)+1
-C$OMP CRITICAL(trap_cr_rgn)
-      barr_count(indx)=barr_count(indx)+1
-      itest=1+(barr_count(indx)-1)/numthreads
-      if (itest /= priv_count(indx)) then
-        write(*,'(A,3I10)') 'sync error', ibarr,
-     &        priv_count(indx),  barr_count(indx)
-      elseif (mod(priv_count(indx),4001) == 0) then
-        write(*,'(A,I12,2(2x,A,I3))') 'barrier count =',
-     &              priv_count(indx), 'barr# =', ibarr,
-     &                                'trd =',  proc(2)
-      endif
-C$OMP END CRITICAL(trap_cr_rgn)
-      end
+    indx=1+mod(ibarr-1,16)
+    priv_count(indx)=priv_count(indx)+1
+!$  OMP CRITICAL(trap_cr_rgn)
+    barr_count(indx)=barr_count(indx)+1
+    itest=1+(barr_count(indx)-1)/numthreads
+    if (itest /= priv_count(indx)) then
+      write(*,'(A,3I10)') 'sync error', ibarr,&
+      &priv_count(indx),  barr_count(indx)
+    elseif (mod(priv_count(indx),4001) == 0) then
+      write(*,'(A,I12,2(2x,A,I3))') 'barrier count =',&
+      &priv_count(indx), 'barr# =', ibarr,&
+      &'trd =',  proc(2)
+    endif
+!$  OMP END CRITICAL(trap_cr_rgn)
+  end subroutine sync_trap
 
 #else
-                                       ! These are stub-routines for
-      subroutine start_timers          ! compatibility with compilers
-      implicit none                    ! without OpenMP support.
+  ! These are stub-routines for
+  subroutine start_timers          ! compatibility with compilers
+    implicit none                    ! without OpenMP support.
 
-      mpi_master_only write(*,'(/2(1x,A,I3),4x,2(1x,A,I4)/)')
-     &                        'BLOCKING:', NSUB_X, 'x', NSUB_E,
-     &                        'HORIZ. GRID SIZE:', Lm, 'x', Mm
-      end
+    mpi_master_only write(*,'(/2(1x,A,I3),4x,2(1x,A,I4)/)')&
+    &'BLOCKING:', NSUB_X, 'x', NSUB_E,&
+    &'HORIZ. GRID SIZE:', Lm, 'x', Mm
+  end subroutine start_timers
 
-      subroutine stop_timers()
-      end
+  subroutine stop_timers()
+  end subroutine stop_timers
 #endif
-      end module /*timers*/
+  end module /*timers*/
