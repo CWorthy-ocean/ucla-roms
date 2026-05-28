@@ -1,0 +1,258 @@
+module omega_mod
+#include "cppdefs.opt"
+  implicit none
+  private
+
+  public :: omega
+
+contains
+
+#ifdef SOLVE3D
+
+  subroutine omega
+
+    use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+    use private_scratch, only: a2d
+
+    implicit none
+    integer(kind=4),save :: tile = 0
+
+# include "compute_tile_bounds.h"
+    call omega_tile (istr,iend,jstr,jend, A2d(1,1),A2d(1,2))
+  end subroutine omega
+
+  subroutine omega_tile (istr,iend,jstr,jend, CX,wrk)
+
+! Compute S-coordinate vertical velocity, w=[Hz/(m*n)]*omega [m^3/s],
+! which has the meaning of FINITE_VOLUME FLUX across MOVING grid-box
+! interfaces of RHO-boxes. To compute it we first integrate divergence
+! of horizontal mass fluxes from bottom up, starting with the no-flow
+! boundary condition at the bottom (k=0); After this operation W(:,:,N)
+! contains vertical velocity flux at the free surface, which is the
+! time-tendency of the free surface, d_zeta/d_t multiplied by grid-box
+! area as seen from above;  To convert W(:,:,:) into S-coordinate
+! vertical velocity flux, one needs to subtract the vertical velocities
+! of moving S-coordinate surfaces, which are proportional the product
+! of d_zeta/d_t and the fraction of the distance from the point to the
+! bottom divided by the total depth of water column, i.e. the whole
+! S-coordinate system is "breathes" by linear in Z-space expansion
+! and contraction set by variation in free surface.
+
+! Parameter setting: "cu_min" is threshold value for Courant Number
+! below which vertical advection is fully explicit; "cu_max" is the
+!     maximum CN which the explicit component "We" is allowed to reach.
+
+    use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
+    use dimensions, only: nx, ny, nz, inode, jnode
+    use grid, only: pn, pm, dn_r, dm_r, rmask
+    use pipe_frc, only:&
+    &pidx, pipe_idx, pipe_prf,&
+    &pipe_flx, pipe_source
+#if defined(CDR_FORCING)
+    use cdr_frc, only:&
+    &cdr_nprf, cdr_icdr,&
+    &cdr_iloc, cdr_prf, cdr_vol,&
+    &cdr_source, cdr_volume
+#endif
+    use roms_mpi, only: exchange_xxx
+    use ocean_vars, only: wi, flxv, flxu, z_w, we, hz
+    use scalars, only: n, dt, forw_start, iic, nrhs
+    use surf_flux, only: swflx
+    use pio_roms, only: use_pio
+    use instant_output, only: wrt_instant
+    implicit none
+    integer(kind=4) istr,iend,jstr,jend, i,j,k, icdr, cidx
+    real(kind=8) CX(PRIVATE_1D_SCRATCH_ARRAY,0:N),  dtau, c2d,dh, cw, cff,&
+    &wrk(PRIVATE_1D_SCRATCH_ARRAY),      cw_min,cw_max,cw_max2
+    real(kind=8), parameter :: cu_min=0.6D0, cu_max=1.0D0,&
+    &cmnx_ratio=cu_min/cu_max,  cutoff=2.D0-cmnx_ratio,&
+    &r4cmx=0.25D0/(1.D0-cmnx_ratio)
+
+# include "compute_auxiliary_bounds.h"
+
+    if (CORR_STAGE) then
+      dtau=dt
+    elseif (FIRST_TIME_STEP) then
+      dtau=0.5_8*dt
+    else
+      dtau=0.6_8*dt
+!**     dtau=(1._8-1._8/6._8)*dt
+    endif
+
+    Wi(1:nx,1:ny,0)=0._8
+
+#if defined CDR_FORCING && defined MARBL
+    if (cdr_source.and.cdr_volume) then
+      do cidx=1,cdr_nprf
+        icdr = cdr_icdr(cidx)
+        i = cdr_iloc(cidx)
+        j = cdr_iloc(cidx)
+        do k=1,nz
+          Wi(i,j,k)=Wi(i,j,k-1)&
+          ! Here we will assume that the vertical distribution of the CDR volume flux
+          ! is the same as the vertical distribution of the heat flux.
+          &+ cdr_vol(icdr)*cdr_prf(cidx,1,k)
+        enddo
+      enddo
+    endif
+#endif
+
+    do j=jstr,jend
+
+      !!! For NHMG pipes, the flux needs to be out of the bottom.
+      !!! Additionally, modify, where needed, the We to Wi split
+      !!! for pipe sources
+      do k=1,N,+1        !--> recursive
+        do i=istr,iend
+          Wi(i,j,k)=Wi(i,j,k-1) -FlxU(i+1,j,k) +FlxU(i,j,k)&
+          &-FlxV(i,j+1,k) +FlxV(i,j,k)
+          if (pipe_source) then
+            if (pipe_idx(i,j)>0) then         ! pipe_source removes branching because it's a parameter
+              pidx = pipe_idx(i,j)
+              Wi(i,j,k)=Wi(i,j,k)&
+              &+ pipe_flx(i,j)*pipe_prf(pidx,k)
+            endif
+          endif
+
+          CX(i,k)=max(FlxU(i+1,j,k),0._8)-min(FlxU(i,j,k),0._8)&
+          &+max(FlxV(i,j+1,k),0._8)-min(FlxV(i,j,k),0._8)
+        enddo
+      enddo
+      ! rain water
+      do i=1,nx
+        Wi(i,j,nz) = Wi(i,j,nz) + swflx(i,j)*dm_r(i,j)*dn_r(i,j)
+      enddo
+      do i=istr,iend
+        wrk(i)=Wi(i,j,N)/(z_w(i,j,N)-z_w(i,j,0))
+        Wi(i,j,N)=0._8
+        We(i,j,N)=0._8                      ! note that
+        We(i,j,0)=0._8                      ! CX(i,k)*CX(i,0)/Hz(i,j,k)
+        CX(i,0)=dtau*pm(i,j)*pn(i,j)      ! is horizontal 2D Courant
+      enddo                               ! number within Hz(i,j,k)
+      do k=N-1,1,-1
+        do i=istr,iend
+          Wi(i,j,k)=Wi(i,j,k)-wrk(i)*(z_w(i,j,k)-z_w(i,j,0))  !! this removes the grid motion
+
+!*          if (Wi(i,j,k) > 0._8) then         ! Three different variants
+!*            c2d=CX(i,k)   ; dh=Hz(i,j,k)   ! for computing 2D Courant
+!*          else                             ! number at the interface:
+!*            c2d=CX(i,k+1) ; dh=Hz(i,j,k+1) ! (1) use value from the
+!*          endif                            !     grid box upstream in
+          !     vertical direction;
+!>          c2d=0.5_8*(CX(i,k) +CX(i,k+1))
+!>          dh=0.5_8*(Hz(i,j,k)+Hz(i,j,k+1))   ! (2) average the two; or
+
+          c2d=max(CX(i,k),  CX(i,k+1))     ! (3) pick the maximum
+          dh=min(Hz(i,j,k),Hz(i,j,k+1))    !     of the two.
+
+
+          cw_max=cu_max*dh-c2d*CX(i,0)
+          if (cw_max > 0.D0) then
+            cw_max2=cw_max*cw_max
+            cw_min=cw_max*cmnx_ratio
+
+            cw=abs(Wi(i,j,k))*CX(i,0)  !<-- cw/dh = vertical Courant
+
+            if (cw < cw_min) then
+              cff=cw_max2
+            elseif (cw < cutoff*cw_max) then
+              cff=cw_max2 +r4cmx*(cw-cw_min)**2
+            else
+              cff=cw_max*cw
+            endif
+
+            We(i,j,k)= rmask(i,j) * cw_max2*Wi(i,j,k)/cff  !<-- NORMAL SPLITING
+            Wi(i,j,k)= rmask(i,j) * (Wi(i,j,k)-We(i,j,k))    !<-- CODE TO BE USED
+          else
+            We(i,j,k)=0._8          !--> Wi(i,j,k) remains unchanged
+            Wi(i,j,k)= rmask(i,j) * Wi(i,j,k)
+          endif
+
+!**         We(i,j,k)=0._8            !<-- fully implicit(BE), test only
+
+!**         We(i,j,k)=Wi(i,j,k)     !<-- for testing only: revert
+!**         Wi(i,j,k)=0._8            !<-- back to fully explicit code
+        enddo
+      enddo
+    enddo
+
+# ifndef EW_PERIODIC
+    if (WESTERN_EDGE) then                       ! Set lateral
+      do k=0,N                                   ! boundary
+        do j=jstr,jend                           ! conditions
+          We(istr-1,j,k)=We(istr,j,k)
+          Wi(istr-1,j,k)=Wi(istr,j,k)
+        enddo
+      enddo
+    endif
+    if (EASTERN_EDGE) then
+      do k=0,N
+        do j=jstr,jend
+          We(iend+1,j,k)=We(iend,j,k)
+          Wi(iend+1,j,k)=Wi(iend,j,k)
+        enddo
+      enddo
+    endif
+# endif
+# ifndef NS_PERIODIC
+    if (SOUTHERN_EDGE) then
+      do k=0,N
+        do i=istr,iend
+          We(i,jstr-1,k)=We(i,jstr,k)
+          Wi(i,jstr-1,k)=Wi(i,jstr,k)
+        enddo
+      enddo
+    endif
+    if (NORTHERN_EDGE) then
+      do k=0,N
+        do i=istr,iend
+          We(i,jend+1,k)=We(i,jend,k)
+          Wi(i,jend+1,k)=Wi(i,jend,k)
+        enddo
+      enddo
+    endif
+#  ifndef EW_PERIODIC
+    if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
+      do k=0,N
+        We(istr-1,jstr-1,k)=We(istr,jstr,k)
+        Wi(istr-1,jstr-1,k)=Wi(istr,jstr,k)
+      enddo
+    endif
+    if (WESTERN_EDGE .and. NORTHERN_EDGE) then
+      do k=0,N
+        We(istr-1,jend+1,k)=We(istr,jend,k)
+        Wi(istr-1,jend+1,k)=Wi(istr,jend,k)
+      enddo
+    endif
+    if (EASTERN_EDGE .and. SOUTHERN_EDGE) then
+      do k=0,N
+        We(iend+1, jstr-1,k)=We(iend,jstr,k)
+        Wi(iend+1, jstr-1,k)=Wi(iend,jstr,k)
+      enddo
+    endif
+    if (EASTERN_EDGE .and. NORTHERN_EDGE) then
+      do k=0,N
+        We(iend+1,jend+1,k)=We(iend,jend,k)
+        Wi(iend+1,jend+1,k)=Wi(iend,jend,k)
+      enddo
+    endif
+#  endif
+# endif
+
+!      call wrt_instant(We, 'We')
+!      call wrt_instant(Wi, 'Wi')
+
+# ifdef EXCHANGE
+    call exchange_xxx(We,Wi)
+# endif
+
+!      call wrt_instant(We, 'We')
+!      call wrt_instant(Wi, 'Wi')
+
+  end subroutine omega_tile
+#else
+  subroutine omega_empty
+  end subroutine omega_empty
+#endif /* SOLVE3D */
+end module omega_mod
+
