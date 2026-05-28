@@ -179,12 +179,6 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       character(len=1024) :: error_info = ""
       character(len=9) :: sr_name ="roms_init"
 C$    integer omp_get_thread_num, omp_get_num_threads
-        real :: walltime0 = 0.
-        real :: walltime1 = 0.
-        real :: walltime2 = 0.
-        real :: walltime3 = 0.
-        real :: walltime4 = 0.
-        real :: walltime5 = 0.
 
       numthreads=1 ; trd=0
 C$    numthreads=omp_get_num_threads()
@@ -233,7 +227,7 @@ C$OMP BARRIER
 
       call do_precheck
       call get_grid                  ! can be analytic or from netcdf
-      walltime1 = MPI_Wtime() - walltime0
+
 
 #ifdef DIAGNOSTICS
       call init_diagnostics
@@ -299,7 +293,6 @@ CR      write(*,*) ' -6' MYID
         call set_depth(0)
 #endif
         call get_init(nrrec, 1)
-      walltime3 = MPI_Wtime() - walltime0
 
         call init_restarts
 
@@ -311,7 +304,7 @@ CR      write(*,*) ' -6' MYID
       call ana_vmix
 #endif
 
-      walltime0 = MPI_Wtime()
+      write(*,*) 'Finished inits'
                                   ! Set initial model clock: at this
       time=start_time             ! moment "start_time" (global scalar)
                                   ! is set by get_init or analytically
@@ -320,10 +313,8 @@ CR      write(*,*) ' -6' MYID
       tdays = time*sec2day
       call set_forces
 
-      walltime4 = MPI_Wtime() - walltime0
-
-
       call set_depth(0)
+
 !----------------------------------------------------------------------
 !  Set NHMG horizontal and vertical grids
 !  then set matrices coefficients for the elliptic problem
@@ -352,6 +343,7 @@ CR      write(*,*)  ' -2' MYID
       if (floats) then
         call init_particles
       endif
+
       ! we should have a grid and z_r by now
 
 #if defined SPONGE
@@ -374,6 +366,7 @@ CR      write(*,*)  ' -2' MYID
       endif
 #endif
       if (wrt_frc) call init_frc_output
+
         mpi_master_only write(*,'(/1x,A/)')
      &     'main :: initialization complete, started time-stepping.'
 
@@ -396,6 +389,7 @@ CR      write(*,*)  ' -2' MYID
       use scalars, only:
      &     dt, iic, iif, knew, kstp, nfast, nnew, nrhs,
      &     nstp, ntstart, sec2day, start_time, tdays, time
+
       use sponge_tune, only: adjust_orlanski, ub_tune
       use particles, only: do_particles, floats
       use surf_flux, only: wrt_sflux, wrt_smflx, wrt_stflx
@@ -442,7 +436,7 @@ CR      write(*,*)  ' -2' MYID
 #endif
       implicit none
 
-        real :: walltime0 = 0.
+
 ! Increment time-step index and set model clock. Note that "time" set
 ! below corresponds to step "n" (denoted here as "nstp"), while counter
 ! "iic" corresponds to "n+1", so normally, assuming that time is
@@ -464,8 +458,10 @@ CR      write(*,*)  ' -2' MYID
       ! get_frc (both versions work with tdays, adding 0.5*dt)
       ! set_tides on the other hand work wit time, not adding 0.5*dt
       ! use time at n for surface forcing values
+
       frc_time='current'
       call set_forces
+
       ! use time at n+1/2 for boundary values
       ! we use these values at the end of pre_step, and during step2d
 
@@ -579,8 +575,6 @@ CR      write(*,*)  ' -2' MYID
 
       call diag  ! log file output of global norms
 
-!      pio_gtype = '----'
-
       call wrt_his_ocean_vars
       call wrt_rst_ocean_vars
       call wrt_avg_ocean_vars
@@ -599,7 +593,6 @@ CR      write(*,*)  ' -2' MYID
 #endif
 
       if (do_random) call wrt_random
-!      if (do_random) call wrt_random2
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
       if (do_cdr_output)  call wrt_cdr
 #endif
@@ -609,5 +602,7 @@ CR      write(*,*)  ' -2' MYID
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
       call wrt_bgc
 #endif
+
       end subroutine roms_step
+
       end program main
