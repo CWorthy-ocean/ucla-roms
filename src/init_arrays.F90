@@ -79,7 +79,7 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
 # endif
 #endif
 
-# include "compute_extended_bounds.h90"
+# include "compute_extended_bounds.h"
 
 #ifdef PRINT_TILE_RANGES
 # ifdef MPI

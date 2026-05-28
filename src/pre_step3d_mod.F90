@@ -164,7 +164,7 @@ contains
       ! Advance tracer fields
       do itrc=1,nt                         ! starting with applying
         ! horizontal fluxes. Also
-# include "compute_horiz_tracer_fluxes.h90"
+# include "compute_horiz_tracer_fluxes.h"
 !! river included in above include file
         ! INITIALIZE CORRECTOR
         do j=jstr,jend                     ! STEP by pre-multiplying
@@ -182,13 +182,13 @@ contains
       ! it is owerwritten by
 
 # ifdef NHMG
-#  include "compute_horiz_rhs_w_terms.h90"
+#  include "compute_horiz_rhs_w_terms.h"
 # endif
 
 # undef FE                                /* ! barotropic mode. */
 # undef FX
 
-# include "compute_horiz_rhs_uv_terms.h90"
+# include "compute_horiz_rhs_uv_terms.h"
 
     enddo !<-- k
 
@@ -211,7 +211,7 @@ contains
     do j=jstr,jend  !! Start of the giant j-loop
 
       do itrc=1,nt
-# include "compute_vert_tracer_fluxes.h90"
+# include "compute_vert_tracer_fluxes.h"
 
         do k=1,n
           do i=istr,iend   !! t(..) is Hz*T
@@ -286,11 +286,11 @@ contains
 !                      ! and wind forcing at surface.
 !                      ! ru,rv, and rw are volume integrated and [m4/s2]
 
-# include "compute_vert_rhs_uv_terms.h90"
+# include "compute_vert_rhs_uv_terms.h"
 
 # ifdef NHMG
 
-#  include "compute_vert_rhs_w_terms.h90"
+#  include "compute_vert_rhs_w_terms.h"
 
       do i=istr,iend
         DC(i,0) =dtau*pm(i,j)*pn(i,j)
@@ -772,7 +772,7 @@ contains
     end if
     cpps(is:ie)='<pre_step3d4S.F>'
 
-# include "track_advec_switches.h90"
+# include "track_advec_switches.h"
     call error_log%abort_check()
   end subroutine check_pre_step_switches
 

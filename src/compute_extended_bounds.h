@@ -24,75 +24,75 @@
 # define jnorth Mm
 #endif
 
-      integer istrR,iendR
+integer(kind=4) istrR,iendR
 #ifndef XI_ONLY
-     &        , jstrR,jendR
+integer(kind=4) jstrR,jendR
 #endif
 
-      if (istr == iwest) then
+if (istr == iwest) then
 #ifdef EW_PERIODIC
-        istrR=istr-2
+  istrR=istr-2
 #elif defined MPI
-        if (inode>0) then
-          istrR=istr-2
-        else
-          istrR=istr-1
-        endif
+  if (inode>0) then
+    istrR=istr-2
+  else
+    istrR=istr-1
+  endif
 #else
-        istrR=istr-1
+  istrR=istr-1
 #endif
-      else
-        istrR=istr
-      endif
+else
+  istrR=istr
+endif
 
-      if (iend == ieast) then
+if (iend == ieast) then
 #ifdef EW_PERIODIC
-        iendR=iend+2
+  iendR=iend+2
 #elif defined MPI
-        if (inode<npx-1) then
-          iendR=iend+2
-        else
-          iendR=iend+1
-        endif
+  if (inode<npx-1) then
+    iendR=iend+2
+  else
+    iendR=iend+1
+  endif
 #else
-        iendR=iend+1
+  iendR=iend+1
 #endif
-      else
-        iendR=iend
-      endif
+else
+  iendR=iend
+endif
 
 #ifndef XI_ONLY
-      if (jstr == jsouth) then
+if (jstr == jsouth) then
 # ifdef NS_PERIODIC
-        jstrR=jstr-2
+  jstrR=jstr-2
 # elif defined MPI
-        if (jnode>0) then
-          jstrR=jstr-2
-        else
-          jstrR=jstr-1
-        endif
+  if (jnode>0) then
+    jstrR=jstr-2
+  else
+    jstrR=jstr-1
+  endif
 # else
-        jstrR=jstr-1
+  jstrR=jstr-1
 # endif
-      else
-        jstrR=jstr
-      endif
+else
+  jstrR=jstr
+endif
 
-      if (jend == jnorth) then
+if (jend == jnorth) then
 # ifdef NS_PERIODIC
-        jendR=jend+2
+  jendR=jend+2
 # elif defined MPI
-        if (jnode<npy-1) then
-          jendR=jend+2
-        else
-          jendR=jend+1
-        endif
+  if (jnode<npy-1) then
+    jendR=jend+2
+  else
+    jendR=jend+1
+  endif
 # else
-        jendR=jend+1
+  jendR=jend+1
 # endif
-      else
-        jendR=jend
-      endif
+else
+  jendR=jend
+endif
 #endif
 
 #ifndef MPI
