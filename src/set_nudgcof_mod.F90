@@ -37,7 +37,7 @@ contains
     integer(kind=4) i,j, isp , I1,I0,I2,J1,J0,J2, ibnd,itrc
     real(kind=8) cff,cff1,cff2,cff3, frac, Tau
 
-# include "compute_extended_bounds.h"
+# include "compute_extended_bounds.h90"
 
 !
 ! The following code segment is rather a generic code go setup

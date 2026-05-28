@@ -203,7 +203,7 @@ contains
 ! concentration of tracer "itrc" taken at time corresponding to "nstp"
 ! and already MULTIPLIED by Hz(:,:,:) at "nstp" in "pre_step3d_tile".
 
-# include "compute_horiz_tracer_fluxes.h"
+# include "compute_horiz_tracer_fluxes.h90"
 
 # ifdef DIAGNOSTICS
 #  ifndef ADV_ISONEUTRAL
@@ -916,7 +916,7 @@ contains
 
   do j=jstr,jend
 
-# include "compute_vert_tracer_fluxes.h"
+# include "compute_vert_tracer_fluxes.h90"
 
 # ifdef DIAGNOSTICS
     if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
@@ -1224,7 +1224,7 @@ subroutine check_step_t_switches
   call error_log%abort_check()
   cpps(is:ie)='<step3d_t_ISO.F>'
 
-# include "track_advec_switches.h"
+# include "track_advec_switches.h90"
 
 end subroutine check_step_t_switches
 #else

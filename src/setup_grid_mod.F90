@@ -28,7 +28,7 @@ contains
     real(kind=8) cff1, cff2
 #endif
 
-# include "compute_extended_bounds.h"
+# include "compute_extended_bounds.h90"
 
 ! Set f and f/mn at horizontal RHO-points.  Note that Coriolis arrays
 ! "f" and "fomn" must computed over the extended ranges of horizontal

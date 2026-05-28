@@ -14,7 +14,7 @@
 .PHONY: all clean depend
 
 all:
-	rsync -a --ignore-missing-args $(ROMS_ROOT)/src/*.F $(ROMS_ROOT)/src/*.F90 $(ROMS_ROOT)/src/*.h  Compile
+	rsync -a --ignore-missing-args $(ROMS_ROOT)/src/*.F $(ROMS_ROOT)/src/*.F90 $(ROMS_ROOT)/src/*.h $(ROMS_ROOT)/src/*.h90 Compile
 	make show_tag
 	@rsync -a $(ROMS_ROOT)/src/*.opt Compile
 	@rsync -a $(ROMS_ROOT)/src/Makedefs.inc Compile
