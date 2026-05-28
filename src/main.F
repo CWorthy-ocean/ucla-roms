@@ -83,7 +83,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       use scalars, only: ntimes, iic, ntstart, diag_sync
       use timers, only: start_timers, stop_timers
       use error_handling_mod, only: error_log
-#ifdef UPSCALING
+#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
       use upscale_output, only: wrt_upscale, do_upscale
 #endif
       implicit none
@@ -101,7 +101,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       enddo
 
 ! This is where we might put a generic "final write" subroutine
-#ifdef UPSCALING
+#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
       if (do_upscale) then
         call wrt_upscale
       endif
@@ -128,7 +128,7 @@ C$OMP END PARALLEL                       ! launch the model in OpenMP
       use diagnostics, only: diag_uv,diag_trc,init_diagnostics
 #endif
       use particles, only: init_particles, floats
-#ifdef UPSCALING
+#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
       use upscale_output, only:  init_upscale, do_upscale
 #endif
       use random_output, only:  init_random, do_random, wrt_random
@@ -378,7 +378,7 @@ CR      write(*,*)  ' -2' MYID
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
       if (do_cdr_output)  call init_cdr_output
 #endif
-#ifdef UPSCALING
+#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
       if (do_upscale) then
         call init_upscale
       endif
@@ -448,7 +448,7 @@ CR      write(*,*)  ' -2' MYID
       use bgc_io, only: wrt_bgc
 #endif
 #ifdef DIAGNOSTICS
-      use diagnostics, only: do_diagnostics
+      use diagnostics, only: do_diagnostics, diag_uv, diag_trc
 #endif
       use roms_read_write, only: frc_time
       use mpi_f08, only: mpi_wtime

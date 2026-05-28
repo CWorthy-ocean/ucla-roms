@@ -188,6 +188,7 @@
       public :: find_new_record
       public :: nc_check_units
       public :: put_global_atts
+      public :: refdatestr
       public :: store_string_att
       public :: create_file
 
