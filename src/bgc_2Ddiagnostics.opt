@@ -25,12 +25,12 @@
 
 !!!!!!!!!!!! bec2_diag_2d !!!!!!!!!!!!!!
 
-      xco2air_idx_t=1
-      vname_bec2_diag_2d(1,xco2air_idx_t)='pCO2air'
-      vname_bec2_diag_2d(2,xco2air_idx_t)='Surface water pCO2'
-      vname_bec2_diag_2d(3,xco2air_idx_t)='ppm'
-      vname_bec2_diag_2d(4,xco2air_idx_t)='  '
-      wrt_bec2_diag_2d(xco2air_idx_t)=.false.     ! pCO2air
+      pco2air_idx_t=1
+      vname_bec2_diag_2d(1,pco2air_idx_t)='pCO2air'
+      vname_bec2_diag_2d(2,pco2air_idx_t)='Surface water pCO2'
+      vname_bec2_diag_2d(3,pco2air_idx_t)='ppm'
+      vname_bec2_diag_2d(4,pco2air_idx_t)='  '
+      wrt_bec2_diag_2d(pco2air_idx_t)=.false.     ! pCO2air
 
       parinc_idx_t=2
       vname_bec2_diag_2d(1,parinc_idx_t)='PARinc'
@@ -130,12 +130,12 @@
       vname_bec2_diag_2d(4,ph_idx_t)=' '
       wrt_bec2_diag_2d(ph_idx_t)=.false.
 
-      xco2_idx_t=16
-      vname_bec2_diag_2d(1,xco2_idx_t)='pCO2'
-      vname_bec2_diag_2d(2,xco2_idx_t)='Surface water pCO2'
-      vname_bec2_diag_2d(3,xco2_idx_t)='ppm'
-      vname_bec2_diag_2d(4,xco2_idx_t)='  '
-      wrt_bec2_diag_2d(xco2_idx_t)=.false.
+      pco2_idx_t=16
+      vname_bec2_diag_2d(1,pco2_idx_t)='pCO2'
+      vname_bec2_diag_2d(2,pco2_idx_t)='Surface water pCO2'
+      vname_bec2_diag_2d(3,pco2_idx_t)='ppm'
+      vname_bec2_diag_2d(4,pco2_idx_t)='  '
+      wrt_bec2_diag_2d(pco2_idx_t)=.false.
 
       co2star_idx_t=17
       vname_bec2_diag_2d(1,co2star_idx_t)='CO2STAR'
@@ -144,12 +144,12 @@
       vname_bec2_diag_2d(4,co2star_idx_t)=' '
       wrt_bec2_diag_2d(co2star_idx_t)=.false.
 
-      xco2oc_idx_t=18
-      vname_bec2_diag_2d(1,xco2oc_idx_t)='PCO2OC'
-      vname_bec2_diag_2d(2,xco2oc_idx_t)='PCO2OC'
-      vname_bec2_diag_2d(3,xco2oc_idx_t)='not looked up yet '
-      vname_bec2_diag_2d(4,xco2oc_idx_t)=' '
-      wrt_bec2_diag_2d(xco2oc_idx_t)=.false.
+      pco2oc_idx_t=18
+      vname_bec2_diag_2d(1,pco2oc_idx_t)='PCO2OC'
+      vname_bec2_diag_2d(2,pco2oc_idx_t)='PCO2OC'
+      vname_bec2_diag_2d(3,pco2oc_idx_t)='not looked up yet '
+      vname_bec2_diag_2d(4,pco2oc_idx_t)=' '
+      wrt_bec2_diag_2d(pco2oc_idx_t)=.false.
 
       dco2star_idx_t=19
       vname_bec2_diag_2d(1,dco2star_idx_t)='DCO2STAR'

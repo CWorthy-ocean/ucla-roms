@@ -41,7 +41,7 @@
      &      idx_bec2_diag_2d
 
 #endif
-       use bgc_forces, only: pco2air, iron, dust
+       use bgc_forces, only: xco2air, iron, dust
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
      &      ,swrad_avg
 #endif
@@ -434,7 +434,7 @@
           DO j = jstr,jend
 
 # ifdef PCO2AIR_FORCING
-             XCO2(istr:iend) = pco2air(istr:iend,j)
+             XCO2(istr:iend) = xco2air(istr:iend,j)
 # endif /* PCO2AIR_FORCING */
 
             WHERE (ph_srf(istr:iend,j) .ne. c0)
