@@ -21,9 +21,12 @@
 
       use bgc_shared_vars, only:
      &     nrpf_avg, nrpf_his, nrpf_avg_dia,
-     &     nrpf_his_dia, t, nc_dust, nc_iron, nc_pco2air
+     &     nrpf_his_dia, t, nc_dust, nc_iron
+#ifdef PCO2AIR_FORCING
+     &     , nc_xco2air
 #ifdef MARBL
-     &     , nc_pco2air_alt
+     &     , nc_xco2air_alt
+#endif
 #endif
 #ifdef NOX_FORCING
      &     , nc_nox
@@ -99,9 +102,12 @@
       ! this routine is called by # if defined BIOLOGY_BEC2 in set_forces.F of ETH code
 
       use scalars, only: cp, nrhs, rho0
-      use bgc_forces, only: dust, iron, pco2air
+      use bgc_forces, only: dust, iron
+#ifdef PCO2AIR_FORCING
+     &     , xco2air
 #ifdef MARBL
-     &     , pco2air_alt
+     &     , xco2air_alt
+#endif
 #endif
 #ifdef NOX_FORCING
      &     , nox
@@ -133,10 +139,10 @@
 
 
 #ifdef PCO2AIR_FORCING
-!     call set_frc_var_tile( istr, iend, jstr, jend, nc_pco2air, pco2air, interp_frc )
-      call set_frc_data(nc_pco2air,pco2air,'r')
+!     call set_frc_var_tile( istr, iend, jstr, jend, nc_xco2air, xco2air, interp_frc )
+      call set_frc_data(nc_xco2air,xco2air,'r')
 #ifdef MARBL
-      call set_frc_data(nc_pco2air_alt,pco2air_alt,'r')
+      call set_frc_data(nc_xco2air_alt,xco2air_alt,'r')
 #endif
 #endif /* PCO2AIR_FORCING */
 
@@ -625,11 +631,11 @@
       if (interp_frc==1) nc_iron%coarse = 1
 
 #ifdef PCO2AIR_FORCING
-      allocate( nc_pco2air%vdata( GLOBAL_2D_ARRAY,2) )
-      if (interp_frc==1) nc_pco2air%coarse = 1
+      allocate( nc_xco2air%vdata( GLOBAL_2D_ARRAY,2) )
+      if (interp_frc==1) nc_xco2air%coarse = 1
 #ifdef MARBL
-      allocate( nc_pco2air_alt%vdata( GLOBAL_2D_ARRAY,2) )
-      if (interp_frc==1) nc_pco2air_alt%coarse = 1
+      allocate( nc_xco2air_alt%vdata( GLOBAL_2D_ARRAY,2) )
+      if (interp_frc==1) nc_xco2air_alt%coarse = 1
 #endif
 #endif
 

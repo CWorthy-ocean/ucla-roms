@@ -8,23 +8,25 @@
       implicit none
 
 #ifdef PCO2AIR_FORCING
-! pCO2air concentration
+! xCO2air concentration
 ! ------- -------------
-!     pCO2air: pCO2air concentraion [ppm]
-      real,allocatable,dimension(:,:) :: pco2air
+!     xCO2air: xCO2air concentraion [micromol/mol]
+      real,allocatable,dimension(:,:) :: xco2air
 #ifdef MARBL
-      real,allocatable,dimension(:,:) :: pco2air_alt
+      real,allocatable,dimension(:,:) :: xco2air_alt
 #endif
-CSDISTRIBUTE_RESHAPE  pCO2air(BLOCK_PATTERN,*) BLOCK_CLAUSE
+CSDISTRIBUTE_RESHAPE  xCO2air(BLOCK_PATTERN,*) BLOCK_CLAUSE
 # if defined PCO2AIR_DATA || defined ALL_DATA
 # ifndef SET_SMTH
 #  undef PCO2AIR_DATA
 # endif
-CSDISTRIBUTE_RESHAPE  pco2airg(BLOCK_PATTERN,*) BLOCK_CLAUSE
-      real :: pco2air_cycle, pco2air_time(2)
-      integer :: pco2air_ncycle,  pco2air_rec, itpco2air, ntpco2air,
-     &           pco2air_file_id, pco2air_id,  pco2air_tid
+CSDISTRIBUTE_RESHAPE  xco2airg(BLOCK_PATTERN,*) BLOCK_CLAUSE
+      real :: xco2air_cycle, xco2air_time(2)
+      integer :: xco2air_ncycle,  xco2air_rec, itxco2air, ntxco2air,
+     &           xco2air_file_id, xco2air_id,  xco2air_tid
 # endif
+#else
+      real, parameter :: xco2air_default = 284.7   ! pre-industrial [micromol/mol]
 #endif /* PCO2AIR_FORCING */
 
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
@@ -118,9 +120,9 @@ CSDISTRIBUTE_RESHAPE  irong(BLOCK_PATTERN,*) BLOCK_CLAUSE
       implicit none
 
 #ifdef PCO2AIR_FORCING
-      allocate( pco2air(GLOBAL_2D_ARRAY) )
+      allocate( xco2air(GLOBAL_2D_ARRAY) )
 #ifdef MARBL
-      allocate( pco2air_alt(GLOBAL_2D_ARRAY) )
+      allocate( xco2air_alt(GLOBAL_2D_ARRAY) )
 #endif
 #endif /* PCO2AIR_FORCING */
 
