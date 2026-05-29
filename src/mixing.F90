@@ -1,40 +1,40 @@
-      module mixing
+module mixing
 
 #include "cppdefs.opt"
 
-      use param, only:
-     &     isalt, lm, mm, ieast, itemp, iwest,
-     &     jnorth, jsouth, obc_east, obc_north, obc_south, obc_west
-      implicit none
+  use param, only:&
+  &isalt, lm, mm, ieast, itemp, iwest,&
+  &jnorth, jsouth, obc_east, obc_north, obc_south, obc_west
+  implicit none
 
 ! This is include file "mixing"
 !------ --- ----------------------
 #ifdef UV_VIS2
-      real,allocatable,dimension(:,:) :: visc2_r
-      real,allocatable,dimension(:,:) :: visc2_p
+  real(kind=8),allocatable,dimension(:,:) :: visc2_r
+  real(kind=8),allocatable,dimension(:,:) :: visc2_p
 #endif
 #ifdef SOLVE3D
 # ifdef TS_DIF2
-      real,allocatable,dimension(:,:,:) :: diff2
+  real(kind=8),allocatable,dimension(:,:,:) :: diff2
 # endif
 # ifdef TS_DIF4
-      real,allocatable,dimension(:,:,:) :: diff4
+  real(kind=8),allocatable,dimension(:,:,:) :: diff4
 # endif
 # ifdef ADV_ISONEUTRAL
-      real,allocatable,dimension(:,:,:) :: diff3u
-      real,allocatable,dimension(:,:,:) :: diff3v
+  real(kind=8),allocatable,dimension(:,:,:) :: diff3u
+  real(kind=8),allocatable,dimension(:,:,:) :: diff3v
 # endif
 
-      real,allocatable,dimension(:,:,:) :: Akv
+  real(kind=8),allocatable,dimension(:,:,:) :: Akv
 # ifdef SALINITY
-      real,allocatable,dimension(:,:,:,:) :: Akt
+  real(kind=8),allocatable,dimension(:,:,:,:) :: Akt
 # else
-      real,allocatable,dimension(:,:,:,:) :: Akt
+  real(kind=8),allocatable,dimension(:,:,:,:) :: Akt
 # endif
 # if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
   || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
   || defined LMD_BKPP
-      real,allocatable,dimension(:,:,:) :: bvf
+  real(kind=8),allocatable,dimension(:,:,:) :: bvf
 # endif
 
 
@@ -48,10 +48,10 @@
 ! q2l     TKE times turbulent length scale[m^3/s^2] at horizontal
 !                                   RHO- and vertical W-points.
 
-      real,allocatable,dimension(:,:,:) :: Akq
-      real,allocatable,dimension(:,:,:) :: Lscale
-      real,allocatable,dimension(:,:,:,:) :: q2
-      real,allocatable,dimension(:,:,:,:) :: q2l
+  real(kind=8),allocatable,dimension(:,:,:) :: Akq
+  real(kind=8),allocatable,dimension(:,:,:) :: Lscale
+  real(kind=8),allocatable,dimension(:,:,:,:) :: q2
+  real(kind=8),allocatable,dimension(:,:,:,:) :: q2l
 #endif /* MY25_MIXING */
 
 ! Large/McWilliams/Doney oceanic planetary boundary layer variables
@@ -62,56 +62,56 @@
 !                                depth z_w [non-dimensional]
 
 # ifdef LMD_KPP
-      real,allocatable,dimension(:,:) :: hbls
+  real(kind=8),allocatable,dimension(:,:) :: hbls
 
-      real,allocatable,dimension(:,:,:) :: swr_frac
+  real(kind=8),allocatable,dimension(:,:,:) :: swr_frac
 #  ifdef LMD_NONLOCAL
-      real,allocatable,dimension(:,:,:) :: ghat
+  real(kind=8),allocatable,dimension(:,:,:) :: ghat
 #  endif
 # endif /* LMD_KPP */
 # ifdef LMD_BKPP
-      real,allocatable,dimension(:,:) :: hbbl
+  real(kind=8),allocatable,dimension(:,:) :: hbbl
 # endif /* LMD_BKPP */
 #endif /* SOLVE3D */
 
-      integer :: sponge_size  ! number of grid point of sponge layer
+  integer(kind=4) :: sponge_size  ! number of grid point of sponge layer
 
-      contains
+contains
 
-      !----------------------------------------------------------------
-      subroutine init_arrays_mixing  ![
-      use scalars, only: init, n, nt, visc2, tnu2, akv_bak, akt_bak
-      use tracers, only: itands
-      implicit none
+  !----------------------------------------------------------------
+  subroutine init_arrays_mixing  ![
+    use scalars, only: init, n, nt, visc2, tnu2, akv_bak, akt_bak
+    use tracers, only: itands
+    implicit none
 
-      integer :: itrc
+    integer(kind=4) :: itrc
 
 #ifdef UV_VIS2
-      allocate( visc2_r(GLOBAL_2D_ARRAY) ); visc2_r=init
-      allocate( visc2_p(GLOBAL_2D_ARRAY) ); visc2_p=init
+    allocate( visc2_r(GLOBAL_2D_ARRAY) ); visc2_r=init
+    allocate( visc2_p(GLOBAL_2D_ARRAY) ); visc2_p=init
 #endif
 #ifdef SOLVE3D
 # ifdef TS_DIF2
-      allocate( diff2(GLOBAL_2D_ARRAY,NT) ); diff2=init
+    allocate( diff2(GLOBAL_2D_ARRAY,NT) ); diff2=init
 # endif
 # ifdef TS_DIF4
-      allocate( diff4(GLOBAL_2D_ARRAY,NT) ); diff4=init
+    allocate( diff4(GLOBAL_2D_ARRAY,NT) ); diff4=init
 # endif
 # ifdef ADV_ISONEUTRAL
-      allocate( diff3u(GLOBAL_2D_ARRAY,N) ); diff3u=init
-      allocate( diff3v(GLOBAL_2D_ARRAY,N) ); diff3v=init
+    allocate( diff3u(GLOBAL_2D_ARRAY,N) ); diff3u=init
+    allocate( diff3v(GLOBAL_2D_ARRAY,N) ); diff3v=init
 # endif
 
-      allocate( Akv(GLOBAL_2D_ARRAY,0:N) ); Akv=init
+    allocate( Akv(GLOBAL_2D_ARRAY,0:N) ); Akv=init
 # ifdef SALINITY
-      allocate( Akt(GLOBAL_2D_ARRAY,0:N,isalt) ); Akt=init
+    allocate( Akt(GLOBAL_2D_ARRAY,0:N,isalt) ); Akt=init
 # else
-      allocate( Akt(GLOBAL_2D_ARRAY,0:N,itemp) ); Akt=init
+    allocate( Akt(GLOBAL_2D_ARRAY,0:N,itemp) ); Akt=init
 # endif
 # if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
   || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
   || defined LMD_BKPP
-      allocate( bvf(GLOBAL_2D_ARRAY,0:N) ); bvf=init
+    allocate( bvf(GLOBAL_2D_ARRAY,0:N) ); bvf=init
 # endif
 
 
@@ -125,10 +125,10 @@
 ! q2l     TKE times turbulent length scale[m^3/s^2] at horizontal
 !                                   RHO- and vertical W-points.
 
-      allocate( Akq(GLOBAL_2D_ARRAY,0:N) ); Akq=init
-      allocate( Lscale(GLOBAL_2D_ARRAY,N) ); Lscale=init
-      allocate( q2(GLOBAL_2D_ARRAY,0:N,2) ); q2=init
-      allocate( q2l(GLOBAL_2D_ARRAY,0:N,2) ); q2l=init
+    allocate( Akq(GLOBAL_2D_ARRAY,0:N) ); Akq=init
+    allocate( Lscale(GLOBAL_2D_ARRAY,N) ); Lscale=init
+    allocate( q2(GLOBAL_2D_ARRAY,0:N,2) ); q2=init
+    allocate( q2l(GLOBAL_2D_ARRAY,0:N,2) ); q2l=init
 #endif /* MY25_MIXING */
 
 ! Large/McWilliams/Doney oceanic planetary boundary layer variables
@@ -139,27 +139,27 @@
 !                                depth z_w [non-dimensional]
 
 # ifdef LMD_KPP
-      allocate( hbls(GLOBAL_2D_ARRAY) ); hbls=0.
+    allocate( hbls(GLOBAL_2D_ARRAY) ); hbls=0._8
 
-      allocate( swr_frac(GLOBAL_2D_ARRAY,0:N) ); swr_frac=init
+    allocate( swr_frac(GLOBAL_2D_ARRAY,0:N) ); swr_frac=init
 #  ifdef LMD_NONLOCAL
-      allocate( ghat(GLOBAL_2D_ARRAY,0:N) ); ghat=0.
+    allocate( ghat(GLOBAL_2D_ARRAY,0:N) ); ghat=0._8
 #  endif
 # endif /* LMD_KPP */
 # ifdef LMD_BKPP
-      allocate( hbbl(GLOBAL_2D_ARRAY) ); hbbl=0.
+    allocate( hbbl(GLOBAL_2D_ARRAY) ); hbbl=0._8
 # endif /* LMD_BKPP */
 #endif /* SOLVE3D */
 
 #ifdef UV_VIS2
-      visc2_r=visc2
-      visc2_p=visc2
+    visc2_r=visc2
+    visc2_p=visc2
 #endif
 #ifdef SOLVE3D
 # ifdef TS_DIF2
-      do itrc=1,NT
-        diff2(:,:,itrc)=tnu2(itrc)
-      enddo
+    do itrc=1,NT
+      diff2(:,:,itrc)=tnu2(itrc)
+    enddo
 # endif
 
 ! Initialize vertical mixing coefficients (see "mixing") to their
@@ -169,31 +169,31 @@
 
 # if !defined LMD_MIXING && !defined BVF_MIXING && !defined PP_MIXING\
                          && !defined MY2_MIXING && !defined MY25_MIXING
-      Akv=Akv_bak
+    Akv=Akv_bak
 # else
-      Akv=0.
+    Akv=0._8
 # endif
 # if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
   || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING \
   || defined LMD_BKPP
-      bvf=0.
+    bvf=0._8
 # endif
 
-      do itrc=1,iTandS
+    do itrc=1,iTandS
 # if !defined LMD_MIXING && !defined BVF_MIXING && !defined PP_MIXING\
                          && !defined MY2_MIXING && !defined MY25_MIXING
-        Akt(:,:,:,itrc)=Akt_bak(itrc)
+      Akt(:,:,:,itrc)=Akt_bak(itrc)
 # else
-        Akt(:,:,:,itrc)=0.
+      Akt(:,:,:,itrc)=0._8
 # endif
-      enddo
+    enddo
 
-      ! averaging variables allocated in ocean_vars to prevent circular reference from wrt_* logicals
+    ! averaging variables allocated in ocean_vars to prevent circular reference from wrt_* logicals
 
 #endif /* SOLVE3D */
 
-      end subroutine init_arrays_mixing  !]
+  end subroutine init_arrays_mixing  !]
 
-      !----------------------------------------------------------------
+  !----------------------------------------------------------------
 
-      end module mixing
+end module mixing
