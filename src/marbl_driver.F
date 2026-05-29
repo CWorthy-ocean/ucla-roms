@@ -128,6 +128,39 @@
       character*72, public                       :: vname_marbl_ss_2d(4,nr_marbl_ss_2d) ! Metadata (shortname,longname,units)
       character*72, public                       :: vname_marbl_ss_3d(4,nr_marbl_ss_3d) ! " "
 
+!     Cache-optimized tile variables for marbldrv_column_physics:
+!     A tile chunk of (tile_ni x tile_nj) columns is staged from scattered
+!     ROMS arrays into contiguous tile arrays sized to fit in L3 cache.
+!     marbl_tile_target_mb controls the target size and can be changed here
+!     or overridden at compile time.  bytes_per_float is derived at runtime
+!     via storage_size() so it automatically adapts to single/double builds
+!     (ROMS precision is controlled externally by DBLEPREC / mpc).
+#ifndef MARBL_TILE_TARGET_MB
+# define MARBL_TILE_TARGET_MB 1.5
+#endif
+      real, parameter :: marbl_tile_target_mb = MARBL_TILE_TARGET_MB
+      integer :: tile_ni, tile_nj
+      real, allocatable :: tile_tracers(:,:,:,:)       ! (nz,nt_marbl,tile_ni,tile_nj)
+      real, allocatable :: tile_temp(:,:,:)            ! (nz,tile_ni,tile_nj)
+      real, allocatable :: tile_salt(:,:,:)            ! (nz,tile_ni,tile_nj)
+      real, allocatable :: tile_Hz(:,:,:)              ! (nz,tile_ni,tile_nj)
+      real, allocatable :: tile_z_r(:,:,:)             ! (nz,tile_ni,tile_nj) negated
+      real, allocatable :: tile_z_w(:,:,:)             ! (nz,tile_ni,tile_nj) negated
+      real, allocatable :: tile_saved_state_3d(:,:,:,:)! (nz,nr_marbl_ss_3d,tile_ni,tile_nj)
+      real, allocatable :: tile_saved_state_2d(:,:,:)  ! (nr_marbl_ss_2d,tile_ni,tile_nj)
+      real, allocatable :: tile_uwnd(:,:)              ! (tile_ni,tile_nj)
+      real, allocatable :: tile_vwnd(:,:)              ! (tile_ni,tile_nj)
+      real, allocatable :: tile_pco2air(:,:)           ! (tile_ni,tile_nj)
+      real, allocatable :: tile_pco2air_alt(:,:)       ! (tile_ni,tile_nj)
+      real, allocatable :: tile_dust(:,:)              ! (tile_ni,tile_nj)
+      real, allocatable :: tile_iron(:,:)              ! (tile_ni,tile_nj)
+      real, allocatable :: tile_srflx(:,:)             ! (tile_ni,tile_nj)
+#ifdef NOX_FORCING
+      real, allocatable :: tile_nox(:,:)               ! (tile_ni,tile_nj)
+#endif
+#ifdef NHY_FORCING
+      real, allocatable :: tile_nhy(:,:)               ! (tile_ni,tile_nj)
+#endif
 
 !     Integers to define where print statements should come from
       integer                             :: printi = 4    ! i location
@@ -150,6 +183,10 @@
       public :: marbldrv_create_ss_vars_in_rst
       public :: marbldrv_read_ss_vars_from_rst
       public :: marbldrv_column_physics
+      public :: marbldrv_tile_selftest
+#ifdef MARBL_TILE_VERIFY
+      public :: marbldrv_verify_tiling
+#endif
 
       public :: read_nml_marbl
       contains
@@ -543,7 +580,8 @@
 !-----------------------------------------------------------------------
       character(len=31) :: sr_name = "marbldrv_configure_saved_state"
       integer            :: nr_marbl_ss_2d_check,nr_marbl_ss_3d_check,
-     &                      iss,i,j,k
+     &                      iss,i,j,k,bytes_per_float,bytes_per_col,
+     &                      n_tile_cols,n_tile_side
       character(len=200) :: ss_varname
 
 !     1. Check hardcoded array size matches MARBL expectations
@@ -657,6 +695,53 @@
      &        nr_marbl_ss_2d,nr_marbl_ss_3d !3,2
       end if
 
+!     4. Compute tile dimensions and allocate cache-tile arrays
+!     ----------------------------------------------------------------------
+!     Per-column byte count: bytes_per_float * (nz * 3D-fields + 2D-fields)
+!     3D-fields per level: nt_marbl (bio) + 2 (T,S) + 3 (Hz,z_r,z_w)
+!                        + nr_marbl_ss_3d (saved state)
+!     2D-fields per column: nr_marbl_ss_2d (saved state) + 7 (scalar forcings)
+!     storage_size() returns bits; /8 converts to bytes. Adapts automatically
+!     to single (4) or double (8) precision builds (ROMS DBLEPREC / mpc).
+      bytes_per_float = storage_size(0.) / 8
+      bytes_per_col = bytes_per_float * ( nz*(nt_marbl + 5 + nr_marbl_ss_3d)
+     &                                  + nr_marbl_ss_2d + 7 )
+      n_tile_cols = max(1, int(marbl_tile_target_mb*1024.*1024.
+     &                         / real(bytes_per_col)))
+      n_tile_side = max(1, int(sqrt(real(n_tile_cols))))
+      tile_ni = n_tile_side
+      tile_nj = max(1, n_tile_cols / n_tile_side)
+
+      if (mynode==printnode) then
+         write(*,'(7x,A,I4,A,I4,A,I6)')
+     &        'MARBL tile cache: tile_ni=',tile_ni,
+     &        ' tile_nj=',tile_nj,
+     &        ' cols=',tile_ni*tile_nj
+      end if
+
+      allocate( tile_tracers(nz,nt_marbl,tile_ni,tile_nj) )
+      allocate( tile_temp(nz,tile_ni,tile_nj) )
+      allocate( tile_salt(nz,tile_ni,tile_nj) )
+      allocate( tile_Hz(nz,tile_ni,tile_nj) )
+      allocate( tile_z_r(nz,tile_ni,tile_nj) )
+      allocate( tile_z_w(nz,tile_ni,tile_nj) )
+      allocate( tile_saved_state_3d(nz,nr_marbl_ss_3d,tile_ni,tile_nj) )
+      allocate( tile_saved_state_2d(nr_marbl_ss_2d,tile_ni,tile_nj) )
+      allocate( tile_uwnd(tile_ni,tile_nj) )
+      allocate( tile_vwnd(tile_ni,tile_nj) )
+      allocate( tile_pco2air(tile_ni,tile_nj) )
+      allocate( tile_pco2air_alt(tile_ni,tile_nj) )
+      allocate( tile_dust(tile_ni,tile_nj) )
+      allocate( tile_iron(tile_ni,tile_nj) )
+      allocate( tile_srflx(tile_ni,tile_nj) )
+#ifdef NOX_FORCING
+      allocate( tile_nox(tile_ni,tile_nj) )
+#endif
+#ifdef NHY_FORCING
+      allocate( tile_nhy(tile_ni,tile_nj) )
+#endif
+
+      call marbldrv_tile_selftest()
 
       end subroutine marbldrv_configure_saved_state
 !--------------------------------------------------------------------------------
@@ -1226,69 +1311,581 @@
 
       real, dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,
      &                            intent(inout)     :: tracer_array
+      integer                                       :: i,j,xi,eta
+      integer                                       :: i_off,j_off
+      integer                                       :: xi_max,eta_max
+
+!     Tiled outer loop: iterate over (tile_ni x tile_nj) chunks of the
+!     horizontal domain so all per-column data fits in marbl_tile_target_mb.
+      do j_off = jstr, jend, tile_nj
+         do i_off = istr, iend, tile_ni
+
+!           Clamp tile extent to actual domain bounds
+            xi_max  = min(tile_ni, iend - i_off + 1)
+            eta_max = min(tile_nj, jend - j_off + 1)
+
+!           Stage in: gather ROMS arrays -> tile (with z-flip & negation)
+            call marbldrv_tile_stage_in(i_off, j_off,
+     &                                  xi_max, eta_max, tracer_array)
+
+!           Inner loop: per-column MARBL computation using tile data
+            do eta = 1, eta_max
+               do xi = 1, xi_max
+                  i = i_off + xi - 1
+                  j = j_off + eta - 1
+                  if (rmask(i,j)==0.) cycle
+
+!                 1. Surface flux forcing values
+                  call marbldrv_t_set_sf_forcing_values(xi, eta)
+                  call marbldrv_t_set_surface_tracer_values(xi, eta)
+                  call marbldrv_t_set_sf_saved_state_values(xi, eta)
+
+!                 3. Compute surface fluxes
+                  call marbldrv_compute_surface_fluxes(i, j)
+
+!                 4a. Update 2D saved state in tile
+                  call marbldrv_t_update_saved_state_surf(xi, eta)
+
+!                 4b. Update surface tracers in tile
+                  call marbldrv_t_update_tracers_surf(xi, eta)
+
+!                 5. Column geometry and interior forcing
+                  call marbldrv_t_set_column_geometry(xi, eta)
+                  call marbldrv_t_set_it_forcing_values(xi, eta)
+                  call marbldrv_t_set_interior_tracer_values(xi, eta)
+
+!                 6. Interior saved state
+                  call marbldrv_t_set_it_saved_state_values(xi, eta)
+                  call marbldrv_t_set_bottom_fluxes(xi, eta)
+
+!                 7. Compute interior tendencies
+                  call marbldrv_compute_interior_tendency(i, j)
+
+!                 8a. Apply tendency increments to tile tracers
+                  call marbldrv_t_update_tracers_interior(xi, eta)
+
+!                 8b. Update 3D saved state in tile
+                  call marbldrv_t_update_saved_state_interior(xi, eta)
+
 #ifdef MARBL_DIAGS
-      integer                                       :: diagidx2d,diagidx3d ! indices for stepping through diagnostics arrays
+!                 8c. Diagnostics write directly to ROMS arrays
+                  call marbldrv_update_roms_diagnostics(i, j)
 #endif
-      integer                                       :: i,j,k,m
+               end do              ! xi
+            end do                 ! eta
 
+!           Stage out: scatter tile -> ROMS arrays (z-flip reversed)
+            call marbldrv_tile_stage_out(i_off, j_off,
+     &                                   xi_max, eta_max, tracer_array)
 
-!     1. Populate MARBL instance surface flux forcing values:
-!     ----------------------------------------------------------------------
-      do j=jstr,jend
-         do i=istr,iend
-            if (rmask(i,j)==0.) cycle
+         end do                    ! i_off
+      end do                       ! j_off
 
-            call marbldrv_set_marbl_surface_flux_forcing_values(
-     &           i,j,tracer_array)
-            call marbldrv_set_marbl_surface_tracer_values(
-     &           i,j,tracer_array)
-            call marbldrv_set_marbl_surface_flux_saved_state_values(i,j)
-!     Surface tracer values
-
-!     3. Compute surface fluxes using MARBL:
-!     ----------------------------------------------------------------------
-            call marbldrv_compute_surface_fluxes(i,j)
-!     4a. Update saved state array in ROMS using newly computed values:
-!     ----------------------------------------------------------------------
-            call marbldrv_update_roms_saved_state_values_surf(i,j)
-!     4b. Update tracer array in ROMS using newly computed values:
-!     ----------------------------------------------------------------------
-            call marbldrv_update_roms_tracers_surf(i,j,tracer_array)
-
-!     5. Populate MARBL instance interior tendency forcing values:
-!     ----------------------------------------------------------------------
-!     First, update domain in MARBL instance to local geometry:
-            call marbldrv_set_marbl_column_geometry(i,j)
-            call marbldrv_set_marbl_interior_tendency_forcing_values(
-     &           i,j,tracer_array)
-            call marbldrv_set_marbl_interior_tracer_values(
-     &           i,j,tracer_array)
-
-!     6. Populate MARBL interior tendency saved state values:
-!     ----------------------------------------------------------------------
-            call marbldrv_set_marbl_interior_saved_state_values(i,j)
-
-            call marbldrv_set_marbl_bottom_fluxes
-
-!     7. Compute interior tendencies using MARBL:
-!     ----------------------------------------------------------------------
-            call marbldrv_compute_interior_tendency(i,j)
-!     8a. Apply calculated increments to ROMS tracer array:
-!     ----------------------------------------------------------------------
-            call marbldrv_update_roms_tracers_interior(i,j,tracer_array)
-!     8b. Update saved state array in ROMS using newly computed values:
-!     ----------------------------------------------------------------------
-            call marbldrv_update_roms_saved_state_values_interior(i,j)
-#ifdef MARBL_DIAGS
-!     8c. Update diagnostics array in ROMS using newly computed values:
-!     ----------------------------------------------------------------------
-            call marbldrv_update_roms_diagnostics(i,j)
-#endif
-
-         end do                 !j=jstr,jend
-      end do                    ! i=istr,iend
       call error_log%abort_check()
       end subroutine marbldrv_column_physics
+
+!-----------------------------------------------------------------------
+!     TILE CACHE SUBROUTINES
+!     All subroutines below support the cache-optimized tiling strategy
+!     in marbldrv_column_physics.  marbldrv_tile_stage_in / _stage_out
+!     use explicit scalar loops so the compiler can auto-vectorize the
+!     gather/scatter.  The _t_ variants copy tile data into the MARBL
+!     instance or update tile data from the MARBL instance, also with
+!     scalar loops.
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_tile_stage_in(i_off,j_off,xi_max,eta_max,
+     &                                  tracer_array)
+!-----------------------------------------------------------------------
+!     Gather scattered ROMS arrays into contiguous tile cache arrays.
+!     Applies z-flip (ROMS k=1=bottom -> MARBL k=1=surface) and negation
+!     for z_r, z_w during the copy so the tile holds MARBL-convention data.
+!     i_off,j_off: absolute ROMS (i,j) of tile corner (xi=1, eta=1).
+!-----------------------------------------------------------------------
+      integer, intent(in) :: i_off, j_off, xi_max, eta_max
+      real, dimension(GLOBAL_2D_ARRAY,nz,3,nt), intent(in) ::
+     &     tracer_array
+      integer :: xi, eta, z, t, m, i, j
+
+!     Bio tracers: flip z so tile k=1 = ROMS surface (z=nz)
+      do eta = 1, eta_max
+         do xi = 1, xi_max
+            do t = 1, nt_marbl
+               do z = 1, nz
+                  tile_tracers(nz-z+1, t, xi, eta) =
+     &                 tracer_array(i_off+xi-1, j_off+eta-1,
+     &                              z, nnew, t+(nt-nt_marbl))
+               end do
+            end do
+         end do
+      end do
+
+!     Temperature and salinity: flip z
+      do eta = 1, eta_max
+         do xi = 1, xi_max
+            do z = 1, nz
+               tile_temp(nz-z+1, xi, eta) =
+     &              tracer_array(i_off+xi-1, j_off+eta-1,
+     &                           z, nnew, itemp)
+               tile_salt(nz-z+1, xi, eta) =
+     &              tracer_array(i_off+xi-1, j_off+eta-1,
+     &                           z, nnew, isalt)
+            end do
+         end do
+      end do
+
+!     Column geometry: flip z, negate depths (ROMS z_r<0; MARBL wants +depth)
+!     tile_Hz(k_m) = Hz(i,j, nz-k_m+1)   i.e. k_m = nz-z+1 -> z = nz-k_m+1
+!     tile_z_r(k_m) = -z_r(i,j, nz-k_m+1)
+!     tile_z_w(k_m) = -z_w(i,j, nz-k_m)  [MARBL zw(k_m)=-z_w(nz-k_m)]
+      do eta = 1, eta_max
+         do xi = 1, xi_max
+            do z = 1, nz
+               tile_Hz(nz-z+1,  xi, eta) = Hz(i_off+xi-1,  j_off+eta-1, z)
+               tile_z_r(nz-z+1, xi, eta) = -z_r(i_off+xi-1,j_off+eta-1, z)
+               tile_z_w(z,      xi, eta) = -z_w(i_off+xi-1,j_off+eta-1, nz-z)
+            end do
+         end do
+      end do
+
+!     3D saved state: flip z
+      do eta = 1, eta_max
+         do xi = 1, xi_max
+            do m = 1, nr_marbl_ss_3d
+               do z = 1, nz
+                  tile_saved_state_3d(nz-z+1, m, xi, eta) =
+     &                 marbl_saved_state_3d(i_off+xi-1,
+     &                                      j_off+eta-1, z, m)
+               end do
+            end do
+         end do
+      end do
+
+!     2D saved state
+      do eta = 1, eta_max
+         do xi = 1, xi_max
+            do m = 1, nr_marbl_ss_2d
+               tile_saved_state_2d(m, xi, eta) =
+     &              marbl_saved_state_2d(i_off+xi-1, j_off+eta-1, m)
+            end do
+         end do
+      end do
+
+!     2D surface scalar forcings
+      do eta = 1, eta_max
+         do xi = 1, xi_max
+            i = i_off + xi - 1
+            j = j_off + eta - 1
+            tile_uwnd(xi,eta)        = uwnd(i,j)
+            tile_vwnd(xi,eta)        = vwnd(i,j)
+            tile_pco2air(xi,eta)     = pco2air(i,j)
+            tile_pco2air_alt(xi,eta) = pco2air_alt(i,j)
+            tile_dust(xi,eta)        = dust(i,j)
+            tile_iron(xi,eta)        = iron(i,j)
+            tile_srflx(xi,eta)       = srflx(i,j)
+#ifdef NOX_FORCING
+            tile_nox(xi,eta)         = nox(i,j)
+#endif
+#ifdef NHY_FORCING
+            tile_nhy(xi,eta)         = nhy(i,j)
+#endif
+         end do
+      end do
+
+      end subroutine marbldrv_tile_stage_in
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_tile_stage_out(i_off,j_off,xi_max,eta_max,
+     &                                   tracer_array)
+!-----------------------------------------------------------------------
+!     Scatter tile cache arrays back to ROMS arrays.
+!     Applies inverse z-flip (tile k=1=surface -> ROMS z=nz=surface).
+!-----------------------------------------------------------------------
+      integer, intent(in) :: i_off, j_off, xi_max, eta_max
+      real, dimension(GLOBAL_2D_ARRAY,nz,3,nt), intent(inout) ::
+     &     tracer_array
+      integer :: xi, eta, z, t, m
+
+!     Bio tracers
+      do eta = 1, eta_max
+         do xi = 1, xi_max
+            do t = 1, nt_marbl
+               do z = 1, nz
+                  tracer_array(i_off+xi-1, j_off+eta-1,
+     &                         z, nnew, t+(nt-nt_marbl)) =
+     &                 tile_tracers(nz-z+1, t, xi, eta)
+               end do
+            end do
+         end do
+      end do
+
+!     3D saved state
+      do eta = 1, eta_max
+         do xi = 1, xi_max
+            do m = 1, nr_marbl_ss_3d
+               do z = 1, nz
+                  marbl_saved_state_3d(i_off+xi-1,
+     &                                 j_off+eta-1, z, m) =
+     &                 tile_saved_state_3d(nz-z+1, m, xi, eta)
+               end do
+            end do
+         end do
+      end do
+
+!     2D saved state
+      do eta = 1, eta_max
+         do xi = 1, xi_max
+            do m = 1, nr_marbl_ss_2d
+               marbl_saved_state_2d(i_off+xi-1, j_off+eta-1, m) =
+     &              tile_saved_state_2d(m, xi, eta)
+            end do
+         end do
+      end do
+
+      end subroutine marbldrv_tile_stage_out
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_tile_count_coverage(
+     &     istr,iend,jstr,jend,t_ni,t_nj,label,errs)
+!     Simulate the tile loop over [istr:iend,jstr:jend] with tile size
+!     t_ni x t_nj and count how many times each point is visited.
+!     Sets errs to the number of points NOT visited exactly once.
+      integer, intent(in)          :: istr,iend,jstr,jend,t_ni,t_nj
+      character(len=*), intent(in) :: label
+      integer, intent(out)         :: errs
+      integer, allocatable         :: hits(:,:)
+      integer                      :: i,j,xi,eta,i_off,j_off,xi_max,eta_max
+
+      allocate(hits(istr:iend, jstr:jend))
+      hits = 0
+
+      do j_off = jstr, jend, t_nj
+         do i_off = istr, iend, t_ni
+            xi_max  = min(t_ni, iend - i_off + 1)
+            eta_max = min(t_nj, jend - j_off + 1)
+            do eta = 1, eta_max
+               do xi = 1, xi_max
+                  i = i_off + xi - 1
+                  j = j_off + eta - 1
+                  hits(i,j) = hits(i,j) + 1
+               end do
+            end do
+         end do
+      end do
+
+      errs = 0
+      do j = jstr, jend
+         do i = istr, iend
+            if (hits(i,j) /= 1) errs = errs + 1
+         end do
+      end do
+
+      if (mynode==printnode) then
+         if (errs > 0) then
+            write(*,'(7x,3A,I6,A)') 'MARBL tile FAILED [',
+     &           trim(label),']: ',errs,' pt(s) visited != 1 time'
+         else
+            write(*,'(7x,3A)') 'MARBL tile OK     [', trim(label),']'
+         end if
+      end if
+      deallocate(hits)
+      end subroutine marbldrv_tile_count_coverage
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_tile_selftest
+!     Pure-logic tile tests — no MARBL calls, safe to run at init.
+!     Test 2: z-flip round-trip identity: nz-(nz-z+1)+1 == z for all z.
+!     Test 3: non-divisible domain coverage (22x15 domain, 5x4 tile).
+!     Test 4: degenerate 1x1 tile coverage on same domain.
+!     Test 5: tile larger than domain (50x50 on 22x15).
+      integer :: z, errs, errs_total
+
+      errs_total = 0
+
+!     Test 2: z-flip round-trip
+      errs = 0
+      do z = 1, nz
+         if (nz - (nz - z + 1) + 1 /= z) errs = errs + 1
+      end do
+      errs_total = errs_total + errs
+      if (mynode==printnode) then
+         if (errs > 0) then
+            write(*,'(7x,A)') 'MARBL tile FAILED [z-flip round-trip]'
+         else
+            write(*,'(7x,A)') 'MARBL tile OK     [z-flip round-trip]'
+         end if
+      end if
+
+!     Test 3: non-divisible domain
+      call marbldrv_tile_count_coverage(1,22, 1,15, 5,4,
+     &     'non-divisible domain 22x15 tile 5x4', errs)
+      errs_total = errs_total + errs
+
+!     Test 4: degenerate 1x1 tile
+      call marbldrv_tile_count_coverage(1,22, 1,15, 1,1,
+     &     'degenerate 1x1 tile on 22x15', errs)
+      errs_total = errs_total + errs
+
+!     Test 5: tile larger than domain
+      call marbldrv_tile_count_coverage(1,22, 1,15, 50,50,
+     &     'tile 50x50 larger than 22x15 domain', errs)
+      errs_total = errs_total + errs
+
+      if (mynode==printnode) then
+         if (errs_total > 0) then
+            write(*,'(7x,A,I4,A)')
+     &           'MARBL tile selftest: ',errs_total,' failure(s)'
+         else
+            write(*,'(7x,A)') 'MARBL tile selftest: all tests passed'
+         end if
+      end if
+      end subroutine marbldrv_tile_selftest
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_set_sf_forcing_values(xi, eta)
+!     Populate MARBL surface_flux_forcings from tile scalar forcings.
+!     tile_salt(1)/tile_temp(1) hold MARBL surface (= ROMS nz) values.
+      integer, intent(in) :: xi, eta
+
+         if (sss_ind > 0) then
+            marbl_instance%surface_flux_forcings(sss_ind)%field_0d(1)
+     &           = tile_salt(1, xi, eta)
+         end if
+         if (sst_ind > 0) then
+            marbl_instance%surface_flux_forcings(sst_ind)%field_0d(1)
+     &           = tile_temp(1, xi, eta)
+         end if
+         if (ifrac_ind > 0) then
+            marbl_instance%surface_flux_forcings(ifrac_ind)%field_0d(1)
+     &           = 0
+         end if
+         if (u10_sqr_ind > 0) then
+            marbl_instance%surface_flux_forcings(u10_sqr_ind)%field_0d(1)
+     &           = (tile_uwnd(xi,eta)**2) + (tile_vwnd(xi,eta)**2)
+         end if
+         if (atmpress_ind > 0) then
+            marbl_instance%surface_flux_forcings(atmpress_ind)%field_0d(1)
+     &           = 1.
+         end if
+         if (xco2_ind > 0) then
+            marbl_instance%surface_flux_forcings(xco2_ind)%field_0d(1)
+     &           = tile_pco2air(xi, eta)
+         end if
+         if (xco2_alt_ind > 0) then
+            marbl_instance%surface_flux_forcings(xco2_alt_ind)%field_0d(1)
+     &           = tile_pco2air_alt(xi, eta)
+         end if
+         if (dust_dep_ind > 0) then
+            marbl_instance%surface_flux_forcings(dust_dep_ind)%field_0d(1)
+     &           = tile_dust(xi, eta)
+         end if
+         if (fe_dep_ind > 0) then
+            marbl_instance%surface_flux_forcings(fe_dep_ind)%field_0d(1)
+     &           = tile_iron(xi, eta)*0.01
+         end if
+#ifdef NOX_FORCING
+         if (nox_flux_ind > 0) then
+            marbl_instance%surface_flux_forcings(nox_flux_ind)%field_0d(1)
+     &           = tile_nox(xi, eta)*71394.200220751
+         end if
+#endif
+#ifdef NHY_FORCING
+         if (nhy_flux_ind > 0) then
+            marbl_instance%surface_flux_forcings(nhy_flux_ind)%field_0d(1)
+     &           = tile_nhy(xi, eta)*71394.200220751
+         end if
+#endif
+      end subroutine marbldrv_t_set_sf_forcing_values
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_set_surface_tracer_values(xi, eta)
+!     Populate MARBL tracers_at_surface from tile surface level (k=1).
+      integer, intent(in) :: xi, eta
+      integer :: m
+
+         do m = 1, nt_marbl
+            marbl_instance%tracers_at_surface(1, m) =
+     &           tile_tracers(1, m, xi, eta)
+         end do
+      end subroutine marbldrv_t_set_surface_tracer_values
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_set_sf_saved_state_values(xi, eta)
+!     Populate MARBL surface_flux_saved_state from tile 2D saved state.
+      integer, intent(in) :: xi, eta
+      integer :: m
+
+         do m = 1,
+     &        MARBL_instance%surface_flux_saved_state%saved_state_cnt
+            MARBL_instance%surface_flux_saved_state%state(m)%field_2d(1)
+     &           = tile_saved_state_2d(m, xi, eta)
+         end do
+      end subroutine marbldrv_t_set_sf_saved_state_values
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_update_saved_state_surf(xi, eta)
+!     Copy MARBL surface_flux_saved_state result back to tile.
+      integer, intent(in) :: xi, eta
+      integer :: m
+
+         do m = 1,
+     &        MARBL_instance%surface_flux_saved_state%saved_state_cnt
+            tile_saved_state_2d(m, xi, eta) =
+     &           MARBL_instance%surface_flux_saved_state%state(m)%field_2d(1)
+         end do
+      end subroutine marbldrv_t_update_saved_state_surf
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_update_tracers_surf(xi, eta)
+!     Apply MARBL surface fluxes to tile_tracers surface level (k=1).
+!     tile_Hz(1) = Hz at ROMS surface layer (nz).
+      integer, intent(in) :: xi, eta
+      integer :: m
+
+         do m = 1, nt_marbl
+            if ( marbl_instance%surface_fluxes(1,m) .ne. 0) then
+               tile_tracers(1, m, xi, eta) =
+     &              tile_tracers(1, m, xi, eta) +
+     &              marbl_instance%surface_fluxes(1,m)*dt
+     &                   / tile_Hz(1, xi, eta)
+            end if
+         end do
+      end subroutine marbldrv_t_update_tracers_surf
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_set_column_geometry(xi, eta)
+!     Copy tile geometry columns (already MARBL-ordered) into MARBL domain.
+      integer, intent(in) :: xi, eta
+      integer :: k
+
+         do k = 1, nz
+            MARBL_instance%domain%zw(k)      = tile_z_w(k, xi, eta)
+            MARBL_instance%domain%zt(k)       = tile_z_r(k, xi, eta)
+            MARBL_instance%domain%delta_z(k)  = tile_Hz(k,  xi, eta)
+         end do
+         MARBL_instance%domain%kmt = nz
+
+      end subroutine marbldrv_t_set_column_geometry
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_set_it_forcing_values(xi, eta)
+!     Populate MARBL interior_tendency_forcings from tile arrays.
+!     tile_z_r is already negated (positive depth), so pressure = z_r*0.1
+      integer, intent(in) :: xi, eta
+      integer :: k
+
+         if (dustflux_ind > 0) then
+            MARBL_instance%interior_tendency_forcings(dustflux_ind)
+     &           %field_0d(1) = tile_dust(xi, eta)
+         end if
+         if (PAR_col_frac_ind > 0) then
+            continue
+         end if
+         if (surf_shortwave_ind > 0) then
+            MARBL_instance%interior_tendency_forcings(surf_shortwave_ind)
+     &           %field_1d(1,1) = tile_srflx(xi, eta) * Cp * rho0
+         end if
+         if (potemp_ind > 0) then
+            do k = 1, nz
+               MARBL_instance%interior_tendency_forcings(potemp_ind)
+     &              %field_1d(1,k) = tile_temp(k, xi, eta)
+            end do
+         end if
+         if (salinity_ind > 0) then
+            do k = 1, nz
+               MARBL_instance%interior_tendency_forcings(salinity_ind)
+     &              %field_1d(1,k) = tile_salt(k, xi, eta)
+            end do
+         end if
+         if (pressure_ind > 0) then
+            do k = 1, nz
+               MARBL_instance%interior_tendency_forcings(pressure_ind)
+     &              %field_1d(1,k) = tile_z_r(k, xi, eta)*0.1
+            end do
+         end if
+         if (fesedflux_ind > 0) then
+            do k = 1, nz
+               MARBL_instance%interior_tendency_forcings(fesedflux_ind)
+     &              %field_1d(1,k) = 0.
+            end do
+         end if
+
+      end subroutine marbldrv_t_set_it_forcing_values
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_set_interior_tracer_values(xi, eta)
+!     Populate MARBL tracers from tile_tracers (already MARBL-ordered).
+!     marbl_instance%tracers(tracer_idx, level)
+      integer, intent(in) :: xi, eta
+      integer :: m, k
+
+         do m = 1, nt_marbl
+            do k = 1, nz
+               marbl_instance%tracers(m, k) =
+     &              tile_tracers(k, m, xi, eta)
+            end do
+         end do
+      end subroutine marbldrv_t_set_interior_tracer_values
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_set_it_saved_state_values(xi, eta)
+!     Populate MARBL interior_tendency_saved_state from tile 3D saved state.
+      integer, intent(in) :: xi, eta
+      integer :: m, k
+
+         do m = 1,
+     &        MARBL_instance%interior_tendency_saved_state%saved_state_cnt
+            do k = 1, nz
+               MARBL_instance%interior_tendency_saved_state%state(m)
+     &              %field_3d(k,1) = tile_saved_state_3d(k, m, xi, eta)
+            end do
+         end do
+      end subroutine marbldrv_t_set_it_saved_state_values
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_set_bottom_fluxes(xi, eta)
+!     Set MARBL bottom flux array.  Uses domain%delta_z set by
+!     marbldrv_t_set_column_geometry, so no direct tile access needed.
+      integer, intent(in) :: xi, eta
+
+         marbl_instance%bot_flux_to_tend(:) = 0.
+         marbl_instance%bot_flux_to_tend(nz) =
+     &        1. / MARBL_instance%domain%delta_z(nz)
+
+      end subroutine marbldrv_t_set_bottom_fluxes
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_update_tracers_interior(xi, eta)
+!     Apply MARBL interior_tendencies (MARBL-ordered) to tile_tracers.
+!     interior_tendencies(tracer_idx, level) where level 1 = surface.
+      integer, intent(in) :: xi, eta
+      integer :: m, k
+
+         do m = 1, nt_marbl
+            do k = 1, nz
+               tile_tracers(k, m, xi, eta) =
+     &              tile_tracers(k, m, xi, eta) +
+     &              marbl_instance%interior_tendencies(m, k)*dt
+            end do
+         end do
+      end subroutine marbldrv_t_update_tracers_interior
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_t_update_saved_state_interior(xi, eta)
+!     Copy MARBL interior_tendency_saved_state result back to tile.
+      integer, intent(in) :: xi, eta
+      integer :: m, k
+
+         do m = 1,
+     &        MARBL_instance%interior_tendency_saved_state%saved_state_cnt
+            do k = 1, nz
+               tile_saved_state_3d(k, m, xi, eta) =
+     &              MARBL_instance%interior_tendency_saved_state
+     &              %state(m)%field_3d(k,1)
+            end do
+         end do
+      end subroutine marbldrv_t_update_saved_state_interior
+!-----------------------------------------------------------------------
 
       subroutine marbldrv_set_marbl_surface_flux_forcing_values(
      &     i,j,tracer_array)
@@ -1585,16 +2182,6 @@
          do m=1,nt_marbl
             marbl_instance%tracers(m,:)=
      &           tracer_array(i,j,nz:1:-1,nnew, m+(NT-nt_marbl) )
-
-!     Print bottom value at a desired location if requested:
-            if ( (i==printi) .and. (j==printj)
-     &           .and. (mynode==printnode) .and. (print_values) ) then
-               print *, 'We just set bottom ',
-     &              (trim(MARBL_instance%tracer_metadata(m)%short_name)),
-     &              ' as ',marbl_instance%tracers(m,nz),
-     &              (trim(MARBL_instance%tracer_metadata(m)%units))
-            end if
-
          end do
       end subroutine marbldrv_set_marbl_interior_tracer_values
 !-----------------------------------------------------------------------
@@ -1613,18 +2200,6 @@
             do m=1,MARBL_instance%interior_tendency_saved_state%saved_state_cnt
                MARBL_instance%interior_tendency_saved_state%state(m)%field_3d(:,1)
      &              =marbl_saved_state_3d(i,j,nz:1:-1,m)
-
-!     Print interior tendency saved state bottom values at a chosen location if desired:
-               if ( (i==printi) .and. (j==printj)
-     &              .and. (mynode==printnode) .and. (print_values) ) then
-                  print *, 'MARBL driver: bottom ',
-     &                 trim(MARBL_instance%
-     &                 interior_tendency_saved_state%state(m)%long_name)
-     &                 ,' set as ',marbl_instance%
-     &                 interior_tendency_saved_state%state(m)%field_3d(nz,1)
-     &                 ,trim(MARBL_instance%interior_tendency_saved_state%state(m)%units)
-               end if
-
             end do
       end subroutine marbldrv_set_marbl_interior_saved_state_values
 !-----------------------------------------------------------------------
@@ -1930,6 +2505,150 @@
 
       end subroutine get_tracer_indices  !]
 !-----------------------------------------------------------------------
+
+#ifdef MARBL_TILE_VERIFY
+!-----------------------------------------------------------------------
+      subroutine marbldrv_column_physics_reference(
+     &     istr,iend,jstr,jend,tracer_array)
+!     Reference (non-tiled) column-physics loop calling the original
+!     (i,j) helpers directly.  Used only by marbldrv_verify_tiling to
+!     provide a known-good baseline for bit-identical comparison.
+      integer, intent(in) :: istr,jstr,iend,jend
+      real, dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,
+     &                            intent(inout) :: tracer_array
+      integer :: i,j
+!-----------------------------------------------------------------------
+      do j = jstr, jend
+         do i = istr, iend
+            if (rmask(i,j)==0.) cycle
+            call marbldrv_set_marbl_surface_flux_forcing_values(
+     &           i,j,tracer_array)
+            call marbldrv_set_marbl_surface_tracer_values(
+     &           i,j,tracer_array)
+            call marbldrv_set_marbl_surface_flux_saved_state_values(
+     &           i,j)
+            call marbldrv_compute_surface_fluxes(i,j)
+            call marbldrv_update_roms_saved_state_values_surf(i,j)
+            call marbldrv_update_roms_tracers_surf(i,j,tracer_array)
+            call marbldrv_set_marbl_column_geometry(i,j)
+            call marbldrv_set_marbl_interior_tendency_forcing_values(
+     &           i,j,tracer_array)
+            call marbldrv_set_marbl_interior_tracer_values(
+     &           i,j,tracer_array)
+            call marbldrv_set_marbl_interior_saved_state_values(i,j)
+            call marbldrv_set_marbl_bottom_fluxes
+            call marbldrv_compute_interior_tendency(i,j)
+            call marbldrv_update_roms_tracers_interior(i,j,tracer_array)
+            call marbldrv_update_roms_saved_state_values_interior(i,j)
+         end do
+      end do
+      call error_log%abort_check()
+      end subroutine marbldrv_column_physics_reference
+!-----------------------------------------------------------------------
+
+      subroutine marbldrv_verify_tiling(istr,iend,jstr,jend,tracer_array)
+!     Test 1: run tiled column_physics then reference loop from identical
+!     initial state and compare MARBL tracer results bit-for-bit.
+!     Reports pass/fail to stdout; tiled results are left in tracer_array.
+      integer, intent(in) :: istr,jstr,iend,jend
+      real, dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,
+     &                            intent(inout) :: tracer_array
+      real, allocatable :: t0(:,:,:,:)        ! initial MARBL tracers
+      real, allocatable :: t_tiled(:,:,:,:)   ! tiled-run result
+      real, allocatable :: ss2d_save(:,:,:)   ! saved_state_2d snapshot
+      real, allocatable :: ss3d_save(:,:,:,:) ! saved_state_3d snapshot
+      integer :: i,j,z,m,nerr
+!-----------------------------------------------------------------------
+!     Snapshot initial state (saved state + MARBL tracer columns)
+      allocate(ss2d_save(GLOBAL_2D_ARRAY,nr_marbl_ss_2d))
+      allocate(ss3d_save(GLOBAL_2D_ARRAY,nz,nr_marbl_ss_3d))
+      allocate(t0    (istr:iend, jstr:jend, nz, nt_marbl))
+      allocate(t_tiled(istr:iend, jstr:jend, nz, nt_marbl))
+      ss2d_save = marbl_saved_state_2d
+      ss3d_save = marbl_saved_state_3d
+      do m = 1, nt_marbl
+         do z = 1, nz
+            do j = jstr, jend
+               do i = istr, iend
+                  t0(i,j,z,m) =
+     &                 tracer_array(i,j,z,nnew, m+(nt-nt_marbl))
+               end do
+            end do
+         end do
+      end do
+
+!     --- Tiled run ---
+      call marbldrv_column_physics(istr,iend,jstr,jend,tracer_array)
+      do m = 1, nt_marbl
+         do z = 1, nz
+            do j = jstr, jend
+               do i = istr, iend
+                  t_tiled(i,j,z,m) =
+     &                 tracer_array(i,j,z,nnew, m+(nt-nt_marbl))
+               end do
+            end do
+         end do
+      end do
+
+!     Restore initial state for reference run
+      marbl_saved_state_2d = ss2d_save
+      marbl_saved_state_3d = ss3d_save
+      do m = 1, nt_marbl
+         do z = 1, nz
+            do j = jstr, jend
+               do i = istr, iend
+                  tracer_array(i,j,z,nnew, m+(nt-nt_marbl)) =
+     &                 t0(i,j,z,m)
+               end do
+            end do
+         end do
+      end do
+
+!     --- Reference run ---
+      call marbldrv_column_physics_reference(
+     &     istr,iend,jstr,jend,tracer_array)
+
+!     --- Bit-for-bit comparison ---
+      nerr = 0
+      do m = 1, nt_marbl
+         do z = 1, nz
+            do j = jstr, jend
+               do i = istr, iend
+                  if (tracer_array(i,j,z,nnew, m+(nt-nt_marbl))
+     &                /= t_tiled(i,j,z,m)) nerr = nerr + 1
+               end do
+            end do
+         end do
+      end do
+
+      if (mynode==printnode) then
+         if (nerr > 0) then
+            write(*,'(7x,A,I8,A)')
+     &           'MARBL_TILE_VERIFY FAILED: ',nerr,
+     &           ' tracer value(s) differ between tiled & reference'
+         else
+            write(*,'(7x,A)')
+     &           'MARBL_TILE_VERIFY PASSED: bit-identical to reference'
+         end if
+      end if
+
+!     Leave tiled results in tracer_array for the time-step to use
+      do m = 1, nt_marbl
+         do z = 1, nz
+            do j = jstr, jend
+               do i = istr, iend
+                  tracer_array(i,j,z,nnew, m+(nt-nt_marbl)) =
+     &                 t_tiled(i,j,z,m)
+               end do
+            end do
+         end do
+      end do
+
+      deallocate(t0,t_tiled,ss2d_save,ss3d_save)
+      end subroutine marbldrv_verify_tiling
+!-----------------------------------------------------------------------
+#endif /* MARBL_TILE_VERIFY */
+
 #endif /* MARBL */
       end module marbl_driver
 
