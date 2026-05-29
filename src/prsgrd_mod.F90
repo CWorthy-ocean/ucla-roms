@@ -1,87 +1,92 @@
-      module prsgrd_mod
+module prsgrd_mod
 
-      implicit none
-      private
+  implicit none
+  private
 
-      public :: prsgrd
+  public :: prsgrd
 
-      contains
+contains
 
 #include "cppdefs.opt"
 #ifdef SOLVE3D
 
-      subroutine prsgrd
-      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-      use private_scratch, only: a3d, a2d
-      implicit none
-      integer,save:: tile=0
+  subroutine prsgrd
+    use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+    use private_scratch, only: a3d, a2d
+    implicit none
+    integer(kind=4),save:: tile=0
 
 # include "compute_tile_bounds.h"
-      call prsgrd_tile(istr,iend,jstr,jend,  A3d(1,1),A3d(1,2),
-     &                                                      A3d(1,3),
+    call prsgrd_tile(istr,iend,jstr,jend,  A3d(1,1),A3d(1,2),&
+    &A3d(1,3),&
 # ifdef SPLIT_EOS
-     &                                                      A3d(1,4),
+    &A3d(1,4),&
 # endif
 # ifdef NHMG
-     &                                                      A3d(1,5),
+    &A3d(1,5),&
 # endif
-     &                        A2d(1,1), A2d(1,2),
-     &                        A2d(1,1), A2d(1,2), A2d(1,3), A2d(1,4)
-     &                                                             )
-      end
+    &A2d(1,1), A2d(1,2),&
+    &A2d(1,1), A2d(1,2), A2d(1,3), A2d(1,4)&
+    &)
+  end subroutine prsgrd
 
-      subroutine prsgrd_tile(istr,iend,jstr,jend, ru,rv, P,
+  subroutine prsgrd_tile(istr,iend,jstr,jend, ru,rv, P,&
 # ifdef SPLIT_EOS
-     &                                                       rho,
+  &rho,&
 # endif
 # ifdef NHMG
-     &                                                       rw,
+  &rw,&
 # endif
-     &     dR,dZ, FC,dZx,rx,dRx)
-      use grid, only: f, pm, pn, umask, dn_u, vmask, dm_v
-      use tides, only:  ptide, pot_tides
-      use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
-      use ocean_vars, only: z_r, z_w, hz
+  &dR,dZ, FC,dZx,rx,dRx)
+    use grid, only: f, pm, pn, umask, dn_u, vmask, dm_v
+    use tides, only:  ptide, pot_tides
+    use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
+    use ocean_vars, only: &
 #ifdef NHMG
-     &     , dzdeta, dzdxi
+    & dzdeta, dzdxi,&
 #endif
+    &z_r, z_w, hz
 #ifdef SPLIT_EOS
-      use eos_vars, only: qp1, rho1, qp2
+    use eos_vars, only: qp1, rho1, qp2
 #else
-      use eos_vars, only: rho
+    use eos_vars, only: rho
 #endif
 #ifdef ADV_ISONEUTRAL
-      use eos_vars, only: drdx,drde
+    use eos_vars, only: drdx,drde
 #endif
-      use dimensions, only:  nx, ny, nz, inode, jnode,i0,i1,j0,j1
-      use scalars, only: n, g, rho0, nrhs
+    use dimensions, only:  nx, ny, nz, inode, jnode,i0,i1,j0,j1
+    use scalars, only: n, g, rho0, nrhs
 #ifdef DIAGNOSTICS
-      use diagnostics, only: calc_diag, udiag,
-     &  vdiag, ipgr, dxdyi_u, dxdyi_v, diag_uv
+    use diagnostics, only: calc_diag, udiag,&
+    &vdiag, ipgr, dxdyi_u, dxdyi_v, diag_uv
 #endif
 #ifdef EXCHANGE
-      use roms_mpi, only: exchange_xxx
+    use roms_mpi, only: exchange_xxx
 #endif
-      use calc_pflx_mod, only: calc_pressure_flux, calc_pflx
+    use calc_pflx_mod, only: calc_pressure_flux, calc_pflx
 
-      implicit none
-      integer istr,iend,jstr,jend, i,j,k, imin,imax,jmin,jmax
-      real, dimension(PRIVATE_2D_SCRATCH_ARRAY,N) :: ru,rv, P
+    implicit none
+    integer(kind=4) istr,iend,jstr,jend, i,j,k, imin,imax,jmin,jmax
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,N) :: &
 # ifdef SPLIT_EOS
-     &                                                    , rho
-      real dpth
+    &rho,&
 # endif
-# ifdef NHMG
-      real, dimension(PRIVATE_2D_SCRATCH_ARRAY,0:N) :: rw
-# endif
-      real, dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: dR,dZ
-      real, dimension(PRIVATE_2D_SCRATCH_ARRAY) :: FC,dZx,rx,dRx
+    &ru,rv, P
 
-      real grho, HalfGRho, cff, cfr
-      real, parameter :: OneFifth=0.2, OneTwelfth=1./12., epsil=0.
+#ifdef SPLIT_EOS
+    real(kind=8) dpth
+#endif
+# ifdef NHMG
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:N) :: rw
+# endif
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: dR,dZ
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: FC,dZx,rx,dRx
+
+    real(kind=8) grho, HalfGRho, cff, cfr
+    real(kind=8), parameter :: OneFifth=0.2_8, OneTwelfth=1._8/12._8, epsil=0._8
 
 # ifdef ADV_ISONEUTRAL
-      real r0g
+    real(kind=8) r0g
 # endif
 
 ! A non-conservative Density-Jacobian scheme using cubic polynomial
@@ -96,7 +101,7 @@
 ! In the code below, if CPP-switch SPLIT_EOS is defined, the Equation
 ! of State (EOS) is assumed to have form
 !
-!       rho(T,S,z) = rho1(T,S) + qp1(T,S)*dpth*[1.-qp2*dpth]
+!       rho(T,S,z) = rho1(T,S) + qp1(T,S)*dpth*[1._8-qp2*dpth]
 !
 ! where "rho1" is density at computed 1 atm pressure; "qp1" is
 ! compressibility coefficient, which does not depend on pressure;
@@ -108,7 +113,7 @@
 ! c.f., Young, 2010]. In this case
 !
 !   d rho    d rho1   d qp1                                    d z
-!  ------- = ------ + ----- *dpth*[..] - qp1*[1.-2.*qp2*dpth]*------
+!  ------- = ------ + ----- *dpth*[..] - qp1*[1._8-2._8*qp2*dpth]*------
 !   d s,x     d s,x   d s,x                                    d s,x
 !
 !           |<--- adiabatic part --->|  |<--- compressible part --->|
@@ -129,359 +134,359 @@
 # include "compute_auxiliary_bounds.h"
 
 # ifndef EW_PERIODIC
-      if (WESTERN_EDGE) then          ! Restrict extended ranges by
-        imin=istrU                    ! one row of points inward near
-      else                            ! the physical boundaries.
-        imin=istrU-1
-      endif                           ! Note that in the code below
-      if (EASTERN_EDGE) then          ! imin,imax appear only in the
-        imax=iend                     ! context of XI-component, while
-      else                            ! jmin,jmax only for ETA.
-        imax=iend+1
-      endif
-# else
-      imin=istr-1
+    if (WESTERN_EDGE) then          ! Restrict extended ranges by
+      imin=istrU                    ! one row of points inward near
+    else                            ! the physical boundaries.
+      imin=istrU-1
+    endif                           ! Note that in the code below
+    if (EASTERN_EDGE) then          ! imin,imax appear only in the
+      imax=iend                     ! context of XI-component, while
+    else                            ! jmin,jmax only for ETA.
       imax=iend+1
+    endif
+# else
+    imin=istr-1
+    imax=iend+1
 # endif
 # ifndef NS_PERIODIC
-      if (SOUTHERN_EDGE) then
-        jmin=jstrV
-      else
-        jmin=jstrV-1
-      endif
-      if (NORTHERN_EDGE) then
-        jmax=jend
-      else
-        jmax=jend+1
-      endif
-# else
-      jmin=jstr-1
+    if (SOUTHERN_EDGE) then
+      jmin=jstrV
+    else
+      jmin=jstrV-1
+    endif
+    if (NORTHERN_EDGE) then
+      jmax=jend
+    else
       jmax=jend+1
+    endif
+# else
+    jmin=jstr-1
+    jmax=jend+1
 # endif
 
 ! Preliminary step (same for XI- and ETA-components):
 !------------ ---- ----- --- --- --- ----------------
 
-      grho=g/rho0
-      HalfGRho=0.5*grho
+    grho=g/rho0
+    HalfGRho=0.5_8*grho
 
-      do j=0,ny
-        do k=1,nz-1
-          do i=0,nx
-            dZ(i,k)=z_r(i,j,k+1)-z_r(i,j,k)
-# ifdef SPLIT_EOS
-c**         dpth=z_w(i,j,N)-0.5*(z_r(i,j,k+1)+z_r(i,j,k))
-            dpth=          -0.5*(z_r(i,j,k+1)+z_r(i,j,k))
-
-            dR(i,k)=rho1(i,j,k+1)-rho1(i,j,k)            ! elementary
-     &              +(qp1(i,j,k+1)-qp1(i,j,k))           ! adiabatic
-     &                     *dpth*(1.-qp2*dpth)           ! difference
-# else
-            dR(i,k)=rho(i,j,k+1)-rho(i,j,k)
-# endif
-          enddo
-        enddo
-        ! Extend derivatives top and bottom
-        ! dR and dZ are at 'w-points'
+    do j=0,ny
+      do k=1,nz-1
         do i=0,nx
-          dR(i,nz)=dR(i,nz-1)
-          dR(i,0 )=dR(i,1)
-          dZ(i,nz)=dZ(i,nz-1)
-          dZ(i,0 )=dZ(i,1)
-        enddo
-        ! Irreversible due to in-place overwriting of dZ and dR
-        do k=nz,1,-1
-          do i=0,nx
-            cff=2.*dZ(i,k)*dZ(i,k-1)
-            dZ(i,k)=cff/(dZ(i,k)+dZ(i,k-1))
-
-            cfr=2.*dR(i,k)*dR(i,k-1)
-            if (cfr > epsil) then
-              dR(i,k)=cfr/(dR(i,k)+dR(i,k-1))
-            else
-              dR(i,k)=0.
-            endif
+          dZ(i,k)=z_r(i,j,k+1)-z_r(i,j,k)
 # ifdef SPLIT_EOS
-c**         dpth=z_w(i,j,N)-z_r(i,j,k)
-            dpth=          -z_r(i,j,k)
-            dR(i,k)=dR(i,k)  -qp1(i,j,k)*dZ(i,k)*(1.-2.*qp2*dpth)
-            rho(i,j,k)=rho1(i,j,k) +qp1(i,j,k)*dpth*(1.-qp2*dpth)
+!**         dpth=z_w(i,j,N)-0.5_8*(z_r(i,j,k+1)+z_r(i,j,k))
+          dpth=          -0.5_8*(z_r(i,j,k+1)+z_r(i,j,k))
+
+          dR(i,k)=rho1(i,j,k+1)-rho1(i,j,k)&            ! elementary
+          &+(qp1(i,j,k+1)-qp1(i,j,k))&           ! adiabatic
+          &*dpth*(1._8-qp2*dpth)           ! difference
+# else
+          dR(i,k)=rho(i,j,k+1)-rho(i,j,k)
 # endif
-          enddo
         enddo
+      enddo
+      ! Extend derivatives top and bottom
+      ! dR and dZ are at 'w-points'
+      do i=0,nx
+        dR(i,nz)=dR(i,nz-1)
+        dR(i,0 )=dR(i,1)
+        dZ(i,nz)=dZ(i,nz-1)
+        dZ(i,0 )=dZ(i,1)
+      enddo
+      ! Irreversible due to in-place overwriting of dZ and dR
+      do k=nz,1,-1
+        do i=0,nx
+          cff=2._8*dZ(i,k)*dZ(i,k-1)
+          dZ(i,k)=cff/(dZ(i,k)+dZ(i,k-1))
 
-        do i=istrU-1,iend
-          P(i,j,N)=g*z_w(i,j,N) + grho*( rho(i,j,N)
-     &       +0.5*(rho(i,j,N)-rho(i,j,N-1))*(z_w(i,j,N)-z_r(i,j,N))
-     &          /(z_r(i,j,N)-z_r(i,j,N-1)) )*(z_w(i,j,N)-z_r(i,j,N))
-          if (pot_tides) then
-            P(i,j,N) = P(i,j,N) - g*ptide(i,j)
+          cfr=2._8*dR(i,k)*dR(i,k-1)
+          if (cfr > epsil) then
+            dR(i,k)=cfr/(dR(i,k)+dR(i,k-1))
+          else
+            dR(i,k)=0._8
           endif
+# ifdef SPLIT_EOS
+!**         dpth=z_w(i,j,N)-z_r(i,j,k)
+          dpth=          -z_r(i,j,k)
+          dR(i,k)=dR(i,k)  -qp1(i,j,k)*dZ(i,k)*(1._8-2._8*qp2*dpth)
+          rho(i,j,k)=rho1(i,j,k) +qp1(i,j,k)*dpth*(1._8-qp2*dpth)
+# endif
         enddo
-        do k=nz-1,1,-1
-          do i=istrU-1,iend
-            P(i,j,k)=P(i,j,k+1)+HalfGRho*( (rho(i,j,k+1)+rho(i,j,k))
-     &                                     *(z_r(i,j,k+1)-z_r(i,j,k))
+      enddo
 
-     &     -OneFifth*( (dR(i,k+1)-dR(i,k))*( z_r(i,j,k+1)-z_r(i,j,k)
-     &                              -OneTwelfth*(dZ(i,k+1)+dZ(i,k)) )
+      do i=istrU-1,iend
+        P(i,j,N)=g*z_w(i,j,N) + grho*( rho(i,j,N)&
+        &+0.5_8*(rho(i,j,N)-rho(i,j,N-1))*(z_w(i,j,N)-z_r(i,j,N))&
+        &/(z_r(i,j,N)-z_r(i,j,N-1)) )*(z_w(i,j,N)-z_r(i,j,N))
+        if (pot_tides) then
+          P(i,j,N) = P(i,j,N) - g*ptide(i,j)
+        endif
+      enddo
+      do k=nz-1,1,-1
+        do i=istrU-1,iend
+          P(i,j,k)=P(i,j,k+1)+HalfGRho*( (rho(i,j,k+1)+rho(i,j,k))&
+          &*(z_r(i,j,k+1)-z_r(i,j,k))&
 
-     &                -(dZ(i,k+1)-dZ(i,k))*( rho(i,j,k+1)-rho(i,j,k)
-     &                              -OneTwelfth*(dR(i,k+1)+dR(i,k)) )
-     &                                                             ))
-          enddo
+          &-OneFifth*( (dR(i,k+1)-dR(i,k))*( z_r(i,j,k+1)-z_r(i,j,k)&
+          &-OneTwelfth*(dZ(i,k+1)+dZ(i,k)) )&
+
+          &-(dZ(i,k+1)-dZ(i,k))*( rho(i,j,k+1)-rho(i,j,k)&
+          &-OneTwelfth*(dR(i,k+1)+dR(i,k)) )&
+          &))
         enddo
-      enddo   !<-- j
+      enddo
+    enddo   !<-- j
 
 ! Compute XI-component of pressure gradient term:
 !-------- ------------ -- -------- -------- -----
 
-      rx(:,:) = 0.0
+    rx(:,:) = 0.0_8
 
-      do k=N,1,-1
-        do j=jstr,jend
-          do i=imin,imax
-            FC(i,j)=(z_r(i,j,k)-z_r(i-1,j,k))
+    do k=N,1,-1
+      do j=jstr,jend
+        do i=imin,imax
+           FC(i,j)=(z_r(i,j,k)-z_r(i-1,j,k))
 # ifdef MASKING
-     &                              *umask(i,j)
+           FC(i,j)=FC(i,j)*umask(i,j)
 # endif
 # ifdef SPLIT_EOS
-c**         dpth=0.5*( z_w(i,j,N)+z_w(i-1,j,N)
-c**   &               -z_r(i,j,k)-z_r(i-1,j,k))
+!**         dpth=0.5_8*( z_w(i,j,N)+z_w(i-1,j,N)
+!**   &               -z_r(i,j,k)-z_r(i-1,j,k))
 
-            dpth=-0.5*(z_r(i,j,k)+z_r(i-1,j,k))
+          dpth=-0.5_8*(z_r(i,j,k)+z_r(i-1,j,k))
 
-            rx(i,j)=( rho1(i,j,k)-rho1(i-1,j,k)          ! elementary
-     &                +(qp1(i,j,k)-qp1(i-1,j,k))         ! adiabatic
-     &                     *dpth*(1.-qp2*dpth) )         ! difference
+          rx(i,j)=( rho1(i,j,k)-rho1(i-1,j,k)&          ! elementary
+          &+(qp1(i,j,k)-qp1(i-1,j,k))&         ! adiabatic
+          &*dpth*(1._8-qp2*dpth) )         ! difference
 # else
-            rx(i,j)=(rho(i,j,k)-rho(i-1,j,k))
+          rx(i,j)=(rho(i,j,k)-rho(i-1,j,k))
 # endif
 # ifdef MASKING
-     &                              *umask(i,j)
+          rx(i,j)=rx(i,j)*umask(i,j)
 # endif
-          enddo
         enddo
-
-# ifndef EW_PERIODIC
-        if (WESTERN_EDGE) then         ! Extrapolate elementary
-          do j=jstr,jend               ! differences near physical
-            FC(imin-1,j)=FC(imin,j)    ! boundaries to compensate.
-            rx(imin-1,j)=rx(imin,j)    ! for reduced loop ranges.
-          enddo
-        endif
-        if (EASTERN_EDGE) then
-          do j=jstr,jend
-            FC(imax+1,j)=FC(imax,j)
-            rx(imax+1,j)=rx(imax,j)
-          enddo
-        endif
-# endif
-
-        do j=jstr,jend
-          do i=istrU-1,iend
-            cff=2.*FC(i,j)*FC(i+1,j)
-            if (cff > epsil) then
-              dZx(i,j)=cff/(FC(i,j)+FC(i+1,j))
-            else
-              dZx(i,j)=0.
-            endif
-
-            cfr=2.*rx(i,j)*rx(i+1,j)
-            if (cfr > epsil) then
-              dRx(i,j)=cfr/(rx(i,j)+rx(i+1,j))
-            else
-              dRx(i,j)=0.
-            endif
-# ifdef SPLIT_EOS
-            dRx(i,j)=dRx(i,j) -qp1(i,j,k)*dZx(i,j)
-     &                      *(1.+2.*qp2*z_r(i,j,k))
-# endif
-          enddo               !--> discard FC, rx
-
-          do i=istrU,iend
-            ru(i,j,k)=0.5*(Hz(i,j,k)+Hz(i-1,j,k))*dn_u(i,j)*(
-     &                              P(i-1,j,k)-P(i,j,k)-HalfGRho*(
-
-     &            (rho(i,j,k)+rho(i-1,j,k))*(z_r(i,j,k)-z_r(i-1,j,k))
-
-     &   -OneFifth*( (dRx(i,j)-dRx(i-1,j))*( z_r(i,j,k)-z_r(i-1,j,k)
-     &                            -OneTwelfth*(dZx(i,j)+dZx(i-1,j)) )
-
-     &              -(dZx(i,j)-dZx(i-1,j))*( rho(i,j,k)-rho(i-1,j,k)
-     &                            -OneTwelfth*(dRx(i,j)+dRx(i-1,j)) )
-     &                                                            )))
-          enddo
-        enddo
-
-# ifdef ADV_ISONEUTRAL
-        if (CORR_STAGE) then   !<-- corrector stage only
-          r0g=rho0/g
-          do j=jstr,jend
-            do i=istr,iendR
-#define ISO
-#  ifdef ISO
-c              dRdx(i,j,k)=-0.5*(pm(i,j)+pm(i-1,j))*rx(i,j)
-
-              dRdx(i,j,k)=0.5*(pm(i,j)+pm(i-1,j))*(
-     &                     r0g*0.25*(f(i,j)+f(i-1,j))**2
-     &                        *(z_r(i,j,k)-z_r(i-1,j,k))
-
-c    &                  -rx(i,j)
-
-c    &          -0.5*rx(i,j)-0.25*(dRx(i,j)+dRx(i-1,j))
-
-c    &                       -0.5*(dRx(i,j)+dRx(i-1,j))
-
-     &          -0.5*rx(i,j)-0.25*(rx(i-1,j)+rx(i+1,j))
-
-c    &        -0.75*rx(i,j)-0.125*(rx(i-1,j)+rx(i+1,j))
-
-     &                                   )*umask(i,j)
-#  else
-              dRdx(i,j,k)=0.5*(pm(i,j)+pm(i-1,j))
-     &                 *(z_r(i,j,k)-z_r(i-1,j,k))*umask(i,j)
-#  endif
-            enddo
-          enddo
-        endif
-# endif
-
       enddo
 
-      do k=N,1,-1
+# ifndef EW_PERIODIC
+      if (WESTERN_EDGE) then         ! Extrapolate elementary
+        do j=jstr,jend               ! differences near physical
+          FC(imin-1,j)=FC(imin,j)    ! boundaries to compensate.
+          rx(imin-1,j)=rx(imin,j)    ! for reduced loop ranges.
+        enddo
+      endif
+      if (EASTERN_EDGE) then
+        do j=jstr,jend
+          FC(imax+1,j)=FC(imax,j)
+          rx(imax+1,j)=rx(imax,j)
+        enddo
+      endif
+# endif
+
+      do j=jstr,jend
+        do i=istrU-1,iend
+          cff=2._8*FC(i,j)*FC(i+1,j)
+          if (cff > epsil) then
+            dZx(i,j)=cff/(FC(i,j)+FC(i+1,j))
+          else
+            dZx(i,j)=0._8
+          endif
+
+          cfr=2._8*rx(i,j)*rx(i+1,j)
+          if (cfr > epsil) then
+            dRx(i,j)=cfr/(rx(i,j)+rx(i+1,j))
+          else
+            dRx(i,j)=0._8
+          endif
+# ifdef SPLIT_EOS
+          dRx(i,j)=dRx(i,j) -qp1(i,j,k)*dZx(i,j)&
+          &*(1._8+2._8*qp2*z_r(i,j,k))
+# endif
+        enddo               !--> discard FC, rx
+
+        do i=istrU,iend
+          ru(i,j,k)=0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))*dn_u(i,j)*(&
+          &P(i-1,j,k)-P(i,j,k)-HalfGRho*(&
+
+          &(rho(i,j,k)+rho(i-1,j,k))*(z_r(i,j,k)-z_r(i-1,j,k))&
+
+          &-OneFifth*( (dRx(i,j)-dRx(i-1,j))*( z_r(i,j,k)-z_r(i-1,j,k)&
+          &-OneTwelfth*(dZx(i,j)+dZx(i-1,j)) )&
+
+          &-(dZx(i,j)-dZx(i-1,j))*( rho(i,j,k)-rho(i-1,j,k)&
+          &-OneTwelfth*(dRx(i,j)+dRx(i-1,j)) )&
+          &)))
+        enddo
+      enddo
+
+# ifdef ADV_ISONEUTRAL
+      if (CORR_STAGE) then   !<-- corrector stage only
+        r0g=rho0/g
+        do j=jstr,jend
+          do i=istr,iendR
+#define ISO
+#  ifdef ISO
+!              dRdx(i,j,k)=-0.5_8*(pm(i,j)+pm(i-1,j))*rx(i,j)
+
+            dRdx(i,j,k)=0.5_8*(pm(i,j)+pm(i-1,j))*(&
+            &r0g*0.25_8*(f(i,j)+f(i-1,j))**2&
+            &*(z_r(i,j,k)-z_r(i-1,j,k))&
+
+!    &                  -rx(i,j)
+
+!    &          -0.5_8*rx(i,j)-0.25_8*(dRx(i,j)+dRx(i-1,j))
+
+!    &                       -0.5_8*(dRx(i,j)+dRx(i-1,j))
+
+            &-0.5_8*rx(i,j)-0.25_8*(rx(i-1,j)+rx(i+1,j))&
+
+!    &        -0.75_8*rx(i,j)-0.125_8*(rx(i-1,j)+rx(i+1,j))
+
+            &)*umask(i,j)
+#  else
+            dRdx(i,j,k)=0.5_8*(pm(i,j)+pm(i-1,j))&
+            &*(z_r(i,j,k)-z_r(i-1,j,k))*umask(i,j)
+#  endif
+          enddo
+        enddo
+      endif
+# endif
+
+    enddo
+
+    do k=N,1,-1
 ! ETA-component of pressure gradient term:
 !-------------- -- -------- -------- -----
 
-        do j=jmin,jmax
-          do i=istr,iend
-            FC(i,j)=(z_r(i,j,k)-z_r(i,j-1,k))
+      do j=jmin,jmax
+        do i=istr,iend
+          FC(i,j)=(z_r(i,j,k)-z_r(i,j-1,k))
 # ifdef MASKING
-     &                              *vmask(i,j)
+          FC(i,j)=FC(i,j)*vmask(i,j)
 # endif
 # ifdef SPLIT_EOS
-c**         dpth=0.5*( z_w(i,j,N)+z_w(i,j-1,N)
-c**  &                -z_r(i,j,k)-z_r(i,j-1,k))
+!**         dpth=0.5_8*( z_w(i,j,N)+z_w(i,j-1,N)
+!**  &                -z_r(i,j,k)-z_r(i,j-1,k))
 
-            dpth=-0.5*(z_r(i,j,k)+z_r(i,j-1,k))
+          dpth=-0.5_8*(z_r(i,j,k)+z_r(i,j-1,k))
 
-            rx(i,j)=( rho1(i,j,k)-rho1(i,j-1,k)          ! elementary
-     &                +(qp1(i,j,k)-qp1(i,j-1,k))         ! adiabatic
-     &                     *dpth*(1.-qp2*dpth) )         ! difference
+          rx(i,j)=( rho1(i,j,k)-rho1(i,j-1,k)&          ! elementary
+          &+(qp1(i,j,k)-qp1(i,j-1,k))&         ! adiabatic
+          &*dpth*(1._8-qp2*dpth) )         ! difference
 # else
-            rx(i,j)=(rho(i,j,k)-rho(i,j-1,k))
+          rx(i,j)=(rho(i,j,k)-rho(i,j-1,k))
 # endif
 # ifdef MASKING
-     &                              *vmask(i,j)
+          rx(i,j)=rx(i,j)*vmask(i,j)
 # endif
-          enddo
         enddo
+      enddo
 
 # ifndef NS_PERIODIC
-        if (SOUTHERN_EDGE) then
-          do i=istr,iend
-            FC(i,jmin-1)=FC(i,jmin)
-            rx(i,jmin-1)=rx(i,jmin)
-          enddo
-        endif
-        if (NORTHERN_EDGE) then
-          do i=istr,iend
-            FC(i,jmax+1)=FC(i,jmax)
-            rx(i,jmax+1)=rx(i,jmax)
-          enddo
-        endif
+      if (SOUTHERN_EDGE) then
+        do i=istr,iend
+          FC(i,jmin-1)=FC(i,jmin)
+          rx(i,jmin-1)=rx(i,jmin)
+        enddo
+      endif
+      if (NORTHERN_EDGE) then
+        do i=istr,iend
+          FC(i,jmax+1)=FC(i,jmax)
+          rx(i,jmax+1)=rx(i,jmax)
+        enddo
+      endif
 # endif
 
-        do j=jstrV-1,jend
-          do i=istr,iend
-            cff=2.*FC(i,j)*FC(i,j+1)
-            if (cff > epsil) then
-              dZx(i,j)=cff/(FC(i,j)+FC(i,j+1))
-            else
-              dZx(i,j)=0.
-            endif
-
-            cfr=2.*rx(i,j)*rx(i,j+1)
-            if (cfr > epsil) then
-              dRx(i,j)=cfr/(rx(i,j)+rx(i,j+1))
-            else
-              dRx(i,j)=0.
-            endif
-# ifdef SPLIT_EOS
-            dRx(i,j)=dRx(i,j) -qp1(i,j,k)*dZx(i,j)
-     &                         *(1.+2.*qp2*z_r(i,j,k))
-# endif
-          enddo               !--> discard FC, rx
-
-          if (j >= jstrV) then
-            do i=istr,iend
-              rv(i,j,k)=0.5*(Hz(i,j,k)+Hz(i,j-1,k))*dm_v(i,j)*(
-     &                             P(i,j-1,k)-P(i,j,k) -HalfGRho*(
-
-     &            (rho(i,j,k)+rho(i,j-1,k))*(z_r(i,j,k)-z_r(i,j-1,k))
-
-     &   -OneFifth*( (dRx(i,j)-dRx(i,j-1))*( z_r(i,j,k)-z_r(i,j-1,k)
-     &                            -OneTwelfth*(dZx(i,j)+dZx(i,j-1)) )
-
-     &              -(dZx(i,j)-dZx(i,j-1))*( rho(i,j,k)-rho(i,j-1,k)
-     &                            -OneTwelfth*(dRx(i,j)+dRx(i,j-1)) )
-     &                                                            )))
-
-            enddo
+      do j=jstrV-1,jend
+        do i=istr,iend
+          cff=2._8*FC(i,j)*FC(i,j+1)
+          if (cff > epsil) then
+            dZx(i,j)=cff/(FC(i,j)+FC(i,j+1))
+          else
+            dZx(i,j)=0._8
           endif
-        enddo   ! <-- j
 
-# ifdef ADV_ISONEUTRAL
-        if (CORR_STAGE) then   !<-- corrector stage only
-          r0g=rho0/g
-          do j=jstr,jendR
-            do i=istr,iend
-#ifdef ISO
-c              dRde(i,j,k)=-0.5*(pn(i,j)+pn(i,j-1))*rx(i,j)
+          cfr=2._8*rx(i,j)*rx(i,j+1)
+          if (cfr > epsil) then
+            dRx(i,j)=cfr/(rx(i,j)+rx(i,j+1))
+          else
+            dRx(i,j)=0._8
+          endif
+# ifdef SPLIT_EOS
+          dRx(i,j)=dRx(i,j) -qp1(i,j,k)*dZx(i,j)&
+          &*(1._8+2._8*qp2*z_r(i,j,k))
+# endif
+        enddo               !--> discard FC, rx
 
-              dRde(i,j,k)=0.5*(pn(i,j)+pn(i,j-1))*(
-     &                      r0g*0.25*(f(i,j)+f(i,j-1))**2
-     &                        *(z_r(i,j,k)-z_r(i,j-1,k))
+        if (j >= jstrV) then
+          do i=istr,iend
+            rv(i,j,k)=0.5_8*(Hz(i,j,k)+Hz(i,j-1,k))*dm_v(i,j)*(&
+            &P(i,j-1,k)-P(i,j,k) -HalfGRho*(&
 
-c    &                -rx(i,j)
+            &(rho(i,j,k)+rho(i,j-1,k))*(z_r(i,j,k)-z_r(i,j-1,k))&
 
-c    &            -0.5*rx(i,j)-0.25*(dRx(i,j)+dRx(i,j-1))
+            &-OneFifth*( (dRx(i,j)-dRx(i,j-1))*( z_r(i,j,k)-z_r(i,j-1,k)&
+            &-OneTwelfth*(dZx(i,j)+dZx(i,j-1)) )&
 
-c    &                         -0.5*(dRx(i,j)+dRx(i,j-1))
+            &-(dZx(i,j)-dZx(i,j-1))*( rho(i,j,k)-rho(i,j-1,k)&
+            &-OneTwelfth*(dRx(i,j)+dRx(i,j-1)) )&
+            &)))
 
-     &            -0.5*rx(i,j)-0.25*(rx(i,j-1)+rx(i,j+1))
-
-c    &            -0.75*rx(i,j)-0.125*(rx(i,j-1)+rx(i,j+1))
-
-     &                                         )*vmask(i,j)
-#else
-              dRde(i,j,k)=0.5*(pn(i,j)+pn(i,j-1))
-     &                 *(z_r(i,j,k)-z_r(i,j-1,k))*vmask(i,j)
-#endif
-            enddo
           enddo
         endif
+      enddo   ! <-- j
+
+# ifdef ADV_ISONEUTRAL
+      if (CORR_STAGE) then   !<-- corrector stage only
+        r0g=rho0/g
+        do j=jstr,jendR
+          do i=istr,iend
+#ifdef ISO
+!              dRde(i,j,k)=-0.5_8*(pn(i,j)+pn(i,j-1))*rx(i,j)
+
+            dRde(i,j,k)=0.5_8*(pn(i,j)+pn(i,j-1))*(&
+            &r0g*0.25_8*(f(i,j)+f(i,j-1))**2&
+            &*(z_r(i,j,k)-z_r(i,j-1,k))&
+
+!    &                -rx(i,j)
+
+!    &            -0.5_8*rx(i,j)-0.25_8*(dRx(i,j)+dRx(i,j-1))
+
+!    &                         -0.5_8*(dRx(i,j)+dRx(i,j-1))
+
+            &-0.5_8*rx(i,j)-0.25_8*(rx(i,j-1)+rx(i,j+1))&
+
+!    &            -0.75_8*rx(i,j)-0.125_8*(rx(i,j-1)+rx(i,j+1))
+
+            &)*vmask(i,j)
+#else
+            dRde(i,j,k)=0.5_8*(pn(i,j)+pn(i,j-1))&
+            &*(z_r(i,j,k)-z_r(i,j-1,k))*vmask(i,j)
+#endif
+          enddo
+        enddo
+      endif
 # endif
 
 
-      enddo   !<-- k
+    enddo   !<-- k
 
 # ifdef ADV_ISONEUTRAL
-      call exchange_xxx(dRdx,dRde)
+    call exchange_xxx(dRdx,dRde)
 # endif
 
 # ifdef DIAGNOSTICS
-      if (CORR_STAGE) then
-        if ((calc_diag.and.diag_uv)) then
-          do k=1,nz
-            Udiag(:,:,k,ipgr) = ru(1:nx,1:ny,k)*dxdyi_u*umask(1:nx,1:ny)
-            Vdiag(:,:,k,ipgr) = rv(1:nx,1:ny,k)*dxdyi_v*vmask(1:nx,1:ny)
-          enddo
-        endif
-        if (calc_pflx) then
-          call calc_pressure_flux(p)
-        endif
+    if (CORR_STAGE) then
+      if ((calc_diag.and.diag_uv)) then
+        do k=1,nz
+          Udiag(:,:,k,ipgr) = ru(1:nx,1:ny,k)*dxdyi_u*umask(1:nx,1:ny)
+          Vdiag(:,:,k,ipgr) = rv(1:nx,1:ny,k)*dxdyi_v*vmask(1:nx,1:ny)
+        enddo
       endif
+      if (calc_pflx) then
+        call calc_pressure_flux(p)
+      endif
+    endif
 # endif
 
 # ifdef NHMG
@@ -493,40 +498,40 @@ c    &            -0.75*rx(i,j)-0.125*(rx(i,j-1)+rx(i,j+1))
 !
 !     We are re-using dR as a work array
 
-      do j=Jstr,Jend
-         do k = 1,N
-            do i=Istr,Iend
-              dR(i,k) = dzdxi(i,j,k) *(
-     $              ru(i  ,j,k  )/(Hz(i,j,k)+Hz(i-1,j,k))
-     $            + ru(i+1,j,k  )/(Hz(i,j,k)+Hz(i+1,j,k)))
-     $            +     dzdeta(i,j,k) *(
-     $              rv(i,j  ,k  )/(Hz(i,j,k)+Hz(i,j-1,k))
-     $            + rv(i,j+1,k  )/(Hz(i,j,k)+Hz(i,j+1,k)))
-            enddo
-         enddo
-
-         !! rw is a V*dwdt units object (m4/s2), just like ru, rv
-         do k = 1,N-1
-            do i=Istr,Iend
-              rw(i,j,k)=-0.25*(dR(i,k+1)+dR(i,k))*(Hz(i,j,k+1)+Hz(i,j,k))
-            enddo
-         enddo
-         do i=Istr,Iend
-            rw(i,j,N) = -0.5*dR(i,N)*Hz(i,j,N)
-         enddo
+    do j=Jstr,Jend
+      do k = 1,N
+        do i=Istr,Iend
+          dR(i,k) = dzdxi(i,j,k) *(&
+          &ru(i  ,j,k  )/(Hz(i,j,k)+Hz(i-1,j,k))&
+          &+ ru(i+1,j,k  )/(Hz(i,j,k)+Hz(i+1,j,k)))&
+          &+     dzdeta(i,j,k) *(&
+          &rv(i,j  ,k  )/(Hz(i,j,k)+Hz(i,j-1,k))&
+          &+ rv(i,j+1,k  )/(Hz(i,j,k)+Hz(i,j+1,k)))
+        enddo
       enddo
+
+      !! rw is a V*dwdt units object (m4/s2), just like ru, rv
+      do k = 1,N-1
+        do i=Istr,Iend
+          rw(i,j,k)=-0.25_8*(dR(i,k+1)+dR(i,k))*(Hz(i,j,k+1)+Hz(i,j,k))
+        enddo
+      enddo
+      do i=Istr,Iend
+        rw(i,j,N) = -0.5_8*dR(i,N)*Hz(i,j,N)
+      enddo
+    enddo
 #  ifdef DIAGNOSTICS_NHMG
-      if (diag_uv.and.calc_diag) then
-        Wdiag(:,:,:,iwprsgr) =rw(1:nx,1:ny,:)*dxdyi
-      endif
+    if (diag_uv.and.calc_diag) then
+      Wdiag(:,:,:,iwprsgr) =rw(1:nx,1:ny,:)*dxdyi
+    endif
 #  endif
 # endif /* NHMG */
 
-      end
+  end subroutine prsgrd_tile
 
 
 #else
-      subroutine prsgrd_empty
-      end
+  subroutine prsgrd_empty
+  end subroutine prsgrd_empty
 #endif /* SOLVE3D */
-      end module prsgrd_mod
+end module prsgrd_mod

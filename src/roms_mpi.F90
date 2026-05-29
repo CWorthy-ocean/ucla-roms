@@ -1,8 +1,8 @@
 
-      module roms_mpi
+module roms_mpi
 
 #include "cppdefs.opt"
-      ! This module provides mpi based parrallelization to roms
+  ! This module provides mpi based parrallelization to roms
 
 !------------------------------------
 !      Pack data in buffers (depends on bf,2d/3d/, and nvars)
@@ -17,150 +17,150 @@
 !      possible options for mpi_buffer_exchange: full 8, 4 (no corners),
 !      2 (left, down only), send NE, recv SW
 
-      use param, only:
-     &     ieast, iwest, jnorth, jsouth, llm,
-     &     lm, mm, mmm, ocean_grid_comm,
-     &     np_xi, np_eta, mynode, nnodes, nsize,
-     &     iSW_corn, jSW_corn, ew_periodic, ns_periodic, N
-      use mpi_f08, only: mpi_comm_world
-      use dimensions, only: bf, i0, i1, j0, j1, nz, npx, npy,
-     &     inode, jnode, eta_rho, eta_v, xi_rho, xi_u, grdname, nx, ny,
-     &     gnx, gny, analytical_grid,
-     &     ds_xr, ds_xu, ds_yr, ds_yv, ds_zr, ds_zw
-      use mpi_f08, only: mpi_double_precision, mpi_status_size
-      use error_handling_mod, only: error_log
-      use netcdf, only: nf90_nowrite, nf90_open, nf90_global, nf90_noerr,
-     &   nf90_close, nf90_get_att
+  use param, only:&
+  &ieast, iwest, jnorth, jsouth, llm,&
+  &lm, mm, mmm, ocean_grid_comm,&
+  &np_xi, np_eta, mynode, nnodes, nsize,&
+  &iSW_corn, jSW_corn, ew_periodic, ns_periodic, N
+  use mpi_f08, only: mpi_comm_world
+  use dimensions, only: bf, i0, i1, j0, j1, nz, npx, npy,&
+  &inode, jnode, eta_rho, eta_v, xi_rho, xi_u, grdname, nx, ny,&
+  &gnx, gny, analytical_grid,&
+  &ds_xr, ds_xu, ds_yr, ds_yv, ds_zr, ds_zw
+  use mpi_f08, only: mpi_double_precision, mpi_status_size
+  use error_handling_mod, only: error_log
+  use netcdf, only: nf90_nowrite, nf90_open, nf90_global, nf90_noerr,&
+  &nf90_close, nf90_get_att
 #ifdef PARALLEL_IO
-      use pio_roms, only: pio_xi_rho, pio_xi_u, pio_eta_rho, pio_eta_v,
-     &  pio_xi_rho_start, pio_xi_u_start, pio_eta_rho_start, pio_eta_v_start,
-     &  pio_xi_rho_start_bry, pio_xi_u_start_bry, pio_eta_rho_start_bry, pio_eta_v_start_bry,
-     &  pio_s_start, PIO_WESTERN_EDGE, PIO_EASTERN_EDGE, PIO_SOUTHERN_EDGE, PIO_NORTHERN_EDGE,
-     &  pio_i0, pio_i1, pio_j0, pio_j1
+  use pio_roms, only: pio_xi_rho, pio_xi_u, pio_eta_rho, pio_eta_v,&
+  &pio_xi_rho_start, pio_xi_u_start, pio_eta_rho_start, pio_eta_v_start,&
+  &pio_xi_rho_start_bry, pio_xi_u_start_bry, pio_eta_rho_start_bry, pio_eta_v_start_bry,&
+  &pio_s_start, PIO_WESTERN_EDGE, PIO_EASTERN_EDGE, PIO_SOUTHERN_EDGE, PIO_NORTHERN_EDGE,&
+  &pio_i0, pio_i1, pio_j0, pio_j1
 #endif
 
-      implicit none
+  implicit none
 
-      private
+  private
 
-      character(len=8) :: module_name = "roms_mpi"
-      integer,public :: p_W, p_SW, p_S, p_SE, p_E, p_NE, p_N,p_NW
+  character(len=8) :: module_name = "roms_mpi"
+  integer(kind=4),public :: p_W, p_SW, p_S, p_SE, p_E, p_NE, p_N,p_NW
 
-      real,dimension(:),allocatable :: sendW,sendE
-      real,dimension(:),allocatable :: sendN,sendS
-      real,dimension(:),allocatable :: sendNE,sendSE
-      real,dimension(:),allocatable :: sendNW,sendSW
-      real,dimension(:),allocatable :: recvW,recvE
-      real,dimension(:),allocatable :: recvN,recvS
-      real,dimension(:),allocatable :: recvNE,recvSE
-      real,dimension(:),allocatable :: recvNW,recvSW
-      integer :: szEW,szNS,szCr
-      integer :: szW,szE,szN,szS,szNE,szNW,szSE,szSW
-      logical :: init_buffer_done = .false.
-      logical,public :: new_part
-      character(len=1024) :: error_info = ''
+  real(kind=8),dimension(:),allocatable :: sendW,sendE
+  real(kind=8),dimension(:),allocatable :: sendN,sendS
+  real(kind=8),dimension(:),allocatable :: sendNE,sendSE
+  real(kind=8),dimension(:),allocatable :: sendNW,sendSW
+  real(kind=8),dimension(:),allocatable :: recvW,recvE
+  real(kind=8),dimension(:),allocatable :: recvN,recvS
+  real(kind=8),dimension(:),allocatable :: recvNE,recvSE
+  real(kind=8),dimension(:),allocatable :: recvNW,recvSW
+  integer(kind=4) :: szEW,szNS,szCr
+  integer(kind=4) :: szW,szE,szN,szS,szNE,szNW,szSE,szSW
+  logical :: init_buffer_done = .false.
+  logical,public :: new_part
+  character(len=1024) :: error_info = ''
 
-      integer :: hl         ! Exchange halo can be less than the buffer size
-      logical :: do_corners ! Argument to modify the some of the exchanges
-      integer :: bl         ! possible argument to make the buffer size of
-                            ! the arrays flexible
+  integer(kind=4) :: hl         ! Exchange halo can be less than the buffer size
+  logical :: do_corners ! Argument to modify the some of the exchanges
+  integer(kind=4) :: bl         ! possible argument to make the buffer size of
+  ! the arrays flexible
 
-      ! Default values are halo=bf, do_corners = .true., and bl = bf
+  ! Default values are halo=bf, do_corners = .true., and bl = bf
 
-      interface exchange_xxx
-        module procedure
-     &        exchange_2,exchange_22,exchange_222,exchange_2222
-     &       ,exchange_3,exchange_33,exchange_333,exchange_3333
-     &                  ,exchange_32,exchange_332
-        ! etc, etc
-      end interface
+  interface exchange_xxx
+    module procedure&
+    &exchange_2,exchange_22,exchange_222,exchange_2222&
+    &,exchange_3,exchange_33,exchange_333,exchange_3333&
+    &,exchange_32,exchange_332
+    ! etc, etc
+  end interface exchange_xxx
 
-      public :: exchange_xxx
-      public :: mpi_setup
+  public :: exchange_xxx
+  public :: mpi_setup
 
-      contains
+contains
 
 !--------------------------------------------------------
-      subroutine mpi_setup      ![
+  subroutine mpi_setup      ![
 #ifdef PARALLEL_IO
-      use insert_node_mod, only: insert_node
+    use insert_node_mod, only: insert_node
 #endif
-      use utils_mod, only: lenstr
-      use param, only: NP_XI, NP_ETA, LLm, MMm
-      use dimensions, only: npx, npy, gnx, gny
-      implicit none
-      integer :: ierr,ncid
-      integer,dimension(8) :: neighbors
-      integer,dimension(2) :: subdompos
-      integer,dimension(4) :: partition
-      character(len=128) :: fname
-      integer :: offx,offy
-      character(len=9) :: sr_name = "mpi_setup"
-      character(len=256) :: grdname_tile
-      integer :: lstr
+    use utils_mod, only: lenstr
+    use param, only: NP_XI, NP_ETA, LLm, MMm
+    use dimensions, only: npx, npy, gnx, gny
+    implicit none
+    integer(kind=4) :: ierr,ncid
+    integer(kind=4),dimension(8) :: neighbors
+    integer(kind=4),dimension(2) :: subdompos
+    integer(kind=4),dimension(4) :: partition
+    character(len=128) :: fname
+    integer(kind=4) :: offx,offy
+    character(len=9) :: sr_name = "mpi_setup"
+    character(len=256) :: grdname_tile
+    integer(kind=4) :: lstr
 
-      npx = NP_XI
-      npy = NP_ETA
-      gnx = LLm
-      gny = MMm
+    npx = NP_XI
+    npy = NP_ETA
+    gnx = LLm
+    gny = MMm
 
-      grdname_tile = trim(grdname)
+    grdname_tile = trim(grdname)
 #ifdef PARALLEL_IO
-      lstr = lenstr(grdname_tile)
-      call insert_node(grdname_tile, lstr, mynode, nsize)
+    lstr = lenstr(grdname_tile)
+    call insert_node(grdname_tile, lstr, mynode, nsize)
 #endif
 
-      if (analytical_grid) then
-        nnodes = np_xi*np_eta
-        new_part = .false.
-      else
-        ! Check in gridfile to check if mpi masking is present
-        ierr=nf90_open(grdname_tile,nf90_nowrite,ncid)
+    if (analytical_grid) then
+      nnodes = np_xi*np_eta
+      new_part = .false.
+    else
+      ! Check in gridfile to check if mpi masking is present
+      ierr=nf90_open(grdname_tile,nf90_nowrite,ncid)
 !        if (ierr/=nf90_noerr) call handle_ierr(ierr)
-        call error_log%check_netcdf_status(
-     &         netcdf_status=ierr,
-     &         context=module_name//"/"//sr_name,
-     &         info=("error opening "//grdname_tile))
+      call error_log%check_netcdf_status(&
+      &netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name,&
+      &info=("error opening "//grdname_tile))
+      ierr=nf90_get_att(ncid,nf90_global,"neighbors",neighbors)
+      ! new style partitioning has the neighbors global attribute
+      if (ierr.eq.nf90_noerr) then
+        if (mynode.eq.0) print * ,'neighbors att found',grdname_tile
+        new_part = .true.
+        ierr=nf90_get_att(ncid,nf90_global,"partition",partition)
+        nnodes=partition(2)
         ierr=nf90_get_att(ncid,nf90_global,"neighbors",neighbors)
-        ! new style partitioning has the neighbors global attribute
-        if (ierr.eq.nf90_noerr) then
-          if (mynode.eq.0) print * ,'neighbors att found',grdname_tile
-          new_part = .true.
-          ierr=nf90_get_att(ncid,nf90_global,"partition",partition)
-          nnodes=partition(2)
-          ierr=nf90_get_att(ncid,nf90_global,"neighbors",neighbors)
-          ierr=nf90_get_att(ncid,nf90_global,"subdompos",subdompos)
-        else
-          if (mynode.eq.0) print * ,'neighbors att not found',grdname_tile
-          new_part = .false.
-          nnodes = np_xi*np_eta
-        endif
-        ierr=nf90_close(ncid)
+        ierr=nf90_get_att(ncid,nf90_global,"subdompos",subdompos)
+      else
+        if (mynode.eq.0) print * ,'neighbors att not found',grdname_tile
+        new_part = .false.
+        nnodes = np_xi*np_eta
       endif
+      ierr=nf90_close(ncid)
+    endif
 
 
 #ifndef PARALLEL_IO
-       if (new_part) then
-         call error_log%raise_global(
-     &        info="ERROR: MPI Masking initiated without Parallel IO",
-     &        context=sr_name)
-       endif
+    if (new_part) then
+      call error_log%raise_global(&
+      &info="ERROR: MPI Masking initiated without Parallel IO",&
+      &context=sr_name)
+    endif
 #endif
 
-      ! Check whether the number of expected nodes
-      ! matches the mpirun or mpiexec argument
+    ! Check whether the number of expected nodes
+    ! matches the mpirun or mpiexec argument
 
-      ! Also check npx,npy somewhere
+    ! Also check npx,npy somewhere
 
-      if (nsize/=nnodes) then
-         write(error_info,*)
-     &   'Number of MPI-nodes should be',
-     &        NNODES, 'instead of ', nsize, '.'
-         call error_log%raise_global(
-     &        info=error_info,
-     &        context=sr_name)
-      endif
-      call error_log%abort_check()
+    if (nsize/=nnodes) then
+      write(error_info,*)&
+      &'Number of MPI-nodes should be',&
+      &NNODES, 'instead of ', nsize, '.'
+      call error_log%raise_global(&
+      &info=error_info,&
+      &context=sr_name)
+    endif
+    call error_log%abort_check()
 
 !     Determine position of subdomain in logical grid. inodes, jnodes
 !     will be needed to determine whether the subdomain is at a physical
@@ -170,29 +170,29 @@
 !     incoming and targets for outgoing messages. Negative numbers are invalid
 !     and indicate that there is not a valid subdomain in that direction
 
-      if (new_part) then
-        inode=subdompos(1)
-        jnode=subdompos(2)
-        p_N  = neighbors(1)
-        p_NE = neighbors(2)
-        p_E  = neighbors(3)
-        p_SE = neighbors(4)
-        p_S  = neighbors(5)
-        p_SW = neighbors(6)
-        p_W  = neighbors(7)
-        p_NW = neighbors(8)
-      else
-        jnode=mynode/npx
-        inode=mynode-jnode*npx
-        p_N = ijnode2rank(inode  ,jnode+1,npx,npy)
-        p_NE= ijnode2rank(inode+1,jnode+1,npx,npy)
-        p_E = ijnode2rank(inode+1,jnode  ,npx,npy)
-        p_SE= ijnode2rank(inode+1,jnode-1,npx,npy)
-        p_S = ijnode2rank(inode  ,jnode-1,npx,npy)
-        p_SW= ijnode2rank(inode-1,jnode-1,npx,npy)
-        p_W = ijnode2rank(inode-1,jnode  ,npx,npy)
-        p_NW= ijnode2rank(inode-1,jnode+1,npx,npy)
-      endif
+    if (new_part) then
+      inode=subdompos(1)
+      jnode=subdompos(2)
+      p_N  = neighbors(1)
+      p_NE = neighbors(2)
+      p_E  = neighbors(3)
+      p_SE = neighbors(4)
+      p_S  = neighbors(5)
+      p_SW = neighbors(6)
+      p_W  = neighbors(7)
+      p_NW = neighbors(8)
+    else
+      jnode=mynode/npx
+      inode=mynode-jnode*npx
+      p_N = ijnode2rank(inode  ,jnode+1,npx,npy)
+      p_NE= ijnode2rank(inode+1,jnode+1,npx,npy)
+      p_E = ijnode2rank(inode+1,jnode  ,npx,npy)
+      p_SE= ijnode2rank(inode+1,jnode-1,npx,npy)
+      p_S = ijnode2rank(inode  ,jnode-1,npx,npy)
+      p_SW= ijnode2rank(inode-1,jnode-1,npx,npy)
+      p_W = ijnode2rank(inode-1,jnode  ,npx,npy)
+      p_NW= ijnode2rank(inode-1,jnode+1,npx,npy)
+    endif
 
 !     Determine the sizes of subdomains.
 !     The first and last subdomain are possibly smaller to add
@@ -200,137 +200,137 @@
 !     removed from those. If the surplus (offx,offy) is odd, the
 !     last subdomain will be the smallest.
 
-      nx = ceiling(1.0*gnx/npx)
-      ny = ceiling(1.0*gny/npy)
+    nx = ceiling(1.0_8*gnx/npx)
+    ny = ceiling(1.0_8*gny/npy)
 
-        ! Check against original weird integer devision
-      if (nx.ne.(gnx+npx-1)/npx ) then
+    ! Check against original weird integer devision
+    if (nx.ne.(gnx+npx-1)/npx ) then
 
-         call error_log%raise_global(
-     &        context=module_name//"/"//sr_name,
-     &        info='integer division error in mpi_setup')
-      end if
-      if (ny.ne.(gny+npy-1)/npy ) then
-         call error_log%raise_global(
-     &        context=module_name//"/"//sr_name,
-     &        info='integer division error in mpi_setup')
-      end if
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info='integer division error in mpi_setup')
+    end if
+    if (ny.ne.(gny+npy-1)/npy ) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info='integer division error in mpi_setup')
+    end if
 
 
-        offx = npx*nx-gnx
-        if (inode.eq.0) then
-          iSW_corn = 0
-        else
-          iSW_corn = inode*nx - offx/2
-        endif
+    offx = npx*nx-gnx
+    if (inode.eq.0) then
+      iSW_corn = 0
+    else
+      iSW_corn = inode*nx - offx/2
+    endif
 
-        if (inode.eq.0) then
-          nx = nx - offx/2
-        endif
-        if (inode.eq.npx-1) then
-          nx = nx -(offx+1)/2
-        endif
+    if (inode.eq.0) then
+      nx = nx - offx/2
+    endif
+    if (inode.eq.npx-1) then
+      nx = nx -(offx+1)/2
+    endif
 
-        offy= npy*ny-gny
-        if (jnode == 0) then
-          jSW_corn = 0
-        else
-          jSW_corn = jnode*ny - offy/2
-        endif
+    offy= npy*ny-gny
+    if (jnode == 0) then
+      jSW_corn = 0
+    else
+      jSW_corn = jnode*ny - offy/2
+    endif
 
-        if (jnode == 0) then
-          ny = ny - offy/2
-        endif
-        if (jnode == NP_ETA-1) then
-          ny = ny -(offy+1)/2
-        endif
+    if (jnode == 0) then
+      ny = ny - offy/2
+    endif
+    if (jnode == NP_ETA-1) then
+      ny = ny -(offy+1)/2
+    endif
 
-        Lm = nx
-        Mm = ny
-        iwest = 1;  ieast = nx
-        jsouth = 1; jnorth = ny
+    Lm = nx
+    Mm = ny
+    iwest = 1;  ieast = nx
+    jsouth = 1; jnorth = ny
 
-        ! Set sizes for output files. The first and last partial files
-        ! include the buffers (for the rho-dimension), the others are
-        ! all sized: [1:nx],[1:ny]
+    ! Set sizes for output files. The first and last partial files
+    ! include the buffers (for the rho-dimension), the others are
+    ! all sized: [1:nx],[1:ny]
 
-        i0 = 1; i1 = nx
-        j0 = 1; j1 = ny
+    i0 = 1; i1 = nx
+    j0 = 1; j1 = ny
 
-        xi_rho = nx
-        xi_u   = nx
-        if (inode.eq.0) then
-          i0 = 0
-          xi_rho = nx+1
-        endif
-        if (inode.eq.npx-1) then
-          i1 = nx+1
-          xi_rho = nx+1
-          xi_u   = nx+1
-        endif
+    xi_rho = nx
+    xi_u   = nx
+    if (inode.eq.0) then
+      i0 = 0
+      xi_rho = nx+1
+    endif
+    if (inode.eq.npx-1) then
+      i1 = nx+1
+      xi_rho = nx+1
+      xi_u   = nx+1
+    endif
 
-        eta_rho = ny
-        eta_v   = ny
-        if (jnode.eq.0) then
-          j0=0
-          eta_rho = ny+1
-        endif
-        if (jnode.eq.npy-1) then
-          j1=ny+1
-          eta_rho = ny+1
-          eta_v   = ny+1
-        endif
+    eta_rho = ny
+    eta_v   = ny
+    if (jnode.eq.0) then
+      j0=0
+      eta_rho = ny+1
+    endif
+    if (jnode.eq.npy-1) then
+      j1=ny+1
+      eta_rho = ny+1
+      eta_v   = ny+1
+    endif
 
 #ifdef PARALLEL_IO
-        ds_xr = LLm+2
-        ds_yr = MMm+2
-        ds_xu = LLm+1
-        ds_yv = MMm+1
-        ds_zr = N
-        ds_zw = N+1
+    ds_xr = LLm+2
+    ds_yr = MMm+2
+    ds_xu = LLm+1
+    ds_yv = MMm+1
+    ds_zr = N
+    ds_zw = N+1
 #else
-        ds_xr = xi_rho
-        ds_yr = eta_rho
-        ds_xu = xi_u
-        ds_yv = eta_v
-        ds_zr = N
-        ds_zw = N+1
+    ds_xr = xi_rho
+    ds_yr = eta_rho
+    ds_xu = xi_u
+    ds_yv = eta_v
+    ds_zr = N
+    ds_zw = N+1
 #endif
 
 
 #ifdef PARALLEL_IO
-        ! Set basic tile sizes
-        pio_xi_rho = xi_rho
-        pio_xi_u = xi_u
-        pio_eta_rho = eta_rho
-        pio_eta_v = eta_v
+    ! Set basic tile sizes
+    pio_xi_rho = xi_rho
+    pio_xi_u = xi_u
+    pio_eta_rho = eta_rho
+    pio_eta_v = eta_v
 
-        ! Set variables to account for the halos
-        if (inode == 0) then
-          pio_i0 = 0
-        else
-          pio_i0 = 2
-        endif
+    ! Set variables to account for the halos
+    if (inode == 0) then
+      pio_i0 = 0
+    else
+      pio_i0 = 2
+    endif
 
-        if (inode == NP_XI-1) then
-          pio_i1 = 0
-        else
-          pio_i1 = 2
-        endif
+    if (inode == NP_XI-1) then
+      pio_i1 = 0
+    else
+      pio_i1 = 2
+    endif
 
-        if (jnode == 0) then
-          pio_j0 = 0
-        else
-          pio_j0 = 2
-        endif
+    if (jnode == 0) then
+      pio_j0 = 0
+    else
+      pio_j0 = 2
+    endif
 
-        if (jnode == NP_ETA-1) then
-          pio_j1 = 0
-        else
-          pio_j1 = 2
-        endif
+    if (jnode == NP_ETA-1) then
+      pio_j1 = 0
+    else
+      pio_j1 = 2
+    endif
 
-        ! Set tile starting locations
+    ! Set tile starting locations
 !        if (inode == 0) then
 !          pio_xi_rho_start = iSW_corn+iwest
 !          pio_xi_u_start   = iSW_corn+iwest
@@ -347,43 +347,43 @@
 !          pio_eta_v_start  = jSW_corn+jsouth
 !        endif
 
-        if (inode == 0) then
-          pio_xi_rho_start = iSW_corn+iwest-pio_i0
-          pio_xi_u_start   = iSW_corn+iwest-pio_i0 !?
-          pio_xi_rho_start_bry = iSW_corn+iwest
-          pio_xi_u_start_bry = iSW_corn+iwest
-        else
-          pio_xi_rho_start= iSW_corn+iwest+1-pio_i0
+    if (inode == 0) then
+      pio_xi_rho_start = iSW_corn+iwest-pio_i0
+      pio_xi_u_start   = iSW_corn+iwest-pio_i0 !?
+      pio_xi_rho_start_bry = iSW_corn+iwest
+      pio_xi_u_start_bry = iSW_corn+iwest
+    else
+      pio_xi_rho_start= iSW_corn+iwest+1-pio_i0
 !          pio_xi_u_start   = iSW_corn+iwest-pio_i0
-          pio_xi_u_start   = iSW_corn+iwest-pio_i0
-          pio_xi_rho_start_bry = iSW_corn+iwest+1
-          pio_xi_u_start_bry = iSW_corn+iwest
-        endif
+      pio_xi_u_start   = iSW_corn+iwest-pio_i0
+      pio_xi_rho_start_bry = iSW_corn+iwest+1
+      pio_xi_u_start_bry = iSW_corn+iwest
+    endif
 
-        if (jnode == 0) then
-          pio_eta_rho_start= jSW_corn+jsouth-pio_j0
-          pio_eta_v_start  = jSW_corn+jsouth-pio_j0 !?
-          pio_eta_rho_start_bry= jSW_corn+jsouth
-          pio_eta_v_start_bry  = jSW_corn+jsouth
-        else
-          pio_eta_rho_start= jSW_corn+jsouth+1-pio_j0
-          pio_eta_v_start  = jSW_corn+jsouth-pio_j0
-          pio_eta_rho_start_bry= jSW_corn+jsouth+1
-          pio_eta_v_start_bry  = jSW_corn+jsouth
-        endif
-        pio_s_start = 1
+    if (jnode == 0) then
+      pio_eta_rho_start= jSW_corn+jsouth-pio_j0
+      pio_eta_v_start  = jSW_corn+jsouth-pio_j0 !?
+      pio_eta_rho_start_bry= jSW_corn+jsouth
+      pio_eta_v_start_bry  = jSW_corn+jsouth
+    else
+      pio_eta_rho_start= jSW_corn+jsouth+1-pio_j0
+      pio_eta_v_start  = jSW_corn+jsouth-pio_j0
+      pio_eta_rho_start_bry= jSW_corn+jsouth+1
+      pio_eta_v_start_bry  = jSW_corn+jsouth
+    endif
+    pio_s_start = 1
 
-        ! Identify domain edges
-        PIO_WESTERN_EDGE = (inode == 0)
-        PIO_EASTERN_EDGE = (inode == npx-1)
-        PIO_SOUTHERN_EDGE = (jnode == 0)
-        PIO_NORTHERN_EDGE = (jnode == npy-1)
+    ! Identify domain edges
+    PIO_WESTERN_EDGE = (inode == 0)
+    PIO_EASTERN_EDGE = (inode == npx-1)
+    PIO_SOUTHERN_EDGE = (jnode == 0)
+    PIO_NORTHERN_EDGE = (jnode == npy-1)
 
 #endif
 
-      end subroutine mpi_setup !]
+  end subroutine mpi_setup !]
 !--------------------------------------------------------
-      function ijnode2rank(inode,jnode,npx,npy) result(rank) ![
+  function ijnode2rank(inode,jnode,npx,npy) result(rank) ![
 
 ! Convert processor-grid indices inode,jnode into MPI rank. Check whether
 ! the indices are within the bounds of processor grid. Return them back
@@ -391,731 +391,731 @@
 ! but only if the number of subdomains is greater than one (hence
 ! periodicity must go through message passing).
 
-      implicit none
+    implicit none
 
-      ! import/export
-      integer,intent(in) :: inode,jnode
-      integer,intent(in) :: npx,npy
+    ! import/export
+    integer(kind=4),intent(in) :: inode,jnode
+    integer(kind=4),intent(in) :: npx,npy
 
-      integer :: rank
+    integer(kind=4) :: rank
 
-      ! local
-      integer :: i,j
+    ! local
+    integer(kind=4) :: i,j
 
-      i=inode ; j=jnode
-      if (ew_periodic) then
-        if (i < 0) then
-          i=i+npx
-        elseif (i > npx-1) then
-          i=i-np_xi
-        endif
+    i=inode ; j=jnode
+    if (ew_periodic) then
+      if (i < 0) then
+        i=i+npx
+      elseif (i > npx-1) then
+        i=i-np_xi
       endif
+    endif
 
-      if (ns_periodic) then
-        if (j < 0) then
-          j=j+np_eta
-        elseif (j > np_eta-1) then
-          j=j-np_eta
-        endif
+    if (ns_periodic) then
+      if (j < 0) then
+        j=j+np_eta
+      elseif (j > np_eta-1) then
+        j=j-np_eta
       endif
+    endif
 
-      if (0<=i .and. i<npx .and. 0<=j .and. j<npy) then
-        rank = i + j*npx
-      else
-        rank = -1  ! meaning that the rank does not exist
-      endif
-      end  function ijnode2rank !]
+    if (0<=i .and. i<npx .and. 0<=j .and. j<npy) then
+      rank = i + j*npx
+    else
+      rank = -1  ! meaning that the rank does not exist
+    endif
+  end function ijnode2rank !]
 !--------------------------------------------------------
-      subroutine exchange_2(A,exch_bf,array_bf,do_corn,skip) ![
-      ! 2D variable, 2 at the time
-      ! Can exchange less data than the allocated buffer space
-      implicit none
+  subroutine exchange_2(A,exch_bf,array_bf,do_corn,skip) ![
+    ! 2D variable, 2 at the time
+    ! Can exchange less data than the allocated buffer space
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:) :: A
-      integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
-      integer,        optional :: array_bf ! non-default allocated buffer for array
-      logical,optional :: do_corn
-      logical,optional :: skip
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:) :: A
+    integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
+    integer(kind=4),        optional :: array_bf ! non-default allocated buffer for array
+    logical,optional :: do_corn
+    logical,optional :: skip
 
 #ifdef PARALLEL_IO
-      if ((present(skip)) .and. skip) return
+    if ((present(skip)) .and. skip) return
 #endif
 
-      if (.not.init_buffer_done) call init_mpi_buffers
+    if (.not.init_buffer_done) call init_mpi_buffers
 
-      ! Provide the ability to work with arrays with non-standard
-      ! allocated buffer sizes
-      bl = bf
-      if (present(array_bf)) then
-        bl = array_bf
-      endif
+    ! Provide the ability to work with arrays with non-standard
+    ! allocated buffer sizes
+    bl = bf
+    if (present(array_bf)) then
+      bl = array_bf
+    endif
 
-      ! Provide the ability to exchange less than the allocated buffer
-      hl = bl
-      if (present(exch_bf)) hl = exch_bf
+    ! Provide the ability to exchange less than the allocated buffer
+    hl = bl
+    if (present(exch_bf)) hl = exch_bf
 
-      do_corners = .true.
-      if (present(do_corn)) do_corners = do_corn
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
 
-      call reset_buffer_sizes
-      call pack_2dvar(A)
+    call reset_buffer_sizes
+    call pack_2dvar(A)
 
-      call mpi_buffer_exchange
+    call mpi_buffer_exchange
 
-      call reset_buffer_sizes
-      call unpack_2dvar(A)
+    call reset_buffer_sizes
+    call unpack_2dvar(A)
 
-      end subroutine exchange_2 !]
+  end subroutine exchange_2 !]
 !--------------------------------------------------------
-      subroutine exchange_22(A,B,exch_bf,do_corn,skip) ![
-      ! 2D variable, 2 at the time
-      ! Can exchange less data than the allocated buffer space
-      implicit none
+  subroutine exchange_22(A,B,exch_bf,do_corn,skip) ![
+    ! 2D variable, 2 at the time
+    ! Can exchange less data than the allocated buffer space
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:) :: A
-      real,intent(inout),dimension(:,:) :: B
-      integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
-      logical,optional :: do_corn
-      logical,optional :: skip
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:) :: A
+    real(kind=8),intent(inout),dimension(:,:) :: B
+    integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
+    logical,optional :: do_corn
+    logical,optional :: skip
 
 #ifdef PARALLEL_IO
-      if ((present(skip)) .and. skip) return
+    if ((present(skip)) .and. skip) return
 #endif
 
-      if (.not.init_buffer_done) call init_mpi_buffers
+    if (.not.init_buffer_done) call init_mpi_buffers
 
-      bl = bf
-      hl = bf
-      if (present(exch_bf)) hl = exch_bf
+    bl = bf
+    hl = bf
+    if (present(exch_bf)) hl = exch_bf
 
-      do_corners = .true.
-      if (present(do_corn)) do_corners = do_corn
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
 
-      call reset_buffer_sizes
-      call pack_2dvar(A)
-      call pack_2dvar(B)
+    call reset_buffer_sizes
+    call pack_2dvar(A)
+    call pack_2dvar(B)
 
-      call mpi_buffer_exchange
+    call mpi_buffer_exchange
 
-      call reset_buffer_sizes
-      call unpack_2dvar(A)
-      call unpack_2dvar(B)
+    call reset_buffer_sizes
+    call unpack_2dvar(A)
+    call unpack_2dvar(B)
 
-      end subroutine exchange_22 !]
+  end subroutine exchange_22 !]
 !--------------------------------------------------------
-      subroutine exchange_222(A,B,C,exch_bf,do_corn,skip) ![
-      ! 2D variable, 2 at the time
-      ! Can exchange less data than the allocated buffer space
-      implicit none
+  subroutine exchange_222(A,B,C,exch_bf,do_corn,skip) ![
+    ! 2D variable, 2 at the time
+    ! Can exchange less data than the allocated buffer space
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:) :: A
-      real,intent(inout),dimension(:,:) :: B
-      real,intent(inout),dimension(:,:) :: C
-      integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
-      logical,optional :: do_corn
-      logical,optional :: skip
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:) :: A
+    real(kind=8),intent(inout),dimension(:,:) :: B
+    real(kind=8),intent(inout),dimension(:,:) :: C
+    integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
+    logical,optional :: do_corn
+    logical,optional :: skip
 
 #ifdef PARALLEL_IO
-      if ((present(skip)) .and. skip) return
+    if ((present(skip)) .and. skip) return
 #endif
 
-      if (.not.init_buffer_done) call init_mpi_buffers
+    if (.not.init_buffer_done) call init_mpi_buffers
 
-      bl = bf
-      hl = bf
-      if (present(exch_bf)) hl = exch_bf
+    bl = bf
+    hl = bf
+    if (present(exch_bf)) hl = exch_bf
 
-      do_corners = .true.
-      if (present(do_corn)) do_corners = do_corn
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
 
-      call reset_buffer_sizes
-      call pack_2dvar(A)
-      call pack_2dvar(B)
-      call pack_2dvar(C)
+    call reset_buffer_sizes
+    call pack_2dvar(A)
+    call pack_2dvar(B)
+    call pack_2dvar(C)
 
-      call mpi_buffer_exchange
+    call mpi_buffer_exchange
 
-      call reset_buffer_sizes
-      call unpack_2dvar(A)
-      call unpack_2dvar(B)
-      call unpack_2dvar(C)
+    call reset_buffer_sizes
+    call unpack_2dvar(A)
+    call unpack_2dvar(B)
+    call unpack_2dvar(C)
 
-      end subroutine exchange_222 !]
+  end subroutine exchange_222 !]
 !--------------------------------------------------------
-      subroutine exchange_2222(A,B,C,D,exch_bf,do_corn,skip) ![
-      ! 2D variable, 2 at the time
-      ! Can exchange less data than the allocated buffer space
-      implicit none
+  subroutine exchange_2222(A,B,C,D,exch_bf,do_corn,skip) ![
+    ! 2D variable, 2 at the time
+    ! Can exchange less data than the allocated buffer space
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:) :: A
-      real,intent(inout),dimension(:,:) :: B
-      real,intent(inout),dimension(:,:) :: C
-      real,intent(inout),dimension(:,:) :: D
-      integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
-      logical,optional :: do_corn
-      logical,optional :: skip
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:) :: A
+    real(kind=8),intent(inout),dimension(:,:) :: B
+    real(kind=8),intent(inout),dimension(:,:) :: C
+    real(kind=8),intent(inout),dimension(:,:) :: D
+    integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
+    logical,optional :: do_corn
+    logical,optional :: skip
 
 #ifdef PARALLEL_IO
-      if ((present(skip)) .and. skip) return
+    if ((present(skip)) .and. skip) return
 #endif
 
-      if (.not.init_buffer_done) call init_mpi_buffers
+    if (.not.init_buffer_done) call init_mpi_buffers
 
-      bl = bf
-      hl = bf
-      if (present(exch_bf)) hl = exch_bf
+    bl = bf
+    hl = bf
+    if (present(exch_bf)) hl = exch_bf
 
-      do_corners = .true.
-      if (present(do_corn)) do_corners = do_corn
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
 
-      call reset_buffer_sizes
-      call pack_2dvar(A)
-      call pack_2dvar(B)
-      call pack_2dvar(C)
-      call pack_2dvar(D)
+    call reset_buffer_sizes
+    call pack_2dvar(A)
+    call pack_2dvar(B)
+    call pack_2dvar(C)
+    call pack_2dvar(D)
 
-      call mpi_buffer_exchange
+    call mpi_buffer_exchange
 
-      call reset_buffer_sizes
-      call unpack_2dvar(A)
-      call unpack_2dvar(B)
-      call unpack_2dvar(C)
-      call unpack_2dvar(D)
+    call reset_buffer_sizes
+    call unpack_2dvar(A)
+    call unpack_2dvar(B)
+    call unpack_2dvar(C)
+    call unpack_2dvar(D)
 
-      end subroutine exchange_2222 !]
+  end subroutine exchange_2222 !]
 !--------------------------------------------------------
-      subroutine exchange_3(A,exch_bf,do_corn,skip) ![
-      ! 3D variable, 1 at the time
-      ! Can exchange less data than the allocated buffer space
-      implicit none
+  subroutine exchange_3(A,exch_bf,do_corn,skip) ![
+    ! 3D variable, 1 at the time
+    ! Can exchange less data than the allocated buffer space
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:,:) :: A
-      integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
-      logical,optional :: do_corn
-      logical,optional :: skip
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:,:) :: A
+    integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
+    logical,optional :: do_corn
+    logical,optional :: skip
 
 #ifdef PARALLEL_IO
-      if ((present(skip)) .and. skip) return
+    if ((present(skip)) .and. skip) return
 #endif
 
-      if (.not.init_buffer_done) call init_mpi_buffers
+    if (.not.init_buffer_done) call init_mpi_buffers
 
-      bl = bf
-      hl = bf
-      if (present(exch_bf)) hl = exch_bf
+    bl = bf
+    hl = bf
+    if (present(exch_bf)) hl = exch_bf
 
-      do_corners = .true.
-      if (present(do_corn)) do_corners = do_corn
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
 
-      call reset_buffer_sizes
-      call pack_3dvar(A)
+    call reset_buffer_sizes
+    call pack_3dvar(A)
 
-      call mpi_buffer_exchange
+    call mpi_buffer_exchange
 
-      call reset_buffer_sizes
-      call unpack_3dvar(A)
+    call reset_buffer_sizes
+    call unpack_3dvar(A)
 
-      end subroutine exchange_3 !]
+  end subroutine exchange_3 !]
 !--------------------------------------------------------
-      subroutine exchange_33(A,B,exch_bf,do_corn,skip) ![
-      ! 3D variable, 1 at the time
-      ! Can exchange less data than the allocated buffer space
-      implicit none
+  subroutine exchange_33(A,B,exch_bf,do_corn,skip) ![
+    ! 3D variable, 1 at the time
+    ! Can exchange less data than the allocated buffer space
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:,:) :: A
-      real,intent(inout),dimension(:,:,:) :: B
-      integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
-      logical,optional :: do_corn
-      logical,optional :: skip
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:,:) :: A
+    real(kind=8),intent(inout),dimension(:,:,:) :: B
+    integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
+    logical,optional :: do_corn
+    logical,optional :: skip
 
 #ifdef PARALLEL_IO
-      if ((present(skip)) .and. skip) return
+    if ((present(skip)) .and. skip) return
 #endif
 
-      if (.not.init_buffer_done) call init_mpi_buffers
+    if (.not.init_buffer_done) call init_mpi_buffers
 
-      bl = bf
-      hl = bf
-      if (present(exch_bf)) hl = exch_bf
+    bl = bf
+    hl = bf
+    if (present(exch_bf)) hl = exch_bf
 
-      do_corners = .true.
-      if (present(do_corn)) do_corners = do_corn
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
 
-      call reset_buffer_sizes
-      call pack_3dvar(A)
-      call pack_3dvar(B)
+    call reset_buffer_sizes
+    call pack_3dvar(A)
+    call pack_3dvar(B)
 
-      call mpi_buffer_exchange
+    call mpi_buffer_exchange
 
-      call reset_buffer_sizes
-      call unpack_3dvar(A)
-      call unpack_3dvar(B)
+    call reset_buffer_sizes
+    call unpack_3dvar(A)
+    call unpack_3dvar(B)
 
-      end subroutine exchange_33 !]
+  end subroutine exchange_33 !]
 !--------------------------------------------------------
-      subroutine exchange_333(A,B,C,exch_bf,do_corn,skip) ![
-      ! 3D variable, 1 at the time
-      ! Can exchange less data than the allocated buffer space
-      implicit none
+  subroutine exchange_333(A,B,C,exch_bf,do_corn,skip) ![
+    ! 3D variable, 1 at the time
+    ! Can exchange less data than the allocated buffer space
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:,:) :: A
-      real,intent(inout),dimension(:,:,:) :: B
-      real,intent(inout),dimension(:,:,:) :: C
-      integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
-      logical,optional :: do_corn
-      logical,optional :: skip
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:,:) :: A
+    real(kind=8),intent(inout),dimension(:,:,:) :: B
+    real(kind=8),intent(inout),dimension(:,:,:) :: C
+    integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
+    logical,optional :: do_corn
+    logical,optional :: skip
 
 #ifdef PARALLEL_IO
-      if ((present(skip)) .and. skip) return
+    if ((present(skip)) .and. skip) return
 #endif
 
-      if (.not.init_buffer_done) call init_mpi_buffers
+    if (.not.init_buffer_done) call init_mpi_buffers
 
-      bl = bf
-      hl = bf
-      if (present(exch_bf)) hl = exch_bf
+    bl = bf
+    hl = bf
+    if (present(exch_bf)) hl = exch_bf
 
-      do_corners = .true.
-      if (present(do_corn)) do_corners = do_corn
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
 
-      call reset_buffer_sizes
-      call pack_3dvar(A)
-      call pack_3dvar(B)
-      call pack_3dvar(C)
+    call reset_buffer_sizes
+    call pack_3dvar(A)
+    call pack_3dvar(B)
+    call pack_3dvar(C)
 
-      call mpi_buffer_exchange
+    call mpi_buffer_exchange
 
-      call reset_buffer_sizes
-      call unpack_3dvar(A)
-      call unpack_3dvar(B)
-      call unpack_3dvar(C)
+    call reset_buffer_sizes
+    call unpack_3dvar(A)
+    call unpack_3dvar(B)
+    call unpack_3dvar(C)
 
-      end subroutine exchange_333 !]
+  end subroutine exchange_333 !]
 !--------------------------------------------------------
-      subroutine exchange_3333(A,B,C,D,exch_bf,do_corn,skip) ![
-      ! 3D variable, 1 at the time
-      ! Can exchange less data than the allocated buffer space
-      implicit none
+  subroutine exchange_3333(A,B,C,D,exch_bf,do_corn,skip) ![
+    ! 3D variable, 1 at the time
+    ! Can exchange less data than the allocated buffer space
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:,:) :: A
-      real,intent(inout),dimension(:,:,:) :: B
-      real,intent(inout),dimension(:,:,:) :: C
-      real,intent(inout),dimension(:,:,:) :: D
-      integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
-      logical,optional :: do_corn
-      logical,optional :: skip
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:,:) :: A
+    real(kind=8),intent(inout),dimension(:,:,:) :: B
+    real(kind=8),intent(inout),dimension(:,:,:) :: C
+    real(kind=8),intent(inout),dimension(:,:,:) :: D
+    integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
+    logical,optional :: do_corn
+    logical,optional :: skip
 
 #ifdef PARALLEL_IO
-      if ((present(skip)) .and. skip) return
+    if ((present(skip)) .and. skip) return
 #endif
 
-      if (.not.init_buffer_done) call init_mpi_buffers
+    if (.not.init_buffer_done) call init_mpi_buffers
 
-      bl = bf
-      hl = bf
-      if (present(exch_bf)) hl = exch_bf
+    bl = bf
+    hl = bf
+    if (present(exch_bf)) hl = exch_bf
 
-      do_corners = .true.
-      if (present(do_corn)) do_corners = do_corn
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
 
-      call reset_buffer_sizes
-      call pack_3dvar(A)
-      call pack_3dvar(B)
-      call pack_3dvar(C)
-      call pack_3dvar(D)
+    call reset_buffer_sizes
+    call pack_3dvar(A)
+    call pack_3dvar(B)
+    call pack_3dvar(C)
+    call pack_3dvar(D)
 
-      call mpi_buffer_exchange
+    call mpi_buffer_exchange
 
-      call reset_buffer_sizes
-      call unpack_3dvar(A)
-      call unpack_3dvar(B)
-      call unpack_3dvar(C)
-      call unpack_3dvar(D)
+    call reset_buffer_sizes
+    call unpack_3dvar(A)
+    call unpack_3dvar(B)
+    call unpack_3dvar(C)
+    call unpack_3dvar(D)
 
-      end subroutine exchange_3333 !]
+  end subroutine exchange_3333 !]
 !--------------------------------------------------------
-      subroutine exchange_32(A,B,exch_bf,do_corn,skip) ![
-      ! 3D variable, 1 at the time
-      ! Can exchange less data than the allocated buffer space
-      implicit none
+  subroutine exchange_32(A,B,exch_bf,do_corn,skip) ![
+    ! 3D variable, 1 at the time
+    ! Can exchange less data than the allocated buffer space
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:,:) :: A
-      real,intent(inout),dimension(:,:)   :: B
-      integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
-      logical,optional :: do_corn
-      logical,optional :: skip
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:,:) :: A
+    real(kind=8),intent(inout),dimension(:,:)   :: B
+    integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
+    logical,optional :: do_corn
+    logical,optional :: skip
 
 #ifdef PARALLEL_IO
-      if ((present(skip)) .and. skip) return
+    if ((present(skip)) .and. skip) return
 #endif
 
-      if (.not.init_buffer_done) call init_mpi_buffers
+    if (.not.init_buffer_done) call init_mpi_buffers
 
-      bl = bf
-      hl = bf
-      if (present(exch_bf)) hl = exch_bf
+    bl = bf
+    hl = bf
+    if (present(exch_bf)) hl = exch_bf
 
-      do_corners = .true.
-      if (present(do_corn)) do_corners = do_corn
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
 
-      call reset_buffer_sizes
-      call pack_3dvar(A)
-      call pack_2dvar(B)
+    call reset_buffer_sizes
+    call pack_3dvar(A)
+    call pack_2dvar(B)
 
-      call mpi_buffer_exchange
+    call mpi_buffer_exchange
 
-      call reset_buffer_sizes
-      call unpack_3dvar(A)
-      call unpack_2dvar(B)
+    call reset_buffer_sizes
+    call unpack_3dvar(A)
+    call unpack_2dvar(B)
 
-      end subroutine exchange_32 !]
+  end subroutine exchange_32 !]
 !--------------------------------------------------------
-      subroutine exchange_332(A,B,C,exch_bf,do_corn,skip) ![
-      ! 3D variable, 1 at the time
-      ! Can exchange less data than the allocated buffer space
-      implicit none
+  subroutine exchange_332(A,B,C,exch_bf,do_corn,skip) ![
+    ! 3D variable, 1 at the time
+    ! Can exchange less data than the allocated buffer space
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:,:) :: A
-      real,intent(inout),dimension(:,:,:) :: B
-      real,intent(inout),dimension(:,:)   :: C
-      integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
-      logical,optional :: do_corn
-      logical,optional :: skip
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:,:) :: A
+    real(kind=8),intent(inout),dimension(:,:,:) :: B
+    real(kind=8),intent(inout),dimension(:,:)   :: C
+    integer(kind=4),optional :: exch_bf  ! amount of data to exchange: exch_bf <= bf
+    logical,optional :: do_corn
+    logical,optional :: skip
 
 #ifdef PARALLEL_IO
-      if ((present(skip)) .and. skip) return
+    if ((present(skip)) .and. skip) return
 #endif
 
-      if (.not.init_buffer_done) call init_mpi_buffers
+    if (.not.init_buffer_done) call init_mpi_buffers
 
-      bl = bf
-      hl = bf
-      if (present(exch_bf)) hl = exch_bf
+    bl = bf
+    hl = bf
+    if (present(exch_bf)) hl = exch_bf
 
-      do_corners = .true.
-      if (present(do_corn)) do_corners = do_corn
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
 
-      call reset_buffer_sizes
-      call pack_3dvar(A)
-      call pack_3dvar(B)
-      call pack_2dvar(C)
+    call reset_buffer_sizes
+    call pack_3dvar(A)
+    call pack_3dvar(B)
+    call pack_2dvar(C)
 
-      call mpi_buffer_exchange
+    call mpi_buffer_exchange
 
-      call reset_buffer_sizes
-      call unpack_3dvar(A)
-      call unpack_3dvar(B)
-      call unpack_2dvar(C)
+    call reset_buffer_sizes
+    call unpack_3dvar(A)
+    call unpack_3dvar(B)
+    call unpack_2dvar(C)
 
-      end subroutine exchange_332 !]
+  end subroutine exchange_332 !]
 !--------------------------------------------------------
-      subroutine reset_buffer_sizes ![
-      ! reset the current size of the mpi buffers
-      implicit none
+  subroutine reset_buffer_sizes ![
+    ! reset the current size of the mpi buffers
+    implicit none
 
-      szW = 0
-      szE = 0
-      szS = 0
-      szN = 0
-      szSW = 0
-      szSE = 0
-      szNW = 0
-      szNE = 0
+    szW = 0
+    szE = 0
+    szS = 0
+    szN = 0
+    szSW = 0
+    szSE = 0
+    szNW = 0
+    szNE = 0
 
-      end subroutine reset_buffer_sizes !]
+  end subroutine reset_buffer_sizes !]
 !--------------------------------------------------------
-      subroutine pack_2dvar(A) ![
-      ! add a single 2D variable to the mpi exchange buffers
-      implicit none
+  subroutine pack_2dvar(A) ![
+    ! add a single 2D variable to the mpi exchange buffers
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:) :: A
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:) :: A
 
-      !local
-      integer(kind=4),dimension(2) :: dims
-      integer(kind=4) :: nxl,nyl
+    !local
+    integer(kind=4),dimension(2) :: dims
+    integer(kind=4) :: nxl,nyl
 
-      dims = shape(A)
-      nxl = dims(1) -2*bl
-      nyl = dims(2) -2*bl
-      call pack_buffers(A,nxl,nyl,1)
+    dims = shape(A)
+    nxl = dims(1) -2*bl
+    nyl = dims(2) -2*bl
+    call pack_buffers(A,nxl,nyl,1)
 
-      end subroutine pack_2dvar !]
+  end subroutine pack_2dvar !]
 !--------------------------------------------------------
-      subroutine pack_3dvar(A) ![
-      ! add a single 2D variable to the mpi exchange buffers
-      implicit none
+  subroutine pack_3dvar(A) ![
+    ! add a single 2D variable to the mpi exchange buffers
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:,:) :: A
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:,:) :: A
 
-      !local
-      integer(kind=4),dimension(3) :: dims
-      integer(kind=4) :: nxl,nyl,nzl
+    !local
+    integer(kind=4),dimension(3) :: dims
+    integer(kind=4) :: nxl,nyl,nzl
 
-      dims = shape(A)
-      nxl = dims(1) -2*bl
-      nyl = dims(2) -2*bl
-      nzl = dims(3)
-      call pack_buffers(A,nxl,nyl,nzl)
+    dims = shape(A)
+    nxl = dims(1) -2*bl
+    nyl = dims(2) -2*bl
+    nzl = dims(3)
+    call pack_buffers(A,nxl,nyl,nzl)
 
-      end subroutine pack_3dvar !]
+  end subroutine pack_3dvar !]
 !--------------------------------------------------------
-      subroutine unpack_2dvar(A) ![
-      ! add a single 2D variable to the mpi exchange buffers
-      implicit none
+  subroutine unpack_2dvar(A) ![
+    ! add a single 2D variable to the mpi exchange buffers
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:) :: A
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:) :: A
 
-      !local
-      integer(kind=4),dimension(2) :: dims
-      integer(kind=4) :: nxl,nyl
+    !local
+    integer(kind=4),dimension(2) :: dims
+    integer(kind=4) :: nxl,nyl
 
-      dims = shape(A)
-      nxl = dims(1) -2*bl
-      nyl = dims(2) -2*bl
-      call unpack_buffers(A,nxl,nyl,1)
+    dims = shape(A)
+    nxl = dims(1) -2*bl
+    nyl = dims(2) -2*bl
+    call unpack_buffers(A,nxl,nyl,1)
 
-      end subroutine unpack_2dvar !]
+  end subroutine unpack_2dvar !]
 !--------------------------------------------------------
-      subroutine unpack_3dvar(A) ![
-      ! add a single 2D variable to the mpi exchange buffers
-      implicit none
+  subroutine unpack_3dvar(A) ![
+    ! add a single 2D variable to the mpi exchange buffers
+    implicit none
 
-      !input/output
-      real,intent(inout),dimension(:,:,:) :: A
+    !input/output
+    real(kind=8),intent(inout),dimension(:,:,:) :: A
 
-      !local
-      integer(kind=4),dimension(3) :: dims
-      integer(kind=4) :: nxl,nyl,nzl
+    !local
+    integer(kind=4),dimension(3) :: dims
+    integer(kind=4) :: nxl,nyl,nzl
 
-      dims = shape(A)
-      nxl = dims(1) -2*bl
-      nyl = dims(2) -2*bl
-      nzl = dims(3)
-      call unpack_buffers(A,nxl,nyl,nzl)
+    dims = shape(A)
+    nxl = dims(1) -2*bl
+    nyl = dims(2) -2*bl
+    nzl = dims(3)
+    call unpack_buffers(A,nxl,nyl,nzl)
 
-      end subroutine unpack_3dvar !]
+  end subroutine unpack_3dvar !]
 !--------------------------------------------------------
-      subroutine init_mpi_buffers ![
-      ! Allocate space for mpi exchange buffers
-      implicit none
+  subroutine init_mpi_buffers ![
+    ! Allocate space for mpi exchange buffers
+    implicit none
 
-      !local
-      integer(kind=4) :: mxEW,mxNS,mxCr
+    !local
+    integer(kind=4) :: mxEW,mxNS,mxCr
 
-      if (mynode.eq.0) print *, 'init buffers'
-      init_buffer_done = .true.
+    if (mynode.eq.0) print *, 'init buffers'
+    init_buffer_done = .true.
 
-      mxEW = 4*bf*(j1+1-j0)*(nz+1)  ! maximum of 4 3D arrays at the time
-      mxNS = 4*bf*(i1+1-i0)*(nz+1)  ! maximum of 4 3D arrays at the time
-      mxCr = 4*bf*bf*(nz+1)         ! maximum of 4 3D arrays at the time
+    mxEW = 4*bf*(j1+1-j0)*(nz+1)  ! maximum of 4 3D arrays at the time
+    mxNS = 4*bf*(i1+1-i0)*(nz+1)  ! maximum of 4 3D arrays at the time
+    mxCr = 4*bf*bf*(nz+1)         ! maximum of 4 3D arrays at the time
 
-      allocate(sendW(mxEW))
-      allocate(sendE(mxEW))
-      allocate(sendN(mxNS))
-      allocate(sendS(mxNS))
-      allocate(sendNE(mxCr))
-      allocate(sendSE(mxCr))
-      allocate(sendNW(mxCr))
-      allocate(sendSW(mxCr))
+    allocate(sendW(mxEW))
+    allocate(sendE(mxEW))
+    allocate(sendN(mxNS))
+    allocate(sendS(mxNS))
+    allocate(sendNE(mxCr))
+    allocate(sendSE(mxCr))
+    allocate(sendNW(mxCr))
+    allocate(sendSW(mxCr))
 
-      allocate(recvW(mxEW))
-      allocate(recvE(mxEW))
-      allocate(recvN(mxNS))
-      allocate(recvS(mxNS))
-      allocate(recvNE(mxCr))
-      allocate(recvSE(mxCr))
-      allocate(recvNW(mxCr))
-      allocate(recvSW(mxCr))
+    allocate(recvW(mxEW))
+    allocate(recvE(mxEW))
+    allocate(recvN(mxNS))
+    allocate(recvS(mxNS))
+    allocate(recvNE(mxCr))
+    allocate(recvSE(mxCr))
+    allocate(recvNW(mxCr))
+    allocate(recvSW(mxCr))
 
-      end subroutine init_mpi_buffers !]
+  end subroutine init_mpi_buffers !]
 !--------------------------------------------------------
-      subroutine pack_buffers(A,nxl,nyl,nzl) ![
-      implicit none
+  subroutine pack_buffers(A,nxl,nyl,nzl) ![
+    implicit none
 
-      !input/output
-      integer,intent(in) :: nxl,nyl,nzl
-      real,intent(in),dimension(1-bl:nxl+bl,1-bl:nyl+bl,nzl) :: A
+    !input/output
+    integer(kind=4),intent(in) :: nxl,nyl,nzl
+    real(kind=8),intent(in),dimension(1-bl:nxl+bl,1-bl:nyl+bl,nzl) :: A
 
-      !local
-      integer :: il0,il1,jl0,jl1
+    !local
+    integer(kind=4) :: il0,il1,jl0,jl1
 
-      il0=1; il1=nxl; jl0=1; jl1=nyl
+    il0=1; il1=nxl; jl0=1; jl1=nyl
 
-      if (inode==0)        il0=0
-      if (inode==NP_XI-1)  il1=nxl+1
-      if (jnode==0)        jl0=0
-      if (jnode==NP_ETA-1) jl1=nyl+1
+    if (inode==0)        il0=0
+    if (inode==NP_XI-1)  il1=nxl+1
+    if (jnode==0)        jl0=0
+    if (jnode==NP_ETA-1) jl1=nyl+1
 
-      szEW = hl*(jl1+1-jl0)*nzl
-      szNS = hl*(il1+1-il0)*nzl
-      szCr = hl*hl*nzl
+    szEW = hl*(jl1+1-jl0)*nzl
+    szNS = hl*(il1+1-il0)*nzl
+    szCr = hl*hl*nzl
 
 ! Append buffers with data from the array to be send
 !----------------------------------------------
-      if (p_w>=0) then
-        sendW(szW+1:szW+szEW) = reshape(A(1:hl,jl0:jl1,:),(/szEW/))
-        szW = szW+szEW
-      endif
+    if (p_w>=0) then
+      sendW(szW+1:szW+szEW) = reshape(A(1:hl,jl0:jl1,:),(/szEW/))
+      szW = szW+szEW
+    endif
 
-      if (p_e>=0) then
-        sendE(szE+1:szE+szEW) = reshape(A(nxl+1-hl:nxl,jl0:jl1,:),(/szEW/))
-        szE = szE+szEW
-      endif
+    if (p_e>=0) then
+      sendE(szE+1:szE+szEW) = reshape(A(nxl+1-hl:nxl,jl0:jl1,:),(/szEW/))
+      szE = szE+szEW
+    endif
 
-      if (p_s>=0) then
-        sendS(szS+1:szS+szNS) = reshape(A(il0:il1,1:hl,:),(/szNS/))
-        szS = szS+szNS
-      endif
+    if (p_s>=0) then
+      sendS(szS+1:szS+szNS) = reshape(A(il0:il1,1:hl,:),(/szNS/))
+      szS = szS+szNS
+    endif
 
-      if (p_n>=0) then
-        sendN(szN+1:szN+szNS) = reshape(A(il0:il1,nyl+1-hl:nyl,:),(/szNS/))
-        szN = szN+szNS
-      endif
+    if (p_n>=0) then
+      sendN(szN+1:szN+szNS) = reshape(A(il0:il1,nyl+1-hl:nyl,:),(/szNS/))
+      szN = szN+szNS
+    endif
 
-      if (p_sw>=0) then
-        sendSW(szSW+1:szSW+szCr) = reshape(A(1:hl,1:hl,:),(/szCr/))
-        szSW = szSW+szCr
-      endif
+    if (p_sw>=0) then
+      sendSW(szSW+1:szSW+szCr) = reshape(A(1:hl,1:hl,:),(/szCr/))
+      szSW = szSW+szCr
+    endif
 
-      if (p_se>=0) then
-        sendSE(szSE+1:szSE+szCr) = reshape(A(nxl+1-hl:nxl,1:hl,:),(/szCr/))
-        szSE = szSE+szCr
-      endif
+    if (p_se>=0) then
+      sendSE(szSE+1:szSE+szCr) = reshape(A(nxl+1-hl:nxl,1:hl,:),(/szCr/))
+      szSE = szSE+szCr
+    endif
 
-      if (p_ne>=0) then
-        sendNE(szNE+1:szNE+szCr) = reshape(A(nxl+1-hl:nxl,nyl+1-hl:nyl,:),(/szCr/))
-        szNE = szNE+szCr
-      endif
+    if (p_ne>=0) then
+      sendNE(szNE+1:szNE+szCr) = reshape(A(nxl+1-hl:nxl,nyl+1-hl:nyl,:),(/szCr/))
+      szNE = szNE+szCr
+    endif
 
-      if (p_nw>=0) then
-        sendNW(szNW+1:szNW+szCr) = reshape(A(1:hl,nyl+1-hl:nyl,:),(/szCr/))
-        szNW = szNW+szCr
-      endif
+    if (p_nw>=0) then
+      sendNW(szNW+1:szNW+szCr) = reshape(A(1:hl,nyl+1-hl:nyl,:),(/szCr/))
+      szNW = szNW+szCr
+    endif
 
-      end subroutine pack_buffers !]
+  end subroutine pack_buffers !]
 !--------------------------------------------------------
-      subroutine unpack_buffers(A,nxl,nyl,nzl) ![
-      implicit none
+  subroutine unpack_buffers(A,nxl,nyl,nzl) ![
+    implicit none
 
-      !input/output
-      integer,intent(in) :: nxl,nyl,nzl
-      real,intent(inout),dimension(1-bl:nxl+bl,1-bl:nyl+bl,nzl) :: A
+    !input/output
+    integer(kind=4),intent(in) :: nxl,nyl,nzl
+    real(kind=8),intent(inout),dimension(1-bl:nxl+bl,1-bl:nyl+bl,nzl) :: A
 
-      !local
-      integer,dimension(3) :: shEW,shNS,shCr
-      integer :: il0,il1,jl0,jl1
+    !local
+    integer(kind=4),dimension(3) :: shEW,shNS,shCr
+    integer(kind=4) :: il0,il1,jl0,jl1
 
-      il0=1; il1=nxl; jl0=1; jl1=nyl
+    il0=1; il1=nxl; jl0=1; jl1=nyl
 
-      if (inode==0)        il0=0
-      if (inode==NP_XI-1)  il1=nxl+1
-      if (jnode==0)        jl0=0
-      if (jnode==NP_ETA-1) jl1=nyl+1
+    if (inode==0)        il0=0
+    if (inode==NP_XI-1)  il1=nxl+1
+    if (jnode==0)        jl0=0
+    if (jnode==NP_ETA-1) jl1=nyl+1
 
-      shEW = shape(A(1:hl,jl0:jl1,:))
-      shNS = shape(A(il0:il1,1:hl,:))
-      shCr = shape(A(1:hl,1:hl,:))
-      szEW = hl*(jl1+1-jl0)*nzl
-      szNS = hl*(il1+1-il0)*nzl
-      szCr = hl*hl*nzl
+    shEW = shape(A(1:hl,jl0:jl1,:))
+    shNS = shape(A(il0:il1,1:hl,:))
+    shCr = shape(A(1:hl,1:hl,:))
+    szEW = hl*(jl1+1-jl0)*nzl
+    szNS = hl*(il1+1-il0)*nzl
+    szCr = hl*hl*nzl
 
 ! Unpack data from exchanged buffers into array
 !----------------------------------------------
-      if (p_w>=0) then
-        A(1-hl:0,jl0:jl1,:) = reshape(recvW(szW+1:szW+szEW),shEW)
-        szW = szW+szEW
+    if (p_w>=0) then
+      A(1-hl:0,jl0:jl1,:) = reshape(recvW(szW+1:szW+szEW),shEW)
+      szW = szW+szEW
 !#ifndef PARALLEL_IO
 !      elseif (inode>0) then
 !        A(1-hl:0,jl0:jl1,:) = A(1:hl,jl0:jl1,:)
 !#endif
-      endif
-      if (p_e>=0) then
-        A(nxl+1:nxl+hl,jl0:jl1,:) = reshape(recvE(szE+1:szE+szEW),shEW)
-        szE = szE+szEW
+    endif
+    if (p_e>=0) then
+      A(nxl+1:nxl+hl,jl0:jl1,:) = reshape(recvE(szE+1:szE+szEW),shEW)
+      szE = szE+szEW
 !#ifndef PARALLEL_IO
 !      elseif (inode<npx-1) then
 !        A(nxl+1:nxl+hl,jl0:jl1,:) =  A(nxl+1-hl:nxl,jl0:jl1,:)
 !#endif
-      endif
+    endif
 
-      if (p_s>=0) then
-        A(il0:il1,1-hl:0,:) = reshape(recvS(szS+1:szS+szNS),shNS)
-        szS = szS+szNS
+    if (p_s>=0) then
+      A(il0:il1,1-hl:0,:) = reshape(recvS(szS+1:szS+szNS),shNS)
+      szS = szS+szNS
 !#ifndef PARALLEL_IO
 !      elseif (jnode>0) then
 !        A(il0:il1,1-hl:0,:) = A(il0:il1,1:hl,:)
 !#endif
-      endif
+    endif
 
-      if (p_n>=0) then
-        A(il0:il1,nyl+1:nyl+hl,:) = reshape(recvN(szN+1:szN+szNS),shNS)
-        szN = szN+szNS
+    if (p_n>=0) then
+      A(il0:il1,nyl+1:nyl+hl,:) = reshape(recvN(szN+1:szN+szNS),shNS)
+      szN = szN+szNS
 !#ifndef PARALLEL_IO
 !      elseif (jnode<npy-1) then
 !        A(il0:il1,nyl+1:nyl+hl,:) = A(il0:il1,nyl+1-hl:nyl,:)
 !#endif
-      endif
+    endif
 
-      if (p_sw>=0.and.do_corners) then
-        A(1-hl:0,1-hl:0,:) = reshape(recvSW(szSW+1:szSW+szCr),shCr)
-        szSW = szSW+szCr
+    if (p_sw>=0.and.do_corners) then
+      A(1-hl:0,1-hl:0,:) = reshape(recvSW(szSW+1:szSW+szCr),shCr)
+      szSW = szSW+szCr
 !#ifndef PARALLEL_IO
 !      elseif (inode>0.and.jnode>0) then
 !        A(1-hl:0,1-hl:0,:) = A(1:hl,1:hl,:)
 !#endif
-      endif
+    endif
 
-      if (p_se>=0.and.do_corners) then
-        A(nxl+1:nxl+hl,1-hl:0,:) = reshape(recvSE(szSE+1:szSE+szCr),shCr)
-        szSE = szSE+szCr
+    if (p_se>=0.and.do_corners) then
+      A(nxl+1:nxl+hl,1-hl:0,:) = reshape(recvSE(szSE+1:szSE+szCr),shCr)
+      szSE = szSE+szCr
 !#ifndef PARALLEL_IO
 !      elseif (inode<npx-1.and.jnode>0) then
 !        A(nxl+1:nxl+hl,1-hl:0,:) = A(nxl+1-hl:nxl,1:hl,:)
 !#endif
-      endif
+    endif
 
-      if (p_nw>=0.and.do_corners) then
-        A(1-hl:0,nyl+1:nyl+hl,:) = reshape(recvNW(szNW+1:szNW+szCr),shCr)
-        szNW = szNW+szCr
+    if (p_nw>=0.and.do_corners) then
+      A(1-hl:0,nyl+1:nyl+hl,:) = reshape(recvNW(szNW+1:szNW+szCr),shCr)
+      szNW = szNW+szCr
 !#ifndef PARALLEL_IO
 !      elseif (inode>0.and.jnode<npy-1) then
 !        A(1-hl:0,nyl+1:nyl+hl,:) = A(1:hl,nyl+1-hl:nyl,:)
 !#endif
-      endif
+    endif
 
-      if (p_ne>=0.and.do_corners) then
-        A(nxl+1:nxl+hl,nyl+1:nyl+hl,:) = reshape(recvNE(szNE+1:szNE+szCr),shCr)
-        szNE = szNE+szCr
+    if (p_ne>=0.and.do_corners) then
+      A(nxl+1:nxl+hl,nyl+1:nyl+hl,:) = reshape(recvNE(szNE+1:szNE+szCr),shCr)
+      szNE = szNE+szCr
 !#ifndef PARALLEL_IO
 !      elseif (inode<npx-1.and.jnode<npy-1) then
 !        A(nxl+1:nxl+hl,nyl+1:nyl+hl,:) = A(nxl+1-hl:nxl,nyl+1-hl:nyl,:)
 !#endif
-      endif
+    endif
 
-      end subroutine unpack_buffers !]
+  end subroutine unpack_buffers !]
 !--------------------------------------------------------
-      subroutine mpi_buffer_exchange ![
-      implicit none
+  subroutine mpi_buffer_exchange ![
+    implicit none
 
-      ! local
-      integer(kind=4) mess_count, comm(16), req(16),
-     &                                  status(MPI_STATUS_SIZE)
-      integer(kind=4) ipass
-      integer(kind=4) i,ierr
-      logical flag
+    ! local
+    integer(kind=4) mess_count, comm(16), req(16),&
+    &status(MPI_STATUS_SIZE)
+    integer(kind=4) ipass
+    integer(kind=4) i,ierr
+    logical flag
 
 ! Permutation array comm(1:16) keeps track which messages are actually
 ! being received -- hence comm(indx)=0  means that no messages are
@@ -1125,117 +1125,117 @@
 ! rearrangement in order to ignore directions from which no message is
 ! expected, as well as to ignore requests from which messages are
 
-                     ! tags for receive      for send        ! each sub-domain can receive up to 8 exchanges.
-      do i=1,16      !         3  5  1        4  6  2        ! the 'tag' value indicates which side/corner
-        comm(i)=0    !         8     7        7     8        ! the message came from.
-      enddo          !         2  6  4        1  5  3
+    ! tags for receive      for send        ! each sub-domain can receive up to 8 exchanges.
+    do i=1,16      !         3  5  1        4  6  2        ! the 'tag' value indicates which side/corner
+      comm(i)=0    !         8     7        7     8        ! the message came from.
+    enddo          !         2  6  4        1  5  3
 
 ! Prepare to receive:
-      if (p_w>=0) then
-        call MPI_Irecv (recvW, szW, MPI_DOUBLE_PRECISION,
-     &          p_W, 8, ocean_grid_comm, req(1), ierr)
-        comm(1)=1
-      endif
-      if (p_e>=0) then
-        call MPI_Irecv (recvE, szE, MPI_DOUBLE_PRECISION,
-     &          p_E, 7, ocean_grid_comm, req(2), ierr)
-        comm(2)=2
-      endif
-      if (p_s>=0) then
-        call MPI_Irecv (recvS, szS, MPI_DOUBLE_PRECISION,
-     &          p_S, 6, ocean_grid_comm, req(3), ierr)
-        comm(3)=3
-      endif
-      if (p_n>=0) then
-        call MPI_Irecv (recvN, szN, MPI_DOUBLE_PRECISION,
-     &          p_N, 5, ocean_grid_comm, req(4), ierr)
-        comm(4)=4
-      endif
-      if (p_sw>=0) then
-        call MPI_Irecv (recvSW, szSW, MPI_DOUBLE_PRECISION,
-     &            p_SW, 2, ocean_grid_comm, req(5), ierr)
-        comm(5)=5
-      endif
-      if (p_ne>=0) then
-        call MPI_Irecv (recvNE, szNE, MPI_DOUBLE_PRECISION,
-     &            p_NE, 1, ocean_grid_comm, req(6), ierr)
-        comm(6)=6
-      endif
-      if (p_se>=0) then
-        call MPI_Irecv (recvSE, szSE, MPI_DOUBLE_PRECISION,
-     &            p_SE, 4, ocean_grid_comm, req(7), ierr)
-        comm(7)=7
-      endif
-      if (p_nw>=0) then
-        call MPI_Irecv (recvNW, szNW, MPI_DOUBLE_PRECISION,
-     &            p_NW, 3, ocean_grid_comm, req(8), ierr)
-        comm(8)=8
-      endif
+    if (p_w>=0) then
+      call MPI_Irecv (recvW, szW, MPI_DOUBLE_PRECISION,&
+      &p_W, 8, ocean_grid_comm, req(1), ierr)
+      comm(1)=1
+    endif
+    if (p_e>=0) then
+      call MPI_Irecv (recvE, szE, MPI_DOUBLE_PRECISION,&
+      &p_E, 7, ocean_grid_comm, req(2), ierr)
+      comm(2)=2
+    endif
+    if (p_s>=0) then
+      call MPI_Irecv (recvS, szS, MPI_DOUBLE_PRECISION,&
+      &p_S, 6, ocean_grid_comm, req(3), ierr)
+      comm(3)=3
+    endif
+    if (p_n>=0) then
+      call MPI_Irecv (recvN, szN, MPI_DOUBLE_PRECISION,&
+      &p_N, 5, ocean_grid_comm, req(4), ierr)
+      comm(4)=4
+    endif
+    if (p_sw>=0) then
+      call MPI_Irecv (recvSW, szSW, MPI_DOUBLE_PRECISION,&
+      &p_SW, 2, ocean_grid_comm, req(5), ierr)
+      comm(5)=5
+    endif
+    if (p_ne>=0) then
+      call MPI_Irecv (recvNE, szNE, MPI_DOUBLE_PRECISION,&
+      &p_NE, 1, ocean_grid_comm, req(6), ierr)
+      comm(6)=6
+    endif
+    if (p_se>=0) then
+      call MPI_Irecv (recvSE, szSE, MPI_DOUBLE_PRECISION,&
+      &p_SE, 4, ocean_grid_comm, req(7), ierr)
+      comm(7)=7
+    endif
+    if (p_nw>=0) then
+      call MPI_Irecv (recvNW, szNW, MPI_DOUBLE_PRECISION,&
+      &p_NW, 3, ocean_grid_comm, req(8), ierr)
+      comm(8)=8
+    endif
 
 ! Send everything
 !----------------------------------------------
-      if (p_w>=0) then
-        call MPI_Isend (sendW, szW, MPI_DOUBLE_PRECISION,
-     &            p_W,7,ocean_grid_comm, req(9), ierr)
-        comm(9)=9
-      endif
-      if (p_e>=0) then
-        call MPI_Isend (sendE, szE, MPI_DOUBLE_PRECISION,
-     &             p_E,8,ocean_grid_comm, req(10), ierr)
-        comm(10)=10
-      endif
-      if (p_s>=0) then
-        call MPI_Isend (sendS, szS, MPI_DOUBLE_PRECISION,
-     &         p_S, 5, ocean_grid_comm, req(11), ierr)
-        comm(11)=11
-      endif
-      if (p_n>=0) then
-        call MPI_Isend (sendN, szN, MPI_DOUBLE_PRECISION,
-     &         p_N, 6, ocean_grid_comm, req(12), ierr)
-        comm(12)=12
-      endif
-      if (p_sw>=0) then
-        call MPI_Isend (sendSW, szSW, MPI_DOUBLE_PRECISION,
-     &           p_SW, 1, ocean_grid_comm, req(13), ierr)
-        comm(13)=13
-      endif
-      if (p_ne>=0) then
-        call MPI_Isend (sendNE, szNE, MPI_DOUBLE_PRECISION,
-     &           p_NE, 2, ocean_grid_comm, req(14), ierr)
-        comm(14)=14
-      endif
-      if (p_se>=0) then
-        call MPI_Isend (sendSE, szSE, MPI_DOUBLE_PRECISION,
-     &           p_SE, 3, ocean_grid_comm, req(15), ierr)
-        comm(15)=15
-      endif
-      if (p_nw>=0) then
-        call MPI_Isend (sendNW, szNW, MPI_DOUBLE_PRECISION,
-     &           p_NW, 4, ocean_grid_comm, req(16), ierr)
-        comm(16)=16
-      endif
+    if (p_w>=0) then
+      call MPI_Isend (sendW, szW, MPI_DOUBLE_PRECISION,&
+      &p_W,7,ocean_grid_comm, req(9), ierr)
+      comm(9)=9
+    endif
+    if (p_e>=0) then
+      call MPI_Isend (sendE, szE, MPI_DOUBLE_PRECISION,&
+      &p_E,8,ocean_grid_comm, req(10), ierr)
+      comm(10)=10
+    endif
+    if (p_s>=0) then
+      call MPI_Isend (sendS, szS, MPI_DOUBLE_PRECISION,&
+      &p_S, 5, ocean_grid_comm, req(11), ierr)
+      comm(11)=11
+    endif
+    if (p_n>=0) then
+      call MPI_Isend (sendN, szN, MPI_DOUBLE_PRECISION,&
+      &p_N, 6, ocean_grid_comm, req(12), ierr)
+      comm(12)=12
+    endif
+    if (p_sw>=0) then
+      call MPI_Isend (sendSW, szSW, MPI_DOUBLE_PRECISION,&
+      &p_SW, 1, ocean_grid_comm, req(13), ierr)
+      comm(13)=13
+    endif
+    if (p_ne>=0) then
+      call MPI_Isend (sendNE, szNE, MPI_DOUBLE_PRECISION,&
+      &p_NE, 2, ocean_grid_comm, req(14), ierr)
+      comm(14)=14
+    endif
+    if (p_se>=0) then
+      call MPI_Isend (sendSE, szSE, MPI_DOUBLE_PRECISION,&
+      &p_SE, 3, ocean_grid_comm, req(15), ierr)
+      comm(15)=15
+    endif
+    if (p_nw>=0) then
+      call MPI_Isend (sendNW, szNW, MPI_DOUBLE_PRECISION,&
+      &p_NW, 4, ocean_grid_comm, req(16), ierr)
+      comm(16)=16
+    endif
 
 ! Verify that everything has been succesfully transferred
 !----------------------------------------------
-      ! 1 each for send and receive
-      mess_count=0
-      do i=1,16
-        if (comm(i) > 0) mess_count=mess_count+1
-      enddo
+    ! 1 each for send and receive
+    mess_count=0
+    do i=1,16
+      if (comm(i) > 0) mess_count=mess_count+1
+    enddo
 
 !  Stay in this loop untill every message has been received
-      do while (mess_count>0)
-        do i=1,16
-          if (comm(i) > 0) then
-            call MPI_Test (req(i), flag, status, ierr)
-            if (flag) then
-               mess_count=mess_count-1 ; comm(i)=0
-            endif
+    do while (mess_count>0)
+      do i=1,16
+        if (comm(i) > 0) then
+          call MPI_Test (req(i), flag, status, ierr)
+          if (flag) then
+            mess_count=mess_count-1 ; comm(i)=0
           endif
-        enddo
+        endif
       enddo
+    enddo
 
-      end subroutine mpi_buffer_exchange !]
+  end subroutine mpi_buffer_exchange !]
 ! ----------------------------------------------------------------------
 
-      end module roms_mpi
+end module roms_mpi
