@@ -198,11 +198,11 @@ module roms_read_write
   public :: read_nml_roms_read_write
 
   interface set_frc_data
-    module procedure&
+    module procedure &
     &set_frc_data_1d,set_frc_data_2d,set_frc_data_3d,set_frc_data_surf
   end interface set_frc_data
   interface fill_frc_slice
-    module procedure&
+    module procedure &
     &fill_frc_slice_aux, fill_frc_slice_aux3d, fill_frc_slice_surf
   end interface fill_frc_slice
 
