@@ -1,6 +1,6 @@
 #include "cppdefs.opt"
 
-      subroutine set_forces
+subroutine set_forces
 
 ! Using either data read from netCDF files or created analytically,
 ! prepare surface and bottom boundary fluxes, so they can be
@@ -15,7 +15,7 @@
 !
 !  heat, SWR fluxes    [Watts/m^2]       1/(rho*Cp)     [deg C * m/s]
 !
-!  fresh water flux     [cm/day]     S_surf*0.01/86400  [PSU *  m/s]
+!  fresh water flux     [cm/day]     S_surf*0.01_8/86400  [PSU *  m/s]
 !
 !     dQdSST       [Watts/(m^2*deg C)]   1/(rho*Cp)        [m/s]
 !
@@ -27,47 +27,47 @@
 !
 ! Bottom drag is computed using either Styles and Glenn(1996) bottom
 ! boundary layer formulation, or linear/quadratic friction law..
-      use param, only:
-     &     ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, itemp
+  use param, only:&
 #ifdef SALINITY
-     &     , isalt
+  &isalt,&
 #endif
-      use flux_frc, only: set_flux_frc
-      use surf_flux, only: set_surf_field_corr
-      use tracers, only: set_surf_tracer_flx, iTandS
-      use river_frc, only:  set_river_frc, river_source
-      use pipe_frc, only: set_pipe_frc, pipe_source
+  &ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, itemp
+  use flux_frc, only: set_flux_frc
+  use surf_flux, only: set_surf_field_corr
+  use tracers, only: set_surf_tracer_flx, iTandS
+  use river_frc, only:  set_river_frc, river_source
+  use pipe_frc, only: set_pipe_frc, pipe_source
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
-      use bgc_io, only: set_bgc_surf_frc
+  use bgc_io, only: set_bgc_surf_frc
 #endif
-      use dimensions, only: jnode, inode
-      use boundary, only: frctype
-      use scalars, only: nt
+  use dimensions, only: jnode, inode
+  use boundary, only: frctype
+  use scalars, only: nt
 #if defined(CDR_FORCING)
-      use cdr_frc, only: set_cdr_frc, cdr_source
+  use cdr_frc, only: set_cdr_frc, cdr_source
 #endif
 # ifdef BULK_FRC
-      use bulk_frc, only: set_bulk_frc
+  use bulk_frc, only: set_bulk_frc
 #endif
 #ifdef ANA_SRFLUX
-      use analytical, only: ana_srflux_tile
+  use analytical, only: ana_srflux_tile
 #endif
 #ifdef ANA_STFLUX
-      use analytical, only: ana_stflux_tile
+  use analytical, only: ana_stflux_tile
 #endif
 #ifdef ANA_SMFLUX
-      use analytical, only: ana_smflux_tile
+  use analytical, only: ana_smflux_tile
 #endif
 
-      implicit none
+  implicit none
 
 
-      integer ierr
-      integer,save:: tile=0
+  integer(kind=4) ierr
+  integer(kind=4),save:: tile=0
 
 #include "compute_tile_bounds.h"
 
-      ierr=0
+  ierr=0
 ! External data to supply at open boundaries. Note that there are
 ! two mutually exclusive mechanisms for each variable: either _BRY
 
@@ -75,17 +75,17 @@
      (defined T_FRC_BRY  || defined M2_FRC_BRY || \
       defined M3_FRC_BRY || defined Z_FRC_BRY )
 # ifdef ANA_BRY
-c***              no code here
+!***              no code here
 # else
 !     call set_bry_all_tile(istr,iend,jstr,jend, ierr)
 !     call set_bry_all
 # endif
 #endif
 
-                                        !--> Surface fluxes
+  !--> Surface fluxes
 
 #ifdef ANA_SMFLUX
-      call ana_smflux_tile(istr,iend,jstr,jend)
+  call ana_smflux_tile(istr,iend,jstr,jend)
 #endif
 
 ! Thermodynamic forcing: Note that BULK_FLUX requires computing the
@@ -101,50 +101,50 @@ c***              no code here
 #ifdef SOLVE3D
 
 # if defined QCORRECTION || defined SFLX_CORR
-      call set_surf_field_corr
+  call set_surf_field_corr
 # endif
 # ifdef BULK_FRC
 #  ifdef LMD_KPP
 #   ifdef ANA_SRFLUX
-      call ana_srflux_tile(istr,iend,jstr,jend) ! Should move this to bulk module
+  call ana_srflux_tile(istr,iend,jstr,jend) ! Should move this to bulk module
 #   endif
 #  endif
-      call set_bulk_frc(istr,iend,jstr,jend)
+  call set_bulk_frc(istr,iend,jstr,jend)
 # else
-      ! DevinD not sure what flag to use here to avoid set_flux for purely analytical
+  ! DevinD not sure what flag to use here to avoid set_flux for purely analytical
 #  ifndef ANA_SMFLUX
-      frctype = 'SURF:'
-      call set_flux_frc(istr,iend,jstr,jend)
+  frctype = 'SURF:'
+  call set_flux_frc(istr,iend,jstr,jend)
 #  endif
 
 #  ifdef ANA_STFLUX
-      call ana_stflux_tile(istr,iend,jstr,jend, itemp) ! DevinD Should move to module
+  call ana_stflux_tile(istr,iend,jstr,jend, itemp) ! DevinD Should move to module
 #  endif
 #  ifdef LMD_KPP
 #   ifdef ANA_SRFLUX
-      call ana_srflux_tile(istr,iend,jstr,jend) ! DevinD Should move to module
+  call ana_srflux_tile(istr,iend,jstr,jend) ! DevinD Should move to module
 #   endif
 #  endif
 #  ifdef SALINITY
 #   ifdef ANA_SSFLUX
-      call ana_stflux_tile(istr,iend,jstr,jend, isalt) ! DevinD Should move to module
+  call ana_stflux_tile(istr,iend,jstr,jend, isalt) ! DevinD Should move to module
 #   endif
 #  endif
 # endif
-      if(nt>iTandS) call set_surf_tracer_flx
-      ! BGC surface flux:
+  if(nt>iTandS) call set_surf_tracer_flx
+  ! BGC surface flux:
 
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
-      call set_bgc_surf_frc(istr,iend,jstr,jend)
+  call set_bgc_surf_frc(istr,iend,jstr,jend)
 # endif
 
-      if (river_source) then
-        frctype = 'RIVERS:'
-        call set_river_frc
-      endif
-      if (pipe_source) call set_pipe_frc
+  if (river_source) then
+    frctype = 'RIVERS:'
+    call set_river_frc
+  endif
+  if (pipe_source) call set_pipe_frc
 #if defined(CDR_FORCING)
-      if (cdr_source) call set_cdr_frc
+  if (cdr_source) call set_cdr_frc
 #endif
 #endif  /* SOLVE3D */
 
@@ -152,17 +152,17 @@ c***              no code here
 !    boundary layer formulation.  Not implemented in this code]
 
 #if defined ANA_BMFLUX
-      call ana_bmflux ILLEGAL
+  call ana_bmflux ILLEGAL
 #elif defined SG_BBL96
 # ifdef ANA_WWAVE
-      call ana_wwave ILLEGAL
+  call ana_wwave ILLEGAL
 # else
-      call set_wwave_tile(istr,iend,jstr,jend)
+  call set_wwave_tile(istr,iend,jstr,jend)
 # endif
-      call sg_bbl96 ILLEGAL
+  call sg_bbl96 ILLEGAL
 #endif
 
 #ifdef ANA_PSOURCE
-      if (ZEROTH_TILE) call ana_psource
+  if (ZEROTH_TILE) call ana_psource
 #endif
-      end
+end subroutine set_forces

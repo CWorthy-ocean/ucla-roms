@@ -1,52 +1,52 @@
-      module set_depth_mod
+module set_depth_mod
 #include "cppdefs.opt"
-      implicit none
-      private
+  implicit none
+  private
 
 #ifdef SOLVE3D
-      public :: set_HUV
-      public :: set_HUV1
-      public :: set_depth
-      public :: set_depth_tile
-      public :: check_set_HUV1_switches
+  public :: set_HUV
+  public :: set_HUV1
+  public :: set_depth
+  public :: set_depth_tile
+  public :: check_set_HUV1_switches
 
-      contains
+contains
 
-      subroutine set_depth(tile)
+  subroutine set_depth(tile)
 
-      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+    use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
 
-      implicit none
-      integer tile
+    implicit none
+    integer(kind=4) tile
 
 # include "compute_tile_bounds.h"
-      call set_depth_tile(istr,iend,jstr,jend)
-      end
+    call set_depth_tile(istr,iend,jstr,jend)
+  end subroutine set_depth
 
-      subroutine set_depth_tile(istr,iend,jstr,jend)
+  subroutine set_depth_tile(istr,iend,jstr,jend)
 
 ! Compute evolving z-coordinates "z_r" and "z_w" and the heights
 ! of vertical grid boxes "Hz" from fast-time-averaged free surface,
 ! topography h(i,j), and vertical coordinate transformation formula.
 
-      use coupling, only: du_avg1, dv_avg1
-      use grid, only: h, hinv, dn_u, dm_v, pn, pm
-      use param, only: ieast, jnorth, lm, mm, np_eta, np_xi
-      use roms_mpi, only: exchange_xxx
-      use dimensions, only: inode, jnode, npx,npy, i0, i1, j0, j1
-      use ocean_vars, only:
-     &     ubar, zeta, vbar, z_w, z_r, hz, z_w0, z_r0, hz0
+    use coupling, only: du_avg1, dv_avg1
+    use grid, only: h, hinv, dn_u, dm_v, pn, pm
+    use param, only: ieast, jnorth, lm, mm, np_eta, np_xi
+    use roms_mpi, only: exchange_xxx
+    use dimensions, only: inode, jnode, npx,npy, i0, i1, j0, j1
+    use ocean_vars, only:&
 # if defined NHMG || defined NONTRAD_COR
-     &     , dzdxi, dzdeta
+    &dzdxi, dzdeta,&
 #endif
-      use scalars, only: iic, knew
-      use scoord, only: hc, iwest, jsouth, n, cs_w, cs_r
-      use pio_roms, only: use_pio
-      use instant_output, only: wrt_instant
+    &ubar, zeta, vbar, z_w, z_r, hz, z_w0, z_r0, hz0
+    use scalars, only: iic, knew
+    use scoord, only: hc, iwest, jsouth, n, cs_w, cs_r
+    use pio_roms, only: use_pio
+    use instant_output, only: wrt_instant
 
-      implicit none
-      integer istr,iend,jstr,jend, i,j,k
-      real cff_r,cff1_r, cff_w,cff1_w, ds
+    implicit none
+    integer(kind=4) istr,iend,jstr,jend, i,j,k
+    real(kind=8) cff_r,cff1_r, cff_w,cff1_w, ds
 
 ! If we are using Parallel IO we are going to read in both the computational
 ! domain and the halos, so we can go ahead and set the fluxes and cell thicknesses
@@ -56,88 +56,88 @@
 #else
 # include "compute_auxiliary_bounds.h"
 #endif
-                                  ! During initialization or
-      if (iic == 0) then               ! restart compute barotropic
-        do j=jstrR,jendR               ! fluxes and place them into
-          do i=istrR,iendR             ! arrays for fast-time-averaged
-            hinv(i,j)=1./(h(i,j)+hc)   ! fluxes. Later during the first
-          enddo                        ! procedure uses these DU_avg1,
-        enddo                          ! DV_avg1 as input to compute
-                                       ! ubar,vbar as it does so during
-        do j=jstrR,jendR               ! all subsequent steps.
-          do i=istr,iendR
-            DU_avg1(i,j)=0.5*( h(i-1,j)+h(i,j)+zeta(i,j,1)
-     &            +zeta(i-1,j,1) )*dn_u(i,j)*( ubar(i,j,1))
-          enddo
+    ! During initialization or
+    if (iic == 0) then               ! restart compute barotropic
+      do j=jstrR,jendR               ! fluxes and place them into
+        do i=istrR,iendR             ! arrays for fast-time-averaged
+          hinv(i,j)=1._8/(h(i,j)+hc)   ! fluxes. Later during the first
+        enddo                        ! procedure uses these DU_avg1,
+      enddo                          ! DV_avg1 as input to compute
+      ! ubar,vbar as it does so during
+      do j=jstrR,jendR               ! all subsequent steps.
+        do i=istr,iendR
+          DU_avg1(i,j)=0.5_8*( h(i-1,j)+h(i,j)+zeta(i,j,1)&
+          &+zeta(i-1,j,1) )*dn_u(i,j)*( ubar(i,j,1))
         enddo
+      enddo
 
-        do j=jstr,jendR
-          do i=istrR,iendR
-            DV_avg1(i,j)=0.5*( h(i,j)+h(i,j-1)+zeta(i,j,1)
-     &            +zeta(i,j-1,1) )*dm_v(i,j)*( vbar(i,j,1))
-          enddo
+      do j=jstr,jendR
+        do i=istrR,iendR
+          DV_avg1(i,j)=0.5_8*( h(i,j)+h(i,j-1)+zeta(i,j,1)&
+          &+zeta(i,j-1,1) )*dm_v(i,j)*( vbar(i,j,1))
         enddo
+      enddo
 
 # ifdef OBC_CHECK
-        print *, 'set_depth_tile:'
-        print *, 'DU_avg1(istr,10)=',DU_avg1(istr,10)
+      print *, 'set_depth_tile:'
+      print *, 'DU_avg1(istr,10)=',DU_avg1(istr,10)
 # endif
 
-      endif  ! first time
+    endif  ! first time
 
-      ds=1.D0/dble(N)
+    ds=1.D0/dble(N)
+    do j=jstrR,jendR
+      do i=istrR,iendR
+        z_w(i,j,0)=-h(i,j)
+      enddo
+
+      do k=1,N,+1   !--> irreversible because of recursion in Hz
+
+        cff_w=hc*ds* dble(k-N)
+        cff_r=hc*ds*(dble(k-N)-0.5_8)
+
+        cff1_w=Cs_w(k)
+        cff1_r=Cs_r(k)
+
+        do i=istrR,iendR
+
+          z_w(i,j,k)=zeta(i,j,knew) +(zeta(i,j,knew)+h(i,j))&
+          &*(cff_w+cff1_w*h(i,j))*hinv(i,j)
+
+          z_r(i,j,k)=zeta(i,j,knew) +(zeta(i,j,knew)+h(i,j))&
+          &*(cff_r+cff1_r*h(i,j))*hinv(i,j)
+
+          Hz(i,j,k)=z_w(i,j,k)-z_w(i,j,k-1)
+        enddo
+      enddo
+    enddo
+
+    ! Only set these during initialization
+    if (iic == 0) then
       do j=jstrR,jendR
         do i=istrR,iendR
-          z_w(i,j,0)=-h(i,j)
+          z_w0(i,j,0)=-h(i,j)
         enddo
 
         do k=1,N,+1   !--> irreversible because of recursion in Hz
 
           cff_w=hc*ds* dble(k-N)
-          cff_r=hc*ds*(dble(k-N)-0.5)
+          cff_r=hc*ds*(dble(k-N)-0.5_8)
 
           cff1_w=Cs_w(k)
           cff1_r=Cs_r(k)
 
           do i=istrR,iendR
 
-            z_w(i,j,k)=zeta(i,j,knew) +(zeta(i,j,knew)+h(i,j))
-     &                        *(cff_w+cff1_w*h(i,j))*hinv(i,j)
+            z_w0(i,j,k)= h(i,j)*(cff_w+cff1_w*h(i,j))*hinv(i,j)
 
-            z_r(i,j,k)=zeta(i,j,knew) +(zeta(i,j,knew)+h(i,j))
-     &                        *(cff_r+cff1_r*h(i,j))*hinv(i,j)
+            z_r0(i,j,k)= h(i,j)*(cff_r+cff1_r*h(i,j))*hinv(i,j)
 
-            Hz(i,j,k)=z_w(i,j,k)-z_w(i,j,k-1)
+            Hz0(i,j,k)= z_w0(i,j,k)-z_w0(i,j,k-1)
           enddo
         enddo
       enddo
-
-      ! Only set these during initialization
-      if (iic == 0) then
-        do j=jstrR,jendR
-          do i=istrR,iendR
-            z_w0(i,j,0)=-h(i,j)
-          enddo
-
-          do k=1,N,+1   !--> irreversible because of recursion in Hz
-
-            cff_w=hc*ds* dble(k-N)
-            cff_r=hc*ds*(dble(k-N)-0.5)
-
-            cff1_w=Cs_w(k)
-            cff1_r=Cs_r(k)
-
-            do i=istrR,iendR
-
-              z_w0(i,j,k)= h(i,j)*(cff_w+cff1_w*h(i,j))*hinv(i,j)
-
-              z_r0(i,j,k)= h(i,j)*(cff_r+cff1_r*h(i,j))*hinv(i,j)
-
-              Hz0(i,j,k)= z_w0(i,j,k)-z_w0(i,j,k-1)
-            enddo
-          enddo
-        enddo
-      endif
+    endif
 
 !            call wrt_instant(z_r(i0:i1,j0:j1,:), 'zr')
 !           stop
@@ -148,116 +148,116 @@
 !              call exchange_xxx(z_w0,z_r0,Hz0, skip=use_pio)
 !      endif
 !      call exchange_xxx(z_w,z_r,Hz, skip=use_pio)
-      if (iic == 0) then
-        call exchange_xxx(hinv)
-              call exchange_xxx(z_w0,z_r0,Hz0)
-      endif
-      call exchange_xxx(z_w,z_r,Hz)
+    if (iic == 0) then
+      call exchange_xxx(hinv)
+      call exchange_xxx(z_w0,z_r0,Hz0)
+    endif
+    call exchange_xxx(z_w,z_r,Hz)
 # endif
 
 #if defined NHMG || defined NONTRAD_COR
 !     Compute slopes
-      do k = 1, N
-         do j = 0,Mm+1
-            do i = 0,Lm+1
-               dzdxi (i,j,k)=0.5*(z_r(i+1,j,k)-z_r(i-1,j,k))*pn(i,j)
-               dzdeta(i,j,k)=0.5*(z_r(i,j+1,k)-z_r(i,j-1,k))*pm(i,j)
-            enddo
-         enddo
+    do k = 1, N
+      do j = 0,Mm+1
+        do i = 0,Lm+1
+          dzdxi (i,j,k)=0.5_8*(z_r(i+1,j,k)-z_r(i-1,j,k))*pn(i,j)
+          dzdeta(i,j,k)=0.5_8*(z_r(i,j+1,k)-z_r(i,j-1,k))*pm(i,j)
+        enddo
       enddo
-      ! z_r is buffer filled in the interior halos but not in the outer halos
+    enddo
+    ! z_r is buffer filled in the interior halos but not in the outer halos
 # ifndef EW_PERIODIC
-      if (WESTERN_EDGE) then
-         do k = 1, N
-            do j = 0,Mm+1
-               dzdxi (0,j,k) = 0.
-               dzdxi (1,j,k) = 0.
-               dzdeta(0,j,k) = 0.
-               dzdeta(1,j,k) = 0.
-            enddo
-         enddo
-       endif
-      if (EASTERN_EDGE) then
-         do k = 1, N
-            do j = 0,Mm+1
-               dzdxi (Lm  ,j,k) = 0.
-               dzdxi (Lm+1,j,k) = 0.
-               dzdeta(Lm  ,j,k) = 0.
-               dzdeta(Lm+1,j,k) = 0.
-            enddo
-         enddo
-       endif
+    if (WESTERN_EDGE) then
+      do k = 1, N
+        do j = 0,Mm+1
+          dzdxi (0,j,k) = 0._8
+          dzdxi (1,j,k) = 0._8
+          dzdeta(0,j,k) = 0._8
+          dzdeta(1,j,k) = 0._8
+        enddo
+      enddo
+    endif
+    if (EASTERN_EDGE) then
+      do k = 1, N
+        do j = 0,Mm+1
+          dzdxi (Lm  ,j,k) = 0._8
+          dzdxi (Lm+1,j,k) = 0._8
+          dzdeta(Lm  ,j,k) = 0._8
+          dzdeta(Lm+1,j,k) = 0._8
+        enddo
+      enddo
+    endif
 # endif
 # ifndef NS_PERIODIC
-      if (SOUTHERN_EDGE) then
-         do k = 1, N
-            do i = 0,Lm+1
-               dzdxi (i,0,k) = 0.
-               dzdxi (i,1,k) = 0.
-               dzdeta(i,0,k) = 0.
-               dzdeta(i,1,k) = 0.
-            enddo
-         enddo
-       endif
-      if (NORTHERN_EDGE) then
-         do k = 1, N
-            do i = 0,Lm+1
-               dzdxi (i,Mm  ,k) = 0.
-               dzdxi (i,Mm+1,k) = 0.
-               dzdeta(i,Mm  ,k) = 0.
-               dzdeta(i,Mm+1,k) = 0.
-            enddo
-         enddo
-       endif
+    if (SOUTHERN_EDGE) then
+      do k = 1, N
+        do i = 0,Lm+1
+          dzdxi (i,0,k) = 0._8
+          dzdxi (i,1,k) = 0._8
+          dzdeta(i,0,k) = 0._8
+          dzdeta(i,1,k) = 0._8
+        enddo
+      enddo
+    endif
+    if (NORTHERN_EDGE) then
+      do k = 1, N
+        do i = 0,Lm+1
+          dzdxi (i,Mm  ,k) = 0._8
+          dzdxi (i,Mm+1,k) = 0._8
+          dzdeta(i,Mm  ,k) = 0._8
+          dzdeta(i,Mm+1,k) = 0._8
+        enddo
+      enddo
+    endif
 # endif
 
 #endif /* NHMG */
 
 
-      end
+  end subroutine set_depth_tile
 
 
 
-      subroutine set_HUV
+  subroutine set_HUV
 
-      use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+    use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
 
-      implicit none
-      integer,save:: tile=0
+    implicit none
+    integer(kind=4),save:: tile=0
 # include "compute_tile_bounds.h"
-      call set_HUV_tile (istr,iend,jstr,jend)
-      end
+    call set_HUV_tile (istr,iend,jstr,jend)
+  end subroutine set_HUV
 
-      subroutine set_HUV_tile (istr,iend,jstr,jend)
-      use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
-      use grid, only: dn_u, dm_v
-      use roms_mpi, only: exchange_xxx
-      use ocean_vars, only: flxu, u, hz, flxv, v, hz_u, hz_v
-      use dimensions, only: inode, jnode
-      use scalars, only: n, nrhs
+  subroutine set_HUV_tile (istr,iend,jstr,jend)
+    use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
+    use grid, only: dn_u, dm_v
+    use roms_mpi, only: exchange_xxx
+    use ocean_vars, only: flxu, u, hz, flxv, v, hz_u, hz_v
+    use dimensions, only: inode, jnode
+    use scalars, only: n, nrhs
 
-      implicit none
-      integer istr,iend,jstr,jend, i,j,k
+    implicit none
+    integer(kind=4) istr,iend,jstr,jend, i,j,k
 
 # include "compute_auxiliary_bounds.h"
 
-      do k=1,N
-        do j=jstrR,jendR
-          do i=istr,iendR
-            FlxU(i,j,k)=0.5*(Hz(i,j,k)+Hz(i-1,j,k))*dn_u(i,j)
+    do k=1,N
+      do j=jstrR,jendR
+        do i=istr,iendR
+          FlxU(i,j,k)=0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))*dn_u(i,j)&
 
-     &                                       *( u(i,j,k,nrhs))
-            Hz_u(i,j,k) = 0.5*(Hz(i,j,k)+Hz(i-1,j,k))
-          enddo
-        enddo
-        do j=jstr,jendR
-          do i=istrR,iendR
-            FlxV(i,j,k)=0.5*(Hz(i,j,k)+Hz(i,j-1,k))*dm_v(i,j)
-     &                                       *( v(i,j,k,nrhs))
-            Hz_v(i,j,k) = 0.5*(Hz(i,j,k)+Hz(i,j-1,k))
-          enddo
+          &*( u(i,j,k,nrhs))
+          Hz_u(i,j,k) = 0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))
         enddo
       enddo
+      do j=jstr,jendR
+        do i=istrR,iendR
+          FlxV(i,j,k)=0.5_8*(Hz(i,j,k)+Hz(i,j-1,k))*dm_v(i,j)&
+          &*( v(i,j,k,nrhs))
+          Hz_v(i,j,k) = 0.5_8*(Hz(i,j,k)+Hz(i,j-1,k))
+        enddo
+      enddo
+    enddo
 
 !      call wrt_instant(Hz, 'Hz')
 
@@ -265,83 +265,83 @@
 !      call wrt_instant(FlxV, 'FlxV')
 
 # ifdef EXCHANGE
-      call exchange_xxx(FlxU,FlxV)
+    call exchange_xxx(FlxU,FlxV)
 # endif
 !      call wrt_instant(Hz, 'Hz')
 
 !      call wrt_instant(FlxU, 'FlxU')
 !      call wrt_instant(FlxV, 'FlxV')
-      end
+  end subroutine set_HUV_tile
 
 
-      subroutine set_HUV1(tile)
+  subroutine set_HUV1(tile)
 
-      use param, only: ieast, iwest, jnorth, jsouth,  nsub_e, nsub_x
-      use private_scratch, only: a2d
+    use param, only: ieast, iwest, jnorth, jsouth,  nsub_e, nsub_x
+    use private_scratch, only: a2d
 
-      implicit none
-      integer tile
+    implicit none
+    integer(kind=4) tile
 
 # include "compute_tile_bounds.h"
-      call set_HUV1_tile (istr,iend,jstr,jend, A2d(1,1), A2d(1,2))
-      end
+    call set_HUV1_tile (istr,iend,jstr,jend, A2d(1,1), A2d(1,2))
+  end subroutine set_HUV1
 
-      subroutine set_HUV1_tile (istr,iend,jstr,jend, DC,FC)
-      use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
-      use dimensions, only: inode, jnode
-      use coupling, only:
-     &     du_avg1, du_avg_bak, du_avg2, dv_avg1, dv_avg_bak,
-     &     dv_avg2
-      use grid, only:  dn_u, umask, dm_v,
-     &     vmask
-      use roms_mpi, only: exchange_xxx
-      use ocean_vars, only: u, v, hz, flxu, flxv
-      use scalars, only: n, forw_start, iic, nnew
-      use dimensions, only: nz
+  subroutine set_HUV1_tile (istr,iend,jstr,jend, DC,FC)
+    use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
+    use dimensions, only: inode, jnode
+    use coupling, only:&
+    &du_avg1, du_avg_bak, du_avg2, dv_avg1, dv_avg_bak,&
+    &dv_avg2
+    use grid, only:  dn_u, umask, dm_v,&
+    &vmask
+    use roms_mpi, only: exchange_xxx
+    use ocean_vars, only: u, v, hz, flxu, flxv
+    use scalars, only: n, forw_start, iic, nnew
+    use dimensions, only: nz
 
-      implicit none
-      integer istr,iend,jstr,jend, i,j,k
-      real, dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: DC,FC
+    implicit none
+    integer(kind=4) istr,iend,jstr,jend, i,j,k
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: DC,FC
 
 # if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
-      real cff
-      integer kbak
+    real(kind=8) cff
+    integer(kind=4) kbak
 # endif
 
 # include "compute_auxiliary_bounds.h"
 
 # if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
-      kbak=knew-1
-      if (kbak < 1) kbak=4
+    kbak=knew-1
+    if (kbak < 1) kbak=4
 # endif
 
-      do j=jstrR,jendR ! big j-loop
+    do j=jstrR,jendR ! big j-loop
 
+      do i=istr,iendR
+        DC(i,N)=0.5_8*(Hz(i,j,N)+Hz(i-1,j,N))*dn_u(i,j)
+        DC(i,0)=DC(i,N)
+        FC(i,0)=DC(i,N)*u(i,j,N,nnew)
+      enddo
+      do k=N-1,1,-1
         do i=istr,iendR
-          DC(i,N)=0.5*(Hz(i,j,N)+Hz(i-1,j,N))*dn_u(i,j)
-          DC(i,0)=DC(i,N)
-          FC(i,0)=DC(i,N)*u(i,j,N,nnew)
+          DC(i,k)=0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))*dn_u(i,j)
+          DC(i,0)=DC(i,0)+DC(i,k)
+          FC(i,0)=FC(i,0)+DC(i,k)*u(i,j,k,nnew)
         enddo
-        do k=N-1,1,-1
-          do i=istr,iendR
-            DC(i,k)=0.5*(Hz(i,j,k)+Hz(i-1,j,k))*dn_u(i,j)
-            DC(i,0)=DC(i,0)+DC(i,k)
-            FC(i,0)=FC(i,0)+DC(i,k)*u(i,j,k,nnew)
-          enddo
-        enddo
+      enddo
 
 
 # ifdef CORR_COUPLED_MODE
 #  ifdef EXTRAP_BAR_FLUXES
-        if (FIRST_TIME_STEP) then
+      if (FIRST_TIME_STEP) then
 #  endif
-          do i=istr,iendR
-            FC(i,0)=(FC(i,0)-DU_avg1(i,j))/DC(i,0)
-          enddo
-          !! JM: Very first time step only
+        do i=istr,iendR
+          FC(i,0)=(FC(i,0)-DU_avg1(i,j))/DC(i,0)
+        enddo
+        !! JM: Very first time step only
 
 #  ifdef EXTRAP_BAR_FLUXES
-! PAC23 verified setting with theoretical alpha_max=1.0877.
+! PAC23 verified setting with theoretical alpha_max=1.0877_8._8
 ! This should match the simlar-labelled setting in step2d_FB.F.
 ! All the other settings below  are to be considered as
 ! experimental.
@@ -354,104 +354,104 @@
 !  DC(i,0) is the barotropic surface H*dy = dy*integral(Hz)
 !  FC(i,0) is the barotropic flux dy*integral(Hz*u)
 
-        else ! not first time step
-          do i=istr,iendR
-#   ifdef KEEP_CORIOLIS
-            cff=1./DC(i,0)
-            ubar(i,j,kbak)=cff*( NOW*DU_avg1(i,j)
-     &                          -MID*DU_avg2(i,j)
-     &                       +BAK*DU_avg_bak(i,j)
-     &                                          )
-            FC(i,0)=cff*FC(i,0)-ubar(i,j,kbak)  ! now FC(i,0) is mismatch in[m/s]
-#   else
-            FC(i,0)=( FC(i,0) -NOW*DU_avg1(i,j)
-     &                        +MID*DU_avg2(i,j)
-     &                     -BAK*DU_avg_bak(i,j)
-     &               )/DC(i,0)
-#   endif
-          enddo
-        endif
-#  endif
-     !! now FC(i,0) => mismatch between  int(U*dz)/int(dz) and ubar
-# else
+      else ! not first time step
         do i=istr,iendR
-          FC(i,0)=(FC(i,0)-DU_avg2(i,j))/DC(i,0) ! FC(i,0) is mismatch in [m/s]
+#   ifdef KEEP_CORIOLIS
+          cff=1._8/DC(i,0)
+          ubar(i,j,kbak)=cff*( NOW*DU_avg1(i,j)&
+          &-MID*DU_avg2(i,j)&
+          &+BAK*DU_avg_bak(i,j)&
+          &)
+          FC(i,0)=cff*FC(i,0)-ubar(i,j,kbak)  ! now FC(i,0) is mismatch in[m/s]
+#   else
+          FC(i,0)=( FC(i,0) -NOW*DU_avg1(i,j)&
+          &+MID*DU_avg2(i,j)&
+          &-BAK*DU_avg_bak(i,j)&
+          &)/DC(i,0)
+#   endif
         enddo
+      endif
+#  endif
+      !! now FC(i,0) => mismatch between  int(U*dz)/int(dz) and ubar
+# else
+      do i=istr,iendR
+        FC(i,0)=(FC(i,0)-DU_avg2(i,j))/DC(i,0) ! FC(i,0) is mismatch in [m/s]
+      enddo
 # endif
 
-        do k=1,N
-          do i=istr,iendR
-            u(i,j,k,nnew)=(u(i,j,k,nnew)-FC(i,0)) !! removing ubar mismatch from u
+      do k=1,N
+        do i=istr,iendR
+          u(i,j,k,nnew)=(u(i,j,k,nnew)-FC(i,0))& !! removing ubar mismatch from u
 # ifdef MASKING
-     &                                *umask(i,j)
+          &*umask(i,j)
 # endif
-            FlxU(i,j,k)=DC(i,k)*( u(i,j,k,nnew))
+          FlxU(i,j,k)=DC(i,k)*( u(i,j,k,nnew))
+        enddo
+      enddo
+
+      if (j >= jstr) then
+        do i=istrR,iendR
+          DC(i,N)=0.5_8*(Hz(i,j,N)+Hz(i,j-1,N))*dm_v(i,j)
+          DC(i,0)=DC(i,N)
+          FC(i,0)=DC(i,N)*v(i,j,N,nnew)
+        enddo
+        do k=N-1,1,-1
+          do i=istrR,iendR
+            DC(i,k)=0.5_8*(Hz(i,j,k)+Hz(i,j-1,k))*dm_v(i,j)
+            DC(i,0)=DC(i,0)+DC(i,k)
+            FC(i,0)=FC(i,0)+DC(i,k)*v(i,j,k,nnew)
           enddo
         enddo
-
-        if (j >= jstr) then
-          do i=istrR,iendR
-            DC(i,N)=0.5*(Hz(i,j,N)+Hz(i,j-1,N))*dm_v(i,j)
-            DC(i,0)=DC(i,N)
-            FC(i,0)=DC(i,N)*v(i,j,N,nnew)
-          enddo
-          do k=N-1,1,-1
-            do i=istrR,iendR
-              DC(i,k)=0.5*(Hz(i,j,k)+Hz(i,j-1,k))*dm_v(i,j)
-              DC(i,0)=DC(i,0)+DC(i,k)
-              FC(i,0)=FC(i,0)+DC(i,k)*v(i,j,k,nnew)
-            enddo
-          enddo
 # ifdef CORR_COUPLED_MODE
 #  ifdef EXTRAP_BAR_FLUXES
-          if (FIRST_TIME_STEP) then
+        if (FIRST_TIME_STEP) then
 #  endif
-            do i=istrR,iendR
-              FC(i,0)=(FC(i,0)-DV_avg1(i,j))/DC(i,0)
-            enddo
+          do i=istrR,iendR
+            FC(i,0)=(FC(i,0)-DV_avg1(i,j))/DC(i,0)
+          enddo
 
 #  ifdef EXTRAP_BAR_FLUXES
-          else
-            do i=istrR,iendR
-#   ifdef KEEP_CORIOLIS
-              cff=1./DC(i,0)
-              vbar(i,j,kbak)=cff*( NOW*DV_avg1(i,j)
-     &                            -MID*DV_avg2(i,j)
-     &                         +BAK*DV_avg_bak(i,j)
-     &                                            )
-              FC(i,0)=cff*FC(i,0)-vbar(i,j,kbak)
-#   else
-              FC(i,0)=( FC(i,0) -NOW*DV_avg1(i,j)
-     &                          +MID*DV_avg2(i,j)
-     &                       -BAK*DV_avg_bak(i,j)
-     &                 )/DC(i,0)
-#   endif
-            enddo
-          endif
-#  endif
-# else
+        else
           do i=istrR,iendR
-            FC(i,0)=(FC(i,0)-DV_avg2(i,j))/DC(i,0)
-          enddo
-# endif
-          do k=1,nz
-            do i=istrR,iendR
-              v(i,j,k,nnew)=(v(i,j,k,nnew)-FC(i,0))
-# ifdef MASKING
-     &                                  *vmask(i,j)
-# endif
-              FlxV(i,j,k)=DC(i,k)*( v(i,j,k,nnew))
-            enddo
+#   ifdef KEEP_CORIOLIS
+            cff=1._8/DC(i,0)
+            vbar(i,j,kbak)=cff*( NOW*DV_avg1(i,j)&
+            &-MID*DV_avg2(i,j)&
+            &+BAK*DV_avg_bak(i,j)&
+            &)
+            FC(i,0)=cff*FC(i,0)-vbar(i,j,kbak)
+#   else
+            FC(i,0)=( FC(i,0) -NOW*DV_avg1(i,j)&
+            &+MID*DV_avg2(i,j)&
+            &-BAK*DV_avg_bak(i,j)&
+            &)/DC(i,0)
+#   endif
           enddo
         endif
-      enddo  ! <-- j-loop
+#  endif
+# else
+        do i=istrR,iendR
+          FC(i,0)=(FC(i,0)-DV_avg2(i,j))/DC(i,0)
+        enddo
+# endif
+        do k=1,nz
+          do i=istrR,iendR
+            v(i,j,k,nnew)=(v(i,j,k,nnew)-FC(i,0))&
+# ifdef MASKING
+            &*vmask(i,j)
+# endif
+            FlxV(i,j,k)=DC(i,k)*( v(i,j,k,nnew))
+          enddo
+        enddo
+      endif
+    enddo  ! <-- j-loop
 
 # ifdef EXCHANGE
 #  if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
-      call exchange_xxx(FlxU,u(:,:,:,nnew),ubar)
-      call exchange_xxx(FlxV,v(:,:,:,nnew),vbar)
+    call exchange_xxx(FlxU,u(:,:,:,nnew),ubar)
+    call exchange_xxx(FlxV,v(:,:,:,nnew),vbar)
 #  else
-      call exchange_xxx(FlxU,FlxV,u(:,:,:,nnew),v(:,:,:,nnew))
+    call exchange_xxx(FlxU,FlxV,u(:,:,:,nnew),v(:,:,:,nnew))
 #  endif
 # endif
 !      call wrt_instant(FlxU, 'FlxU')
@@ -459,101 +459,101 @@
 !      call wrt_instant(u(:,:,:,nnew), 'u')
 !      call wrt_instant(v(:,:,:,nnew), 'v')
 
-      end
+  end subroutine set_HUV1_tile
 
-      subroutine check_set_HUV1_switches
+  subroutine check_set_HUV1_switches
 
 ! This code must be placed here rather than in a separate file in order
 ! to be exposed to the relevant CPP-macros defined locally in this file
 ! above.  It does not affect any model results, other than signature in
 ! global attribute "CPPS" in output netCDF files.
 
-      use param, only: mynode
-      use strings, only: cpps, max_opt_size
-      use error_handling_mod, only: error_log
-      use utils_mod, only: lenstr
-      implicit none
-      integer is,ie
+    use param, only: mynode
+    use strings, only: cpps, max_opt_size
+    use error_handling_mod, only: error_log
+    use utils_mod, only: lenstr
+    implicit none
+    integer(kind=4) is,ie
 
-      integer lstr
-      character(len=16) tmpstr
-      character(len=24) :: sr_name = "check_set_HUV1_switches"
-      character(len=1024) :: error_info =""
+    integer(kind=4) lstr
+    character(len=16) tmpstr
+    character(len=24) :: sr_name = "check_set_HUV1_switches"
+    character(len=1024) :: error_info =""
 
-      ie=lenstr(cpps)
-      is=ie+2 ; ie=is+12
-      if (ie > max_opt_size) then
-         call error_log%raise_global(
-     &        info=error_info,
-     &        context=sr_name)
-      end if
+    ie=lenstr(cpps)
+    is=ie+2 ; ie=is+12
+    if (ie > max_opt_size) then
+      call error_log%raise_global(&
+      &info=error_info,&
+      &context=sr_name)
+    end if
 
-      cpps(is:ie)='<set_depth.F>'
+    cpps(is:ie)='<set_depth.F>'
 # ifdef NOW
-      write(tmpstr,'(F16.12)') NOW ; lstr=lenstr(tmpstr)
-      do while(tmpstr(lstr:lstr)=='0' .and. lstr>3)
-        lstr=lstr-1
-      enddo
-      is=ie+2 ; ie=is+3+lstr
-      if (ie > max_opt_size) then
-         call error_log%raise_global(
-     &        info=error_info,
-     &        context=sr_name)
-      end if
+    write(tmpstr,'(F16.12)') NOW ; lstr=lenstr(tmpstr)
+    do while(tmpstr(lstr:lstr)=='0' .and. lstr>3)
+      lstr=lstr-1
+    enddo
+    is=ie+2 ; ie=is+3+lstr
+    if (ie > max_opt_size) then
+      call error_log%raise_global(&
+      &info=error_info,&
+      &context=sr_name)
+    end if
 
-      cpps(is:ie)='NOW='/ /tmpstr(1:lstr)
+    cpps(is:ie)='NOW='//tmpstr(1:lstr)
 # endif
 # ifdef MID
-      write(tmpstr,'(F16.12)') MID ; lstr=lenstr(tmpstr)
-      do while(tmpstr(lstr:lstr)=='0' .and. lstr>3)
-        lstr=lstr-1
-      enddo
-      is=ie+2 ; ie=is+3+lstr
-      if (ie > max_opt_size) then
-         call error_log%raise_global(
-     &        info=error_info,
-     &        context=sr_name)
-      end if
+    write(tmpstr,'(F16.12)') MID ; lstr=lenstr(tmpstr)
+    do while(tmpstr(lstr:lstr)=='0' .and. lstr>3)
+      lstr=lstr-1
+    enddo
+    is=ie+2 ; ie=is+3+lstr
+    if (ie > max_opt_size) then
+      call error_log%raise_global(&
+      &info=error_info,&
+      &context=sr_name)
+    end if
 
-      cpps(is:ie)='MID='/ /tmpstr(1:lstr)
+    cpps(is:ie)='MID='//tmpstr(1:lstr)
 # endif
 # ifdef BAK
-      write(tmpstr,'(F16.12)') BAK ; lstr=lenstr(tmpstr)
-      do while(tmpstr(lstr:lstr) == '0' .and. lstr > 3)
-        lstr=lstr-1
-      enddo
-      is=ie+2 ; ie=is+3+lstr
-      if (ie > max_opt_size) then
-         call error_log%raise_global(
-     &        info=error_info,
-     &        context=sr_name)
-      end if
+    write(tmpstr,'(F16.12)') BAK ; lstr=lenstr(tmpstr)
+    do while(tmpstr(lstr:lstr) == '0' .and. lstr > 3)
+      lstr=lstr-1
+    enddo
+    is=ie+2 ; ie=is+3+lstr
+    if (ie > max_opt_size) then
+      call error_log%raise_global(&
+      &info=error_info,&
+      &context=sr_name)
+    end if
 
-      cpps(is:ie)='BAK='/ /tmpstr(1:lstr)
+    cpps(is:ie)='BAK='//tmpstr(1:lstr)
 
 ! Note that the value of (NOW-MID+BAK-1.D0)/BAK should match
 ! the coefficient in front of DU_avg2 when computing DU_avg_bak
 ! in step2d_FB.F. Put it into the signature for cross-checking.
 
-      write(tmpstr,'(F16.12)') (NOW-MID+BAK-1.D0)/BAK
-      lstr=lenstr(tmpstr)
-      do while(tmpstr(lstr:lstr) == '0' .and. lstr > 3)
-        lstr=lstr-1
-      enddo
-      is=ie+2 ; ie=is+9+lstr
-      if (ie > max_opt_size) then
-         call error_log%raise_global(
-     &        info=error_info,
-     &        context=sr_name)
-      end if
+    write(tmpstr,'(F16.12)') (NOW-MID+BAK-1.D0)/BAK
+    lstr=lenstr(tmpstr)
+    do while(tmpstr(lstr:lstr) == '0' .and. lstr > 3)
+      lstr=lstr-1
+    enddo
+    is=ie+2 ; ie=is+9+lstr
+    if (ie > max_opt_size) then
+      call error_log%raise_global(&
+      &info=error_info,&
+      &context=sr_name)
+    end if
 
-      cpps(is:ie)='(N-M+B-1)/B='/ /tmpstr(1:lstr)
+    cpps(is:ie)='(N-M+B-1)/B='//tmpstr(1:lstr)
 # endif
-      end subroutine check_set_HUV1_switches
+  end subroutine check_set_HUV1_switches
 #else
-      contains
+contains
 
-      subroutine set_depth_empty
-      end
+  subroutine set_depth_empty
+  end subroutine set_depth_empty
 #endif /* SOLVE3D */
-      end module set_depth_mod
+end module set_depth_mod
