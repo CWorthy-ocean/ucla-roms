@@ -202,7 +202,7 @@ contains
     real(kind=8) dpth
 # endif
 
-# include "compute_extended_bounds.h90"
+# include "compute_extended_bounds.h"
 
 # ifdef NONLIN_EOS
     Tt=3.8D0 ; Ts=34.5D0 ; sqrtTs=sqrt(Ts)

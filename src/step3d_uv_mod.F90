@@ -102,7 +102,7 @@ contains
 #  define FE VFe
 
     do k=1,N
-#  include "compute_horiz_rhs_w_terms.h90"
+#  include "compute_horiz_rhs_w_terms.h"
     enddo
 
 #  undef FE
@@ -110,7 +110,7 @@ contains
 
     do j=jstr,jend
 
-#  include "compute_vert_rhs_w_terms.h90"
+#  include "compute_vert_rhs_w_terms.h"
       do i=istr,iend
         DC(i,0)=dt*pm(i,j)*pn(i,j)
       enddo
@@ -127,7 +127,7 @@ contains
 # endif  /* NHMG */
 
     do k=1,N
-# include "compute_horiz_rhs_uv_terms.h90"
+# include "compute_horiz_rhs_uv_terms.h"
     enddo
 
 # ifdef DIAGNOSTICS
@@ -139,7 +139,7 @@ contains
 
     do j=jstr,jend
 
-# include "compute_vert_rhs_uv_terms.h90"
+# include "compute_vert_rhs_uv_terms.h"
 
 #define IMPLICIT_BOTTOM_DRAG
 # ifdef IMPLICIT_BOTTOM_DRAG
@@ -570,7 +570,7 @@ contains
     end if
     cpps(is:ie)='<step3d_uv1.F>'
 
-# include "track_advec_switches.h90"
+# include "track_advec_switches.h"
 
     return
   end subroutine check_step_uv1_switches

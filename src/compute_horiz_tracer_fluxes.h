@@ -15,30 +15,30 @@
 
 !#define BIO_1ST_USTREAM_TEST
 #ifdef  BIO_1ST_USTREAM_TEST
-        if (itrc>isalt) then       ! biological tracer components:
+if (itrc>isalt) then       ! biological tracer components:
 !       if (itrc>0) then       ! biological tracer components:
-          if (nrhs==3) then         ! compute fluxes during corrector
-            do j=jstr,jend            ! stage only
-              do i=istr,iend+1
-                FX(i,j)=t(i-1,j,k,nstp,itrc)*max(FlxU(i,j,k),0.)
-     &                 +t(i  ,j,k,nstp,itrc)*min(FlxU(i,j,k),0.)
-              enddo
-            enddo
-            do j=jstr,jend+1
-              do i=istr,iend
-                FE(i,j)=t(i,j-1,k,nstp,itrc)*max(FlxV(i,j,k),0.)
-     &                 +t(i,j  ,k,nstp,itrc)*min(FlxV(i,j,k),0.)
-              enddo
-            enddo
-          else                         ! there is no need to compute
-            do j=jstr,jend+1           ! fluxes during predictor stage
-              do i=istr,iend+1         ! because there is no use for
-                FX(i,j)=0.             ! t(:,:,:,:,n+1/2) in the case
-                FE(i,j)=0.             ! of 1st-order upsteam (note
-              enddo                    ! index "nstp" instead of
-            enddo                      ! "nrhs" above.
-          endif
-        else       !--> standard code applies for T,S
+  if (nrhs==3) then         ! compute fluxes during corrector
+    do j=jstr,jend            ! stage only
+      do i=istr,iend+1
+        FX(i,j)=t(i-1,j,k,nstp,itrc)*max(FlxU(i,j,k),0._8)&
+        &+t(i  ,j,k,nstp,itrc)*min(FlxU(i,j,k),0._8)
+      enddo
+    enddo
+    do j=jstr,jend+1
+      do i=istr,iend
+        FE(i,j)=t(i,j-1,k,nstp,itrc)*max(FlxV(i,j,k),0._8)&
+        &+t(i,j  ,k,nstp,itrc)*min(FlxV(i,j,k),0._8)
+      enddo
+    enddo
+  else                         ! there is no need to compute
+    do j=jstr,jend+1           ! fluxes during predictor stage
+      do i=istr,iend+1         ! because there is no use for
+        FX(i,j)=0._8             ! t(:,:,:,:,n+1/2) in the case
+        FE(i,j)=0._8             ! of 1st-order upsteam (note
+      enddo                    ! index "nstp" instead of
+    enddo                      ! "nrhs" above.
+  endif
+else       !--> standard code applies for T,S
 #endif
 
 
@@ -48,203 +48,199 @@
 # define grad wrk1
 #endif
 #ifndef EW_PERIODIC
-          if (WESTERN_EDGE) then       ! Determine extended index
-            imin=istr                  ! range for computation of
-          else                         ! elementary differences: it
-            imin=istr-1                ! needs to be restricted
-          endif                        ! because in the vicinity of
-          if (EASTERN_EDGE) then       ! physical boundary the extra
-            imax=iend                  ! point may be not available,
-          else                         ! and extrapolation of slope
-            imax=iend+1                ! is used instead.
-          endif
+  if (WESTERN_EDGE) then       ! Determine extended index
+    imin=istr                  ! range for computation of
+  else                         ! elementary differences: it
+    imin=istr-1                ! needs to be restricted
+  endif                        ! because in the vicinity of
+  if (EASTERN_EDGE) then       ! physical boundary the extra
+    imax=iend                  ! point may be not available,
+  else                         ! and extrapolation of slope
+    imax=iend+1                ! is used instead.
+  endif
 #else
-          imin=istr-1
-          imax=iend+1
+  imin=istr-1
+  imax=iend+1
 #endif
-          do j=jstr,jend
-            do i=imin,imax+1
-              FX(i,j)=(t(i,j,k,nrhs,itrc)-t(i-1,j,k,nrhs,itrc))
+  do j=jstr,jend
+    do i=imin,imax+1
+      FX(i,j)=(t(i,j,k,nrhs,itrc)-t(i-1,j,k,nrhs,itrc))&
 #ifdef MASKING
-     &                                               *umask(i,j)
+      &*umask(i,j)
 #endif
-            enddo
-          enddo
+    enddo
+  enddo
 #ifndef EW_PERIODIC
-          if (WESTERN_EDGE) then
-            do j=jstr,jend
-              FX(istr-1,j)=FX(istr,j)
-            enddo
-          endif
-          if (EASTERN_EDGE) then
-            do j=jstr,jend
-              FX(iend+2,j)=FX(iend+1,j)
-            enddo
-          endif
+  if (WESTERN_EDGE) then
+    do j=jstr,jend
+      FX(istr-1,j)=FX(istr,j)
+    enddo
+  endif
+  if (EASTERN_EDGE) then
+    do j=jstr,jend
+      FX(iend+2,j)=FX(iend+1,j)
+    enddo
+  endif
 #endif
-          do j=jstr,jend
-            do i=istr-1,iend+1
+  do j=jstr,jend
+    do i=istr-1,iend+1
 #if defined UPSTREAM_TS
-              curv(i,j)=FX(i+1,j)-FX(i,j)
+      curv(i,j)=FX(i+1,j)-FX(i,j)
 #elif defined AKIMA
-              cff=2.*FX(i+1,j)*FX(i,j)
-              if (cff>epsil) then
-                grad(i,j)=cff/(FX(i+1,j)+FX(i,j))
-              else
-                grad(i,j)=0.
-              endif
+      cff=2._8*FX(i+1,j)*FX(i,j)
+      if (cff>epsil) then
+        grad(i,j)=cff/(FX(i+1,j)+FX(i,j))
+      else
+        grad(i,j)=0._8
+      endif
 #else
-              grad(i,j)=0.5*(FX(i+1,j)+FX(i,j))
+      grad(i,j)=0.5_8*(FX(i+1,j)+FX(i,j))
 #endif
-            enddo
-          enddo             !--> discard FX
-          do j=jstr,jend
-            do i=istr,iend+1
+    enddo
+  enddo             !--> discard FX
+  do j=jstr,jend
+    do i=istr,iend+1
 #ifdef UPSTREAM_TS
-              FX(i,j)=0.5*(t(i,j,k,nrhs,itrc)+t(i-1,j,k,nrhs,itrc))
-     &                                                  *FlxU(i,j,k)
-     &          -0.1666666666666666*( curv(i-1,j)*max(FlxU(i,j,k),0.)
-     &                               +curv(i  ,j)*min(FlxU(i,j,k),0.))
+      FX(i,j)=0.5_8*(t(i,j,k,nrhs,itrc)+t(i-1,j,k,nrhs,itrc))&
+      &*FlxU(i,j,k)&
+      &-0.1666666666666666_8*( curv(i-1,j)*max(FlxU(i,j,k),0._8)&
+      &+curv(i  ,j)*min(FlxU(i,j,k),0._8))
 #else
-              FX(i,j)=0.5*( t(i,j,k,nrhs,itrc)+t(i-1,j,k,nrhs,itrc)
-     &                   -0.3333333333333333*(grad(i,j)-grad(i-1,j))
-     &                                                 )*FlxU(i,j,k)
+      FX(i,j)=0.5_8*( t(i,j,k,nrhs,itrc)+t(i-1,j,k,nrhs,itrc)&
+      &-0.3333333333333333_8*(grad(i,j)-grad(i-1,j))&
+      &)*FlxU(i,j,k)
 #endif
-            enddo           !--> discard curv,grad, keep FX
-          enddo
+    enddo           !--> discard curv,grad, keep FX
+  enddo
 
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
-          if (inode==0) then ! (.not. west_exchng)
-            do j=jstr,jend
-              FX(istr,j) = FX(istr,j) + 0.5*(t(istr-1,j,k,nrhs,itrc)-t(istr,j,k,nrhs,itrc))
-     &          * max(FlxU(istr,j,k),0.0)
-            enddo
-          endif
-          if (inode==npx-1) then ! (.not. east_exchng)
-            do j=jstr,jend
-              FX(iend+1,j) = FX(iend+1,j) + 0.5*(t(iend+1,j,k,nrhs,itrc)-t(iend,j,k,nrhs,itrc))
-     &          * min(FlxU(iend+1,j,k),0.0)
-            enddo
-          endif
+  if (inode==0) then ! (.not. west_exchng)
+    do j=jstr,jend
+      FX(istr,j) = FX(istr,j) + 0.5_8*(t(istr-1,j,k,nrhs,itrc)-t(istr,j,k,nrhs,itrc))&
+      &* max(FlxU(istr,j,k),0.0_8)
+    enddo
+  endif
+  if (inode==npx-1) then ! (.not. east_exchng)
+    do j=jstr,jend
+      FX(iend+1,j) = FX(iend+1,j) + 0.5_8*(t(iend+1,j,k,nrhs,itrc)-t(iend,j,k,nrhs,itrc))&
+      &* min(FlxU(iend+1,j,k),0.0_8)
+    enddo
+  endif
 #endif
 
 #ifndef NS_PERIODIC
-          if (SOUTHERN_EDGE) then
-            jmin=jstr
-          else
-            jmin=jstr-1
-          endif
-          if (NORTHERN_EDGE) then
-            jmax=jend
-          else
-            jmax=jend+1
-          endif
+  if (SOUTHERN_EDGE) then
+    jmin=jstr
+  else
+    jmin=jstr-1
+  endif
+  if (NORTHERN_EDGE) then
+    jmax=jend
+  else
+    jmax=jend+1
+  endif
 #else
-          jmin=jstr-1
-          jmax=jend+1
+  jmin=jstr-1
+  jmax=jend+1
 #endif
-          do j=jmin,jmax+1
-            do i=istr,iend
-              FE(i,j)=(t(i,j,k,nrhs,itrc)-t(i,j-1,k,nrhs,itrc))
+  do j=jmin,jmax+1
+    do i=istr,iend
+      FE(i,j)=(t(i,j,k,nrhs,itrc)-t(i,j-1,k,nrhs,itrc))&
 #ifdef MASKING
-     &                                               *vmask(i,j)
+      &*vmask(i,j)
 #endif
-            enddo
-          enddo
+    enddo
+  enddo
 #ifndef NS_PERIODIC
-          if (SOUTHERN_EDGE) then
-            do i=istr,iend
-              FE(i,jstr-1)=FE(i,jstr)
-            enddo
-          endif
-          if (NORTHERN_EDGE) then
-            do i=istr,iend
-              FE(i,jend+2)=FE(i,jend+1)
-            enddo
-          endif
+  if (SOUTHERN_EDGE) then
+    do i=istr,iend
+      FE(i,jstr-1)=FE(i,jstr)
+    enddo
+  endif
+  if (NORTHERN_EDGE) then
+    do i=istr,iend
+      FE(i,jend+2)=FE(i,jend+1)
+    enddo
+  endif
 #endif
-          do j=jstr-1,jend+1
-            do i=istr,iend
+  do j=jstr-1,jend+1
+    do i=istr,iend
 #if defined UPSTREAM_TS
-              curv(i,j)=FE(i,j+1)-FE(i,j)
+      curv(i,j)=FE(i,j+1)-FE(i,j)
 #elif defined AKIMA
-              cff=2.*FE(i,j+1)*FE(i,j)
-              if (cff>epsil) then
-                grad(i,j)=cff/(FE(i,j+1)+FE(i,j))
-              else
-                grad(i,j)=0.
-              endif
+      cff=2._8*FE(i,j+1)*FE(i,j)
+      if (cff>epsil) then
+        grad(i,j)=cff/(FE(i,j+1)+FE(i,j))
+      else
+        grad(i,j)=0._8
+      endif
 #else
-              grad(i,j)=0.5*(FE(i,j+1)+FE(i,j))
+      grad(i,j)=0.5_8*(FE(i,j+1)+FE(i,j))
 #endif
-            enddo
-          enddo            !--> discard FE
+    enddo
+  enddo            !--> discard FE
 
-          do j=jstr,jend+1
-            do i=istr,iend
+  do j=jstr,jend+1
+    do i=istr,iend
 #ifdef UPSTREAM_TS
-              FE(i,j)=0.5*(t(i,j,k,nrhs,itrc)+t(i,j-1,k,nrhs,itrc))
-     &                                                  *FlxV(i,j,k)
-     &          -0.1666666666666666*( curv(i,j-1)*max(FlxV(i,j,k),0.)
-     &                               +curv(i,j  )*min(FlxV(i,j,k),0.))
-# ifdef DIAGNOSTICS_TS
-              TruncFE(i,j)=0.04166666666666667*(curv(i,j)-curv(i-1,j))
-     &                                               *abs(FlxV(i,j,k))
-# endif
+      FE(i,j)=0.5_8*(t(i,j,k,nrhs,itrc)+t(i,j-1,k,nrhs,itrc))&
+      &*FlxV(i,j,k)&
+      &-0.1666666666666666_8*( curv(i,j-1)*max(FlxV(i,j,k),0._8)&
+      &+curv(i,j  )*min(FlxV(i,j,k),0._8))
 #else
-              FE(i,j)=0.5*( t(i,j,k,nrhs,itrc)+t(i,j-1,k,nrhs,itrc)
-     &                   -0.3333333333333333*(grad(i,j)-grad(i,j-1))
-     &                                                 )*FlxV(i,j,k)
+      FE(i,j)=0.5_8*( t(i,j,k,nrhs,itrc)+t(i,j-1,k,nrhs,itrc)&
+      &-0.3333333333333333_8*(grad(i,j)-grad(i,j-1))&
+      &)*FlxV(i,j,k)
 #endif
-            enddo
-          enddo             !--> discard curv,grad, keep FE
+    enddo
+  enddo             !--> discard curv,grad, keep FE
 
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
-          if (jnode==0) then ! (.not. south_west)
-            do i=istr,iend
-              FE(i,jstr) = FE(i,jstr) + 0.5*(t(i,jstr-1,k,nrhs,itrc)-t(i,jstr,k,nrhs,itrc))
-     &          * max(FlxV(i,jstr,k),0.0)
-            enddo
-          endif
-          if (jnode==npy-1) then ! (.not. north_exchng)
-            do i=istr,iend
-              FE(i,jend+1) = FE(i,jend+1) + 0.5*(t(i,jend+1,k,nrhs,itrc)-t(i,jend,k,nrhs,itrc))
-     &          * min(FlxV(i,jend+1,k),0.0)
-            enddo
-          endif
+  if (jnode==0) then ! (.not. south_west)
+    do i=istr,iend
+      FE(i,jstr) = FE(i,jstr) + 0.5_8*(t(i,jstr-1,k,nrhs,itrc)-t(i,jstr,k,nrhs,itrc))&
+      &* max(FlxV(i,jstr,k),0.0_8)
+    enddo
+  endif
+  if (jnode==npy-1) then ! (.not. north_exchng)
+    do i=istr,iend
+      FE(i,jend+1) = FE(i,jend+1) + 0.5_8*(t(i,jend+1,k,nrhs,itrc)-t(i,jend,k,nrhs,itrc))&
+      &* min(FlxV(i,jend+1,k),0.0_8)
+    enddo
+  endif
 #endif
 
 #ifdef BIO_1ST_USTREAM_TEST
-        endif  !<-- itrc>isalt, bio-components only.
+endif  !<-- itrc>isalt, bio-components only.
 #endif
 
-        if (river_source) then
-          !! inefficient because this is inside a k-loop
-          !! we could try to compute riv_uvel(i,j) somewhere else
-          do j=jstr,jend
-            do i=istr,iend+1
-              if (abs(riv_uflx(i,j)).gt.1e-3) then
-                riv_depth = 0.5*( z_w(i-1,j,N)-z_w(i-1,j,0)
-     &                      + z_w(i  ,j,N)-z_w(i  ,j,0) )
-                iriver = nint(riv_uflx(i,j)/10)
-                riv_uvel = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)/riv_depth
-                FX(i,j)= riv_trc(iriver,itrc)*
-     &            0.5*(Hz(i-1,j,k)+Hz(i,j,k))*riv_uvel
+if (river_source) then
+  !! inefficient because this is inside a k-loop
+  !! we could try to compute riv_uvel(i,j) somewhere else
+  do j=jstr,jend
+    do i=istr,iend+1
+      if (abs(riv_uflx(i,j)).gt.1e-3) then
+        riv_depth = 0.5_8*( z_w(i-1,j,N)-z_w(i-1,j,0)&
+        &+ z_w(i  ,j,N)-z_w(i  ,j,0) )
+        iriver = nint(riv_uflx(i,j)/10)
+        riv_uvel = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)/riv_depth
+        FX(i,j)= riv_trc(iriver,itrc)*&
+        &0.5_8*(Hz(i-1,j,k)+Hz(i,j,k))*riv_uvel
 
-              endif
-            enddo
-          enddo
-          do j=jstr,jend+1
-            do i=istr,iend
-              if (abs(riv_vflx(i,j)).gt.1e-3) then
-                riv_depth = 0.5*( z_w(i,j-1,N)-z_w(i,j-1,0)
-     &                      + z_w(i  ,j,N)-z_w(i  ,j,0) )
-                iriver = nint(riv_vflx(i,j)/10)
-                riv_vvel = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)/riv_depth
-                FE(i,j)= riv_trc(iriver,itrc)*
-     &            0.5*(Hz(i,j-1,k)+Hz(i,j,k))*riv_vvel
+      endif
+    enddo
+  enddo
+  do j=jstr,jend+1
+    do i=istr,iend
+      if (abs(riv_vflx(i,j)).gt.1e-3) then
+        riv_depth = 0.5_8*( z_w(i,j-1,N)-z_w(i,j-1,0)&
+        &+ z_w(i  ,j,N)-z_w(i  ,j,0) )
+        iriver = nint(riv_vflx(i,j)/10)
+        riv_vvel = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)/riv_depth
+        FE(i,j)= riv_trc(iriver,itrc)*&
+        &0.5_8*(Hz(i,j-1,k)+Hz(i,j,k))*riv_vvel
 
-              endif
-            enddo
-          enddo
-        endif  !<-- river_source
+      endif
+    enddo
+  enddo
+endif  !<-- river_source

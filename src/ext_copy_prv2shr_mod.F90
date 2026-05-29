@@ -20,7 +20,7 @@ contains
     real(kind=8) A(PRIVATE_2D_SCRATCH_ARRAY)
     real(kind=8) B(GLOBAL_2D_ARRAY)
 
-# include "compute_extended_bounds.h90"
+# include "compute_extended_bounds.h"
 
     do j=jstrR,jendR
       do i=istrR,iendR
@@ -39,7 +39,7 @@ contains
     real(kind=8) A(PRIVATE_2D_SCRATCH_ARRAY,nmax)
     real(kind=8) B(GLOBAL_2D_ARRAY,nmax)
 
-# include "compute_extended_bounds.h90"
+# include "compute_extended_bounds.h"
 
     do k=1,nmax
       do j=jstrR,jendR
@@ -60,7 +60,7 @@ contains
     real(kind=8) A(PRIVATE_1D_SCRATCH_ARRAY,nmax)
     real(kind=8) B(GLOBAL_2D_ARRAY,nmax)
 
-# include "compute_extended_bounds.h90"
+# include "compute_extended_bounds.h"
 
     do k=1,nmax
       do i=istrR,iendR

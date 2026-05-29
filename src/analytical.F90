@@ -226,7 +226,7 @@ contains
     integer(kind=4) istr,iend,jstr,jend, i,j
     real(kind=8) TauX, TauY, cff
 
-# include "compute_extended_bounds.h90"
+# include "compute_extended_bounds.h"
 
     if (FIRST_TIME_STEP) then  ! Set wind stress (kinematic surface
       do j=jstrR,jendR         ! momentum flux [m^2/s^2]) components
@@ -249,7 +249,7 @@ contains
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j
 
-# include "compute_extended_bounds.h90"
+# include "compute_extended_bounds.h"
 
     do j=jstrR,jendR
       do i=istrR,iendR
@@ -268,7 +268,7 @@ contains
     implicit none
     integer(kind=4) istr,iend,jstr,jend, itrc, i,j
 
-# include "compute_extended_bounds.h90"
+# include "compute_extended_bounds.h"
 
     if (itrc==itemp) then
 

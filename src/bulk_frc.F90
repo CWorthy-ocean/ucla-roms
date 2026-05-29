@@ -379,7 +379,7 @@ contains
 
 ! Extended bounds needed since u2rho and rho2u averaging occurs, and
 ! lmd_kpp has SMOOTH_HBL which requires extended loop ranges for smoothing.
-# include "compute_extended_bounds.h90"
+# include "compute_extended_bounds.h"
 
 
     ! SET_SRFLUX.F PLACED HERE FOR MODULE VERSION

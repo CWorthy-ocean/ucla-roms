@@ -45,7 +45,7 @@ contains
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: Wrk
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: Wxi, Weta
 
-# include "compute_extended_bounds.h90"
+# include "compute_extended_bounds.h"
 
 # ifdef EW_PERIODIC
     imin=max(istrR, istr-1)        ! The logic here is somewhat
