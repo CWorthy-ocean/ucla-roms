@@ -1,81 +1,81 @@
-      module get_init_mod
+module get_init_mod
 
-      implicit none
-      private
+  implicit none
+  private
 
-      public :: get_init
+  public :: get_init
 
-      contains
+contains
 
 #include "cppdefs.opt"
 
-      subroutine get_init(req_rec, tindx)    ! Reads initial conditions
-                                             ! from netCDF file.
-      use scalars, only:
-     &     day2sec, dt, forw_start, iic, ntstart,
-     &     sec2day, start_time
-      use dimensions, only: inode, jnode
-      use tracers, only: t_vname, t, iTandS
+  subroutine get_init(req_rec, tindx)    ! Reads initial conditions
+    ! from netCDF file.
+    use scalars, only:&
+    &day2sec, dt, forw_start, iic, ntstart,&
+    &sec2day, start_time
+    use dimensions, only: inode, jnode
+    use tracers, only: t_vname, t, iTandS
 #ifdef MARBL
-      use marbl_driver, only: marbldrv_read_ss_vars_from_rst
+    use marbl_driver, only: marbldrv_read_ss_vars_from_rst
 #endif
-      use coupling, only:
-     &     du_avg1, dv_avg1, du_avg2, dv_avg2,
-     &     du_avg_bak, dv_avg_bak
+    use coupling, only:&
+    &du_avg1, dv_avg1, du_avg2, dv_avg2,&
+    &du_avg_bak, dv_avg_bak
 #ifdef LMD_BKPP
-      use mixing, only: hbbl
+    use mixing, only: hbbl
 #endif
 #ifdef LMD_KPP
-      use mixing, only: hbls
+    use mixing, only: hbls
 #endif
-      use ocean_vars, only: zeta, ubar, vbar, u, v
-      use basic_output, only:
-     &     vname, iaux, indxtime,
-     &     indxu, indxv
+    use ocean_vars, only: zeta, ubar, vbar, u, v
+    use basic_output, only:&
 #ifdef LMD_BKPP
-     &     , indxhbbl,
+    & indxhbbl,&
 #endif
 #ifdef LMD_KPP
-     &     indxhbls
+    &indxhbls,&
 #endif
-      use netcdf, only:
-     &     nf90_get_att, nf90_inquire_variable,
-     &     nf90_inquire_dimension, nf90_noerr, nf90_nowrite,
-     &     nf90_strerror, nf90_inq_varid, nf90_get_var, nf90_close,
-     &     nf90_open
-      use nc_read_write, only: ncread
-      use roms_read_write, only: ininame
-      use grid, only:
-     &     riv_umask, riv_vmask, rmask, umask, vmask
-      use dimensions, only: i0, i1, j0, j1, nz, x_,x0,x1,y_,y0,y1
-      use param, only:
-     &     ieast, iwest, jnorth, jsouth, mynode,
-     &     nsub_e, nsub_x, nnodes, n, nt,
-     &     np_xi, np_eta
-      use roms_mpi, only: exchange_xxx
-      use error_handling_mod, only: error_log
-      use calc_pflx_mod, only : get_init_slow, calc_pflx
-      use sponge_tune, only: get_init_ub, ub_tune
-      use pio_roms, only: use_pio, pio_gtype
+    &vname, iaux, indxtime,&
+    &indxu, indxv
+    use netcdf, only:&
+    &nf90_get_att, nf90_inquire_variable,&
+    &nf90_inquire_dimension, nf90_noerr, nf90_nowrite,&
+    &nf90_strerror, nf90_inq_varid, nf90_get_var, nf90_close,&
+    &nf90_open
+    use nc_read_write, only: ncread
+    use roms_read_write, only: ininame
+    use grid, only:&
+    &riv_umask, riv_vmask, rmask, umask, vmask
+    use dimensions, only: i0, i1, j0, j1, nz, x_,x0,x1,y_,y0,y1
+    use param, only:&
+    &ieast, iwest, jnorth, jsouth, mynode,&
+    &nsub_e, nsub_x, nnodes, n, nt,&
+    &np_xi, np_eta
+    use roms_mpi, only: exchange_xxx
+    use error_handling_mod, only: error_log
+    use calc_pflx_mod, only : get_init_slow, calc_pflx
+    use sponge_tune, only: get_init_ub, ub_tune
+    use pio_roms, only: use_pio, pio_gtype
 #ifdef PARALLEL_IO
-      use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
-      use pio, only : PIO_openfile, PIO_closefile
+    use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
+    use pio, only : PIO_openfile, PIO_closefile
 #endif
-      use checkdims_mod, only: checkdims
+    use checkdims_mod, only: checkdims
 
-      implicit none
-      character(len=8) :: sr_name = "get_init"
-      character(len=1024) :: error_info
-      integer :: req_rec, tindx, max_rec, record, ncid, varid, i, j, k,
-     &           ierr,  start(4), count(2), ibuff(iaux),
-     &           itrc
-      real    :: time_scale
-      integer :: init_type, tile=0 ! set tile to zero for compute_tile_bounds.h below. Needed to fixed closed boundaries.
-      integer, parameter :: init_run=1,  rst_run=2
+    implicit none
+    character(len=8) :: sr_name = "get_init"
+    character(len=1024) :: error_info
+    integer(kind=4) :: req_rec, tindx, max_rec, record, ncid, varid, i, j, k,&
+    &ierr,  start(4), count(2), ibuff(iaux),&
+    &itrc
+    real(kind=8)    :: time_scale
+    integer(kind=4) :: init_type, tile=0 ! set tile to zero for compute_tile_bounds.h below. Needed to fixed closed bo
+    integer(kind=4), parameter :: init_run=1,  rst_run=2&
 #ifdef EXACT_RESTART
-     &                    , apprx_rst=3, exact_rst=4
-      real time_bak
-      logical :: exact_succes
+    &, apprx_rst=3, exact_rst=4
+    real(kind=8) time_bak
+    logical :: exact_succes
 #endif
 #define time illegal
 #define tdays illegal
@@ -84,10 +84,10 @@
 ! needed for istr, iend, etc in order to fix closed boundaries to u(istr)=0, etc
 # include "compute_tile_bounds.h"
 
-c--#define VERBOSE
+!--#define VERBOSE
 #ifdef VERBOSE
-      write(*,'(3(2x,A,I3))') 'enter get_init: req_rec =', req_rec,
-     &            'tindx =', tindx
+    write(*,'(3(2x,A,I3))') 'enter get_init: req_rec =', req_rec,&
+    &'tindx =', tindx
 #endif
 
 
@@ -108,41 +108,41 @@ c--#define VERBOSE
 !
 !             (2b) nrrec < 0, THE LAST available record is used.
 
-      init_type=0
-      ierr=nf90_open(ininame, nf90_nowrite, ncid)
-      write(error_info, *)
-     &     'Cannot open netCDF file ''', trim(ininame), '''.'
-      call error_log%check_netcdf_status(
-     &     netcdf_status=ierr,
-     &     context=sr_name,
-     &     info=error_info)
-      call error_log%abort_check()
+    init_type=0
+    ierr=nf90_open(ininame, nf90_nowrite, ncid)
+    write(error_info, *)&
+    &'Cannot open netCDF file ''', trim(ininame), '''.'
+    call error_log%check_netcdf_status(&
+    &netcdf_status=ierr,&
+    &context=sr_name,&
+    &info=error_info)
+    call error_log%abort_check()
 
-      ierr=checkdims (ncid, ininame, max_rec)
-      call error_log%abort_check()
+    ierr=checkdims (ncid, ininame, max_rec)
+    call error_log%abort_check()
 
-      if (max_rec > 0) then
-         if (req_rec > 0) then
-            if (req_rec <= max_rec) then
-               record=req_rec
-            else
-               write(error_info, *)
-     &              'requested restart time ',
-     &              'record',req_rec,
-     &              'exceeds number', 'of records',
-     &              max_rec,  'available in netCDF file ''',
-     &              trim(ininame), '''.'
-               call error_log%raise_from_rank(
-     &              context=sr_name,
-     &              info=error_info)
-            endif
-         else                   !(if (req_rec > 0))
-            record=max_rec
-         endif
-      else                      !if (max_rec > 0)
-         record=1
+    if (max_rec > 0) then
+      if (req_rec > 0) then
+        if (req_rec <= max_rec) then
+          record=req_rec
+        else
+          write(error_info, *)&
+          &'requested restart time ',&
+          &'record',req_rec,&
+          &'exceeds number', 'of records',&
+          &max_rec,  'available in netCDF file ''',&
+          &trim(ininame), '''.'
+          call error_log%raise_from_rank(&
+          &context=sr_name,&
+          &info=error_info)
+        endif
+      else                   !(if (req_rec > 0))
+        record=max_rec
       endif
-      call error_log%abort_check()
+    else                      !if (max_rec > 0)
+      record=1
+    endif
+    call error_log%abort_check()
 
 ! Read in evolving model variables:
 !----- -- -------- ----- ----------
@@ -174,7 +174,7 @@ c--#define VERBOSE
 ! predictor step rather than forward), both checks are performed
 ! during the first call, tindx=2. If either check fails, the exact
 ! restart is cancelled and no reading of 2D and 3D fields will be
-! performed for tindx=2.
+! performed for tindx=2._8
 !
 ! The possibility of exact restart is communicated with the rest of
 ! the code via integer variable "forw_start" which is set exclussively
@@ -205,112 +205,112 @@ c--#define VERBOSE
 ! (3) restart from a file created by this code with activated
 ! EXACT_RESTART.
 
-      ierr=nf90_inq_varid(ncid, vname(1,indxTime), varid)
+    ierr=nf90_inq_varid(ncid, vname(1,indxTime), varid)
 
 ! The following is done for backward compatibility: normally time
 ! variable is named "ocean_time", but legacy startup files may name
 ! it either "roms_time" or "scrum_time".
 
-      if (ierr /= nf90_noerr) then
-        ierr=nf90_inq_varid(ncid, 'roms_time', varid)
-      endif
-      if (ierr /= nf90_noerr) then
-        ierr=nf90_inq_varid(ncid, 'scrum_time', varid)
-      endif
-      if (ierr/=0) then
-         call error_log%check_netcdf_status(
-     &        netcdf_status=ierr,
-     &        context=sr_name,
-     &        info="time var not found")
-      end if
-      ierr=nf90_get_var(ncid, varid, start_time, start=(/record/) )
-      if (ierr/=0) then
-         call error_log%check_netcdf_status(
-     &        netcdf_status=ierr,
-     &        context=sr_name,
-     &        info="unable to get time var")
-      end if
-      ierr=nf90_get_att(ncid, varid, 'units', vname(3,indxTime))
-      if (ierr/=0) then
-         call error_log%check_netcdf_status(
-     &        netcdf_status=ierr,
-     &        context=sr_name,
-     &        info="unable to get time units")
-      end if
-      if (vname(3,indxTime)(1:6) == 'second') then
-        time_scale=1.D0
-      elseif (vname(3,indxTime)(1:3) == 'day') then
-        time_scale=day2sec
-      else
-        write(error_info, *)
-     &  'unknown units for variable ''',trim(vname(1,indxTime)),
-     &        '''', 'in netCDF file ''', trim(ininame), '''.'
-        call error_log%raise_global(
-     &       context=sr_name,
-     &       info=error_info)
-      endif
-      call error_log%abort_check()
-      start_time=start_time*time_scale
+    if (ierr /= nf90_noerr) then
+      ierr=nf90_inq_varid(ncid, 'roms_time', varid)
+    endif
+    if (ierr /= nf90_noerr) then
+      ierr=nf90_inq_varid(ncid, 'scrum_time', varid)
+    endif
+    if (ierr/=0) then
+      call error_log%check_netcdf_status(&
+      &netcdf_status=ierr,&
+      &context=sr_name,&
+      &info="time var not found")
+    end if
+    ierr=nf90_get_var(ncid, varid, start_time, start=(/record/) )
+    if (ierr/=0) then
+      call error_log%check_netcdf_status(&
+      &netcdf_status=ierr,&
+      &context=sr_name,&
+      &info="unable to get time var")
+    end if
+    ierr=nf90_get_att(ncid, varid, 'units', vname(3,indxTime))
+    if (ierr/=0) then
+      call error_log%check_netcdf_status(&
+      &netcdf_status=ierr,&
+      &context=sr_name,&
+      &info="unable to get time units")
+    end if
+    if (vname(3,indxTime)(1:6) == 'second') then
+      time_scale=1.D0
+    elseif (vname(3,indxTime)(1:3) == 'day') then
+      time_scale=day2sec
+    else
+      write(error_info, *)&
+      &'unknown units for variable ''',trim(vname(1,indxTime)),&
+      &'''', 'in netCDF file ''', trim(ininame), '''.'
+      call error_log%raise_global(&
+      &context=sr_name,&
+      &info=error_info)
+    endif
+    call error_log%abort_check()
+    start_time=start_time*time_scale
 !     start_time=start_time*time_scale + 288
 
 #ifdef EXACT_RESTART
-      if (tindx == 2) then
-        iic = 1 ! Hack to not re-compute DU/DV_avg1 but use the version loaded here
-        forw_start=0
-        if (record < max_rec) then
-          time_bak=start_time
-          ierr=nf90_get_var(ncid, varid, start_time, start=(/record+1/))
-          if (ierr == nf90_noerr) then
-            start_time=start_time*time_scale
+    if (tindx == 2) then
+      iic = 1 ! Hack to not re-compute DU/DV_avg1 but use the version loaded here
+      forw_start=0
+      if (record < max_rec) then
+        time_bak=start_time
+        ierr=nf90_get_var(ncid, varid, start_time, start=(/record+1/))
+        if (ierr == nf90_noerr) then
+          start_time=start_time*time_scale
 # ifdef VERBOSE
-            write(*,'(3(1x,A,F16.6))') 'time_bak =', time_bak,
-     &               'start_time =', start_time, 'dt =', dt
+          write(*,'(3(1x,A,F16.6))') 'time_bak =', time_bak,&
+          &'start_time =', start_time, 'dt =', dt
 # endif
 
 ! Note that expression "abs(start_time-time_bak-dt) < 0.001*dt" below
 ! is a roundoff-error tolerant version of "start_time == time_bak+dt".
 
-            if (abs(start_time-time_bak-dt) < 0.01*dt) then
-               forw_start=1
-            else
-              mpi_nonexit_warn write(*,'(1x,2A,2I4/10x,4A/10x,A/)')
-     &                'WARNING: Exact restart is requested, but ',
-     &                'is not possible: records', record,record+1,
-     &                'in ''', trim(ininame),  ''' are not ',
-     &                'consecutive time steps ==> proceeding ',
-     &                          'with forward initial time step.'
-              iic = 0 ! set back to zero if exact restart fails
-            endif
-         else
-            write(error_info,
-     &           '(/1x,3A,/12x,A,I5,1x,3A,/12x,A)')
-     &           'Cannot read variable ''',
-     &           trim(vname(1,indxTime)),
-     &           '''',
-     &           'rec =', record,
-     &           'file = ''', trim(ininame), '''',
-     &           nf90_strerror(ierr)
-            call error_log%raise_global(
-     &           context=sr_name,
-     &           info=error_info)
+          if (abs(start_time-time_bak-dt) < 0.01_8*dt) then
+            forw_start=1
+          else
+            mpi_nonexit_warn write(*,'(1x,2A,2I4/10x,4A/10x,A/)')&
+            &'WARNING: Exact restart is requested, but ',&
+            &'is not possible: records', record,record+1,&
+            &'in ''', trim(ininame),  ''' are not ',&
+            &'consecutive time steps ==> proceeding ',&
+            &'with forward initial time step.'
+            iic = 0 ! set back to zero if exact restart fails
           endif
         else
-           mpi_nonexit_warn write(*,'(1x,2A/10x,4A)')
-     &           'WARNING: Exact restart is requested, but is not ',
-     &           'possible: initial',  'file ''', trim(ininame),
-     &                    ''' does not contain sufficient records.'
+          write(error_info,&
+          &'(/1x,3A,/12x,A,I5,1x,3A,/12x,A)')&
+          &'Cannot read variable ''',&
+          &trim(vname(1,indxTime)),&
+          &'''',&
+          &'rec =', record,&
+          &'file = ''', trim(ininame), '''',&
+          &nf90_strerror(ierr)
+          call error_log%raise_global(&
+          &context=sr_name,&
+          &info=error_info)
         endif
-        if (forw_start /= 1) return
-        forw_start=0
+      else
+        mpi_nonexit_warn write(*,'(1x,2A/10x,4A)')&
+        &'WARNING: Exact restart is requested, but is not ',&
+        &'possible: initial',  'file ''', trim(ininame),&
+        &''' does not contain sufficient records.'
       endif
+      if (forw_start /= 1) return
+      forw_start=0
+    endif
 #endif
-      if (ierr /= nf90_noerr) then
-         call error_log%check_netcdf_status(
-     &        netcdf_status=ierr,
-     &        context=sr_name,
-     &        info="Cause of termination: netCDF input.")
-      endif
-      call error_log%abort_check()
+    if (ierr /= nf90_noerr) then
+      call error_log%check_netcdf_status(&
+      &netcdf_status=ierr,&
+      &context=sr_name,&
+      &info="Cause of termination: netCDF input.")
+    endif
+    call error_log%abort_check()
 ! Check whether variable 'time_step' is present, which can be a
 ! structure of four to up to eight integer numbers storing time step
 ! number and the corresponding record numbers for output files.
@@ -318,140 +318,140 @@ c--#define VERBOSE
 ! counters (i.e., technically  this is "restart" as opposite to
 ! "initial run");  otherwise initialise all the counters to zeroes.
 
-      ierr=nf90_inq_varid(ncid, 'time_step', varid)
-      if (ierr == nf90_noerr) then
-        ierr=nf90_inquire_variable(ncid, varid, dimids=ibuff)
-        if (ierr/=0) then
-           call error_log%check_netcdf_status(
-     &        netcdf_status=ierr,
-     &        context=sr_name,
-     &        info="Cannot get time_step dimids.")
-        end if
-        ierr=nf90_inquire_dimension(ncid, ibuff(1), len=count(1))
-        if (ierr/=0) then
-           call error_log%check_netcdf_status(
-     &        netcdf_status=ierr,
-     &        context=sr_name,
-     &          info="Cannot get time dim size")
-        end if
-        start(1)=1 ; start(2)=record ; count(2)=1
-        ibuff(1:iaux)=0
-        ierr=nf90_get_var(ncid, varid, ibuff, start, count)
-        if (ierr/=0) then
-           call error_log%check_netcdf_status(
-     &        netcdf_status=ierr,
-     &        context=sr_name,
-     &          info="Cannot read time_step")
-        end if
-        ntstart=ibuff(1)+1
+    ierr=nf90_inq_varid(ncid, 'time_step', varid)
+    if (ierr == nf90_noerr) then
+      ierr=nf90_inquire_variable(ncid, varid, dimids=ibuff)
+      if (ierr/=0) then
+        call error_log%check_netcdf_status(&
+        &netcdf_status=ierr,&
+        &context=sr_name,&
+        &info="Cannot get time_step dimids.")
+      end if
+      ierr=nf90_inquire_dimension(ncid, ibuff(1), len=count(1))
+      if (ierr/=0) then
+        call error_log%check_netcdf_status(&
+        &netcdf_status=ierr,&
+        &context=sr_name,&
+        &info="Cannot get time dim size")
+      end if
+      start(1)=1 ; start(2)=record ; count(2)=1
+      ibuff(1:iaux)=0
+      ierr=nf90_get_var(ncid, varid, ibuff, start, count)
+      if (ierr/=0) then
+        call error_log%check_netcdf_status(&
+        &netcdf_status=ierr,&
+        &context=sr_name,&
+        &info="Cannot read time_step")
+      end if
+      ntstart=ibuff(1)+1
 
 #ifdef EXACT_RESTART
-        if (tindx == 2 .and. record < max_rec) then
-          start(2)=record+1
-          ierr=nf90_get_var(ncid, varid, ibuff, start, count)
+      if (tindx == 2 .and. record < max_rec) then
+        start(2)=record+1
+        ierr=nf90_get_var(ncid, varid, ibuff, start, count)
         if (ierr/=0) then
-           call error_log%check_netcdf_status(
-     &        netcdf_status=ierr,
-     &        context=sr_name,
-     &          info="Cannot read second time_step")
+          call error_log%check_netcdf_status(&
+          &netcdf_status=ierr,&
+          &context=sr_name,&
+          &info="Cannot read second time_step")
         end if
 # ifdef VERBOSE
-          write(*,*) 'ibuff(1),ntstart =', ibuff(1), ntstart
+        write(*,*) 'ibuff(1),ntstart =', ibuff(1), ntstart
 # endif
-          if (ibuff(1) == ntstart) then
-            forw_start=1
-          else
-          mpi_nonexit_warn write(*,'(1x,2A,2I4/10x,4A/10x,A)')
-     &             'WARNING: Exact restart is requested, but is not ',
-     &             'possible: records',  record,   record+1,  'in ''',
-     &              trim(ininame),  ''' are not consecutive time ',
-     &                                    'steps ==> proceeding with',
-     &                                   'forward initial time step.'
-            iic = 0 ! set back to zero in case of fail
-            return   !--> no need to read preliminary record
-          endif
-        elseif (tindx == 1) then
-          if (forw_start == 1) then
-            init_type=exact_rst
-          else
-            init_type=apprx_rst
-          endif
+        if (ibuff(1) == ntstart) then
+          forw_start=1
+        else
+          mpi_nonexit_warn write(*,'(1x,2A,2I4/10x,4A/10x,A)')&
+          &'WARNING: Exact restart is requested, but is not ',&
+          &'possible: records',  record,   record+1,  'in ''',&
+          &trim(ininame),  ''' are not consecutive time ',&
+          &'steps ==> proceeding with',&
+          &'forward initial time step.'
+          iic = 0 ! set back to zero in case of fail
+          return   !--> no need to read preliminary record
         endif
+      elseif (tindx == 1) then
+        if (forw_start == 1) then
+          init_type=exact_rst
+        else
+          init_type=apprx_rst
+        endif
+      endif
 #else
-        init_type=rst_run
+      init_type=rst_run
 #endif
-        if (ierr/=0) then
-           call error_log%check_netcdf_status(
-     &        netcdf_status=ierr,
-     &        context=sr_name,
-     &          info="Cause of termination: netCDF input.")
-        end if
+      if (ierr/=0) then
+        call error_log%check_netcdf_status(&
+        &netcdf_status=ierr,&
+        &context=sr_name,&
+        &info="Cause of termination: netCDF input.")
+      end if
 
-      else ! ierr==nf90_noerr on inq_varid time_step
-        init_type=init_run
-        ntstart=1               ! netCDF variable "time_step" not
+    else ! ierr==nf90_noerr on inq_varid time_step
+      init_type=init_run
+      ntstart=1               ! netCDF variable "time_step" not
 !        nrecrst=0               ! found: proceed with initializing
 !        nrechis=0               ! all counters to zero (initial run).
 
-        ierr=0                                                       ! DevinD added to not trigger break later
-      endif
+      ierr=0                                                       ! DevinD added to not trigger break later
+    endif
 #ifdef EXACT_RESTART
-      if (tindx == 1 .and. forw_start == 0) forw_start=ntstart
+    if (tindx == 1 .and. forw_start == 0) forw_start=ntstart
 #endif
 #ifdef VERBOSE
-      write(*,'(1x,2A,F12.4,1x,A,I4)')   'get_init: reading initial ',
-     &   'fields for time =', start_time*sec2day, 'record =', record
+    write(*,'(1x,2A,F12.4,1x,A,I4)')   'get_init: reading initial ',&
+    &'fields for time =', start_time*sec2day, 'record =', record
 #endif
-      call error_log%abort_check()
+    call error_log%abort_check()
 ! Read initial fields:
 !---------------------
 ! River mask (needed for exact restarts)
 
 #ifdef PARALLEL_IO
-      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, ininame)
+    ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, ininame)
 #endif
 
-      start=1; start(3)=record                                       ! 2D vars
+    start=1; start(3)=record                                       ! 2D vars
 
-      ierr=nf90_inq_varid(ncid, 'riv_umask', varid)
-      if (ierr == nf90_noerr) then
-        pio_gtype = '2Dur'
-        call ncread(ncid,'riv_umask',riv_umask(x_:x1,y0:y1),start=start)!,fname=ininame)
-      else
-        if (mynode == 0) then
-        write(*,*) 'riv_umask not found in initial file. Initializing ',
-     & 'to zero.'
-        endif
+    ierr=nf90_inq_varid(ncid, 'riv_umask', varid)
+    if (ierr == nf90_noerr) then
+      pio_gtype = '2Dur'
+      call ncread(ncid,'riv_umask',riv_umask(x_:x1,y0:y1),start=start)!,fname=ininame)
+    else
+      if (mynode == 0) then
+        write(*,*) 'riv_umask not found in initial file. Initializing ',&
+        &'to zero.'
       endif
-      ierr=nf90_inq_varid(ncid, 'riv_vmask', varid)
-      if (ierr == nf90_noerr) then
-        pio_gtype = '2Dvr'
-        call ncread(ncid,'riv_vmask',riv_vmask(x0:x1,y_:y1),start=start)!,fname=ininame)
-      else
-        if (mynode == 0) then
-        write(*,*) 'riv_vmask not found in initial file. Initializing ',
-     & 'to zero.'
-        endif
+    endif
+    ierr=nf90_inq_varid(ncid, 'riv_vmask', varid)
+    if (ierr == nf90_noerr) then
+      pio_gtype = '2Dvr'
+      call ncread(ncid,'riv_vmask',riv_vmask(x0:x1,y_:y1),start=start)!,fname=ininame)
+    else
+      if (mynode == 0) then
+        write(*,*) 'riv_vmask not found in initial file. Initializing ',&
+        &'to zero.'
       endif
+    endif
 
 ! Free-surface and barotropic 2D momentuma, XI- and ETA-components
 
-      pio_gtype = '2Drr'
-      call ncread(ncid,'zeta',zeta(x0:x1,y0:y1,1),start=(/1,1,record/))!,fname=ininame)
-      zeta(x0:x1,y0:y1,1)=zeta(x0:x1,y0:y1,1)*rmask(x0:x1,y0:y1)
-      call exchange_xxx(zeta(:,:,1))
+    pio_gtype = '2Drr'
+    call ncread(ncid,'zeta',zeta(x0:x1,y0:y1,1),start=(/1,1,record/))!,fname=ininame)
+    zeta(x0:x1,y0:y1,1)=zeta(x0:x1,y0:y1,1)*rmask(x0:x1,y0:y1)
+    call exchange_xxx(zeta(:,:,1))
 
-      pio_gtype = '2Dur'
-      call ncread(ncid,'ubar',ubar(x_:x1,y0:y1,1),start=(/1,1,record/))!,fname=ininame)
-      ubar(x_:x1,y0:y1,1) = ubar(x_:x1,y0:y1,1)*
-     &  (umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
-      call exchange_xxx(ubar(:,:,1))
+    pio_gtype = '2Dur'
+    call ncread(ncid,'ubar',ubar(x_:x1,y0:y1,1),start=(/1,1,record/))!,fname=ininame)
+    ubar(x_:x1,y0:y1,1) = ubar(x_:x1,y0:y1,1)*&
+    &(umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
+    call exchange_xxx(ubar(:,:,1))
 
-      pio_gtype = '2Dvr'
-      call ncread(ncid,'vbar',vbar(x0:x1,y_:y1,1),start=(/1,1,record/))!,fname=ininame)
-      vbar(x0:x1,y_:y1,1) = vbar(x0:x1,y_:y1,1)*
-     &  (vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
-      call exchange_xxx(vbar(:,:,1))
+    pio_gtype = '2Dvr'
+    call ncread(ncid,'vbar',vbar(x0:x1,y_:y1,1),start=(/1,1,record/))!,fname=ininame)
+    vbar(x0:x1,y_:y1,1) = vbar(x0:x1,y_:y1,1)*&
+    &(vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
+    call exchange_xxx(vbar(:,:,1))
 
 ! Two sets of fast-time-averaged barotropic fluxes needed for exact
 ! restart in the case when using Adams-Bashforth-like extrapolation of
@@ -463,256 +463,256 @@ c--#define VERBOSE
 #ifdef SOLVE3D
 # ifdef EXACT_RESTART
 #  ifdef EXTRAP_BAR_FLUXES
-      exact_succes = .true.
-      ierr=nf90_inq_varid(ncid, 'DU_avg1', varid)
-      if (ierr /= nf90_noerr) exact_succes = .false.
-      ierr=nf90_inq_varid(ncid, 'DV_avg1', varid)
-      if (ierr /= nf90_noerr) exact_succes = .false.
-      ierr=nf90_inq_varid(ncid, 'DU_avg2', varid)
-      if (ierr /= nf90_noerr) exact_succes = .false.
-      ierr=nf90_inq_varid(ncid, 'DV_avg2', varid)
-      if (ierr /= nf90_noerr) exact_succes = .false.
-      ierr=nf90_inq_varid(ncid, 'DU_avg_bak', varid)
-      if (ierr /= nf90_noerr) exact_succes = .false.
-      ierr=nf90_inq_varid(ncid, 'DV_avg_bak', varid)
-      if (ierr /= nf90_noerr) exact_succes = .false.
+    exact_succes = .true.
+    ierr=nf90_inq_varid(ncid, 'DU_avg1', varid)
+    if (ierr /= nf90_noerr) exact_succes = .false.
+    ierr=nf90_inq_varid(ncid, 'DV_avg1', varid)
+    if (ierr /= nf90_noerr) exact_succes = .false.
+    ierr=nf90_inq_varid(ncid, 'DU_avg2', varid)
+    if (ierr /= nf90_noerr) exact_succes = .false.
+    ierr=nf90_inq_varid(ncid, 'DV_avg2', varid)
+    if (ierr /= nf90_noerr) exact_succes = .false.
+    ierr=nf90_inq_varid(ncid, 'DU_avg_bak', varid)
+    if (ierr /= nf90_noerr) exact_succes = .false.
+    ierr=nf90_inq_varid(ncid, 'DV_avg_bak', varid)
+    if (ierr /= nf90_noerr) exact_succes = .false.
 
-      if (exact_succes) then
-        pio_gtype = '2Dur'
-        call ncread(ncid,'DU_avg1',DU_avg1(x_:x1,y0:y1),start=start)!,fname=ininame)
-        pio_gtype = '2Dvr'
-        call ncread(ncid,'DV_avg1',DV_avg1(x0:x1,y_:y1),start=start)!,fname=ininame)
-        pio_gtype = '2Dur'
-        call ncread(ncid,'DU_avg2',DU_avg2(x_:x1,y0:y1),start=start)!,fname=ininame)
-        pio_gtype = '2Dvr'
-        call ncread(ncid,'DV_avg2',DV_avg2(x0:x1,y_:y1),start=start)!,fname=ininame)
-        pio_gtype = '2Dur'
-        call ncread(ncid,'DU_avg_bak',DU_avg_bak(x_:x1,y0:y1),start=start)!,fname=ininame)
-        pio_gtype = '2Dvr'
-        call ncread(ncid,'DV_avg_bak',DV_avg_bak(x0:x1,y_:y1),start=start)!,fname=ininame)
-      else
-        forw_start=ntstart    !--> cancel exact restart
-        iic = 0 ! set back to zero
-      endif
+    if (exact_succes) then
+      pio_gtype = '2Dur'
+      call ncread(ncid,'DU_avg1',DU_avg1(x_:x1,y0:y1),start=start)!,fname=ininame)
+      pio_gtype = '2Dvr'
+      call ncread(ncid,'DV_avg1',DV_avg1(x0:x1,y_:y1),start=start)!,fname=ininame)
+      pio_gtype = '2Dur'
+      call ncread(ncid,'DU_avg2',DU_avg2(x_:x1,y0:y1),start=start)!,fname=ininame)
+      pio_gtype = '2Dvr'
+      call ncread(ncid,'DV_avg2',DV_avg2(x0:x1,y_:y1),start=start)!,fname=ininame)
+      pio_gtype = '2Dur'
+      call ncread(ncid,'DU_avg_bak',DU_avg_bak(x_:x1,y0:y1),start=start)!,fname=ininame)
+      pio_gtype = '2Dvr'
+      call ncread(ncid,'DV_avg_bak',DV_avg_bak(x0:x1,y_:y1),start=start)!,fname=ininame)
+    else
+      forw_start=ntstart    !--> cancel exact restart
+      iic = 0 ! set back to zero
+    endif
 
 #  elif defined PRED_COUPLED_MODE
-      ierr=nf90_inq_varid(ncid, 'rufrc_bak', varid)
+    ierr=nf90_inq_varid(ncid, 'rufrc_bak', varid)
+    if (ierr == nf90_noerr) then
+      ierr=nf90_inq_varid(ncid,  'rvfrc_bak', varid)
       if (ierr == nf90_noerr) then
-        ierr=nf90_inq_varid(ncid,  'rvfrc_bak', varid)
-        if (ierr == nf90_noerr) then
 
-          pio_gtype = '2Dur'
-          call ncread(ncid,'rufrc_bak',rufrc_bak(x_:x1,y0:y1,tindx),start=start)!,fname=ininame)
-          pio_gtype = '2Dvr'
-          call ncread(ncid,'rvfrc_bak',rvfrc_bak(x0:x1,y_:y1,tindx),start=start)!,fname=ininame)
-          if (ierr/=nf90_noerr) then
-             call error_log%check_netcdf_status(
-     &        netcdf_status=ierr,
-     &            context=sr_name,
-     &            info="Cause of termination: netCDF input.")
-          end if
+        pio_gtype = '2Dur'
+        call ncread(ncid,'rufrc_bak',rufrc_bak(x_:x1,y0:y1,tindx),start=start)!,fname=ininame)
+        pio_gtype = '2Dvr'
+        call ncread(ncid,'rvfrc_bak',rvfrc_bak(x0:x1,y_:y1,tindx),start=start)!,fname=ininame)
+        if (ierr/=nf90_noerr) then
+          call error_log%check_netcdf_status(&
+          &netcdf_status=ierr,&
+          &context=sr_name,&
+          &info="Cause of termination: netCDF input.")
+        end if
 
-        else
-          forw_start=ntstart    !--> cancel exact restart
-        endif
       else
         forw_start=ntstart    !--> cancel exact restart
       endif
-      call error_log%abort_check()
+    else
+      forw_start=ntstart    !--> cancel exact restart
+    endif
+    call error_log%abort_check()
 #  endif
 # endif /*EXACT_RESTART*/
 
 ! 3D momentum components in XI- and ETA-directions
 
-      start=1; start(4)=record                                       ! 3D vars
+    start=1; start(4)=record                                       ! 3D vars
 
-      pio_gtype = '3Dur'
-      call ncread(ncid,vname(1,indxU),u(x_:x1,y0:y1,:,tindx),start=start)!,fname=ininame)
-      do k=1,nz
-        u(x_:x1,y0:y1,k,tindx) = u(x_:x1,y0:y1,k,tindx)*
-     &  (umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
-      enddo
-      call exchange_xxx(u(:,:,:,tindx))
+    pio_gtype = '3Dur'
+    call ncread(ncid,vname(1,indxU),u(x_:x1,y0:y1,:,tindx),start=start)!,fname=ininame)
+    do k=1,nz
+      u(x_:x1,y0:y1,k,tindx) = u(x_:x1,y0:y1,k,tindx)*&
+      &(umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
+    enddo
+    call exchange_xxx(u(:,:,:,tindx))
 
-      pio_gtype = '3Dvr'
-      call ncread(ncid,vname(1,indxV),v(x0:x1,y_:y1,:,tindx),start=start)!,fname=ininame)
-      do k=1,nz
-        v(x0:x1,y_:y1,k,tindx) = v(x0:x1,y_:y1,k,tindx)*
-     &  (vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
-      enddo
-      call exchange_xxx(v(:,:,:,tindx))
+    pio_gtype = '3Dvr'
+    call ncread(ncid,vname(1,indxV),v(x0:x1,y_:y1,:,tindx),start=start)!,fname=ininame)
+    do k=1,nz
+      v(x0:x1,y_:y1,k,tindx) = v(x0:x1,y_:y1,k,tindx)*&
+      &(vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
+    enddo
+    call exchange_xxx(v(:,:,:,tindx))
 
 
 ! Tracer variables.
 
-      do itrc=1,nt
+    do itrc=1,nt
 
-        ierr=nf90_inq_varid(ncid, t_vname(itrc), varid)
-        if (ierr == nf90_noerr) then
-          pio_gtype = '3Drr'
-          call ncread(ncid,t_vname(itrc),t(x0:x1,y0:y1,:,tindx,itrc),start=start)!,fname=ininame)
-          do k=1,N
-            t(x0:x1,y0:y1,k,tindx,itrc)=t(x0:x1,y0:y1,k,tindx,itrc)*rmask(x0:x1,y0:y1)
-          enddo
-          call exchange_xxx(t(:,:,:,tindx,itrc))
-        else
-
-           if (itrc <= iTandS) then ! temperature and salt(s) always require inital condition
-              write(error_info,
-     &             '(/1x,3A,/12x,3A,/12x,A)')
-     &             'Cannot find variable ''',
-     &             trim(t_vname(itrc)),
-     &             '''',
-     &             'in netCDF file ''',
-     &             trim(ininame),
-     &             '''',
-     &             nf90_strerror(ierr)
-              call error_log%check_netcdf_status(
-     &             netcdf_status=ierr,
-     &             context=sr_name,
-     &             info=error_info)
-          else
-            t(:,:,:,tindx,itrc) = 0.0
-            if(mynode==0) write(*,*) ' --- WARNING: '
-     &         , trim(t_vname(itrc))
-     &         , ' not in initial file.  Initialized to 0.0'
-            ierr=nf90_noerr
-          endif
-
-        endif
-      enddo
-
-      call error_log%abort_check()
-      start=1; start(3)=record                                       ! 2D vars
-# ifdef LMD_KPP
-      ierr=nf90_inq_varid(ncid, vname(1,indxHbls), varid)
+      ierr=nf90_inq_varid(ncid, t_vname(itrc), varid)
       if (ierr == nf90_noerr) then
-        pio_gtype = '2Drr'
-        call ncread(ncid,vname(1,indxHbls),hbls(x0:x1,y0:y1),start=start)!,fname=ininame)
-        hbls(x0:x1,y0:y1)=hbls(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
-        call exchange_xxx(hbls(:,:))
+        pio_gtype = '3Drr'
+        call ncread(ncid,t_vname(itrc),t(x0:x1,y0:y1,:,tindx,itrc),start=start)!,fname=ininame)
+        do k=1,N
+          t(x0:x1,y0:y1,k,tindx,itrc)=t(x0:x1,y0:y1,k,tindx,itrc)*rmask(x0:x1,y0:y1)
+        enddo
+        call exchange_xxx(t(:,:,:,tindx,itrc))
       else
-        mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',
-     & 'variable ''', trim(vname(1,indxHbls)), ''' not found in ''',
-     &           trim(ininame), ''' ==> initialized to zero state.'
+
+        if (itrc <= iTandS) then ! temperature and salt(s) always require inital condition
+          write(error_info,&
+          &'(/1x,3A,/12x,3A,/12x,A)')&
+          &'Cannot find variable ''',&
+          &trim(t_vname(itrc)),&
+          &'''',&
+          &'in netCDF file ''',&
+          &trim(ininame),&
+          &'''',&
+          &nf90_strerror(ierr)
+          call error_log%check_netcdf_status(&
+          &netcdf_status=ierr,&
+          &context=sr_name,&
+          &info=error_info)
+        else
+          t(:,:,:,tindx,itrc) = 0.0_8
+          if(mynode==0) write(*,*) ' --- WARNING: '&
+          &, trim(t_vname(itrc))&
+          &, ' not in initial file.  Initialized to 0.0'
+          ierr=nf90_noerr
+        endif
 
       endif
+    enddo
+
+    call error_log%abort_check()
+    start=1; start(3)=record                                       ! 2D vars
+# ifdef LMD_KPP
+    ierr=nf90_inq_varid(ncid, vname(1,indxHbls), varid)
+    if (ierr == nf90_noerr) then
+      pio_gtype = '2Drr'
+      call ncread(ncid,vname(1,indxHbls),hbls(x0:x1,y0:y1),start=start)!,fname=ininame)
+      hbls(x0:x1,y0:y1)=hbls(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
+      call exchange_xxx(hbls(:,:))
+    else
+      mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',&
+      &'variable ''', trim(vname(1,indxHbls)), ''' not found in ''',&
+      &trim(ininame), ''' ==> initialized to zero state.'
+
+    endif
 # endif
 # ifdef LMD_BKPP
-      ierr=nf90_inq_varid(ncid, vname(1,indxHbbl), varid)
-      if (ierr == nf90_noerr) then
-        pio_gtype = '2Drr'
-        call ncread(ncid,vname(1,indxHbbl),hbbl(x0:x1,y0:y1),start=start)!,fname=ininame)
-        hbbl(x0:x1,y0:y1)=hbbl(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
-        call exchange_xxx(hbbl(:,:))                               ! confirmed needs an exchange, not sure why
-      else
-        mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',
-     & 'variable ''', trim(vname(1,indxHbbl)), ''' not found in ''',
-     &      trim(ininame), ''' ==> initialized to zero state.'
+    ierr=nf90_inq_varid(ncid, vname(1,indxHbbl), varid)
+    if (ierr == nf90_noerr) then
+      pio_gtype = '2Drr'
+      call ncread(ncid,vname(1,indxHbbl),hbbl(x0:x1,y0:y1),start=start)!,fname=ininame)
+      hbbl(x0:x1,y0:y1)=hbbl(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
+      call exchange_xxx(hbbl(:,:))                               ! confirmed needs an exchange, not sure why
+    else
+      mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',&
+      &'variable ''', trim(vname(1,indxHbbl)), ''' not found in ''',&
+      &trim(ininame), ''' ==> initialized to zero state.'
 
-      endif
+    endif
 # endif
 
 #ifdef MARBL
 !     Read in MARBL saved_state variables here
-      call marbldrv_read_ss_vars_from_rst(ncid,record)
+    call marbldrv_read_ss_vars_from_rst(ncid,record)
 #endif /* MARBL */
 
 #endif /* SOLVE3D */
 
-      if (calc_pflx) call get_init_slow(ncid,record,tindx)
-      if (ub_tune)   call get_init_ub(ncid,record)
+    if (calc_pflx) call get_init_slow(ncid,record,tindx)
+    if (ub_tune)   call get_init_ub(ncid,record)
 
 ! Close input NetCDF file and  write greeting message depending
 ! on the the type of initial/restart procedure performed above.
 
-      ierr=nf90_close(ncid)
+    ierr=nf90_close(ncid)
 #ifdef MPI_SILENT_MODE
-      if (mynode == 0) then
+    if (mynode == 0) then
 #endif
-       if (tindx == 1) then
-         if (init_type == init_run) then
-          write(*,'(6x,2A,F12.4,1x,A,I4)') 'get_init :: Read initial ',
-     &   'conditions for day =', start_time*sec2day, 'record =',record
+      if (tindx == 1) then
+        if (init_type == init_run) then
+          write(*,'(6x,2A,F12.4,1x,A,I4)') 'get_init :: Read initial ',&
+          &'conditions for day =', start_time*sec2day, 'record =',record
 #ifdef EXACT_RESTART
-         elseif (init_type == exact_rst) then
-           write(*,'(6x,A,F12.4,1x,A,I4,A)')
-     &    'get_init :: Exact restart from day =',  start_time*sec2day,
-     &    'rec =', record, '.'
-         elseif (init_type == apprx_rst) then
-           write(*,'(6x,A,F12.4,1x,A,I4,A)')
-     &      'get_init :: Approximate, single-step restart from day =',
-     &       start_time*sec2day,   'rec =', record, '.'
+        elseif (init_type == exact_rst) then
+          write(*,'(6x,A,F12.4,1x,A,I4,A)')&
+          &'get_init :: Exact restart from day =',  start_time*sec2day,&
+          &'rec =', record, '.'
+        elseif (init_type == apprx_rst) then
+          write(*,'(6x,A,F12.4,1x,A,I4,A)')&
+          &'get_init :: Approximate, single-step restart from day =',&
+          &start_time*sec2day,   'rec =', record, '.'
 #else
-         elseif (init_type == rst_run) then
-           write(*,'(6x,A,F12.4,1x,A,I4,A)')
-     &          'get_init: Restarted from day =', start_time*sec2day,
-     &     'rec =', record, '.'
+        elseif (init_type == rst_run) then
+          write(*,'(6x,A,F12.4,1x,A,I4,A)')&
+          &'get_init: Restarted from day =', start_time*sec2day,&
+          &'rec =', record, '.'
 #endif
         else
-              call error_log%raise_from_rank(
-     &             context=sr_name,
-     &             info="Unknown Error.")
-         endif
-       endif  !<-- tindex==1
+          call error_log%raise_from_rank(&
+          &context=sr_name,&
+          &info="Unknown Error.")
+        endif
+      endif  !<-- tindex==1
 #ifdef MPI_SILENT_MODE
-      endif
+    endif
 #endif
 
 #ifdef PARALLEL_IO
-      call PIO_closefile(pio_FileDesc)
+    call PIO_closefile(pio_FileDesc)
 #endif
 
-      call error_log%abort_check()
-      ! Here we catch an initial file that does not have the boundary values of u/v
-      ! set to zero, even though we prescribed a closed boundary. This is necessary
-      ! for conservation tests.
+    call error_log%abort_check()
+    ! Here we catch an initial file that does not have the boundary values of u/v
+    ! set to zero, even though we prescribed a closed boundary. This is necessary
+    ! for conservation tests.
 #if !defined OBC_WEST && !defined EW_PERIODIC
-      if(WESTERN_EDGE) then
-        if(mynode==0) write (*,'(6x,A)')        ! S&W bry always contained in start node (==0)
-     &  'get_init :: set closed west  boundary row to zero (u/ub/v/vb)'
-        u(   istr  ,:     ,:,tindx)=0.0         ! ensure closed boundary u on boundary is zero
-        ubar(istr  ,:     ,1)      =0.0         ! ubar read into index 1 above
-      endif
+    if(WESTERN_EDGE) then
+      if(mynode==0) write (*,'(6x,A)')&        ! S&W bry always contained in start node (==0)
+      &'get_init :: set closed west  boundary row to zero (u/ub/v/vb)'
+      u(   istr  ,:     ,:,tindx)=0.0_8         ! ensure closed boundary u on boundary is zero
+      ubar(istr  ,:     ,1)      =0.0_8         ! ubar read into index 1 above
+    endif
 #endif
 #if !defined OBC_EAST && !defined EW_PERIODIC
-      if(EASTERN_EDGE) then
-        if(mynode==NNODES-1) write (*,'(6x,A)') ! N&E bry always contained in final node (==NNODES-1)
-     &  'get_init :: set closed east  boundary row to zero (u/ub/v/vb)'
-        u(   iend+1,:     ,:,tindx)=0.0
-        ubar(iend+1,:     ,1)      =0.0
-      endif
+    if(EASTERN_EDGE) then
+      if(mynode==NNODES-1) write (*,'(6x,A)')& ! N&E bry always contained in final node (==NNODES-1)
+      &'get_init :: set closed east  boundary row to zero (u/ub/v/vb)'
+      u(   iend+1,:     ,:,tindx)=0.0_8
+      ubar(iend+1,:     ,1)      =0.0_8
+    endif
 #endif
 #if !defined OBC_SOUTH && !defined NS_PERIODIC
-      if(SOUTHERN_EDGE) then
-        if(mynode==0) write (*,'(6x,A)')
-     &  'get_init :: set closed south boundary row to zero (u/ub/v/vb)'
-        v(   :     ,jstr  ,:,tindx)=0.0
-        vbar(:     ,jstr  ,1)      =0.0
-      endif
+    if(SOUTHERN_EDGE) then
+      if(mynode==0) write (*,'(6x,A)')&
+      &'get_init :: set closed south boundary row to zero (u/ub/v/vb)'
+      v(   :     ,jstr  ,:,tindx)=0.0_8
+      vbar(:     ,jstr  ,1)      =0.0_8
+    endif
 #endif
 #if !defined OBC_NORTH && !defined NS_PERIODIC
-      if(NORTHERN_EDGE) then
-        if(mynode==NNODES-1) write (*,'(6x,A)')
-     &  'get_init :: set closed north boundary row to zero (u/ub/v/vb)'
-        v(   :     ,jend+1,:,tindx)=0.0
-        vbar(:     ,jend+1,1)      =0.0
-      endif
+    if(NORTHERN_EDGE) then
+      if(mynode==NNODES-1) write (*,'(6x,A)')&
+      &'get_init :: set closed north boundary row to zero (u/ub/v/vb)'
+      v(   :     ,jend+1,:,tindx)=0.0_8
+      vbar(:     ,jend+1,1)      =0.0_8
+    endif
 #endif
 
 #if defined ANA_BRY
-      call ana_init_generic(1,nx,1,ny)
+    call ana_init_generic(1,nx,1,ny)
 #endif
 
 
 #ifdef VERBOSE
-      write(*,'(1x,3(1x,A,I6))') 'return from get_init, ntstart =',
-     &                                                  ntstart
+    write(*,'(1x,3(1x,A,I6))') 'return from get_init, ntstart =',&
+    &ntstart&
 # ifdef EXACT_RESTART
-     &                              ,   'forw_start =', forw_start
+    &,   'forw_start =', forw_start
 # endif
 #endif
-      return
-      end subroutine get_init
+    return
+  end subroutine get_init
 
-      end module get_init_mod
+end module get_init_mod
