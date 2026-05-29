@@ -1,14 +1,14 @@
 #ifndef LINEAR_DRAG_ONLY
-        if (Zob > 0.) then
-          do j=jstrV-1,jend
-            do i=istrU-1,iend
+if (Zob > 0._8) then
+  do j=jstrV-1,jend
+    do i=istrU-1,iend
 # define nrdg nstp
-              cff=sqrt( 0.333333333333*(
-     &              u(i,j,1,nrdg)**2 +u(i+1,j,1,nrdg)**2
-     &                     +u(i,j,1,nrdg)*u(i+1,j,1,nrdg)
-     &               +v(i,j,1,nrdg)**2+v(i,j+1,1,nrdg)**2
-     &                     +v(i,j,1,nrdg)*v(i,j+1,1,nrdg)
-     &                                               ) )
+      cff=sqrt( 0.333333333333_8*(&
+      &u(i,j,1,nrdg)**2 +u(i+1,j,1,nrdg)**2&
+      &+u(i,j,1,nrdg)*u(i+1,j,1,nrdg)&
+      &+v(i,j,1,nrdg)**2+v(i,j+1,1,nrdg)**2&
+      &+v(i,j,1,nrdg)*v(i,j+1,1,nrdg)&
+      &) )
 
 # undef nrdg
 
@@ -26,41 +26,41 @@
 ! The next formula after it is a simplified version which nevertheless
 ! yields correct asymptotic limits in both extremes, safely passing
 ! through Zob=Hz transition, and closely matching the upper formula
-! there: setting Zob=Hz makes [vonKar/(2*ln 2-1)]^2 = [vonKar/0.386]^2
-! upper vs. [vonKar/ln(3/2)]^2 = [vonKar/0.405]^2 lower.
+! there: setting Zob=Hz makes [vonKar/(2*ln 2-1)]^2 = [vonKar/0.386_8]^2
+! upper vs. [vonKar/ln(3/2)]^2 = [vonKar/0.405_8]^2 lower.
 
-!**           rd(i,j)=rdrg + cff*(  vonKar/(   (1.+Zob/Hz(i,j,1))
-!**                                  *log(1.+Hz(i,j,1)/Zob) -1. ) )**2
+!**           rd(i,j)=rdrg + cff*(  vonKar/(   (1._8+Zob/Hz(i,j,1))
+!**                                  *log(1._8+Hz(i,j,1)/Zob) -1._8 ) )**2
 
 !  Removed the addition of a linear 'background' drag
-!             rd(i,j)=rdrg+cff*( vonKar/log(1.+0.5*Hz(i,j,1)/Zob) )**2
+!             rd(i,j)=rdrg+cff*( vonKar/log(1._8+0.5_8*Hz(i,j,1)/Zob) )**2
 
-              rd(i,j)= cff*( vonKar/log(1.+0.5*Hz(i,j,1)/Zob) )**2
+      rd(i,j)= cff*( vonKar/log(1._8+0.5_8*Hz(i,j,1)/Zob) )**2
 
 
 # if !defined IMPLICIT_BOTTOM_DRAG
 #  if !defined IMPLCT_NO_SLIP_BTTM_BC
-                                                     ! must have
-              rd(i,j)=min(rd(i,j), 0.8*Hz(i,j,1)/dt) ! restriction
-                                                     ! for stability
+      ! must have
+      rd(i,j)=min(rd(i,j), 0.8_8*Hz(i,j,1)/dt) ! restriction
+      ! for stability
 #  endif
 # endif
-            enddo
-          enddo
-        else  !<-- Zob > 0.
+    enddo
+  enddo
+else  !<-- Zob > 0._8
 #endif /* ! LINEAR_DRAG_ONLY */
 
-          do j=jstrV-1,jend
-            do i=istrU-1,iend
-              rd(i,j)=rdrg
+  do j=jstrV-1,jend
+    do i=istrU-1,iend
+      rd(i,j)=rdrg
 
-              rd(i,j)=min(rd(i,j), 0.8*Hz(i,j,1)/dt)
+      rd(i,j)=min(rd(i,j), 0.8_8*Hz(i,j,1)/dt)
 
-            enddo
-          enddo
+    enddo
+  enddo
 
 #ifndef LINEAR_DRAG_ONLY
-        endif  !<-- Zob > 0
+endif  !<-- Zob > 0
 #endif
 
 ! Save "rd" into shared array "r_D" for subsequent use in barotropic
@@ -70,5 +70,5 @@
 ! rows into its periodic and/or computational margins, so there is no
 ! need for exchange call.
 
-        call ext_copy_prv2shr_2d_tile(istr,iend,jstr,jend, rd,r_D)
+call ext_copy_prv2shr_2d_tile(istr,iend,jstr,jend, rd,r_D)
 

@@ -109,7 +109,7 @@ module error_handling_mod
     character(len=:), allocatable :: context
     character(len=:), allocatable :: info
     type(error_log_entry_type), pointer :: next => null()
-#ifdef MPI
+#if defined(MPI)
   contains
     procedure, private :: serialize => serialize_log_entry
 #endif
@@ -148,7 +148,7 @@ module error_handling_mod
     procedure :: abort_check
     procedure, private :: raise_internal
     procedure, private :: append_entry => append_entry_to_log
-#ifdef MPI
+#if defined(MPI)
     procedure, private :: serialize => serialize_log
 #endif
   end type error_log_type
@@ -332,16 +332,16 @@ contains
        local_abort = merge(1, 0, this%abort_requested)
        call MPI_Allreduce(local_abort, global_abort, 1, MPI_INTEGER, MPI_MAX, ocean_grid_comm)
 
-    if (global_abort == 0) return
+       if (global_abort == 0) return
 
-    call this%serialize(local_serialized_log)
-    call gather_serialized_error_logs_on_primary_rank(local_serialized_log, global_serialized_log)
+       call this%serialize(local_serialized_log)
+       call gather_serialized_error_logs_on_primary_rank(local_serialized_log, global_serialized_log)
 
-    if (mynode == 0) then
-       call deserialize_log(global_serialized_log, global_log)
-       call group_error_log_entries(global_log, grouped_error_log_entries)
-       call print_error_log_entry_groups(grouped_error_log_entries)
-    end if
+       if (mynode == 0) then
+          call deserialize_log(global_serialized_log, global_log)
+          call group_error_log_entries(global_log, grouped_error_log_entries)
+          call print_error_log_entry_groups(grouped_error_log_entries)
+       end if
 
        call MPI_Barrier(ocean_grid_comm)
        call MPI_Abort(ocean_grid_comm, 1)
@@ -363,7 +363,8 @@ contains
        call print_error_log_entry_groups(grouped_error_log_entries)
        error stop
     end if
-#endif
+#endif /* MPI */
+
   end subroutine abort_check
 
   !=========================================================
@@ -458,9 +459,8 @@ contains
 
   end subroutine append_entry_to_log
 
-
   !--------------------------------------------------------------------------------
-  ! GROUPING ENTRIES AND PRINTING
+  ! GROUPING ENTRIES
   !--------------------------------------------------------------------------------
 
   subroutine group_error_log_entries(log, grouped_log_entries)
@@ -656,7 +656,7 @@ contains
        case (SCOPE_POINT)
           write(error_unit,'(A)') 'THE ABOVE ERROR WAS RAISED FROM THE FOLLOWING POINTS: '
           do j = 1, n_locs
-             write(error_unit,*) &
+             write(error_unit,'(A,I0,A,I0,A,I0,A,I0,A)') &
                   '  rank ', grouped_log_entries(i)%id(j)%rank, &
                   ' (i,j,k)=(', grouped_log_entries(i)%id(j)%i, ',', &
                   grouped_log_entries(i)%id(j)%j, ',', &
@@ -668,7 +668,7 @@ contains
     end do
   end subroutine print_error_log_entry_groups
 
-#ifdef MPI
+#if defined(MPI)
 !--------------------------------------------------------------------------------
 ! MPI-SPECIFIC SUBROUTINES
 !--------------------------------------------------------------------------------
