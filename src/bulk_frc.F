@@ -185,21 +185,33 @@
       ! ----------------
       use surf_flux, only:
      &     srflx, vwnd, uwnd, stflx, sustr_r, svstr_r,
-     &     sustr, svstr, apply_surf_field_corr, swflx
-      use tracers, only: t
+     &     sustr, svstr, swflx, wrt_rstflx, rstflx
+#if defined(SFLX_CORR) && defined SALINITY && !defined ANA_SSFLUX
+     &     , sss, dSSSdt
+#endif
+#if defined(QCORRECTION) && !defined(ANA_SST)
+     &     , sst, dSSTdt
+#endif
+#if defined(MARBL) && defined(CFLX_CORR)
+     &     , sDIC, sALK, dCdt
+#endif
+
+      use tracers, only: t, itands, t_vname
       use grid, only: rmask, umask, vmask
       use mixing, only:
      &     east_exchng, ieast, isalt, itemp, iwest,
      &     jnorth, jsouth, north_exchng, south_exchng, west_exchng
       use ocean_vars, only: u, v
       use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar, cmday2ms
+      use param, only: nt
 
       implicit none
 
       ! input/outputs
       integer,intent(in)  :: istr,iend,jstr,jend
 
-      integer i,j, IterMax,iter
+      integer i, j, IterMax, iter
+      integer itrc, itrc2read, itrc2writ
       real a
       real rho0i
       real TseaC,TseaK,Qsea
@@ -778,10 +790,115 @@
 !          shflx_sen(i,j)=hfsen
 !          shflx_rlw(i,j)=hflw
 !
+!---------------------------------------------------------------
+! Flux correction to surface net heat flux.
+!---------------------------------------------------------------
+!
+# ifdef QCORRECTION
+!          cff=cff11*dqdtg(i,j,it11)+cff12*dqdtg(i,j,it12)
+!          stflx(i,j,itemp)=stflx(i,j,itemp) +cff*(
+!     &           t(i,j,N,nrhs,itemp) -cff13*sstg(i,j,it13)
+!     &                               -cff14*sstg(i,j,it14)
+!     &                                                  )
+          stflx(i,j,itemp)=stflx(i,j,itemp) -dSSTdt*(
+     &           t(i,j,N,nrhs,itemp) - sst(i,j)  )
+
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+# endif /* QCORRECTION */
+
+!
 !--------------------------------------------------------------
 ! Flux corrections to surface net heat flux and salt flux.
 !--------------------------------------------------------------
-      call apply_surf_field_corr
+# ifdef SFLX_CORR
+# ifdef SALINITY
+          stflx(i,j,isalt)=stflx(i,j,isalt) -dSSSdt*(
+     &           t(i,j,N,nrhs,isalt) - sss(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       if (wrt_rstflx) then
+           rstflx(i,j,isalt) = -dSSSdt*(
+     &           t(i,j,N,nrhs,isalt) - sss(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       endif
+# endif
+# endif
+
+!
+!--------------------------------------------------------------
+! Flux correction to surface Alk/DIC
+!--------------------------------------------------------------
+#if defined CFLX_CORR && defined MARBL
+
+!!!!!!!      DIC
+       do itrc = iTandS+1,NT
+         if ( trim(t_vname(itrc))=="DIC" ) then
+            itrc2writ=itrc
+         elseif ( trim(t_vname(itrc))=="DIC_ALT_CO2" ) then
+            itrc2read=itrc
+         endif
+       enddo
+          stflx(i,j,itrc2read)=stflx(i,j,itrc2read) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+          stflx(i,j,itrc2writ)=stflx(i,j,itrc2writ) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       if (wrt_rstflx) then
+           rstflx(i,j,itrc2read) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+           rstflx(i,j,itrc2writ) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       endif
+
+!!!!!!!      ALK
+       do itrc = iTandS+1,NT
+         if ( trim(t_vname(itrc))=="ALK" ) then
+            itrc2writ=itrc
+         elseif ( trim(t_vname(itrc))=="ALK_ALT_CO2" ) then
+            itrc2read=itrc
+         endif
+       enddo
+          stflx(i,j,itrc2read)=stflx(i,j,itrc2read) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+          stflx(i,j,itrc2writ)=stflx(i,j,itrc2writ) -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       if (wrt_rstflx) then
+           rstflx(i,j,itrc2read) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+           rstflx(i,j,itrc2writ) = -dCdt*(
+     &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
+#  ifdef MASKING
+     &                                           *rmask(i,j)
+#  endif
+       endif
+
+# endif
+
 !---------------------------------------------------------------
 ! Restrict stflx to prevent surface temperature to go below -1.8
 ! degrees C.
