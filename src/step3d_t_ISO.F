@@ -71,7 +71,7 @@ c--# define CONST_TRACERS
 # endif
 #endif
       use grid, only: umask, vmask, pn, pm, rmask, nx, ny, nz, dn_u, dm_v
-      use param, only: mynode
+      use param, only: mynode, nt_passive
       use mpi_exchanges, only: exchange_xxx
       use mixing, only:
      &     east_exchng, ieast, isalt, itemp, iwest,
@@ -180,6 +180,57 @@ c--#  define ntdf nrhs
 !       write(60,*) 't:          ',t(10,10,20,nnew,1)
 !     endif
 
+# ifndef ADV_ISONEUTRAL
+!     BGC horizontal advection: k-outer/itrc-inner loop reorder.
+!     FlxU/FlxV are loaded once per k-level and reused across all ntrc_bio
+!     tracers, instead of being reloaded ntrc_bio*N times in itrc-outer order.
+      do k=1,N
+        do itrc=itands+nt_passive+1,nt
+
+# include "compute_horiz_tracer_fluxes.h"
+
+# ifdef DIAGNOSTICS
+          if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
+            call diag_t_adv_hc4(k,itrc)
+          endif
+# endif
+
+          do j=jstr,jend
+            do i=istr,iend
+              t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc) -dt*pm(i,j)
+     &                              *pn(i,j)*( FX(i+1,j)-FX(i,j)
+     &                                        +FE(i,j+1)-FE(i,j)
+     &                                                          )
+            enddo
+          enddo
+
+#  if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
+          if (do_upscale) then
+            call calc_forcing_rates(itrc,k,FX,FE,istr,iend,jstr,jend)
+          endif
+#  endif
+
+# ifdef DIAGNOSTICS
+          if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
+            do j=1,ny
+              do i=1,nx+1
+                Tdiag(i,j,k,tmixx,td(itrc)) = FX(i,j)
+     &            - Tdiag(i,j,k,tadvx,td(itrc))
+              enddo
+            enddo
+            do j=1,ny+1
+              do i=1,nx
+                Tdiag(i,j,k,tmixy,td(itrc)) = FE(i,j)
+     &            - Tdiag(i,j,k,tadvy,td(itrc))
+              enddo
+            enddo
+          endif
+# endif
+
+        enddo  !<-- itrc (BGC, k-outer horiz)
+      enddo  !<-- k (BGC, k-outer horiz)
+# endif  /* !ADV_ISONEUTRAL */
+
       do itrc=1,nt
 
 # ifdef ADV_ISONEUTRAL
@@ -189,6 +240,7 @@ c--#  define ntdf nrhs
           k2=3-k1
           if (k > 0) then
 # else
+        if (itrc <= itands+nt_passive) then
         do k=1,N
 # endif
 
@@ -849,8 +901,9 @@ c**               cff=1./(z_r(i,j,k+1)-z_r(i,j,k))
           endif   !<-- k > 0
 # endif /* ADV_ISONEUTRAL */
         enddo      !<-- k
-
-
+# ifndef ADV_ISONEUTRAL
+        endif  !<-- T/S+passive horiz only
+# endif
 
 ! Compute and apply vertical advective fluxes.
 

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(git merge *)",
+      "Bash(awk -F: '$2~/enddo|end do/{print}')"
+    ]
+  }
+}
