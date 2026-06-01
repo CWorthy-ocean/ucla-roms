@@ -1455,7 +1455,7 @@ contains
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_w1v_w, arr, ierr)
     endif
 
-!        call PIO_syncfile(pio_FileDesc)
+        call PIO_syncfile(pio_FileDesc)
 
   end subroutine pio_ncwrite1
 ! ----------------------------------------------------------------------
@@ -1515,7 +1515,7 @@ contains
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Cv_w, arr, ierr)
     endif
 
-!        call PIO_syncfile(pio_FileDesc)
+        call PIO_syncfile(pio_FileDesc)
 
   end subroutine pio_ncwrite2
 ! ----------------------------------------------------------------------
@@ -1547,7 +1547,7 @@ contains
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_3Dw_w, arr, ierr)
     endif
 
-!        call PIO_syncfile(pio_FileDesc)
+        call PIO_syncfile(pio_FileDesc)
 
   end subroutine pio_ncwrite3
 ! ----------------------------------------------------------------------
