@@ -739,8 +739,7 @@ contains                  !]
         if (mynode == 0) then
           write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&  ! confirm work completed
           &'ocean_vars :: wrote averages, tdays =', tdays,&
-          &'step =', iic, 'rec =', rec_avg, '/', total_rec_avg&  !
-          &MYID
+          &'step =', iic, 'rec =', rec_avg, '/', total_rec_avg
         endif
         call PIO_closefile(pio_FileDesc)
       endif
@@ -795,7 +794,7 @@ contains                  !]
         if (mynode == 0) then
           write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&  ! confirm work completed
           &'ocean_vars :: wrote averages, tdays =', tdays,&
-          &'step =', iic, 'rec =', rec_avg, '/', total_rec_avg MYID
+          &'step =', iic, 'rec =', rec_avg, '/', total_rec_avg
         endif
       endif
 

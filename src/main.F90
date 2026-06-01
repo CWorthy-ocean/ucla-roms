@@ -423,7 +423,7 @@ contains
     use bgc_io, only: wrt_bgc
 #endif
 #ifdef DIAGNOSTICS
-    use diagnostics, only: do_diagnostics
+    use diagnostics, only: do_diagnostics, diag_uv, diag_trc
 #endif
     use roms_read_write, only: frc_time
 #ifdef LMD_MIXING
