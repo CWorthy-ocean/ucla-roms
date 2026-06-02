@@ -51,6 +51,7 @@ contains
     character(len=20) :: sr_name = "read_nml_pflx"
     ! Read namelist
     call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
     read (unit=namelist_unit, nml=CALC_PFLX_SETTINGS, iostat=ios)
     if (ios /= 0) then
       call error_log%raise_global(&

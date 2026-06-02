@@ -117,6 +117,7 @@ contains
     end if
 
 #if defined SFLX_CORR && defined SALINITY
+    rewind(namelist_unit)
     read (unit=namelist_unit, nml=SSS_CORRECTION, iostat=ios, iomsg=msg)
     if (ios /= 0) then
       call error_log%raise_global(&
@@ -129,6 +130,7 @@ contains
 #endif
 
 #ifdef QCORRECTION
+    rewind(namelist_unit)
     read (unit=namelist_unit, nml=SST_CORRECTION, iostat=ios, iomsg=msg)
     call error_log%raise_global(&
     &context = module_name//'/'//sr_name,&

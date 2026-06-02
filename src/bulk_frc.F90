@@ -71,8 +71,6 @@ contains
     character(len=512) :: msg = ""
     ! Read namelist
     call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-
     read (unit=namelist_unit, nml=BULK_FRC_SETTINGS, iostat=ios, iomsg=msg)
 
     if (ios /= 0) then
