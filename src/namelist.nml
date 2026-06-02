@@ -432,14 +432,13 @@ diag_uv = .false.          ! Output momentum diagnostics
 diag_trc = .false.         ! Output tracer diagnostics
 output_period = 3600       ! Output frequency (s)
 nrpf = 4                   ! Number of records per output file
-code_check_mode = .false.  ! diagnostics in stdout formatted for code testing
 /
 
 &STDOUT_DIAG_SETTINGS
 !-----------------------------
 ! Previously set in `diag.opt`
 !-----------------------------
-code_check_mode = .false.
+code_check_mode = .false.  ! diagnostics in stdout formatted for code testing
 /
 
 
