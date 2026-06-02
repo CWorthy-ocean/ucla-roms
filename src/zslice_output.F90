@@ -4,20 +4,27 @@ module zslice_output
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
   use grid, only: rmask
-  use param, only: lm, mm, mynode
+  use param, only: lm, mm, mynode, ocean_grid_comm
   use roms_mpi, only: exchange_xxx
-  use dimensions, only: nx, ny, nz, eta_rho, eta_v, xi_rho, xi_u
+  use dimensions, only: nx, ny, nz, eta_rho, eta_v, xi_rho, xi_u&
+&, ds_xr, ds_yr, ds_xu, ds_yv
   use roms_read_write, only:&
   &bfx, bfy, dn_tm, dn_xr, dn_xu, dn_yr,&
   &dn_yv, create_file
   use nc_read_write, only: nccreate, ncwrite
   use netcdf, only:&
   &nf90_noerr, nf90_write, nf90_open,&
-  &nf90_put_att, nf90_close
+  &nf90_put_att, nf90_close, nf90_double, nf90_redef, nf90_enddef
   use scalars, only: n, dt, iic, tdays, time, nnew
   use ocean_vars, only: u, v, z_w, z_r
   use tracers, only: t, t_vname, t_lname, t_units
   use error_handling_mod, only: error_log
+  use pio_roms, only: pio_gtype
+#ifdef PARALLEL_IO
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_z
+  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+#endif
+  use mpi_f08, only: MPI_CHARACTER, mpi_bcast
 
   implicit none
 
@@ -90,6 +97,7 @@ contains
 
     integer(kind=4) m
 
+    call pio_initialize_z(ndep)
 
     if (wrt_T_zsl)  then
       allocate( Tz(GLOBAL_2D_ARRAY,ndep,nt_z) )
@@ -328,12 +336,12 @@ contains
     ! local
     integer(kind=4)                        :: ierr, varid, n
 
-    varid = nccreate(ncid,'depth',(/'depth'/),(/ndep/))
+    varid = nccreate(ncid,'depth',(/'depth'/),(/ndep/),nf90_double)
 
     if (wrt_T_zsl) then
       do n=1,nt_z
         varid = nccreate(ncid,t_vname(trc2zsc(n)),&
-        &(/dn_xr,dn_yr,'depth',dn_tm/),(/xi_rho,eta_rho,ndep,0/))
+        &(/dn_xr,dn_yr,'depth',dn_tm/),(/ds_xr,ds_yr,ndep,0/),nf90_double)
         if (zslice_avg) then
           ierr = nf90_put_att(ncid,varid,'long_name','averaged'//t_lname(trc2zsc(n)))
         else
@@ -344,7 +352,7 @@ contains
     endif
 
     if (wrt_U_zsl) then
-      varid = nccreate(ncid,'u',(/dn_xu,dn_yr,'depth',dn_tm/),(/xi_u,eta_rho,ndep,0/))
+      varid = nccreate(ncid,'u',(/dn_xu,dn_yr,'depth',dn_tm/),(/ds_xu,ds_yr,ndep,0/),nf90_double)
       if (zslice_avg) then
         ierr = nf90_put_att(ncid,varid,'long_name','averaged u-momentum component')
       else
@@ -354,7 +362,7 @@ contains
     endif
 
     if (wrt_V_zsl) then
-      varid = nccreate(ncid,'v',(/dn_xr,dn_yv,'depth',dn_tm/),(/xi_rho,eta_v,ndep,0/))
+      varid = nccreate(ncid,'v',(/dn_xr,dn_yv,'depth',dn_tm/),(/ds_xr,ds_yv,ndep,0/),nf90_double)
       if (zslice_avg) then
         ierr = nf90_put_att(ncid,varid,'long_name','averaged v-momentum component')
       else
@@ -389,10 +397,86 @@ contains
 
     if (output_time>=output_period) then
 
+#ifdef PARALLEL_IO
+
+      if (record==nrpf) then
+        if (mynode == 0) then
+        call create_file('_zsl',fname,nonode=.true.)
+        ierr=nf90_open(fname,nf90_write,ncid)
+        ierr=nf90_redef(ncid)
+        call def_vars_zslice(ncid)
+        ierr = nf90_enddef(ncid)
+        call ncwrite(ncid,'depth',vecdep(1:ndep))
+        ierr = nf90_close(ncid)
+        endif
+        call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+        call MPI_Barrier(ocean_grid_comm, ierr)
+      endif
+      record = 0
+
+      if (.not. zslice_avg) call calc_zslice
+      record = record+1
+
+      if (mynode == 0) then
+        ierr=nf90_open(fname,nf90_write,ncid)
+!      if (ierr/=nf90_noerr) then
+!        call error_log%check_netcdf_status(netcdf_status=ierr,&
+!        &info="error opening "//fname,&
+!        &context=module_name//"/"//sr_name)
+!      end if
+        call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+        ierr=nf90_close (ncid)
+      endif
+
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+
+      pio_gtype = '3Drz'
+      if (wrt_T_zsl) then
+        do n=1,nt_z
+          if (zslice_avg) then
+            call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz_avg(1:nx,1:ny,:,n),&
+            &(/bfx,bfy,1,record/))
+          else
+            call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz(1:nx,1:ny,:,n),(/bfx,bfy,1,record/),.true.)
+          endif
+        enddo
+      endif
+      pio_gtype = '3Duz'
+      if (wrt_U_zsl) then
+        if (zslice_avg) then
+          call ncwrite(ncid,'u',Uz_avg(1:nx,1:ny,:),(/1,bfy,1,record/),.true.)
+        else
+          call ncwrite(ncid,'u',Uz(1:nx,1:ny,:),(/1,bfy,1,record/),.true.)
+        endif
+      endif
+      pio_gtype = '3Dvz'
+      if (wrt_V_zsl) then
+        if (zslice_avg) then
+          call ncwrite(ncid,'v',Vz_avg(1:nx,1:ny,:),(/bfx,1,1,record/),.true.)
+        else
+          call ncwrite(ncid,'v',Vz(1:nx,1:ny,:),(/bfx,1,1,record/),.true.)
+        endif
+      endif
+
+      call PIO_closefile(pio_FileDesc)
+
+      if (mynode == 0) then
+        write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
+        &'wrt_zslice :: wrote zslice, tdays =', tdays,&
+        &'step =', iic-1, 'rec =', record
+      endif
+
+      output_time=0
+      navg = 0
+
+#else ! PARALLEL_IO
+
       if (record==nrpf) then
         call create_file('_zsl',fname)
         ierr=nf90_open(fname,nf90_write,ncid)
+        ierr=nf90_redef(ncid)
         call def_vars_zslice(ncid)
+        ierr = nf90_enddef(ncid)
         call ncwrite(ncid,'depth',vecdep(1:ndep))
         ierr = nf90_close(ncid)
         record = 0
@@ -409,6 +493,7 @@ contains
         &context=module_name//"/"//sr_name)
       end if
       call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+
       if (wrt_T_zsl) then
         do n=1,nt_z
           if (zslice_avg) then
@@ -443,6 +528,7 @@ contains
 
       output_time=0
       navg = 0
+#endif ! PARALLEL_IO
 
     endif
     call error_log%abort_check()

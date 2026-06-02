@@ -127,6 +127,9 @@ module pio_roms
   integer(kind=4), dimension(3) :: pio_dimLen_3Du_w
   integer(kind=4), dimension(3) :: pio_dimLen_3Dv_w
   integer(kind=4), dimension(3) :: pio_dimLen_3Dw_w
+  integer(kind=4), dimension(3) :: pio_dimLen_3Dr_z
+  integer(kind=4), dimension(3) :: pio_dimLen_3Du_z
+  integer(kind=4), dimension(3) :: pio_dimLen_3Dv_z
 
   integer(kind=4), dimension(2) :: pio_dimLen_2Cr_w
   integer(kind=4), dimension(2) :: pio_dimLen_2Cu_w
@@ -332,6 +335,15 @@ module pio_roms
   integer(kind=PIO_OFFSET_KIND), dimension(3) :: pio_start_3Dw_w
   integer(kind=PIO_OFFSET_KIND), dimension(3) :: pio_count_3Dw_w
 
+  integer(kind=PIO_OFFSET_KIND), dimension(3) :: pio_start_3Dr_z
+  integer(kind=PIO_OFFSET_KIND), dimension(3) :: pio_count_3Dr_z
+
+  integer(kind=PIO_OFFSET_KIND), dimension(3) :: pio_start_3Du_z
+  integer(kind=PIO_OFFSET_KIND), dimension(3) :: pio_count_3Du_z
+
+  integer(kind=PIO_OFFSET_KIND), dimension(3) :: pio_start_3Dv_z
+  integer(kind=PIO_OFFSET_KIND), dimension(3) :: pio_count_3Dv_z
+
 
   integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_start_2Cr_w
   integer(kind=PIO_OFFSET_KIND), dimension(2) :: pio_count_2Cr_w
@@ -419,6 +431,9 @@ module pio_roms
   type(io_desc_t),public     :: pio_desc_3Du_w
   type(io_desc_t),public     :: pio_desc_3Dv_w
   type(io_desc_t),public     :: pio_desc_3Dw_w
+  type(io_desc_t),public     :: pio_desc_3Dr_z
+  type(io_desc_t),public     :: pio_desc_3Du_z
+  type(io_desc_t),public     :: pio_desc_3Dv_z
 
   type(io_desc_t),public     :: pio_desc_2Cr_w
   type(io_desc_t),public     :: pio_desc_2Cu_w
@@ -448,6 +463,7 @@ module pio_roms
   !! memory to read data from the netCDF file.
   public  :: pio_initialize
   public  :: pio_initialize_coarse
+  public  :: pio_initialize_z
 
   !! This subroutine reads the data array from the netCDF input file.
   public  :: pio_ncread1
@@ -1124,6 +1140,61 @@ contains
 
 
   end subroutine pio_initialize_coarse
+! ----------------------------------------------------------------------
+  subroutine pio_initialize_z(zlevs)
+
+  implicit none
+
+    !import/export
+    integer(kind=4), intent(in) :: zlevs
+
+    pio_dimLen_3Dr_z(1) = LLm+2
+    pio_dimLen_3Dr_z(2) = MMm+2
+    pio_dimLen_3Dr_z(3) = zlevs
+
+    pio_start_3Dr_z(1) = pio_xi_rho_start+pio_i0
+    pio_start_3Dr_z(2) = pio_eta_rho_start+pio_j0
+    pio_start_3Dr_z(3) = 1
+
+    pio_count_3Dr_z(1) = pio_xi_rho
+    pio_count_3Dr_z(2) = pio_eta_rho
+    pio_count_3Dr_z(3) = zlevs
+
+
+    pio_dimLen_3Du_z(1) = LLm+1
+    pio_dimLen_3Du_z(2) = MMm+2
+    pio_dimLen_3Du_z(3) = zlevs
+
+    pio_start_3Du_z(1) = pio_xi_u_start+pio_i0
+    pio_start_3Du_z(2) = pio_eta_rho_start+pio_j0
+    pio_start_3Du_z(3) = 1
+
+    pio_count_3Du_z(1) = pio_xi_u
+    pio_count_3Du_z(2) = pio_eta_rho
+    pio_count_3Du_z(3) = zlevs
+
+
+    pio_dimLen_3Dv_z(1) = LLm+2
+    pio_dimLen_3Dv_z(2) = MMm+1
+    pio_dimLen_3Dv_z(3) = zlevs
+
+    pio_start_3Dv_z(1) = pio_xi_rho_start+pio_i0
+    pio_start_3Dv_z(2) = pio_eta_v_start+pio_j0
+    pio_start_3Dv_z(3) = 1
+
+    pio_count_3Dv_z(1) = pio_xi_rho
+    pio_count_3Dv_z(2) = pio_eta_v
+    pio_count_3Dv_z(3) = zlevs
+
+
+    call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dr_z, pio_start_3Dr_z, pio_count_3Dr_z,&
+    &pio_desc_3Dr_z)
+    call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Du_z, pio_start_3Du_z, pio_count_3Du_z,&
+    &pio_desc_3Du_z)
+    call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dv_z, pio_start_3Dv_z, pio_count_3Dv_z,&
+    &pio_desc_3Dv_z)
+
+  end subroutine pio_initialize_z
 !! ----------------------------------------------------------------------
   subroutine pio_createDecomps
 
@@ -1545,6 +1616,12 @@ contains
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_3Dv_w, arr, ierr)
     elseif (pio_gtype == '3Dww') then
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_3Dw_w, arr, ierr)
+    elseif (pio_gtype == '3Drz') then
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_3Dr_z, arr, ierr)
+    elseif (pio_gtype == '3Duz') then
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_3Du_z, arr, ierr)
+    elseif (pio_gtype == '3Dvz') then
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_3Dv_z, arr, ierr)
     endif
 
         call PIO_syncfile(pio_FileDesc)
