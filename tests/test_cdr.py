@@ -21,21 +21,22 @@ from ._helpers import (
 )
 
 
+@pytest.fixture(scope="module")
+def cdr_conf(tmp_path_factory) -> ROMSConfiguration:
+    """Compile the CDR ROMS binary once for the whole class."""
+    cpp_keys = (
+        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
+        + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
+        + MARBL_CPP_KEYS + ["CDR_FORCING"]
+    )
+    build_dir = tmp_path_factory.mktemp("cdr_build")
+    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
+    conf.compile()
+    return conf
+
+
 class TestCdr:
     """Three CDR forcing variants sharing one compiled binary."""
-
-    @pytest.fixture(scope="class")
-    def cdr_conf(self, tmp_path_factory) -> ROMSConfiguration:
-        """Compile the CDR ROMS binary once for the whole class."""
-        cpp_keys = (
-            UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
-            + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
-            + MARBL_CPP_KEYS + ["CDR_FORCING"]
-        )
-        build_dir = tmp_path_factory.mktemp("cdr_build")
-        conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
-        conf.compile()
-        return conf
 
     @pytest.fixture
     def base_nml(self, input_dir) -> dict:
