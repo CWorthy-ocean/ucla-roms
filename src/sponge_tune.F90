@@ -18,15 +18,17 @@ module sponge_tune
   &ncforce, bfx, bfy, dn_tm, dn_xr,&
   &dn_yr, bc_options, create_file, set_frc_data,&
   &store_string_att
-  use dimensions, only: inode, jnode
+  use dimensions, only: inode, jnode, ds_xr
   use param, only:&
   &obc_east, obc_north, obc_south, obc_west,&
-  &mynode, np_eta, np_xi
+  &mynode, np_eta, np_xi, ocean_grid_comm
   use error_handling_mod, only: error_log
+  use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_gtype
-  use pio, only : PIO_closefile
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_file_is_open
+  use pio, only : PIO_openfile, PIO_closefile, PIO_write
 #endif
+  use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
 
   implicit none
   private
@@ -349,6 +351,49 @@ contains
     character(len=99)  :: fname
     save fname
 
+#ifdef PARALLEL_IO
+    if (record==nrpf) then
+      call create_sp_tune_file(fname)
+      record = 0
+    endif
+    call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Barrier(ocean_grid_comm, ierr)
+    record = record + 1
+
+    if (mynode == 0) then
+    ierr=nf90_open(fname, nf90_write, ncid)
+!    if (ierr/=nf90_noerr) then
+!      call error_log%check_netcdf_status(netcdf_status=ierr,&
+!      &info="error opening "//fname,&
+!      &context=module_name//"/"//sr_name)
+!    end if
+!    call error_log%abort_check()
+    call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+    ierr=nf90_close(ncid)
+    endif
+
+    ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+
+    ! fluxes and ub coefficients are defined as nx, ny sized arrays
+    ! so use method 2 for output (see roms_read_write)
+    if (obc_south.and.(jnode==0)) then
+      call ncwrite(ncid,'cf_south',cflx_south_avg,(/bfx,record /),.true.)
+      call ncwrite(ncid,'pf_south',pflx_south_avg,(/bfx,record /),.true.)
+      call ncwrite(ncid,'ub_south',  ub_south_avg,(/bfx,record /),.true.)
+    endif
+    if (obc_east.and.(inode==np_xi-1)) then
+!       call ncwrite(ncid,'ub_east',ub_east(j0:j1),(/1,record /))
+    endif
+    if (obc_west.and.(inode==0)) then
+      call ncwrite(ncid,'cf_west',cflx_west_avg,(/ bfy,record /),.true.)
+      call ncwrite(ncid,'pf_west',pflx_west_avg,(/ bfy,record /),.true.)
+      call ncwrite(ncid,'ub_west',  ub_west_avg,(/ bfy,record /),.true.)
+    endif
+
+    call PIO_closefile(pio_FileDesc)
+
+#else ! PARALLEL_IO
+
     if (record==nrpf) then
       call create_sp_tune_file(fname)
       record = 0
@@ -366,6 +411,7 @@ contains
 
     ! fluxes and ub coefficients are defined as nx, ny sized arrays
     ! so use method 2 for output (see roms_read_write)
+    pio_gtype = 's1rw'
     if (obc_south.and.(jnode==0)) then
       call ncwrite(ncid,'cf_south',cflx_south_avg,(/bfx,record /))
       call ncwrite(ncid,'pf_south',pflx_south_avg,(/bfx,record /))
@@ -374,6 +420,7 @@ contains
     if (obc_east.and.(inode==np_xi-1)) then
 !       call ncwrite(ncid,'ub_east',ub_east(j0:j1),(/1,record /))
     endif
+    pio_gtype = 'w1rw'
     if (obc_west.and.(inode==0)) then
       call ncwrite(ncid,'cf_west',cflx_west_avg,(/ bfy,record /))
       call ncwrite(ncid,'pf_west',pflx_west_avg,(/ bfy,record /))
@@ -381,6 +428,7 @@ contains
     endif
 
     ierr=nf90_close(ncid)
+#endif
 
     navg = 0
 
@@ -401,6 +449,45 @@ contains
     !local
     integer(kind=4) :: ncid,ierr,varid
 
+#ifdef PARALLEL_IO
+    if (mynode == 0) then
+    call create_file('_spn',fname,nonode=.true.)
+
+    ierr=nf90_open(fname,nf90_write,ncid)
+
+    varid = nccreate(ncid,'cf_south',(/dn_xr,dn_tm/),(/ds_xr,0/))
+    ierr = nf90_put_att(ncid,varid,'long_name'&
+    &,'South boundary child flux')
+    ierr = nf90_put_att(ncid,varid,'units','W/m' )
+
+    varid = nccreate(ncid,'pf_south',(/dn_xr,dn_tm/),(/ds_xr,0/))
+    ierr = nf90_put_att(ncid,varid,'long_name'&
+    &,'South boundary parent flux')
+    ierr = nf90_put_att(ncid,varid,'units','W/m' )
+
+    varid = nccreate(ncid,'ub_south',(/dn_xr,dn_tm/),(/ds_xr,0/))
+    ierr = nf90_put_att(ncid,varid,'long_name'&
+    &,'South boundary binding velocity')
+    ierr = nf90_put_att(ncid,varid,'units','m/s' )
+
+    varid = nccreate(ncid,'cf_west',(/dn_yr,dn_tm/),(/ds_xr,0/))
+    ierr = nf90_put_att(ncid,varid,'long_name'&
+    &,'West boundary child flux')
+    ierr = nf90_put_att(ncid,varid,'units','W/m' )
+
+    varid = nccreate(ncid,'pf_west',(/dn_yr,dn_tm/),(/ds_xr,0/))
+    ierr = nf90_put_att(ncid,varid,'long_name'&
+    &,'West boundary parent flux')
+    ierr = nf90_put_att(ncid,varid,'units','W/m' )
+
+    varid = nccreate(ncid,'ub_west',(/dn_yr,dn_tm/),(/ds_xr,0/))
+    ierr = nf90_put_att(ncid,varid,'long_name'&
+    &,'West boundary binding velocity')
+    ierr = nf90_put_att(ncid,varid,'units','m/s' )
+
+    ierr = nf90_close(ncid)
+    endif
+#else
     call create_file('_spn',fname)
 
     ierr=nf90_open(fname,nf90_write,ncid)
@@ -436,6 +523,7 @@ contains
     ierr = nf90_put_att(ncid,varid,'units','m/s' )
 
     ierr = nf90_close(ncid)
+#endif ! PARALLEL_IO
 
   end subroutine create_sp_tune_file !]
 ! ----------------------------------------------------------------------
