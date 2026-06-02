@@ -326,7 +326,8 @@ contains
         call ncwrite(ncid,'srflx',srflx(i0:i1,j0:j1),(/1,1,record/),.true.)
       endif
       call PIO_closefile(pio_FileDesc)
-#else
+
+#else ! PARALLEL_IO
       ierr=nf90_open(fname,nf90_write,ncid)
       record = record+1
       call ncwrite(ncid,'ocean_time',(/time/),(/record/))
@@ -400,7 +401,7 @@ contains
         call ncwrite(ncid,'srflx',srflx(i0:i1,j0:j1),(/1,1,record/))
       endif
       ierr=nf90_close(ncid)
-#endif
+#endif ! PARALLEL_IO
 
       if (mynode == 0) then
         write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
