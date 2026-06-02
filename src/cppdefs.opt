@@ -156,6 +156,10 @@
 ! Usage notes:
 #undef SFLX_CORR
 
+! Apply restoring to sea surface DIC/ALK
+! Usage notes:
+#undef CFLX_COR
+
 ! Apply a correction to the wind stress to bring it closer to observations
 ! Usage notes: Only used in conjunction with the BULK_FORCING module. Requires additional fields in the input file.
 #undef TAU_CORRECTION
