@@ -7,8 +7,9 @@ module surf_flux
 
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
-  use param, only: mynode, lm, mm
-  use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u
+  use param, only: mynode, lm, mm, ocean_grid_comm
+  use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u&
+  &, ds_xr, ds_yr, ds_xu, ds_yv
   use roms_read_write, only:&
   &ncforce, dn_tm, dn_xr, dn_xu, dn_yr&
   &, dn_yv, create_file
@@ -17,10 +18,13 @@ module surf_flux
   &nf90_global, nf90_write, nf90_nofill,&
   &nf90_open, nf90_put_att, nf90_close, nf90_set_fill
   use scalars, only: dt, iic, tdays, time
+  use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_file_is_open, pio_FileDesc
-  use pio, only : PIO_closefile
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_file_is_open
+  use pio, only : PIO_openfile, PIO_closefile, PIO_write
 #endif
+  use mpi_f08, only: MPI_CHARACTER, mpi_bcast
+
   use error_handling_mod, only: error_log
   implicit none
 
@@ -272,12 +276,12 @@ subroutine create_sflx_vars(ncid)  ![
   ! output surface flux as per Eq.Sys. units m^2/s^2 not N/m^2
   if (wrt_smflx) then
     varid = nccreate(ncid,'sustr',(/dn_xu,dn_yr,dn_tm/),&
-    &(/xi_u,eta_rho,0/))
+    &(/ds_xu,ds_yr,0/))
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'wind stress in x-direction')
     ierr = nf90_put_att(ncid,varid,'units','m^2/s^2')
     varid = nccreate(ncid,'svstr',(/dn_xr,dn_yv,dn_tm/),&
-    &(/xi_rho,eta_v,0/))
+    &(/ds_xr,ds_yv,0/))
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'wind stress in y-direction')
     ierr = nf90_put_att(ncid,varid,'units','m^2/s^2')
@@ -285,13 +289,13 @@ subroutine create_sflx_vars(ncid)  ![
 
   if (wrt_stflx) then
     varid = nccreate(ncid,shflx_name,(/dn_xr,dn_yr,dn_tm/),&
-    &(/xi_rho,eta_rho,0/))
+    &(/ds_xr,ds_yr,0/))
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'Surface heat flux')
     ierr = nf90_put_att(ncid,varid,'units','degC m/s')
     if (salinity) then
       varid = nccreate(ncid,'ssflx',(/dn_xr,dn_yr,dn_tm/),&
-      &(/xi_rho,eta_rho,0/))
+      &(/ds_xr,ds_yr,0/))
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Surface Salinity flux')
       ierr = nf90_put_att(ncid,varid,'units','PSU m/s')
@@ -299,7 +303,7 @@ subroutine create_sflx_vars(ncid)  ![
   endif
   if (wrt_swflx) then
     varid = nccreate(ncid,'swflx',(/dn_xr,dn_yr,dn_tm/),&
-    &(/xi_rho,eta_rho,0/))
+    &(/ds_xr,ds_yr,0/))
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'Fresh water flux (P-E)')
     ierr = nf90_put_att(ncid,varid,'units','m/s')
@@ -327,6 +331,66 @@ subroutine wrt_sflux  ![
     output_time = 0
     navg_sflx   = 0
 
+#ifdef PARALLEL_IO
+
+    if (record==nrpf) then
+      call create_sflx_file(fname)
+      record = 0
+    endif
+    record = record + 1
+
+    if (mynode == 0) then
+    ierr=nf90_open(fname,nf90_write,ncid)
+!    ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
+
+    call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+    ierr=nf90_close(ncid)
+    endif
+
+    ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+
+    start=1; start(3)=record
+    if (sflx_avg) then
+      if (wrt_smflx) then
+        call ncwrite(ncid,'sustr',sustr_avg,start,.true.)
+        call ncwrite(ncid,'svstr',svstr_avg,start,.true.)
+      endif
+      if (wrt_stflx) then
+        call ncwrite(ncid,'shflx',stflx_avg(:,:,1),start,.true.)
+        if (salinity) then
+          call ncwrite(ncid,'ssflx',stflx_avg(:,:,2),start,.true.)
+        endif
+      endif
+      if (wrt_swflx) then
+        call ncwrite(ncid,'swflx',swflx_avg(:,:),start,.true.)
+      endif
+    else  ! snapshots
+      if (wrt_smflx) then
+        call ncwrite(ncid,'sustr',sustr(1:i1,j0:j1),start,.true.)
+        call ncwrite(ncid,'svstr',svstr(i0:i1,1:j1),start,.true.)
+      endif
+      if (wrt_stflx) then
+        call ncwrite(ncid,'shflx',stflx(i0:i1,j0:j1,1),start,.true.)
+        if (salinity) then
+          call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,2),start,.true.)
+        endif
+      endif
+      if (wrt_swflx) then
+        call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),start,.true.)
+      endif
+    endif
+
+    call PIO_closefile(pio_FileDesc)
+
+    if (mynode == 0) then
+      write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&  ! confirm work completed
+      &'surf_flux :: wrote surface flux, tdays =', tdays,&
+      &'step =', iic, 'rec =', record
+    endif
+  endif  ! time for an output
+
+#else
+
     if (record==nrpf) then
       call create_sflx_file(fname)
       record = 0
@@ -351,20 +415,6 @@ subroutine wrt_sflux  ![
         endif
       endif
       if (wrt_swflx) then
-        call ncwrite(ncid,'swflx',swflx_avg(:,:),start)
-      endif
-    else  ! snapshots
-      if (wrt_smflx) then
-        call ncwrite(ncid,'sustr',sustr(1:i1,j0:j1),start)
-        call ncwrite(ncid,'svstr',svstr(i0:i1,1:j1),start)
-      endif
-      if (wrt_stflx) then
-        call ncwrite(ncid,'shflx',stflx(i0:i1,j0:j1,1),start)
-        if (salinity) then
-          call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,2),start)
-        endif
-      endif
-      if (wrt_swflx) then
         call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),start)
       endif
     endif
@@ -376,6 +426,8 @@ subroutine wrt_sflux  ![
       &'step =', iic, 'rec =', record
     endif
   endif  ! time for an output
+
+#endif ! PARALLEL_IO
 
 end subroutine wrt_sflux  !]
 !----------------------------------------------------------------------
@@ -389,6 +441,30 @@ subroutine create_sflx_file(fname)  ![
   integer(kind=4) :: ierr,varid
   character(len=10),dimension(4) :: dimnames           ! dimension names
   integer(kind=4),          dimension(4) :: dimsizes
+
+#ifdef PARALLEL_IO
+  if (mynode == 0) then
+  if (sflx_avg) then
+    call create_file('_flx_avg',fname,nonode=.true.)
+  else
+    call create_file('_flx_his',fname,nonode=.true.)
+  endif
+
+  ierr=nf90_open(fname,nf90_write,ncid)
+
+  call create_sflx_vars(ncid)
+
+  if (sflx_avg) then
+    ierr=nf90_put_att(ncid,nf90_global,'type','surface flux average')
+  else
+    ierr=nf90_put_att(ncid,nf90_global,'type','surface flux history')
+  endif
+
+  ierr = nf90_close(ncid)
+  endif
+  call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+  call MPI_Barrier(ocean_grid_comm, ierr)
+#else
 
   if (sflx_avg) then
     call create_file('_flx_avg',fname)
@@ -407,6 +483,7 @@ subroutine create_sflx_file(fname)  ![
   endif
 
   ierr = nf90_close(ncid)
+#endif
 
 end subroutine create_sflx_file !]
 !-----------------------------------------------------------------------
