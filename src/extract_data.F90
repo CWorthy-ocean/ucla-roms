@@ -216,6 +216,7 @@ contains
     character(len=17) :: sr_name = "read_nml_extract"
     ! Read namelist
     call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
     read (unit=namelist_unit, nml=EXTRACT_DATA_SETTINGS, iostat=ios)
     if (ios /= 0) then
       call error_log%raise_global(&

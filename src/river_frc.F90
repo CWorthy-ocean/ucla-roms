@@ -118,6 +118,7 @@ contains
     character(len=15) :: sr_name = "read_nml_river"
     ! Read namelist
     call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
     read (unit=namelist_unit, nml=RIVER_FRC_SETTINGS, iostat=ios)
     if (ios /= 0) then
       call error_log%raise_global(&

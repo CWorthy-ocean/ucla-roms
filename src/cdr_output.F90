@@ -107,6 +107,7 @@ contains
     character(len=20) :: sr_name = "read_cdr_output_nml"
     ! Read namelist
     call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
     read (unit=namelist_unit, nml=CDR_OUTPUT_SETTINGS, iostat=ios)
     if (ios /= 0) then
       call error_log%raise_global(&
