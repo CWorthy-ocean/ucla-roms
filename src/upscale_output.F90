@@ -8,14 +8,15 @@ module upscale_output
 
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
 
-  use param, only: jnorth, jsouth, ieast, iwest, nsub_e, nsub_x, np_xi, np_eta
+  use param, only: jnorth, jsouth, ieast, iwest, nsub_e, nsub_x, np_xi, np_eta&
+  &,mynode, ocean_grid_comm
   use namelist_open_mod, only: open_namelist_file
   use error_handling_mod, only: error_log
   use tracers, only: t_units
-  use dimensions, only: i0, i1, j0, j1, eta_rho, xi_rho, inode, jnode
+  use dimensions, only: i0, i1, j0, j1, inode, jnode, ds_xr, ds_yr, ds_zr
   use grid, only: latr, lonr
   use nc_read_write, only: nccreate, ncwrite
-  use roms_read_write, only: create_file, dn_tm, dn_xr, dn_yr, dn_zr, eta_rho, xi_rho
+  use roms_read_write, only: create_file, dn_tm, dn_xr, dn_yr, dn_zr
   use netcdf, only:&
   &nf90_double, nf90_write, nf90_put_att,&
   &nf90_open, nf90_close
@@ -23,7 +24,12 @@ module upscale_output
   use ocean_vars, only: hz
   use basic_output, only: vn=>vname
   use scalars, only: n, dt, time
-  use hidden_mpi_vars, only: inode, jnode
+  use pio_roms, only: pio_gtype
+#ifdef PARALLEL_IO
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
+  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+#endif
+  use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
 
   implicit none
   private
@@ -426,6 +432,75 @@ contains
     endif
 
     if (otime>=output_period_uscl) then
+#ifdef PARALLEL_IO
+      record_uscl = record_uscl+1
+
+      start2D = (/1,1,record_uscl/)
+
+      if (mynode == 0) then
+      ierr=nf90_open(fname,nf90_write,ncid)
+      call ncwrite(ncid,'ocean_time',(/time/),(/record_uscl/))
+      ierr=nf90_close(ncid)
+      endif
+
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+
+#ifdef OBC_NORTH
+      pio_gtype = 'n2rw'
+      if (jnode==npy-1) then
+        call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        ALK_add_north_avg(:,:) = 0
+        DIC_add_north_avg(:,:) = 0
+        h_north_avg(:,:) = 0
+      endif
+#endif
+
+#ifdef OBC_SOUTH
+      pio_gtype = 's2rw'
+      if (jnode==0) then
+        call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        ALK_add_south_avg(:,:) = 0
+        DIC_add_south_avg(:,:) = 0
+        h_south_avg(:,:) = 0
+      endif
+#endif
+
+#ifdef OBC_EAST
+      pio_gtype = 'e2rw'
+      if (inode==npx-1) then
+        call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        ALK_add_east_avg(:,:) = 0
+        DIC_add_east_avg(:,:) = 0
+        h_east_avg(:,:) = 0
+      endif
+#endif
+
+#ifdef OBC_WEST
+      pio_gtype = 'w2rw'
+      if (inode==0) then
+        call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        ALK_add_west_avg(:,:) = 0
+        DIC_add_west_avg(:,:) = 0
+        h_west_avg(:,:) = 0
+      endif
+#endif
+
+      call PIO_closefile(pio_FileDesc)
+
+      otime = 0
+      navg=0
+
+    endif
+
+#else
       ierr=nf90_open(fname,nf90_write,ncid)
       record_uscl = record_uscl+1
 
@@ -483,6 +558,7 @@ contains
       navg=0
 
     endif
+#endif
 
   end subroutine wrt_upscale  !]
 ! ----------------------------------------------------------------------
@@ -495,16 +571,31 @@ contains
     !local
     integer(kind=4) :: ncid,ierr
 
+#ifdef PARALLEL_IO
+    if (mynode == 0) then
+    call create_file('_uscl',fname,nonode=.true.)
+
+    ierr=nf90_open(fname,nf90_write,ncid)
+
+    ! Make sure all necessary dimensions are in all files
+    ierr=nccreate(ncid,'',(/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/))
+    call create_upscale_vars(ncid)
+
+    ierr = nf90_close(ncid)
+    endif
+    call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Barrier(ocean_grid_comm, ierr)
+#else ! PARALLEL_IO
     call create_file('_uscl',fname)
 
     ierr=nf90_open(fname,nf90_write,ncid)
 
     ! Make sure all necessary dimensions are in all files
-    ierr=nccreate(ncid,'',(/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/))
+    ierr=nccreate(ncid,'',(/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/))
     call create_upscale_vars(ncid)
 
     ierr = nf90_close(ncid)
-
+#endif ! PARALLEL_IO
   end subroutine create_upscale_file !]
 ! ----------------------------------------------------------------------
   subroutine create_upscale_vars(ncid)  ![
@@ -522,28 +613,28 @@ contains
 
 #ifdef OBC_NORTH
     if (jnode==npy-1) then
-      varid = nccreate(ncid,'ALK_add_north',(/dn_xr,dn_zr,dn_tm/),(/xi_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'ALK_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'ALK additionality on northern boundary')
       ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
 
-      varid = nccreate(ncid,'DIC_add_north',(/dn_xr,dn_zr,dn_tm/),(/xi_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'DIC_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'DIC additionality on northern boundary')
       ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
 
-      varid = nccreate(ncid,'h_north',(/dn_xr,dn_zr,dn_tm/),(/xi_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'h_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Layer thickness on northern boundary')
       ierr = nf90_put_att(ncid,varid,'units','meters')
 
-      varid = nccreate(ncid,'lat_north',(/dn_xr/),(/xi_rho/),uscl_prec)
+      varid = nccreate(ncid,'lat_north',(/dn_xr/),(/ds_xr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Latitudes of tracer points on northern boundary')
       ierr = nf90_put_att(ncid,varid,'units','degrees')
       call ncwrite(ncid,'lat_north',latr(i0:i1,jend+1),(/1/))
 
-      varid = nccreate(ncid,'lon_north',(/dn_xr/),(/xi_rho/),uscl_prec)
+      varid = nccreate(ncid,'lon_north',(/dn_xr/),(/ds_xr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Longitudes of tracer points on northern boundary')
       ierr = nf90_put_att(ncid,varid,'units','degrees')
@@ -553,28 +644,28 @@ contains
 
 #ifdef OBC_SOUTH
     if (jnode==0) then
-      varid = nccreate(ncid,'ALK_add_south',(/dn_xr,dn_zr,dn_tm/),(/xi_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'ALK_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'ALK additionality on southern boundary')
       ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
 
-      varid = nccreate(ncid,'DIC_add_south',(/dn_xr,dn_zr,dn_tm/),(/xi_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'DIC_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'DIC additionality on southern boundary')
       ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
 
-      varid = nccreate(ncid,'h_south',(/dn_xr,dn_zr,dn_tm/),(/xi_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'h_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Layer thickness on southern boundary')
       ierr = nf90_put_att(ncid,varid,'units','meters')
 
-      varid = nccreate(ncid,'lat_south',(/dn_xr/),(/xi_rho/),uscl_prec)
+      varid = nccreate(ncid,'lat_south',(/dn_xr/),(/ds_xr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Latitudes of tracer points on southern boundary')
       ierr = nf90_put_att(ncid,varid,'units','degrees')
       call ncwrite(ncid,'lat_south',latr(i0:i1,jstr-1),(/1/))
 
-      varid = nccreate(ncid,'lon_south',(/dn_xr/),(/xi_rho/),uscl_prec)
+      varid = nccreate(ncid,'lon_south',(/dn_xr/),(/ds_xr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Longitudes of tracer points on southern boundary')
       ierr = nf90_put_att(ncid,varid,'units','degrees')
@@ -584,28 +675,28 @@ contains
 
 #ifdef OBC_EAST
     if (inode==npx-1) then
-      varid = nccreate(ncid,'ALK_add_east',(/dn_yr,dn_zr,dn_tm/),(/eta_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'ALK_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'ALK additionality on eastern boundary')
       ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
 
-      varid = nccreate(ncid,'DIC_add_east',(/dn_yr,dn_zr,dn_tm/),(/eta_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'DIC_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'DIC additionality on eastern boundary')
       ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
 
-      varid = nccreate(ncid,'h_east',(/dn_yr,dn_zr,dn_tm/),(/eta_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'h_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Layer thickness on eastern boundary')
       ierr = nf90_put_att(ncid,varid,'units','meters')
 
-      varid = nccreate(ncid,'lat_east',(/dn_yr/),(/eta_rho/),uscl_prec)
+      varid = nccreate(ncid,'lat_east',(/dn_yr/),(/ds_yr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Latitudes of tracer points on eastern boundary')
       ierr = nf90_put_att(ncid,varid,'units','degrees')
       call ncwrite(ncid,'lat_east',latr(iend+1,j0:j1),(/1/))
 
-      varid = nccreate(ncid,'lon_east',(/dn_yr/),(/eta_rho/),uscl_prec)
+      varid = nccreate(ncid,'lon_east',(/dn_yr/),(/ds_yr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Longitudes of tracer points on eastern boundary')
       ierr = nf90_put_att(ncid,varid,'units','degrees')
@@ -615,28 +706,28 @@ contains
 
 #ifdef OBC_WEST
     if (inode==0) then
-      varid = nccreate(ncid,'ALK_add_west',(/dn_yr,dn_zr,dn_tm/),(/eta_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'ALK_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'ALK additionality on western boundary')
       ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
 
-      varid = nccreate(ncid,'DIC_add_west',(/dn_yr,dn_zr,dn_tm/),(/eta_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'DIC_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'DIC additionality on western boundary')
       ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
 
-      varid = nccreate(ncid,'h_west',(/dn_yr,dn_zr,dn_tm/),(/eta_rho,N,0/),uscl_prec)
+      varid = nccreate(ncid,'h_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Layer thickness on western boundary')
       ierr = nf90_put_att(ncid,varid,'units','meters')
 
-      varid = nccreate(ncid,'lat_west',(/dn_yr/),(/eta_rho/),uscl_prec)
+      varid = nccreate(ncid,'lat_west',(/dn_yr/),(/ds_yr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Latitudes of tracer points on western boundary')
       ierr = nf90_put_att(ncid,varid,'units','degrees')
       call ncwrite(ncid,'lat_west',latr(istr-1,j0:j1),(/1/))
 
-      varid = nccreate(ncid,'lon_west',(/dn_yr/),(/eta_rho/),uscl_prec)
+      varid = nccreate(ncid,'lon_west',(/dn_yr/),(/ds_yr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Longitudes of tracer points on western boundary')
       ierr = nf90_put_att(ncid,varid,'units','degrees')
