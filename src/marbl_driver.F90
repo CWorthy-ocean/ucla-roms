@@ -118,6 +118,10 @@ module marbl_driver
   real(kind=8),dimension(:,:,:,:),pointer, public :: marbl_diag_3d ! points to bec2_diag_3d
   real(kind=8),dimension(:,:,:)  ,pointer, public :: marbl_diag_2d ! points to bec2_diag_2d
 
+  ! Pre-computed 2D/3D flags: avoids repeated trim()/string compare in the hot per-column loop
+  logical, allocatable :: sf_diag_is_2d(:)
+  logical, allocatable :: it_diag_is_2d(:)
+
 #endif
 !     Saved state variables: (mimicking structure of bgc_shared_vars for bec2_diag arrays)
   integer(kind=4), public                         :: nr_marbl_ss_2d,nr_marbl_ss_3d       ! No. of saved_state vars
@@ -1032,7 +1036,20 @@ contains
 !     Read user file to determine which diagnostics to write out
     call marbldrv_parse_diagnostic_output_list(&
     &vname_marbl_diag_2d,vname_marbl_diag_3d&
-    &)                    !
+    &)
+
+!     Pre-compute 2D/3D flags to avoid repeated trim()/string compare in hot loop
+    allocate(sf_diag_is_2d(size(MARBL_instance%surface_flux_diags%diags)))
+    allocate(it_diag_is_2d(size(MARBL_instance%interior_tendency_diags%diags)))
+    do m=1,size(MARBL_instance%surface_flux_diags%diags)
+      sf_diag_is_2d(m) = trim(MARBL_instance%surface_flux_diags%diags(m)%vertical_grid) &
+                         .eq. "none"
+    end do
+    do m=1,size(MARBL_instance%interior_tendency_diags%diags)
+      it_diag_is_2d(m) = trim(MARBL_instance%interior_tendency_diags%diags(m)%vertical_grid) &
+                         .eq. "none"
+    end do
+
   end subroutine marbldrv_configure_diagnostics
 
 !-----------------------------------------------------------------------
@@ -1697,8 +1714,7 @@ contains
     diagidx3d=1
 
     do m=1,size(MARBL_instance%surface_flux_diags%diags)
-      if (trim(MARBL_instance%surface_flux_diags%diags(m&
-      &)%vertical_grid) .eq. "none") then ! 2D field
+      if (sf_diag_is_2d(m)) then ! 2D field
 
         if (wrt_marbl_diag_2d(diagidx2d)) then
           marbl_diag_2d(i,j,idx_marbl_diag_2d(diagidx2d))=&
@@ -1720,8 +1736,7 @@ contains
     diagidx3d=diag_cnt_sf_3d+1
 
     do m=1,size(MARBL_instance%interior_tendency_diags%diags)
-      if (trim(MARBL_instance%interior_tendency_diags%diags(m&
-      &)%vertical_grid) .eq. "none") then ! 2D field
+      if (it_diag_is_2d(m)) then ! 2D field
         if (wrt_marbl_diag_2d(diagidx2d)) then
           marbl_diag_2d(i,j,idx_marbl_diag_2d(diagidx2d))=&
           &real(MARBL_instance%interior_tendency_diags%diags(m)%field_2d(1))
