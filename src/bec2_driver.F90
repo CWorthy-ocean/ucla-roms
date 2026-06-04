@@ -44,7 +44,7 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
   & swrad_avg, &
 #endif
-  & pco2air, iron, dust
+  & xco2air, iron, dust
   use bec2_params, only: c0, c1, parm_fe_bioavail
 
 
@@ -439,7 +439,7 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
     DO j = jstr,jend
 
 # ifdef PCO2AIR_FORCING
-      XCO2(istr:iend) = pco2air(istr:iend,j)
+      XCO2(istr:iend) = xco2air(istr:iend,j)
 # endif /* PCO2AIR_FORCING */
 
       WHERE (ph_srf(istr:iend,j) .ne. c0)

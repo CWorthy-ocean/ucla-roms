@@ -21,13 +21,16 @@ module bgc_io
   use bgc_shared_vars, only: wrt_bgc_his, wrt_bgc_avg,&
        & wrt_bgc_dia_his, wrt_bgc_dia_avg, interp_bgc_frc,&
        & nrpf_avg, nrpf_his, nrpf_avg_dia,&
-       & nrpf_his_dia, t, nc_dust, nc_iron, nc_pco2air,&
+       & nrpf_his_dia, t, nc_dust, nc_iron,&
+#ifdef PCO2AIR_FORCING
+       & nc_xco2air,&
+#ifdef MARBL
+       & nc_xco2air_alt,&
+#endif
+#endif
        & bgc_idx, t_idx, lm, mm, itands,&
        & mynode, nt_passive, output_period_avg, output_period_his,&
        & t_vname, wrt_t, t_lname
-#ifdef MARBL
-       use bgc_shared_vars, only: nc_pco2air_alt
-#endif
 #ifdef NOX_FORCING
   use bgc_shared_vars, only: nc_nox
 #endif
@@ -111,8 +114,11 @@ contains
     use scalars, only: cp, nrhs, rho0
     use dimensions, only: inode, jnode
     use bgc_forces, only: &
+#ifdef PCO2AIR_FORCING
+    & xco2air, &
 #ifdef MARBL
-    & pco2air_alt, &
+    & xco2air_alt, &
+#endif
 #endif
 #ifdef NOX_FORCING
     & nox, &
@@ -123,7 +129,7 @@ contains
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
     & swrad_avg, &
 #endif
-    & dust, iron, pco2air
+    & dust, iron
     use dimensions, only: npx, npy
     implicit none
 
@@ -148,9 +154,9 @@ contains
 
 
 #ifdef PCO2AIR_FORCING
-    call set_frc_data(nc_pco2air,pco2air,'r')
+    call set_frc_data(nc_xco2air,xco2air,'r')
 #ifdef MARBL
-    call set_frc_data(nc_pco2air_alt,pco2air_alt,'r')
+    call set_frc_data(nc_xco2air_alt,xco2air_alt,'r')
 #endif
 #endif /* PCO2AIR_FORCING */
 
@@ -894,11 +900,11 @@ contains
     if (interp_bgc_frc) nc_iron%coarse = 1
 
 #ifdef PCO2AIR_FORCING
-    allocate( nc_pco2air%vdata( GLOBAL_2D_ARRAY,2) )
-    if (interp_bgc_frc) nc_pco2air%coarse = 1
+    allocate( nc_xco2air%vdata( GLOBAL_2D_ARRAY,2) )
+    if (interp_bgc_frc) nc_xco2air%coarse = 1
 #ifdef MARBL
-    allocate( nc_pco2air_alt%vdata( GLOBAL_2D_ARRAY,2) )
-    if (interp_bgc_frc) nc_pco2air_alt%coarse = 1
+    allocate( nc_xco2air_alt%vdata( GLOBAL_2D_ARRAY,2) )
+    if (interp_bgc_frc) nc_xco2air_alt%coarse = 1
 #endif
 #endif
 
