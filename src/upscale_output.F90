@@ -8,18 +8,18 @@ module upscale_output
 
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
 
+  use dimensions, only: i0, i1, j0, j1, inode, jnode, npx, npy, ds_xr, ds_yr, ds_zr
   use param, only: jnorth, jsouth, ieast, iwest, nsub_e, nsub_x, np_xi, np_eta&
   &,mynode, ocean_grid_comm
   use namelist_open_mod, only: open_namelist_file
   use error_handling_mod, only: error_log
   use tracers, only: t_units
-  use dimensions, only: i0, i1, j0, j1, inode, jnode, ds_xr, ds_yr, ds_zr
   use grid, only: latr, lonr
   use nc_read_write, only: nccreate, ncwrite
   use roms_read_write, only: create_file, dn_tm, dn_xr, dn_yr, dn_zr
   use netcdf, only:&
-  &nf90_double, nf90_write, nf90_put_att,&
-  &nf90_open, nf90_close
+  &nf90_double, nf90_noerr, nf90_write, nf90_put_att,&
+  &nf90_open, nf90_close, nf90_redef, nf90_enddef
   use marbl_driver, only: iALK, iDIC, iALK_alt, iDIC_alt
   use ocean_vars, only: hz
   use basic_output, only: vn=>vname
@@ -422,6 +422,7 @@ contains
     integer(kind=4) :: ierr,ncid
     character(len=99),save :: fname
     integer(kind=4),dimension(3) :: start2D
+    logical,save :: coords_written = .false.
 
     call calc_average
     otime = otime + dt
@@ -429,6 +430,7 @@ contains
     if ((record_uscl==nrpf_uscl) .and. (otime>=output_period_uscl)) then
       call create_upscale_file(fname)
       record_uscl = 0
+      coords_written = .false.
     endif
 
     if (otime>=output_period_uscl) then
@@ -438,12 +440,24 @@ contains
       start2D = (/1,1,record_uscl/)
 
       if (mynode == 0) then
-      ierr=nf90_open(fname,nf90_write,ncid)
-      call ncwrite(ncid,'ocean_time',(/time/),(/record_uscl/))
-      ierr=nf90_close(ncid)
+        ierr=nf90_open(fname,nf90_write,ncid)
+        if (ierr/=nf90_noerr) then
+          call error_log%check_netcdf_status(netcdf_status=ierr, &
+            info="error opening "//trim(fname), &
+            context=module_name//"/"//sr_name)
+        end if
+        call ncwrite(ncid,'ocean_time',(/time/),(/record_uscl/))
+        ierr=nf90_close(ncid)
       endif
+      call error_log%abort_check()
+      call MPI_Barrier(ocean_grid_comm, ierr)
 
       ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+
+      if (.not. coords_written) then
+        call wrt_upscale_coords(.true.)
+        coords_written = .true.
+      endif
 
 #ifdef OBC_NORTH
       pio_gtype = 'n2rw'
@@ -573,169 +587,239 @@ contains
 
 #ifdef PARALLEL_IO
     if (mynode == 0) then
-    call create_file('_uscl',fname,nonode=.true.)
+      call create_file('_uscl',fname,nonode=.true.)
 
-    ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_redef(ncid)
+      if (ierr/=nf90_noerr) then
+        call error_log%check_netcdf_status(netcdf_status=ierr, &
+          context=module_name//"/create_upscale_file", &
+          info="nf90_redef for file "//trim(fname))
+      end if
 
-    ! Make sure all necessary dimensions are in all files
-    ierr=nccreate(ncid,'',(/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/))
-    call create_upscale_vars(ncid)
+      ! Make sure all necessary dimensions are in all files
+      ierr=nccreate(ncid,'',(/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/))
+      call def_upscale_vars(ncid, .true.)
 
-    ierr = nf90_close(ncid)
+      ierr = nf90_enddef(ncid)
+      if (ierr/=nf90_noerr) then
+        call error_log%check_netcdf_status(netcdf_status=ierr, &
+          context=module_name//"/create_upscale_file", &
+          info="nf90_enddef for file "//trim(fname))
+      end if
+      ierr = nf90_close(ncid)
     endif
+    call error_log%abort_check()
     call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
 #else ! PARALLEL_IO
     call create_file('_uscl',fname)
 
     ierr=nf90_open(fname,nf90_write,ncid)
+    ierr=nf90_redef(ncid)
 
     ! Make sure all necessary dimensions are in all files
     ierr=nccreate(ncid,'',(/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/))
-    call create_upscale_vars(ncid)
+    call def_upscale_vars(ncid, .false.)
+    call wrt_upscale_coords(.false.)
 
+    ierr = nf90_enddef(ncid)
     ierr = nf90_close(ncid)
 #endif ! PARALLEL_IO
   end subroutine create_upscale_file !]
 ! ----------------------------------------------------------------------
-  subroutine create_upscale_vars(ncid)  ![
-    ! Add edata variables to an opened netcdf file
+  subroutine def_upscale_vars(ncid, all_boundaries)  ![
+    ! Define upscale variables on rank 0 (all_boundaries=.true.) or
+    ! only for open boundaries on the local tile (serial I/O).
 
-    use dimensions, only: inode, jnode
     implicit none
 
-    !import/export
     integer(kind=4), intent(in) :: ncid
+    logical, intent(in) :: all_boundaries
     integer(kind=4)             :: ierr, varid
-    integer(kind=4) :: tile
+
+#include "compute_tile_bounds.h"
+
+#ifdef OBC_NORTH
+    if (all_boundaries .or. jnode==npy-1) then
+    varid = nccreate(ncid,'ALK_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'ALK additionality on northern boundary')
+    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
+
+    varid = nccreate(ncid,'DIC_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'DIC additionality on northern boundary')
+    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
+
+    varid = nccreate(ncid,'h_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Layer thickness on northern boundary')
+    ierr = nf90_put_att(ncid,varid,'units','meters')
+
+    varid = nccreate(ncid,'lat_north',(/dn_xr/),(/ds_xr/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Latitudes of tracer points on northern boundary')
+    ierr = nf90_put_att(ncid,varid,'units','degrees')
+
+    varid = nccreate(ncid,'lon_north',(/dn_xr/),(/ds_xr/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Longitudes of tracer points on northern boundary')
+    ierr = nf90_put_att(ncid,varid,'units','degrees')
+    endif
+#endif
+
+#ifdef OBC_SOUTH
+    if (all_boundaries .or. jnode==0) then
+    varid = nccreate(ncid,'ALK_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'ALK additionality on southern boundary')
+    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
+
+    varid = nccreate(ncid,'DIC_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'DIC additionality on southern boundary')
+    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
+
+    varid = nccreate(ncid,'h_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Layer thickness on southern boundary')
+    ierr = nf90_put_att(ncid,varid,'units','meters')
+
+    varid = nccreate(ncid,'lat_south',(/dn_xr/),(/ds_xr/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Latitudes of tracer points on southern boundary')
+    ierr = nf90_put_att(ncid,varid,'units','degrees')
+
+    varid = nccreate(ncid,'lon_south',(/dn_xr/),(/ds_xr/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Longitudes of tracer points on southern boundary')
+    ierr = nf90_put_att(ncid,varid,'units','degrees')
+    endif
+#endif
+
+#ifdef OBC_EAST
+    if (all_boundaries .or. inode==npx-1) then
+    varid = nccreate(ncid,'ALK_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'ALK additionality on eastern boundary')
+    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
+
+    varid = nccreate(ncid,'DIC_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'DIC additionality on eastern boundary')
+    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
+
+    varid = nccreate(ncid,'h_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Layer thickness on eastern boundary')
+    ierr = nf90_put_att(ncid,varid,'units','meters')
+
+    varid = nccreate(ncid,'lat_east',(/dn_yr/),(/ds_yr/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Latitudes of tracer points on eastern boundary')
+    ierr = nf90_put_att(ncid,varid,'units','degrees')
+
+    varid = nccreate(ncid,'lon_east',(/dn_yr/),(/ds_yr/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Longitudes of tracer points on eastern boundary')
+    ierr = nf90_put_att(ncid,varid,'units','degrees')
+    endif
+#endif
+
+#ifdef OBC_WEST
+    if (all_boundaries .or. inode==0) then
+    varid = nccreate(ncid,'ALK_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'ALK additionality on western boundary')
+    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
+
+    varid = nccreate(ncid,'DIC_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'DIC additionality on western boundary')
+    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
+
+    varid = nccreate(ncid,'h_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Layer thickness on western boundary')
+    ierr = nf90_put_att(ncid,varid,'units','meters')
+
+    varid = nccreate(ncid,'lat_west',(/dn_yr/),(/ds_yr/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Latitudes of tracer points on western boundary')
+    ierr = nf90_put_att(ncid,varid,'units','degrees')
+
+    varid = nccreate(ncid,'lon_west',(/dn_yr/),(/ds_yr/),uscl_prec)
+    ierr = nf90_put_att(ncid,varid,'long_name',&
+    &'Longitudes of tracer points on western boundary')
+    ierr = nf90_put_att(ncid,varid,'units','degrees')
+    endif
+#endif
+
+  end subroutine def_upscale_vars  !]
+! ----------------------------------------------------------------------
+  subroutine wrt_upscale_coords(use_pio)  ![
+    ! Write static boundary lat/lon coordinates from boundary tiles.
+
+    implicit none
+
+    logical, intent(in) :: use_pio
 
 #include "compute_tile_bounds.h"
 
 #ifdef OBC_NORTH
     if (jnode==npy-1) then
-      varid = nccreate(ncid,'ALK_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'ALK additionality on northern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
-
-      varid = nccreate(ncid,'DIC_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'DIC additionality on northern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
-
-      varid = nccreate(ncid,'h_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Layer thickness on northern boundary')
-      ierr = nf90_put_att(ncid,varid,'units','meters')
-
-      varid = nccreate(ncid,'lat_north',(/dn_xr/),(/ds_xr/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Latitudes of tracer points on northern boundary')
-      ierr = nf90_put_att(ncid,varid,'units','degrees')
-      call ncwrite(ncid,'lat_north',latr(i0:i1,jend+1),(/1/))
-
-      varid = nccreate(ncid,'lon_north',(/dn_xr/),(/ds_xr/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Longitudes of tracer points on northern boundary')
-      ierr = nf90_put_att(ncid,varid,'units','degrees')
-      call ncwrite(ncid,'lon_north',lonr(i0:i1,jend+1),(/1/))
+      if (use_pio) then
+        pio_gtype = 'n1rw'
+        call ncwrite(ncid,'lat_north',latr(i0:i1,jend+1), PP=.true.)
+        call ncwrite(ncid,'lon_north',lonr(i0:i1,jend+1), PP=.true.)
+      else
+        call ncwrite(ncid,'lat_north',latr(i0:i1,jend+1),(/1/))
+        call ncwrite(ncid,'lon_north',lonr(i0:i1,jend+1),(/1/))
+      endif
     endif
 #endif
 
 #ifdef OBC_SOUTH
     if (jnode==0) then
-      varid = nccreate(ncid,'ALK_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'ALK additionality on southern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
-
-      varid = nccreate(ncid,'DIC_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'DIC additionality on southern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
-
-      varid = nccreate(ncid,'h_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Layer thickness on southern boundary')
-      ierr = nf90_put_att(ncid,varid,'units','meters')
-
-      varid = nccreate(ncid,'lat_south',(/dn_xr/),(/ds_xr/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Latitudes of tracer points on southern boundary')
-      ierr = nf90_put_att(ncid,varid,'units','degrees')
-      call ncwrite(ncid,'lat_south',latr(i0:i1,jstr-1),(/1/))
-
-      varid = nccreate(ncid,'lon_south',(/dn_xr/),(/ds_xr/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Longitudes of tracer points on southern boundary')
-      ierr = nf90_put_att(ncid,varid,'units','degrees')
-      call ncwrite(ncid,'lon_south',lonr(i0:i1,jstr-1),(/1/))
+      if (use_pio) then
+        pio_gtype = 's1rw'
+        call ncwrite(ncid,'lat_south',latr(i0:i1,jstr-1), PP=.true.)
+        call ncwrite(ncid,'lon_south',lonr(i0:i1,jstr-1), PP=.true.)
+      else
+        call ncwrite(ncid,'lat_south',latr(i0:i1,jstr-1),(/1/))
+        call ncwrite(ncid,'lon_south',lonr(i0:i1,jstr-1),(/1/))
+      endif
     endif
 #endif
 
 #ifdef OBC_EAST
     if (inode==npx-1) then
-      varid = nccreate(ncid,'ALK_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'ALK additionality on eastern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
-
-      varid = nccreate(ncid,'DIC_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'DIC additionality on eastern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
-
-      varid = nccreate(ncid,'h_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Layer thickness on eastern boundary')
-      ierr = nf90_put_att(ncid,varid,'units','meters')
-
-      varid = nccreate(ncid,'lat_east',(/dn_yr/),(/ds_yr/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Latitudes of tracer points on eastern boundary')
-      ierr = nf90_put_att(ncid,varid,'units','degrees')
-      call ncwrite(ncid,'lat_east',latr(iend+1,j0:j1),(/1/))
-
-      varid = nccreate(ncid,'lon_east',(/dn_yr/),(/ds_yr/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Longitudes of tracer points on eastern boundary')
-      ierr = nf90_put_att(ncid,varid,'units','degrees')
-      call ncwrite(ncid,'lon_east',lonr(iend+1,j0:j1),(/1/))
+      if (use_pio) then
+        pio_gtype = 'e1rw'
+        call ncwrite(ncid,'lat_east',latr(iend+1,j0:j1), PP=.true.)
+        call ncwrite(ncid,'lon_east',lonr(iend+1,j0:j1), PP=.true.)
+      else
+        call ncwrite(ncid,'lat_east',latr(iend+1,j0:j1),(/1/))
+        call ncwrite(ncid,'lon_east',lonr(iend+1,j0:j1),(/1/))
+      endif
     endif
 #endif
 
 #ifdef OBC_WEST
     if (inode==0) then
-      varid = nccreate(ncid,'ALK_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'ALK additionality on western boundary')
-      ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
-
-      varid = nccreate(ncid,'DIC_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'DIC additionality on western boundary')
-      ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
-
-      varid = nccreate(ncid,'h_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Layer thickness on western boundary')
-      ierr = nf90_put_att(ncid,varid,'units','meters')
-
-      varid = nccreate(ncid,'lat_west',(/dn_yr/),(/ds_yr/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Latitudes of tracer points on western boundary')
-      ierr = nf90_put_att(ncid,varid,'units','degrees')
-      call ncwrite(ncid,'lat_west',latr(istr-1,j0:j1),(/1/))
-
-      varid = nccreate(ncid,'lon_west',(/dn_yr/),(/ds_yr/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Longitudes of tracer points on western boundary')
-      ierr = nf90_put_att(ncid,varid,'units','degrees')
-      call ncwrite(ncid,'lon_west',lonr(istr-1,j0:j1),(/1/))
+      if (use_pio) then
+        pio_gtype = 'w1rw'
+        call ncwrite(ncid,'lat_west',latr(istr-1,j0:j1), PP=.true.)
+        call ncwrite(ncid,'lon_west',lonr(istr-1,j0:j1), PP=.true.)
+      else
+        call ncwrite(ncid,'lat_west',latr(istr-1,j0:j1),(/1/))
+        call ncwrite(ncid,'lon_west',lonr(istr-1,j0:j1),(/1/))
+      endif
     endif
 #endif
 
-  end subroutine create_upscale_vars  !]
+  end subroutine wrt_upscale_coords  !]
 ! ----------------------------------------------------------------------
 #else /* MARBL && MARBL_DIAGS && UPSCALING */
 
