@@ -41,6 +41,12 @@
 ! Usage notes:
 #undef ADV_ISONEUTRAL
 
+! Use k-outer/itrc-inner loop order for BGC tracer horizontal advection.
+! Loads FlxU/FlxV once per k-level and reuses across all BGC tracers,
+! reducing memory bandwidth by ~30x on large grids. Incompatible with
+! ADV_ISONEUTRAL (silently ignored if both are defined).
+#define BGC_KOUTER_ADV
+
 ! Switch to allow mixed [tiled + single-block] execution in OpenMP.
 !Usage notes: Useful for debugging purposes only. Normally should be kept undefined.
 #undef ALLOW_SINGLE_BLOCK_MODE

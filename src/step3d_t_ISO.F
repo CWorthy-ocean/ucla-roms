@@ -180,7 +180,7 @@ c--#  define ntdf nrhs
 !       write(60,*) 't:          ',t(10,10,20,nnew,1)
 !     endif
 
-# ifndef ADV_ISONEUTRAL
+# if defined BGC_KOUTER_ADV && !defined ADV_ISONEUTRAL
 !     BGC horizontal advection: k-outer/itrc-inner loop reorder.
 !     FlxU/FlxV are loaded once per k-level and reused across all ntrc_bio
 !     tracers, instead of being reloaded ntrc_bio*N times in itrc-outer order.
@@ -229,7 +229,7 @@ c--#  define ntdf nrhs
 
         enddo  !<-- itrc (BGC, k-outer horiz)
       enddo  !<-- k (BGC, k-outer horiz)
-# endif  /* !ADV_ISONEUTRAL */
+# endif  /* BGC_KOUTER_ADV && !ADV_ISONEUTRAL */
 
       do itrc=1,nt
 
@@ -239,8 +239,10 @@ c--#  define ntdf nrhs
           k1=k2
           k2=3-k1
           if (k > 0) then
-# else
+# elif defined BGC_KOUTER_ADV
         if (itrc <= itands+nt_passive) then
+        do k=1,N
+# else
         do k=1,N
 # endif
 
@@ -901,7 +903,7 @@ c**               cff=1./(z_r(i,j,k+1)-z_r(i,j,k))
           endif   !<-- k > 0
 # endif /* ADV_ISONEUTRAL */
         enddo      !<-- k
-# ifndef ADV_ISONEUTRAL
+# if defined BGC_KOUTER_ADV && !defined ADV_ISONEUTRAL
         endif  !<-- T/S+passive horiz only
 # endif
 
