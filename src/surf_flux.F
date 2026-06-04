@@ -63,6 +63,12 @@
       real,public,allocatable,dimension(:,:) :: sss
       real,public :: dSSSdt                                ! input units (cm/day)
 
+#if defined ANTITRACER
+      real,public,allocatable,dimension(:,:) :: ddic_dco2  ! time interpolated carbonate sensitivity
+      real,public,allocatable,dimension(:,:) :: ddic_dalk  ! time interpolated carbonate sensitivity
+      real,public,allocatable,dimension(:,:) :: k_gas      ! time interpolated gas transfer velocity
+#endif
+
       ! Netcdf outputting:
       real    :: output_time = 0
       integer :: record = nrpf     ! to trigger the first file creation
@@ -71,6 +77,7 @@
       ! Public functions
       public init_arrays_surf_flx
       public set_surf_field_corr
+      public set_carbonate_sensitivity
       public wrt_sflux
       public apply_surf_field_corr
 
@@ -100,6 +107,13 @@
 #if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
       allocate( sss(GLOBAL_2D_ARRAY)        ); sss=init
       allocate(nc_sss%vdata(GLOBAL_2D_ARRAY,2) )
+#endif
+#if defined ANTITRACER
+      allocate( nc_ddic_dco2%vdata( GLOBAL_2D_ARRAY,2) )
+      allocate( ddic_dco2(GLOBAL_2D_ARRAY)  )
+      allocate( nc_ddic_dalk%vdata( GLOBAL_2D_ARRAY,2) )
+      allocate( ddic_dalk(GLOBAL_2D_ARRAY)  )
+      allocate( k_gas(GLOBAL_2D_ARRAY)      ); k_gas=0.
 #endif
 
       if (sflx_avg) then
@@ -162,7 +176,20 @@
 #endif
 
       end subroutine apply_surf_field_corr  !]
+!     ----------------------------------------------------------------------
 ! ----------------------------------------------------------------------
+      subroutine set_carbonate_sensitivity ![
+
+      implicit none
+
+#ifdef ANTITRACER
+      call set_frc_data(nc_ddic_dco2, ddic_dco2, 'r')
+      call set_frc_data(nc_ddic_dalk, ddic_dalk, 'r')
+#endif
+
+      end subroutine set_carbonate_sensitivity  !]
+! ----------------------------------------------------------------------
+
       subroutine calc_sflx_avg  ![
       implicit none
 

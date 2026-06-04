@@ -951,7 +951,6 @@ c**               cff=1./(z_r(i,j,k+1)-z_r(i,j,k))
           endif
 
 ! Start computation of vertical diffusion: add surface forcing fluxes
-
           !! JM add line for bottom tracer flux
           do i=istr,iend
             t(i,j,N,nnew,itrc)=t(i,j,N,nnew,itrc)+dt*stflx(i,j,itrc)
