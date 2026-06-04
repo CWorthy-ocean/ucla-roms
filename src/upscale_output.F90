@@ -151,9 +151,6 @@ contains
     logical,save :: done=.false.
     integer(kind=4) :: itot=0
     integer(kind=4) :: idx,k
-    integer(kind=4) :: tile
-
-#include "compute_tile_bounds.h"
 
     if (done) then
       return
@@ -351,15 +348,12 @@ contains
     ! Update averages
     ! The average is always scaled properly throughout
     ! reset navg_rnd=0 after an output of the average
-    use dimensions, only: inode, jnode
+    use dimensions, only: i0, i1, j0, j1, inode, jnode
     use param, only: mynode
     implicit none
 
     ! local
     real(kind=8) :: coef
-    integer(kind=4) :: tile
-
-#include "compute_tile_bounds.h"
 
     navg = navg+1
 
@@ -376,7 +370,7 @@ contains
       &(ALK_rate_north(:,:) - ALK_alt_rate_north(:,:))*coef
       DIC_add_north_avg(:,:) = DIC_add_north_avg(:,:)*(1-coef) +&
       &(DIC_rate_north(:,:) - DIC_alt_rate_north(:,:))*coef
-      h_north_avg(:,:) = h_north_avg(:,:)*(1-coef) + Hz(:,jend+1,:)*coef
+      h_north_avg(:,:) = h_north_avg(:,:)*(1-coef) + Hz(:,j1,:)*coef
     endif
 #endif
 
@@ -386,7 +380,7 @@ contains
       &(ALK_rate_south(:,:) - ALK_alt_rate_south(:,:))*coef
       DIC_add_south_avg(:,:) = DIC_add_south_avg(:,:)*(1-coef) +&
       &(DIC_rate_south(:,:) - DIC_alt_rate_south(:,:))*coef
-      h_south_avg(:,:) = h_south_avg(:,:)*(1-coef) + Hz(:,jstr-1,:)*coef
+      h_south_avg(:,:) = h_south_avg(:,:)*(1-coef) + Hz(:,j0,:)*coef
     endif
 #endif
 
@@ -396,7 +390,7 @@ contains
       &(ALK_rate_east(:,:) - ALK_alt_rate_east(:,:))*coef
       DIC_add_east_avg(:,:) = DIC_add_east_avg(:,:)*(1-coef) +&
       &(DIC_rate_east(:,:) - DIC_alt_rate_east(:,:))*coef
-      h_east_avg(:,:) = h_east_avg(:,:)*(1-coef) + Hz(iend+1,:,:)*coef
+      h_east_avg(:,:) = h_east_avg(:,:)*(1-coef) + Hz(i1,:,:)*coef
     endif
 #endif
 
@@ -406,7 +400,7 @@ contains
       &(ALK_rate_west(:,:) - ALK_alt_rate_west(:,:))*coef
       DIC_add_west_avg(:,:) = DIC_add_west_avg(:,:)*(1-coef) +&
       &(DIC_rate_west(:,:) - DIC_alt_rate_west(:,:))*coef
-      h_west_avg(:,:) = h_west_avg(:,:)*(1-coef) + Hz(istr-1,:,:)*coef
+      h_west_avg(:,:) = h_west_avg(:,:)*(1-coef) + Hz(i0,:,:)*coef
     endif
 #endif
 
@@ -453,9 +447,10 @@ contains
       call MPI_Barrier(ocean_grid_comm, ierr)
 
       ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+      ncid = 0  ! unused when PP=.true.; required by ncwrite interface
 
       if (.not. coords_written) then
-        call wrt_upscale_coords(.true.)
+        call wrt_upscale_coords(.true., ncid)
         coords_written = .true.
       endif
 
@@ -621,9 +616,9 @@ contains
     ! Make sure all necessary dimensions are in all files
     ierr=nccreate(ncid,'',(/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/))
     call def_upscale_vars(ncid, .false.)
-    call wrt_upscale_coords(.false.)
 
     ierr = nf90_enddef(ncid)
+    call wrt_upscale_coords(.false., ncid)
     ierr = nf90_close(ncid)
 #endif ! PARALLEL_IO
   end subroutine create_upscale_file !]
@@ -637,8 +632,6 @@ contains
     integer(kind=4), intent(in) :: ncid
     logical, intent(in) :: all_boundaries
     integer(kind=4)             :: ierr, varid
-
-#include "compute_tile_bounds.h"
 
 #ifdef OBC_NORTH
     if (all_boundaries .or. jnode==npy-1) then
@@ -758,24 +751,23 @@ contains
 
   end subroutine def_upscale_vars  !]
 ! ----------------------------------------------------------------------
-  subroutine wrt_upscale_coords(use_pio)  ![
+  subroutine wrt_upscale_coords(use_pio, ncid)  ![
     ! Write static boundary lat/lon coordinates from boundary tiles.
 
     implicit none
 
     logical, intent(in) :: use_pio
-
-#include "compute_tile_bounds.h"
+    integer(kind=4), intent(in) :: ncid
 
 #ifdef OBC_NORTH
     if (jnode==npy-1) then
       if (use_pio) then
         pio_gtype = 'n1rw'
-        call ncwrite(ncid,'lat_north',latr(i0:i1,jend+1), PP=.true.)
-        call ncwrite(ncid,'lon_north',lonr(i0:i1,jend+1), PP=.true.)
+        call ncwrite(ncid,'lat_north',latr(i0:i1,j1), PP=.true.)
+        call ncwrite(ncid,'lon_north',lonr(i0:i1,j1), PP=.true.)
       else
-        call ncwrite(ncid,'lat_north',latr(i0:i1,jend+1),(/1/))
-        call ncwrite(ncid,'lon_north',lonr(i0:i1,jend+1),(/1/))
+        call ncwrite(ncid,'lat_north',latr(i0:i1,j1),(/1/))
+        call ncwrite(ncid,'lon_north',lonr(i0:i1,j1),(/1/))
       endif
     endif
 #endif
@@ -784,11 +776,11 @@ contains
     if (jnode==0) then
       if (use_pio) then
         pio_gtype = 's1rw'
-        call ncwrite(ncid,'lat_south',latr(i0:i1,jstr-1), PP=.true.)
-        call ncwrite(ncid,'lon_south',lonr(i0:i1,jstr-1), PP=.true.)
+        call ncwrite(ncid,'lat_south',latr(i0:i1,j0), PP=.true.)
+        call ncwrite(ncid,'lon_south',lonr(i0:i1,j0), PP=.true.)
       else
-        call ncwrite(ncid,'lat_south',latr(i0:i1,jstr-1),(/1/))
-        call ncwrite(ncid,'lon_south',lonr(i0:i1,jstr-1),(/1/))
+        call ncwrite(ncid,'lat_south',latr(i0:i1,j0),(/1/))
+        call ncwrite(ncid,'lon_south',lonr(i0:i1,j0),(/1/))
       endif
     endif
 #endif
@@ -797,11 +789,11 @@ contains
     if (inode==npx-1) then
       if (use_pio) then
         pio_gtype = 'e1rw'
-        call ncwrite(ncid,'lat_east',latr(iend+1,j0:j1), PP=.true.)
-        call ncwrite(ncid,'lon_east',lonr(iend+1,j0:j1), PP=.true.)
+        call ncwrite(ncid,'lat_east',latr(i1,j0:j1), PP=.true.)
+        call ncwrite(ncid,'lon_east',lonr(i1,j0:j1), PP=.true.)
       else
-        call ncwrite(ncid,'lat_east',latr(iend+1,j0:j1),(/1/))
-        call ncwrite(ncid,'lon_east',lonr(iend+1,j0:j1),(/1/))
+        call ncwrite(ncid,'lat_east',latr(i1,j0:j1),(/1/))
+        call ncwrite(ncid,'lon_east',lonr(i1,j0:j1),(/1/))
       endif
     endif
 #endif
@@ -810,11 +802,11 @@ contains
     if (inode==0) then
       if (use_pio) then
         pio_gtype = 'w1rw'
-        call ncwrite(ncid,'lat_west',latr(istr-1,j0:j1), PP=.true.)
-        call ncwrite(ncid,'lon_west',lonr(istr-1,j0:j1), PP=.true.)
+        call ncwrite(ncid,'lat_west',latr(i0,j0:j1), PP=.true.)
+        call ncwrite(ncid,'lon_west',lonr(i0,j0:j1), PP=.true.)
       else
-        call ncwrite(ncid,'lat_west',latr(istr-1,j0:j1),(/1/))
-        call ncwrite(ncid,'lon_west',lonr(istr-1,j0:j1),(/1/))
+        call ncwrite(ncid,'lat_west',latr(i0,j0:j1),(/1/))
+        call ncwrite(ncid,'lon_west',lonr(i0,j0:j1),(/1/))
       endif
     endif
 #endif

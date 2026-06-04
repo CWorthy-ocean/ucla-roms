@@ -9,7 +9,7 @@ module zslice_output
   use dimensions, only: nx, ny, nz, i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u&
 &, ds_xr, ds_yr, ds_xu, ds_yv
   use roms_read_write, only:&
-  &bfx, bfy, dn_tm, dn_xr, dn_xu, dn_yr,&
+  &dn_tm, dn_xr, dn_xu, dn_yr,&
   &dn_yv, create_file
   use nc_read_write, only: nccreate, ncwrite
   use netcdf, only:&
@@ -457,27 +457,27 @@ contains
         do n=1,nt_z
           if (zslice_avg) then
             call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz_avg(i0:i1,j0:j1,:,n),&
-            &(/bfx,bfy,1,record/),.true.)
+            &(/1,1,1,record/),.true.)
           else
             call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz(i0:i1,j0:j1,:,n),&
-            &(/bfx,bfy,1,record/),.true.)
+            &(/1,1,1,record/),.true.)
           endif
         enddo
       endif
       pio_gtype = '3Duz'
       if (wrt_U_zsl) then
         if (zslice_avg) then
-          call ncwrite(ncid,'u',Uz_avg(1:i1,j0:j1,:),(/1,bfy,1,record/),.true.)
+          call ncwrite(ncid,'u',Uz_avg(1:i1,j0:j1,:),(/1,1,1,record/),.true.)
         else
-          call ncwrite(ncid,'u',Uz(1:i1,j0:j1,:),(/1,bfy,1,record/),.true.)
+          call ncwrite(ncid,'u',Uz(1:i1,j0:j1,:),(/1,1,1,record/),.true.)
         endif
       endif
       pio_gtype = '3Dvz'
       if (wrt_V_zsl) then
         if (zslice_avg) then
-          call ncwrite(ncid,'v',Vz_avg(i0:i1,1:j1,:),(/bfx,1,1,record/),.true.)
+          call ncwrite(ncid,'v',Vz_avg(i0:i1,1:j1,:),(/1,1,1,record/),.true.)
         else
-          call ncwrite(ncid,'v',Vz(i0:i1,1:j1,:),(/bfx,1,1,record/),.true.)
+          call ncwrite(ncid,'v',Vz(i0:i1,1:j1,:),(/1,1,1,record/),.true.)
         endif
       endif
 
@@ -521,24 +521,24 @@ contains
         do n=1,nt_z
           if (zslice_avg) then
             call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz_avg(i0:i1,j0:j1,:,n),&
-            &(/bfx,bfy,1,record/))
+            &(/1,1,1,record/))
           else
-            call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz(i0:i1,j0:j1,:,n),(/bfx,bfy,1,record/))
+            call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz(i0:i1,j0:j1,:,n),(/1,1,1,record/))
           endif
         enddo
       endif
       if (wrt_U_zsl) then
         if (zslice_avg) then
-          call ncwrite(ncid,'u',Uz_avg(1:i1,j0:j1,:),(/1,bfy,1,record/))
+          call ncwrite(ncid,'u',Uz_avg(1:i1,j0:j1,:),(/1,1,1,record/))
         else
-          call ncwrite(ncid,'u',Uz(1:i1,j0:j1,:),(/1,bfy,1,record/))
+          call ncwrite(ncid,'u',Uz(1:i1,j0:j1,:),(/1,1,1,record/))
         endif
       endif
       if (wrt_V_zsl) then
         if (zslice_avg) then
-          call ncwrite(ncid,'v',Vz_avg(i0:i1,1:j1,:),(/bfx,1,1,record/))
+          call ncwrite(ncid,'v',Vz_avg(i0:i1,1:j1,:),(/1,1,1,record/))
         else
-          call ncwrite(ncid,'v',Vz(i0:i1,1:j1,:),(/bfx,1,1,record/))
+          call ncwrite(ncid,'v',Vz(i0:i1,1:j1,:),(/1,1,1,record/))
         endif
       endif
       ierr=nf90_close (ncid)
