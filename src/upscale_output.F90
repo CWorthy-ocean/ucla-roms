@@ -168,6 +168,26 @@ contains
     if (mynode==0) print *,'init upscale'
 
 #ifdef OBC_NORTH
+#ifdef PARALLEL_IO
+    allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(DIC_add_north_avg(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(ALK_rate_north(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(DIC_rate_north(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(ALK_alt_rate_north(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(DIC_alt_rate_north(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(h_north_avg(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(lat_north(GLOBAL_1DX_ARRAY))
+    allocate(lon_north(GLOBAL_1DX_ARRAY))
+    ALK_add_north_avg(:,:) = 0
+    DIC_add_north_avg(:,:) = 0
+    ALK_rate_north(:,:) = 0
+    DIC_rate_north(:,:) = 0
+    ALK_alt_rate_north(:,:) = 0
+    DIC_alt_rate_north(:,:) = 0
+    h_north_avg(:,:) = 0
+    lat_north(:) = 0
+    lon_north(:) = 0
+#else
     if (jnode==npy-1) then ! .not. north_exchng
       allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:N) )
       allocate(DIC_add_north_avg(GLOBAL_1DX_ARRAY,1:N) )
@@ -189,8 +209,29 @@ contains
       lon_north(:) = 0
     endif
 #endif
+#endif
 
 #ifdef OBC_SOUTH
+#ifdef PARALLEL_IO
+    allocate(ALK_add_south_avg(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(DIC_add_south_avg(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(ALK_rate_south(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(DIC_rate_south(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(ALK_alt_rate_south(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(DIC_alt_rate_south(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(h_south_avg(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(lat_south(GLOBAL_1DX_ARRAY))
+    allocate(lon_south(GLOBAL_1DX_ARRAY))
+    ALK_add_south_avg(:,:) = 0
+    DIC_add_south_avg(:,:) = 0
+    ALK_rate_south(:,:) = 0
+    DIC_rate_south(:,:) = 0
+    ALK_alt_rate_south(:,:) = 0
+    DIC_alt_rate_south(:,:) = 0
+    h_south_avg(:,:) = 0
+    lat_south(:) = 0
+    lon_south(:) = 0
+#else
     if (jnode==0) then ! .not. south_exchange
       allocate(ALK_add_south_avg(GLOBAL_1DX_ARRAY,1:N) )
       allocate(DIC_add_south_avg(GLOBAL_1DX_ARRAY,1:N) )
@@ -212,8 +253,29 @@ contains
       lon_south(:) = 0
     endif
 #endif
+#endif
 
 #ifdef OBC_EAST
+#ifdef PARALLEL_IO
+    allocate(ALK_add_east_avg(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(DIC_add_east_avg(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(ALK_rate_east(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(DIC_rate_east(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(ALK_alt_rate_east(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(DIC_alt_rate_east(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(h_east_avg(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(lat_east(GLOBAL_1DY_ARRAY))
+    allocate(lon_east(GLOBAL_1DY_ARRAY))
+    ALK_add_east_avg(:,:) = 0
+    DIC_add_east_avg(:,:) = 0
+    ALK_rate_east(:,:) = 0
+    DIC_rate_east(:,:) = 0
+    ALK_alt_rate_east(:,:) = 0
+    DIC_alt_rate_east(:,:) = 0
+    h_east_avg(:,:) = 0
+    lat_east(:) = 0
+    lon_east(:) = 0
+#else
     if (inode==npx-1) then ! .not. east_exchng
       allocate(ALK_add_east_avg(GLOBAL_1DY_ARRAY,1:N) )
       allocate(DIC_add_east_avg(GLOBAL_1DY_ARRAY,1:N) )
@@ -235,8 +297,29 @@ contains
       lon_east(:) = 0
     endif
 #endif
+#endif
 
 #ifdef OBC_WEST
+#ifdef PARALLEL_IO
+    allocate(ALK_add_west_avg(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(DIC_add_west_avg(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(ALK_rate_west(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(DIC_rate_west(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(ALK_alt_rate_west(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(DIC_alt_rate_west(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(h_west_avg(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(lat_west(GLOBAL_1DY_ARRAY))
+    allocate(lon_west(GLOBAL_1DY_ARRAY))
+    ALK_add_west_avg(:,:) = 0
+    DIC_add_west_avg(:,:) = 0
+    ALK_rate_west(:,:) = 0
+    DIC_rate_west(:,:) = 0
+    ALK_alt_rate_west(:,:) = 0
+    DIC_alt_rate_west(:,:) = 0
+    h_west_avg(:,:) = 0
+    lat_west(:) = 0
+    lon_west(:) = 0
+#else
     if (inode==0) then ! .not. west_exchng
       allocate(ALK_add_west_avg(GLOBAL_1DY_ARRAY,1:N) )
       allocate(DIC_add_west_avg(GLOBAL_1DY_ARRAY,1:N) )
@@ -257,6 +340,7 @@ contains
       lat_west(:) = 0
       lon_west(:) = 0
     endif
+#endif
 #endif
 
   end subroutine init_upscale  !]
@@ -456,10 +540,10 @@ contains
 
 #ifdef OBC_NORTH
       pio_gtype = 'n2rw'
+      call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+      call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+      call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
       if (jnode==npy-1) then
-        call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-        call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-        call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
         ALK_add_north_avg(:,:) = 0
         DIC_add_north_avg(:,:) = 0
         h_north_avg(:,:) = 0
@@ -468,10 +552,10 @@ contains
 
 #ifdef OBC_SOUTH
       pio_gtype = 's2rw'
+      call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+      call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+      call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
       if (jnode==0) then
-        call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-        call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-        call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
         ALK_add_south_avg(:,:) = 0
         DIC_add_south_avg(:,:) = 0
         h_south_avg(:,:) = 0
@@ -480,10 +564,10 @@ contains
 
 #ifdef OBC_EAST
       pio_gtype = 'e2rw'
+      call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+      call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+      call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
       if (inode==npx-1) then
-        call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-        call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-        call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
         ALK_add_east_avg(:,:) = 0
         DIC_add_east_avg(:,:) = 0
         h_east_avg(:,:) = 0
@@ -492,16 +576,18 @@ contains
 
 #ifdef OBC_WEST
       pio_gtype = 'w2rw'
+      call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+      call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+      call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
       if (inode==0) then
-        call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-        call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-        call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
         ALK_add_west_avg(:,:) = 0
         DIC_add_west_avg(:,:) = 0
         h_west_avg(:,:) = 0
       endif
 #endif
 
+      call error_log%abort_check()
+      call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_closefile(pio_FileDesc)
 
       otime = 0
@@ -760,54 +846,46 @@ contains
     integer(kind=4), intent(in) :: ncid
 
 #ifdef OBC_NORTH
-    if (jnode==npy-1) then
-      if (use_pio) then
-        pio_gtype = 'n1rw'
-        call ncwrite(ncid,'lat_north',latr(i0:i1,j1), PP=.true.)
-        call ncwrite(ncid,'lon_north',lonr(i0:i1,j1), PP=.true.)
-      else
-        call ncwrite(ncid,'lat_north',latr(i0:i1,j1),(/1/))
-        call ncwrite(ncid,'lon_north',lonr(i0:i1,j1),(/1/))
-      endif
+    if (use_pio) then
+      pio_gtype = 'n1rw'
+      call ncwrite(ncid,'lat_north',latr(i0:i1,j1), PP=.true.)
+      call ncwrite(ncid,'lon_north',lonr(i0:i1,j1), PP=.true.)
+    elseif (jnode==npy-1) then
+      call ncwrite(ncid,'lat_north',latr(i0:i1,j1),(/1/))
+      call ncwrite(ncid,'lon_north',lonr(i0:i1,j1),(/1/))
     endif
 #endif
 
 #ifdef OBC_SOUTH
-    if (jnode==0) then
-      if (use_pio) then
-        pio_gtype = 's1rw'
-        call ncwrite(ncid,'lat_south',latr(i0:i1,j0), PP=.true.)
-        call ncwrite(ncid,'lon_south',lonr(i0:i1,j0), PP=.true.)
-      else
-        call ncwrite(ncid,'lat_south',latr(i0:i1,j0),(/1/))
-        call ncwrite(ncid,'lon_south',lonr(i0:i1,j0),(/1/))
-      endif
+    if (use_pio) then
+      pio_gtype = 's1rw'
+      call ncwrite(ncid,'lat_south',latr(i0:i1,j0), PP=.true.)
+      call ncwrite(ncid,'lon_south',lonr(i0:i1,j0), PP=.true.)
+    elseif (jnode==0) then
+      call ncwrite(ncid,'lat_south',latr(i0:i1,j0),(/1/))
+      call ncwrite(ncid,'lon_south',lonr(i0:i1,j0),(/1/))
     endif
 #endif
 
 #ifdef OBC_EAST
-    if (inode==npx-1) then
-      if (use_pio) then
-        pio_gtype = 'e1rw'
-        call ncwrite(ncid,'lat_east',latr(i1,j0:j1), PP=.true.)
-        call ncwrite(ncid,'lon_east',lonr(i1,j0:j1), PP=.true.)
-      else
-        call ncwrite(ncid,'lat_east',latr(i1,j0:j1),(/1/))
-        call ncwrite(ncid,'lon_east',lonr(i1,j0:j1),(/1/))
-      endif
+    if (use_pio) then
+      pio_gtype = 'e1rw'
+      call ncwrite(ncid,'lat_east',latr(i1,j0:j1), PP=.true.)
+      call ncwrite(ncid,'lon_east',lonr(i1,j0:j1), PP=.true.)
+    elseif (inode==npx-1) then
+      call ncwrite(ncid,'lat_east',latr(i1,j0:j1),(/1/))
+      call ncwrite(ncid,'lon_east',lonr(i1,j0:j1),(/1/))
     endif
 #endif
 
 #ifdef OBC_WEST
-    if (inode==0) then
-      if (use_pio) then
-        pio_gtype = 'w1rw'
-        call ncwrite(ncid,'lat_west',latr(i0,j0:j1), PP=.true.)
-        call ncwrite(ncid,'lon_west',lonr(i0,j0:j1), PP=.true.)
-      else
-        call ncwrite(ncid,'lat_west',latr(i0,j0:j1),(/1/))
-        call ncwrite(ncid,'lon_west',lonr(i0,j0:j1),(/1/))
-      endif
+    if (use_pio) then
+      pio_gtype = 'w1rw'
+      call ncwrite(ncid,'lat_west',latr(i0,j0:j1), PP=.true.)
+      call ncwrite(ncid,'lon_west',lonr(i0,j0:j1), PP=.true.)
+    elseif (inode==0) then
+      call ncwrite(ncid,'lat_west',latr(i0,j0:j1),(/1/))
+      call ncwrite(ncid,'lon_west',lonr(i0,j0:j1),(/1/))
     endif
 #endif
 
