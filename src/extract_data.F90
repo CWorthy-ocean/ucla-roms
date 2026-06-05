@@ -70,6 +70,11 @@ module extract_data
   use vertical_remapping, only: remap_src_to_grid
   use roms_mpi, only: exchange_xxx
   use error_handling_mod, only: error_log
+  use pio_roms, only: pio_gtype
+#ifdef PARALLEL_IO
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_extract
+  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+#endif
 
   ! TODO: add averaging
 
@@ -82,6 +87,8 @@ module extract_data
   integer(kind=4),public :: nrpf_extract = 0    ! number of records per output file
 
   ! S-coordinate parameters for child grid
+  integer(kind=4)  :: LLm_chd     = 0
+  integer(kind=4)  :: MMm_chd     = 0
   integer(kind=4)  :: N_chd       = 0
   real(kind=8)     :: theta_s_chd = 5.0_8
   real(kind=8)     :: theta_b_chd = 2.0_8
@@ -89,7 +96,7 @@ module extract_data
   logical, public  :: do_extract
 
   namelist /EXTRACT_DATA_SETTINGS/ extract_period, extract_file,&
-  &nrpf_extract, N_chd, theta_s_chd, theta_b_chd, hc_chd, do_extract
+  &nrpf_extract, LLm_chd, MMm_chd, N_chd, theta_s_chd, theta_b_chd, hc_chd, do_extract
 
   integer(kind=4),parameter        :: edat_prec = nf90_double  ! Precision of output variables (nf90_float/nf90_doub
 
@@ -276,6 +283,10 @@ contains
       np = obj(i)%np
       if (np>0) then
 
+#ifdef PARALLEL_IO
+        call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,LLm_chd,MMm_chd,N_chd,obj(i)%bnd)
+#endif
+
         preamb = trim(obj(i)%obj_name)
         lpre = len(trim(preamb))-1
         allocate(character(len=lpre) :: obj(i)%pre)
@@ -428,11 +439,11 @@ contains
         obj(iobj)%set = objname
       endif
 
-      ierr = nf90_get_att(ncid,iobj,'output_period',extract_period)
-      call error_log%check_netcdf_status(netcdf_status=ierr,&
-      &info="error when getting `output_period` attribute",&
-      &context=module_name//"/"//sr_name)
-      call error_log%abort_check()
+!      ierr = nf90_get_att(ncid,iobj,'output_period',extract_period)
+!      call error_log%check_netcdf_status(netcdf_status=ierr,&
+!      &info="error when getting `output_period` attribute",&
+!      &context=module_name//"/"//sr_name)
+!      call error_log%abort_check()
 
       if (obj(iobj)%np>0) then
 !! only for objects with a presences in this subdomain
@@ -795,7 +806,6 @@ contains
             else
               call ncwrite(ncid,oname,obj(i)%vari,start2D)
             endif
-            call ncwrite(ncid,oname,obj(i)%vari,start2D)
           endif
 
 !     u variables --------------------------------------------------------
@@ -894,7 +904,6 @@ contains
             else
               call ncwrite(ncid,oname,obj(i)%vari,start2D)
             endif
-            call ncwrite(ncid,oname,obj(i)%vari,start2D)
           endif
           if (obj(i)%vp) then
             call interpolate(upe,ui(:,1),cfu,ipu,jpu)
