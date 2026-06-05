@@ -76,7 +76,7 @@
 
 ! Enable special forcing for marine CO2 removal
 ! Usage notes: Required inputs and fields are specified in cdr_frc.opt.
-#undef CDR_FORCING
+#define CDR_FORCING
 
 ! Save advective tendencies at lateral boundaries for use in upscaling applications.
 ! Usage notes: Meant to be used in child domains when forcing will be subsequently applied to parent domains. Only saves ALK and DIC perturbations. Requires MARBL and MARBL_DIAGS to be enabled.
@@ -384,7 +384,7 @@
 ! Usage notes: Hardcoded in ana_grid.h
 #undef ANA_PIPES
 
-#undef PARALLEL_IO
+
 
 !---------- Do not delete anything below this line! --------
 

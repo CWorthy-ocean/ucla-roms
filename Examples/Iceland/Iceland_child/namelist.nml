@@ -53,7 +53,7 @@ LLm = 192                      ! Number of grid points in X
 MMm = 192                      ! Number of grid points in Y
 N = 20                         ! Number of vertical levels
 nt_passive = 0                 ! Number of passive tracers
-ntrc_bio = 0                   ! Number of BGC tracers
+ntrc_bio = 32                   ! Number of BGC tracers
 /
 
 
@@ -69,8 +69,7 @@ nrrec = 1                            ! Number of time records in IC file
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
-frcfile =                            ! Comma-separated list of forcing files
-'input_data/iceland_child_tides.nc',
+frcfile = 'input_data/iceland_child_tides.nc',
 'input_data/iceland_child_surface_forcing.nc',
 'input_data/iceland_child_bgc_surface_forcing.nc',
 'input_data/iceland_child_boundary_forcing.nc',
@@ -261,7 +260,7 @@ trc2zsc = 1, 2        ! Indices of tracers to include
 !------------
 ! Previously set in `bgc.opt`
 !------------
-interp_bgc_frc = .false.    ! Interpolate forcing from coarser input grid if T
+interp_bgc_frc = .true.    ! Interpolate forcing from coarser input grid if T
 !
 wrt_bgc_his = .false.       ! Write instantaneous BGC tracers to output
 output_period_his = 100     ! Frequency of instantaneous BGC output (s)

@@ -69,8 +69,7 @@ nrrec = 2                            ! Number of time records in IC file
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
-frcfile =                            ! Comma-separated list of forcing files
-'input_data/iceland_parent_tides.nc',
+frcfile = 'input_data/iceland_parent_tides.nc',
 'input_data/iceland_parent_surface_bulk_forcing.nc',
 'input_data/iceland_parent_bgc_surface_forcing.nc',
 'input_data/iceland_parent_phys_boundary_forcing.nc',
