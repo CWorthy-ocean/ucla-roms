@@ -34,7 +34,7 @@ module cdr_frc
   private
   character(len=7) :: module_name="cdr_frc"
   character(len=1024) :: error_info=""
-  character(len=128) :: cdr_file = 'cdr_release.nc'
+  character(len=256) :: cdr_file = 'cdr_release.nc'
   integer(kind=4),public :: ncdr_parm=0
 
   ! Forcing file settings:
