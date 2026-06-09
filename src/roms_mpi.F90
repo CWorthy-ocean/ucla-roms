@@ -918,9 +918,9 @@ contains
     if (mynode.eq.0) print *, 'init buffers'
     init_buffer_done = .true.
 
-    mxEW = 4*bf*(j1+1-j0)*(nz+1)  ! maximum of 4 3D arrays at the time
-    mxNS = 4*bf*(i1+1-i0)*(nz+1)  ! maximum of 4 3D arrays at the time
-    mxCr = 4*bf*bf*(nz+1)         ! maximum of 4 3D arrays at the time
+    mxEW = 4*bf*(j1+1-j0)*(N+1)  ! maximum of 4 3D arrays at the time
+    mxNS = 4*bf*(i1+1-i0)*(N+1)  ! maximum of 4 3D arrays at the time
+    mxCr = 4*bf*bf*(N+1)         ! maximum of 4 3D arrays at the time
 
     allocate(sendW(mxEW))
     allocate(sendE(mxEW))
