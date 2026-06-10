@@ -918,9 +918,9 @@ contains
     if (mynode.eq.0) print *, 'init buffers'
     init_buffer_done = .true.
 
-    mxEW = 4*bf*(j1+1-j0)*(N+1)  ! maximum of 4 3D arrays at the time
-    mxNS = 4*bf*(i1+1-i0)*(N+1)  ! maximum of 4 3D arrays at the time
-    mxCr = 4*bf*bf*(N+1)         ! maximum of 4 3D arrays at the time
+    mxEW = 4*bf*(j1+1-j0)*(nz+1)  ! maximum of 4 3D arrays at the time
+    mxNS = 4*bf*(i1+1-i0)*(nz+1)  ! maximum of 4 3D arrays at the time
+    mxCr = 4*bf*bf*(nz+1)         ! maximum of 4 3D arrays at the time
 
     allocate(sendW(mxEW))
     allocate(sendE(mxEW))
@@ -941,6 +941,40 @@ contains
     allocate(recvSW(mxCr))
 
   end subroutine init_mpi_buffers !]
+!--------------------------------------------------------
+  subroutine grow_pair(sendbuf,recvbuf,needed) ![
+    ! Ensure a send/recv buffer pair can hold at least "needed" elements,
+    ! growing both (and preserving the already-packed send data) if not.
+    !
+    ! init_mpi_buffers sizes the buffers assuming a 3D exchange packs at
+    ! most 4*(nz+1) two-dimensional slices (<=4 arrays, each with <=nz+1
+    ! vertical levels). That assumption is violated when an exchanged 3D
+    ! array's third dimension is NOT vertical levels -- e.g. the tidal
+    ! arrays ztide_r/ztide_i(GLOBAL_2D_ARRAY,ntides). With a small N and a
+    ! larger ntides, 2*ntides slices can exceed the default allocation, so
+    ! grow on demand instead. Buffers are module-level, so once grown they
+    ! stay grown and this cost is paid at most once per direction.
+    implicit none
+    real(kind=8),allocatable,intent(inout) :: sendbuf(:),recvbuf(:)
+    integer(kind=4),intent(in) :: needed
+    real(kind=8),allocatable :: tmp(:)
+    integer(kind=4) :: oldsize
+
+    oldsize = size(sendbuf)
+    if (needed <= oldsize) return
+
+    allocate(tmp(needed))
+    tmp(1:oldsize) = sendbuf(1:oldsize)
+    call move_alloc(tmp,sendbuf)
+
+    ! recv buffer holds the neighbour's matching message (same size for a
+    ! regular decomposition); contents need not be preserved.
+    if (size(recvbuf) < needed) then
+      deallocate(recvbuf)
+      allocate(recvbuf(needed))
+    endif
+
+  end subroutine grow_pair !]
 !--------------------------------------------------------
   subroutine pack_buffers(A,nxl,nyl,nzl) ![
     implicit none
@@ -966,41 +1000,49 @@ contains
 ! Append buffers with data from the array to be send
 !----------------------------------------------
     if (p_w>=0) then
+      call grow_pair(sendW,recvW,szW+szEW)
       sendW(szW+1:szW+szEW) = reshape(A(1:hl,jl0:jl1,:),(/szEW/))
       szW = szW+szEW
     endif
 
     if (p_e>=0) then
+      call grow_pair(sendE,recvE,szE+szEW)
       sendE(szE+1:szE+szEW) = reshape(A(nxl+1-hl:nxl,jl0:jl1,:),(/szEW/))
       szE = szE+szEW
     endif
 
     if (p_s>=0) then
+      call grow_pair(sendS,recvS,szS+szNS)
       sendS(szS+1:szS+szNS) = reshape(A(il0:il1,1:hl,:),(/szNS/))
       szS = szS+szNS
     endif
 
     if (p_n>=0) then
+      call grow_pair(sendN,recvN,szN+szNS)
       sendN(szN+1:szN+szNS) = reshape(A(il0:il1,nyl+1-hl:nyl,:),(/szNS/))
       szN = szN+szNS
     endif
 
     if (p_sw>=0) then
+      call grow_pair(sendSW,recvSW,szSW+szCr)
       sendSW(szSW+1:szSW+szCr) = reshape(A(1:hl,1:hl,:),(/szCr/))
       szSW = szSW+szCr
     endif
 
     if (p_se>=0) then
+      call grow_pair(sendSE,recvSE,szSE+szCr)
       sendSE(szSE+1:szSE+szCr) = reshape(A(nxl+1-hl:nxl,1:hl,:),(/szCr/))
       szSE = szSE+szCr
     endif
 
     if (p_ne>=0) then
+      call grow_pair(sendNE,recvNE,szNE+szCr)
       sendNE(szNE+1:szNE+szCr) = reshape(A(nxl+1-hl:nxl,nyl+1-hl:nyl,:),(/szCr/))
       szNE = szNE+szCr
     endif
 
     if (p_nw>=0) then
+      call grow_pair(sendNW,recvNW,szNW+szCr)
       sendNW(szNW+1:szNW+szCr) = reshape(A(1:hl,nyl+1-hl:nyl,:),(/szCr/))
       szNW = szNW+szCr
     endif
