@@ -8,22 +8,22 @@ module bgc_forces
   implicit none
 
 #ifdef PCO2AIR_FORCING
-! pCO2air concentration
+! xCO2air concentration
 ! ------- -------------
-!     pCO2air: pCO2air concentraion [ppm]
-  real(kind=8),allocatable,dimension(:,:) :: pco2air
+!     xCO2air: xCO2air concentraion [ppm]
+  real(kind=8),allocatable,dimension(:,:) :: xco2air
 #ifdef MARBL
-  real(kind=8),allocatable,dimension(:,:) :: pco2air_alt
+  real(kind=8),allocatable,dimension(:,:) :: xco2air_alt
 #endif
-!SDISTRIBUTE_RESHAPE  pCO2air(BLOCK_PATTERN,*) BLOCK_CLAUSE
+!SDISTRIBUTE_RESHAPE  xCO2air(BLOCK_PATTERN,*) BLOCK_CLAUSE
 # if defined PCO2AIR_DATA || defined ALL_DATA
 # ifndef SET_SMTH
 #  undef PCO2AIR_DATA
 # endif
-!SDISTRIBUTE_RESHAPE  pco2airg(BLOCK_PATTERN,*) BLOCK_CLAUSE
-  real(kind=8) :: pco2air_cycle, pco2air_time(2)
-  integer(kind=4) :: pco2air_ncycle,  pco2air_rec, itpco2air, ntpco2air,&
-  &pco2air_file_id, pco2air_id,  pco2air_tid
+!SDISTRIBUTE_RESHAPE  xco2airg(BLOCK_PATTERN,*) BLOCK_CLAUSE
+  real(kind=8) :: xco2air_cycle, xco2air_time(2)
+  integer(kind=4) :: xco2air_ncycle,  xco2air_rec, itxco2air, ntxco2air,&
+  &xco2air_file_id, xco2air_id,  xco2air_tid
 # endif
 #endif /* PCO2AIR_FORCING */
 
@@ -118,9 +118,9 @@ contains
     implicit none
 
 #ifdef PCO2AIR_FORCING
-    allocate( pco2air(GLOBAL_2D_ARRAY) )
+    allocate( xco2air(GLOBAL_2D_ARRAY) )
 #ifdef MARBL
-    allocate( pco2air_alt(GLOBAL_2D_ARRAY) )
+    allocate( xco2air_alt(GLOBAL_2D_ARRAY) )
 #endif
 #endif /* PCO2AIR_FORCING */
 
