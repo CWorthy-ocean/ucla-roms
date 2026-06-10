@@ -284,7 +284,9 @@ contains
       if (np>0) then
 
 #ifdef PARALLEL_IO
-        call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,LLm_chd,MMm_chd,N_chd,obj(i)%bnd)
+        write(*,*) "YAY0"
+        !call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,LLm_chd,MMm_chd,N_chd,obj(i)%bnd)
+        write(*,*) "YAY1"
 #endif
 
         preamb = trim(obj(i)%obj_name)

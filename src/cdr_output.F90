@@ -22,7 +22,7 @@ module cdr_output
   use nc_read_write, only: nccreate, ncwrite
   use netcdf, only:&
   &nf90_noerr, nf90_write, nf90_double, nf90_open,&
-  &nf90_put_att, nf90_close
+  &nf90_put_att, nf90_close, nf90_redef, nf90_enddef
   use scalars, only: iic, knew, nnew, tdays, time, dt, n
   use ocean_vars, only: zeta, hz
   use error_handling_mod, only: error_log
@@ -579,7 +579,9 @@ contains
       if (mynode == 0) then
         call create_file('_cdr',fname, nonode=.true.)
         ierr=nf90_open(fname,nf90_write,ncid)
+        ierr=nf90_redef(ncid)
         call create_cdr_output_variables(ncid)
+        ierr=nf90_enddef(ncid)
         ierr = nf90_close(ncid)
       endif
       record = 0
@@ -684,7 +686,9 @@ contains
     if (record==nrpf) then
       call create_file('_cdr',fname)
       ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_redef(ncid)
       call create_cdr_output_variables(ncid)
+      ierr=nf90_enddef(ncid)
       ierr = nf90_close(ncid)
       record = 0
     endif
