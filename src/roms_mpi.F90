@@ -258,11 +258,12 @@ contains
     j0 = 1; j1 = ny
 
     ! Each physical boundary the tile touches adds one rho ghost column/
-    ! row. The additions are incremental (not "= nx+1") so a tile that is
-    ! both the first AND last in a direction -- i.e. NP_XI==1 or NP_ETA==1
-    ! -- correctly gets BOTH ghost points (xi_rho = nx+2 = LLm+2). u/v
-    ! points have one fewer point globally, so they only gain the east/
-    ! north extra and keep the absolute "= nx+1"/"= ny+1" form.
+    ! row. The additions are incremental so that a tile that is both
+    ! the first AND last in a direction (i.e. NP_XI==1 or NP_ETA==1)
+    ! gets both ghost points.
+
+    ! u/v points have one fewer point globally, so they only gain the
+    ! east/north extra and keep the absolute "= nx+1"/"= ny+1" form.
     xi_rho = nx
     xi_u   = nx
     if (inode.eq.0) then
