@@ -31,7 +31,7 @@ def create_roms_inputs(target_dir: Path):
 
     create_roms_physical_surface_forcing(grid, target_dir)
     create_roms_bgc_surface_forcing(grid, target_dir)
-    create_roms_co2_surface_forcing(grid, target_dir)    
+    create_roms_co2_surface_forcing(grid, target_dir)
 
     create_roms_initial_conditions(grid, target_dir)
 
@@ -170,7 +170,7 @@ def create_roms_co2_surface_forcing(grid, target_dir: Path):
         source={"name": "MBL_co2"}
     )
     rsf.save(target_dir / "example_input_co2_surface_forcing.nc", group=False)
-        
+
 
 def create_roms_initial_conditions(grid, target_dir: Path):
     ic = rt.InitialConditions(
