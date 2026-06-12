@@ -5,7 +5,7 @@ from ._helpers import create_test_namelist_dict, ROMSConfiguration, ROMS_ROOT, g
 @pytest.fixture(scope=session)
 def standard_configuration(tmp_path_factory, read_cppdefs) -> ROMSConfiguration:
     """Generates a session-scoped ROMSConfiguration using the default cppkey set"""
-    
+
     cpp_keys=read_cppdefs(ROMS_ROOT/"src/cppdefs.opt")
     build_dir = tmp_path_factory.mktemp("standard_configuration_build")
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
@@ -77,20 +77,20 @@ def test_exact_restart(standard_configuration,input_dir,tmp_path):
     # Run 1: Produce 2 restart files from init
     run1_path = (tmp_path/"run_1/")
     run1_path.mkdir()
-    
+
     standard_configuration.run(nml,cwd=run1_path)
-    
+
     # Run 2: Produce 1 restart file from run 1's restart
     run2_path = (tmp_path/"run_2/")
     run2_path.mkdir()
-    
+
     nml["INITIAL_CONDITIONS"]["ininame"] = str(run1_path/"roms_rst.20100101000640.nc")
     nml["TIME_STEPPING"]["ntimes"] = 10
-    
+
     standard_configuration.run(nml, cwd=run2_path)
 
     # Compare restart file contents:
     run1_val = get_summary_value(run1_path,"roms_rst.20100101001320")
     run2_val = get_summary_value(run2_path,"roms_rst.20100101001320")
     assert (run1_val == run2_val)
-    
+
