@@ -2,7 +2,7 @@ import pytest
 from ._helpers import create_test_namelist_dict, ROMSConfiguration, ROMS_ROOT, get_summary_value
 
 
-@pytest.fixture(scope=session)
+@pytest.fixture(scope="session")
 def standard_configuration(tmp_path_factory, read_cppdefs) -> ROMSConfiguration:
     """Generates a session-scoped ROMSConfiguration using the default cppkey set"""
 
