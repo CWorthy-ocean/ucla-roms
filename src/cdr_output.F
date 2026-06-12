@@ -50,10 +50,16 @@
       integer :: ico3_sat_arag, ico3_sat_calc, izsatarag, izsatcalc
       integer :: ico3_sat_arag_idiag, ico3_sat_calc_idiag, izsatarag_idiag, izsatcalc_idiag
 
-      real,allocatable,dimension(:,:,:) :: hALK_tmp
-      real,allocatable,dimension(:,:,:) :: hDIC_tmp
-      real,allocatable,dimension(:,:,:) :: hALK_alt_tmp
-      real,allocatable,dimension(:,:,:) :: hDIC_alt_tmp
+!      real,allocatable,dimension(:,:,:) :: hALK_tmp
+!      real,allocatable,dimension(:,:,:) :: hDIC_tmp
+!      real,allocatable,dimension(:,:,:) :: hALK_alt_tmp
+!      real,allocatable,dimension(:,:,:) :: hDIC_alt_tmp
+
+
+      real,allocatable,dimension(:,:) :: int_z_ALK_tmp
+      real,allocatable,dimension(:,:) :: int_z_DIC_tmp
+      real,allocatable,dimension(:,:) :: int_z_ALK_alt_tmp
+      real,allocatable,dimension(:,:) :: int_z_DIC_alt_tmp
 
       real,allocatable,dimension(:,:,:) :: ALK_source
       real,allocatable,dimension(:,:,:) :: ALK_alt_source
@@ -65,13 +71,17 @@
       real,allocatable,dimension(:,:,:) :: temp_avg
       real,allocatable,dimension(:,:,:) :: salt_avg
       real,allocatable,dimension(:,:,:) :: ALK_avg
-      real,allocatable,dimension(:,:,:) :: hALK_avg
+!      real,allocatable,dimension(:,:,:) :: hALK_avg
+      real,allocatable,dimension(:,:) :: int_z_ALK_avg
       real,allocatable,dimension(:,:,:) :: DIC_avg
-      real,allocatable,dimension(:,:,:) :: hDIC_avg
+!      real,allocatable,dimension(:,:,:) :: hDIC_avg
+      real,allocatable,dimension(:,:) :: int_z_DIC_avg
       real,allocatable,dimension(:,:,:) :: ALK_alt_avg
-      real,allocatable,dimension(:,:,:) :: hALK_alt_avg
+!      real,allocatable,dimension(:,:,:) :: hALK_alt_avg
+      real,allocatable,dimension(:,:) :: int_z_ALK_alt_avg
       real,allocatable,dimension(:,:,:) :: DIC_alt_avg
-      real,allocatable,dimension(:,:,:) :: hDIC_alt_avg
+!      real,allocatable,dimension(:,:,:) :: hDIC_alt_avg
+      real,allocatable,dimension(:,:) :: int_z_DIC_alt_avg
       real,allocatable,dimension(:,:,:) :: pH_avg
       real,allocatable,dimension(:,:,:) :: pH_alt_avg
       real,allocatable,dimension(:,:) :: FG_CO2_avg
@@ -177,24 +187,44 @@
      &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
      &      t_lname(iDIC_alt), t_units(iDIC_alt))
 
-      call add_cdr_output_variable(cdr_varlist, 'hALK',
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
-     &      'thickness-weighted ' // trim(t_lname(iALK)),
+!      call add_cdr_output_variable(cdr_varlist, 'hALK',
+!     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
+!     &      'thickness-weighted ' // trim(t_lname(iALK)),
+!     &      'meters ' // trim(t_units(iALK)))
+
+!      call add_cdr_output_variable(cdr_varlist, 'hDIC',
+!     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
+!     &      'instantaneous thickness-weighted ' // trim(t_lname(iDIC)),
+!     &      'meters ' // trim(t_units(iDIC)))
+
+      call add_cdr_output_variable(cdr_varlist, 'int_z_ALK',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      'depth-integrated ' // trim(t_lname(iALK)),
      &      'meters ' // trim(t_units(iALK)))
 
-      call add_cdr_output_variable(cdr_varlist, 'hDIC',
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
-     &      'instantaneous thickness-weighted ' // trim(t_lname(iDIC)),
+      call add_cdr_output_variable(cdr_varlist, 'int_z_DIC',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      'instantaneous depth-integrated ' // trim(t_lname(iDIC)),
      &      'meters ' // trim(t_units(iDIC)))
 
-      call add_cdr_output_variable(cdr_varlist, 'hALK_ALT_CO2',
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
-     &      'thickness-weighted ' // trim(t_lname(iALK_alt)),
+!      call add_cdr_output_variable(cdr_varlist, 'hALK_ALT_CO2',
+!     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
+!     &      'thickness-weighted ' // trim(t_lname(iALK_alt)),
+!     &      'meters ' // trim(t_units(iALK_alt)))
+
+!      call add_cdr_output_variable(cdr_varlist, 'hDIC_ALT_CO2',
+!     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
+!     &      'instantaneous thickness-weighted ' // trim(t_lname(iDIC_alt)),
+!     &      'meters ' // trim(t_units(iDIC_alt)))
+
+      call add_cdr_output_variable(cdr_varlist, 'int_z_ALK_ALT_CO2',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      'depth-integrated ' // trim(t_lname(iALK_alt)),
      &      'meters ' // trim(t_units(iALK_alt)))
 
-      call add_cdr_output_variable(cdr_varlist, 'hDIC_ALT_CO2',
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
-     &      'instantaneous thickness-weighted ' // trim(t_lname(iDIC_alt)),
+      call add_cdr_output_variable(cdr_varlist, 'int_z_DIC_ALT_CO2',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      'instantaneous depth-integrated ' // trim(t_lname(iDIC_alt)),
      &      'meters ' // trim(t_units(iDIC_alt)))
 
       call add_cdr_output_variable(cdr_varlist, 'pH',
@@ -261,14 +291,14 @@
       endif
 
       if (do_avg) then
-       call add_cdr_output_variable(cdr_varlist, 'hDIC_avg',
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
-     &      'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),
+       call add_cdr_output_variable(cdr_varlist, 'int_z_DIC_avg',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      'time-averaged depth-integrated ' // trim(t_lname(iDIC)),
      &      'meters ' // trim(t_units(iDIC)))
 
-       call add_cdr_output_variable(cdr_varlist, 'hDIC_ALT_CO2_avg',
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
-     &      'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),
+       call add_cdr_output_variable(cdr_varlist, 'int_z_DIC_ALT_CO2_avg',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      'time-averaged depth-integrated ' // trim(t_lname(iDIC)),
      &      'meters ' // trim(t_units(iDIC)))
       endif
 
@@ -391,20 +421,28 @@
         salt_avg(:,:,:)=0
         allocate(ALK_avg(GLOBAL_2D_ARRAY,1:N) )
         ALK_avg(:,:,:)=0
-        allocate(hALK_avg(GLOBAL_2D_ARRAY,1:N) )
-        hALK_avg(:,:,:)=0
+!        allocate(hALK_avg(GLOBAL_2D_ARRAY,1:N) )
+!        hALK_avg(:,:,:)=0
+        allocate(int_z_ALK_avg(GLOBAL_2D_ARRAY) )
+        int_z_ALK_avg(:,:)=0
         allocate(DIC_avg(GLOBAL_2D_ARRAY,1:N) )
         DIC_avg(:,:,:)=0
-        allocate(hDIC_avg(GLOBAL_2D_ARRAY,1:N) )
-        hDIC_avg(:,:,:)=0
+!        allocate(hDIC_avg(GLOBAL_2D_ARRAY,1:N) )
+!        hDIC_avg(:,:,:)=0
+        allocate(int_z_DIC_avg(GLOBAL_2D_ARRAY) )
+        int_z_DIC_avg(:,:)=0
         allocate(ALK_alt_avg(GLOBAL_2D_ARRAY,1:N) )
         ALK_alt_avg(:,:,:)=0
-        allocate(hALK_alt_avg(GLOBAL_2D_ARRAY,1:N) )
-        hALK_alt_avg(:,:,:)=0
+!        allocate(hALK_alt_avg(GLOBAL_2D_ARRAY,1:N) )
+!        hALK_alt_avg(:,:,:)=0
+        allocate(int_z_ALK_alt_avg(GLOBAL_2D_ARRAY) )
+        int_z_ALK_alt_avg(:,:)=0
         allocate(DIC_alt_avg(GLOBAL_2D_ARRAY,1:N) )
         DIC_alt_avg(:,:,:)=0
-        allocate(hDIC_alt_avg(GLOBAL_2D_ARRAY,1:N) )
-        hDIC_alt_avg(:,:,:)=0
+!        allocate(hDIC_alt_avg(GLOBAL_2D_ARRAY,1:N) )
+!        hDIC_alt_avg(:,:,:)=0
+        allocate(int_z_DIC_alt_avg(GLOBAL_2D_ARRAY) )
+        int_z_DIC_alt_avg(:,:)=0
         allocate(pH_avg(GLOBAL_2D_ARRAY,1:N) )
         pH_avg(:,:,:)=0
         allocate(pH_alt_avg(GLOBAL_2D_ARRAY,1:N) )
@@ -442,17 +480,28 @@
         endif
       endif
 
-      ! Always output instantaneous hDIC
-      allocate(hDIC_tmp(GLOBAL_2D_ARRAY,1:N) )
-      hDIC_tmp(:,:,:)=0
-      allocate(hDIC_alt_tmp(GLOBAL_2D_ARRAY,1:N) )
-      hDIC_alt_tmp(:,:,:)=0
+!      ! Always output instantaneous hDIC
+!      allocate(hDIC_tmp(GLOBAL_2D_ARRAY,1:N) )
+!      hDIC_tmp(:,:,:)=0
+!      allocate(hDIC_alt_tmp(GLOBAL_2D_ARRAY,1:N) )
+!      hDIC_alt_tmp(:,:,:)=0
+      ! Always output instantaneous int_z_DIC
+      allocate(int_z_DIC_tmp(GLOBAL_2D_ARRAY) )
+      int_z_DIC_tmp(:,:)=0
+      allocate(int_z_DIC_alt_tmp(GLOBAL_2D_ARRAY) )
+      int_z_DIC_alt_tmp(:,:)=0
+
+!      ! These have to be allocated for multiply_by_thickness call
+!      allocate(hALK_tmp(GLOBAL_2D_ARRAY,1:N) )
+!      hALK_tmp(:,:,:)=0
+!      allocate(hALK_alt_tmp(GLOBAL_2D_ARRAY,1:N) )
+!      hALK_alt_tmp(:,:,:)=0
 
       ! These have to be allocated for multiply_by_thickness call
-      allocate(hALK_tmp(GLOBAL_2D_ARRAY,1:N) )
-      hALK_tmp(:,:,:)=0
-      allocate(hALK_alt_tmp(GLOBAL_2D_ARRAY,1:N) )
-      hALK_alt_tmp(:,:,:)=0
+      allocate(int_z_ALK_tmp(GLOBAL_2D_ARRAY) )
+      int_z_ALK_tmp(:,:)=0
+      allocate(int_z_ALK_alt_tmp(GLOBAL_2D_ARRAY) )
+      int_z_ALK_alt_tmp(:,:)=0
 
 
 
@@ -469,6 +518,7 @@
 
       ! local
       real :: coef
+      integer :: k
 
       if (navg == 0) then
         ! By the time the code enters here, it will have advanced one timestep,
@@ -499,19 +549,39 @@
 
       ALK_avg(:,:,:) = ALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*coef
 
-      hALK_avg(:,:,:) = hALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*Hz(:,:,:)*coef
+!      hALK_avg(:,:,:) = hALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*Hz(:,:,:)*coef
+      int_z_ALK_tmp(:,:) = 0
+      do k=1,nz
+        int_z_ALK_tmp(:,:) = int_z_ALK_tmp(:,:) + t(:,:,k,nnew,iALK)*Hz(:,:,k)
+      enddo
+      int_z_ALK_avg(:,:) = int_z_ALK_avg(:,:)*(1-coef) + int_z_ALK_tmp(:,:)*coef
 
       DIC_avg(:,:,:) = DIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*coef
 
-      hDIC_avg(:,:,:) = hDIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*Hz(:,:,:)*coef
+!      hDIC_avg(:,:,:) = hDIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*Hz(:,:,:)*coef
+      int_z_DIC_tmp(:,:) = 0
+      do k=1,nz
+        int_z_DIC_tmp(:,:) = int_z_DIC_tmp(:,:) + t(:,:,k,nnew,iDIC)*Hz(:,:,k)
+      enddo
+      int_z_DIC_avg(:,:) = int_z_DIC_avg(:,:)*(1-coef) + int_z_DIC_tmp(:,:)*coef
 
       ALK_alt_avg(:,:,:) = ALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*coef
 
-      hALK_alt_avg(:,:,:) = hALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*Hz(:,:,:)*coef
+!      hALK_alt_avg(:,:,:) = hALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*Hz(:,:,:)*coef
+      int_z_ALK_alt_tmp(:,:) = 0
+      do k=1,nz
+        int_z_ALK_alt_tmp(:,:) = int_z_ALK_alt_tmp(:,:) + t(:,:,k,nnew,iALK_alt)*Hz(:,:,k)
+      enddo
+      int_z_ALK_alt_avg(:,:) = int_z_ALK_alt_avg(:,:)*(1-coef) + int_z_ALK_alt_tmp(:,:)*coef
 
       DIC_alt_avg(:,:,:) = DIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*coef
 
-      hDIC_alt_avg(:,:,:) = hDIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*Hz(:,:,:)*coef
+!      hDIC_alt_avg(:,:,:) = hDIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*Hz(:,:,:)*coef
+      int_z_DIC_alt_tmp(:,:) = 0
+      do k=1,nz
+        int_z_DIC_alt_tmp(:,:) = int_z_DIC_alt_tmp(:,:) + t(:,:,k,nnew,iDIC_alt)*Hz(:,:,k)
+      enddo
+      int_z_DIC_alt_avg(:,:) = int_z_DIC_alt_avg(:,:)*(1-coef) + int_z_DIC_alt_tmp(:,:)*coef
 
       pH_avg(:,:,:) = pH_avg(:,:,:)*(1-coef) + marbl_saved_state_3d(:,:,:,iPH)*coef
 
@@ -556,13 +626,26 @@
       ! reset navg_rnd=0 after an output of the average
       implicit none
 
-      hALK_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK)*Hz(i0:i1,j0:j1,:)
+      integer :: k
 
-      hDIC_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC)*Hz(i0:i1,j0:j1,:)
+!      hALK_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK)*Hz(i0:i1,j0:j1,:)
+!
+!      hDIC_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC)*Hz(i0:i1,j0:j1,:)
+!
+!      hALK_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK_alt)*Hz(i0:i1,j0:j1,:)
+!
+!      hDIC_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC_alt)*Hz(i0:i1,j0:j1,:)
 
-      hALK_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK_alt)*Hz(i0:i1,j0:j1,:)
-
-      hDIC_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC_alt)*Hz(i0:i1,j0:j1,:)
+      int_z_ALK_tmp(:,:) = 0
+      int_z_ALK_alt_tmp(:,:) = 0
+      int_z_DIC_tmp(:,:) = 0
+      int_z_DIC_alt_tmp(:,:) = 0
+      do k = 1,nz
+        int_z_ALK_tmp(:,:) = int_z_ALK_tmp(:,:) + t(:,:,k,knew,iALK)*Hz(:,:,k)
+        int_z_DIC_tmp(:,:) = int_z_DIC_tmp(:,:) + t(:,:,k,knew,iDIC)*Hz(:,:,k)
+        int_z_ALK_alt_tmp(:,:) = int_z_ALK_alt_tmp(:,:) + t(:,:,k,knew,iALK_alt)*Hz(:,:,k)
+        int_z_DIC_alt_tmp(:,:) = int_z_DIC_alt_tmp(:,:) + t(:,:,k,knew,iDIC_alt)*Hz(:,:,k)
+      enddo
 
       end subroutine multiply_by_thickness !]
 !----------------------------------------------------------------------
@@ -703,14 +786,22 @@
           ALK_alt_avg(:,:,:)=0
           call ncwrite(ncid,'DIC_ALT_CO2',DIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
           DIC_alt_avg(:,:,:)=0
-          call ncwrite(ncid,'hALK',hALK_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          hALK_avg(:,:,:)=0
-          call ncwrite(ncid,'hDIC_avg',hDIC_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          hDIC_avg(:,:,:)=0
-          call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          hALK_alt_avg(:,:,:)=0
-          call ncwrite(ncid,'hDIC_ALT_CO2_avg',hDIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          hDIC_alt_avg(:,:,:)=0
+!          call ncwrite(ncid,'hALK',hALK_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+!          hALK_avg(:,:,:)=0
+!          call ncwrite(ncid,'hDIC_avg',hDIC_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+!          hDIC_avg(:,:,:)=0
+!          call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+!          hALK_alt_avg(:,:,:)=0
+!          call ncwrite(ncid,'hDIC_ALT_CO2_avg',hDIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+!          hDIC_alt_avg(:,:,:)=0
+          call ncwrite(ncid,'int_z_ALK',int_z_ALK_avg(i0:i1,j0:j1),(/1,1,record/))
+          int_z_ALK_avg(:,:)=0
+          call ncwrite(ncid,'int_z_DIC_avg',int_z_DIC_avg(i0:i1,j0:j1),(/1,1,record/))
+          int_z_DIC_avg(:,:)=0
+          call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_avg(i0:i1,j0:j1),(/1,1,record/))
+          int_z_ALK_alt_avg(:,:)=0
+          call ncwrite(ncid,'int_z_DIC_ALT_CO2_avg',int_z_DIC_alt_avg(i0:i1,j0:j1),(/1,1,record/))
+          int_z_DIC_alt_avg(:,:)=0
           call ncwrite(ncid,'pH',pH_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
           pH_avg(:,:,:)=0
           call ncwrite(ncid,'pH_ALT_CO2',pH_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
@@ -754,8 +845,10 @@
           call ncwrite(ncid,'DIC',t(i0:i1,j0:j1,:,nnew,iDIC),(/1,1,1,record/))
           call ncwrite(ncid,'ALK_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iALK_alt),(/1,1,1,record/))
           call ncwrite(ncid,'DIC_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iDIC_alt),(/1,1,1,record/))
-          call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
-          call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
+!          call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
+!          call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
+          call ncwrite(ncid,'int_z_ALK',int_z_ALK_tmp(i0:i1,j0:j1),(/1,1,record/))
+          call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_tmp(i0:i1,j0:j1),(/1,1,record/))
           call ncwrite(ncid,'pH',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH),(/1,1,1,record/))
           call ncwrite(ncid,'pH_ALT_CO2',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH_alt),(/1,1,1,record/))
           call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_idiag),(/1,1,record/))
@@ -776,10 +869,14 @@
             call ncwrite(ncid,'DIC_ALT_source',DIC_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/))
           endif
        endif
-       ! Always write instantaneous hDIC vars
-       call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
-       call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),
-     &      (/1,1,1,record/))
+!       ! Always write instantaneous hDIC vars
+!       call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
+!       call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),
+!     &      (/1,1,1,record/))
+       ! Always write instantaneous depth-integrated DIC vars
+       call ncwrite(ncid,'int_z_DIC',int_z_DIC_tmp(i0:i1,j0:j1),(/1,1,record/))
+       call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_tmp(i0:i1,j0:j1),
+     &      (/1,1,record/))
 
         ierr=nf90_close (ncid)
 
