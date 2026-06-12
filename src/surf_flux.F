@@ -296,25 +296,25 @@
         start=1; start(3)=record
         if (sflx_avg) then
           if (wrt_smflx) then
-            call ncwrite(ncid,'sustr',sustr_avg,start)
-            call ncwrite(ncid,'svstr',svstr_avg,start)
+            call ncwrite(ncid,'sustr',sustr_avg(1:i1,j0:j1),start)
+            call ncwrite(ncid,'svstr',svstr_avg(i0:i1,1:j1),start)
           endif
           if (wrt_stflx) then
-            call ncwrite(ncid,'shflx',stflx_avg(:,:,1),start)
+            call ncwrite(ncid,'shflx',stflx_avg(i0:i1,j0:j1,1),start)
             if (salinity) then
-             call ncwrite(ncid,'ssflx',stflx_avg(:,:,2),start)
+             call ncwrite(ncid,'ssflx',stflx_avg(i0:i1,j0:j1,2),start)
             endif
          endif
           if (wrt_rstflx) then
             do itrc = 1, nt
              if (rst2diag(itrc)==1) then
              write(varname,'("RSTFLX_tracer",I2.2)') itrc
-             call ncwrite(ncid,varname,rstflx_avg(:,:,itrc),start)
+             call ncwrite(ncid,varname,rstflx_avg(i0:i1,j0:j1,itrc),start)
              endif
             enddo
           endif
           if (wrt_swflx) then
-            call ncwrite(ncid,'swflx',swflx_avg(:,:),start)
+            call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),start)
           endif
         else  ! snapshots
           if (wrt_smflx) then
@@ -331,7 +331,7 @@
             do itrc = 1, nt
              if (rst2diag(itrc)==1) then
              write(varname,'("RSTFLX_tracer",I2.2)') itrc
-             call ncwrite(ncid,varname,rstflx(:,:,itrc),start)
+             call ncwrite(ncid,varname,rstflx(i0:i1,j0:j1,itrc),start)
              endif
             enddo
           endif
