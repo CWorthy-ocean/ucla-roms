@@ -2,7 +2,7 @@ import pytest
 from ._helpers import create_test_namelist_dict, ROMSConfiguration, ROMS_ROOT, get_summary_value
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def standard_configuration(tmp_path_factory, read_cppdefs) -> ROMSConfiguration:
     """Generates a session-scoped ROMSConfiguration using the default cppkey set"""
 
@@ -31,7 +31,7 @@ def read_cppdefs():
     return _read_cppdefs
 
 
-def test_default_cppkeys():
+def test_default_cppkeys(read_cppdefs):
     """Test that the default cpp key set found at $ROMS_ROOT/src/cppdefs.opt is unchanged.
 
     Force the user to manually update a list in this test if the change was expected.
