@@ -9,11 +9,12 @@
       use param, only: itemp, isalt
       use marbl_driver, only:
      &     marbl_saved_state_3d, ialk,
-     &     ialk_alt, idic, idic_alt, nr_marbl_ss_3d,
-     &     vname_marbl_ss_3d
+     &     ialk_alt, idic, idic_alt, nr_marbl_ss_2d, nr_marbl_ss_3d,
+     &     vname_marbl_ss_3d, vname_marbl_ss_2d
       use bgc_shared_vars, only:
-     &     t, bgc_diag_2d, mynode, lm, mm,
-     &     nr_bgc_diag_2d, vname_bgc_diag_2d, t_lname, idx_bgc_diag_2d
+     &     t, bgc_diag_2d, bgc_diag_3d, mynode, lm, mm,
+     &     nr_bgc_diag_2d, vname_bgc_diag_2d, t_lname, idx_bgc_diag_2d,
+     &     nr_bgc_diag_3d, vname_bgc_diag_3d, idx_bgc_diag_3d
       use dimensions, only: i0, i1, j0, j1, nx, ny, nz
       use roms_read_write, only:
      &     dn_tm, dn_xr, dn_yr, dn_zr, eta_rho,
@@ -44,6 +45,11 @@
 
       integer :: navg = 0
       integer :: iPH, iPH_alt, iFG, iFG_alt, iFG_idiag, iFG_alt_idiag
+      integer :: ipCO2SURF, ipCO2SURF_ALT_CO2, iCO3, iCO3_ALT_CO2
+      integer :: ipCO2SURF_idiag, ipCO2SURF_ALT_CO2_idiag, iCO3_idiag, iCO3_ALT_CO2_idiag
+      integer :: ico3_sat_arag, ico3_sat_calc, izsatarag, izsatcalc
+      integer :: ico3_sat_arag_idiag, ico3_sat_calc_idiag, izsatarag_idiag, izsatcalc_idiag
+
       real,allocatable,dimension(:,:,:) :: hALK_tmp
       real,allocatable,dimension(:,:,:) :: hDIC_tmp
       real,allocatable,dimension(:,:,:) :: hALK_alt_tmp
@@ -74,6 +80,15 @@
       real,allocatable,dimension(:,:,:) :: ALK_alt_source_avg
       real,allocatable,dimension(:,:,:) :: DIC_source_avg
       real,allocatable,dimension(:,:,:) :: DIC_alt_source_avg
+      real,allocatable,dimension(:,:) :: pCO2SURF_avg
+      real,allocatable,dimension(:,:) :: pCO2SURF_ALT_CO2_avg
+      real,allocatable,dimension(:,:,:) :: CO3_avg
+      real,allocatable,dimension(:,:,:) :: CO3_ALT_CO2_avg
+      real,allocatable,dimension(:,:,:) :: co3_sat_arag_avg
+      real,allocatable,dimension(:,:,:) :: co3_sat_calc_avg
+      real,allocatable,dimension(:,:) :: zsatarag_avg
+      real,allocatable,dimension(:,:) :: zsatcalc_avg
+
 
       type CStarOutputVariable
         character(len=32)              :: name
@@ -198,6 +213,38 @@
      &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
      &      vname_bgc_diag_2d(2,iFG_alt), vname_bgc_diag_2d(3,iFG_alt))
 
+      call add_cdr_output_variable(cdr_varlist, 'pCO2SURF',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      vname_bgc_diag_2d(2,ipCO2SURF), vname_bgc_diag_2d(3,ipCO2SURF))
+
+      call add_cdr_output_variable(cdr_varlist, 'pCO2SURF_ALT_CO2',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      vname_bgc_diag_2d(2,ipCO2SURF_ALT_CO2), vname_bgc_diag_2d(3,ipCO2SURF_ALT_CO2))
+
+      call add_cdr_output_variable(cdr_varlist, 'CO3',
+     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
+     &      vname_bgc_diag_3d(2,iCO3), vname_bgc_diag_3d(3,iCO3))
+
+      call add_cdr_output_variable(cdr_varlist, 'CO3_ALT_CO2',
+     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
+     &      vname_bgc_diag_3d(2,iCO3_ALT_CO2), vname_bgc_diag_3d(3,iCO3_ALT_CO2))
+
+      call add_cdr_output_variable(cdr_varlist, 'co3_sat_arag',
+     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
+     &      vname_bgc_diag_3d(2,ico3_sat_arag), vname_bgc_diag_3d(3,ico3_sat_arag))
+
+      call add_cdr_output_variable(cdr_varlist, 'co3_sat_calc',
+     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
+     &      vname_bgc_diag_3d(2,ico3_sat_calc), vname_bgc_diag_3d(3,ico3_sat_calc))
+
+      call add_cdr_output_variable(cdr_varlist, 'zsatarag',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      vname_bgc_diag_2d(2,izsatarag), vname_bgc_diag_2d(3,izsatarag))
+
+      call add_cdr_output_variable(cdr_varlist, 'zsatcalc',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      vname_bgc_diag_2d(2,izsatcalc), vname_bgc_diag_2d(3,izsatcalc))
+
       if (cdr_source) then
          call add_cdr_output_variable(cdr_varlist, 'ALK_source',
      &        (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
@@ -271,10 +318,50 @@
            iFG_alt = itot
            iFG_alt_idiag = idx_bgc_diag_2d(iFG_alt)
          endif
+         if (vname_bgc_diag_2d(1,idx)=='pCO2SURF') then
+           ipCO2SURF = itot
+           ipCO2SURF_idiag = idx_bgc_diag_2d(ipCO2SURF)
+         endif
+         if (vname_bgc_diag_2d(1,idx)=='pCO2SURF_ALT_CO2') then
+           ipCO2SURF_ALT_CO2 = itot
+           ipCO2SURF_ALT_CO2_idiag = idx_bgc_diag_2d(ipCO2SURF_ALT_CO2)
+         endif
+         if (vname_bgc_diag_2d(1,idx)=='zsatarag') then
+           izsatarag = itot
+           izsatarag_idiag = idx_bgc_diag_2d(izsatarag)
+         endif
+         if (vname_bgc_diag_2d(1,idx)=='zsatcalc') then
+           izsatcalc = itot
+           izsatcalc_idiag = idx_bgc_diag_2d(izsatcalc)
+         endif
       enddo
 
       itot = 0
       ! Loop over 3D BGC diagnostics...
+      ! ...but use itot as index (to include other diagnostics)
+      do idx=1,nr_bgc_diag_3d
+         itot=itot+1
+         if (vname_bgc_diag_3d(1,idx)=='CO3') then
+           iCO3 = itot
+           iCO3_idiag = idx_bgc_diag_3d(iCO3)
+         endif
+         if (vname_bgc_diag_3d(1,idx)=='CO3_ALT_CO2') then
+           iCO3_ALT_CO2 = itot
+           iCO3_ALT_CO2_idiag = idx_bgc_diag_3d(iCO3_ALT_CO2)
+         endif
+         if (vname_bgc_diag_3d(1,idx)=='co3_sat_arag') then
+           ico3_sat_arag = itot
+           ico3_sat_arag_idiag = idx_bgc_diag_3d(ico3_sat_arag)
+         endif
+         if (vname_bgc_diag_3d(1,idx)=='co3_sat_calc') then
+           ico3_sat_calc = itot
+           ico3_sat_calc_idiag = idx_bgc_diag_3d(ico3_sat_calc)
+         endif
+
+      enddo
+
+      itot = 0
+      ! Loop over 3D MARBL saved state...
       ! ...but use itot as index (to include other diagnostics)
       do idx=1,nr_marbl_ss_3d
          itot=itot+1
@@ -326,6 +413,23 @@
         FG_CO2_avg(:,:)=0
         allocate(FG_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
         FG_ALT_CO2_avg(:,:)=0
+        allocate(pCO2SURF_avg(GLOBAL_2D_ARRAY) )
+        pCO2SURF_avg(:,:)=0
+        allocate(pCO2SURF_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
+        pCO2SURF_ALT_CO2_avg(:,:)=0
+        allocate(zsatarag_avg(GLOBAL_2D_ARRAY) )
+        zsatarag_avg(:,:)=0
+        allocate(zsatcalc_avg(GLOBAL_2D_ARRAY) )
+        zsatcalc_avg(:,:)=0
+        allocate(CO3_avg(GLOBAL_2D_ARRAY,1:N) )
+        CO3_avg(:,:,:)=0
+        allocate(CO3_ALT_CO2_avg(GLOBAL_2D_ARRAY,1:N) )
+        CO3_ALT_CO2_avg(:,:,:)=0
+        allocate(co3_sat_arag_avg(GLOBAL_2D_ARRAY,1:N) )
+        co3_sat_arag_avg(:,:,:)=0
+        allocate(co3_sat_calc_avg(GLOBAL_2D_ARRAY,1:N) )
+        co3_sat_calc_avg(:,:,:)=0
+
         if (cdr_source) then
           allocate(ALK_source_avg(GLOBAL_2D_ARRAY,1:N) )
           ALK_source_avg(:,:,:)=0
@@ -416,6 +520,23 @@
       FG_CO2_avg(:,:) = FG_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,iFG_idiag)*coef
 
       FG_ALT_CO2_avg(:,:) = FG_ALT_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,iFG_alt_idiag)*coef
+
+      pCO2SURF_avg(:,:) = pCO2SURF_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,ipCO2SURF_idiag)*coef
+
+      pCO2SURF_ALT_CO2_avg(:,:) = pCO2SURF_ALT_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,ipCO2SURF_ALT_CO2_idiag)*coef
+
+      zsatarag_avg(:,:) = zsatarag_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,izsatarag_idiag)*coef
+
+      zsatcalc_avg(:,:) = zsatcalc_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,izsatcalc_idiag)*coef
+
+      CO3_avg(:,:,:) = CO3_avg(:,:,:)*(1-coef) + bgc_diag_3d(:,:,:,iCO3_idiag)*coef
+
+      CO3_ALT_CO2_avg(:,:,:) = CO3_ALT_CO2_avg(:,:,:)*(1-coef) + bgc_diag_3d(:,:,:,iCO3_ALT_CO2_idiag)*coef
+
+      co3_sat_arag_avg(:,:,:) = co3_sat_arag_avg(:,:,:)*(1-coef) + bgc_diag_3d(:,:,:,ico3_sat_arag_idiag)*coef
+
+      co3_sat_calc_avg(:,:,:) = co3_sat_calc_avg(:,:,:)*(1-coef) + bgc_diag_3d(:,:,:,ico3_sat_calc_idiag)*coef
+
 
       if (cdr_source) then
         ALK_source_avg(:,:,:) = ALK_source_avg(:,:,:)*(1-coef) + ALK_source(:,:,:)*coef
@@ -598,6 +719,23 @@
           FG_CO2_avg(:,:)=0
           call ncwrite(ncid,'FG_ALT_CO2'  ,FG_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
           FG_ALT_CO2_avg(:,:)=0
+          call ncwrite(ncid,'pCO2SURF'  ,pCO2SURF_avg(i0:i1,j0:j1),(/1,1,record/))
+          pCO2SURF_avg(:,:)=0
+          call ncwrite(ncid,'pCO2SURF_ALT_CO2'  ,pCO2SURF_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
+          pCO2SURF_ALT_CO2_avg(:,:)=0
+          call ncwrite(ncid,'zsatarag'  ,zsatarag_avg(i0:i1,j0:j1),(/1,1,record/))
+          zsatarag_avg(:,:)=0
+          call ncwrite(ncid,'zsatcalc'  ,zsatcalc_avg(i0:i1,j0:j1),(/1,1,record/))
+          zsatcalc_avg(:,:)=0
+          call ncwrite(ncid,'CO3',CO3_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+          CO3_avg(:,:,:)=0
+          call ncwrite(ncid,'CO3_ALT_CO2',CO3_ALT_CO2_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+          CO3_ALT_CO2_avg(:,:,:)=0
+          call ncwrite(ncid,'co3_sat_arag',co3_sat_arag_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+          co3_sat_arag_avg(:,:,:)=0
+          call ncwrite(ncid,'co3_sat_calc',co3_sat_calc_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+          co3_sat_calc_avg(:,:,:)=0
+
           if (cdr_source) then
             call ncwrite(ncid,'ALK_source',ALK_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
             ALK_source_avg(:,:,:)=0
@@ -620,8 +758,17 @@
           call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
           call ncwrite(ncid,'pH',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH),(/1,1,1,record/))
           call ncwrite(ncid,'pH_ALT_CO2',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH_alt),(/1,1,1,record/))
-          call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG),(/1,1,record/))
-          call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt),(/1,1,record/))
+          call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_idiag),(/1,1,record/))
+          call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt_idiag),(/1,1,record/))
+          call ncwrite(ncid,'pCO2SURF'  ,bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_idiag),(/1,1,record/))
+          call ncwrite(ncid,'pCO2SURF_ALT_CO2'  , bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_ALT_CO2_idiag),(/1,1,record/))
+          call ncwrite(ncid,'zsatarag'  ,bgc_diag_2d(i0:i1,j0:j1,izsatarag_idiag),(/1,1,record/))
+          call ncwrite(ncid,'zsatcalc'  ,bgc_diag_2d(i0:i1,j0:j1,izsatcalc_idiag),(/1,1,record/))
+          call ncwrite(ncid,'CO3',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_idiag),(/1,1,1,record/))
+          call ncwrite(ncid,'CO3_ALT_CO2',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_ALT_CO2_idiag),(/1,1,1,record/))
+          call ncwrite(ncid,'co3_sat_arag',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_arag_idiag),(/1,1,1,record/))
+          call ncwrite(ncid,'co3_sat_calc',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_calc_idiag),(/1,1,1,record/))
+
           if (cdr_source) then
             call ncwrite(ncid,'ALK_source',ALK_source(i0:i1,j0:j1,:),(/1,1,1,record/))
             call ncwrite(ncid,'ALK_ALT_source',ALK_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/))
