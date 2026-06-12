@@ -814,7 +814,7 @@
 !--------------------------------------------------------------
 # ifdef SFLX_CORR
 # ifdef SALINITY
-          stflx(i,j,isalt)=stflx(i,j,isalt) -dSSSdt*(
+          stflx(i,j,isalt)= -dSSSdt*(
      &           t(i,j,N,nrhs,isalt) - sss(i,j)  )
 #  ifdef MASKING
      &                                           *rmask(i,j)
@@ -843,12 +843,12 @@
             itrc2read=itrc
          endif
        enddo
-          stflx(i,j,itrc2read)=stflx(i,j,itrc2read) -dCdt*(
+          stflx(i,j,itrc2read)= -dCdt*(
      &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
 #  ifdef MASKING
      &                                           *rmask(i,j)
 #  endif
-          stflx(i,j,itrc2writ)=stflx(i,j,itrc2writ) -dCdt*(
+          stflx(i,j,itrc2writ)= -dCdt*(
      &           t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )
 #  ifdef MASKING
      &                                           *rmask(i,j)
@@ -874,12 +874,12 @@
             itrc2read=itrc
          endif
        enddo
-          stflx(i,j,itrc2read)=stflx(i,j,itrc2read) -dCdt*(
+          stflx(i,j,itrc2read)= -dCdt*(
      &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
 #  ifdef MASKING
      &                                           *rmask(i,j)
 #  endif
-          stflx(i,j,itrc2writ)=stflx(i,j,itrc2writ) -dCdt*(
+          stflx(i,j,itrc2writ)= -dCdt*(
      &           t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )
 #  ifdef MASKING
      &                                           *rmask(i,j)
