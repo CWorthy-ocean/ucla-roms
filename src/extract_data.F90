@@ -78,7 +78,7 @@ module extract_data
   private
 
   real(kind=8),public              :: extract_period = 0._8   ! output period (seconds)
-  character(len=60)        :: extract_file = 'sample_edata.nc'
+  character(len=256)        :: extract_file = 'sample_edata.nc'
   integer(kind=4),public :: nrpf_extract = 0    ! number of records per output file
 
   ! S-coordinate parameters for child grid
