@@ -50,12 +50,15 @@
       integer :: ico3_sat_arag, ico3_sat_calc, izsatarag, izsatcalc
       integer :: ico3_sat_arag_idiag, ico3_sat_calc_idiag, izsatarag_idiag, izsatcalc_idiag
       integer :: ispChl, idiatChl, idiazChl
+      integer :: ispC, idiatC, idiazC
 
       real,allocatable,dimension(:,:) :: int_z_ALK_tmp
       real,allocatable,dimension(:,:) :: int_z_DIC_tmp
       real,allocatable,dimension(:,:) :: int_z_ALK_alt_tmp
       real,allocatable,dimension(:,:) :: int_z_DIC_alt_tmp
       real,allocatable,dimension(:,:) :: Chl_TOT_surf_tmp
+      real,allocatable,dimension(:,:) :: C_TOT_100m_tmp
+      real,allocatable,dimension(:,:,:) :: C_TOT_tmp
 
       real,allocatable,dimension(:,:,:) :: ALK_source
       real,allocatable,dimension(:,:,:) :: ALK_alt_source
@@ -91,6 +94,7 @@
       real,allocatable,dimension(:,:) :: zsatarag_avg
       real,allocatable,dimension(:,:) :: zsatcalc_avg
       real,allocatable,dimension(:,:) :: Chl_TOT_surf_avg
+      real,allocatable,dimension(:,:) :: C_TOT_100m_avg
 
       type CStarOutputVariable
         character(len=32)              :: name
@@ -271,6 +275,10 @@
      &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
      &      'Total surface chlorophyll', 'mg/m3')
 
+      call add_cdr_output_variable(cdr_varlist, 'C_TOT_100m',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      'Total biomass over top 100m', 'mmol/m2')
+
       if (cdr_source) then
          call add_cdr_output_variable(cdr_varlist, 'ALK_source',
      &        (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
@@ -412,9 +420,16 @@
          if (t_vname(idx)=='diazChl') then
            idiazChl = itot
          endif
+         if (t_vname(idx)=='spC') then
+           ispC = itot
+         endif
+         if (t_vname(idx)=='diatC') then
+           idiatC = itot
+         endif
+         if (t_vname(idx)=='diazC') then
+           idiazC = itot
+         endif
       enddo
-
-      write(*,*) "YAY", ispChl, idiatChl, idiazChl
 
       ! put the relevant part of your code here
 
@@ -482,6 +497,8 @@
         co3_sat_calc_avg(:,:,:)=0
         allocate(Chl_TOT_surf_avg(GLOBAL_2D_ARRAY) )
         Chl_TOT_surf_avg(:,:)=0
+        allocate(C_TOT_100m_avg(GLOBAL_2D_ARRAY) )
+        C_TOT_100m_avg(:,:)=0
 
         if (cdr_source) then
           allocate(ALK_source_avg(GLOBAL_2D_ARRAY,1:N) )
@@ -508,6 +525,10 @@
 
         allocate(Chl_TOT_surf_tmp(GLOBAL_2D_ARRAY) )
         Chl_TOT_surf_tmp(:,:)=0
+        allocate(C_TOT_100m_tmp(GLOBAL_2D_ARRAY) )
+        C_TOT_100m_tmp(:,:)=0
+        allocate(C_TOT_tmp(GLOBAL_2D_ARRAY,1:N) )
+        C_TOT_tmp(:,:,:)=0
 
 !      ! These have to be allocated for multiply_by_thickness call
 !      allocate(hALK_tmp(GLOBAL_2D_ARRAY,1:N) )
@@ -627,6 +648,7 @@
 
       Chl_TOT_surf_avg(:,:) = Chl_TOT_surf_avg(:,:)*(1-coef) + Chl_TOT_surf_tmp(:,:)*coef
 
+      C_TOT_100m_avg(:,:) = C_TOT_100m_avg(:,:)*(1-coef) + C_TOT_100m_tmp(:,:)*coef
 
       if (cdr_source) then
         ALK_source_avg(:,:,:) = ALK_source_avg(:,:,:)*(1-coef) + ALK_source(:,:,:)*coef
@@ -713,15 +735,40 @@
       end subroutine calc_cdr_source !]
 
 ! ----------------------------------------------------------------------
-      subroutine calc_Chl_TOT_surf ![
+      subroutine calc_biomass_and_chl ![
       implicit none
 
+      integer :: i,j,k
+      real :: tot_depth, C_tmp, frac
+
+      ! Calcualte surface chlorophyll
       Chl_TOT_surf_tmp(:,:) = t(:,:,nz,nnew,ispChl) + t(:,:,nz,nnew,idiatChl) + t(:,:,nz,nnew,idiazChl)
 
-! bgc_diag_3d(:,:,nz,ispChl_idiag)
-!     &   + bgc_diag_3d(:,:,nz,idiatChl_idiag) + bgc_diag_3d(:,:,nz,idiazChl_idiag)
+      ! Calculate total biomass over top 100m
+      C_TOT_tmp(:,:,:) = t(:,:,:,nnew,ispC) + t(:,:,:,nnew,idiatC) + t(:,:,:,nnew,idiazC)
 
-      end subroutine calc_Chl_TOT_surf
+      do j=1,ny
+        do i=1,nx
+          tot_depth = 0
+          C_tmp = 0
+          k=nz
+          do while ((tot_depth < 100) .and. (k>=1))
+            C_tmp = C_tmp + C_TOT_tmp(i,j,k)*Hz(i,j,k)
+            tot_depth = tot_depth + Hz(i,j,k)
+            k = k-1
+          enddo
+          ! If we went past 100m, subtract off the excess
+          if (tot_depth >= 100) then
+            k = k+1
+            frac = (tot_depth - 100.0) / Hz(i,j,k)
+            C_tmp = C_tmp - frac *C_TOT_tmp(i,j,k)*Hz(i,j,k)
+          endif
+
+          C_TOT_100m_tmp(i,j) =  C_tmp
+        enddo
+      enddo
+
+      end subroutine calc_biomass_and_chl
 ! ----------------------------------------------------------------------
       subroutine create_cdr_output_variables(ncid)
         implicit none
@@ -748,7 +795,7 @@
 
       if (cdr_source) call calc_cdr_source
 
-      call calc_Chl_TOT_surf
+      call calc_biomass_and_chl
 
       if (do_avg) call calc_average
 
@@ -860,6 +907,8 @@
           co3_sat_calc_avg(:,:,:)=0
           call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_avg(i0:i1,j0:j1),(/1,1,record/))
           Chl_TOT_surf_avg(:,:)=0
+          call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_avg(i0:i1,j0:j1),(/1,1,record/))
+          C_TOT_100m_avg(:,:)=0
 
           if (cdr_source) then
             call ncwrite(ncid,'ALK_source',ALK_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
@@ -896,6 +945,7 @@
           call ncwrite(ncid,'co3_sat_arag',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_arag_idiag),(/1,1,1,record/))
           call ncwrite(ncid,'co3_sat_calc',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_calc_idiag),(/1,1,1,record/))
           call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_tmp(i0:i1,j0:j1),(/1,1,record/))
+          call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_tmp(i0:i1,j0:j1),(/1,1,record/))
 
           if (cdr_source) then
             call ncwrite(ncid,'ALK_source',ALK_source(i0:i1,j0:j1,:),(/1,1,1,record/))
