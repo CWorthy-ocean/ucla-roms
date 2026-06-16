@@ -178,7 +178,8 @@
       call read_extraction_objects
       call error_log%abort_check()
 
-      if ((N == N_chd) .and. (theta_s == theta_s_chd) .and. (theta_b == theta_b_chd) .and. (hc == hc_chd)) then
+      if ((N == N_chd) .and. (theta_s == theta_s_chd) .and.
+     &     (theta_b == theta_b_chd) .and. (hc == hc_chd)) then
         parent_child_grid_mismatch = .false.
         if (mynode == 0) then
           mpi_nonexit_warn write(*,*) 'init_extract_data :: Parent ',
@@ -665,7 +666,8 @@
               call interpolate(t(:,:,:,nstp,itemp),obj(i)%vari,coef,ip,jp)
               if (parent_child_grid_mismatch) then
                 do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:),
+     &                  N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
               else
@@ -678,7 +680,8 @@
               call interpolate(t(:,:,:,nstp,isalt),obj(i)%vari,coef,ip,jp)
               if (parent_child_grid_mismatch) then
                 do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:),
+     &                  N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
               else
@@ -692,7 +695,8 @@
               call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
               if (parent_child_grid_mismatch) then
                 do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:),
+     &                  N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
               else
@@ -709,7 +713,8 @@
               call interpolate(Wvl(-1:nx+2,-1:ny+2,1:nz),obj(i)%vari,coef,ip,jp)
               if (parent_child_grid_mismatch) then
                 do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:), obj(i)%vari(j,:),
+     &                  N_chd, obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
               else
@@ -754,7 +759,8 @@
               oname = trim(obj(i)%set)//'_u'//trim(obj(i)%bnd)
               if (parent_child_grid_mismatch) then
                 do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par_u(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd_u(j,:), obj(i)%vari_chd(j,:))
+                  call remap_src_to_grid(N, obj(i)%Hz_par_u(j,:), obj(i)%vari(j,:),
+     &                  N_chd, obj(i)%Hz_chd_u(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
               else
@@ -804,7 +810,8 @@
               oname = trim(obj(i)%set)//'_v'//trim(obj(i)%bnd)
               if (parent_child_grid_mismatch) then
                 do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par_v(j,:), obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd_v(j,:), obj(i)%vari_chd(j,:))
+                  call remap_src_to_grid(N, obj(i)%Hz_par_v(j,:), obj(i)%vari(j,:),
+     &                  N_chd, obj(i)%Hz_chd_v(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
               else
