@@ -61,12 +61,6 @@
 #ifdef MY25_MIXING
          call register_keyword(name="MY_bak_mixing",handler=kwread_my_bak_mixing)
 #endif
-#if defined SFLX_CORR && defined SALINITY
-         call register_keyword(name="SSS_correction",handler=kwread_sss_correction)
-#endif
-#ifdef QCORRECTION
-         call register_keyword(name="SST_correction",handler=kwread_sst_correction)
-#endif
 #endif /* SOLVE3D */
 
 #if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
@@ -754,53 +748,6 @@
       end subroutine kwread_MY_bak_mixing
 #endif
 
-#if defined SFLX_CORR && defined SALINITY
-      subroutine kwread_SSS_correction(unit)
-      implicit none
-
-      integer, intent(in)    :: unit
-      integer :: ios
-
-      read(unit,*,iostat=ios) dSSSdt
-      if (ios /= 0) then
-         call report_read_error('SSS_correction')
-         return
-      end if
-
-      mpi_master_only write(*,'(5x,A,ES10.3,2x,2A/38x,A)')
-     &   'dSSSdt =', dSSSdt,
-     &   'Sea-Surface Salinity correction ',
-     &   'coefficient expressed',
-     &   'kinematically as "piston velocity" [cm/day]'
-
-      dSSSdt = dSSSdt / (100*day2sec)
-
-      end subroutine kwread_SSS_correction
-#endif
-
-# ifdef QCORRECTION
-      subroutine kwread_SST_correction(unit)
-      implicit none
-
-      integer, intent(in)    :: unit
-      integer :: ios
-
-      read(unit,*,iostat=ios) dSSTdt
-      if (ios /= 0) then
-         call report_read_error('SST_correction')
-         return
-      end if
-
-      mpi_master_only write(*,'(5x,A,ES10.3,2x,2A/38x,A)')
-     &   'dSSTdt =', dSSTdt,
-     &   'Sea-Surface Temperature correction ',
-     &   'coefficient expressed',
-     &   'kinematically as "piston velocity" [cm/day]'
-
-      dSSTdt = dSSTdt / (100*day2sec)
-
-      end subroutine kwread_SST_correction
-# endif
 #endif /*SOLVE3D*/
 
 #if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
