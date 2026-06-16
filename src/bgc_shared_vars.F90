@@ -51,8 +51,8 @@ module bgc_shared_vars
        &lossdicdiaz_idx_t, lossdicsp_idx_t, n2oammox_idx_t,&
        &n2osat_idx_t, n2sat_idx_t, nitrif_idx_t, nitrox_idx_t,&
        &o2cons_idx_t, o2prod_idx_t, o2sat_idx_t, otherremin_idx_t,&
-       &par_idx_t, parinc_idx_t, pcaco3prod_idx_t, pco2_idx_t,&
-       &pco2air_idx_t, pco2oc_idx_t, ph_idx_t, photocdiat_idx_t,&
+       &par_idx_t, parinc_idx_t, pcaco3prod_idx_t, xco2_idx_t,&
+       &xco2air_idx_t, xco2oc_idx_t, ph_idx_t, photocdiat_idx_t,&
        &photocdiaz_idx_t, photocsp_idx_t, pironfluxin_idx_t,&
        &pironfluxtosed_idx_t, pironprod_idx_t, pironremin_idx_t,&
        &pocfluxin_idx_t, pocprod_idx_t, pocremin_idx_t,&
@@ -89,11 +89,11 @@ module bgc_shared_vars
   type (ncforce) :: nc_iron = ncforce(&
   &vname='iron', tname='iron_time' ) ! iron forcing
 #ifdef PCO2AIR_FORCING
-  type (ncforce) :: nc_pco2air = ncforce(&
-  &vname='pco2_air',   tname='pco2_time' )
+  type (ncforce) :: nc_xco2air = ncforce(&
+  &vname='xco2_air',   tname='xco2_time' )
 #ifdef MARBL
-  type (ncforce) :: nc_pco2air_alt = ncforce(&
-  &vname='pco2_air_alt',   tname='pco2_time' )
+  type (ncforce) :: nc_xco2air_alt = ncforce(&
+  &vname='xco2_air_alt',   tname='xco2_time' )
 #endif
 #endif
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC

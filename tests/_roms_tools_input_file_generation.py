@@ -193,7 +193,9 @@ def create_rti_bgc_surf(target_dir: Path):
     shape = (len(times), len(lat), len(lon))
 
     data_vars = {}
-    for v in ["pCO2SURF", "NHy_FLUX", "NOx_FLUX", "IRON_FLUX", "dust_FLUX_IN"]:
+    for v in [
+            #"pCO2SURF",
+            "NHy_FLUX", "NOx_FLUX", "IRON_FLUX", "dust_FLUX_IN"]:
         data_vars[v] = xr.DataArray(np.full(shape, np.nan, dtype=np.float32), dims=dims)
 
     ds = xr.Dataset(data_vars, coords=coords)
@@ -203,8 +205,8 @@ def create_rti_bgc_surf(target_dir: Path):
         "regrid_method": "conservative",
     }
 
-    ds["pCO2SURF"].values[:, 0, :]    = [[387.27, 387.54],
-                                          [382.06, 383.74]]
+#    ds["pCO2SURF"].values[:, 0, :]    = [[387.27, 387.54],
+#                                          [382.06, 383.74]]
     ds["NHy_FLUX"].values[:, 0, :]    = [[1.2647e-12, 2.7269e-12],
                                           [1.1239e-12, 2.4886e-12]]
     ds["NOx_FLUX"].values[:, 0, :]    = [[5.5854e-12, 5.9207e-12],

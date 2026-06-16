@@ -31,6 +31,7 @@ def create_roms_inputs(target_dir: Path):
 
     create_roms_physical_surface_forcing(grid, target_dir)
     create_roms_bgc_surface_forcing(grid, target_dir)
+    create_roms_co2_surface_forcing(grid, target_dir)
 
     create_roms_initial_conditions(grid, target_dir)
 
@@ -158,6 +159,17 @@ def create_roms_bgc_surface_forcing(grid, target_dir: Path):
                 "path": target_dir / "fake_bgc_surf_data.nc"},
     )
     rsf.save(target_dir / "example_input_bgc_surface_forcing.nc", group=False)
+
+
+def create_roms_co2_surface_forcing(grid, target_dir: Path):
+    rsf = rt.SurfaceForcing(
+        grid=grid,
+        type="bgc",
+        start_time=dt.datetime(2010, 1, 1),
+        end_time=dt.datetime(2010, 1, 2),
+        source={"name": "MBL_co2"}
+    )
+    rsf.save(target_dir / "example_input_co2_surface_forcing.nc", group=False)
 
 
 def create_roms_initial_conditions(grid, target_dir: Path):
