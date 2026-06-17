@@ -942,7 +942,7 @@ contains
 
   end subroutine init_mpi_buffers !]
 !--------------------------------------------------------
-  subroutine grow_pair(sendbuf,recvbuf,needed) ![
+  subroutine grow_buffers(sendbuf,recvbuf,needed) ![
     ! Ensure a send/recv buffer pair can hold at least "needed" elements,
     ! growing both (and preserving the already-packed send data) if not.
     !
@@ -974,7 +974,7 @@ contains
       allocate(recvbuf(needed))
     endif
 
-  end subroutine grow_pair !]
+  end subroutine grow_buffers !]
 !--------------------------------------------------------
   subroutine pack_buffers(A,nxl,nyl,nzl) ![
     implicit none
@@ -1000,49 +1000,49 @@ contains
 ! Append buffers with data from the array to be send
 !----------------------------------------------
     if (p_w>=0) then
-      call grow_pair(sendW,recvW,szW+szEW)
+      call grow_buffers(sendW,recvW,szW+szEW)
       sendW(szW+1:szW+szEW) = reshape(A(1:hl,jl0:jl1,:),(/szEW/))
       szW = szW+szEW
     endif
 
     if (p_e>=0) then
-      call grow_pair(sendE,recvE,szE+szEW)
+      call grow_buffers(sendE,recvE,szE+szEW)
       sendE(szE+1:szE+szEW) = reshape(A(nxl+1-hl:nxl,jl0:jl1,:),(/szEW/))
       szE = szE+szEW
     endif
 
     if (p_s>=0) then
-      call grow_pair(sendS,recvS,szS+szNS)
+      call grow_buffers(sendS,recvS,szS+szNS)
       sendS(szS+1:szS+szNS) = reshape(A(il0:il1,1:hl,:),(/szNS/))
       szS = szS+szNS
     endif
 
     if (p_n>=0) then
-      call grow_pair(sendN,recvN,szN+szNS)
+      call grow_buffers(sendN,recvN,szN+szNS)
       sendN(szN+1:szN+szNS) = reshape(A(il0:il1,nyl+1-hl:nyl,:),(/szNS/))
       szN = szN+szNS
     endif
 
     if (p_sw>=0) then
-      call grow_pair(sendSW,recvSW,szSW+szCr)
+      call grow_buffers(sendSW,recvSW,szSW+szCr)
       sendSW(szSW+1:szSW+szCr) = reshape(A(1:hl,1:hl,:),(/szCr/))
       szSW = szSW+szCr
     endif
 
     if (p_se>=0) then
-      call grow_pair(sendSE,recvSE,szSE+szCr)
+      call grow_buffers(sendSE,recvSE,szSE+szCr)
       sendSE(szSE+1:szSE+szCr) = reshape(A(nxl+1-hl:nxl,1:hl,:),(/szCr/))
       szSE = szSE+szCr
     endif
 
     if (p_ne>=0) then
-      call grow_pair(sendNE,recvNE,szNE+szCr)
+      call grow_buffers(sendNE,recvNE,szNE+szCr)
       sendNE(szNE+1:szNE+szCr) = reshape(A(nxl+1-hl:nxl,nyl+1-hl:nyl,:),(/szCr/))
       szNE = szNE+szCr
     endif
 
     if (p_nw>=0) then
-      call grow_pair(sendNW,recvNW,szNW+szCr)
+      call grow_buffers(sendNW,recvNW,szNW+szCr)
       sendNW(szNW+1:szNW+szCr) = reshape(A(1:hl,nyl+1-hl:nyl,:),(/szCr/))
       szNW = szNW+szCr
     endif
