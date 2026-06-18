@@ -5,8 +5,8 @@
 #include "cppdefs.opt"
 
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
-      use tracers, only: t_units
-      use param, only: itemp, isalt
+      use tracers, only: t_units, t_vname
+      use param, only: itemp, isalt, nt
       use marbl_driver, only:
      &     marbl_saved_state_3d, ialk,
      &     ialk_alt, idic, idic_alt, nr_marbl_ss_2d, nr_marbl_ss_3d,
@@ -49,17 +49,16 @@
       integer :: ipCO2SURF_idiag, ipCO2SURF_ALT_CO2_idiag, iCO3_idiag, iCO3_ALT_CO2_idiag
       integer :: ico3_sat_arag, ico3_sat_calc, izsatarag, izsatcalc
       integer :: ico3_sat_arag_idiag, ico3_sat_calc_idiag, izsatarag_idiag, izsatcalc_idiag
-
-!      real,allocatable,dimension(:,:,:) :: hALK_tmp
-!      real,allocatable,dimension(:,:,:) :: hDIC_tmp
-!      real,allocatable,dimension(:,:,:) :: hALK_alt_tmp
-!      real,allocatable,dimension(:,:,:) :: hDIC_alt_tmp
-
+      integer :: ispChl, idiatChl, idiazChl
+      integer :: ispC, idiatC, idiazC
 
       real,allocatable,dimension(:,:) :: int_z_ALK_tmp
       real,allocatable,dimension(:,:) :: int_z_DIC_tmp
       real,allocatable,dimension(:,:) :: int_z_ALK_alt_tmp
       real,allocatable,dimension(:,:) :: int_z_DIC_alt_tmp
+      real,allocatable,dimension(:,:) :: Chl_TOT_surf_tmp
+      real,allocatable,dimension(:,:) :: C_TOT_100m_tmp
+      real,allocatable,dimension(:,:,:) :: C_TOT_tmp
 
       real,allocatable,dimension(:,:,:) :: ALK_source
       real,allocatable,dimension(:,:,:) :: ALK_alt_source
@@ -71,16 +70,12 @@
       real,allocatable,dimension(:,:,:) :: temp_avg
       real,allocatable,dimension(:,:,:) :: salt_avg
       real,allocatable,dimension(:,:,:) :: ALK_avg
-!      real,allocatable,dimension(:,:,:) :: hALK_avg
       real,allocatable,dimension(:,:) :: int_z_ALK_avg
       real,allocatable,dimension(:,:,:) :: DIC_avg
-!      real,allocatable,dimension(:,:,:) :: hDIC_avg
       real,allocatable,dimension(:,:) :: int_z_DIC_avg
       real,allocatable,dimension(:,:,:) :: ALK_alt_avg
-!      real,allocatable,dimension(:,:,:) :: hALK_alt_avg
       real,allocatable,dimension(:,:) :: int_z_ALK_alt_avg
       real,allocatable,dimension(:,:,:) :: DIC_alt_avg
-!      real,allocatable,dimension(:,:,:) :: hDIC_alt_avg
       real,allocatable,dimension(:,:) :: int_z_DIC_alt_avg
       real,allocatable,dimension(:,:,:) :: pH_avg
       real,allocatable,dimension(:,:,:) :: pH_alt_avg
@@ -98,7 +93,8 @@
       real,allocatable,dimension(:,:,:) :: co3_sat_calc_avg
       real,allocatable,dimension(:,:) :: zsatarag_avg
       real,allocatable,dimension(:,:) :: zsatcalc_avg
-
+      real,allocatable,dimension(:,:) :: Chl_TOT_surf_avg
+      real,allocatable,dimension(:,:) :: C_TOT_100m_avg
 
       type CStarOutputVariable
         character(len=32)              :: name
@@ -275,6 +271,14 @@
      &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
      &      vname_bgc_diag_2d(2,izsatcalc), vname_bgc_diag_2d(3,izsatcalc))
 
+      call add_cdr_output_variable(cdr_varlist, 'Chl_TOT_surf',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      'Total surface chlorophyll', 'mg/m3')
+
+      call add_cdr_output_variable(cdr_varlist, 'C_TOT_100m',
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),
+     &      'Total biomass over top 100m', 'mmol/m2')
+
       if (cdr_source) then
          call add_cdr_output_variable(cdr_varlist, 'ALK_source',
      &        (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),
@@ -387,7 +391,6 @@
            ico3_sat_calc = itot
            ico3_sat_calc_idiag = idx_bgc_diag_3d(ico3_sat_calc)
          endif
-
       enddo
 
       itot = 0
@@ -400,6 +403,31 @@
          endif
          if (vname_marbl_ss_3d(1,idx)=='MARBL_PH_3D_ALT_CO2') then
            iPH_alt = itot
+         endif
+      enddo
+
+      itot = 0
+      ! Loop over 3D BGC diagnostics...
+      ! ...but use itot as index (to include other diagnostics)
+      do idx=1,nt
+         itot=itot+1
+         if (t_vname(idx)=='spChl') then
+           ispChl = itot
+         endif
+         if (t_vname(idx)=='diatChl') then
+           idiatChl = itot
+         endif
+         if (t_vname(idx)=='diazChl') then
+           idiazChl = itot
+         endif
+         if (t_vname(idx)=='spC') then
+           ispC = itot
+         endif
+         if (t_vname(idx)=='diatC') then
+           idiatC = itot
+         endif
+         if (t_vname(idx)=='diazC') then
+           idiazC = itot
          endif
       enddo
 
@@ -467,6 +495,10 @@
         co3_sat_arag_avg(:,:,:)=0
         allocate(co3_sat_calc_avg(GLOBAL_2D_ARRAY,1:N) )
         co3_sat_calc_avg(:,:,:)=0
+        allocate(Chl_TOT_surf_avg(GLOBAL_2D_ARRAY) )
+        Chl_TOT_surf_avg(:,:)=0
+        allocate(C_TOT_100m_avg(GLOBAL_2D_ARRAY) )
+        C_TOT_100m_avg(:,:)=0
 
         if (cdr_source) then
           allocate(ALK_source_avg(GLOBAL_2D_ARRAY,1:N) )
@@ -490,6 +522,13 @@
       int_z_DIC_tmp(:,:)=0
       allocate(int_z_DIC_alt_tmp(GLOBAL_2D_ARRAY) )
       int_z_DIC_alt_tmp(:,:)=0
+
+        allocate(Chl_TOT_surf_tmp(GLOBAL_2D_ARRAY) )
+        Chl_TOT_surf_tmp(:,:)=0
+        allocate(C_TOT_100m_tmp(GLOBAL_2D_ARRAY) )
+        C_TOT_100m_tmp(:,:)=0
+        allocate(C_TOT_tmp(GLOBAL_2D_ARRAY,1:N) )
+        C_TOT_tmp(:,:,:)=0
 
 !      ! These have to be allocated for multiply_by_thickness call
 !      allocate(hALK_tmp(GLOBAL_2D_ARRAY,1:N) )
@@ -607,6 +646,9 @@
 
       co3_sat_calc_avg(:,:,:) = co3_sat_calc_avg(:,:,:)*(1-coef) + bgc_diag_3d(:,:,:,ico3_sat_calc_idiag)*coef
 
+      Chl_TOT_surf_avg(:,:) = Chl_TOT_surf_avg(:,:)*(1-coef) + Chl_TOT_surf_tmp(:,:)*coef
+
+      C_TOT_100m_avg(:,:) = C_TOT_100m_avg(:,:)*(1-coef) + C_TOT_100m_tmp(:,:)*coef
 
       if (cdr_source) then
         ALK_source_avg(:,:,:) = ALK_source_avg(:,:,:)*(1-coef) + ALK_source(:,:,:)*coef
@@ -641,10 +683,10 @@
       int_z_DIC_tmp(:,:) = 0
       int_z_DIC_alt_tmp(:,:) = 0
       do k = 1,nz
-        int_z_ALK_tmp(:,:) = int_z_ALK_tmp(:,:) + t(:,:,k,knew,iALK)*Hz(:,:,k)
-        int_z_DIC_tmp(:,:) = int_z_DIC_tmp(:,:) + t(:,:,k,knew,iDIC)*Hz(:,:,k)
-        int_z_ALK_alt_tmp(:,:) = int_z_ALK_alt_tmp(:,:) + t(:,:,k,knew,iALK_alt)*Hz(:,:,k)
-        int_z_DIC_alt_tmp(:,:) = int_z_DIC_alt_tmp(:,:) + t(:,:,k,knew,iDIC_alt)*Hz(:,:,k)
+        int_z_ALK_tmp(:,:) = int_z_ALK_tmp(:,:) + t(:,:,k,nnew,iALK)*Hz(:,:,k)
+        int_z_DIC_tmp(:,:) = int_z_DIC_tmp(:,:) + t(:,:,k,nnew,iDIC)*Hz(:,:,k)
+        int_z_ALK_alt_tmp(:,:) = int_z_ALK_alt_tmp(:,:) + t(:,:,k,nnew,iALK_alt)*Hz(:,:,k)
+        int_z_DIC_alt_tmp(:,:) = int_z_DIC_alt_tmp(:,:) + t(:,:,k,nnew,iDIC_alt)*Hz(:,:,k)
       enddo
 
       end subroutine multiply_by_thickness !]
@@ -693,6 +735,41 @@
       end subroutine calc_cdr_source !]
 
 ! ----------------------------------------------------------------------
+      subroutine calc_biomass_and_chl ![
+      implicit none
+
+      integer :: i,j,k
+      real :: tot_depth, C_tmp, frac
+
+      ! Calcualte surface chlorophyll
+      Chl_TOT_surf_tmp(:,:) = t(:,:,nz,nnew,ispChl) + t(:,:,nz,nnew,idiatChl) + t(:,:,nz,nnew,idiazChl)
+
+      ! Calculate total biomass over top 100m
+      C_TOT_tmp(:,:,:) = t(:,:,:,nnew,ispC) + t(:,:,:,nnew,idiatC) + t(:,:,:,nnew,idiazC)
+
+      do j=1,ny
+        do i=1,nx
+          tot_depth = 0
+          C_tmp = 0
+          k=nz
+          do while ((tot_depth < 100) .and. (k>=1))
+            C_tmp = C_tmp + C_TOT_tmp(i,j,k)*Hz(i,j,k)
+            tot_depth = tot_depth + Hz(i,j,k)
+            k = k-1
+          enddo
+          ! If we went past 100m, subtract off the excess
+          if (tot_depth >= 100) then
+            k = k+1
+            frac = (tot_depth - 100.0) / Hz(i,j,k)
+            C_tmp = C_tmp - frac *C_TOT_tmp(i,j,k)*Hz(i,j,k)
+          endif
+
+          C_TOT_100m_tmp(i,j) =  C_tmp
+        enddo
+      enddo
+
+      end subroutine calc_biomass_and_chl
+! ----------------------------------------------------------------------
       subroutine create_cdr_output_variables(ncid)
         implicit none
         integer, intent(in) :: ncid
@@ -717,6 +794,8 @@
       implicit none
 
       if (cdr_source) call calc_cdr_source
+
+      call calc_biomass_and_chl
 
       if (do_avg) call calc_average
 
@@ -826,6 +905,10 @@
           co3_sat_arag_avg(:,:,:)=0
           call ncwrite(ncid,'co3_sat_calc',co3_sat_calc_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
           co3_sat_calc_avg(:,:,:)=0
+          call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_avg(i0:i1,j0:j1),(/1,1,record/))
+          Chl_TOT_surf_avg(:,:)=0
+          call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_avg(i0:i1,j0:j1),(/1,1,record/))
+          C_TOT_100m_avg(:,:)=0
 
           if (cdr_source) then
             call ncwrite(ncid,'ALK_source',ALK_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
@@ -861,6 +944,8 @@
           call ncwrite(ncid,'CO3_ALT_CO2',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_ALT_CO2_idiag),(/1,1,1,record/))
           call ncwrite(ncid,'co3_sat_arag',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_arag_idiag),(/1,1,1,record/))
           call ncwrite(ncid,'co3_sat_calc',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_calc_idiag),(/1,1,1,record/))
+          call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_tmp(i0:i1,j0:j1),(/1,1,record/))
+          call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_tmp(i0:i1,j0:j1),(/1,1,record/))
 
           if (cdr_source) then
             call ncwrite(ncid,'ALK_source',ALK_source(i0:i1,j0:j1,:),(/1,1,1,record/))
