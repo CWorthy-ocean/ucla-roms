@@ -62,7 +62,7 @@ ntrc_bio = 0                   ! Number of BGC tracers
 ! Previously set in `roms.in`
 !---------------------------
 ininame = "my_initial_conditions.nc" ! Initial conditions (IC) file path
-nrrec = 1                            ! Number of time records in IC file
+nrrec = 2                            ! Number of time records in IC file
 /
 
 &FORCING_FILES                                                 !roms_read_write.F
