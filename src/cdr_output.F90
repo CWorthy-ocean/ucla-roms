@@ -5,6 +5,7 @@ module cdr_output
 #include "cppdefs.opt"
 
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+      use namelist_open_mod, only: open_namelist_file
       use tracers, only: t_units, t_vname
       use param, only: itemp, isalt, nt
       use marbl_driver, only:&
@@ -41,66 +42,66 @@ module cdr_output
   &wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
 
       character(len=10) :: module_name = "cdr_output"
-      real    :: output_time = 0
-      integer :: record ! to trigger the first file creation
+      real(kind=8)    :: output_time = 0
+      integer(kind=4) :: record ! to trigger the first file creation
 
-      integer,dimension(6) :: date
+      integer(kind=4),dimension(6) :: date
       character(len=15)  :: datestr
-      integer :: month_at_prev_timestep
-      real :: avg_begin_time, avg_end_time
+      integer(kind=4) :: month_at_prev_timestep
+      real(kind=8) :: avg_begin_time, avg_end_time
 
-      integer :: navg = 0
-      integer :: iPH, iPH_alt, iFG, iFG_alt, iFG_idiag, iFG_alt_idiag
-      integer :: ipCO2SURF, ipCO2SURF_ALT_CO2, iCO3, iCO3_ALT_CO2
-      integer :: ipCO2SURF_idiag, ipCO2SURF_ALT_CO2_idiag, iCO3_idiag, iCO3_ALT_CO2_idiag
-      integer :: ico3_sat_arag, ico3_sat_calc, izsatarag, izsatcalc
-      integer :: ico3_sat_arag_idiag, ico3_sat_calc_idiag, izsatarag_idiag, izsatcalc_idiag
-      integer :: ispChl, idiatChl, idiazChl
-      integer :: ispC, idiatC, idiazC
+      integer(kind=4) :: navg = 0
+      integer(kind=4) :: iPH, iPH_alt, iFG, iFG_alt, iFG_idiag, iFG_alt_idiag
+      integer(kind=4) :: ipCO2SURF, ipCO2SURF_ALT_CO2, iCO3, iCO3_ALT_CO2
+      integer(kind=4) :: ipCO2SURF_idiag, ipCO2SURF_ALT_CO2_idiag, iCO3_idiag, iCO3_ALT_CO2_idiag
+      integer(kind=4) :: ico3_sat_arag, ico3_sat_calc, izsatarag, izsatcalc
+      integer(kind=4) :: ico3_sat_arag_idiag, ico3_sat_calc_idiag, izsatarag_idiag, izsatcalc_idiag
+      integer(kind=4) :: ispChl, idiatChl, idiazChl
+      integer(kind=4) :: ispC, idiatC, idiazC
 
-      real,allocatable,dimension(:,:) :: int_z_ALK_tmp
-      real,allocatable,dimension(:,:) :: int_z_DIC_tmp
-      real,allocatable,dimension(:,:) :: int_z_ALK_alt_tmp
-      real,allocatable,dimension(:,:) :: int_z_DIC_alt_tmp
-      real,allocatable,dimension(:,:) :: Chl_TOT_surf_tmp
-      real,allocatable,dimension(:,:) :: C_TOT_100m_tmp
-      real,allocatable,dimension(:,:,:) :: C_TOT_tmp
+      real(kind=8),allocatable,dimension(:,:) :: int_z_ALK_tmp
+      real(kind=8),allocatable,dimension(:,:) :: int_z_DIC_tmp
+      real(kind=8),allocatable,dimension(:,:) :: int_z_ALK_alt_tmp
+      real(kind=8),allocatable,dimension(:,:) :: int_z_DIC_alt_tmp
+      real(kind=8),allocatable,dimension(:,:) :: Chl_TOT_surf_tmp
+      real(kind=8),allocatable,dimension(:,:) :: C_TOT_100m_tmp
+      real(kind=8),allocatable,dimension(:,:,:) :: C_TOT_tmp
 
-      real,allocatable,dimension(:,:,:) :: ALK_source
-      real,allocatable,dimension(:,:,:) :: ALK_alt_source
-      real,allocatable,dimension(:,:,:) :: DIC_source
-      real,allocatable,dimension(:,:,:) :: DIC_alt_source
+      real(kind=8),allocatable,dimension(:,:,:) :: ALK_source
+      real(kind=8),allocatable,dimension(:,:,:) :: ALK_alt_source
+      real(kind=8),allocatable,dimension(:,:,:) :: DIC_source
+      real(kind=8),allocatable,dimension(:,:,:) :: DIC_alt_source
 
       ! Needed for averaging
-      real,allocatable,dimension(:,:) :: zeta__avg
-      real,allocatable,dimension(:,:,:) :: temp_avg
-      real,allocatable,dimension(:,:,:) :: salt_avg
-      real,allocatable,dimension(:,:,:) :: ALK_avg
-      real,allocatable,dimension(:,:) :: int_z_ALK_avg
-      real,allocatable,dimension(:,:,:) :: DIC_avg
-      real,allocatable,dimension(:,:) :: int_z_DIC_avg
-      real,allocatable,dimension(:,:,:) :: ALK_alt_avg
-      real,allocatable,dimension(:,:) :: int_z_ALK_alt_avg
-      real,allocatable,dimension(:,:,:) :: DIC_alt_avg
-      real,allocatable,dimension(:,:) :: int_z_DIC_alt_avg
-      real,allocatable,dimension(:,:,:) :: pH_avg
-      real,allocatable,dimension(:,:,:) :: pH_alt_avg
-      real,allocatable,dimension(:,:) :: FG_CO2_avg
-      real,allocatable,dimension(:,:) :: FG_ALT_CO2_avg
-      real,allocatable,dimension(:,:,:) :: ALK_source_avg
-      real,allocatable,dimension(:,:,:) :: ALK_alt_source_avg
-      real,allocatable,dimension(:,:,:) :: DIC_source_avg
-      real,allocatable,dimension(:,:,:) :: DIC_alt_source_avg
-      real,allocatable,dimension(:,:) :: pCO2SURF_avg
-      real,allocatable,dimension(:,:) :: pCO2SURF_ALT_CO2_avg
-      real,allocatable,dimension(:,:,:) :: CO3_avg
-      real,allocatable,dimension(:,:,:) :: CO3_ALT_CO2_avg
-      real,allocatable,dimension(:,:,:) :: co3_sat_arag_avg
-      real,allocatable,dimension(:,:,:) :: co3_sat_calc_avg
-      real,allocatable,dimension(:,:) :: zsatarag_avg
-      real,allocatable,dimension(:,:) :: zsatcalc_avg
-      real,allocatable,dimension(:,:) :: Chl_TOT_surf_avg
-      real,allocatable,dimension(:,:) :: C_TOT_100m_avg
+      real(kind=8),allocatable,dimension(:,:) :: zeta__avg
+      real(kind=8),allocatable,dimension(:,:,:) :: temp_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: salt_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: ALK_avg
+      real(kind=8),allocatable,dimension(:,:) :: int_z_ALK_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: DIC_avg
+      real(kind=8),allocatable,dimension(:,:) :: int_z_DIC_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: ALK_alt_avg
+      real(kind=8),allocatable,dimension(:,:) :: int_z_ALK_alt_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: DIC_alt_avg
+      real(kind=8),allocatable,dimension(:,:) :: int_z_DIC_alt_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: pH_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: pH_alt_avg
+      real(kind=8),allocatable,dimension(:,:) :: FG_CO2_avg
+      real(kind=8),allocatable,dimension(:,:) :: FG_ALT_CO2_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: ALK_source_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: ALK_alt_source_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: DIC_source_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: DIC_alt_source_avg
+      real(kind=8),allocatable,dimension(:,:) :: pCO2SURF_avg
+      real(kind=8),allocatable,dimension(:,:) :: pCO2SURF_ALT_CO2_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: CO3_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: CO3_ALT_CO2_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: co3_sat_arag_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: co3_sat_calc_avg
+      real(kind=8),allocatable,dimension(:,:) :: zsatarag_avg
+      real(kind=8),allocatable,dimension(:,:) :: zsatcalc_avg
+      real(kind=8),allocatable,dimension(:,:) :: Chl_TOT_surf_avg
+      real(kind=8),allocatable,dimension(:,:) :: C_TOT_100m_avg
 
   type CStarOutputVariable
     character(len=32)              :: name
@@ -300,17 +301,17 @@ contains
       &'alt DIC source from CDR module','mmol/s')
     endif
 
-    if (wrt_cdr_avg) then
-      call add_cdr_output_variable(cdr_varlist, 'hDIC_avg',&
-      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
-      &'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),&
-      &'meters ' // trim(t_units(iDIC)))
-
-      call add_cdr_output_variable(cdr_varlist, 'hDIC_ALT_CO2_avg',&
-      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
-      &'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),&
-      &'meters ' // trim(t_units(iDIC)))
-    endif
+!    if (wrt_cdr_avg) then
+!      call add_cdr_output_variable(cdr_varlist, 'hDIC_avg',&
+!      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+!      &'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),&
+!      &'meters ' // trim(t_units(iDIC)))
+!
+!      call add_cdr_output_variable(cdr_varlist, 'hDIC_ALT_CO2_avg',&
+!      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+!      &'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),&
+!      &'meters ' // trim(t_units(iDIC)))
+!    endif
 
   end subroutine define_cdr_output_variables
 
@@ -883,11 +884,11 @@ contains
 !          hDIC_alt_avg(:,:,:)=0
           call ncwrite(ncid,'int_z_ALK',int_z_ALK_avg(i0:i1,j0:j1),(/1,1,record/))
           int_z_ALK_avg(:,:)=0
-          call ncwrite(ncid,'int_z_DIC_avg',int_z_DIC_avg(i0:i1,j0:j1),(/1,1,record/))
+          call ncwrite(ncid,'int_z_DIC',int_z_DIC_avg(i0:i1,j0:j1),(/1,1,record/))
           int_z_DIC_avg(:,:)=0
           call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_avg(i0:i1,j0:j1),(/1,1,record/))
           int_z_ALK_alt_avg(:,:)=0
-          call ncwrite(ncid,'int_z_DIC_ALT_CO2_avg',int_z_DIC_alt_avg(i0:i1,j0:j1),(/1,1,record/))
+          call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_avg(i0:i1,j0:j1),(/1,1,record/))
           int_z_DIC_alt_avg(:,:)=0
           call ncwrite(ncid,'pH',pH_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
           pH_avg(:,:,:)=0
@@ -940,6 +941,8 @@ contains
 !          call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
           call ncwrite(ncid,'int_z_ALK',int_z_ALK_tmp(i0:i1,j0:j1),(/1,1,record/))
           call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_tmp(i0:i1,j0:j1),(/1,1,record/))
+          call ncwrite(ncid,'int_z_DIC',int_z_DIC_tmp(i0:i1,j0:j1),(/1,1,record/))
+          call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_tmp(i0:i1,j0:j1),(/1,1,record/))
           call ncwrite(ncid,'pH',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH),(/1,1,1,record/))
           call ncwrite(ncid,'pH_ALT_CO2',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH_alt),(/1,1,1,record/))
           call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_idiag),(/1,1,record/))
