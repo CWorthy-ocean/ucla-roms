@@ -455,6 +455,16 @@ contains
       &'so the timestep MARBL will actually use is ', marbl_timestep, ' seconds.'
     end if
 
+    if (marbl_timestep > 10800.0) then
+      write(error_info, *)&
+        &"MARBL timestep is ", marbl_timestep,&
+        &", but the maximum allowable value ",&
+        &"is 10800.0."
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info=error_info)
+    endif
+
   end subroutine marbldrv_configure_tracers
 
 
