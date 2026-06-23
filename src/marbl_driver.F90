@@ -70,7 +70,8 @@ module marbl_driver
   integer(kind=4)                     :: idx            ! Looping variable
 
 !     MARBL config:
-  integer(kind=4), public :: marbl_timestep_ratio = 1
+  integer(kind=4), public :: marbl_timestep_ratio
+  real(kind=8), public :: marbl_timestep = 3600.0
   character(len=256), public :: marbl_config_file='marbl_in'
   character(len=32), public ::&
   &marbl_tracers_to_write(40) = ""
@@ -80,7 +81,7 @@ module marbl_driver
 #endif
 
   namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
-  &marbl_timestep_ratio, marbl_tracers_to_write&
+  &marbl_timestep, marbl_tracers_to_write&
 #ifdef MARBL_DIAGS
   &, marbl_diagnostics_to_write
 #endif
@@ -438,6 +439,21 @@ contains
 !     5. Save carbonate system indices
 !     ---------------------------------------------------------
     call get_tracer_indices(t_vname)
+
+!     6. Set MARBL update frequency
+!     ---------------------------------------------------------
+      if (mod(marbl_timestep,dt) /= 0) then
+        write(error_info, *)&
+        &'The ROMS timestep'&
+        &,marbl_timestep&
+        &,' does not evenly divide the MARBL timestep '&
+        &,dt, '.'
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info=error_info)
+      else
+        marbl_timestep_ratio = int(marbl_timestep / dt)
+      endif
 
   end subroutine marbldrv_configure_tracers
 

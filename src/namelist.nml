@@ -285,7 +285,7 @@ nrpf_avg_dia = 10           ! Number of time records per BGC diagnostics file
 marbl_config_file = "marbl_in"  ! MARBL configuration file
 marbl_tracers_to_write = ""     ! MARBL tracers to include in BGC output
 marbl_diagnostics_to_write = "" ! MARBL diagnostics to include in BGC output
-marbl_timestep_ratio = 1        ! If "N", solve BGC equations every N model steps
+marbl_timestep = 3600.0           ! If "N", solve BGC equations every N model steps
 /
 
 !================================================================================
