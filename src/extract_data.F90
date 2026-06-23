@@ -281,14 +281,15 @@ contains
 
     do i = 1,nobj
       np = obj(i)%np
-      if (np>0) then
+!      if (np>0) then
 
 #ifdef PARALLEL_IO
         write(*,*) "YAY0"
-        !call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,LLm_chd,MMm_chd,N_chd,obj(i)%bnd)
+        call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,LLm_chd,MMm_chd,N_chd,obj(i)%bnd)
         write(*,*) "YAY1"
 #endif
 
+      if (np>0) then
         preamb = trim(obj(i)%obj_name)
         lpre = len(trim(preamb))-1
         allocate(character(len=lpre) :: obj(i)%pre)
@@ -373,6 +374,10 @@ contains
     real(kind=8),dimension(:,:),allocatable :: object
     integer(kind=4)               :: n1,n2,i0,i1,lstr
     integer(kind=4) ierr,sidx,sidx2
+
+    ! This should be very quick to read even serially, so for simplicity
+    ! just have each rank open the file and read what it needs.
+    pio_gtype='----'
 
     if (mynode==0) then
       write(*,'(7x,2A)')&
