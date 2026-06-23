@@ -7,7 +7,7 @@ module surf_flux
 
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
-  use param, only: mynode, lm, mm, ocean_grid_comm
+  use param, only: mynode, lm, mm, ocean_grid_comm, nt
   use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u&
   &, ds_xr, ds_yr, ds_xu, ds_yv
   use roms_read_write, only:&
@@ -17,7 +17,7 @@ module surf_flux
   use netcdf, only:&
   &nf90_global, nf90_write, nf90_nofill,&
   &nf90_open, nf90_put_att, nf90_close, nf90_set_fill
-  use scalars, only: dt, iic, tdays, time
+  use scalars, only: dt, iic, nt, tdays, time, day2sec
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_file_is_open
