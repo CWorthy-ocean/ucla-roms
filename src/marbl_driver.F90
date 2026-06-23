@@ -442,18 +442,18 @@ contains
 
 !     6. Set MARBL update frequency
 !     ---------------------------------------------------------
-      if (mod(marbl_timestep,dt) /= 0) then
-        write(error_info, *)&
-        &'The ROMS timestep'&
-        &,marbl_timestep&
-        &,' does not evenly divide the MARBL timestep '&
-        &,dt, '.'
-        call error_log%raise_global(&
-        &context=module_name//"/"//sr_name,&
-        &info=error_info)
-      else
-        marbl_timestep_ratio = int(marbl_timestep / dt)
-      endif
+
+    if (mynode==printnode) then
+      print *, 'The requested MARBL timestep is', marbl_timestep, '.'
+    end if
+
+    marbl_timestep_ratio = max(1,int(marbl_timestep / dt))
+    marbl_timestep = dt * marbl_timestep_ratio
+
+    if (mynode==printnode) then
+      print *, 'The ROMS timestep must divide the MARBL timestep evenly, ',&
+      &'so the timestep MARBL will actually use is ', marbl_timestep, ' seconds.'
+    end if
 
   end subroutine marbldrv_configure_tracers
 
