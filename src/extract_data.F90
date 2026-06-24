@@ -45,17 +45,17 @@ module extract_data
   use grid, only: angler, rmask, umask, vmask
   use dimensions, only: nx, ny, nz
   use nc_read_write, only: nccreate, ncread, ncwrite
-  use roms_read_write, only: findstr, create_file
+  use roms_read_write, only: findstr, create_file, output_root_name, append_date_node
   use netcdf, only:&
   &nf90_double, nf90_write, nf90_nowrite,&
   &nf90_put_att, nf90_inq_varid, nf90_open, nf90_close,&
   &nf90_inquire, nf90_inquire_variable, nf90_inquire_dimension,&
-  &nf90_get_att
+  &nf90_get_att, nf90_clobber, nf90_64bit_data, nf90_create
   use tracers, only: t, t_vname, t_lname, t_units  ! need to get names of tracers
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u, hz_v
   use scalars, only: dt, knew, nstp, time
   use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
-  &nt_passive, mynode, lm, mm, N
+  &nt_passive, mynode, lm, mm, N, ocean_grid_comm
   use scoord, only: theta_s, theta_b, hc
   use calc_pflx_mod, only:  up, vp
   use basic_output, only: &
@@ -75,7 +75,7 @@ module extract_data
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_extract
   use pio, only : PIO_openfile, PIO_closefile, PIO_write
 #endif
-
+  use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
   ! TODO: add averaging
 
 
@@ -85,6 +85,7 @@ module extract_data
   real(kind=8),public              :: extract_period = 0._8   ! output period (seconds)
   character(len=256)        :: extract_file = 'sample_edata.nc'
   integer(kind=4),public :: nrpf_extract = 0    ! number of records per output file
+  character(len=256)        :: extract_root_name
 
   ! S-coordinate parameters for child grid
   integer(kind=4)  :: LLm_chd     = 0
@@ -96,7 +97,7 @@ module extract_data
   logical, public  :: do_extract
 
   namelist /EXTRACT_DATA_SETTINGS/ extract_period, extract_file,&
-  &nrpf_extract, LLm_chd, MMm_chd, N_chd, theta_s_chd, theta_b_chd, hc_chd, do_extract
+  &nrpf_extract, LLm_chd, MMm_chd, N_chd, theta_s_chd, theta_b_chd, hc_chd, do_extract, extract_root_name
 
   integer(kind=4),parameter        :: edat_prec = nf90_double  ! Precision of output variables (nf90_float/nf90_doub
 
@@ -284,9 +285,7 @@ contains
 !      if (np>0) then
 
 #ifdef PARALLEL_IO
-        write(*,*) "YAY0"
         call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,LLm_chd,MMm_chd,N_chd,obj(i)%bnd)
-        write(*,*) "YAY1"
 #endif
 
       if (np>0) then
@@ -548,6 +547,7 @@ contains
       obj%np = end_idx - start_idx + 1
     else ! object not in local range
       obj%np = 0
+      obj%start_idx = 1
     endif
 
     if (obj%np>0) then
@@ -940,6 +940,32 @@ contains
     !local
     integer(kind=4) :: ncid,ierr
 
+#ifdef PARALLEL_IO
+    if (mynode == 0) then
+
+      fname=trim(adjustl(extract_root_name)) // '_bry'
+
+!      write(*,*) "YAY ", fname
+
+      call append_date_node(fname,nonode=.true.)
+
+!      write(*,*) "YAY ", fname
+
+    ierr = nf90_create(trim(fname), ior(nf90_clobber, nf90_64bit_data), ncid)
+
+!      write(*,*) "YAY MADE "
+    endif
+!    call create_file('_ext',fname,nonode=.true.)
+
+!    ierr=nf90_open(fname,nf90_write,ncid)
+!
+!    call create_edata_vars(ncid)
+!
+!    ierr = nf90_close(ncid)
+!    endif
+!    call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+!    call MPI_Barrier(ocean_grid_comm, ierr)
+#else
     call create_file('_ext',fname)
 
     ierr=nf90_open(fname,nf90_write,ncid)
@@ -948,6 +974,7 @@ contains
     call error_log%abort_check()
 
     ierr = nf90_close(ncid)
+#endif
 
   end subroutine create_edata_file !]
 ! ----------------------------------------------------------------------
