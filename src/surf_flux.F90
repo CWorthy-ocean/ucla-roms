@@ -12,7 +12,7 @@ module surf_flux
   &, ds_xr, ds_yr, ds_xu, ds_yv
   use roms_read_write, only:&
   &ncforce, dn_tm, dn_xr, dn_xu, dn_yr&
-  &, dn_yv, create_file
+  &, dn_yv, create_file, store_string_att
   use nc_read_write, only: nccreate, ncwrite
   use netcdf, only:&
   &nf90_global, nf90_write, nf90_nofill,&
@@ -76,9 +76,18 @@ module surf_flux
 
   ! Sea-surface temperature (SST) and salinity (SSS) data for restoring
   real(kind=8),public,allocatable,dimension(:,:) :: sst
-  real(kind=8),public :: dSSTdt = 0._8
+  ! real(kind=8),public :: dSSTdt = 0._8
   real(kind=8),public,allocatable,dimension(:,:) :: sss
-  real(kind=8),public :: dSSSdt = 0._8                           ! input units (cm/day)
+  ! real(kind=8),public :: dSSSdt = 0._8                           ! input units (cm/day)
+
+  ! Sea-surface DIC (sDIC) and ALK (sALK) data for restoring
+  real(kind=8),public,allocatable,dimension(:,:) :: sDIC
+  real(kind=8),public,allocatable,dimension(:,:) :: sALK
+! real(kind=8),public :: dCdt                                  ! input units (cm/day)
+
+  ! Surface fluxes of restoring tracer type variables (rho-points)
+  real,public,allocatable,dimension(:,:,:) :: rstflx
+  real,allocatable,dimension(:,:,:):: rstflx_avg
 
   ! Netcdf outputting:
   real(kind=8)    :: output_time = 0
@@ -89,7 +98,7 @@ module surf_flux
   public init_arrays_surf_flx
   public set_surf_field_corr
   public wrt_sflux
-  public apply_surf_field_corr
+!  public apply_surf_field_corr
   public read_nml_surf_flx
 
 contains
@@ -147,8 +156,7 @@ contains
 end subroutine read_nml_surf_flx
 
 subroutine init_arrays_surf_flx ![
-  use error_handling_mod, only: error_log
-  use scalars, only: init, nt
+  use scalars, only: init
   implicit none
 
   ! local
