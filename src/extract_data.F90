@@ -50,7 +50,7 @@ module extract_data
   &nf90_double, nf90_write, nf90_nowrite,&
   &nf90_put_att, nf90_inq_varid, nf90_open, nf90_close,&
   &nf90_inquire, nf90_inquire_variable, nf90_inquire_dimension,&
-  &nf90_get_att, nf90_clobber, nf90_64bit_data, nf90_create
+  &nf90_get_att, nf90_clobber, nf90_64bit_data, nf90_create, nf90_def_dim
   use tracers, only: t, t_vname, t_lname, t_units  ! need to get names of tracers
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u, hz_v
   use scalars, only: dt, knew, nstp, time
@@ -119,6 +119,11 @@ module extract_data
   logical :: parent_child_grid_mismatch = .true.
 
   real(kind=8)    :: otime=0   ! time since last output
+
+  logical, dimension(4) :: child_bnds = .false.
+  integer, dimension(4) :: child_dims_t
+  integer, dimension(4) :: child_dims_u
+  integer, dimension(4) :: child_dims_v
 
   type extract_object  ! contains all information for a data_extraction object
 
@@ -445,6 +450,17 @@ contains
         obj(iobj)%set = objname
       endif
 
+      ! Determine which child boundaries we are saving
+      if (obj(iobj)%bnd == '_north') then
+        child_bnds(1) = .true.
+      else if (obj(iobj)%bnd == '_south') then
+        child_bnds(2) = .true.
+      else if (obj(iobj)%bnd == '_east') then
+        child_bnds(3) = .true.
+      else if (obj(iobj)%bnd == '_west') then
+        child_bnds(4) = .true.
+      endif
+
 !      ierr = nf90_get_att(ncid,iobj,'output_period',extract_period)
 !      call error_log%check_netcdf_status(netcdf_status=ierr,&
 !      &info="error when getting `output_period` attribute",&
@@ -502,6 +518,7 @@ contains
       endif
       deallocate(object)
     enddo
+
     ierr = nf90_close(ncid)
 
   end subroutine read_extraction_objects !]
@@ -938,22 +955,59 @@ contains
     character(len=99),intent(out) :: fname
 
     !local
-    integer(kind=4) :: ncid,ierr
+    integer(kind=4) :: ncid,ierr,dimid, varid
+    integer(kind=4) :: bnd
 
 #ifdef PARALLEL_IO
     if (mynode == 0) then
 
       fname=trim(adjustl(extract_root_name)) // '_bry'
 
-!      write(*,*) "YAY ", fname
-
       call append_date_node(fname,nonode=.true.)
 
-!      write(*,*) "YAY ", fname
+      ierr = nf90_create(trim(fname), ior(nf90_clobber, nf90_64bit_data), ncid)
 
-    ierr = nf90_create(trim(fname), ior(nf90_clobber, nf90_64bit_data), ncid)
+!      ierr=nf90_open(fname,nf90_write,ncid)
 
-!      write(*,*) "YAY MADE "
+      ierr=nf90_def_dim(ncid, 'time', 0, dimid)
+      ierr=nf90_def_dim(ncid,'xi_rho', LLm_chd, dimid)
+      ierr=nf90_def_dim(ncid,'xi_u',   (LLm_chd-1),   dimid)
+      ierr=nf90_def_dim(ncid,'eta_rho',MMm_chd,dimid)
+      ierr=nf90_def_dim(ncid,'eta_v',  (MMm_chd-1),  dimid)
+      ierr=nf90_def_dim(ncid,'s_rho', N_chd, dimid)
+
+      varid = nccreate(ncid,'bry_time',(/dn_tm/),(/0/), nf90_double)
+      ierr = nf90_put_att(ncid,varid,'long_name',"Time since 2000")
+      ierr = nf90_put_att(ncid,varid,'units',"days")
+
+      do bnd=1,4
+        if (child_bnds(bnd)) then
+
+!      varid = nccreate(ncid,'zeta',(/dn_xr,dn_yr,dn_tm/),(/LLm_chd,MMm_chd,0/), nf90_double)
+!      ierr = nf90_put_att(ncid,varid,'long_name',"free-surface elevation")
+!      ierr = nf90_put_att(ncid,varid,'units',"meter")
+
+!      varid = nccreate(ncid,'ubar',(/dn_xu,dn_yr,dn_tm/),(/(LLm_chd-1),MMm_chd,0/), nf90_double)
+!      ierr = nf90_put_att(ncid,varid,'long_name',"")
+!      ierr = nf90_put_att(ncid,varid,'units',"meter")
+
+!        if (obj(i)%ubar) call create_var(ncid,obj(i),'ubar',dname,dsize,indxUb)
+!        if (obj(i)%vbar) call create_var(ncid,obj(i),'vbar',dname,dsize,indxVb)
+!        if (obj(i)%temp) call create_var(ncid,obj(i),'temp',dname3,dsize3,indxT)
+!#ifdef SALINITY
+!        if (obj(i)%salt) call create_var(ncid,obj(i),'salt',dname3,dsize3,indxS)
+!#endif
+!        if (obj(i)%u)    call create_var(ncid,obj(i),'u',dname3,dsize3,indxU)
+!        if (obj(i)%v)    call create_var(ncid,obj(i),'v',dname3,dsize3,indxV)
+!        if (obj(i)%w)    call create_var(ncid,obj(i),'w',dname3,dsize3,indxW)
+!        if (obj(i)%up)   call create_var(ncid,obj(i),'up',dname,dsize)
+!        if (obj(i)%vp)   call create_var(ncid,obj(i),'vp',dname,dsize)
+!        if (obj(i)%bgc) then
+!          do indt=isalt+nt_passive+1,NT
+!            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
+!          enddo
+
+      ierr = nf90_close(ncid)
     endif
 !    call create_file('_ext',fname,nonode=.true.)
 
