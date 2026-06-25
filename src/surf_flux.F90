@@ -49,14 +49,14 @@ module surf_flux
 
   ! Diagnose restoring surface fluxes  :
 #if defined(MARBL)
-  integer, parameter :: rst2diag(nt) = [0,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+  integer, parameter :: rst2diag(nt) = (/ 0,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 /)
 #elif defined(BIOLOGY_BEC2)
-  integer, parameter :: rst2diag(nt) = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+  integer, parameter :: rst2diag(nt) = (/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 /)
 #else
 #  ifdef SALINITY
-     integer, parameter :: rst2diag(nt) = [0,0]
+     integer, parameter :: rst2diag(nt) = (/ 0,0 /)
 #  else
-     integer, parameter :: rst2diag(nt) = [0]
+     integer, parameter :: rst2diag(nt) = (/0 /)
 #  endif
 #endif
 
