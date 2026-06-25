@@ -257,7 +257,7 @@ contains
     use surf_flux, only:&
     &sDIC, sALK, dCdt
 #endif
-    use tracers, only: t
+    use tracers, only: t, itands, t_vname
     use grid, only: rmask, umask, vmask
     use mixing, only: ieast, isalt, itemp, iwest, jnorth, jsouth
     use ocean_vars, only: u, v
