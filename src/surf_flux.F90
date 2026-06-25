@@ -173,36 +173,36 @@ subroutine init_arrays_surf_flx ![
   allocate( stflx  (GLOBAL_2D_ARRAY,nt) ); stflx=init
   allocate( srflx  (GLOBAL_2D_ARRAY)    ); srflx=init
   allocate( swflx  (GLOBAL_2D_ARRAY)    ); swflx = 0
-!#if defined(Q_CORRECTION) && !defined(ANA_SST)
-!  allocate( sst(GLOBAL_2D_ARRAY)        ); sst=init
-!  allocate(nc_sst%vdata(GLOBAL_2D_ARRAY,2) )
-!#endif
-!
-!#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
-!  allocate( sss(GLOBAL_2D_ARRAY)        ); sss=init
-!  allocate(nc_sss%vdata(GLOBAL_2D_ARRAY,2) )
-!
-!  call store_string_att(surf_forcing_strings,'<surf_flux.F>')
-!  call store_string_att(surf_forcing_strings,'dSSSdt=')
-!  write (string, "(F9.6)") dSSSdt*(100.*day2sec)                 ! convert number to string...
-!  call store_string_att(surf_forcing_strings,string)
-!  call store_string_att(surf_forcing_strings,'dSSSdt_units')
-!  call store_string_att(surf_forcing_strings,'cm/day')
-!#endif
-!
-!#if defined CFLX_CORR && defined MARBL
-!  allocate( sDIC(GLOBAL_2D_ARRAY)        ); sDIC=init
-!  allocate(nc_sDIC%vdata(GLOBAL_2D_ARRAY,2) )
-!  allocate( sALK(GLOBAL_2D_ARRAY)        ); sALK=init
-!  allocate(nc_sALK%vdata(GLOBAL_2D_ARRAY,2) )
-!
-!  call store_string_att(surf_forcing_strings,'<surf_flux.F>')
-!  call store_string_att(surf_forcing_strings,'dCdt=')
-!  write (string, "(F9.6)") dCdt*(100.*day2sec)                 ! convert number to string...
-!  call store_string_att(surf_forcing_strings,string)
-!  call store_string_att(surf_forcing_strings,'dCdt_units')
-!  call store_string_att(surf_forcing_strings,'cm/day')
-!#endif
+#if defined(Q_CORRECTION) && !defined(ANA_SST)
+  allocate( sst(GLOBAL_2D_ARRAY)        ); sst=init
+  allocate(nc_sst%vdata(GLOBAL_2D_ARRAY,2) )
+#endif
+
+#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
+  allocate( sss(GLOBAL_2D_ARRAY)        ); sss=init
+  allocate(nc_sss%vdata(GLOBAL_2D_ARRAY,2) )
+
+  call store_string_att(surf_forcing_strings,'<surf_flux.F>')
+  call store_string_att(surf_forcing_strings,'dSSSdt=')
+  write (string, "(F9.6)") dSSSdt*(100.*day2sec)                 ! convert number to string...
+  call store_string_att(surf_forcing_strings,string)
+  call store_string_att(surf_forcing_strings,'dSSSdt_units')
+  call store_string_att(surf_forcing_strings,'cm/day')
+#endif
+
+#if defined CFLX_CORR && defined MARBL
+  allocate( sDIC(GLOBAL_2D_ARRAY)        ); sDIC=init
+  allocate(nc_sDIC%vdata(GLOBAL_2D_ARRAY,2) )
+  allocate( sALK(GLOBAL_2D_ARRAY)        ); sALK=init
+  allocate(nc_sALK%vdata(GLOBAL_2D_ARRAY,2) )
+
+  call store_string_att(surf_forcing_strings,'<surf_flux.F>')
+  call store_string_att(surf_forcing_strings,'dCdt=')
+  write (string, "(F9.6)") dCdt*(100.*day2sec)                 ! convert number to string...
+  call store_string_att(surf_forcing_strings,string)
+  call store_string_att(surf_forcing_strings,'dCdt_units')
+  call store_string_att(surf_forcing_strings,'cm/day')
+#endif
 
   if (sflx_avg) then
     allocate(sustr_avg(1:i1,j0:j1))
