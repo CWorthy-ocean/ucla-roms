@@ -6,7 +6,8 @@ module sponge_tune
 #include "cppdefs.opt"
 
   use calc_pflx_mod, only: calc_pflx
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use netcdf, only:&
   &nf90_noerr, nf90_write, nf90_inq_varid,&
   &nf90_open, nf90_put_att, nf90_close
@@ -88,20 +89,9 @@ contains
     character(len=20) :: sr_name = "read_nml_sponge_tun"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=SPONGE_TUNE_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read SPONGE_TUNE_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=SPONGE_TUNE_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'SPONGE_TUNE_SETTINGS', module_name//'/'//sr_name, msg)
 
     record = nrpf_sponge
 

@@ -214,42 +214,24 @@ contains
     use insert_node_mod, only: insert_node
     use param, only: mynode, nsize
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
+    use namelist_open_mod, only: check_nml_read
+    use namelist_buffer_mod, only: namelist_lines
     use utils_mod, only: lenstr
     integer(kind=4) ::  namelist_unit, ios, lstr, testunit
     character(len=25) :: sr_name = "read_nml_roms_read_write"
     character(len=512) :: msg = ""
     character(len=max_name_size) :: fname
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 !     Read the "SIMULATION_NAME_SETTINGS", "INITIAL_CONDITIONS" section of the namelist file
-    read (unit=namelist_unit, nml=SIMULATION_NAME_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read SIMULATION_NAME_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
+    read (namelist_lines, nml=SIMULATION_NAME_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'SIMULATION_NAME_SETTINGS', module_name//'/'//sr_name, msg)
     output_root_name=trim(output_root_name)
     instant_root_name = output_root_name
     mpi_master_only write(*,'(/1x,A)') trim(title)
 !==========================================================================================
 #ifndef ANA_INITIAL
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=INITIAL_CONDITIONS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read INITIAL_CONDITIONS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
+    read (namelist_lines, nml=INITIAL_CONDITIONS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'INITIAL_CONDITIONS', module_name//'/'//sr_name, msg)
 
 
     lstr = lenstr(inifile)
@@ -275,17 +257,8 @@ contains
 
 #endif /*ANA_INITIAL*/
 !==========================================================================================
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=FORCING_FILES, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read FORCING_FILES'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
+    read (namelist_lines, nml=FORCING_FILES, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'FORCING_FILES', module_name//'/'//sr_name, msg)
 !     Reset forcing storage.
 
     force_files = ''
@@ -356,7 +329,6 @@ contains
     end do      ! filename loop
 !================================================================================
 
-    close(namelist_unit)
 
   end subroutine read_nml_roms_read_write
   subroutine init_output_indices  ![

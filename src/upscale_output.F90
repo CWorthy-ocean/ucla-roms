@@ -11,7 +11,8 @@ module upscale_output
   use dimensions, only: i0, i1, j0, j1, inode, jnode, npx, npy, ds_xr, ds_yr, ds_zr
   use param, only: jnorth, jsouth, ieast, iwest, nsub_e, nsub_x, np_xi, np_eta&
   &,mynode, ocean_grid_comm
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use error_handling_mod, only: error_log
   use tracers, only: t_units
   use grid, only: latr, lonr
@@ -122,20 +123,9 @@ contains
     character(len=20) :: sr_name = "read_nml_upscale"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=UPSCALE_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read UPSCALE_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=UPSCALE_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'UPSCALE_SETTINGS', module_name//'/'//sr_name, msg)
     record_uscl = nrpf_uscl
     otime = output_period_uscl
   end subroutine read_nml_upscale

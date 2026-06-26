@@ -4,7 +4,8 @@ module diagnostics
   ! Define options in diagnostics.opt
 
 #include "cppdefs.opt"
-  use namelist_open_mod, only : open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use error_handling_mod, only: error_log
   use netcdf, only:&
   &nf90_double, nf90_global, nf90_nofill,&
@@ -175,19 +176,12 @@ contains
   subroutine read_nml_diagnostics
 !     Read the "DIAGNOSTICS_SETTINGS" section of the namelist file
 
-    integer(kind=4) ::  namelist_unit, ios
+    integer(kind=4) ::  ios
     character(len=21) :: sr_name = "read_nml_diagnostics"
+    character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=DIAGNOSTICS_SETTINGS, iostat=ios)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context=module_name//'/'//sr_name, info=&
-      &'could not read DIAGNOSTICS_SETTINGS section of namelist file'&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=DIAGNOSTICS_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'DIAGNOSTICS_SETTINGS', module_name//'/'//sr_name, msg)
     record = nrpf_diag
   end subroutine read_nml_diagnostics
 

@@ -91,26 +91,16 @@ contains
 !     ----------------------------------------------------------------------
   subroutine read_nml_tracers
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
+    use namelist_open_mod, only: check_nml_read
+    use namelist_buffer_mod, only: namelist_lines
 !     Read the "TS_OUTPUT_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_tracers"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=TS_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read TS_OUTPUT_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=TS_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'TS_OUTPUT_SETTINGS', module_name//'/'//sr_name, msg)
 
   end subroutine read_nml_tracers
 

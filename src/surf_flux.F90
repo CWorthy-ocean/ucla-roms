@@ -6,7 +6,8 @@ module surf_flux
   ! Devin Dollery & Jeroen Molemaker (2020-2022)
 
 #include "cppdefs.opt"
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use param, only: mynode, lm, mm, ocean_grid_comm
   use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u&
   &, ds_xr, ds_yr, ds_xu, ds_yv
@@ -102,36 +103,17 @@ contains
     character(len=20) :: sr_name = "read_nml_surf_flx"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=SURF_FLX_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read SURF_FLX_OUTPUT_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
+    read (namelist_lines, nml=SURF_FLX_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'SURF_FLX_OUTPUT_SETTINGS', module_name//'/'//sr_name, msg)
 
 #if defined SFLX_CORR && defined SALINITY
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=SSS_CORRECTION, iostat=ios, iomsg=msg)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read SSS_CORRECTION'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
+    read (namelist_lines, nml=SSS_CORRECTION, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'SSS_CORRECTION', module_name//'/'//sr_name, msg)
 #endif
 
 #ifdef QCORRECTION
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=SST_CORRECTION, iostat=ios, iomsg=msg)
+    read (namelist_lines, nml=SST_CORRECTION, iostat=ios, iomsg=msg)
     call error_log%raise_global(&
     &context = module_name//'/'//sr_name,&
     &info='could not read SST_CORRECTION'&
@@ -142,7 +124,6 @@ contains
 #endif
 
 
-  close(namelist_unit)
   record = nrpf_sflx
 end subroutine read_nml_surf_flx
 

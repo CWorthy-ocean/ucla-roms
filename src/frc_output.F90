@@ -4,7 +4,8 @@ module frc_output
 ! or thermodynamically forced.
 
 #include "cppdefs.opt"
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use error_handling_mod, only: error_log
   use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x,&
   &lm, mm, isalt, itemp, mynode, ocean_grid_comm
@@ -86,20 +87,9 @@ contains
     character(len=20) :: sr_name = "read_nml_frc_output"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=FRC_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read FRC_OUTPUT_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=FRC_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'FRC_OUTPUT_SETTINGS', module_name//'/'//sr_name, msg)
     record = nrpf_frc
   end subroutine read_nml_frc_output
 

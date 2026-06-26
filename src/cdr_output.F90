@@ -6,7 +6,8 @@ module cdr_output
 
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
   use cdr_frc, only: cdr_source, cdr_forcing_3d
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use tracers, only: t_units
   use param, only: itemp, isalt
   use marbl_driver, only:&
@@ -105,17 +106,10 @@ contains
 
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_cdr_output_nml"
+    character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=CDR_OUTPUT_SETTINGS, iostat=ios)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context=module_name//'/'//sr_name, info=&
-      &'could not read CDR_OUTPUT_SETTINGS section of namelist file'&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=CDR_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'CDR_OUTPUT_SETTINGS', module_name//'/'//sr_name, msg)
     record = nrpf_cdr
   end subroutine read_cdr_output_nml
 

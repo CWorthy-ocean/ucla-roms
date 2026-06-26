@@ -8,7 +8,8 @@ module river_frc
   ! in the direction of the unmasked cell.
 
 #include "cppdefs.opt"
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use roms_read_write, only: ncforce, frcfiles, set_frc_data
   use nc_read_write, only: nccreate, ncread, ncwrite
   use scalars, only: nt
@@ -116,18 +117,10 @@ contains
 
     integer(kind=4) ::  namelist_unit, ios
     character(len=15) :: sr_name = "read_nml_river"
+    character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=RIVER_FRC_SETTINGS, iostat=ios)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context=module_name//"/"//sr_name,&
-      &info=&
-      &"could not read RIVER_FRC_SETTINGS section of namelist file"&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=RIVER_FRC_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'RIVER_FRC_SETTINGS', module_name//'/'//sr_name, msg)
 
   end subroutine read_nml_river
 

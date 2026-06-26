@@ -46,27 +46,17 @@ contains
 !     ----------------------------------------------------------------------
   subroutine read_nml_scoord
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
+    use namelist_open_mod, only: check_nml_read
+    use namelist_buffer_mod, only: namelist_lines
     implicit none
 !     Read the "SCOORD_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_scoord"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=S_COORD, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read S_COORD'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=S_COORD, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'S_COORD', module_name//'/'//sr_name, msg)
 
     mpi_master_only write(*,'(2(/4x,A,F10.7,2x,A))')&
     &'theta_s =', theta_s, 'vertical S-coordinate surface',&

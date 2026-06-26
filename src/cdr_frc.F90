@@ -9,7 +9,8 @@ module cdr_frc
 #include "cppdefs.opt"
 
 #if defined MARBL && defined CDR_FORCING
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use roms_read_write, only:&
   &ncforce, ncforce3d, cdr_frc_opt,&
   &set_frc_data, store_string_att
@@ -177,18 +178,10 @@ contains
 !     Read the "CDR_FRC_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=17) :: sr_name = "read_nml_cdr_frc"
+    character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=CDR_FRC_SETTINGS, iostat=ios)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info=&
-      &'could not read CDR_FRC_SETTINGS section of namelist file'&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=CDR_FRC_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'CDR_FRC_SETTINGS', module_name//'/'//sr_name, msg)
 
   end subroutine read_nml_cdr_frc
 

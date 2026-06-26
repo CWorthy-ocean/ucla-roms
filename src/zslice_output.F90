@@ -2,7 +2,8 @@ module zslice_output
   ! Collection of zslice variables for output
 
 #include "cppdefs.opt"
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use grid, only: rmask
   use param, only: lm, mm, mynode, ocean_grid_comm
   use roms_mpi, only: exchange_xxx
@@ -74,20 +75,9 @@ contains
     character(len=20) :: sr_name = "read_nml_zslice"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=ZSLICE_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read ZSLICE_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=ZSLICE_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'ZSLICE_SETTINGS', module_name//'/'//sr_name, msg)
     record = nrpf_zslice
   end subroutine read_nml_zslice
 

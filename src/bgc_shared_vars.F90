@@ -5,7 +5,8 @@ module bgc_shared_vars
 
 #include "cppdefs.opt"
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use error_handling_mod, only: error_log
   use param, only: mynode, nt_passive, nt_bgc, lm, mm, nz
   use roms_read_write, only: ncforce
@@ -274,18 +275,9 @@ contains
     character(len=13) :: sr_name = "read_nml_bgc"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=BGC_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read BGC_SETTINGS section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
+    read (namelist_lines, nml=BGC_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'BGC_SETTINGS', module_name//'/'//sr_name, msg)
     nbgc_flx = 0+ &
 #ifdef PCO2AIR_FORCING
     &+1&
@@ -294,7 +286,6 @@ contains
     &+1 &
 #endif
     & + nbgc_flx
-    close(namelist_unit)
 
   end subroutine read_nml_bgc
 

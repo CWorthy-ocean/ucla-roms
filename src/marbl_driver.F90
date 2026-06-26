@@ -160,29 +160,19 @@ contains
 
   subroutine read_nml_marbl
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
+    use namelist_open_mod, only: check_nml_read
+    use namelist_buffer_mod, only: namelist_lines
 !     Read the "MARBL_BIOGEOCHEMISTRY_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios, tidx
     character(len=21) :: sr_name = "read_nml_marbl"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=MARBL_BIOGEOCHEMISTRY_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read MARBL_BIOGEOCHEMISTRY_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
+    read (namelist_lines, nml=MARBL_BIOGEOCHEMISTRY_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'MARBL_BIOGEOCHEMISTRY_SETTINGS', module_name//'/'//sr_name, msg)
     mpi_master_only write(*,'(1x,A,15x,A)')&
     &'MARBL config file',trim(marbl_config_file)
 
-    close(namelist_unit)
 
   end subroutine read_nml_marbl
 

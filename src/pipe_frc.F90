@@ -11,7 +11,8 @@ module pipe_frc
 #include "cppdefs.opt"
 ! we have no PIPE_SOURCE flag here anymore, since we are moving away from cpp flags.
 !     Variables still need to be visible within code even when pipes are not used.
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use dimensions, only: i0, i1, j0, j1, nx, ny, grdname
   use roms_read_write, only:&
   &ncforce, pipe_frc_opt,&
@@ -68,17 +69,10 @@ contains
 
     integer(kind=4) ::  namelist_unit, ios
     character(len=14) :: sr_name = "read_nml_pipe"
+    character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=PIPE_FRC_SETTINGS, iostat=ios)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context=module_name//'/'//sr_name, info=&
-      &'could not read PIPE_FRC_SETTINGS section of namelist file'&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=PIPE_FRC_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'PIPE_FRC_SETTINGS', module_name//'/'//sr_name, msg)
 
   end subroutine read_nml_pipe
 

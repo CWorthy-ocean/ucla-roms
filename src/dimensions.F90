@@ -59,7 +59,8 @@ contains
   subroutine read_nml_grid
     use param, only: mynode, nsize
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
+    use namelist_open_mod, only: check_nml_read
+    use namelist_buffer_mod, only: namelist_lines
     use utils_mod, only: lenstr
 !     Read the "GRID_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios, lstr
@@ -68,19 +69,9 @@ contains
     character(len=20) :: sr_name = "read_nml_grid"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=GRID_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read GRID_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
+    read (namelist_lines, nml=GRID_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'GRID_SETTINGS', module_name//'/'//sr_name, msg)
 
 
     lstr = lenstr(grdname)
@@ -101,7 +92,6 @@ contains
     mpi_master_only write(*,'(1x,2A)')&
     &'grid file: ', trim(grdname)
 
-    close(namelist_unit)
 
 
   end subroutine read_nml_grid

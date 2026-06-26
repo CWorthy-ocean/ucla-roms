@@ -70,7 +70,9 @@ contains
     use scoord, only: read_nml_scoord !SCOORD_SETTINGS
 #endif
     use diag_mod, only: read_nml_stdout_diag
+    use namelist_open_mod, only: load_namelist_buffer
     implicit none
+    call load_namelist_buffer   ! read file once + broadcast; all read_nml_* read from the buffer
     call read_nml_param
 #ifndef ANA_GRID
     call read_nml_grid

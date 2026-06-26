@@ -4,7 +4,8 @@ module basic_output
   ! his, avg, and rst files
 
 #include "cppdefs.opt"
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use netcdf, only:&
   &nf90_double, nf90_int, nf90_global, nf90_write,&
   &nf90_inq_varid, nf90_put_var, nf90_put_att, nf90_open, nf90_close,&
@@ -172,20 +173,9 @@ contains                  !]
 #endif
 
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=BASIC_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read BASIC_OUTPUT_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=BASIC_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'BASIC_OUTPUT_SETTINGS', module_name//'/'//sr_name, msg)
 
   end subroutine read_nml_basic_output
 

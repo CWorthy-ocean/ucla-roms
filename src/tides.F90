@@ -1,7 +1,8 @@
 module tides
 
 #include "cppdefs.opt"
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use dimensions, only: inode, jnode, x_,x0,x1,y_,y0,y1
   use param, only:&
   &mynode, ieast, iwest, jnorth, jsouth, lm, mm, np_xi, np_eta
@@ -45,20 +46,9 @@ contains
     character(len=20) :: sr_name = "read_nml_tides"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=TIDAL_FRC_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read TIDAL_FRC_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=TIDAL_FRC_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'TIDAL_FRC_SETTINGS', module_name//'/'//sr_name, msg)
 
   end subroutine read_nml_tides
 

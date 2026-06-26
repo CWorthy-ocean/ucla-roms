@@ -41,7 +41,8 @@ module extract_data
 #include "cppdefs.opt"
   use basic_output, only: wrt_file_rst
   use calc_pflx_mod, only: calc_pflx
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use grid, only: angler, rmask, umask, vmask
   use dimensions, only: nx, ny, nz
   use nc_read_write, only: nccreate, ncread, ncwrite
@@ -212,19 +213,12 @@ contains
   subroutine read_nml_extract
 !     Read the "EXTRACT_DATA_SETTINGS" section of the namelist file
 
-    integer(kind=4) ::  namelist_unit, ios
+    integer(kind=4) ::  ios
     character(len=17) :: sr_name = "read_nml_extract"
+    character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=EXTRACT_DATA_SETTINGS, iostat=ios)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context=module_name//'/'//sr_name, info=&
-      &'could not read EXTRACT_DATA_SETTINGS section of namelist file'&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=EXTRACT_DATA_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'EXTRACT_DATA_SETTINGS', module_name//'/'//sr_name, msg)
 
   end subroutine read_nml_extract
 

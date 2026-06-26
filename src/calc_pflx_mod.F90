@@ -1,7 +1,8 @@
 module calc_pflx_mod
 
 #include "cppdefs.opt"
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: check_nml_read
+  use namelist_buffer_mod, only: namelist_lines
   use error_handling_mod, only: error_log
   use netcdf, only: nf90_noerr, nf90_inq_varid
   use dimensions, only: nx, ny, nz, i0, i1, j0, j1,x_,x0,x1,y_,y0,y1
@@ -49,17 +50,10 @@ contains
 
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_pflx"
+    character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=CALC_PFLX_SETTINGS, iostat=ios)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context=module_name//'/'//sr_name, info=&
-      &'could not read CALC_PFLX_SETTINGS section of namelist file'&
-      &)
-    end if
-    close(namelist_unit)
+    read (namelist_lines, nml=CALC_PFLX_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'CALC_PFLX_SETTINGS', module_name//'/'//sr_name, msg)
 
   end subroutine read_nml_pflx
 

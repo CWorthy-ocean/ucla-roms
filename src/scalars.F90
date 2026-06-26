@@ -171,7 +171,8 @@ contains
   subroutine read_nml_scalars
     use param, only: itemp
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
+    use namelist_open_mod, only: check_nml_read
+    use namelist_buffer_mod, only: namelist_lines
     implicit none
 !     Read the "FRC_OUTPUT_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios, itrc
@@ -179,21 +180,12 @@ contains
     character(len=20) :: sr_name = "read_nml_scalars"
     character(len=512) :: msg = ""
     ! Read namelist
-    call open_namelist_file(namelist_unit)
 
 !================================================================================
 ! set `gamma2`
 #if !defined EW_PERIODIC || !defined NS_PERIODIC
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=GAMMA2_SETTINGS, iostat=ios, iomsg=msg)
-    if (ios /= 0) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name, &
-      &   info='could not read GAMMA2_SETTINGS' &
-      &        //' section of namelist file: ' &
-      &        //trim(msg) &
-      &      )
-    end if
+    read (namelist_lines, nml=GAMMA2_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'GAMMA2_SETTINGS', module_name//'/'//sr_name, msg)
     mpi_master_only write(*,'(5x,A,ES10.3,2x,2A)') &
     &    'gamma2 =', gamma2, &
     &    'slipperiness parameter: ',&
@@ -204,16 +196,8 @@ contains
     allocate(tnu2(NT))
     tnu2(:) = 0._8
 #if define SOLVE3D && defined TS_DIF2
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=TRACER_DIFF2, iostat=ios, iomsg=msg)
-    if (ios /= 0) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name, &
-      &   info='could not read TRACER_DIFF2' &
-      &        //' section of namelist file: ' &
-      &        //trim(msg) &
-      &      )
-    end if
+    read (namelist_lines, nml=TRACER_DIFF2, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'TRACER_DIFF2', module_name//'/'//sr_name, msg)
     do itrc = 1, NT
       if (itrc == itemp) then
         mpi_master_only write(*, &
@@ -233,16 +217,8 @@ contains
 #endif
 !================================================================================
 ! set rdrg, rdrg2
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=BOTTOM_DRAG_SETTINGS, iostat=ios, iomsg=msg)
-    if (ios /= 0) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name, &
-      &   info='could not read BOTTOM_DRAG_SETTINGS' &
-      &        //' section of namelist file: ' &
-      &        //trim(msg) &
-      &      )
-    end if
+    read (namelist_lines, nml=BOTTOM_DRAG_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'BOTTOM_DRAG_SETTINGS', module_name//'/'//sr_name, msg)
 
     mpi_master_only write(*,'(7x,A,ES10.3,2x,A)') &
     &    'rdrg =', rdrg, &
@@ -263,17 +239,8 @@ contains
 #ifdef SOLVE3D
     allocate(Akt_bak(NT))
     akt_bak(:) = 0._8
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=VERTICAL_MIXING_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name, &
-      &   info='could not read VERTICAL_MIXING_SETTINGS' &
-      &        //' section of namelist file: ' &
-      &        //trim(msg) &
-      &      )
-    end if
+    read (namelist_lines, nml=VERTICAL_MIXING_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'VERTICAL_MIXING_SETTINGS', module_name//'/'//sr_name, msg)
 #if !defined LMD_MIXING && !defined MY25_MIXING
     mixing_type = "background"
 #else
@@ -299,34 +266,16 @@ contains
 !===============================================================================
 !visc2
 #ifdef UV_VIS2
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=LATERAL_VISC_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name, &
-      &   info='could not read LATERAL_VISC_SETTINGS' &
-      &        //' section of namelist file: ' &
-      &        //trim(msg) &
-      &      )
-    end if
+    read (namelist_lines, nml=LATERAL_VISC_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'LATERAL_VISC_SETTINGS', module_name//'/'//sr_name, msg)
     mpi_master_only write(*,'(6x,A,ES10.3,2x,A)') &
     &    'visc2 =', visc2, &
     &    'horizontal Laplacian kinematic viscosity [m^2/s]'
 #endif
 !===============================================================================
 !dt, dtfast, ndtfast, ntimes ninfo
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=TIME_STEPPING, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name, &
-      &   info='could not read TIME_STEPPING' &
-      &        //' section of namelist file: ' &
-      &        //trim(msg) &
-      &        )
-    end if
+    read (namelist_lines, nml=TIME_STEPPING, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'TIME_STEPPING', module_name//'/'//sr_name, msg)
     mpi_master_only write(*, &
     &  '(5x,A,I10,3x,A/9x,A,F11.4,2x,A/4x,A,I10,3x,A/6x,A,I10,3x,2A)' &
     &    ) 'ntimes =',  ntimes, 'total number of 3D timesteps', &
@@ -339,17 +288,8 @@ contains
 !===============================================================================
 ! ubind
 #if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=UBIND_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name,&
-      &   info='could not read UBIND_SETTINGS'&
-      &        //' section of namelist file: '&
-      &        //trim(msg)&
-      &      )
-    end if
+    read (namelist_lines, nml=UBIND_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'UBIND_SETTINGS', module_name//'/'//sr_name, msg)
     mpi_master_only write(*,'(6x,A,ES10.3,2x,A)')&
     &    'ubind =', ubind,&
     &    'open boundary binding velcity [m/s]'
@@ -357,17 +297,8 @@ contains
 !===============================================================================
 !v_sponge
 #ifdef SPONGE
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=V_SPONGE_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &   context = module_name//'/'//sr_name,&
-      &   info='could not read V_SPONGE_SETTINGS'&
-      &        //' section of namelist file: '&
-      &        //trim(msg)&
-      &      )
-    end if
+    read (namelist_lines, nml=V_SPONGE_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'V_SPONGE_SETTINGS', module_name//'/'//sr_name, msg)
     mpi_master_only write(*,'(3x,A,F10.2,2x,A)')&
     &      'v_sponge =', v_sponge,&
     &      'maximum viscosity in sponge layer [m^2/s]'
@@ -375,24 +306,11 @@ contains
 #endif
 !===============================================================================
 ! rho0
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=RHO0_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &   context = module_name//'/'//sr_name,&
-      &   info='could not read RHO0_SETTINGS'&
-      &        //' section of namelist file: '&
-      &        //trim(msg)&
-      &        )
-      mpi_master_only write(*,'(7x,A,F10.4,2x,A)')  'rho0 =',&
-      &     rho0, 'Boussinesq reference density [kg/m^3].'
-
-    end if
+    read (namelist_lines, nml=RHO0_SETTINGS, iostat=ios, iomsg=msg)
+    call check_nml_read(ios, 'RHO0_SETTINGS', module_name//'/'//sr_name, msg)
 
 !===============================================================================
 
-    close(namelist_unit)
   end subroutine read_nml_scalars
 
 
