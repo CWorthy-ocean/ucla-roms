@@ -70,7 +70,8 @@ module marbl_driver
   integer(kind=4)                     :: idx            ! Looping variable
 
 !     MARBL config:
-  integer(kind=4), public :: marbl_timestep_ratio = 1
+  integer(kind=4), public :: marbl_timestep_ratio
+  real(kind=8), public :: marbl_timestep = 3600.0
   character(len=256), public :: marbl_config_file='marbl_in'
   character(len=32), public ::&
   &marbl_tracers_to_write(40) = ""
@@ -80,7 +81,7 @@ module marbl_driver
 #endif
 
   namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
-  &marbl_timestep_ratio, marbl_tracers_to_write&
+  &marbl_timestep, marbl_tracers_to_write&
 #ifdef MARBL_DIAGS
   &, marbl_diagnostics_to_write
 #endif
@@ -438,6 +439,31 @@ contains
 !     5. Save carbonate system indices
 !     ---------------------------------------------------------
     call get_tracer_indices(t_vname)
+
+!     6. Set MARBL update frequency
+!     ---------------------------------------------------------
+
+    if (mynode==printnode) then
+      print *, 'The requested MARBL timestep is', marbl_timestep, '.'
+    end if
+
+    marbl_timestep_ratio = max(1,int(marbl_timestep / dt))
+    marbl_timestep = dt * marbl_timestep_ratio
+
+    if (mynode==printnode) then
+      print *, 'The ROMS timestep must divide the MARBL timestep evenly, ',&
+      &'so the timestep MARBL will actually use is ', marbl_timestep, ' seconds.'
+    end if
+
+    if (marbl_timestep > 10800.0) then
+      write(error_info, *)&
+        &"MARBL timestep is ", marbl_timestep,&
+        &", but the maximum allowable value ",&
+        &"is 10800.0."
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info=error_info)
+    endif
 
   end subroutine marbldrv_configure_tracers
 
