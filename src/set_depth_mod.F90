@@ -40,7 +40,7 @@ contains
 #endif
     &ubar, zeta, vbar, z_w, z_r, hz, z_w0, z_r0, hz0
     use scalars, only: iic, knew
-    use scoord, only: hc, iwest, jsouth, n, cs_w, cs_r
+    use scoord, only: hc, iwest, jsouth, nz, cs_w, cs_r
     use pio_roms, only: use_pio
     use instant_output, only: wrt_instant
 
@@ -85,16 +85,16 @@ contains
 
     endif  ! first time
 
-    ds=1.D0/dble(N)
+    ds=1.D0/dble(nz)
     do j=jstrR,jendR
       do i=istrR,iendR
         z_w(i,j,0)=-h(i,j)
       enddo
 
-      do k=1,N,+1   !--> irreversible because of recursion in Hz
+      do k=1,nz,+1   !--> irreversible because of recursion in Hz
 
-        cff_w=hc*ds* dble(k-N)
-        cff_r=hc*ds*(dble(k-N)-0.5_8)
+        cff_w=hc*ds* dble(k-nz)
+        cff_r=hc*ds*(dble(k-nz)-0.5_8)
 
         cff1_w=Cs_w(k)
         cff1_r=Cs_r(k)
@@ -119,10 +119,10 @@ contains
           z_w0(i,j,0)=-h(i,j)
         enddo
 
-        do k=1,N,+1   !--> irreversible because of recursion in Hz
+        do k=1,nz,+1   !--> irreversible because of recursion in Hz
 
-          cff_w=hc*ds* dble(k-N)
-          cff_r=hc*ds*(dble(k-N)-0.5_8)
+          cff_w=hc*ds* dble(k-nz)
+          cff_r=hc*ds*(dble(k-nz)-0.5_8)
 
           cff1_w=Cs_w(k)
           cff1_r=Cs_r(k)
@@ -157,7 +157,7 @@ contains
 
 #if defined NHMG || defined NONTRAD_COR
 !     Compute slopes
-    do k = 1, N
+    do k = 1, nz
       do j = 0,Mm+1
         do i = 0,Lm+1
           dzdxi (i,j,k)=0.5_8*(z_r(i+1,j,k)-z_r(i-1,j,k))*pn(i,j)
@@ -168,7 +168,7 @@ contains
     ! z_r is buffer filled in the interior halos but not in the outer halos
 # ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
-      do k = 1, N
+      do k = 1, nz
         do j = 0,Mm+1
           dzdxi (0,j,k) = 0._8
           dzdxi (1,j,k) = 0._8
@@ -178,7 +178,7 @@ contains
       enddo
     endif
     if (EASTERN_EDGE) then
-      do k = 1, N
+      do k = 1, nz
         do j = 0,Mm+1
           dzdxi (Lm  ,j,k) = 0._8
           dzdxi (Lm+1,j,k) = 0._8
@@ -190,7 +190,7 @@ contains
 # endif
 # ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
-      do k = 1, N
+      do k = 1, nz
         do i = 0,Lm+1
           dzdxi (i,0,k) = 0._8
           dzdxi (i,1,k) = 0._8
@@ -200,7 +200,7 @@ contains
       enddo
     endif
     if (NORTHERN_EDGE) then
-      do k = 1, N
+      do k = 1, nz
         do i = 0,Lm+1
           dzdxi (i,Mm  ,k) = 0._8
           dzdxi (i,Mm+1,k) = 0._8
@@ -234,14 +234,14 @@ contains
     use roms_mpi, only: exchange_xxx
     use ocean_vars, only: flxu, u, hz, flxv, v, hz_u, hz_v
     use dimensions, only: inode, jnode
-    use scalars, only: n, nrhs
+    use scalars, only: nz, nrhs
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k
 
 # include "compute_auxiliary_bounds.h"
 
-    do k=1,N
+    do k=1,nz
       do j=jstrR,jendR
         do i=istr,iendR
           FlxU(i,j,k)=0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))*dn_u(i,j)&
@@ -296,12 +296,12 @@ contains
     &vmask
     use roms_mpi, only: exchange_xxx
     use ocean_vars, only: u, v, hz, flxu, flxv
-    use scalars, only: n, forw_start, iic, nnew
+    use scalars, only: nz, forw_start, iic, nnew
     use dimensions, only: nz
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k
-    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: DC,FC
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: DC,FC
 
 # if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
     real(kind=8) cff
@@ -318,11 +318,11 @@ contains
     do j=jstrR,jendR ! big j-loop
 
       do i=istr,iendR
-        DC(i,N)=0.5_8*(Hz(i,j,N)+Hz(i-1,j,N))*dn_u(i,j)
-        DC(i,0)=DC(i,N)
-        FC(i,0)=DC(i,N)*u(i,j,N,nnew)
+        DC(i,nz)=0.5_8*(Hz(i,j,nz)+Hz(i-1,j,nz))*dn_u(i,j)
+        DC(i,0)=DC(i,nz)
+        FC(i,0)=DC(i,nz)*u(i,j,nz,nnew)
       enddo
-      do k=N-1,1,-1
+      do k=nz-1,1,-1
         do i=istr,iendR
           DC(i,k)=0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))*dn_u(i,j)
           DC(i,0)=DC(i,0)+DC(i,k)
@@ -379,7 +379,7 @@ contains
       enddo
 # endif
 
-      do k=1,N
+      do k=1,nz
         do i=istr,iendR
           u(i,j,k,nnew)=(u(i,j,k,nnew)-FC(i,0))& !! removing ubar mismatch from u
 # ifdef MASKING
@@ -391,11 +391,11 @@ contains
 
       if (j >= jstr) then
         do i=istrR,iendR
-          DC(i,N)=0.5_8*(Hz(i,j,N)+Hz(i,j-1,N))*dm_v(i,j)
-          DC(i,0)=DC(i,N)
-          FC(i,0)=DC(i,N)*v(i,j,N,nnew)
+          DC(i,nz)=0.5_8*(Hz(i,j,nz)+Hz(i,j-1,nz))*dm_v(i,j)
+          DC(i,0)=DC(i,nz)
+          FC(i,0)=DC(i,nz)*v(i,j,nz,nnew)
         enddo
-        do k=N-1,1,-1
+        do k=nz-1,1,-1
           do i=istrR,iendR
             DC(i,k)=0.5_8*(Hz(i,j,k)+Hz(i,j-1,k))*dm_v(i,j)
             DC(i,0)=DC(i,0)+DC(i,k)

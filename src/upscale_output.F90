@@ -23,7 +23,7 @@ module upscale_output
   use marbl_driver, only: iALK, iDIC, iALK_alt, iDIC_alt
   use ocean_vars, only: hz
   use basic_output, only: vn=>vname
-  use scalars, only: n, dt, time
+  use scalars, only: nz, dt, time
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
@@ -169,13 +169,13 @@ contains
 
 #ifdef OBC_NORTH
 #ifdef PARALLEL_IO
-    allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(DIC_add_north_avg(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(ALK_rate_north(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(DIC_rate_north(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(ALK_alt_rate_north(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(DIC_alt_rate_north(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(h_north_avg(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(DIC_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(ALK_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(DIC_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(ALK_alt_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(DIC_alt_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(h_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
     allocate(lat_north(GLOBAL_1DX_ARRAY))
     allocate(lon_north(GLOBAL_1DX_ARRAY))
     ALK_add_north_avg(:,:) = 0
@@ -189,13 +189,13 @@ contains
     lon_north(:) = 0
 #else
     if (jnode==npy-1) then ! .not. north_exchng
-      allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(DIC_add_north_avg(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(ALK_rate_north(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(DIC_rate_north(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(ALK_alt_rate_north(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(DIC_alt_rate_north(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(h_north_avg(GLOBAL_1DX_ARRAY,1:N) )
+      allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(DIC_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(ALK_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(DIC_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(ALK_alt_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(DIC_alt_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(h_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
       allocate(lat_north(GLOBAL_1DX_ARRAY))
       allocate(lon_north(GLOBAL_1DX_ARRAY))
       ALK_add_north_avg(:,:) = 0
@@ -213,13 +213,13 @@ contains
 
 #ifdef OBC_SOUTH
 #ifdef PARALLEL_IO
-    allocate(ALK_add_south_avg(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(DIC_add_south_avg(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(ALK_rate_south(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(DIC_rate_south(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(ALK_alt_rate_south(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(DIC_alt_rate_south(GLOBAL_1DX_ARRAY,1:N) )
-    allocate(h_south_avg(GLOBAL_1DX_ARRAY,1:N) )
+    allocate(ALK_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(DIC_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(ALK_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(DIC_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(ALK_alt_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(DIC_alt_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+    allocate(h_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
     allocate(lat_south(GLOBAL_1DX_ARRAY))
     allocate(lon_south(GLOBAL_1DX_ARRAY))
     ALK_add_south_avg(:,:) = 0
@@ -233,13 +233,13 @@ contains
     lon_south(:) = 0
 #else
     if (jnode==0) then ! .not. south_exchange
-      allocate(ALK_add_south_avg(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(DIC_add_south_avg(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(ALK_rate_south(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(DIC_rate_south(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(ALK_alt_rate_south(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(DIC_alt_rate_south(GLOBAL_1DX_ARRAY,1:N) )
-      allocate(h_south_avg(GLOBAL_1DX_ARRAY,1:N) )
+      allocate(ALK_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(DIC_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(ALK_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(DIC_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(ALK_alt_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(DIC_alt_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+      allocate(h_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
       allocate(lat_south(GLOBAL_1DX_ARRAY))
       allocate(lon_south(GLOBAL_1DX_ARRAY))
       ALK_add_south_avg(:,:) = 0
@@ -257,13 +257,13 @@ contains
 
 #ifdef OBC_EAST
 #ifdef PARALLEL_IO
-    allocate(ALK_add_east_avg(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(DIC_add_east_avg(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(ALK_rate_east(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(DIC_rate_east(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(ALK_alt_rate_east(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(DIC_alt_rate_east(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(h_east_avg(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(ALK_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(DIC_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(ALK_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(DIC_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(ALK_alt_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(DIC_alt_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(h_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
     allocate(lat_east(GLOBAL_1DY_ARRAY))
     allocate(lon_east(GLOBAL_1DY_ARRAY))
     ALK_add_east_avg(:,:) = 0
@@ -277,13 +277,13 @@ contains
     lon_east(:) = 0
 #else
     if (inode==npx-1) then ! .not. east_exchng
-      allocate(ALK_add_east_avg(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(DIC_add_east_avg(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(ALK_rate_east(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(DIC_rate_east(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(ALK_alt_rate_east(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(DIC_alt_rate_east(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(h_east_avg(GLOBAL_1DY_ARRAY,1:N) )
+      allocate(ALK_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(DIC_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(ALK_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(DIC_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(ALK_alt_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(DIC_alt_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(h_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
       allocate(lat_east(GLOBAL_1DY_ARRAY))
       allocate(lon_east(GLOBAL_1DY_ARRAY))
       ALK_add_east_avg(:,:) = 0
@@ -301,13 +301,13 @@ contains
 
 #ifdef OBC_WEST
 #ifdef PARALLEL_IO
-    allocate(ALK_add_west_avg(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(DIC_add_west_avg(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(ALK_rate_west(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(DIC_rate_west(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(ALK_alt_rate_west(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(DIC_alt_rate_west(GLOBAL_1DY_ARRAY,1:N) )
-    allocate(h_west_avg(GLOBAL_1DY_ARRAY,1:N) )
+    allocate(ALK_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(DIC_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(ALK_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(DIC_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(ALK_alt_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(DIC_alt_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+    allocate(h_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
     allocate(lat_west(GLOBAL_1DY_ARRAY))
     allocate(lon_west(GLOBAL_1DY_ARRAY))
     ALK_add_west_avg(:,:) = 0
@@ -321,13 +321,13 @@ contains
     lon_west(:) = 0
 #else
     if (inode==0) then ! .not. west_exchng
-      allocate(ALK_add_west_avg(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(DIC_add_west_avg(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(ALK_rate_west(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(DIC_rate_west(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(ALK_alt_rate_west(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(DIC_alt_rate_west(GLOBAL_1DY_ARRAY,1:N) )
-      allocate(h_west_avg(GLOBAL_1DY_ARRAY,1:N) )
+      allocate(ALK_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(DIC_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(ALK_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(DIC_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(ALK_alt_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(DIC_alt_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+      allocate(h_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
       allocate(lat_west(GLOBAL_1DY_ARRAY))
       allocate(lon_west(GLOBAL_1DY_ARRAY))
       ALK_add_west_avg(:,:) = 0

@@ -2,7 +2,7 @@ module bec2_vars
 #include "cppdefs.opt"
 #ifdef BIOLOGY_BEC2
 
-  use param, only: nt, lm, mm, n, ntrc_bio
+  use param, only: nt, lm, mm, nz, nt_bgc
 
 
   implicit none
@@ -150,7 +150,7 @@ contains
   subroutine init_arrays_bec2_vars ![
     implicit none
 
-    allocate( DTRACER_MODULE(GLOBAL_2D_ARRAY,N,ntrc_bio) )
+    allocate( DTRACER_MODULE(GLOBAL_2D_ARRAY,nz,nt_bgc) )
 
     allocate( ifrac(GLOBAL_2D_ARRAY), press(GLOBAL_2D_ARRAY) )
 

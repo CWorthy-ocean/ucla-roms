@@ -280,7 +280,7 @@ contains
   subroutine t3dmix_gp_tile (istr,iend,jstr,jend, itrc, LapT,FX,FE,&
   &FSC,dTdz, dTdx,dTde,dZdx,dZde)
 
-    use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta, N
+    use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta, nz
     use tracers, only: t, wrt_t_dia
     use dimensions, only: inode, jnode
     use diagnostics, only:&
@@ -296,7 +296,7 @@ contains
 # ifdef TS_DIF4
     integer(kind=4) imin,imax,jmin,jmax
 # endif
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:N) :: LapT
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: LapT
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: FX,FE
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,2) ::  FSC,dTdz,&
     &dTdx,dTde, dZdx,dZde
@@ -316,10 +316,10 @@ contains
 ! surfaces) Laplacian diffusion terms.       !!!
 
     k2=1            ! vertical   dTdx,dTde(:,:,k2) k+1   rho-points
-    do k=0,N,+1     ! placement    dTdz,FSC(:,:,k2) k+1/2   W-points
+    do k=0,nz,+1     ! placement    dTdz,FSC(:,:,k2) k+1/2   W-points
       k1=k2         ! of scratch dTdx,dTde(:,:,k1) k     rho-points
       k2=3-k1       ! variables    dTdz,FSC(:,:,k1) k-1/2   W-points
-      if (k<N) then
+      if (k<nz) then
         do j=jstr,jend
           do i=istr,iend+1
             cff=0.5_8*(pm(i,j)+pm(i-1,j)) SWITCH umask(i,j)
@@ -340,7 +340,7 @@ contains
         enddo
       endif
 
-      if (k==0 .or. k==N) then
+      if (k==0 .or. k==nz) then
         do j=jstr-1,jend+1
           do i=istr-1,iend+1
             dTdz(i,j,k2)=0.0_8     ! Set no-flux bottom or
@@ -377,7 +377,7 @@ contains
             &))
           enddo
         enddo
-        if (k<N) then
+        if (k<nz) then
           do j=jstr,jend
             do i=istr,iend
 
@@ -461,10 +461,10 @@ contains
 ! THE FIRST LAPLACIAN: ! vertical   dTdx,dTde(:,:,k2)  k+1   rho-points
 !                      ! placement    dTdz,FSC(:,:,k2) k+1/2   W-points
     k2=1             ! of scratch dTdx,dTde(:,:,k1)  k     rho-points
-    do k=0,N,+1      ! variables    dTdz,FSC(:,:,k1) k-1/2   W-points
+    do k=0,nz,+1      ! variables    dTdz,FSC(:,:,k1) k-1/2   W-points
       k1=k2
       k2=3-k1
-      if (k<N) then
+      if (k<nz) then
         do j=jmin,jmax
           do i=imin,imax+1
             cff=0.5_8*(pm(i,j)+pm(i-1,j)) SWITCH umask(i,j)
@@ -483,7 +483,7 @@ contains
         enddo
       endif
 
-      if (k==0 .or. k==N) then
+      if (k==0 .or. k==nz) then
         do j=jmin-1,jmax+1
           do i=imin-1,imax+1
             dTdz(i,j,k2)=0.0_8
@@ -518,7 +518,7 @@ contains
             &))
           enddo
         enddo
-        if (k<N) then
+        if (k<nz) then
           do j=jmin,jmax
             do i=imin,imax
 !**             cff1=min(dZdx(i,j,k1)+dZdx(i+1,j,k2),0._8)
@@ -579,7 +579,7 @@ contains
 
 #  ifndef EW_PERIODIC
     if (WESTERN_EDGE) then            ! Apply lateral boundary
-      do k=1,N                        ! conditions to the first
+      do k=1,nz                        ! conditions to the first
         do j=jmin,jmax                ! Laplacian (in cases other
 #   ifdef WESTERN_WALL
           LapT(istr-1,j,k)=0._8         ! than periodic: closed
@@ -590,7 +590,7 @@ contains
       enddo
     endif
     if (EASTERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         do j=jmin,jmax
 #   ifdef EASTERN_WALL
           LapT(iend+1,j,k)=0._8
@@ -603,7 +603,7 @@ contains
 #  endif /* !EW_PERIODIC */
 #  ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         do i=imin,imax
 #   ifdef SOUTHERN_WALL
           LapT(i,jstr-1,k)=0._8
@@ -614,7 +614,7 @@ contains
       enddo
     endif
     if (NORTHERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         do i=imin,imax
 #   ifdef NORTHERN_WALL
           LapT(i,jend+1,k)=0._8
@@ -629,11 +629,11 @@ contains
 ! THE SECOND LAPLACIAN
 !
     k2=1
-    do k=0,N,+1
+    do k=0,nz,+1
       k1=k2
       k2=3-k1
 
-      if (k<N) then
+      if (k<nz) then
         do j=jstr,jend
           do i=istr,iend+1
             cff=0.5_8*(pm(i,j)+pm(i-1,j)) SWITCH umask(i,j)
@@ -650,7 +650,7 @@ contains
         enddo
       endif
 
-      if (k==0 .or. k==N) then
+      if (k==0 .or. k==nz) then
         do j=jstr-1,jend+1
           do i=istr-1,iend+1
             dTdz(i,j,k2)=0.0_8
@@ -687,7 +687,7 @@ contains
             &))
           enddo
         enddo
-        if (k<N) then
+        if (k<nz) then
           do j=jstr,jend
             do i=istr,iend
 !**             cff1=min(dZdx(i,j,k1)+dZdx(i+1,j,k2),0._8)

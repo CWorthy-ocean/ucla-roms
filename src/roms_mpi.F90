@@ -21,7 +21,7 @@ module roms_mpi
   &ieast, iwest, jnorth, jsouth, llm,&
   &lm, mm, mmm, ocean_grid_comm,&
   &np_xi, np_eta, mynode, nnodes, nsize,&
-  &iSW_corn, jSW_corn, ew_periodic, ns_periodic, N
+  &iSW_corn, jSW_corn, ew_periodic, ns_periodic, nz
   use mpi_f08, only: mpi_comm_world
   use dimensions, only: bf, i0, i1, j0, j1, nz, npx, npy,&
   &inode, jnode, eta_rho, eta_v, xi_rho, xi_u, grdname, nx, ny,&
@@ -293,15 +293,15 @@ contains
     ds_yr = MMm+2
     ds_xu = LLm+1
     ds_yv = MMm+1
-    ds_zr = N
-    ds_zw = N+1
+    ds_zr = nz
+    ds_zw = nz+1
 #else
     ds_xr = xi_rho
     ds_yr = eta_rho
     ds_xu = xi_u
     ds_yv = eta_v
-    ds_zr = N
-    ds_zw = N+1
+    ds_zr = nz
+    ds_zw = nz+1
 #endif
 
 

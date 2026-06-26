@@ -60,21 +60,18 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 |--------|-------------|------------------------|
 | `NP_XI` | Number of MPI processors in XI (~x) direction | `param.opt: NP_XI` |
 | `NP_ETA` | Number of MPI processors in ETA (~y) direction | `param.opt: NP_ETA` |
-| `NSUB_X` | Number of shared-memory subdomains in XI | `param.opt: NSUB_X` |
-| `NSUB_E` | Number of shared-memory subdomains in ETA | `param.opt: NSUB_E` |
 | `LLm` | Number of grid points in XI direction | `param.opt: LLm` |
 | `MMm` | Number of grid points in ETA direction | `param.opt: MMm` |
-| `N` | Number of vertical levels | `param.opt: N` |
+| `nz` | Number of vertical levels | `param.opt: N` |
 | `nt_passive` | Number of passive tracers | `param.opt: nt_passive` |
-| `ntrc_bio` | Number of biogeochemical tracers | `param.opt: ntrc_bio` |
+| `nt_bgc` | Number of biogeochemical tracers | `param.opt: ntrc_bio` |
 
 ### `INITIAL_CONDITIONS`
 (read by module `roms_read_write.F`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
-| `ininame` | Initial conditions NetCDF file path | `roms.in` |
-| `nrrec` | Number of time records in initial conditions file | `roms.in` |
+| `inifile` | Initial conditions NetCDF file path | `roms.in` |
 
 
 ### `FORCING_FILES`
@@ -82,21 +79,15 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
-| `frcfile` | Comma-separated list of strings of forcing NetCDF file paths (boundary, surface, river, etc.) | `roms.in` |
+| `frcfiles` | Comma-separated list of strings of forcing NetCDF file paths (boundary, surface, river, etc.) | `roms.in` |
 
-### `BULK_FRC_SETTINGS`
+### `SURF_FRC_SETTINGS`
 (read by module `bulk_frc.F`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `interp_bulk_frc` | Interpolate forcing from coarser input grid if .true. | `bulk_frc.opt: interp_frc` |
 | `check_bulk_frc_units` | Perform a check that input files have expected units if .true.  | `bulk_frc.opt: check_units` |
-
-### `FLUX_FRC_SETTINGS`
-(read by module `flux_frc.F`)
-
-| Setting | Description | Previous location/name |
-|--------|-------------|------------------------|
 | `interp_flux_frc` | Interpolate forcing from coarser input grid if .true. | `flux_frc.opt: interp_frc` |
 
 ### `RIVER_FRC_SETTINGS`
@@ -109,7 +100,7 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `nriv` | Number of rivers | `river_frc.opt: nriv` |
 
 
-### `TIDES_SETTINGS`
+### `TIDAL_FRC_SETTINGS`
 (read by module `tides.F`)
 
 | Setting | Description | Previous location/name |
@@ -183,8 +174,8 @@ Controls setting specifying the output of the basic physical model state (not in
 |--------|-------------|------------------------|
 | `wrt_frc` | Write model forcing fields if `.true.` | `frc_output.opt: wrt_frc` |
 | `wrt_frc_avg` | Averaged forcing output if `.true.` | `frc_output.opt: wrt_frc_avg` |
-| `output_period` | Forcing output interval (s) | `frc_output.opt: output_period` |
-| `nrpf` | Records per forcing file | `frc_output.opt: nrpf` |
+| `output_period_frc` | Forcing output interval (s) | `frc_output.opt: output_period` |
+| `nrpf_frc` | Records per forcing file | `frc_output.opt: nrpf` |
 
 
 ### `EXTRACT_DATA_SETTINGS`
@@ -195,7 +186,7 @@ These settings control "data extraction", typically used for generating boundary
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `do_extract` | Enable nested boundary extraction if `.true.` | `extract_data.opt: do_extract` |
-| `extract_period` | Frequency of file creation (s) | `extract_data.opt: extract_period` |
+| `output_period_extract` | Frequency of file creation (s) | `extract_data.opt: extract_period` |
 | `nrpf_extract` | Records per extraction file | `extract_data.opt: nrpf_extract` |
 | `extract_file` | Nesting configuration file | `extract_data.opt: extract_file` |
 | `N_chd` | Vertical levels in child grid | `extract_data.opt: N_chd` |
@@ -212,11 +203,11 @@ Sponge tuning tunes the sponge values near the boundaries to attempt to match th
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `ub_tune` | Tune boundary sponge layer if `.true.` | `sponge_tune.opt: ub_tune` |
-| `sp_timscale` | Filtering timescale (s) | `sponge_tune.opt: sp_timscale` |
+| `sponge_timescale` | Filtering timescale (s) | `sponge_tune.opt: sp_timscale` |
 | `wrt_sponge` | Output sponge tuning fields if `.true`. | `sponge_tune.opt: wrt_sponge` |
-| `spn_avg` | Sponge tuning output averaged if `.true.` or instantaneous if `.false`   | `sponge_tune.opt: spn_avg` |
-| `nrpf` | Number of records per sponge file | `sponge_tune.opt: nrpf` |
-| `output_period` | Output frequency of sponge tuning file (s) | `sponge_tune.opt: output_period` |
+| `sponge_avg` | Sponge tuning output averaged if `.true.` or instantaneous if `.false`   | `sponge_tune.opt: spn_avg` |
+| `nrpf_sponge` | Number of records per sponge file | `sponge_tune.opt: nrpf` |
+| `output_period_sponge` | Output frequency of sponge tuning file (s) | `sponge_tune.opt: output_period` |
 
 
 ### `CALC_PFLX_SETTINGS`
@@ -227,7 +218,7 @@ These settings control the calculation of baroclinic pressure fluxes, e.g. at ne
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `calc_pflx` | Enable baroclinic pressure flux calculation | `calc_pflx.opt: calc_pflx` |
-| `timescale` |  Timescale for filtering pressure fluxes (s)  | `calc_pflx.opt: timescale` |
+| `pflx_timescale` |  Timescale for filtering pressure fluxes (s)  | `calc_pflx.opt: timescale` |
 
 
 ### `ZSLICE_SETTINGS`
@@ -239,14 +230,14 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 |--------|-------------|------------------------|
 | `do_zslice` | Enable z-level output | `zslice_output.opt: do_zslice` |
 | `zslice_avg` | Averaged output (T) or instantaneous (F) | `zslice_output.opt: zslice_avg` |
-| `wrt_T_zsl` | Output tracers on z-levels | `zslice_output.opt: wrt_T_zsl` |
-| `wrt_U_zsl` | Output zonal velocity | `zslice_output.opt: wrt_U_zsl` |
-| `wrt_V_zsl` | Output meridional velocity | `zslice_output.opt: wrt_V_zsl` |
-| `output_period` | Z-slice output interval (s) | `zslice_output.opt: output_period` |
-| `nrpf` | Number of time records per file  | `zslice_output.opt: nrpf` |
+| `wrt_T_zslice` | Output tracers on z-levels | `zslice_output.opt: wrt_T_zsl` |
+| `wrt_U_zslice` | Output zonal velocity | `zslice_output.opt: wrt_U_zsl` |
+| `wrt_V_zslice` | Output meridional velocity | `zslice_output.opt: wrt_V_zsl` |
+| `output_period_zslice` | Z-slice output interval (s) | `zslice_output.opt: output_period` |
+| `nrpf_zslice` | Number of time records per file  | `zslice_output.opt: nrpf` |
 | `ndep` | Number of depth levels on which to remap outputs | `zslice_output.opt: ndep` |
 | `vecdep` | Depth values for slices (`ndep` comma separated values) | `zslice_output.opt: vecdep` |
-| `nt_z` | Number of tracers to write to output | `zslice_output.opt: nt_z` |
+| `nt_zslice` | Number of tracers to write to output | `zslice_output.opt: nt_z` |
 | `trc2zsc` | Indices of tracers to include | `zslice_output.opt: trc2zsc` |
 
 ### `BGC_SETTINGS`
@@ -256,17 +247,17 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 |--------|-------------|------------------------|
 | `interp_bgc_frc` | Interpolate forcing from coarser input grid if .true. | `bgc.opt: interp_frc` |
 | `wrt_bgc_his` | Write instantaneous BGC tracers to output | `bgc.opt: wrt_his` |
-| `output_period_his` | Frequency of instantaneous BGC output (s) | `bgc.opt: output_period_his` |
-| `nrpf_his` | Number of time records per BGC output file | `bgc.opt: nrpf_his` |
+| `output_period_bgc_his` | Frequency of instantaneous BGC output (s) | `bgc.opt: output_period_his` |
+| `nrpf_bgc_his` | Number of time records per BGC output file | `bgc.opt: nrpf_his` |
 | `wrt_bgc_avg` | Write averaged BGC tracers to output | `bgc.opt: wrt_avg` |
-| `output_period_avg` | Output frequency/averaging period (s) | `bgc.opt: output_period_avg` |
-| `nrpf_avg` | Number of time records per BGC average file | `bgc.opt: nrpf_avg` |
+| `output_period_bgc_avg` | Output frequency/averaging period (s) | `bgc.opt: output_period_avg` |
+| `nrpf_bgc_avg` | Number of time records per BGC average file | `bgc.opt: nrpf_avg` |
 | `wrt_bgc_dia_his` | Write instantaneous BGC diagnostics to output | `bgc.opt: wrt_his_dia` |
-| `output_period_his_dia` | Frequency of diagnostics output (s) | `bgc.opt: output_period_his_dia` |
-| `nrpf_his_dia` | Number of time records per BGC diagnostics file | `bgc.opt: nrpf_his_dia` |
+| `output_period_bgc_his_dia` | Frequency of diagnostics output (s) | `bgc.opt: output_period_his_dia` |
+| `nrpf_bgc_his_dia` | Number of time records per BGC diagnostics file | `bgc.opt: nrpf_his_dia` |
 | `wrt_bgc_dia_avg` | Write averaged BGC diagnostics to output | `bgc.opt: wrt_avg_dia` |
-| `output_period_avg_dia` | Frequency/period of averaged diagnostic output | `bgc.opt: output_period_avg_dia` |
-| `nrpf_avg_dia` | Number of time records per BGC diagnostics file | `bgc.opt: nrpf_avg_dia` |
+| `output_period_bgc_avg_dia` | Frequency/period of averaged diagnostic output | `bgc.opt: output_period_avg_dia` |
+| `nrpf_bgc_avg_dia` | Number of time records per BGC diagnostics file | `bgc.opt: nrpf_avg_dia` |
 
 ### `MARBL_BIOGEOCHEMISTRY_SETTINGS`
 (read by module `marbl_driver.F`)
@@ -287,12 +278,12 @@ Settings controlling Carbon Dioxide Removal (CDR) experiments using Ocean Alkali
 |--------|-------------|------------------------|
 | `cdr_source` | Apply CDR perturbation if `.true.` | `cdr_frc.opt: cdr_source` |
 | `cdr_file` | Path to netCDF file containing CDR perturbation | `cdr_frc.opt: cdr_file` |
-| `ncdr_parm` | Number of CDR releases (if `3D`/`parameterized`) | `cdr_frc.opt: ncdr_parm` |
-| `nz_chd` | Number of vertical levels in CDR forcing file | `cdr_frc.opt: nz_chd` |
-| `forcing_depth_profiles` | Apply CDR forcing from a depth profile if `.true.`| `cdr_frc.opt: forcing_depth_profiles` |
-| `forcing_3d` | Apply CDR forcing from a fully 3D distribution if `.true.`| `cdr_frc.opt: forcing_3d` |
-| `forcing_parameterized` | Apply CDR forcing from Guassian parameters if `.true.`| `cdr_frc.opt: forcing_parameterized` |
-| `time_interpolation` | Interpolate linearly between CDR forcing records if `.true.` | `cdr_frc.opt: time_interpolation` |
+| `cdr_ncdr_parm` | Number of CDR releases (if `3D`/`parameterized`) | `cdr_frc.opt: ncdr_parm` |
+| `cdr_nz_chd` | Number of vertical levels in CDR forcing file | `cdr_frc.opt: nz_chd` |
+| `cdr_forcing_depth_profiles` | Apply CDR forcing from a depth profile if `.true.`| `cdr_frc.opt: forcing_depth_profiles` |
+| `cdr_forcing_3d` | Apply CDR forcing from a fully 3D distribution if `.true.`| `cdr_frc.opt: forcing_3d` |
+| `cdr_forcing_parameterized` | Apply CDR forcing from Guassian parameters if `.true.`| `cdr_frc.opt: forcing_parameterized` |
+| `cdr_time_interpolation` | Interpolate linearly between CDR forcing records if `.true.` | `cdr_frc.opt: time_interpolation` |
 | `relocate_to_wet_points` | Relocate CDR perturbation to nearest ocean point if on land | `cdr_frc.opt: relocate_to_wet_points` |
 | `cdr_volume` | Read in volume flux/tracer concentration | `cdr_frc.opt: cdr_volume` |
 
@@ -306,8 +297,8 @@ Write an output file containing CDR-relevant fields.
 | `do_cdr_output` | Write output file for CDR-relevant fields if `.true.`| `cdr_output.opt: do_cdr` |
 | `wrt_cdr_avg` | Write averaged (if `.true.`) or instantaneous (if `.false.`) output | `cdr_output.opt: do_avg` |
 | `cdr_monthly_averages` | Write averaged outputs per calendar month if `.true.`| `cdr_output.opt: monthly_averages` |
-| `output_period` | Frequency of CDR-relevant output | `cdr_output.opt: output_period` |
-| `nrpf` | Time records per output file | `cdr_output.opt: nrpf` |
+| `output_period_cdr` | Frequency of CDR-relevant output | `cdr_output.opt: output_period` |
+| `nrpf_cdr` | Time records per output file | `cdr_output.opt: nrpf` |
 
 ### `UPSCALING_SETTINGS`
 (read by module `upscale_output.F`)
@@ -417,8 +408,8 @@ Controls output of diagnostics concerning the physical ocean state.
 | `diag_avg` | Output physics diagnostics as averages if `.true.` or snapshots if `.false.` | `diagnostics.opt: diag_avg` |
 | `diag_uv` | Output momentum diagnostics | `diagnostics.opt: diag_uv` |
 | `diag_trc` | Output tracer diagnostics | `diagnostics.opt: diag_trc` |
-| `output_period` | Output frequency (s) | `diagnostics.opt: output_period` |
-| `nrpf` | Number of records per output file | `diagnostics.opt: nrpf` |
+| `output_period_diag` | Output frequency (s) | `diagnostics.opt: output_period` |
+| `nrpf_diag` | Number of records per output file | `diagnostics.opt: nrpf` |
 
 
 ### `STDOUT_DIAG_SETTINGS`
@@ -438,10 +429,10 @@ Controls output of user-specified custom fields defined in `random_output.F`
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `do_random` | Output user-specified custom output fields if `.true.` | `random_output.opt: do_random` |
-| `output_period` | Frequency of custom output (s) | `random_output.opt: output_period` |
-| `nrpf` | Number of records per output file | `random_output.opt: nrpf` |
+| `output_period_random` | Frequency of custom output (s) | `random_output.opt: output_period` |
+| `nrpf_random` | Number of records per output file | `random_output.opt: nrpf` |
 
-### `SURF_FLX_SETTINGS`
+### `SURF_FLX_OUTPUT_SETTINGS`
 (read by module `surf_flx.F`)
 
 Controls the output of model surface fluxes.
@@ -452,8 +443,8 @@ Controls the output of model surface fluxes.
 | `wrt_stflx` | Output surface tracer flux if `.true.`| `surf_flx.opt: wrt_stflx` |
 | `wrt_swflx` | Output surface water flux (P-E) if `.true.` | `surf_flx.opt: wrt_swflx` |
 | `sflx_avg` | Output average (if `.true`) or instantaneous (if `.false`) fields | `surf_flx.opt: sflx_avg` |
-| `output_period` | Frequency of surface flux output (s) | `surf_flx.opt: output_period` |
-| `nrpf` | Number of records per surface flux file | `surf_flx.opt: nrpf` |
+| `output_period_sflx` | Frequency of surface flux output (s) | `surf_flx.opt: output_period` |
+| `nrpf_sflx` | Number of records per surface flux file | `surf_flx.opt: nrpf` |
 
 ### `PIPE_FRC_SETTINGS`
 (read by module `pipe_frc.F`)

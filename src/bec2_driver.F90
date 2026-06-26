@@ -27,7 +27,7 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
 #ifdef Ncycle_SY
   &lflux_gas_n2, lflux_gas_n2o,&
 #endif
-  &lflux_gas_o2, liron_flux, n, ntrc_bio,&
+  &lflux_gas_o2, liron_flux, nz, nt_bgc,&
 #ifdef BEC2_DIAG
   &bec2_diag_2d, atmpress_idx_t,&
   &co2star_idx_t, dco2star_idx_t, fgco2_idx_t, fgn2_idx_t,&
@@ -93,7 +93,7 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
   &O2SAT_1atm,&   ! O2 saturation @ 1 atm (mmol/m^3)
   &FLUX          ! tracer flux (mmol/m^2/s)
 
-  real(kind=8) STF(istr:iend,jstr:jend,ntrc_bio)
+  real(kind=8) STF(istr:iend,jstr:jend,nt_bgc)
 
   real(kind=8),dimension(istr:iend)::&
   &PHLO&          ! lower bound for ph in solver
@@ -163,8 +163,8 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
 !
 
 
-  sstt(istr:iend,jstr:jend) = t(istr:iend,jstr:jend,N,nnew,1)
-  ssss(istr:iend,jstr:jend) = t(istr:iend,jstr:jend,N,nnew,2)
+  sstt(istr:iend,jstr:jend) = t(istr:iend,jstr:jend,nz,nnew,1)
+  ssss(istr:iend,jstr:jend) = t(istr:iend,jstr:jend,nz,nnew,2)
 
 !
 ! Get short wave radiation:
@@ -279,11 +279,11 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
         !!! we let n2o_atm trace the invasion of atmospheric n2o
         !!! and set the atmopspheric concentration of all other
         !!! tracer to 0 So that everything is additive.
-        FLUX(i,j) = PV(i,j) * (N2OSAT_USED - t(i,j,N,nnew,iN2O))
+        FLUX(i,j) = PV(i,j) * (N2OSAT_USED - t(i,j,nz,nnew,iN2O))
         STF(i,j,bgc_idx(iN2O)) = FLUX(i,j)
         !!! Update tracer
-        t(i,j,N,nnew,iN2O) = t(i,j,N,nnew,iN2O)+&
-        &stf(i,j,bgc_idx(iN2O))*dt/Hz(i,j,N)
+        t(i,j,nz,nnew,iN2O) = t(i,j,nz,nnew,iN2O)+&
+        &stf(i,j,bgc_idx(iN2O))*dt/Hz(i,j,nz)
 
 # if defined BEC2_DIAG && defined Ncycle_SY
         if (wrt_bec2_diag_2d(fgn2o_idx_t)) then
@@ -334,10 +334,10 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
         &* rmask(i,j)
 # endif
 !!!!!---------------Tracking only N2 excess for no2---------!!!!! to track full use:
-        FLUX(i,j) = PV(i,j) * (c0 - t(i,j,N,nnew,iN2))
+        FLUX(i,j) = PV(i,j) * (c0 - t(i,j,nz,nnew,iN2))
         STF(i,j,bgc_idx(iN2)) = FLUX(i,j)
-        t(i,j,N,nnew,iN2) = t(i,j,N,nnew,iN2)+&
-        &stf(i,j,bgc_idx(iN2))*dt/Hz(i,j,N)
+        t(i,j,nz,nnew,iN2) = t(i,j,nz,nnew,iN2)+&
+        &stf(i,j,bgc_idx(iN2))*dt/Hz(i,j,nz)
 # ifdef BEC2_DIAG
         if (wrt_bec2_diag_2d(pvn2_idx_t)) then
           idiag = idx_bec2_diag_2d(pvn2_idx_t)
@@ -384,10 +384,10 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
 # ifdef MASKING
         &* rmask(i,j)
 # endif
-        FLUX(i,j) = PV(i,j) * (O2SAT_USED - t(i,j,N,nnew,iO2))
+        FLUX(i,j) = PV(i,j) * (O2SAT_USED - t(i,j,nz,nnew,iO2))
         STF(i,j,bgc_idx(iO2)) = FLUX(i,j)
-        t(i,j,N,nnew,iO2) = t(i,j,N,nnew,iO2)+&
-        &stf(i,j,bgc_idx(iO2))*dt/Hz(i,j,N)
+        t(i,j,nz,nnew,iO2) = t(i,j,nz,nnew,iO2)+&
+        &stf(i,j,bgc_idx(iO2))*dt/Hz(i,j,nz)
 # ifdef BEC2_DIAG
         if (wrt_bec2_diag_2d(pvo2_idx_t)) then
           idiag = idx_bec2_diag_2d(pvo2_idx_t)
@@ -452,10 +452,10 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
 
       CALL co2calc_row(LANDMASK(istr:iend,j),&
       &SSTT(istr:iend,j), SSSS(istr:iend,j),&
-      &t(istr:iend,j,N,nnew,iDIC),&
-      &t(istr:iend,j,N,nnew,iALK),&
-      &t(istr:iend,j,N,nnew,iPO4),&
-      &t(istr:iend,j,N,nnew,iSIO3),&
+      &t(istr:iend,j,nz,nnew,iDIC),&
+      &t(istr:iend,j,nz,nnew,iALK),&
+      &t(istr:iend,j,nz,nnew,iPO4),&
+      &t(istr:iend,j,nz,nnew,iSIO3),&
       &PHLO(istr:iend), PHHI(istr:iend), PH_NEW(istr:iend), XCO2(istr:iend),&
       &AP_USED(istr:iend,j), CO2STAR_ROW(istr:iend),&
       &DCO2STAR_ROW(istr:iend), pco2oc_ROW(istr:iend),&
@@ -490,10 +490,10 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
 
     STF(istr:iend,jstr:jend,bgc_idx(iDIC)) = FLUX(istr:iend,jstr:jend)
 
-    t(istr:iend,jstr:jend,N,nnew,iDIC) =&
-    &t(istr:iend,jstr:jend,N,nnew,iDIC) +&
+    t(istr:iend,jstr:jend,nz,nnew,iDIC) =&
+    &t(istr:iend,jstr:jend,nz,nnew,iDIC) +&
     &stf(istr:iend,jstr:jend,bgc_idx(iDIC))&
-    &*dt/Hz(istr:iend,jstr:jend,N)
+    &*dt/Hz(istr:iend,jstr:jend,nz)
 # ifdef BEC2_DIAG
     if (wrt_bec2_diag_2d(fgco2_idx_t)) then
       idiag = idx_bec2_diag_2d(fgco2_idx_t)
@@ -515,24 +515,24 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
   endif
   FLUX = FLUX * parm_Fe_bioavail * nmol_cm2_to_mmol_m2
   STF(istr:iend,jstr:jend,bgc_idx(iFE)) = FLUX(istr:iend,jstr:jend)
-  t(istr:iend,jstr:jend,N,nnew,iFE) =&
-  &t(istr:iend,jstr:jend,N,nnew,iFE) +&
+  t(istr:iend,jstr:jend,nz,nnew,iFE) =&
+  &t(istr:iend,jstr:jend,nz,nnew,iFE) +&
   &stf(istr:iend,jstr:jend,bgc_idx(iFE))&
-  &*dt/Hz(istr:iend,jstr:jend,N)
+  &*dt/Hz(istr:iend,jstr:jend,nz)
 
 # ifdef NOX_FORCING
   ! NOx: added to nitrate (convert units from kg N to mmol N)
-  t(istr:iend,jstr:jend,N,nnew,iNO3) =&
-  &t(istr:iend,jstr:jend,N,nnew,iNO3) +&
+  t(istr:iend,jstr:jend,nz,nnew,iNO3) =&
+  &t(istr:iend,jstr:jend,nz,nnew,iNO3) +&
   &nox(istr:iend,jstr:jend)*71394.200220751_8&
-  &*dt/Hz(istr:iend,jstr:jend,N)
+  &*dt/Hz(istr:iend,jstr:jend,nz)
 # endif
 # ifdef NHY_FORCING
   ! NHy: added to ammonium (convert units from kg N to mmol N)
-  t(istr:iend,jstr:jend,N,nnew, iNH4) =&
-  &t(istr:iend,jstr:jend,N,nnew,iNH4) +&
+  t(istr:iend,jstr:jend,nz,nnew, iNH4) =&
+  &t(istr:iend,jstr:jend,nz,nnew,iNH4) +&
   &nhy(istr:iend,jstr:jend)*71394.200220751_8&
-  &*dt/Hz(istr:iend,jstr:jend,N)
+  &*dt/Hz(istr:iend,jstr:jend,nz)
 # endif
 
 # ifdef BEC2_DIAG
@@ -552,7 +552,7 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
 
   do j = jstr, jend
 
-    do k = N,1,-1
+    do k = nz,1,-1
 
       call ecosys_set_interior(k,t(istr:iend,j,k,nnew,1),&
       &SHF_QSW(istr:iend,j),&
@@ -572,8 +572,8 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
   ! biological tracer values.
   !---------------------------------------------------------------------
 
-  do k=1,n
-    do m=1,ntrc_bio
+  do k=1,nz
+    do m=1,nt_bgc
       t(istr:iend,jstr:jend,k,nnew,isalt+nt_passive+m) =&
       &t(istr:iend,jstr:jend,k,nnew,isalt+nt_passive+m)&
       &+ dt * DTRACER_MODULE(istr:iend,jstr:jend,k,m)
@@ -672,7 +672,7 @@ subroutine ecosys_set_interior(k,temp,SHF_QSW,&
   &poc_hflux_out, p_caco3_sflux_out, p_caco3_hflux_out,&
   &p_sio2_sflux_out, p_sio2_hflux_out, dust_sflux_out,&
   &dust_hflux_out, poc_remin, dtracer_module, p_iron_remin,&
-  &p_sio2_remin, p_caco3_remin, lsource_sink, n, p_caco3_mass,&
+  &p_sio2_remin, p_caco3_remin, lsource_sink, nz, p_caco3_mass,&
   &p_sio2_mass
 
 #ifdef Ncycle_SY
@@ -1039,7 +1039,7 @@ subroutine ecosys_set_interior(k,temp,SHF_QSW,&
   !   f_qsw_par   fraction of incoming SW -> PAR (non-dim)
   !---------------------------------------------------------------------------
 
-  if (k == N) then
+  if (k == nz) then
 #if defined DAILYPAR_PHOTOINHIBITION
     PAR_out_AVG = MAX(c0, f_qsw_par * SHF_QSW_AVG)&
 # ifdef MASKING
@@ -2100,7 +2100,7 @@ subroutine ecosys_set_interior(k,temp,SHF_QSW,&
   end where
 
 # ifdef NO3_RESTORE
-  if (k .eq. N)
+  if (k .eq. nz)
   restore_no3 = c1/2592000 * (no3_restore(istr:iend,j,k)-NO3_loc)
 else
   restore_no3 = c0

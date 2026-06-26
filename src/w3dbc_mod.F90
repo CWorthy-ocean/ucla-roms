@@ -11,7 +11,7 @@ contains
     use boundary, only: w_west
     use grid, only: pm, pn, rmask
     use ocean_vars, only: w, u, v
-    use scalars, only: dt, gamma2, n, nnew, nrhs, nstp
+    use scalars, only: dt, gamma2, nz, nnew, nrhs, nstp
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k
@@ -35,7 +35,7 @@ contains
     if (WESTERN_EDGE) then
 #  if defined OBC_WEST
 #   if defined OBC_M3ORLANSKI
-      do k=1,N
+      do k=1,nz
         do j=jstr,jend+1
           grad(istr-1,j)= w(istr-1,j,k,nstp)- w(istr-1,j-1,k,nstp)
           grad(istr  ,j)= w(istr  ,j,k,nstp)- w(istr  ,j-1,k,nstp)
@@ -67,7 +67,7 @@ contains
       enddo
 #   else  /* not OBC_M3ORLANSKI */
       ! not orlanski, can be either no gradient, or specified
-      do k=1,N
+      do k=1,nz
         do j=jstr,jend
 #    if defined OBC_M3SPECIFIED
           w(istr-1,j,k,nnew)=w_west(j,k)
@@ -79,7 +79,7 @@ contains
 #   endif /* OBC_M3ORLANSKI or SPECIFIED/NO-GRAD*/
 
 #  else /* !OBC_WEST (closed)*/
-      do k=1,N                          ! Wall: slip: gamma= 1
+      do k=1,nz                          ! Wall: slip: gamma= 1
         do j=jstr,jend                  !    no-slip: gamma=-1
           w(istr-1,j,k,nnew)=gamma2*w(istr,j,k,nnew)
         enddo
@@ -91,7 +91,7 @@ contains
     if (EASTERN_EDGE) then
 #  if defined OBC_EAST
 #   if defined OBC_M3ORLANSKI
-      do k=1,N
+      do k=1,nz
         do j=jstr,jend+1
           grad(iend  ,j)= w(iend  ,j,k,nstp)-w(iend  ,j-1,k,nstp)
           grad(iend+1,j)= w(iend+1,j,k,nstp)-w(iend+1,j-1,k,nstp)
@@ -120,7 +120,7 @@ contains
         enddo
       enddo
 #   else  /* not ORLANSKI  (Spec or no grad)*/
-      do k=1,N
+      do k=1,nz
         do j=jstr,jend
 #    if defined OBC_M3SPECIFIED
           w(iend+1,j,k,nnew)=w_east(j,k)
@@ -132,7 +132,7 @@ contains
 #   endif /* orlanski,spec, or no-grad */
 
 #  else /* not OBC_EAST (closed) */
-      do k=1,N                          ! Wall: slip: gamma= 1
+      do k=1,nz                          ! Wall: slip: gamma= 1
         do j=jstr,jend                  !    no-slip: gamma=-1
           w(iend+1,j,k,nnew)=gamma2*w(iend,j,k,nnew)
         enddo
@@ -149,7 +149,7 @@ contains
     if (SOUTHERN_EDGE) then
 #  if defined OBC_SOUTH
 #   if defined OBC_M3ORLANSKI
-      do k=1,N
+      do k=1,nz
         do i=istr,iend+1
           grad(i,jstr  )= w(i  ,jstr  ,k,nstp)-w(i-1,jstr  ,k,nstp)
           grad(i,jstr-1)= w(i  ,jstr-1,k,nstp)-w(i-1,jstr-1,k,nstp)
@@ -176,7 +176,7 @@ contains
         enddo
       enddo
 #   else /* not orlanski, but spec or no-grad */
-      do k=1,N
+      do k=1,nz
         do i=istr,iend
 #    if defined OBC_WSPECIFIED
           w(i,jstr-1,k,nnew)=w_south(i,k)
@@ -187,7 +187,7 @@ contains
       enddo
 #   endif /* orlanski, spec, or no-grad */
 #  else /* not open, but closed */
-      do k=1,N                          ! Wall: slip: gamma= 1
+      do k=1,nz                          ! Wall: slip: gamma= 1
         do j=jstr,jend                  !    no-slip: gamma=-1
           w(i,jstr-1,k,nnew)=gamma2*w(i,jstr,k,nnew)
         enddo
@@ -199,7 +199,7 @@ contains
     if (NORTHERN_EDGE) then
 #  if defined OBC_NORTH
 #   if defined OBC_M3ORLANSKI
-      do k=1,N
+      do k=1,nz
         do i=istr,iend+1
           grad(i,jend  )= w(i  ,jend  ,k,nstp)-w(i-1,jend  ,k,nstp)
           grad(i,jend+1)= w(i  ,jend+1,k,nstp)-w(i-1,jend+1,k,nstp)
@@ -228,7 +228,7 @@ contains
         enddo
       enddo
 #   else  /* not orlanski, spec or non-grad instead */
-      do k=1,N
+      do k=1,nz
         do i=istr,iend
 #    if defined OBC_M3SPECIFIED
           w(i,jend+1,k,nnew)=w_north(i,k)
@@ -239,7 +239,7 @@ contains
       enddo
 #   endif  /* orlanski, spec, or non-grad */
 #  else /* not open, but closed */
-      do k=1,N                          ! Wall: slip: gamma= 1
+      do k=1,nz                          ! Wall: slip: gamma= 1
         do j=jstr,jend                  !    no-slip: gamma=-1
           w(i,jend+1,k,nnew)=gamma2*w(i,jend,k,nnew)
         enddo
@@ -264,18 +264,18 @@ contains
       cff=rmask(istr,jstr-1)+rmask(istr-1,jstr)
       if (cff > 0._8) then
         cff=1._8/cff
-        do k=1,N
+        do k=1,nz
           w(istr-1,jstr-1,k,nnew)=cff*(&
           &rmask(istr,jstr-1)*w(istr,jstr-1,k,nnew)&
           &+rmask(istr-1,jstr)*w(istr-1,jstr,k,nnew))
         enddo
       else
-        do k=1,N
+        do k=1,nz
           w(istr-1,jstr-1,k,nnew)=0._8
         enddo
       endif
 #   else
-      do k=1,N
+      do k=1,nz
         w(istr-1,jstr-1,k,nnew)=0.5_8*( w(istr,jstr-1,k,nnew)&
         &+ w(istr-1,jstr,k,nnew))
       enddo
@@ -287,18 +287,18 @@ contains
       cff=rmask(iend,jstr-1)+rmask(iend+1,jstr)
       if (cff > 0._8) then
         cff=1._8/cff
-        do k=1,N
+        do k=1,nz
           w(iend+1,jstr-1,k,nnew)=cff*(&
           &rmask(iend,jstr-1)*w(iend,jstr-1,k,nnew)&
           &+rmask(iend+1,jstr)*w(iend+1,jstr,k,nnew))
         enddo
       else
-        do k=1,N
+        do k=1,nz
           w(iend+1,jstr-1,k,nnew)=0._8
         enddo
       endif
 #   else
-      do k=1,N
+      do k=1,nz
         w(iend+1,jstr-1,k,nnew)=0.5_8*( w(iend,jstr-1,k,nnew)&
         &+ w(iend+1,jstr,k,nnew) )
       enddo
@@ -310,18 +310,18 @@ contains
       cff=rmask(istr,jend+1)+rmask(istr-1,jend)
       if (cff > 0._8) then
         cff=1._8/cff
-        do k=1,N
+        do k=1,nz
           w(istr-1,jend+1,k,nnew)=cff*(&
           &rmask(istr,jend+1)*w(istr,jend+1,k,nnew)&
           &+rmask(istr-1,jend)*w(istr-1,jend,k,nnew))
         enddo
       else
-        do k=1,N
+        do k=1,nz
           w(istr-1,jend+1,k,nnew)=0._8
         enddo
       endif
 #   else
-      do k=1,N
+      do k=1,nz
         w(istr-1,jend+1,k,nnew)=0.5_8*( w(istr,jend+1,k,nnew)&
         &+ w(istr-1,jend,k,nnew))
       enddo
@@ -333,18 +333,18 @@ contains
       cff=rmask(iend,jend+1)+rmask(iend+1,jend)
       if (cff > 0._8) then
         cff=1._8/cff
-        do k=1,N
+        do k=1,nz
           w(iend+1,jend+1,k,nnew)=cff*(&
           &rmask(iend,jend+1)*w(iend,jend+1,k,nnew)&
           &+rmask(iend+1,jend)*w(iend+1,jend,k,nnew))
         enddo
       else
-        do k=1,N
+        do k=1,nz
           w(iend+1,jend+1,k,nnew)=0._8
         enddo
       endif
 #   else
-      do k=1,N
+      do k=1,nz
         w(iend+1,jend+1,k,nnew)= 0.5_8*( w(iend,jend+1,k,nnew)&
         &+ w(iend+1,jend,k,nnew))
       enddo

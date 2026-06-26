@@ -39,7 +39,7 @@ contains
 
 !----------------------------------------------------------------------
   subroutine init_arrays_private_scratch  ![
-    use scalars, only: n
+    use scalars, only: nz
     implicit none
 
 #ifdef ALLOW_SINGLE_BLOCK_MODE
@@ -48,9 +48,9 @@ contains
     size_XI=7+(Lm+NSUB_X-1)/NSUB_X
     size_ETA=7+(Mm+NSUB_E-1)/NSUB_E
 #endif
-    sse=size_ETA/(N+1);  ssz=(N+1)/size_ETA
-    N2d=size_XI*(sse*size_ETA+ssz*(N+1))/(sse+ssz)
-    N3d=size_XI*size_ETA*(N+1)
+    sse=size_ETA/(nz+1);  ssz=(nz+1)/size_ETA
+    N2d=size_XI*(sse*size_ETA+ssz*(nz+1))/(sse+ssz)
+    N3d=size_XI*size_ETA*(nz+1)
 
     ! Initialize (first touch) private
     ! scratch arrays in parallel by each thread.

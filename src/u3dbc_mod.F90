@@ -14,7 +14,7 @@ contains
     use boundary, only: u_west, u_east, u_south, u_north
     use dimensions, only: inode, jnode
     use ocean_vars, only: u, v
-    use scalars, only: dt, n, nnew, nrhs, nstp, gamma2
+    use scalars, only: dt, nz, nnew, nrhs, nstp, gamma2
 #if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
   || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
                                              || defined M3NUDGING
@@ -213,7 +213,7 @@ contains
       enddo
 #   endif
 #  else
-      do k=1,N                                ! Eastern edge closed
+      do k=1,nz                                ! Eastern edge closed
         do j=jstr,jend                        ! ======= ==== ======
           u(iend+1,j,k,nnew)=0._8               !  (no-flux: default)
         enddo
@@ -228,7 +228,7 @@ contains
     if (SOUTHERN_EDGE) then
 #  ifdef OBC_SOUTH
 #   ifdef OBC_M3ORLANSKI
-      do k=1,N                            ! Southern edge radiation
+      do k=1,nz                            ! Southern edge radiation
         do i=istrU-1,iend                 ! ======== ==== =========
           grad(i,jstr-1)=u(i+1,jstr-1,k,nstp)-u(i,jstr-1,k,nstp)
           grad(i,jstr  )=u(i+1,jstr  ,k,nstp)-u(i,jstr  ,k,nstp)
@@ -271,7 +271,7 @@ contains
         enddo
       enddo
 #   else
-      do k=1,N
+      do k=1,nz
         do i=istrU,iend
 #    ifdef OBC_M3SPECIFIED
           u(i,jstr-1,k,nnew)=u_south(i,k)      ! specified
@@ -307,7 +307,7 @@ contains
   if (NORTHERN_EDGE) then
 #  ifdef OBC_NORTH
 #   ifdef OBC_M3ORLANSKI
-    do k=1,N                            ! Northern edge radiation
+    do k=1,nz                            ! Northern edge radiation
       do i=istrU-1,iend                 ! ======== ==== =========
         grad(i,jend  )=u(i+1,jend  ,k,nstp)-u(i,jend  ,k,nstp)
         grad(i,jend+1)=u(i+1,jend+1,k,nstp)-u(i,jend+1,k,nstp)
@@ -369,7 +369,7 @@ contains
 #   else
 #    define I_RANGE istr,iendR
 #   endif
-    do k=1,N                        ! Wall: free-slip (gamma2=+1)
+    do k=1,nz                        ! Wall: free-slip (gamma2=+1)
       do i=I_RANGE                  ! =====   no-slip (gamma2=-1)
       u(i,jend+1,k,nnew)=gamma2*u(i,jend,k,nnew)&
 #   ifdef MASKING
@@ -386,7 +386,7 @@ endif   !<-- NORTHERN_EDGE
 
 # if defined OBC_SOUTH && defined OBC_WEST
 if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
-  do k=1,N
+  do k=1,nz
     u(istr,jstr-1,k,nnew)=0.5_8*( u(istr+1,jstr-1,k,nnew)&
     &+u(istr  ,jstr  ,k,nnew))
   enddo
@@ -394,7 +394,7 @@ endif
 # endif
 # if defined OBC_SOUTH && defined OBC_EAST
 if (EASTERN_EDGE .and. SOUTHERN_EDGE) then
-  do k=1,N
+  do k=1,nz
     u(iend+1,jstr-1,k,nnew)=0.5_8*( u(iend,jstr-1,k,nnew)&
     &+u(iend+1,jstr,k,nnew))
   enddo
@@ -402,7 +402,7 @@ endif
 # endif
 # if defined OBC_NORTH && defined OBC_WEST
 if (WESTERN_EDGE .and. NORTHERN_EDGE) then
-  do k=1,N
+  do k=1,nz
     u(istr,jend+1,k,nnew)=0.5_8*( u(istr+1,jend+1,k,nnew)&
     &+u(istr  ,jend  ,k,nnew))
   enddo
@@ -410,7 +410,7 @@ endif
 # endif
 # if defined OBC_NORTH && defined OBC_EAST
 if (EASTERN_EDGE .and. NORTHERN_EDGE) then
-  do k=1,N
+  do k=1,nz
     u(iend+1,jend+1,k,nnew)=0.5_8*( u(iend,jend+1,k,nnew)&
     &+u(iend+1,jend,k,nnew))
   enddo

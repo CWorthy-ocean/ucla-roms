@@ -1,7 +1,7 @@
 module scoord
 
 #include "cppdefs.opt"
-  use param, only: n, isw_corn, iwest, jsouth, jsw_corn, mynode
+  use param, only: nz, isw_corn, iwest, jsouth, jsw_corn, mynode
   implicit none
   character(len=6) :: module_name = "scoord"
 
@@ -79,8 +79,8 @@ contains
       &'hc =', hc, 'critical depth [m]'
     end if
 
-    allocate(Cs_w(0:N))
-    allocate(Cs_r(N))
+    allocate(Cs_w(0:nz))
+    allocate(Cs_r(nz))
 
   end subroutine read_nml_scoord
 #endif

@@ -7,7 +7,7 @@ module bgc_shared_vars
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
   use namelist_open_mod, only: open_namelist_file
   use error_handling_mod, only: error_log
-  use param, only: mynode, nt_passive, ntrc_bio, lm, mm, n
+  use param, only: mynode, nt_passive, nt_bgc, lm, mm, nz
   use roms_read_write, only: ncforce
   use tracers, only: itands, t_vname, wrt_t, t_lname, t
 #if defined(BIOLOGY_BEC2)
@@ -111,17 +111,17 @@ module bgc_shared_vars
 
   ! note: choice of bgc tracers to output is still selected in tracers.opt.
 
-  real(kind=8)    :: output_period_his = 0._8        ! output period in seconds
-  integer(kind=4) :: nrpf_his          = 0                  ! total recs per file
+  real(kind=8)    :: output_period_bgc_his = 0._8        ! output period in seconds
+  integer(kind=4) :: nrpf_bgc_his          = 0                  ! total recs per file
 
-  real(kind=8)    :: output_period_avg = 0._8        ! output averaging period in seconds
-  integer(kind=4) :: nrpf_avg          = 0                  ! total recs per file
+  real(kind=8)    :: output_period_bgc_avg = 0._8        ! output averaging period in seconds
+  integer(kind=4) :: nrpf_bgc_avg          = 0                  ! total recs per file
 
-  real(kind=8)    :: output_period_his_dia = 0._8  ! output period in seconds
-  integer(kind=4) :: nrpf_his_dia          = 0             ! total recs per file
+  real(kind=8)    :: output_period_bgc_his_dia = 0._8  ! output period in seconds
+  integer(kind=4) :: nrpf_bgc_his_dia          = 0             ! total recs per file
 
-  real(kind=8)    :: output_period_avg_dia = 0._8    ! output period in seconds
-  integer(kind=4) :: nrpf_avg_dia          = 0              ! total recs per file
+  real(kind=8)    :: output_period_bgc_avg_dia = 0._8    ! output period in seconds
+  integer(kind=4) :: nrpf_bgc_avg_dia          = 0              ! total recs per file
 
   integer(kind=4) :: nbgc_flx = 0                   ! number of surface bgc flux forcings
 
@@ -132,10 +132,10 @@ module bgc_shared_vars
   namelist /BGC_SETTINGS/&
   &wrt_bgc_his, wrt_bgc_avg, wrt_bgc_dia_his, wrt_bgc_dia_avg,&
   &interp_bgc_frc,&
-  &output_period_his, nrpf_his,&
-  &output_period_avg, nrpf_avg,&
-  &output_period_his_dia, nrpf_his_dia,&
-  &output_period_avg_dia, nrpf_avg_dia,&
+  &output_period_bgc_his, nrpf_bgc_his,&
+  &output_period_bgc_avg, nrpf_bgc_avg,&
+  &output_period_bgc_his_dia, nrpf_bgc_his_dia,&
+  &output_period_bgc_avg_dia, nrpf_bgc_avg_dia,&
   &nbgc_flx
 #if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
 !
@@ -306,7 +306,7 @@ contains
     call find_write_bgc_diag
     call display_bgc_output_settings_to_terminal
 
-    allocate( bgc_diag_3d(GLOBAL_2D_ARRAY,N,nr_bgc_wrdiag_3d) )
+    allocate( bgc_diag_3d(GLOBAL_2D_ARRAY,nz,nr_bgc_wrdiag_3d) )
     allocate( bgc_diag_2d(GLOBAL_2D_ARRAY,nr_bgc_wrdiag_2d) )
 
     bgc_diag_2d=0.0_8
@@ -320,7 +320,7 @@ contains
 #endif
 
     if (wrt_bgc_dia_avg) then
-      allocate( bgc_diag_3d_avg(GLOBAL_2D_ARRAY,N,nr_bgc_wrdiag_3d) )
+      allocate( bgc_diag_3d_avg(GLOBAL_2D_ARRAY,nz,nr_bgc_wrdiag_3d) )
       allocate( bgc_diag_2d_avg(GLOBAL_2D_ARRAY,nr_bgc_wrdiag_2d) )
       bgc_diag_2d_avg=0.0_8
       bgc_diag_3d_avg=0.0_8
@@ -348,7 +348,7 @@ contains
     character(len=200), allocatable :: stdoutlines(:)
     character(len=200) :: stdoutline
 
-    n_bgc_fields = ntrc_bio
+    n_bgc_fields = nt_bgc
     n_bgc_wrt_fields = 0
 #if defined(MARBL_DIAGS) || defined(BEC2_DIAG)
     n_bgc_fields=n_bgc_fields+nr_bgc_diag_2d+nr_bgc_diag_3d
@@ -358,7 +358,7 @@ contains
     lineidx=1
 
     ! BGC tracers
-    do idx = 1, ntrc_bio
+    do idx = 1, nt_bgc
       tidx = t_idx(idx)      ! Tracer index corresponding to this BGC tracer
       write(stdoutline, '(11X, A, T50, L1, 4X, A)')&
       &trim(t_vname(tidx)),& ! vname
@@ -397,14 +397,14 @@ contains
       if (wrt_bgc_his) then
         write(*,'(/7x,2A,F6.1,2x,A,I4)')& ! write to terminal output in simulation pre-amble text which
         &'bgc :: history file ',& ! result variables are being stored
-        &'output_period =', output_period_his,&
-        &'recs/file =', nrpf_his
+        &'output_period =', output_period_bgc_his,&
+        &'recs/file =', nrpf_bgc_his
       end if
       if (wrt_bgc_avg) then
         write(*,'(/7x,2A,F6.1,2x,A,I4)')& ! write to terminal output in simulation pre-amble text which
         &'bgc :: average file ',& ! result variables are being stored
-        &'output_period =', output_period_avg,&
-        &'recs/file =', nrpf_avg
+        &'output_period =', output_period_bgc_avg,&
+        &'recs/file =', nrpf_bgc_avg
       end if
       write(*,'(9x,A)') 'bgc fields to be saved (T/F)'
       write(*,'(11x,A)') repeat('-',62)

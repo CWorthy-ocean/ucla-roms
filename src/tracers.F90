@@ -22,7 +22,7 @@ module tracers
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rath
-  use scalars, only: n, nstp, nnew, forw_start, iic, nt
+  use scalars, only: nz, nstp, nnew, forw_start, iic, nt
 ! for 'FIRST_TIME_STEP' and nstp, only:
   use nc_read_write, only: nccreate, ncwrite
   use roms_read_write, only:&
@@ -384,7 +384,7 @@ contains
       end do
     end if
 
-    allocate( t(GLOBAL_2D_ARRAY,N,3,NT) )
+    allocate( t(GLOBAL_2D_ARRAY,nz,3,NT) )
     t=0._8
 
     ! remove averages flag above but do wrt_file_avg flag over this to avoid any allocation
@@ -397,7 +397,7 @@ contains
     enddo
 
     n_t_avg = cnt                                    ! number of tracers of interest
-    allocate( t_avg( GLOBAL_2D_ARRAY, N, n_t_avg) )  ! only for tracers we are interested in
+    allocate( t_avg( GLOBAL_2D_ARRAY, nz, n_t_avg) )  ! only for tracers we are interested in
     t_avg=0._8
 
     allocate( t_avg_2_NT( n_t_avg ) )                ! to convert indices between t_avg(itavg) and t(itrc)

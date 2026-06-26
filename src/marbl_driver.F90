@@ -31,7 +31,7 @@ module marbl_driver
   use MARBL_interface_public_types, only: marbl_diagnostics_type,&
   &marbl_saved_state_type
 #endif
-  use param                       , only: mynode,nt,ntrc_bio,&
+  use param                       , only: mynode,nt,nt_bgc,&
   &isalt,itemp,Lm,Mm,&
   &ocean_grid_comm
   use dimensions                  , only: nz
@@ -313,14 +313,14 @@ contains
 !     Number of MARBL tracers according to MARBL
     nt_marbl=size(marbl_instance%tracer_metadata)
 
-!     Check that the number of tracers in MARBL_instance agrees with ROMS' ntrc_bio:
-    if ( nt_marbl .ne. ntrc_bio ) then
+!     Check that the number of tracers in MARBL_instance agrees with ROMS' nt_bgc:
+    if ( nt_marbl .ne. nt_bgc ) then
       write(error_info, *)&
       &'Allocated no. of MARBL tracers'&
-      &,ntrc_bio&
+      &,nt_bgc&
       &,' does not match no. expected by MARBL: '&
       &,nt_marbl&
-      &,' set ntrc_bio = ',nt_marbl&
+      &,' set nt_bgc = ',nt_marbl&
       &,' in namelist and re-run'
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
@@ -690,7 +690,7 @@ contains
     use netcdf, only: nf90_noerr, nf90_inq_varid
     use dimensions, only : i0,i1,j0,j1,x0,x1,y0,y1
     use roms_mpi, only : exchange_xxx
-    use param, only : N
+    use param, only : nz
     use pio_roms, only: use_pio, pio_gtype
     use instant_output, only: wrt_instant
     implicit none
@@ -732,7 +732,7 @@ contains
       if (ierr == nf90_noerr) then
         call ncread(ncid, vname_marbl_ss_3d(1,itrc),&
         &marbl_saved_state_3d(x0:x1,y0:y1,:,itrc),start=start)
-        do k=1,N
+        do k=1,nz
           marbl_saved_state_3d(x0:x1,y0:y1,k,itrc)=&
           &marbl_saved_state_3d(x0:x1,y0:y1,k,itrc)*rmask(x0:x1,y0:y1)
         enddo
@@ -778,7 +778,7 @@ contains
     use nc_read_write, only: nccreate
     use roms_read_write, only: dn_xr,dn_yr,dn_zr,dn_tm
     use dimensions, only: xi_rho,eta_rho
-    use param, only : N
+    use param, only : nz
 
     implicit none
 
@@ -789,7 +789,7 @@ contains
     do itrc=1,nr_marbl_ss_3d
       varid = nccreate(ncid,vname_marbl_ss_3d(1,itrc),&
       &(/dn_xr,dn_yr,dn_zr,dn_tm/),&
-      &(/xi_rho,eta_rho,N,0/), nf90_double)
+      &(/xi_rho,eta_rho,nz,0/), nf90_double)
       ierr=nf90_put_att (ncid, varid, 'long_name', vname_marbl_ss_3d(2,itrc))
       ierr=nf90_put_att (ncid, varid, 'units', vname_marbl_ss_3d(3,itrc))
     enddo
@@ -1930,7 +1930,7 @@ contains
     integer(kind=4) :: idx, itot
 
     itot = 0
-    do idx=1,ntrc_bio
+    do idx=1,nt_bgc
       itot=itot+1
       if (t_vname(itot)=='ALK') then
         iALK = itot
