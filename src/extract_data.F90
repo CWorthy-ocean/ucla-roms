@@ -730,8 +730,17 @@ contains
 # endif
       endif
 
+#ifdef PARALLEL_IO
+      if (mynode == 0) then
+        ierr=nf90_open(fname,nf90_write,ncid)
+        call ncwrite(ncid,'bry_time',(/time/),(/(obj(1)%record+1)/))
+        ierr=nf90_close(ncid)
+      endif
+
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+#else
       ierr=nf90_open(fname,nf90_write,ncid)
-!     ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
+#endif
 
 !! We have to update the object records regardless of whether
 !! there are points in the sub-domain to ensure correct file
@@ -759,8 +768,11 @@ contains
             jpu=> obj(i)%jpu
             jpv=> obj(i)%jpv
           endif
+
+#ifndef PARALLEL_IO
           tname = trim(obj(i)%set)//'_time'
           call ncwrite(ncid,tname,(/time/),(/record/))
+#endif
 !if (mynode==0) print *,'writing extract: ',time,mynode,tname
 
 !     rho variables --------------------------------------------------------
@@ -960,7 +972,11 @@ contains
 !endif
       enddo
 
+#ifdef PARALLEL_IO
+      call PIO_closefile(pio_FileDesc)
+#else
       ierr=nf90_close(ncid)
+#endif
 
       otime = 0
     endif
@@ -1043,7 +1059,7 @@ contains
       enddo
 
       ierr = nf90_close(ncid)
-    endif
+    endif ! mynode == 0
     call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
 #else
