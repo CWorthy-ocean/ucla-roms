@@ -698,6 +698,7 @@ contains
     character(len=99),save :: fname
     character(len=20)              :: tname
     character(len=40) :: oname
+    character(len=1) :: pio_bnd
     integer(kind=4) :: lpre
     real(kind=8), dimension(:,:),pointer :: vi
     real(kind=8), dimension(:,:),pointer :: ui
@@ -746,6 +747,19 @@ contains
 !! there are points in the sub-domain to ensure correct file
 !! names for all
       do i = 1,nobj
+
+#ifdef PARALLEL_IO
+        if (obj(i)%bnd == '_north') then
+          pio_bnd = 'n'
+        else if (obj(i)%bnd == '_south') then
+          pio_bnd = 's'
+        else if (obj(i)%bnd == '_east') then
+          pio_bnd = 'e'
+        else if (obj(i)%bnd == '_west') then
+          pio_bnd = 'w'
+        endif
+#endif
+
         obj(i)%record = obj(i)%record+1
         if (i==1) total_rec = total_rec+1
         if (obj(i)%np>0) then
@@ -793,11 +807,17 @@ contains
           endif
 
           if (obj(i)%zeta) then
+#ifdef PARALLEL_IO
+            oname = 'zeta' // trim(obj(i)%bnd)
+            pio_gtype = pio_bnd // '1rc'
+#else
             oname = trim(obj(i)%set)//'_zeta'//trim(obj(i)%bnd)
+#endif
             call interpolate(zeta(:,:,knew),obj(i)%vari(:,1),coef,ip,jp)
-            call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
+            call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D,.true.)
           endif
 
+          pio_gtype = '----'
           if (obj(i)%temp) then
             oname = trim(obj(i)%set)//'_temp'//trim(obj(i)%bnd)
             call interpolate(t(:,:,:,nstp,itemp),obj(i)%vari,coef,ip,jp)
