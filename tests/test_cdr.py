@@ -42,6 +42,10 @@ class TestCdr:
         """Base namelist for every CDR variant; deep-copied per test."""
         nml = create_test_namelist_dict(input_dir)
         nml["TIME_STEPPING"]["dt"] = 40
+        # marbl_timestep replaced the old integer marbl_timestep_ratio; set it
+        # equal to dt so the derived ratio is 1 (BGC updated every step),
+        # preserving the behaviour the reference hashes were generated with.
+        nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = 40
         nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
         nml["BGC_SETTINGS"]["output_period_bgc_his"] = 400
         nml["FORCING_FILES"] = {

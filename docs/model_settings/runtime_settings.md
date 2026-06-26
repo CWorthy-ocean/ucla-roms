@@ -267,7 +267,7 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 | `marbl_config_file` | MARBL configuration file | `roms.in: marbl_namelist_fname` |
 | `marbl_tracers_to_write` | Comma-separated (string) list of MARBL tracers to include in BGC output | `roms.in: marbl_tracer_output_list` |
 | `marbl_diagnostics_to_write` | Comma-separated (string) list of MARBL diagnostics to include in BGC diagnostics output | `roms.in: marbl_diagnostics_output_list` |
-| ``marbl_timestep_ratio` | If "N", solve BGC equations every N model time-steps. On other time-steps, BGC tracers are advected/diffused, but not updated with MARBL. | `roms.in: marbl_diagnostics_output_list` |
+| `marbl_timestep` | Desired MARBL timestep (seconds). ROMS solves BGC every `max(1, int(marbl_timestep/dt))` model steps (rounding `marbl_timestep` to that whole multiple of `dt`, max 10800 s); on other steps BGC tracers are advected/diffused but not updated by MARBL. Set `= dt` to update every step. | `roms.in: marbl_timestep_ratio` (was an integer step ratio) |
 
 ### `CDR_FRC_SETTINGS`
 (read by module `cdr_frc.F`)
