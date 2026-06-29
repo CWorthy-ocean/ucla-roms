@@ -292,10 +292,6 @@ contains
       np = obj(i)%np
 !      if (np>0) then
 
-#ifdef PARALLEL_IO
-        call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,LLm_chd,MMm_chd,N_chd,obj(i)%bnd)
-#endif
-
       if (np>0) then
         preamb = trim(obj(i)%obj_name)
         lpre = len(trim(preamb))-1
@@ -364,6 +360,9 @@ contains
 
         endif
       endif
+#ifdef PARALLEL_IO
+      call MPI_Barrier(ocean_grid_comm, ierr)
+#endif
     enddo
 
   end subroutine init_extract_data !]
@@ -486,7 +485,7 @@ contains
 !      &context=module_name//"/"//sr_name)
 !      call error_log%abort_check()
 
-      if (obj(iobj)%np>0) then
+!      if (obj(iobj)%np>0) then
 !! only for objects with a presences in this subdomain
 
         if (n2==3) then
@@ -534,9 +533,13 @@ contains
 #endif
         if (obj(iobj)%up.or.obj(iobj)%vp) extend_up = .true.
 
-      endif
+!      endif
       deallocate(object)
     enddo
+
+#ifdef PARALLEL_IO
+    call MPI_Barrier(ocean_grid_comm, ierr)
+#endif
 
     ierr = nf90_close(ncid)
 
@@ -699,6 +702,7 @@ contains
     character(len=20)              :: tname
     character(len=40) :: oname
     character(len=1) :: pio_bnd
+    character(len=1) :: pio_stag
     integer(kind=4) :: lpre
     real(kind=8), dimension(:,:),pointer :: vi
     real(kind=8), dimension(:,:),pointer :: ui
@@ -708,6 +712,9 @@ contains
     integer(kind=4),dimension(3) :: start2D
     integer(kind=4),dimension(2) :: start1D
     real(kind=8), dimension(1:N_chd) :: tmpp
+    real(kind=8), dimension(1) :: dummy1d
+    real(kind=8), dimension(1,1) :: dummy2d
+    real(kind=8), dimension(1,1,1) :: dummy3d
 
     if (.not.allocated(obj)) then
       call init_extract_data
@@ -738,6 +745,7 @@ contains
         ierr=nf90_close(ncid)
       endif
 
+      call MPI_Barrier(ocean_grid_comm, ierr)
       ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
 #else
       ierr=nf90_open(fname,nf90_write,ncid)
@@ -758,12 +766,37 @@ contains
         else if (obj(i)%bnd == '_west') then
           pio_bnd = 'w'
         endif
+
+        if (obj(i)%bnd == '_south' .or. obj(i)%bnd == '_north') then
+          if (obj(i)%dsize == LLm_chd-1) then
+            pio_stag = 'u'
+          else if (obj(i)%scalar) then
+            pio_stag = 'r'
+          else
+            pio_stag = 'v'
+          endif
+        else if (obj(i)%bnd == '_east' .or. obj(i)%bnd == '_west') then
+          if (obj(i)%dsize == MMm_chd-1) then
+            pio_stag = 'v'
+          else if (obj(i)%scalar) then
+            pio_stag = 'r'
+          else
+            pio_stag = 'u'
+          endif
+        endif
+
+!    call MPI_Barrier(ocean_grid_comm, ierr)
+        if (obj(i)%bnd /= ' ') then
+          call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,&
+          &LLm_chd,MMm_chd,N_chd,obj(i)%bnd,pio_stag)
+        endif
 #endif
 
         obj(i)%record = obj(i)%record+1
         if (i==1) total_rec = total_rec+1
+#ifndef PARALLEL_IO
         if (obj(i)%np>0) then
-
+#endif
           record = obj(i)%record
           start1D = (/1, record/)
           start2D = (/1,1,record/)
@@ -813,13 +846,22 @@ contains
 #else
             oname = trim(obj(i)%set)//'_zeta'//trim(obj(i)%bnd)
 #endif
+          if (obj(i)%np > 0) then
             call interpolate(zeta(:,:,knew),obj(i)%vari(:,1),coef,ip,jp)
             call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D,.true.)
+          else
+            call ncwrite(ncid,oname,dummy1d,start1D,.true.)
+          endif
           endif
 
-          pio_gtype = '----'
           if (obj(i)%temp) then
+#ifdef PARALLEL_IO
+            oname = 'temp' // trim(obj(i)%bnd)
+            pio_gtype = pio_bnd // '2rc'
+#else
             oname = trim(obj(i)%set)//'_temp'//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
             call interpolate(t(:,:,:,nstp,itemp),obj(i)%vari,coef,ip,jp)
             if (parent_child_grid_mismatch) then
               do j=1,obj(i)%np
@@ -827,14 +869,24 @@ contains
                 &obj(i)%vari(j,:), N_chd,&
                 &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
               enddo
-              call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+              call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
             else
-              call ncwrite(ncid,oname,obj(i)%vari,start2D)
+              call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
             endif
+          else
+            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
           endif
+          endif
+
 #ifdef SALINITY
           if (obj(i)%salt) then
+#ifdef PARALLEL_IO
+            oname = 'salt' // trim(obj(i)%bnd)
+            pio_gtype = pio_bnd // '2rc'
+#else
             oname = trim(obj(i)%set)//'_salt'//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
             call interpolate(t(:,:,:,nstp,isalt),obj(i)%vari,coef,ip,jp)
             if (parent_child_grid_mismatch) then
               do j=1,obj(i)%np
@@ -842,15 +894,25 @@ contains
                 &obj(i)%vari(j,:), N_chd,&
                 &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
               enddo
-              call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+              call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
             else
-              call ncwrite(ncid,oname,obj(i)%vari,start2D)
+              call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
             endif
+          else
+            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
+          endif
           endif
 #endif
+
           if (obj(i)%bgc) then
             do indt=isalt+nt_passive+1,NT
+#ifdef PARALLEL_IO
+              oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
+              pio_gtype = pio_bnd // '2rc'
+#else
               oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
               call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
               if (parent_child_grid_mismatch) then
                 do j=1,obj(i)%np
@@ -858,15 +920,19 @@ contains
                   &obj(i)%vari(j,:), N_chd,&
                   &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
               else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D)
+                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
               endif
-            enddo
+          else
+            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
           endif
+            enddo ! indt
+          endif  ! bgc
 
 !     w variables --------------------------------------------------------
 
+          pio_gtype = '----'
           if (obj(i)%w) then
             call wvlcty (0,Wvl)
             oname = trim(obj(i)%set)//'_w'//trim(obj(i)%bnd)
@@ -884,7 +950,7 @@ contains
           endif
 
 !     u variables --------------------------------------------------------
-
+          if (obj(i)%np > 0) then
           if (parent_child_grid_mismatch) then
             if ((obj(i)%u) .or. (obj(i)%up)) then
 ! Get thickness and depth at interpolated location
@@ -901,43 +967,73 @@ contains
               enddo
             endif
           endif
+          endif
 
           if (obj(i)%ubar) then
+#ifdef PARALLEL_IO
+            oname = 'ubar' // trim(obj(i)%bnd)
+            pio_gtype = pio_bnd // '1uc'
+#else
             oname = trim(obj(i)%set)//'_ubar'//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
             call interpolate(ubar(:,:,knew),ui(:,1),cfu,ipu,jpu)
             call interpolate(vbar(:,:,knew),vi(:,1),cfv,ipv,jpv)
             obj(i)%vari(:,1) = obj(i)%cosa*ui(:,1) - obj(i)%sina*vi(:,1)
-            call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
+            call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D,.true.)
+          else
+            call ncwrite(ncid,oname,dummy1d,start1D,.true.)
           endif
+          endif
+
           if (obj(i)%u) then
+#ifdef PARALLEL_IO
+            oname = 'u' // trim(obj(i)%bnd)
+            pio_gtype = pio_bnd // '2uc'
+#else
+            oname = trim(obj(i)%set)//'_u'//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
             call interpolate(u(:,:,:,nstp),ui,cfu,ipu,jpu)
             call interpolate(v(:,:,:,nstp),vi,cfv,ipv,jpv)
             obj(i)%vari = ui
             do k=1,nz
               obj(i)%vari(:,k) = obj(i)%cosa*ui(:,k) - obj(i)%sina*vi(:,k)
             enddo
-            oname = trim(obj(i)%set)//'_u'//trim(obj(i)%bnd)
             if (parent_child_grid_mismatch) then
               do j=1,obj(i)%np
                 call remap_src_to_grid(N, obj(i)%Hz_par_u(j,:),&
                 &obj(i)%vari(j,:), N_chd,&
                 &obj(i)%Hz_chd_u(j,:), obj(i)%vari_chd(j,:))
               enddo
-              call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+              call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
             else
-              call ncwrite(ncid,oname,obj(i)%vari,start2D)
+              call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
             endif
+          else
+            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
           endif
+          endif
+
           if (obj(i)%up) then
+#ifdef PARALLEL_IO
+            oname = 'up' // trim(obj(i)%bnd)
+            pio_gtype = pio_bnd // '2uc'
+#else
+            oname = trim(obj(i)%set)//'_up'//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
             call interpolate(upe,ui(:,1),cfu,ipu,jpu)
             call interpolate(vpe,vi(:,1),cfv,ipv,jpv)
             obj(i)%vari(:,1) = obj(i)%cosa*ui(:,1) - obj(i)%sina*vi(:,1)
-            oname = trim(obj(i)%set)//'_up'//trim(obj(i)%bnd)
-            call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
+            call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D,.true.)
+          else
+            call ncwrite(ncid,oname,dummy1d,start1D,.true.)
+          endif
           endif
 
 !     v variables --------------------------------------------------------
-
+          if (obj(i)%np > 0) then
           if (parent_child_grid_mismatch) then
             if ((obj(i)%v) .or. (obj(i)%vp)) then
 ! Get thickness and depth at interpolated location
@@ -954,41 +1050,74 @@ contains
               enddo
             endif
           endif
+          endif
 
           if (obj(i)%vbar) then
+#ifdef PARALLEL_IO
+            oname = 'vbar' // trim(obj(i)%bnd)
+            pio_gtype = pio_bnd // '1vc'
+#else
             oname = trim(obj(i)%set)//'_vbar'//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
             call interpolate(ubar(:,:,knew),ui(:,1),cfu,ipu,jpu)
             call interpolate(vbar(:,:,knew),vi(:,1),cfv,ipv,jpv)
             obj(i)%vari(:,1) = obj(i)%sina*ui(:,1) + obj(i)%cosa*vi(:,1)
-            call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
+            call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D,.true.)
+          else
+            call ncwrite(ncid,oname,dummy1d,start1D,.true.)
           endif
+          endif
+
           if (obj(i)%v) then
+#ifdef PARALLEL_IO
+            oname = 'v' // trim(obj(i)%bnd)
+            pio_gtype = pio_bnd // '2vc'
+#else
+            oname = trim(obj(i)%set)//'_v'//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
             call interpolate(u(:,:,:,nstp),ui,cfu,ipu,jpu)
             call interpolate(v(:,:,:,nstp),vi,cfv,ipv,jpv)
             do k=1,nz
               obj(i)%vari(:,k) = obj(i)%sina*ui(:,k) + obj(i)%cosa*vi(:,k)
             enddo
-            oname = trim(obj(i)%set)//'_v'//trim(obj(i)%bnd)
             if (parent_child_grid_mismatch) then
               do j=1,obj(i)%np
                 call remap_src_to_grid(N, obj(i)%Hz_par_v(j,:),&
                 &obj(i)%vari(j,:), N_chd,&
                 &obj(i)%Hz_chd_v(j,:), obj(i)%vari_chd(j,:))
               enddo
-              call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
+              call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
             else
-              call ncwrite(ncid,oname,obj(i)%vari,start2D)
+              call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
             endif
+          else
+            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
           endif
+          endif
+
           if (obj(i)%vp) then
+#ifdef PARALLEL_IO
+            oname = 'vp' // trim(obj(i)%bnd)
+            pio_gtype = pio_bnd // '1vc'
+#else
+            oname = trim(obj(i)%set)//'_vp'//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
             call interpolate(upe,ui(:,1),cfu,ipu,jpu)
             call interpolate(vpe,vi(:,1),cfv,ipv,jpv)
             obj(i)%vari(:,1) = obj(i)%sina*ui(:,1) + obj(i)%cosa*vi(:,1)
-            oname = trim(obj(i)%set)//'_vp'//trim(obj(i)%bnd)
-            call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D)
+            call ncwrite(ncid,oname,obj(i)%vari(:,1),start1D,.true.)
+          else
+            call ncwrite(ncid,oname,dummy1d,start1D,.true.)
+          endif
           endif
 
+#ifndef PARALLEL_IO
         endif
+#endif
+
 !endif
       enddo
 

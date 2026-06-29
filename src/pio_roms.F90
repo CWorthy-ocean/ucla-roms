@@ -1318,7 +1318,7 @@ contains
 
   end subroutine pio_initialize_z
 ! ----------------------------------------------------------------------
-  subroutine pio_initialize_extract(start, np, dsize, LLm_chd, MMm_chd, N_chd, bnd)
+  subroutine pio_initialize_extract(start, np, dsize, LLm_chd, MMm_chd, N_chd, bnd, stag)
 
   implicit none
 
@@ -1330,6 +1330,8 @@ contains
   integer(kind=4), intent(in) :: MMm_chd
   integer(kind=4), intent(in) :: N_chd
   character(len=20), intent(in) :: bnd
+  character(len=1), intent(in) :: stag
+  integer(kind=4) :: ierr
 
   pio_dimLen_1Chdnr_w(1) = LLm_chd
   pio_dimLen_2Chdnr_w(1) = LLm_chd
@@ -1380,215 +1382,198 @@ contains
   pio_dimLen_2Chdwv_w(2) = N_chd
 
   if (trim(bnd) == '_north') then
-    pio_start_1Chdnr_w(1) = start
 
-    pio_start_2Chdnr_w(1) = start
-    pio_start_2Chdnr_w(2) = 1
-
-    pio_start_1Chdnv_w(1) = start
-
-    pio_start_2Chdnv_w(1) = start
-    pio_start_2Chdnv_w(2) = 1
-
-    pio_start_1Chdnu_w(1) = start
-
-    pio_start_2Chdnu_w(1) = start
-    pio_start_2Chdnu_w(2) = 1
-
-    pio_count_1Chdnr_w(:) = 0
-    pio_count_2Chdnr_w(:) = 0
-    pio_count_1Chdnv_w(:) = 0
-    pio_count_2Chdnv_w(:) = 0
-    pio_count_1Chdnu_w(:) = 0
-    pio_count_2Chdnu_w(:) = 0
-
-    if (dsize == LLm_chd) then
+    if (stag == 'r') then
+      pio_start_1Chdnr_w(1) = start
+      pio_start_2Chdnr_w(1) = start
+      pio_start_2Chdnr_w(2) = 1
+      pio_count_1Chdnr_w(:) = 0
+      pio_count_2Chdnr_w(:) = 0
       if (np > 0) then
         pio_count_1Chdnr_w(1) = np
-
         pio_count_2Chdnr_w(1) = np
         pio_count_2Chdnr_w(2) = N_chd
-
-        pio_count_1Chdnv_w(1) = np
-
-        pio_count_2Chdnv_w(1) = np
-        pio_count_2Chdnv_w(2) = N_chd
       endif
-      call MPI_Barrier(ocean_grid_comm)
+      call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnr_w, pio_start_1Chdnr_w, pio_count_1Chdnr_w, pio_desc_1Chdnr_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnv_w, pio_start_1Chdnv_w, pio_count_1Chdnv_w, pio_desc_1Chdnv_w)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnr_w, pio_start_2Chdnr_w, pio_count_2Chdnr_w, pio_desc_2Chdnr_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnv_w, pio_start_2Chdnv_w, pio_count_2Chdnv_w, pio_desc_2Chdnv_w)
-    else
+
+    else if (stag == 'u') then
+      pio_start_1Chdnu_w(1) = start
+      pio_start_2Chdnu_w(1) = start
+      pio_start_2Chdnu_w(2) = 1
+      pio_count_1Chdnu_w(:) = 0
+      pio_count_2Chdnu_w(:) = 0
       if (np > 0) then
         pio_count_1Chdnu_w(1) = np
-
         pio_count_2Chdnu_w(1) = np
         pio_count_2Chdnu_w(2) = N_chd
       endif
-      call MPI_Barrier(ocean_grid_comm)
+      call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnu_w, pio_start_1Chdnu_w, pio_count_1Chdnu_w, pio_desc_1Chdnu_w)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnu_w, pio_start_2Chdnu_w, pio_count_2Chdnu_w, pio_desc_2Chdnu_w)
-    endif ! dsize
+
+    else if (stag == 'v') then
+      pio_start_1Chdnv_w(1) = start
+      pio_start_2Chdnv_w(1) = start
+      pio_start_2Chdnv_w(2) = 1
+      pio_count_1Chdnv_w(:) = 0
+      pio_count_2Chdnv_w(:) = 0
+      if (np > 0) then
+        pio_count_1Chdnv_w(1) = np
+        pio_count_2Chdnv_w(1) = np
+        pio_count_2Chdnv_w(2) = N_chd
+      endif
+      call MPI_Barrier(ocean_grid_comm, ierr)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnv_w, pio_start_1Chdnv_w, pio_count_1Chdnv_w, pio_desc_1Chdnv_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnv_w, pio_start_2Chdnv_w, pio_count_2Chdnv_w, pio_desc_2Chdnv_w)
+    endif
+
   endif ! north
-
   if (trim(bnd) == '_south') then
-    pio_start_1Chdsr_w(1) = start
 
-    pio_start_2Chdsr_w(1) = start
-    pio_start_2Chdsr_w(2) = 1
-
-    pio_start_1Chdsv_w(1) = start
-
-    pio_start_2Chdsv_w(1) = start
-    pio_start_2Chdsv_w(2) = 1
-
-    pio_start_1Chdsu_w(1) = start
-
-    pio_start_2Chdsu_w(1) = start
-    pio_start_2Chdsu_w(2) = 1
-
-    pio_count_1Chdsr_w(:) = 0
-    pio_count_2Chdsr_w(:) = 0
-    pio_count_1Chdsv_w(:) = 0
-    pio_count_2Chdsv_w(:) = 0
-    pio_count_1Chdsu_w(:) = 0
-    pio_count_2Chdsu_w(:) = 0
-
-    if (dsize == LLm_chd) then
+    if (stag == 'r') then
+      pio_start_1Chdsr_w(1) = start
+      pio_start_2Chdsr_w(1) = start
+      pio_start_2Chdsr_w(2) = 1
+      pio_count_1Chdsr_w(:) = 0
+      pio_count_2Chdsr_w(:) = 0
       if (np > 0) then
         pio_count_1Chdsr_w(1) = np
-
         pio_count_2Chdsr_w(1) = np
         pio_count_2Chdsr_w(2) = N_chd
-
-        pio_count_1Chdsv_w(1) = np
-
-        pio_count_2Chdsv_w(1) = np
-        pio_count_2Chdsv_w(2) = N_chd
       endif
-      call MPI_Barrier(ocean_grid_comm)
+      call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsr_w, pio_start_1Chdsr_w, pio_count_1Chdsr_w, pio_desc_1Chdsr_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsv_w, pio_start_1Chdsv_w, pio_count_1Chdsv_w, pio_desc_1Chdsv_w)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsr_w, pio_start_2Chdsr_w, pio_count_2Chdsr_w, pio_desc_2Chdsr_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsv_w, pio_start_2Chdsv_w, pio_count_2Chdsv_w, pio_desc_2Chdsv_w)
-    else
+    else if (stag == 'u') then
+      pio_start_1Chdsu_w(1) = start
+      pio_start_2Chdsu_w(1) = start
+      pio_start_2Chdsu_w(2) = 1
+      pio_count_1Chdsu_w(:) = 0
+      pio_count_2Chdsu_w(:) = 0
       if (np > 0) then
         pio_count_1Chdsu_w(1) = np
-
         pio_count_2Chdsu_w(1) = np
         pio_count_2Chdsu_w(2) = N_chd
       endif
-      call MPI_Barrier(ocean_grid_comm)
+      call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsu_w, pio_start_1Chdsu_w, pio_count_1Chdsu_w, pio_desc_1Chdsu_w)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsu_w, pio_start_2Chdsu_w, pio_count_2Chdsu_w, pio_desc_2Chdsu_w)
-    endif ! dsize
+    else if (stag == 'v') then
+      pio_start_1Chdsv_w(1) = start
+      pio_start_2Chdsv_w(1) = start
+      pio_start_2Chdsv_w(2) = 1
+      pio_count_1Chdsv_w(:) = 0
+      pio_count_2Chdsv_w(:) = 0
+      if (np > 0) then
+        pio_count_1Chdsv_w(1) = np
+        pio_count_2Chdsv_w(1) = np
+        pio_count_2Chdsv_w(2) = N_chd
+      endif
+      call MPI_Barrier(ocean_grid_comm, ierr)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsv_w, pio_start_1Chdsv_w, pio_count_1Chdsv_w, pio_desc_1Chdsv_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsv_w, pio_start_2Chdsv_w, pio_count_2Chdsv_w, pio_desc_2Chdsv_w)
+    endif
+
   endif ! south
-
   if (trim(bnd) == '_east') then
-    pio_start_1Chder_w(1) = start
 
-    pio_start_2Chder_w(1) = start
-    pio_start_2Chder_w(2) = 1
-
-    pio_start_1Chdeu_w(1) = start
-
-    pio_start_2Chdeu_w(1) = start
-    pio_start_2Chdeu_w(2) = 1
-
-    pio_start_1Chdev_w(1) = start
-
-    pio_start_2Chdev_w(1) = start
-    pio_start_2Chdev_w(2) = 1
-
-    pio_count_1Chder_w(:) = 0
-    pio_count_2Chder_w(:) = 0
-    pio_count_1Chdeu_w(:) = 0
-    pio_count_2Chdeu_w(:) = 0
-    pio_count_1Chdev_w(:) = 0
-    pio_count_2Chdev_w(:) = 0
-
-    if (dsize == MMm_chd) then
+    if (stag == 'r') then
+      pio_start_1Chder_w(1) = start
+      pio_start_2Chder_w(1) = start
+      pio_start_2Chder_w(2) = 1
+      pio_count_1Chder_w(:) = 0
+      pio_count_2Chder_w(:) = 0
       if (np > 0) then
         pio_count_1Chder_w(1) = np
-
         pio_count_2Chder_w(1) = np
         pio_count_2Chder_w(2) = N_chd
+      endif
+      call MPI_Barrier(ocean_grid_comm, ierr)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chder_w, pio_start_1Chder_w, pio_count_1Chder_w, pio_desc_1Chder_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chder_w, pio_start_2Chder_w, pio_count_2Chder_w, pio_desc_2Chder_w)
 
+    else if (stag == 'u') then
+      pio_start_1Chdeu_w(1) = start
+      pio_start_2Chdeu_w(1) = start
+      pio_start_2Chdeu_w(2) = 1
+      pio_count_1Chdeu_w(:) = 0
+      pio_count_2Chdeu_w(:) = 0
+      if (np > 0) then
         pio_count_1Chdeu_w(1) = np
-
         pio_count_2Chdeu_w(1) = np
         pio_count_2Chdeu_w(2) = N_chd
       endif
-      call MPI_Barrier(ocean_grid_comm)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chder_w, pio_start_1Chder_w, pio_count_1Chder_w, pio_desc_1Chder_w)
+      call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdeu_w, pio_start_1Chdeu_w, pio_count_1Chdeu_w, pio_desc_1Chdeu_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chder_w, pio_start_2Chder_w, pio_count_2Chder_w, pio_desc_2Chder_w)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdeu_w, pio_start_2Chdeu_w, pio_count_2Chdeu_w, pio_desc_2Chdeu_w)
-    else
+
+    else if (stag == 'v') then
+      pio_start_1Chdev_w(1) = start
+      pio_start_2Chdev_w(1) = start
+      pio_start_2Chdev_w(2) = 1
+      pio_count_1Chdev_w(:) = 0
+      pio_count_2Chdev_w(:) = 0
       if (np > 0) then
         pio_count_1Chdev_w(1) = np
-
         pio_count_2Chdev_w(1) = np
         pio_count_2Chdev_w(2) = N_chd
       endif
-      call MPI_Barrier(ocean_grid_comm)
+      call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdev_w, pio_start_1Chdev_w, pio_count_1Chdev_w, pio_desc_1Chdev_w)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdev_w, pio_start_2Chdev_w, pio_count_2Chdev_w, pio_desc_2Chdev_w)
-    endif ! dsize
+    endif
+
   endif ! east
-
   if (trim(bnd) == '_west') then
-    pio_start_1Chdwr_w(1) = start
 
-    pio_start_2Chdwr_w(1) = start
-    pio_start_2Chdwr_w(2) = 1
-
-    pio_start_1Chdwu_w(1) = start
-
-    pio_start_2Chdwu_w(1) = start
-    pio_start_2Chdwu_w(2) = 1
-
-    pio_start_1Chdwv_w(1) = start
-
-    pio_start_2Chdwv_w(1) = start
-    pio_start_2Chdwv_w(2) = 1
-
-    pio_count_1Chdwr_w(:) = 0
-    pio_count_2Chdwr_w(:) = 0
-    pio_count_1Chdwu_w(:) = 0
-    pio_count_2Chdwu_w(:) = 0
-    pio_count_1Chdwv_w(:) = 0
-    pio_count_2Chdwv_w(:) = 0
-
-    if (dsize == MMm_chd) then
+    if (stag == 'r') then
+      pio_start_1Chdwr_w(1) = start
+      pio_start_2Chdwr_w(1) = start
+      pio_start_2Chdwr_w(2) = 1
+      pio_count_1Chdwr_w(:) = 0
+      pio_count_2Chdwr_w(:) = 0
       if (np > 0) then
         pio_count_1Chdwr_w(1) = np
-
         pio_count_2Chdwr_w(1) = np
         pio_count_2Chdwr_w(2) = N_chd
+      endif
+      call MPI_Barrier(ocean_grid_comm, ierr)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwr_w, pio_start_1Chdwr_w, pio_count_1Chdwr_w, pio_desc_1Chdwr_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwr_w, pio_start_2Chdwr_w, pio_count_2Chdwr_w, pio_desc_2Chdwr_w)
 
+    else if (stag == 'u') then
+      pio_start_1Chdwu_w(1) = start
+      pio_start_2Chdwu_w(1) = start
+      pio_start_2Chdwu_w(2) = 1
+      pio_count_1Chdwu_w(:) = 0
+      pio_count_2Chdwu_w(:) = 0
+      if (np > 0) then
         pio_count_1Chdwu_w(1) = np
-
         pio_count_2Chdwu_w(1) = np
         pio_count_2Chdwu_w(2) = N_chd
       endif
-      call MPI_Barrier(ocean_grid_comm)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwr_w, pio_start_1Chdwr_w, pio_count_1Chdwr_w, pio_desc_1Chdwr_w)
+      call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwu_w, pio_start_1Chdwu_w, pio_count_1Chdwu_w, pio_desc_1Chdwu_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwr_w, pio_start_2Chdwr_w, pio_count_2Chdwr_w, pio_desc_2Chdwr_w)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwu_w, pio_start_2Chdwu_w, pio_count_2Chdwu_w, pio_desc_2Chdwu_w)
-    else
+
+    else if (stag == 'v') then
+      pio_start_1Chdwv_w(1) = start
+      pio_start_2Chdwv_w(1) = start
+      pio_start_2Chdwv_w(2) = 1
+      pio_count_1Chdwv_w(:) = 0
+      pio_count_2Chdwv_w(:) = 0
       if (np > 0) then
         pio_count_1Chdwv_w(1) = np
-
         pio_count_2Chdwv_w(1) = np
         pio_count_2Chdwv_w(2) = N_chd
       endif
-      call MPI_Barrier(ocean_grid_comm)
+      call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwv_w, pio_start_1Chdwv_w, pio_count_1Chdwv_w, pio_desc_1Chdwv_w)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwv_w, pio_start_2Chdwv_w, pio_count_2Chdwv_w, pio_desc_2Chdwv_w)
-    endif !dsize
+    endif
+
   endif ! west
 
   end subroutine pio_initialize_extract
