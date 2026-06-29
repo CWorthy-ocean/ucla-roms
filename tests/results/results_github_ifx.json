@@ -5,19 +5,19 @@
   },
   "bgc_real_marbl": {
     "physics": "bf6ac4cb417cf44d289ac42d68729d4211df0edd4defbe22e2e2b150a010f49d",
-    "bgc": "8dd8c73c0934ae7306d84e4dbdbfaeac9abae5abac4175e9f36bb70c6369a784"
+    "bgc": "74d5458119b50c53692713d85377857db2d27a49e03078b1ba6c747349c7faee"
   },
   "cdr_3d": {
     "physics": "15e78f1a08498f07cd621f0ca28128c61f967ef25327d8ab3cbe8c6617bfa609",
-    "bgc": "d9f2657f15ba92a25c3d591793256fc2bd7e15d553e21dbcaea804332b9231bc"
+    "bgc": "ecbdae1805f814847e52c1319c5809b1272d5fc6d806bfd13eb3393b5697a370"
   },
   "cdr_dp": {
     "physics": "15e78f1a08498f07cd621f0ca28128c61f967ef25327d8ab3cbe8c6617bfa609",
-    "bgc": "e0f8511ee0de447204753eaa4171f70fca5ac3769e9157d3da8e1fc410db27c1"
+    "bgc": "53ba8a8ff1713213e0aa971718a53a0845e621a328bc1f4bdaf4fd87a5ba4c15"
   },
   "cdr_parameterized": {
     "physics": "15e78f1a08498f07cd621f0ca28128c61f967ef25327d8ab3cbe8c6617bfa609",
-    "bgc": "74c36ea4831da8ef7c7a323d547f9cdea301fa2aac15598996c54bbea146473a"
+    "bgc": "ebe11bf96edb36bb56505b7e698e932869350bef077fa597e64a71cbd4aec0b7"
   },
   "filament": {
     "physics": "7f3bca215bfebc1f7bbb982ef3d411d8d72a95d5fef7d4294e112e465b6e808b"
