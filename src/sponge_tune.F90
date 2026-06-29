@@ -43,14 +43,14 @@ module sponge_tune
   &vname='vp_north',tname='bry_time')
 
 
-  real(kind=8)    :: sp_timscale = 24*3600 ! filtering time scale
+  real(kind=8)    :: sponge_timescale = 24*3600 ! filtering time scale
 
-  integer(kind=4) :: nrpf = 7              ! Number of records per file
-  real(kind=8)    :: output_period = 24*3600 ! time between outputs in seconds
+  integer(kind=4) :: nrpf_sponge = 7              ! Number of records per file
+  real(kind=8)    :: output_period_sponge = 24*3600 ! time between outputs in seconds
   logical, public ::&
-  &ub_tune, wrt_sponge, spn_avg
-  namelist /SPONGE_TUNE_SETTINGS/ sp_timscale, nrpf, output_period,&
-  &ub_tune, wrt_sponge, spn_avg
+  &ub_tune, wrt_sponge, sponge_avg
+  namelist /SPONGE_TUNE_SETTINGS/ sponge_timescale, nrpf_sponge, output_period_sponge,&
+  &ub_tune, wrt_sponge, sponge_avg
 
   logical   :: tune_init = .true.
 
@@ -103,7 +103,7 @@ contains
     end if
     close(namelist_unit)
 
-    record = nrpf
+    record = nrpf_sponge
 
   end subroutine read_nml_sponge_tune
 
@@ -272,7 +272,7 @@ contains
     ub_mx = 2.0_8
     ub_mn =-1.0_8
 
-    alpha = 0.5_8*ub_mx*dt/sp_timscale
+    alpha = 0.5_8*ub_mx*dt/sponge_timescale
 
     if (tune_init) call init_orlanski_tune
 
@@ -306,7 +306,7 @@ contains
 
     output_time = output_time + dt
     call calc_spn_avg
-    if (output_time>=output_period .and. wrt_sponge) then
+    if (output_time>=output_period_sponge .and. wrt_sponge) then
       call write_sp_tune
       output_time = 0
     endif
@@ -326,7 +326,7 @@ contains
 
     coef = 1._8/navg
 
-    if (spn_avg) then
+    if (sponge_avg) then
       if (obc_south.and.jnode.eq.0) then
         cflx_south_avg = cflx_south_avg*(1-coef) + cflx_south*coef
         pflx_south_avg = pflx_south_avg*(1-coef) + pflx_south*coef
@@ -352,7 +352,7 @@ contains
     save fname
 
 #ifdef PARALLEL_IO
-    if (record==nrpf) then
+    if (record==nrpf_sponge) then
       call create_sp_tune_file(fname)
       record = 0
     endif
@@ -394,7 +394,7 @@ contains
 
 #else ! PARALLEL_IO
 
-    if (record==nrpf) then
+    if (record==nrpf_sponge) then
       call create_sp_tune_file(fname)
       record = 0
     endif

@@ -150,10 +150,10 @@ contains
     use bec2_params, only: ecosys2_init
 #endif
     use grid, only: get_grid, dm_r, dn_r
-    use roms_read_write, only: nrrec, frc_time
+    use roms_read_write, only: nrrec, frc_time, inifile
     use param, only:&
     &mynode, nsub_e, nsub_x, lm, mm,&
-    &N, np_eta, np_xi, padd_e, padd_x
+    &nz, np_eta, np_xi, padd_e, padd_x
 #ifdef SPONGE_TUNE
     use sponge_tune, only: init_orlanski_tune, ub_tune
 #endif
@@ -235,7 +235,7 @@ contains
 #endif
 
 #ifdef NHMG
-    call nhmg_init(Lm,Mm,N,NP_XI,NP_ETA)
+    call nhmg_init(Lm,Mm,nz,NP_XI,NP_ETA)
 #endif
 #ifdef SPONGE_TUNE
     if (ub_tune) call init_orlanski_tune
@@ -286,7 +286,7 @@ contains
     call set_forces               ! model prognostic variables,
     call ana_init                 ! may require surface forcing
     ! either analytically or read
-    if (nrrec > 0) then
+    if (len_trim(inifile) > 0) then   ! only read IC file if one was supplied
 #endif
 
 #ifdef EXACT_RESTART
@@ -298,7 +298,7 @@ contains
       call init_restarts
 
 #ifdef ANA_INITIAL
-    endif    !<-- nrrec>0
+    endif    !<-- len_trim(inifile)>0
 #endif
 
 #ifdef ANA_VMIX
@@ -321,7 +321,7 @@ contains
 !  then set matrices coefficients for the elliptic problem
 !----------------------------------------------------------------------
 #ifdef NHMG
-    call nhmg_matrices(Lm,Mm,N,halo,padd_X,padd_E,dzdxi,dzdeta,Hz,&
+    call nhmg_matrices(Lm,Mm,nz,halo,padd_X,padd_E,dzdxi,dzdeta,Hz,&
     &dm_r(0:Lm+1,0:Mm+1),&
     &dn_r(0:Lm+1,0:Mm+1)    )
 #endif

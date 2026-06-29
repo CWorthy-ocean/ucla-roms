@@ -66,7 +66,7 @@ contains
 #if defined CDR_FORCING && defined MARBL
   use cdr_frc, only: cdr_nprf, cdr_icdr, cdr_iloc,&
   &cdr_jloc, cdr_flx, cdr_prf, cdr_flx_3d_ALK, cdr_flx_3d_DIC,&
-  &ncdr, cdr_source, forcing_3d
+  &ncdr, cdr_source, cdr_forcing_3d
 #endif
   use river_frc, only: iriver, riv_depth, riv_uvel, riv_vvel, river_source,&
   &riv_uflx, riv_vol, riv_trc, riv_vflx
@@ -93,7 +93,7 @@ contains
        & ieast, isalt, itemp, iwest, jnorth, jsouth
   use t3dbc_mod, only : t3dbc_tile
   use ocean_vars, only: flxu, flxv, z_w, hz, we, wi, z_r
-  use scalars, only: n, dt, nnew, nrhs, nt, nstp
+  use scalars, only: nz, dt, nnew, nrhs, nt, nstp
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
   use upscale_output, only:&
   &calc_forcing_rates, wrt_upscale, do_upscale
@@ -109,14 +109,14 @@ contains
   use surf_flux, only: swflx
   implicit none
   integer(kind=4) icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k!, td
-  real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: WC,FC,CF,DC
+  real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: WC,FC,CF,DC
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY)     :: FX,FE, wrk1
 # ifdef ADV_ISONEUTRAL
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,2) :: FSC,  dTdz,&
   &dTdx, dTde
-  real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,N) :: LapT
+  real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,nz) :: LapT
 #  ifdef STABILIZE
-  real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:N) :: Akz
+  real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: Akz
 #  endif
 # endif
   real(kind=8) cff
@@ -190,12 +190,12 @@ contains
 
 # ifdef ADV_ISONEUTRAL
     k2=1
-    do k=0,N,+1       !--> recursive
+    do k=0,nz,+1       !--> recursive
       k1=k2
       k2=3-k1
       if (k > 0) then
 # else
-    do k=1,N
+    do k=1,nz
 # endif
 
 ! Compute and add in contribution due to horizontal advection fluxes.
@@ -332,7 +332,7 @@ contains
           &- t(i,j,1,ntdf,itrc) )
         enddo
       enddo
-    elseif (k < N) then
+    elseif (k < nz) then
       do j=jmin-1,jmax+1
         do i=imin-1,imax+1
           FSC(i,j,k2)=idRz(i,j,k)*(z_r (i,j,k+1)-z_r (i,j,k))
@@ -340,7 +340,7 @@ contains
           &- t(i,j,k,ntdf,itrc) )
         enddo
       enddo
-    elseif (k == N) then
+    elseif (k == nz) then
       do j=jmin-1,jmax+1
         do i=imin-1,imax+1
           FSC(i,j,k2)=0._8
@@ -356,7 +356,7 @@ contains
 ! to FSC further below, where both slices of dTdx,dTde will be used
 ! simultaneously.
 
-    if (k < N) then
+    if (k < nz) then
       do j=jmin,jmax
         do i=imin,imax+1
           dTdx(i,j,k2)=0.5_8*(pm(i,j)+pm(i-1,j))*(&
@@ -415,7 +415,7 @@ contains
 
 ! Finalize computation of the vertical component FSC
 
-      if (k < N) then
+      if (k < nz) then
         do j=jmin,jmax
           do i=imin,imax
 #  ifdef SW_TRIADS
@@ -527,7 +527,7 @@ contains
 
 #  ifndef EW_PERIODIC
   if (WESTERN_EDGE) then
-    do k=1,N
+    do k=1,nz
       do j=jmin,jmax
 #   ifndef OBC_WEST
         LapT(istr-1,j,k)=0._8
@@ -538,7 +538,7 @@ contains
     enddo
   endif
   if (EASTERN_EDGE) then
-    do k=1,N
+    do k=1,nz
       do j=jmin,jmax
 #   ifndef OBC_EAST
         LapT(iend+1,j,k)=0._8
@@ -551,7 +551,7 @@ contains
 #  endif
 #  ifndef NS_PERIODIC
   if (SOUTHERN_EDGE) then
-    do k=1,N
+    do k=1,nz
       do i=imin,imax
 #   ifndef OBC_SOUTH
         LapT(i,jstr-1,k)=0._8
@@ -562,7 +562,7 @@ contains
     enddo
   endif
   if (NORTHERN_EDGE) then
-    do k=1,N
+    do k=1,nz
       do i=imin,imax
 #   ifndef OBC_NORTH
         LapT(i,jend+1,k)=0._8
@@ -578,7 +578,7 @@ contains
 !---- ------ ------- --------- ----------
 
   k2=1
-  do k=0,N,+1
+  do k=0,nz,+1
     k1=k2
     k2=3-k1
 
@@ -589,14 +589,14 @@ contains
           dTdz(i,j,k2)=idRz(i,j,1)*(LapT(i,j,2)-LapT(i,j,1))
         enddo
       enddo
-    elseif (k < N) then
+    elseif (k < nz) then
       do j=jstr-1,jend+1
         do i=istr-1,iend+1
           FSC(i,j,k2)= idRz(i,j,k)*(z_r (i,j,k+1)-z_r (i,j,k))
           dTdz(i,j,k2)=idRz(i,j,k)*(LapT(i,j,k+1)-LapT(i,j,k))
         enddo
       enddo
-    elseif (k == N) then
+    elseif (k == nz) then
       do j=jmin-1,jmax+1
         do i=imin-1,imax+1
           FSC(i,j,k2)=0._8
@@ -605,7 +605,7 @@ contains
       enddo
     endif
 
-    if (k < N) then
+    if (k < nz) then
       do j=jstr,jend
         do i=istr,iend+1
           dTdx(i,j,k2)=0.5_8*(pm(i,j)+pm(i-1,j))*( LapT(i,j,k+1)&
@@ -659,7 +659,7 @@ contains
         enddo
       enddo
 
-      if (k < N) then    ! Compute the vertical component...
+      if (k < nz) then    ! Compute the vertical component...
         do j=jstr,jend
           do i=istr,iend
 
@@ -871,7 +871,7 @@ contains
 #if defined CDR_FORCING && defined MARBL
   if (cdr_source) then
 
-    if (forcing_3d) then
+    if (cdr_forcing_3d) then
       if (itrc == iALK) then
         do k=1,nz
           do j=1,ny
@@ -892,7 +892,7 @@ contains
         enddo
       endif
 
-    else ! forcing_3d
+    else ! cdr_forcing_3d
       ! Loop over cdr release locations in this subdomain
       ! The global sum over all cdr_prf for each tracer should be 1.
       ! cdr_flux unit is [C/s]
@@ -909,7 +909,7 @@ contains
           &cdr_prf(cidx,itrc,k)*cdr_flx(icdr,itrc)
         enddo
       enddo
-    endif ! forcing_3d
+    endif ! cdr_forcing_3d
 
   endif ! cdr_source
 #endif
@@ -966,7 +966,7 @@ contains
 
     !! JM add line for bottom tracer flux
     do i=istr,iend
-      t(i,j,N,nnew,itrc)=t(i,j,N,nnew,itrc)+dt*stflx(i,j,itrc)
+      t(i,j,nz,nnew,itrc)=t(i,j,nz,nnew,itrc)+dt*stflx(i,j,itrc)
 !           t(i,j,1,nnew,itrc)=t(i,j,1,nnew,itrc)+dt*btflx(i,j,itrc)
     enddo
 
@@ -977,7 +977,7 @@ contains
 ! scheme.
 
     if (itrc == itemp) then
-      do k=N-1,1,-1
+      do k=nz-1,1,-1
         do i=istr,iend
           cff=srflx(i,j)*swr_frac(i,j,k)&
 #  ifdef LMD_NONLOCAL
@@ -1004,7 +1004,7 @@ contains
 
 #  if defined LMD_NONLOCAL && defined SALINITY
     elseif (itrc == isalt) then
-      do k=N-1,1,-1
+      do k=nz-1,1,-1
         do i=istr,iend
           cff=-dt*ghat(i,j,k)*stflx(i,j,isalt)
           t(i,j,k+1,nnew,isalt)=t(i,j,k+1,nnew,isalt) -cff
@@ -1070,7 +1070,7 @@ contains
       CF(i,1)=cff*(      FC(i,1)-min(WC(i,1),0._8))
       DC(i,1)=cff*t(i,j,1,nnew,itrc)
     enddo
-    do k=2,N-1,+1
+    do k=2,nz-1,+1
       do i=istr,iend
 # if defined ADV_ISONEUTRAL && defined STABILIZE
         FC(i,k)=2._8*dt*(Akt(i,j,k,iAkt)+Akz(i,j,k))&
@@ -1093,16 +1093,16 @@ contains
       enddo
     enddo          !--> discard DC(:,0)
     do i=istr,iend
-      t(i,j,N,nnew,itrc)=( t(i,j,N,nnew,itrc) +DC(i,N-1)*(&
-      &FC(i,N-1)+max(WC(i,N-1),0._8) )&
-      &)/( Hz(i,j,N) +FC(i,N-1)-min(WC(i,N-1),0._8)&
-      &-CF(i,N-1)*(FC(i,N-1)+max(WC(i,N-1),0._8))&
+      t(i,j,nz,nnew,itrc)=( t(i,j,nz,nnew,itrc) +DC(i,nz-1)*(&
+      &FC(i,nz-1)+max(WC(i,nz-1),0._8) )&
+      &)/( Hz(i,j,nz) +FC(i,nz-1)-min(WC(i,nz-1),0._8)&
+      &-CF(i,nz-1)*(FC(i,nz-1)+max(WC(i,nz-1),0._8))&
       &)&
 # ifdef MASKING
       &*rmask(i,j)
 # endif
     enddo
-    do k=N-1,1,-1
+    do k=nz-1,1,-1
       do i=istr,iend
         t(i,j,k,nnew,itrc)=(DC(i,k)+CF(i,k)*t(i,j,k+1,nnew,itrc))&
 # ifdef MASKING
@@ -1150,7 +1150,7 @@ contains
 # endif
 
 #ifdef CONST_TRACERS
-    do k=1,N
+    do k=1,nz
       do i=istr,iend
         t(i,j,k,nnew,itrc)=t(i,j,k,nstp,itrc)
       enddo

@@ -13,10 +13,10 @@ contains
 
   !----------------------------------------------------------------
   subroutine init_arrays_work_mod  ![
-    use scalars, only: N, init
+    use scalars, only: nz, init
     implicit none
 
-    allocate( work(GLOBAL_2D_ARRAY,0:N) ); work=init
+    allocate( work(GLOBAL_2D_ARRAY,0:nz) ); work=init
 
   end subroutine init_arrays_work_mod  !]
   !----------------------------------------------------------------

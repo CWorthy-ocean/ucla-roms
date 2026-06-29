@@ -34,11 +34,11 @@ module surf_flux
   type (ncforce) :: nc_sst  = ncforce(vname='sst',tname='sst_time' )       ! sea-surface temperature (SST) data
   type (ncforce) :: nc_sss  = ncforce(vname='sss',tname='sss_time' )       ! sea-surface salinity (SSS) data
 
-  real(kind=8)           :: output_period = 120       ! output averaging period in seconds
-  integer(kind=4)        :: nrpf          = 10 ! total recs per file
+  real(kind=8)           :: output_period_sflx = 120       ! output averaging period in seconds
+  integer(kind=4)        :: nrpf_sflx          = 10 ! total recs per file
   logical, public ::&
   &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg
-  namelist /SURF_FLX_SETTINGS/ output_period, nrpf,&
+  namelist /SURF_FLX_OUTPUT_SETTINGS/ output_period_sflx, nrpf_sflx,&
   &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg
 
 #if defined SALINITY
@@ -97,7 +97,7 @@ contains
 !     ----------------------------------------------------------------------
   subroutine read_nml_surf_flx
 
-!     Read the "SURF_FLX_SETTINGS" section of the namelist file
+!     Read the "SURF_FLX_OUTPUT_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_surf_flx"
     character(len=512) :: msg = ""
@@ -105,12 +105,12 @@ contains
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=SURF_FLX_SETTINGS, iostat=ios, iomsg=msg)
+    read (unit=namelist_unit, nml=SURF_FLX_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
 
     if (ios /= 0) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
-      &info='could not read SURF_FLX_SETTINGS'&
+      &info='could not read SURF_FLX_OUTPUT_SETTINGS'&
       &//' section of namelist file: '&
       &//trim(msg)&
       &)
@@ -143,7 +143,7 @@ contains
 
 
   close(namelist_unit)
-  record = nrpf
+  record = nrpf_sflx
 end subroutine read_nml_surf_flx
 
 subroutine init_arrays_surf_flx ![
@@ -237,7 +237,7 @@ subroutine apply_surf_field_corr  ![
   do j=j0,j1
     do i=i0,i1
       stflx(i,j,isalt)=stflx(i,j,isalt)-dSSSdt*&
-      &( t(i,j,N,nrhs,isalt)-sss(i,j) )
+      &( t(i,j,nz,nrhs,isalt)-sss(i,j) )
     enddo
   enddo
 #endif
@@ -329,13 +329,13 @@ subroutine wrt_sflux  ![
 
   if (sflx_avg) call calc_sflx_avg
 
-  if (output_time>=output_period) then  ! time for an output
+  if (output_time>=output_period_sflx) then  ! time for an output
     output_time = 0
     navg_sflx   = 0
 
 #ifdef PARALLEL_IO
 
-    if (record==nrpf) then
+    if (record==nrpf_sflx) then
       call create_sflx_file(fname)
       record = 0
     endif
@@ -393,7 +393,7 @@ subroutine wrt_sflux  ![
 
 #else
 
-    if (record==nrpf) then
+    if (record==nrpf_sflx) then
       call create_sflx_file(fname)
       record = 0
     endif

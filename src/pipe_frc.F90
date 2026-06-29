@@ -17,7 +17,7 @@ module pipe_frc
   &ncforce, pipe_frc_opt,&
   &set_frc_data, store_string_att
   use nc_read_write, only: ncread
-  use param, only: n, lm, mm, nt, mynode
+  use param, only: nz, lm, mm, nt, mynode
   use error_handling_mod, only: error_log
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_file_is_open, pio_FileDesc
@@ -131,7 +131,7 @@ contains
     &nf90_close, nf90_noerr, nf90_inq_varid
     use param, only: ocean_grid_comm
     use mpi_f08, only: mpi_double_precision, mpi_max
-    use roms_read_write, only: frcfile
+    use roms_read_write, only: frcfiles
     use error_handling_mod, only: error_log
 
     implicit none
@@ -145,7 +145,7 @@ contains
       ! pipe_flx is defined in ana_pipe_frc.h
 
     else ! Look in pipe forcing file for index and fraction vars
-      ierr = nf90_open(frcfile(nc_pvol%ifile), nf90_nowrite, ncid)
+      ierr = nf90_open(frcfiles(nc_pvol%ifile), nf90_nowrite, ncid)
       ierr = nf90_inq_varid(ncid, "pipe_index", varid)
       ierr = ierr * nf90_inq_varid(ncid, "pipe_fraction", varid)
 
@@ -192,7 +192,7 @@ contains
           &'unable to find pipe index and fraction'//&
           &' either as separate variables '//&
           &' (pipe_index, pipe_fraction) in pipe '//&
-          &' forcing file ('// trim(frcfile(nc_pvol%ifile)) //&
+          &' forcing file ('// trim(frcfiles(nc_pvol%ifile)) //&
           &') or as a combined variable, '// trim(pipe_flx_name) //&
           &',  in grid (' // trim(grdname)//&
           &') file.'
@@ -236,7 +236,7 @@ contains
     allocate( pipe_flx(GLOBAL_2D_ARRAY) );      pipe_flx=0._8
     allocate( pipe_trc(npip,nt) ) ;             pipe_trc=0._8
     allocate( pipe_vol(npip)) ;                 pipe_vol=0._8
-    allocate( pipe_prf(npip,N) );               pipe_prf=0._8
+    allocate( pipe_prf(npip,nz) );               pipe_prf=0._8
 
     if (.not. p_analytical) then
       allocate(nc_pvol%vdata(npip,1 ,2))

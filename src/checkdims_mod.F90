@@ -41,7 +41,7 @@ contains
 !         max_rec   current size of unlimited dimension
 !                   [=0, if there is no unlimited dimension].
 
-    use param, only: n
+    use param, only: nz
     use netcdf, only:&
     &nf90_noerr, nf90_inquire,&
     &nf90_inquire_dimension, nf90_strerror
@@ -125,18 +125,18 @@ contains
 #ifdef SOLVE3D
           elseif (ldim == 3 .and. dname(1:ldim) == 's_w') then
             chk_Cs_wr=chk_Cs_wr+1
-            if (dsize /= N+1) then
+            if (dsize /= nz+1) then
               error_info=write_dim_error_info(&
-              &dname(1:ldim), fname(1:lname), N+1, dsize)
+              &dname(1:ldim), fname(1:lname), nz+1, dsize)
               call error_log%raise_from_rank(&
               &context=fn_name,&
               &info=error_info)
             endif
           elseif (ldim == 5 .and. dname(1:ldim) == 's_rho') then
             chk_Cs_wr=chk_Cs_wr+2
-            if (dsize /= N) then
+            if (dsize /= nz) then
               error_info=write_dim_error_info(&
-              &dname(1:ldim), fname(1:lname), N, dsize)
+              &dname(1:ldim), fname(1:lname), nz, dsize)
               call error_log%raise_from_rank(&
               &context=fn_name,&
               &info=error_info)
@@ -197,7 +197,7 @@ contains
 
   integer(kind=4) function check_scoord(ncid, fname, what_to_check)  ![
 
-    use scoord, only: hc, n, theta_b, theta_s, cs_w, cs_r
+    use scoord, only: hc, nz, theta_b, theta_s, cs_w, cs_r
     use error_handling_mod, only: error_log
 
     implicit none
@@ -206,7 +206,7 @@ contains
     integer(kind=4) ncid, what_to_check
     character(len=*) fname
     real(kind=8), parameter :: epsil=1.D-7
-    real(kind=8) tst_val(N+1)
+    real(kind=8) tst_val(nz+1)
     integer(kind=4) ierr, k, icount, lfile
     logical chk_Cs_w, chk_Cs_r
 
@@ -245,9 +245,9 @@ contains
     endif
 
     if (chk_Cs_w) then
-      ierr=read_nc1dat(ncid, fname, 'Cs_w', N+1, tst_val)
+      ierr=read_nc1dat(ncid, fname, 'Cs_w', nz+1, tst_val)
       if (ierr == 0) then
-        do k=N,0,-1
+        do k=nz,0,-1
           if (abs(Cs_w(k)-tst_val(k+1)) > epsil) then
             ierr=ierr+1
           endif
@@ -269,9 +269,9 @@ contains
     endif
 
     if (chk_Cs_r) then
-      ierr=read_nc1dat(ncid, fname, 'Cs_r', N, tst_val)
+      ierr=read_nc1dat(ncid, fname, 'Cs_r', nz, tst_val)
       if (ierr == 0) then
-        do k=N,1,-1
+        do k=nz,1,-1
           if (abs(Cs_r(k)-tst_val(k)) > epsil) then
             ierr=ierr+1
           endif

@@ -37,7 +37,7 @@ contains
     use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
     use mixing, only: visc2_r, visc2_p
     use ocean_vars, only: v, u, hz
-    use scalars, only: dt, n, nstp
+    use scalars, only: dt, nz, nstp
 #ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag, vdiag,&
     &dxdyi_u, dxdyi_v, ihmix, diag_uv
@@ -56,7 +56,7 @@ contains
 !  Compute flux-components of the horizontal divergence of the stress
 !  tensor (m5/s2) in XI- and ETA-directions.
 
-    do k=1,N
+    do k=1,nz
       do j=jstrV-1,jend
         do i=istrU-1,iend
           cff=0.5_8*Hz(i,j,k)*visc2_r(i,j)*(&
@@ -190,7 +190,7 @@ contains
 !       eddy-permitting ocean models, Monthly Weather Rev.,v. 128,
 !       No. 8, pp. 2935-2946._8
 
-    use param, only: np_xi, np_eta, N
+    use param, only: np_xi, np_eta, nz
     use coupling, only: rufrc, rvfrc
     use grid, only: umask, vmask, rmask, pm, pn, pmask,&
     &dn_r, dn_u, dn_v, dm_r, dm_p, dn_p, dm_u, dm_v
@@ -235,10 +235,10 @@ contains
 ! Compute momentum horizontal (1/m/s) and vertical (1/s) gradients.
 
     k2=1
-    do k=0,N,+1  !--> irreversible
+    do k=0,nz,+1  !--> irreversible
       k1=k2
       k2=3-k1
-      if (k<N) then
+      if (k<nz) then
         do j=jstr-1,jend+1
           do i=istrU-1,iend+1
             UFx(i,j)=0.5_8*(z_r(i,j,k+1)-z_r(i-1,j,k+1))&
@@ -309,7 +309,7 @@ contains
 
 
 
-      if (k==0 .or. k==N) then
+      if (k==0 .or. k==nz) then
         do j=jstr-1,jend+1
           do i=istrU-1,iend+1
             dUdz(i,j,k2)=0._8
@@ -386,7 +386,7 @@ contains
 ! Compute vertical flux [m^2/s^2] due to sloping terrain-following
 ! surfaces.
 
-        if (k<N) then
+        if (k<nz) then
           do j=jstr,jend
             do i=istrU,iend
               cff1=0.5_8*(pn(i-1,j)+pn(i,j))

@@ -17,12 +17,12 @@ module param
   integer(kind=4), public :: NP_ETA = 1
   integer(kind=4), public :: Lm, Mm
   integer(kind=4), public :: LLm, MMm
-  integer(kind=4), public :: N
-  integer(kind=4), public :: NSUB_E, NSUB_X
+  integer(kind=4), public :: nz
+  integer(kind=4), parameter, public :: NSUB_X = 1, NSUB_E = 1  ! shared-memory tiling: hardcoded, no longer namelist-configurable
   integer(kind=4), public :: nt = 1
-  integer(kind=4), public :: nt_passive = 0, ntrc_bio = 0
-  namelist /PARAM_SETTINGS/ NP_XI, NP_ETA, NSUB_X, NSUB_E, LLm, MMm,&
-  &N, nt_passive, ntrc_bio
+  integer(kind=4), public :: nt_passive = 0, nt_bgc = 0
+  namelist /PARAM_SETTINGS/ NP_XI, NP_ETA, LLm, MMm,&
+  &nz, nt_passive, nt_bgc
 ! Array dimensions and bounds of the used portions of sub-arrays:
 
 #ifdef MPI
@@ -151,7 +151,7 @@ contains
     Mm = MMm
 #endif
 
-    nt = nt_passive + ntrc_bio + 1
+    nt = nt_passive + nt_bgc + 1
 #ifdef SALINITY
     nt = nt+ 1
 #endif

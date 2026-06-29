@@ -17,7 +17,7 @@ module frc_output
   use netcdf, only:&
   &nf90_double, nf90_noerr, nf90_write, nf90_put_att,&
   &nf90_open, nf90_close, nf90_redef, nf90_enddef
-  use scalars, only: n, dt, iic, tdays, time
+  use scalars, only: nz, dt, iic, tdays, time
 #ifdef MARBL
   use marbl_driver, only: iALK, iDIC, iALK_alt, iDIC_alt
 #endif
@@ -35,10 +35,10 @@ module frc_output
   implicit none
   private
   character(len=10) :: module_name = "frc_output"
-  real(kind=8) :: output_period = 0._8   ! in seconds
-  integer(kind=4) :: nrpf   = 0          ! number of frames per file
+  real(kind=8) :: output_period_frc = 0._8   ! in seconds
+  integer(kind=4) :: nrpf_frc   = 0          ! number of frames per file
   logical, public :: wrt_frc, wrt_frc_avg
-  namelist /FRC_OUTPUT_SETTINGS/ output_period, nrpf, wrt_frc, wrt_frc_avg
+  namelist /FRC_OUTPUT_SETTINGS/ output_period_frc, nrpf_frc, wrt_frc, wrt_frc_avg
 
   real(kind=8)    :: output_time = 0
   integer(kind=4) :: record = 0 ! to trigger the first file creation
@@ -100,7 +100,7 @@ contains
       &)
     end if
     close(namelist_unit)
-    record = nrpf
+    record = nrpf_frc
   end subroutine read_nml_frc_output
 
   subroutine init_frc_output ![
@@ -224,7 +224,7 @@ contains
     integer(kind=4) :: ierr,itrc,ncid
     character(len=99),save :: fname
 
-    if (record==nrpf) then
+    if (record==nrpf_frc) then
       call create_frc_file(fname)
       record = 0
     endif
@@ -236,7 +236,7 @@ contains
     if (wrt_frc_avg) call calc_average
     output_time = output_time + dt
 
-    if (output_time>=output_period) then
+    if (output_time>=output_period_frc) then
 #ifdef PARALLEL_IO
       record = record+1
       if (mynode == 0) then

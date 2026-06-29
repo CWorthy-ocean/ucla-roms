@@ -2,7 +2,7 @@ module scalars
 
 #include "cppdefs.opt"
 
-  use param, only: nt, N, mynode
+  use param, only: nt, nz, mynode
   implicit none
   character(len=7) :: module_name = "scalars"
 ! This is include file "scalars"

@@ -26,7 +26,7 @@ contains
 
     use tracers, only: t
     use scalars, only: nstp, rho0
-    use param, only: N, isalt, itemp
+    use param, only: nz, isalt, itemp
 #ifndef NONLIN_EOS
     use eos_vars, only: tcoef&
 #ifdef SALINITY
@@ -59,9 +59,9 @@ contains
     do j=jmin,jmax
       do i=imin,imax
 # ifdef NONLIN_EOS
-        Tt=t(i,j,N,nstp,itemp)
+        Tt=t(i,j,nz,nstp,itemp)
 #  ifdef SALINITY
-        Ts=t(i,j,N,nstp,isalt) ; sqrtTs=sqrt(max(0._8,Ts))
+        Ts=t(i,j,nz,nstp,isalt) ; sqrtTs=sqrt(max(0._8,Ts))
 #  endif
         alpha(i,j)=-cff*( r01+Tt*( 2._8*r02+Tt*( 3._8*r03+Tt*(&
         &4._8*r04 +Tt*5._8*r05 )))&

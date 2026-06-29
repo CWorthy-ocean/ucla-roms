@@ -74,9 +74,10 @@ New-tools/optimal
 *.log
 *.out
 
-# DevinD related ignores:
+# IDES / tool-chain artifacts
 benchmark.result_laptop
 .settings
 .project
 .cproject
 .pydevproject
+__pycache__

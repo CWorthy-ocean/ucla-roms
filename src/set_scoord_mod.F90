@@ -12,22 +12,22 @@ contains
     use param, only: mynode
     use comm_vars, only: hmax, hmin
     use scoord, only: hc, theta_b, theta_s, cs_w, cs_r
-    use scalars, only: n
+    use scalars, only: nz
 
     implicit none                      ! output: Cs_w(0:N), Cs_r(1:N)
 
     integer(kind=4) k                          ! Compute vertical stretching
     real(kind=8) ds,sc, z1,zhc,z2,z3      ! curves at W- and RHO-points,
 
-    ds=1.D0/dble(N)                    !      -1 < Cs_r,Cs_w < 0,
-    Cs_w(N)=0.D0
-    do k=N-1,1,-1                      ! then print out z-coordinate
-      sc=ds*dble(k-N)                  ! of S-levels for minimum,
+    ds=1.D0/dble(nz)                    !      -1 < Cs_r,Cs_w < 0,
+    Cs_w(nz)=0.D0
+    do k=nz-1,1,-1                      ! then print out z-coordinate
+      sc=ds*dble(k-nz)                  ! of S-levels for minimum,
       Cs_w(k)=CSF(sc, theta_s,theta_b) ! h=hc, half way, and maximum
     enddo                              ! depth.
     Cs_w(0)=-1.D0
-    do k=1,N
-      sc=ds*(dble(k-N)-0.5D0)
+    do k=1,nz
+      sc=ds*(dble(k-nz)-0.5D0)
       Cs_r(k)=CSF(sc, theta_s,theta_b)
     enddo
 
@@ -41,8 +41,8 @@ contains
     &'at hc', 'half way', 'at hmax'
 
 
-    do k=N,0,-1
-      sc=ds*dble(k-N)
+    do k=nz,0,-1
+      sc=ds*dble(k-nz)
       z1=hmin*(hc*sc + hmin*Cs_w(k))/(hc+hmin)
       zhc=0.5_8*hc*(sc + Cs_w(k))
       z2=0.5_8*hmax*(hc*sc + 0.5_8*hmax*Cs_w(k))/(hc+0.5_8*hmax)
@@ -50,7 +50,7 @@ contains
 
       mpi_master_only write(*,&
       &'(I7,2X,ES11.4,2X,ES14.7,2X,ES16.7,2X,ES14.7,2X,ES14.7,2X,ES14.7)')&
-      &k, ds*(k-N), Cs_w(k), z1, zhc, z2, z3
+      &k, ds*(k-nz), Cs_w(k), z1, zhc, z2, z3
     enddo
   end subroutine set_scoord
 

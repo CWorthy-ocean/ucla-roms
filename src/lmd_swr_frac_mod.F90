@@ -34,7 +34,7 @@ contains
 ! output: swr_frac (in "mixing")  shortwave radiation fraction
 !
 
-    use scalars, only: n
+    use scalars, only: nz
     use ocean_vars, only: hz
     use mixing, only: swr_frac
     use roms_mpi, only: exchange_xxx
@@ -71,9 +71,9 @@ contains
       do i=istr,iend                   ! for each spectral band at
         swdk1(i)=r1(Jwt)               ! surface, then attenuate
         swdk2(i)=1._8-swdk1(i)           ! them separately throughout
-        swr_frac(i,j,N)=1._8             ! the water column.
+        swr_frac(i,j,nz)=1._8             ! the water column.
       enddo
-      do k=N,1,-1
+      do k=nz,1,-1
         do i=istr,iend
           xi1=attn1*Hz(i,j,k)
           if (xi1 > -20._8) then        ! this logic to avoid
