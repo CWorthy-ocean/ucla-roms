@@ -150,7 +150,7 @@ contains
     use bec2_params, only: ecosys2_init
 #endif
     use grid, only: get_grid, dm_r, dn_r
-    use roms_read_write, only: nrrec, frc_time
+    use roms_read_write, only: nrrec, frc_time, inifile
     use param, only:&
     &mynode, nsub_e, nsub_x, lm, mm,&
     &nz, np_eta, np_xi, padd_e, padd_x
@@ -286,7 +286,7 @@ contains
     call set_forces               ! model prognostic variables,
     call ana_init                 ! may require surface forcing
     ! either analytically or read
-    if (nrrec > 0) then
+    if (len_trim(inifile) > 0) then   ! only read IC file if one was supplied
 #endif
 
 #ifdef EXACT_RESTART
@@ -298,7 +298,7 @@ contains
       call init_restarts
 
 #ifdef ANA_INITIAL
-    endif    !<-- nrrec>0
+    endif    !<-- len_trim(inifile)>0
 #endif
 
 #ifdef ANA_VMIX
