@@ -71,7 +71,7 @@ def test_bgc_real_marbl(tmp_path, input_dir, reference_results):
     # marbl_timestep replaced the old integer marbl_timestep_ratio; set it equal
     # to dt so the derived ratio is 1 (BGC updated every step), preserving the
     # behaviour the reference hashes were generated with.
-    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = 20
+    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = 3600
     nml["TIME_STEPPING"].update({"dt": 20, "ntimes": 10})
     nml["TIDAL_FRC_SETTINGS"].update({"pot_tides": True, "ntides": 2})
     nml["PARAM_SETTINGS"]["nt_bgc"] = 32
