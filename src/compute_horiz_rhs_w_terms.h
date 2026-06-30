@@ -64,7 +64,7 @@ do j=jstr,jend
 enddo             !--> discard FX
 do j=jstr,jend
   do i=istr,iend+1
-    if (k<N) then
+    if (k<nz) then
       Uflxw= 0.5_8*(FlxU(i,j,k)+FlxU(i,j,k+1))
     else
       Uflxw= 0.5_8*(FlxU(i,j,k)              )
@@ -133,7 +133,7 @@ enddo            !--> discard FE
 
 do j=jstr,jend+1
   do i=istr,iend
-    if (k<N) then
+    if (k<nz) then
       Vflxw= 0.5_8*(FlxV(i,j,k)+FlxV(i,j,k+1))
     else
       Vflxw= 0.5_8*(FlxV(i,j,k)              )

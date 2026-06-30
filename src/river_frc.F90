@@ -9,7 +9,7 @@ module river_frc
 
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
-  use roms_read_write, only: ncforce, frcfile, set_frc_data
+  use roms_read_write, only: ncforce, frcfiles, set_frc_data
   use nc_read_write, only: nccreate, ncread, ncwrite
   use scalars, only: nt
   use grid, only:&
@@ -190,14 +190,14 @@ contains
 
     else                      ! Not analytical, read from file
       ! Start by checking forcing file for separate variables
-      ierr=nf90_open(frcfile(nc_rvol%ifile), nf90_nowrite, ncid) ! open river forcing file
+      ierr=nf90_open(frcfiles(nc_rvol%ifile), nf90_nowrite, ncid) ! open river forcing file
       ierr = nf90_inq_varid(ncid, "river_index", varid) ! check river forcing file for index...
       ierr = ierr * nf90_inq_varid(ncid, "river_fraction", varid) ! ... and fraction variables
 
       if (ierr == nf90_noerr) then ! Found the variables in the forcing file
         pio_gtype = '2Drr'
 #ifdef PARALLEL_IO
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(nc_rvol%ifile))
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(nc_rvol%ifile))
 #endif
         call ncread(ncid,"river_index",ridx_real(x0:x1,y0:y1))
         call ncread(ncid,"river_fraction",rfrc(x0:x1,y0:y1))
@@ -243,7 +243,7 @@ contains
           &'unable to find river index and fraction'//&
           &' either as separate variables '//&
           &' (river_index, river_fraction) in river '//&
-          &' forcing file ('// trim(frcfile(nc_rvol%ifile)) //&
+          &' forcing file ('// trim(frcfiles(nc_rvol%ifile)) //&
           &') or as a combined variable, '// trim(riv_flx_name) //&
           &',  in grid (' // trim(grdname)//&
           &') file.'
@@ -286,7 +286,7 @@ contains
     ! river_flux = iriver + fraction of river's flux through grid point.
     ! e.g. River 3 is over 2 grid points (half flux through each point),
 ! hence river_flux = 3 + 0.5_8 = 3.5_8
-    use param, only: N
+    use param, only: nz
     implicit none
 
 ! local
@@ -308,7 +308,7 @@ contains
             call error_log%raise_from_point(&
             &context=module_name//"/"//sr_name,&
             &info='river grid position error',&
-            &i=i, j=j, k=N)
+            &i=i, j=j, k=nz)
           endif
           ! 10*iriver needed because uflx/vflx can be positive or negative around
           ! the iriver number, and hence nearest integer is safest done with 10*.

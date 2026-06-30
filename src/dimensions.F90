@@ -6,7 +6,7 @@ module dimensions
   ! ========================================
 
   ! coded by Jeroen Molemaker
-  use param, only: llm, mmm, n, lm, mm, np_eta, np_xi
+  use param, only: llm, mmm, nz, lm, mm, np_eta, np_xi
   use insert_node_mod, only: insert_node
 #ifdef PARALLEL_IO
   use pio_roms, only: use_pio,pio_i0, pio_i1, pio_j0, pio_j1
@@ -19,7 +19,7 @@ module dimensions
 
   integer(kind=4), public :: gnx
   integer(kind=4), public :: gny
-  integer(kind=4), public :: nz
+  public :: nz   ! re-exported from param (single canonical number of vertical levels)
 
   integer(kind=4), public :: npx
   integer(kind=4), public :: npy
@@ -113,7 +113,6 @@ contains
 
 !$  $$      nx = Lm
 !$  $$  ny = Mm
-    nz = N
     Lm = nx
     Mm = ny
 

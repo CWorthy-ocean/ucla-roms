@@ -46,10 +46,9 @@ contains
     use random_output, only: read_nml_random      !RANDOM_OUTPUT_SETTINGS
     use river_frc, only: read_nml_river           !RIVER_FRC_SETTINGS
     use sponge_tune, only: read_nml_sponge_tune   !SPONGE_TUNE_SETTINGS
-    use surf_flux, only: read_nml_surf_flx        !SURF_FLX_SETTINGS
-    use tides, only: read_nml_tides               !TIDES_SETTINGS
-    use bulk_frc, only: read_nml_bulk_frc         !BULK_FRC_SETTINGS
-    use flux_frc, only: read_nml_flux_frc         !FLUX_FRC_SETTINGS
+    use surf_flux, only: read_nml_surf_flx        !SURF_FLX_OUTPUT_SETTINGS
+    use tides, only: read_nml_tides               !TIDAL_FRC_SETTINGS
+    use bulk_frc, only: read_nml_surf_frc         !SURF_FRC_SETTINGS
     use tracers, only: read_nml_tracers           !TS_SETTINGS
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: read_nml_upscale    !UPSCALE_SETTINGS
@@ -114,8 +113,7 @@ contains
 #ifdef SOLVE3D
    call read_nml_scoord
 #endif
-   call read_nml_bulk_frc
-   call read_nml_flux_frc
+   call read_nml_surf_frc
    call read_nml_tracers
    call read_nml_stdout_diag
   end subroutine read_namelists

@@ -22,7 +22,7 @@ module basic_output
   use calc_pflx_mod, only: wrt_rst_diag_slow, calc_pflx
   use scalars, only:&
   &NT, iic, knew, nstp, time,&
-  &N, dt, start_time, nnew, tdays
+  &nz, dt, start_time, nnew, tdays
   use ocean_vars, only:&
   &zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,&
   &w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
@@ -248,32 +248,32 @@ contains                  !]
       endif
 
       if (wrt_avg_U) then
-        allocate( u_avg(GLOBAL_2D_ARRAY,N) )
+        allocate( u_avg(GLOBAL_2D_ARRAY,nz) )
         u_avg=0._8
       endif
       if (wrt_avg_V) then
-        allocate( v_avg(GLOBAL_2D_ARRAY,N) )
+        allocate( v_avg(GLOBAL_2D_ARRAY,nz) )
         v_avg=0._8
       endif
       if (wrt_avg_O) then
-        allocate( w_avg(GLOBAL_2D_ARRAY,0:N) )
+        allocate( w_avg(GLOBAL_2D_ARRAY,0:nz) )
         w_avg=0
       endif
       if (wrt_avg_W) then
-        allocate( wvl_avg(GLOBAL_2D_ARRAY,0:N) )
+        allocate( wvl_avg(GLOBAL_2D_ARRAY,0:nz) )
         wvl_avg=0._8
       endif
 
       ! the following variables do not 'live' in this module, but in order to prevent
       ! circular reference cause by e.g. wrt_R logical, they are allocated here.
       if (wrt_avg_R) then
-        allocate( rho_avg(GLOBAL_2D_ARRAY,N) )
+        allocate( rho_avg(GLOBAL_2D_ARRAY,nz) )
         rho_avg=0._8
       endif
-      if (wrt_avg_Akv)  allocate( akv_avg(GLOBAL_2D_ARRAY,0:N) )
-      if (wrt_avg_Akt)  allocate( akt_avg(GLOBAL_2D_ARRAY,0:N) )
+      if (wrt_avg_Akv)  allocate( akv_avg(GLOBAL_2D_ARRAY,0:nz) )
+      if (wrt_avg_Akt)  allocate( akt_avg(GLOBAL_2D_ARRAY,0:nz) )
 # ifdef SALINITY
-      if (wrt_avg_Aks)  allocate( aks_avg(GLOBAL_2D_ARRAY,0:N) )
+      if (wrt_avg_Aks)  allocate( aks_avg(GLOBAL_2D_ARRAY,0:nz) )
 # endif
 # ifdef LMD_KPP
       if (wrt_avg_Hbls) allocate( hbl_avg(GLOBAL_2D_ARRAY) )
@@ -498,7 +498,7 @@ contains                  !]
 # endif
         endif
         if (wrt_O) then                              ! s-coordinate omega vertical velocity (m/s).
-          do k=0,N
+          do k=0,nz
             do j=0,Mm+1
               do i=0,Lm+1
                 work(i,j,k)=pm(i,j)*pn(i,j)*(We(i,j,k)+Wi(i,j,k))
@@ -516,7 +516,7 @@ contains                  !]
 !         enddo
           call wvlcty (0, work)
           pio_gtype = '3Drw'
-          call ncwrite(ncid,vname(1,indxW),work(i0:i1,j0:j1,1:N),start, .true.)
+          call ncwrite(ncid,vname(1,indxW),work(i0:i1,j0:j1,1:nz),start, .true.)
         endif
         pio_gtype = '3Dww'
         if (wrt_Akv) call ncwrite(ncid,vname(1,indxAkv),Akv(i0:i1,j0:j1,:),start, .true.)
@@ -579,7 +579,7 @@ contains                  !]
 # endif
         endif
         if (wrt_O) then                              ! s-coordinate omega vertical velocity (m/s).
-          do k=0,N
+          do k=0,nz
             do j=0,Mm+1
               do i=0,Lm+1
                 work(i,j,k)=pm(i,j)*pn(i,j)*(We(i,j,k)+Wi(i,j,k))
@@ -592,7 +592,7 @@ contains                  !]
         endif
         if (wrt_W) then                              ! true vertical velocity (m/s).
           call wvlcty (0, work)
-          call ncwrite(ncid,vname(1,indxW),work(i0:i1,j0:j1,1:N),start)
+          call ncwrite(ncid,vname(1,indxW),work(i0:i1,j0:j1,1:nz),start)
         endif
         if (wrt_Akv) call ncwrite(ncid,vname(1,indxAkv),Akv(i0:i1,j0:j1,:),start)
         if (wrt_Akt) call ncwrite(ncid,vname(1,indxAkt),Akt(i0:i1,j0:j1,:,itemp),start)
@@ -705,14 +705,14 @@ contains                  !]
         pio_gtype = '3Drw'
         if (wrt_avg_R)   call ncwrite(ncid, vname(1,indxR),   rho_avg(i0:i1,j0:j1,:), start,.true.)
         if (wrt_avg_O) then
-          do k=0,N
+          do k=0,nz
             w_avg(i0:i1,j0:j1,k) = w_avg(i0:i1,j0:j1,k)*pm(i0:i1,j0:j1)*pn(i0:i1,j0:j1)  ! convert before write.
           enddo
           pio_gtype = '3Dww'
           call ncwrite(ncid, vname(1,indxO),     w_avg(i0:i1,j0:j1,:), start,.true.)            ! here rather than calc_
         endif
         pio_gtype = '3Dww'                                                                 ! for efficiency
-        if (wrt_avg_W)   call ncwrite(ncid, vname(1,indxW),   wvl_avg(i0:i1,j0:j1,1:N), start,.true.)
+        if (wrt_avg_W)   call ncwrite(ncid, vname(1,indxW),   wvl_avg(i0:i1,j0:j1,1:nz), start,.true.)
         pio_gtype = '3Dww'
         if (wrt_avg_Akv) call ncwrite(ncid, vname(1,indxAkv), akv_avg(i0:i1,j0:j1,:), start,.true.)
         pio_gtype = '3Dww'
@@ -767,12 +767,12 @@ contains                  !]
 
         if (wrt_avg_R)   call ncwrite(ncid, vname(1,indxR),   rho_avg(i0:i1,j0:j1,:), start)
         if (wrt_avg_O) then
-          do k=0,N
+          do k=0,nz
             w_avg(i0:i1,j0:j1,k) = w_avg(i0:i1,j0:j1,k)*pm(i0:i1,j0:j1)*pn(i0:i1,j0:j1)  ! convert before write.
           enddo
           call ncwrite(ncid, vname(1,indxO),     w_avg(i0:i1,j0:j1,:), start)            ! here rather than calc_avg
         endif                                                                            ! for efficiency
-        if (wrt_avg_W)   call ncwrite(ncid, vname(1,indxW),   wvl_avg(i0:i1,j0:j1,1:N), start)
+        if (wrt_avg_W)   call ncwrite(ncid, vname(1,indxW),   wvl_avg(i0:i1,j0:j1,1:nz), start)
         if (wrt_avg_Akv) call ncwrite(ncid, vname(1,indxAkv), akv_avg(i0:i1,j0:j1,:), start)
         if (wrt_avg_Akt) call ncwrite(ncid, vname(1,indxAkt), akt_avg(i0:i1,j0:j1,:), start)
 #  ifdef SALINITY
@@ -1402,18 +1402,18 @@ contains                  !]
 #endif
 #ifdef SOLVE3D
     varid = nccreate(ncid,vname(1,indxU),(/dn_xu,dn_yr,dn_zr,dn_tm/),&
-    &(/ds_xu,ds_yr,N,0/),nf90_double)
+    &(/ds_xu,ds_yr,nz,0/),nf90_double)
     ierr = nf90_put_att(ncid,varid,'long_name',vname(2,indxU))
     ierr = nf90_put_att(ncid,varid,'units',vname(3,indxU))
 
     varid = nccreate(ncid,vname(1,indxV),(/dn_xr,dn_yv,dn_zr,dn_tm/),&
-    &(/ds_xr,ds_yv,N,0/),nf90_double)
+    &(/ds_xr,ds_yv,nz,0/),nf90_double)
     ierr = nf90_put_att(ncid,varid,'long_name',vname(2,indxV))
     ierr = nf90_put_att(ncid,varid,'units',vname(3,indxV))
 
     do itrc=1,NT
       varid = nccreate(ncid,t_vname(itrc),(/dn_xr,dn_yr,dn_zr,dn_tm/),&
-      &(/ds_xr,ds_yr,N,0/), nf90_double)
+      &(/ds_xr,ds_yr,nz,0/), nf90_double)
       ierr=nf90_put_att (ncid, varid, 'long_name', t_lname(itrc))
       ierr=nf90_put_att (ncid, varid, 'units', t_units(itrc))
     enddo
@@ -1467,18 +1467,18 @@ contains                  !]
 
     if (calc_pflx) then
       varid = nccreate(ncid,'u_slow',(/dn_xu,dn_yr,dn_zr,dn_tm/),&
-      &(/ds_xu,ds_yr,N,0/),nf90_double)
+      &(/ds_xu,ds_yr,nz,0/),nf90_double)
       ierr = nf90_put_att(ncid,varid,'long_name','time filtered u')
       ierr = nf90_put_att(ncid,varid,'units','m/s')
 
       varid = nccreate(ncid,'v_slow',(/dn_xr,dn_yv,dn_zr,dn_tm/),&
-      &(/ds_xr,ds_yv,N,0/),nf90_double)
+      &(/ds_xr,ds_yv,nz,0/),nf90_double)
       ierr = nf90_put_att(ncid,varid,'long_name','time filtered v')
       ierr = nf90_put_att(ncid,varid,'units','m/s')
 
       varid = nccreate(ncid,'p_slow',&
       &(/dn_xr,dn_yr,dn_zr,dn_tm/),&
-      &(/ds_xr,ds_yr,n,0/),nf90_double)
+      &(/ds_xr,ds_yr,nz,0/),nf90_double)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'time filtered pressure')
       ierr = nf90_put_att(ncid,varid,'units','Pa??')
@@ -1586,8 +1586,8 @@ contains                  !]
         ! the w averaging, calculation and output should be checked at some point.
         call wvlcty_tile(1,nx,1,ny, work, A2d(1,1), A2d(1,2), A2d(1,3))  ! as per set_avg
 
-        wvl_avg(i0:i1,j0:j1,1:N) = wvl_avg(i0:i1,j0:j1,1:N)*(1-coef)&
-        &+ work(i0:i1,j0:j1,1:N)*coef
+        wvl_avg(i0:i1,j0:j1,1:nz) = wvl_avg(i0:i1,j0:j1,1:nz)*(1-coef)&
+        &+ work(i0:i1,j0:j1,1:nz)*coef
       endif
       if (wrt_avg_Akv) akv_avg(i0:i1,j0:j1,:) = akv_avg(i0:i1,j0:j1,:)*(1-coef) + akv(i0:i1,j0:j1,:)*coef
       if (wrt_avg_Akt) akt_avg(i0:i1,j0:j1,:) = akt_avg(i0:i1,j0:j1,:)*(1-coef) + akt(i0:i1,j0:j1,:,itemp)*coef

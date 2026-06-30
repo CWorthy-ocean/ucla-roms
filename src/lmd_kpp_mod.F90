@@ -49,11 +49,11 @@ contains
     &, hbbl
 #endif
     use ocean_vars, only: z_w, hz, v, u, z_r
-    use scalars, only: n, forw_start, g, iic, nstp, vonkar, zob
+    use scalars, only: nz, forw_start, g, iic, nstp, vonkar, zob
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:N) :: Kv, Kt, Ks
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: Kv, Kt, Ks
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: ustar, Bo, Bosol&
     &, hbl, bbl&
 # ifdef SMOOTH_HBL
@@ -61,7 +61,7 @@ contains
 # else
     real(kind=8) FX, FE, FE1  !<-- not in use, except as arguments
 # endif
-    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: Cr,FC, wrk1,wrk2
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: Cr,FC, wrk1,wrk2
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY) ::  Bfsfc_bl,&
     &Gm1,dGm1dS, Gt1,dGt1dS, Gs1,dGs1dS
     integer(kind=4), dimension(PRIVATE_1D_SCRATCH_ARRAY) :: kbls, kmo&
@@ -195,9 +195,9 @@ contains
     bbl(i,j)=hbbl(i,j)     ! as the initial guess
 
     kbls(i)=0
-    Cr(i,N)=0._8
+    Cr(i,nz)=0._8
     Cr(i,0)=0._8
-    FC(i,N)=0._8
+    FC(i,nz)=0._8
   enddo  !--> discard alpha,beta; keep Bo,Bosol to the very end.
 
 
@@ -210,9 +210,9 @@ contains
 
 !/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
 
-  do k=N-1,1,-1
+  do k=nz-1,1,-1
     do i=I_EXT_RANGE
-    cff_up=(z_w(i,j,N)-z_w(i,j,k))**2
+    cff_up=(z_w(i,j,nz)-z_w(i,j,k))**2
     cff_dn=(z_w(i,j,k)-z_w(i,j,0))**2
     Kern=cff_up*cff_dn/( (cff_up +(epssfc*hbl(i,j))**2)&
     &*(cff_dn +(epssfc*bbl(i,j))**2) )
@@ -233,7 +233,7 @@ enddo
 
 do i=I_EXT_RANGE
 z_bl=z_w(i,j,0)+0.25_8*Hz(i,j,1)
-cff_up=(z_w(i,j,N)-z_bl)**2
+cff_up=(z_w(i,j,nz)-z_bl)**2
 cff_dn=(z_bl-z_w(i,j,0))**2
 Kern=cff_up*cff_dn/( (cff_up +(epssfc*hbl(i,j))**2)&
 &*(cff_dn +(epssfc*bbl(i,j))**2) )
@@ -247,11 +247,11 @@ FC(i,0)=FC(i,1) + Kern*(&
 enddo
 
 #   define swdk_r wrk1
-do k=N,1,-1
+do k=nz,1,-1
   do i=I_EXT_RANGE
   swdk_r(i,k)=sqrt(swr_frac(i,j,k)*swr_frac(i,j,k-1))
 
-  zscale=z_w(i,j,N)-z_r(i,j,k)
+  zscale=z_w(i,j,nz)-z_r(i,j,k)
   Bfsfc=Bo(i,j)+Bosol(i,j)*(1._8-swdk_r(i,k))
 
 #   include "lmd_wscale_ws_only.h"
@@ -269,15 +269,15 @@ enddo
 do i=I_EXT_RANGE
 if (kbls(i) > 0) then
   k=kbls(i)
-  if (k == N) then
-    hbl(i,j)=z_w(i,j,N)-z_r(i,j,N)
+  if (k == nz) then
+    hbl(i,j)=z_w(i,j,nz)-z_r(i,j,nz)
   else
-    hbl(i,j)=z_w(i,j,N)-( z_r(i,j,k)*Cr(i,k+1)&
+    hbl(i,j)=z_w(i,j,nz)-( z_r(i,j,k)*Cr(i,k+1)&
     &-z_r(i,j,k+1)*Cr(i,k)&
     &)/(Cr(i,k+1)-Cr(i,k))
   endif
 else
-  hbl(i,j)=z_w(i,j,N)-z_w(i,j,0)
+  hbl(i,j)=z_w(i,j,nz)-z_w(i,j,0)
 endif
 #   ifdef MASKING
 hbl(i,j)=hbl(i,j)*rmask(i,j)
@@ -289,7 +289,7 @@ do i=I_EXT_RANGE
 kbbl(i)=0       ! reset Cr at bottom and kbls for BKPP
 Cr(i,0)=0.D0
 enddo
-do k=1,N,+1
+do k=1,nz,+1
   do i=I_EXT_RANGE
   Cr(i,k)=FC(i,k)-FC(i,0)
   if (kbbl(i) == 0 .and. Cr(i,k) > 0._8) kbbl(i)=k
@@ -305,7 +305,7 @@ if (kbbl(i) > 0) then
     &)/(Cr(i,k)-Cr(i,k-1)) -z_w(i,j,0)
   endif
 else
-  bbl(i,j)=z_w(i,j,N)-z_w(i,j,0) ! total depth
+  bbl(i,j)=z_w(i,j,nz)-z_w(i,j,0) ! total depth
 endif
 #   ifdef MASKING
 bbl(i,j)=bbl(i,j)*rmask(i,j)
@@ -361,7 +361,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
 
 # if defined MERGE_OVERLAP && defined LMD_KPP && defined LMD_BKPP
   do i=istr,iend
-    cff=z_w(i,j,N)-z_w(i,j,0)          ! if surface and bottom
+    cff=z_w(i,j,nz)-z_w(i,j,0)          ! if surface and bottom
     if (hbl(i,j)+bbl(i,j) > cff) then  ! boundary layers overlap
       hbl(i,j) = cff                   ! set both of them to the
       bbl(i,j) = cff                   ! total depth of water
@@ -371,11 +371,11 @@ do j=jstr,jend   !--> restart j-loop till the very end
 
 # ifdef LMD_KPP
   do i=istr,iend
-    kbls(i)=N          ! initialize search, then find
+    kbls(i)=nz          ! initialize search, then find
   enddo                ! new boundary layer index "kbls"
-  do k=N-1,1,-1
+  do k=nz-1,1,-1
     do i=istr,iend
-      if (z_w(i,j,k) > z_w(i,j,N)-hbl(i,j)) kbls(i)=k
+      if (z_w(i,j,k) > z_w(i,j,nz)-hbl(i,j)) kbls(i)=k
     enddo
   enddo
 
@@ -390,7 +390,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
 
   do i=istr,iend
     k=kbls(i)
-    z_bl=z_w(i,j,N)-hbl(i,j)
+    z_bl=z_w(i,j,nz)-hbl(i,j)
     zscale=hbl(i,j)
 
     if (swr_frac(i,j,k-1) > 0._8) then
@@ -413,15 +413,15 @@ do j=jstr,jend   !--> restart j-loop till the very end
 ! Compute turbulent velocity scales at vertical W-points.
 
   do i=istr,iend
-    do k=N,0,-1
+    do k=nz,0,-1
       Bfsfc=Bfsfc_bl(i)
-      zscale=z_w(i,j,N)-z_w(i,j,k)
+      zscale=z_w(i,j,nz)-z_w(i,j,k)
 
 #  include "lmd_wscale_wm_and_ws.h"
 
 ! Compute vertical mixing coefficients
 
-      ssgm=(z_w(i,j,N)-z_w(i,j,k))/max(hbl(i,j),EPS)
+      ssgm=(z_w(i,j,nz)-z_w(i,j,k))/max(hbl(i,j),EPS)
 
       if (ssgm < 1._8) then
         if (ssgm<0.07D0) then
@@ -461,9 +461,9 @@ do j=jstr,jend   !--> restart j-loop till the very end
 # endif   /* LMD_KPP */
 
   do i=istr,iend
-    kbbl(i)=N          !<-- initialize search
+    kbbl(i)=nz          !<-- initialize search
   enddo
-  do k=N-1,1,-1       ! find new boundary layer index "kbls"
+  do k=nz-1,1,-1       ! find new boundary layer index "kbls"
     do i=istr,iend
       if (z_w(i,j,k) > z_w(i,j,0)+bbl(i,j)) kbbl(i)=k
     enddo
@@ -491,7 +491,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
 !--------- -------- ----- ------ -------------
 ! Compute turbulent velocity scales at vertical W-points.
 
-    do k=0,N
+    do k=0,nz
       sgmb=(z_w(i,j,k)-z_w(i,j,0)+Zob)/(bbl(i,j)+Zob)
       if (sgmb < 1._8) then
 
@@ -513,7 +513,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
     if (rmask(i,j) > 0.5_8) then
 # endif
       if (FIRST_TIME_STEP) then
-        do k=0,N
+        do k=0,nz
           Akv(i,j,k)=Kv(i,j,k)
           Akt(i,j,k,itemp)=Kt(i,j,k)
 # ifdef SALINITY
@@ -521,7 +521,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
 # endif
         enddo
       else  !! Average 2 time steps of mixing coefficients
-        do k=0,N
+        do k=0,nz
 !               Akv(i,j,k)       = 0.5_8*Akv(i,j,k)       + 0.5_8*Kv(i,j,k)
 !               Akt(i,j,k,itemp) = 0.5_8*Akt(i,j,k,itemp) + 0.5_8*Kt(i,j,k)
           Akv(i,j,k)       = Kv(i,j,k)
@@ -535,7 +535,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
       endif  !<-- FIRST_TIME_STEP
 # ifdef MASKING
     else
-      do k=0,N
+      do k=0,nz
         Akv(i,j,k)=0._8
         Akt(i,j,k,itemp)=0._8
 #  ifdef SALINITY

@@ -42,10 +42,11 @@ class TestCdr:
         """Base namelist for every CDR variant; deep-copied per test."""
         nml = create_test_namelist_dict(input_dir)
         nml["TIME_STEPPING"]["dt"] = 40
+        nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = 40
         nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
-        nml["BGC_SETTINGS"]["output_period_his"] = 400
+        nml["BGC_SETTINGS"]["output_period_bgc_his"] = 400
         nml["FORCING_FILES"] = {
-            "frcfile": [
+            "frcfiles": [
                 str(input_dir / "example_input_boundary_forcing.nc"),
                 str(input_dir / "example_input_surface_forcing.nc"),
                 str(input_dir / "example_input_bgc_surface_forcing.nc"),
@@ -54,16 +55,16 @@ class TestCdr:
                 str(input_dir / "example_input_bgc_boundary_forcing.nc"),
             ]
         }
-        nml["PARAM_SETTINGS"]["ntrc_bio"] = 32
+        nml["PARAM_SETTINGS"]["nt_bgc"] = 32
         return nml
 
     def test_3d(self, tmp_path, cdr_conf, base_nml, input_dir, reference_results):
         nml = copy.deepcopy(base_nml)
-        nml["FORCING_FILES"]["frcfile"] += [str(input_dir / "cdr_forcing_3d.nc")]
+        nml["FORCING_FILES"]["frcfiles"] += [str(input_dir / "cdr_forcing_3d.nc")]
         nml["CDR_FRC_SETTINGS"].update({
             "cdr_source": True,
-            "forcing_3d": True,
-            "relocate_to_wet_pts": True,
+            "cdr_forcing_3d": True,
+            "cdr_relocate_to_wet_pts": True,
         })
         cdr_conf.run(nml, cwd=tmp_path)
 
@@ -75,13 +76,13 @@ class TestCdr:
 
     def test_dp(self, tmp_path, cdr_conf, base_nml, input_dir, reference_results):
         nml = copy.deepcopy(base_nml)
-        nml["BGC_SETTINGS"]["output_period_his"] = 200
+        nml["BGC_SETTINGS"]["output_period_bgc_his"] = 200
         nml["CDR_FRC_SETTINGS"].update({
             "cdr_source": True,
-            "forcing_depth_profiles": True,
+            "cdr_forcing_depth_profiles": True,
             "cdr_file": str(input_dir / "cdr_forcing_dp.nc"),
-            "relocate_to_wet_pts": True,
-            "nz_chd": 10,
+            "cdr_relocate_to_wet_pts": True,
+            "cdr_nz_chd": 10,
         })
         cdr_conf.run(nml, cwd=tmp_path)
 
@@ -95,8 +96,8 @@ class TestCdr:
         nml = copy.deepcopy(base_nml)
         nml["CDR_FRC_SETTINGS"].update({
             "cdr_source": True,
-            "forcing_parameterized": True,
-            "relocate_to_wet_pts": True,
+            "cdr_forcing_parameterized": True,
+            "cdr_relocate_to_wet_pts": True,
             "cdr_file": str(input_dir / "cdr_forcing_parm.nc"),
         })
         cdr_conf.run(nml, cwd=tmp_path)

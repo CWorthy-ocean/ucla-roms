@@ -55,7 +55,7 @@ contains
     use eos_vars, only: drdx,drde
 #endif
     use dimensions, only:  nx, ny, nz, inode, jnode,i0,i1,j0,j1
-    use scalars, only: n, g, rho0, nrhs
+    use scalars, only: nz, g, rho0, nrhs
 #ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag,&
     &vdiag, ipgr, dxdyi_u, dxdyi_v, diag_uv
@@ -67,7 +67,7 @@ contains
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k, imin,imax,jmin,jmax
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,N) :: &
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,nz) :: &
 # ifdef SPLIT_EOS
     &rho,&
 # endif
@@ -77,9 +77,9 @@ contains
     real(kind=8) dpth
 #endif
 # ifdef NHMG
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:N) :: rw
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: rw
 # endif
-    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: dR,dZ
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: dR,dZ
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: FC,dZx,rx,dRx
 
     real(kind=8) grho, HalfGRho, cff, cfr
@@ -216,11 +216,11 @@ contains
       enddo
 
       do i=istrU-1,iend
-        P(i,j,N)=g*z_w(i,j,N) + grho*( rho(i,j,N)&
-        &+0.5_8*(rho(i,j,N)-rho(i,j,N-1))*(z_w(i,j,N)-z_r(i,j,N))&
-        &/(z_r(i,j,N)-z_r(i,j,N-1)) )*(z_w(i,j,N)-z_r(i,j,N))
+        P(i,j,nz)=g*z_w(i,j,nz) + grho*( rho(i,j,nz)&
+        &+0.5_8*(rho(i,j,nz)-rho(i,j,nz-1))*(z_w(i,j,nz)-z_r(i,j,nz))&
+        &/(z_r(i,j,nz)-z_r(i,j,nz-1)) )*(z_w(i,j,nz)-z_r(i,j,nz))
         if (pot_tides) then
-          P(i,j,N) = P(i,j,N) - g*ptide(i,j)
+          P(i,j,nz) = P(i,j,nz) - g*ptide(i,j)
         endif
       enddo
       do k=nz-1,1,-1
@@ -243,7 +243,7 @@ contains
 
     rx(:,:) = 0.0_8
 
-    do k=N,1,-1
+    do k=nz,1,-1
       do j=jstr,jend
         do i=imin,imax
            FC(i,j)=(z_r(i,j,k)-z_r(i-1,j,k))
@@ -354,7 +354,7 @@ contains
 
     enddo
 
-    do k=N,1,-1
+    do k=nz,1,-1
 ! ETA-component of pressure gradient term:
 !-------------- -- -------- -------- -----
 
@@ -499,7 +499,7 @@ contains
 !     We are re-using dR as a work array
 
     do j=Jstr,Jend
-      do k = 1,N
+      do k = 1,nz
         do i=Istr,Iend
           dR(i,k) = dzdxi(i,j,k) *(&
           &ru(i  ,j,k  )/(Hz(i,j,k)+Hz(i-1,j,k))&
@@ -511,13 +511,13 @@ contains
       enddo
 
       !! rw is a V*dwdt units object (m4/s2), just like ru, rv
-      do k = 1,N-1
+      do k = 1,nz-1
         do i=Istr,Iend
           rw(i,j,k)=-0.25_8*(dR(i,k+1)+dR(i,k))*(Hz(i,j,k+1)+Hz(i,j,k))
         enddo
       enddo
       do i=Istr,Iend
-        rw(i,j,N) = -0.5_8*dR(i,N)*Hz(i,j,N)
+        rw(i,j,nz) = -0.5_8*dR(i,nz)*Hz(i,j,nz)
       enddo
     enddo
 #  ifdef DIAGNOSTICS_NHMG

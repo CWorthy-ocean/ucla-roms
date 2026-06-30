@@ -33,8 +33,8 @@ module calc_pflx_mod
   real(kind=8) :: alpha, beta       ! filtering constants (needed for child bry)
 
   logical, public :: calc_pflx
-  real(kind=8) :: timescale     = 0._8 ! timescale for filtering pressure fluxes (in seconds)
-  namelist /CALC_PFLX_SETTINGS/ timescale, calc_pflx
+  real(kind=8) :: pflx_timescale     = 0._8 ! pflx_timescale for filtering pressure fluxes (in seconds)
+  namelist /CALC_PFLX_SETTINGS/ pflx_timescale, calc_pflx
 
   public init_pflx
   public calc_pressure_flux
@@ -70,7 +70,7 @@ contains
     if (calc_pflx) then
 
       ! Coefficients for exponential smoothing
-      alpha = dt / timescale
+      alpha = dt / pflx_timescale
       beta  = 1 - alpha
 
       if (mynode==0) print *,'allocating pflux vars'

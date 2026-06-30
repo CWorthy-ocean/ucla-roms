@@ -5,7 +5,7 @@ module ocean_vars
 #include "cppdefs.opt"
 
   use param, only: lm, mm
-  use scalars, only: init, n
+  use scalars, only: init, nz
   implicit none
   private
 
@@ -79,38 +79,38 @@ contains  !]
 
 
 #ifdef SOLVE3D
-    allocate( u(GLOBAL_2D_ARRAY,N,3) )
+    allocate( u(GLOBAL_2D_ARRAY,nz,3) )
     u(:,:,:,1)=init
     u(:,:,:,2)=0.0_8                             ! index 2 used on rhs u(indx) in pre_step for DC.
     u(:,:,:,3)=init                            ! multiplied by zero but can't be a nan.
-    allocate( v(GLOBAL_2D_ARRAY,N,3) )
+    allocate( v(GLOBAL_2D_ARRAY,nz,3) )
     v(:,:,:,1)=init
     v(:,:,:,2)=0.0_8                             ! index 2 used on rhs v(indx) in pre_step for DC.
     v(:,:,:,3)=init                            ! multiplied by zero but can't be a nan.
 
 # if defined NHMG
-    allocate( w(GLOBAL_2D_ARRAY,0:N,3) )
-    allocate( nhdu(GLOBAL_2D_ARRAY,1:N,2) )
-    allocate( nhdv(GLOBAL_2D_ARRAY,1:N,2) )
-    allocate( nhdw(GLOBAL_2D_ARRAY,0:N,2) )
+    allocate( w(GLOBAL_2D_ARRAY,0:nz,3) )
+    allocate( nhdu(GLOBAL_2D_ARRAY,1:nz,2) )
+    allocate( nhdv(GLOBAL_2D_ARRAY,1:nz,2) )
+    allocate( nhdw(GLOBAL_2D_ARRAY,0:nz,2) )
 # endif
 
-    allocate( FlxU(GLOBAL_2D_ARRAY,N) ) ; FlxU=init
-    allocate( FlxV(GLOBAL_2D_ARRAY,N) ) ; FlxV=init
-    allocate( We(GLOBAL_2D_ARRAY,0:N) ) ; We=init        ! explicit
-    allocate( Wi(GLOBAL_2D_ARRAY,0:N) ) ; Wi=init        ! implicit
+    allocate( FlxU(GLOBAL_2D_ARRAY,nz) ) ; FlxU=init
+    allocate( FlxV(GLOBAL_2D_ARRAY,nz) ) ; FlxV=init
+    allocate( We(GLOBAL_2D_ARRAY,0:nz) ) ; We=init        ! explicit
+    allocate( Wi(GLOBAL_2D_ARRAY,0:nz) ) ; Wi=init        ! implicit
 
-    allocate( Hz(GLOBAL_2D_ARRAY,N) )    ; Hz=init       ! height of rho-cell
-    allocate( Hz_u(GLOBAL_2D_ARRAY,N) )  ; Hz_u=init     ! height of cell at u-interface
-    allocate( Hz_v(GLOBAL_2D_ARRAY,N) )  ; Hz_v=init     ! height of cell at v-interface
-    allocate( z_r(GLOBAL_2D_ARRAY,N) )   ; z_r=init      ! depth at rho-points
-    allocate( z_w(GLOBAL_2D_ARRAY,0:N) ) ; z_w=init      ! depth at   w-points
-    allocate( Hz0(GLOBAL_2D_ARRAY,N) )   ; Hz0=init      ! height of rho-cell with zero SSH
-    allocate( z_r0(GLOBAL_2D_ARRAY,N) )  ; z_r0=init     ! depth at rho-points with zero SSH
-    allocate( z_w0(GLOBAL_2D_ARRAY,0:N) ); z_w0=init     ! depth at w-points with zero SSH
+    allocate( Hz(GLOBAL_2D_ARRAY,nz) )    ; Hz=init       ! height of rho-cell
+    allocate( Hz_u(GLOBAL_2D_ARRAY,nz) )  ; Hz_u=init     ! height of cell at u-interface
+    allocate( Hz_v(GLOBAL_2D_ARRAY,nz) )  ; Hz_v=init     ! height of cell at v-interface
+    allocate( z_r(GLOBAL_2D_ARRAY,nz) )   ; z_r=init      ! depth at rho-points
+    allocate( z_w(GLOBAL_2D_ARRAY,0:nz) ) ; z_w=init      ! depth at   w-points
+    allocate( Hz0(GLOBAL_2D_ARRAY,nz) )   ; Hz0=init      ! height of rho-cell with zero SSH
+    allocate( z_r0(GLOBAL_2D_ARRAY,nz) )  ; z_r0=init     ! depth at rho-points with zero SSH
+    allocate( z_w0(GLOBAL_2D_ARRAY,0:nz) ); z_w0=init     ! depth at w-points with zero SSH
 # if defined NHMG || defined NONTRAD_COR
-    allocate( dzdxi(GLOBAL_2D_ARRAY,1:N)  )
-    allocate( dzdeta(GLOBAL_2D_ARRAY,1:N) )
+    allocate( dzdxi(GLOBAL_2D_ARRAY,1:nz)  )
+    allocate( dzdeta(GLOBAL_2D_ARRAY,1:nz) )
 # endif
 #endif  /* SOLVE3D */
 

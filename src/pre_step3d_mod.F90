@@ -65,7 +65,7 @@ contains
 #endif
     use ocean_vars, only: wi, we, flxv, flxu, hz, z_w, u, v
     use scalars, only:&
-    &n, dt, forw_start, iic, nnew, nrhs, nstp, nt,&
+    &nz, dt, forw_start, iic, nnew, nrhs, nstp, nt,&
     &rdrg, vonkar, zob, ntstart
 #ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag, vdiag, icori,&
@@ -80,13 +80,13 @@ contains
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,N) :: ru,rv,Hz_bak,&
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,nz) :: ru,rv,Hz_bak,&
     &Hz_fwd
-    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) ::  WC,FC,CF,DC
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) ::  WC,FC,CF,DC
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: UFx,UFe,VFx,VFe,&
     &wrk1,wrk2
 #ifdef NHMG
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:N) :: rw
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: rw
     real(kind=8)  Flxw,Uflxw,Vflxw
     real(kind=8)  div,dmax
     real(kind=8)  ub,ut
@@ -147,7 +147,7 @@ contains
       cf_bak=0.5_8 -AM3_crv
     endif                           ! Construct artificial slow-time
     ! continuity equation for pseudo-
-    do k=1,N                        ! compressible predictor substep,
+    do k=1,nz                        ! compressible predictor substep,
       cff=0.5_8*dtau                  ! Eq. (4.7_8) from SM2005.
       do j=jstrV-1,jend
         do i=istrU-1,iend
@@ -214,7 +214,7 @@ contains
       do itrc=1,nt
 # include "compute_vert_tracer_fluxes.h"
 
-        do k=1,n
+        do k=1,nz
           do i=istr,iend   !! t(..) is Hz*T
             t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)&
             &-dtau*pm(i,j)*pn(i,j)*(FC(i,k)-FC(i,k-1))
@@ -253,7 +253,7 @@ contains
           DC(i,1)=cff*t(i,j,1,nnew,itrc)                 !! u(1) = r(1)/bet
         enddo
 
-        do k=2,N-1,+1
+        do k=2,nz-1,+1
           do i=istr,iend
             FC(i,k)=2._8*dtau*Akt(i,j,k,iAkt)/( Hz_fwd(i,j,k+1)&
             &+Hz_fwd(i,j,k) )
@@ -271,14 +271,14 @@ contains
         enddo  !--> discard DC(:,0)
 
         do i=istr,iend
-          t(i,j,N,nnew,itrc)=( t(i,j,N,nnew,itrc) +DC(i,N-1)*(&
-          &FC(i,N-1)+max(WC(i,N-1),0._8) )&
-          &)/( Hz_fwd(i,j,N) +FC(i,N-1)-min(WC(i,N-1),0._8)&
-          &-CF(i,N-1)*(FC(i,N-1)+max(WC(i,N-1),0._8))&
+          t(i,j,nz,nnew,itrc)=( t(i,j,nz,nnew,itrc) +DC(i,nz-1)*(&
+          &FC(i,nz-1)+max(WC(i,nz-1),0._8) )&
+          &)/( Hz_fwd(i,j,nz) +FC(i,nz-1)-min(WC(i,nz-1),0._8)&
+          &-CF(i,nz-1)*(FC(i,nz-1)+max(WC(i,nz-1),0._8))&
           &)
         enddo
 
-        do k=N-1,1,-1
+        do k=nz-1,1,-1
           do i=istr,iend
             t(i,j,k,nnew,itrc)=DC(i,k)+CF(i,k)*t(i,j,k+1,nnew,itrc)
           enddo
@@ -306,7 +306,7 @@ contains
       enddo
       !! w(indx),w(nstp) in m/s,
       !! w(0) is always zero
-      do k=1,N-1
+      do k=1,nz-1
         do i=istr,iend
           DC(i,k)=0.5_8*(Hz_bak(i,j,k+1)+Hz_bak(i,j,k))*(&
           &cf_stp*w(i,j,k,nstp)+cf_bak*w(i,j,k,indx) )&
@@ -315,7 +315,7 @@ contains
           w(i,j,k,indx)=0.5_8*(Hz(i,j,k+1)+Hz(i,j,k))*w(i,j,k,nstp)
         enddo
       enddo
-      k = N
+      k = nz
       !! here is the special volume weighting for w(N)
       !! Still, write out the volume integrated (dz*w) vertical mixing eq.
       !! Just to check :)
@@ -330,19 +330,19 @@ contains
       !! start of tri-diag solve
       !   FC(i,1)=0.5_8*dtau*(Akt(i,j,k+1)+Akt(i,j,k)/( Hz_fwd(i,j,k)
       do i=istr,iend
-        FC(i,N-1)= 0.5_8*dtau*(-Akv(i,j,N)+Akv(i,j,N-1))& ! see notes, exception for k=N
-        &/Hz_fwd(i,j,N)
+        FC(i,nz-1)= 0.5_8*dtau*(-Akv(i,j,nz)+Akv(i,j,nz-1))& ! see notes, exception for k=N
+        &/Hz_fwd(i,j,nz)
 
-        WC(i,N-1)= DC(i,0)*0.5_8*(Wi(i,j,N)+Wi(i,j,N-1))
+        WC(i,nz-1)= DC(i,0)*0.5_8*(Wi(i,j,nz)+Wi(i,j,nz-1))
 
-        cff = 0.5_8*Hz_fwd(i,j,N) +FC(i,N-1)-min(WC(i,N-1),0._8)
+        cff = 0.5_8*Hz_fwd(i,j,nz) +FC(i,nz-1)-min(WC(i,nz-1),0._8)
 
-        CF(i,N-1)= ( FC(i,N-1)+max(WC(i,N-1),0._8) )/cff ! gam(n-1)=c(n)/bet
+        CF(i,nz-1)= ( FC(i,nz-1)+max(WC(i,nz-1),0._8) )/cff ! gam(n-1)=c(n)/bet
 
-        DC(i,N)=  DC(i,N)/cff                          ! u(1) = r(1)/bet
+        DC(i,nz)=  DC(i,nz)/cff                          ! u(1) = r(1)/bet
       enddo
 
-      do k=N-1,2,-1      !--> forward elimination for w
+      do k=nz-1,2,-1      !--> forward elimination for w
         do i=istr,iend
           FC(i,k-1)= 0.5_8*dtau*(Akv(i,j,k)+Akv(i,j,k-1))&!! A(k-1)
           &/Hz_fwd(i,j,k)
@@ -373,7 +373,7 @@ contains
         &-CF(i,1)*(FC(i,1)-min(WC(i,1),0._8))&
         &)
       enddo
-      do k=2,N,+1          !--> backsubstitution for w
+      do k=2,nz,+1          !--> backsubstitution for w
         do i=istr,iend
           w(i,j,k,nnew)=DC(i,k) +CF(i,k-1)*w(i,j,k-1,nnew)
         enddo
@@ -384,7 +384,7 @@ contains
       do i=istrU,iend
         DC(i,0)=dtau*0.25_8*(pm(i,j)+pm(i-1,j))*(pn(i,j)+pn(i-1,j))
       enddo
-      do k=1,N
+      do k=1,nz
         do i=istrU,iend
           !! DC is dz*u
           DC(i,k)=0.5_8*(Hz_bak(i,j,k)+Hz_bak(i-1,j,k))*(&
@@ -397,21 +397,21 @@ contains
       enddo
 
       do i=istrU,iend
-        FC(i,N-1)= 2._8*dtau*(Akv(i,j,N-1)+Akv(i-1,j,N-1))&
-        &/( Hz_fwd(i,j,N  )+Hz_fwd(i-1,j,N  )&
-        &+Hz_fwd(i,j,N-1)+Hz_fwd(i-1,j,N-1))
+        FC(i,nz-1)= 2._8*dtau*(Akv(i,j,nz-1)+Akv(i-1,j,nz-1))&
+        &/( Hz_fwd(i,j,nz  )+Hz_fwd(i-1,j,nz  )&
+        &+Hz_fwd(i,j,nz-1)+Hz_fwd(i-1,j,nz-1))
 
-        WC(i,N-1)= DC(i,0)*0.5_8*(Wi(i,j,N-1)+Wi(i-1,j,N-1))
+        WC(i,nz-1)= DC(i,0)*0.5_8*(Wi(i,j,nz-1)+Wi(i-1,j,nz-1))
 
-        cff=1._8/( 0.5_8*(Hz_fwd(i,j,N)+Hz_fwd(i-1,j,N))&
-        &+FC(i,N-1)-min(WC(i,N-1),0._8) )
+        cff=1._8/( 0.5_8*(Hz_fwd(i,j,nz)+Hz_fwd(i-1,j,nz))&
+        &+FC(i,nz-1)-min(WC(i,nz-1),0._8) )
 
-        CF(i,N-1)=cff*(  FC(i,N-1)+max(WC(i,N-1),0._8) )
+        CF(i,nz-1)=cff*(  FC(i,nz-1)+max(WC(i,nz-1),0._8) )
 
-        DC(i,N)=cff*( DC(i,N)&
+        DC(i,nz)=cff*( DC(i,nz)&
         &+dtau*sustr(i,j))
       enddo
-      do k=N-1,2,-1      !--> forward elimination
+      do k=nz-1,2,-1      !--> forward elimination
         do i=istrU,iend
           FC(i,k-1)= 2._8*dtau*(Akv(i,j,k-1)+Akv(i-1,j,k-1))&
           &/( Hz_fwd(i,j,k  )+Hz_fwd(i-1,j,k  )&
@@ -439,7 +439,7 @@ contains
         &-CF(i,1)*(FC(i,1)-min(WC(i,1),0._8))&
         &)
       enddo
-      do k=2,N,+1          !--> backsubstitution
+      do k=2,nz,+1          !--> backsubstitution
         do i=istrU,iend
           u(i,j,k,nnew)=DC(i,k) +CF(i,k-1)*u(i,j,k-1,nnew)
         enddo
@@ -450,7 +450,7 @@ contains
         do i=istr,iend
           DC(i,0)=dtau*0.25_8*(pm(i,j)+pm(i,j-1))*(pn(i,j)+pn(i,j-1))
         enddo
-        do k=1,N
+        do k=1,nz
           do i=istr,iend
             DC(i,k)=0.5_8*(Hz_bak(i,j,k)+Hz_bak(i,j-1,k))*(&
             &cf_stp*v(i,j,k,nstp)+cf_bak*v(i,j,k,indx) )&
@@ -460,21 +460,21 @@ contains
           enddo
         enddo
         do i=istr,iend
-          FC(i,N-1)= 2._8*dtau*(Akv(i,j,N-1)+Akv(i,j-1,N-1))&
-          &/( Hz_fwd(i,j,N  )+Hz_fwd(i,j-1,N  )&
-          &+Hz_fwd(i,j,N-1)+Hz_fwd(i,j-1,N-1))
+          FC(i,nz-1)= 2._8*dtau*(Akv(i,j,nz-1)+Akv(i,j-1,nz-1))&
+          &/( Hz_fwd(i,j,nz  )+Hz_fwd(i,j-1,nz  )&
+          &+Hz_fwd(i,j,nz-1)+Hz_fwd(i,j-1,nz-1))
 
-          WC(i,N-1)= DC(i,0)*0.5_8*(Wi(i,j,N-1)+Wi(i,j-1,N-1))
+          WC(i,nz-1)= DC(i,0)*0.5_8*(Wi(i,j,nz-1)+Wi(i,j-1,nz-1))
 
-          cff=1._8/( 0.5_8*(Hz_fwd(i,j,N)+Hz_fwd(i,j-1,N))&
-          &+FC(i,N-1)-min(WC(i,N-1),0._8) )
+          cff=1._8/( 0.5_8*(Hz_fwd(i,j,nz)+Hz_fwd(i,j-1,nz))&
+          &+FC(i,nz-1)-min(WC(i,nz-1),0._8) )
 
-          CF(i,N-1)=cff*(  FC(i,N-1)+max(WC(i,N-1),0._8) )
+          CF(i,nz-1)=cff*(  FC(i,nz-1)+max(WC(i,nz-1),0._8) )
 
-          DC(i,N)=cff*( DC(i,N)&
+          DC(i,nz)=cff*( DC(i,nz)&
           &+dtau*svstr(i,j))
         enddo
-        do k=N-1,2,-1      !--> forward elimination
+        do k=nz-1,2,-1      !--> forward elimination
           do i=istr,iend
             FC(i,k-1)= 2._8*dtau*(Akv(i,j,k-1)+Akv(i,j-1,k-1))&
             &/( Hz_fwd(i,j,k  )+Hz_fwd(i,j-1,k  )&
@@ -502,7 +502,7 @@ contains
           &-CF(i,1)*(FC(i,1)-min(WC(i,1),0._8))&
           &)
         enddo
-        do k=2,N,+1          !--> backsubstitution
+        do k=2,nz,+1          !--> backsubstitution
           do i=istr,iend
             v(i,j,k,nnew)=DC(i,k) +CF(i,k-1)*v(i,j,k-1,nnew)
           enddo
@@ -516,12 +516,12 @@ contains
       do j=jstr,jend
         do i=istrU,iend
           if (abs(riv_uflx(i,j)).gt.1e-3) then
-            riv_depth = 0.5_8*( z_w(i-1,j,N)-z_w(i-1,j,0)&
-            &+z_w(i  ,j,N)-z_w(i  ,j,0) )
+            riv_depth = 0.5_8*( z_w(i-1,j,nz)-z_w(i-1,j,0)&
+            &+z_w(i  ,j,nz)-z_w(i  ,j,0) )
             iriver = nint(riv_uflx(i,j)/10)
             riv_uvel = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)/&
             &( dn_u(i,j)*riv_depth)
-            do k= 1,N
+            do k= 1,nz
               u(i,j,k,nnew) = riv_uvel
             enddo
           endif
@@ -530,12 +530,12 @@ contains
       do j=jstrV,jend
         do i=istr,iend
           if (abs(riv_vflx(i,j)).gt.1e-3) then
-            riv_depth = 0.5_8*( z_w(i,j-1,N)-z_w(i,j-1,0)&
-            &+z_w(i,j  ,N)-z_w(i,j  ,0) )
+            riv_depth = 0.5_8*( z_w(i,j-1,nz)-z_w(i,j-1,0)&
+            &+z_w(i,j  ,nz)-z_w(i,j  ,0) )
             iriver = nint(riv_vflx(i,j)/10)
             riv_vvel = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)/&
             &( dm_v(i,j)*riv_depth)
-            do k= 1,N
+            do k= 1,nz
               v(i,j,k,nnew) = riv_vvel
             enddo
           endif
@@ -570,7 +570,7 @@ contains
 !     if (iic.lt.-10) then ! should never happen, so always project twice
     if (iic.ge.(ntstart+2)) then ! Use AB2 extrapolation for the NH prsgrd
 !       if  (mynode==0) print *, 'AB2 extrapolate'
-      do k=1,N
+      do k=1,nz
         do j=jstr,jend
           do i=istrU,iend
             u(i,j,k,nnew) = u(i,j,k,nnew)&
@@ -599,14 +599,14 @@ contains
     else  !! instead of using AB2 to extrapolate the nh pressure gradient from corrector steps, we project here
 #  ifndef EW_PERIODIC
       if (WESTERN_EDGE) then
-        do k=1,N
+        do k=1,nz
           do j=jstr,jend
             Hz_fwd(istr-1,j,k)=Hz_fwd(istr,j,k)
           enddo
         enddo
       endif
       if (EASTERN_EDGE) then
-        do k=1,N
+        do k=1,nz
           do j=jstr,jend
             Hz_fwd(iend+1,j,k)=Hz_fwd(iend,j,k)
           enddo
@@ -615,14 +615,14 @@ contains
 #  endif
 #  ifndef NS_PERIODIC
       if (SOUTHERN_EDGE) then
-        do k=1,N
+        do k=1,nz
           do i=istr,iend
             Hz_fwd(i,jstr-1,k)=Hz_fwd(i,jstr,k)
           enddo
         enddo
       endif
       if (NORTHERN_EDGE) then
-        do k=1,N
+        do k=1,nz
           do i=istr,iend
             Hz_fwd(i,jend+1,k)=Hz_fwd(i,jend,k)
           enddo
@@ -632,7 +632,7 @@ contains
 
 !    At the end of the tridiag solves, the velocities are in m/s
 !    Multiply u,v,w to get back fluxes for use inside mg_solve
-      do k=1,N
+      do k=1,nz
         do j=jstr,jend
           do i=istr,iend
             u(i,j,k,nnew) = u(i,j,k,nnew)&
@@ -662,7 +662,7 @@ contains
 !         print *,'neumann'
         nh_ubar = 0._8
         nh_vbar = 0._8
-        do k=1,N
+        do k=1,nz
           do j=jstr,jend
             do i=istr,iend+1
               nh_ubar(i,j) = nh_ubar(i,j) + u(i,j,k,nnew)
@@ -677,26 +677,26 @@ contains
 
         do j=jstr,jend
           do i=istr,iend
-            nh_wcor(i,j) = w(i,j,N,nnew) +&
+            nh_wcor(i,j) = w(i,j,nz,nnew) +&
             &(nh_ubar(i+1,j)-nh_ubar(i,j)+nh_vbar(i,j+1)-nh_vbar(i,j))
           enddo
         enddo
-        do k=1,N
+        do k=1,nz
           do j=jstr,jend
             do i=istr,iend
               w(i,j,k,nnew) = w(i,j,k,nnew) - nh_wcor(i,j)&
               &* (z_w(i,j,k)-z_w(i,j,0))&
-              &/ (z_w(i,j,N)-z_w(i,j,0))
+              &/ (z_w(i,j,nz)-z_w(i,j,0))
             enddo
           enddo
         enddo
       endif  ! surface_neumann !
 
-      call nhmg_solve(Lm,Mm,N,halo,padd_X,padd_E,&
+      call nhmg_solve(Lm,Mm,nz,halo,padd_X,padd_E,&
       &u(:,:,:,nnew),v(:,:,:,nnew),w(:,:,:,nnew) )
 
       dmax = 0
-      do k=1,N
+      do k=1,nz
         do j=jstr,jend
           do i=istr,iend
             div= (u(i+1,j,k,nnew) + mggrid(1)%du(k,j,i+1))&
@@ -713,7 +713,7 @@ contains
       ! add the non-hydro correction (du, dv, dw are in flux form)
       ! add the non-hydrostatic pressure gradient to rufrc, rvfrc
       ! Can't do to iend+1 because we dont have Hz_fwd(iend+1)
-      do k=1,N
+      do k=1,nz
         do j=jstr,jend
           do i=istr,iend
             u(i,j,k,nnew) = (u(i,j,k,nnew) + mggrid(1)%du(k,j,i))&

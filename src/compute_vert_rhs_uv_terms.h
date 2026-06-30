@@ -15,7 +15,7 @@ do i=istrU,iend
   CF(i,1)=1._8  ;  FC(i,0)=2.0_8*u(i,j,1,nrhs)
 #  endif
 enddo
-do k=1,N-1,+1    !--> recursive
+do k=1,nz-1,+1    !--> recursive
   do i=istrU,iend
     DC(i,k+1)=0.5625_8*(Hz(i  ,j,k+1)+Hz(i-1,j,k+1))&
     &-0.0625_8*(Hz(i+1,j,k+1)+Hz(i-2,j,k+1))
@@ -29,13 +29,13 @@ do k=1,N-1,+1    !--> recursive
 enddo               !--> discard DC, keep CF,FC
 do i=istrU,iend
 #  if defined NEUMANN_UV
-  FC(i,N)=(3._8*u(i,j,N,nrhs)-FC(i,N-1))/(2._8-CF(i,N))
+  FC(i,nz)=(3._8*u(i,j,nz,nrhs)-FC(i,nz-1))/(2._8-CF(i,nz))
 #  else
-  FC(i,N)=(2._8*u(i,j,N,nrhs)-FC(i,N-1))/(1._8-CF(i,N))
+  FC(i,nz)=(2._8*u(i,j,nz,nrhs)-FC(i,nz-1))/(1._8-CF(i,nz))
 #  endif
-  DC(i,N)=0._8        !<-- uppermost W*U flux
+  DC(i,nz)=0._8        !<-- uppermost W*U flux
 enddo
-do k=N-1,1,-1       !--> recursive
+do k=nz-1,1,-1       !--> recursive
   do i=istrU,iend
     FC(i,k)=FC(i,k)-CF(i,k+1)*FC(i,k+1)
 
@@ -56,7 +56,7 @@ do i=istrU,iend
   ru(i,j,1)=ru(i,j,1) -DC(i,1)
 enddo                          !--> discard DC
 # else
-do k=2,N-2
+do k=2,nz-2
   do i=istrU,iend
     FC(i,k)=( 0.5625_8*(u(i,j,k  ,nrhs)+u(i,j,k+1,nrhs))&
     &-0.0625_8*(u(i,j,k-1,nrhs)+u(i,j,k+2,nrhs)))&
@@ -65,11 +65,11 @@ do k=2,N-2
   enddo
 enddo
 do i=istrU,iend
-  FC(i,N)=0._8
-  FC(i,N-1)=( 0.5625_8*(u(i,j,N-1,nrhs)+u(i,j,N,nrhs))&
-  &-0.0625_8*(u(i,j,N-2,nrhs)+u(i,j,N,nrhs)))&
-  &*( 0.5625_8*(We(i  ,j,N-1)+We(i-1,j,N-1))&
-  &-0.0625_8*(We(i+1,j,N-1)+We(i-2,j,N-1)))
+  FC(i,nz)=0._8
+  FC(i,nz-1)=( 0.5625_8*(u(i,j,nz-1,nrhs)+u(i,j,nz,nrhs))&
+  &-0.0625_8*(u(i,j,nz-2,nrhs)+u(i,j,nz,nrhs)))&
+  &*( 0.5625_8*(We(i  ,j,nz-1)+We(i-1,j,nz-1))&
+  &-0.0625_8*(We(i+1,j,nz-1)+We(i-2,j,nz-1)))
 
   FC(i,  1)=( 0.5625_8*(u(i,j,  1,nrhs)+u(i,j,2,nrhs))&
   &-0.0625_8*(u(i,j,  1,nrhs)+u(i,j,3,nrhs)))&
@@ -87,7 +87,7 @@ enddo
 !*        FC(i,0)=0._8
 !*        FC(i,N)=0._8
 !*      enddo
-do k=1,N
+do k=1,nz
   do i=istrU,iend
     ru(i,j,k)=ru(i,j,k)-FC(i,k)+FC(i,k-1)
   enddo
@@ -105,7 +105,7 @@ if (j >= jstrV) then
     CF(i,1)=1._8  ;  FC(i,0)=2.0_8*v(i,j,1,nrhs)
 #  endif
   enddo
-  do k=1,N-1,+1       !--> recursive
+  do k=1,nz-1,+1       !--> recursive
     do i=istr,iend
       DC(i,k+1)=0.5625_8*(Hz(i  ,j,k+1)+Hz(i,j-1,k+1))&
       &-0.0625_8*(Hz(i,j+1,k+1)+Hz(i,j-2,k+1))
@@ -119,13 +119,13 @@ if (j >= jstrV) then
   enddo               !--> discard DC, keep CF,FC
   do i=istr,iend
 #  if defined NEUMANN_UV
-    FC(i,N)=(3._8*v(i,j,N,nrhs)-FC(i,N-1))/(2._8-CF(i,N))
+    FC(i,nz)=(3._8*v(i,j,nz,nrhs)-FC(i,nz-1))/(2._8-CF(i,nz))
 #  else
-    FC(i,N)=(2._8*v(i,j,N,nrhs)-FC(i,N-1))/(1._8-CF(i,N))
+    FC(i,nz)=(2._8*v(i,j,nz,nrhs)-FC(i,nz-1))/(1._8-CF(i,nz))
 #  endif
-    DC(i,N)=0._8        !<-- uppermost W*V flux
+    DC(i,nz)=0._8        !<-- uppermost W*V flux
   enddo
-  do k=N-1,1,-1       !--> recursive
+  do k=nz-1,1,-1       !--> recursive
     do i=istr,iend
       FC(i,k)=FC(i,k)-CF(i,k+1)*FC(i,k+1)
 
@@ -147,7 +147,7 @@ if (j >= jstrV) then
   enddo                         !--> discard DC
 
 # else
-  do k=2,N-2
+  do k=2,nz-2
     do i=istr,iend
       FC(i,k)=( 0.5625_8*(v(i,j,k ,nrhs)+v(i,j,k+1,nrhs))&
       &-0.0625_8*(v(i,j,k-1,nrhs)+v(i,j,k+2,nrhs)))&
@@ -156,11 +156,11 @@ if (j >= jstrV) then
     enddo
   enddo
   do i=istr,iend
-    FC(i,N)=0._8
-    FC(i,N-1)=(  0.5625_8*(v(i,j,N-1,nrhs)+v(i,j,N,nrhs))&
-    &-0.0625_8*(v(i,j,N-2,nrhs)+v(i,j,N,nrhs)))&
-    &*( 0.5625_8*(We(i,j  ,N-1)+We(i,j-1,N-1))&
-    &-0.0625_8*(We(i,j+1,N-1)+We(i,j-2,N-1)))
+    FC(i,nz)=0._8
+    FC(i,nz-1)=(  0.5625_8*(v(i,j,nz-1,nrhs)+v(i,j,nz,nrhs))&
+    &-0.0625_8*(v(i,j,nz-2,nrhs)+v(i,j,nz,nrhs)))&
+    &*( 0.5625_8*(We(i,j  ,nz-1)+We(i,j-1,nz-1))&
+    &-0.0625_8*(We(i,j+1,nz-1)+We(i,j-2,nz-1)))
 
     FC(i,  1)=(  0.5625_8*(v(i,j,  1,nrhs)+v(i,j,2,nrhs))&
     &-0.0625_8*(v(i,j,  1,nrhs)+v(i,j,3,nrhs)))&
@@ -178,7 +178,7 @@ if (j >= jstrV) then
 !*          FC(i,0)=0._8
 !*          FC(i,N)=0._8
 !*        enddo
-  do k=1,N
+  do k=1,nz
     do i=istr,iend
       rv(i,j,k)=rv(i,j,k)-FC(i,k)+FC(i,k-1)
     enddo

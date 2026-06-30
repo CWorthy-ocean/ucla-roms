@@ -104,7 +104,7 @@ contains
     &nnodes, ieast, isw_corn, iwest, jnorth, jsouth, jsw_corn,&
     &mynode, nsub_e, nsub_x, ocean_grid_comm
     use scalars, only:&
-    &diag_sync, dt, g, iic, n, nstp,&
+    &diag_sync, dt, g, iic, nz, nstp,&
     &rho0, tdays
     use mpi_f08, only: mpi_real8, mpi_status_size, mpi_wtime
     use timers, only: tstart
@@ -163,10 +163,10 @@ contains
 # endif
     do j=jstr,jend+1
       do i=istr,iend+1
-        ub(i,j)=(Hz(i,j,N)+Hz(i-1,j,N))*u(i,j,N,nstp)
-        vb(i,j)=(Hz(i,j,N)+Hz(i,j-1,N))*v(i,j,N,nstp)
+        ub(i,j)=(Hz(i,j,nz)+Hz(i-1,j,nz))*u(i,j,nz,nstp)
+        vb(i,j)=(Hz(i,j,nz)+Hz(i,j-1,nz))*v(i,j,nz,nstp)
       enddo
-      do k=N-1,2,-1
+      do k=nz-1,2,-1
         do i=istr,iend+1
           ub(i,j)=ub(i,j)+(Hz(i,j,k)+Hz(i-1,j,k))*u(i,j,k,nstp)
           vb(i,j)=vb(i,j)+(Hz(i,j,k)+Hz(i,j-1,k))*v(i,j,k,nstp)
@@ -174,9 +174,9 @@ contains
       enddo
       do i=istr,iend+1
         ub(i,j)=(ub(i,j)+(Hz(i,j,1)+Hz(i-1,j,1))*u(i,j,1,nstp))&
-        &/(z_w(i,j,N)+z_w(i-1,j,N)-z_w(i,j,0)-z_w(i-1,j,0))
+        &/(z_w(i,j,nz)+z_w(i-1,j,nz)-z_w(i,j,0)-z_w(i-1,j,0))
         vb(i,j)=(vb(i,j)+(Hz(i,j,1)+Hz(i,j-1,1))*v(i,j,1,nstp))&
-        &/(z_w(i,j,N)+z_w(i,j-1,N)-z_w(i,j,0)-z_w(i,j-1,0))
+        &/(z_w(i,j,nz)+z_w(i,j-1,nz)-z_w(i,j,0)-z_w(i,j-1,0))
       enddo
     enddo
 
@@ -187,14 +187,14 @@ contains
         my_v2d_max=max(my_v2d_max, v2)
 
         ke(i,j)=0._8
-        pe(i,j)=0.5_8*g*z_w(i,j,N)*z_w(i,j,N)
+        pe(i,j)=0.5_8*g*z_w(i,j,nz)*z_w(i,j,nz)
 
-        ke2b(i,j)=0.5_8*(z_w(i,j,N)-z_w(i,j,0))*v2
+        ke2b(i,j)=0.5_8*(z_w(i,j,nz)-z_w(i,j,0))*v2
         ke3bc(i,j)=0._8
-        kesrf(i,j)=0.25_8*( u(i,j,N,nstp)**2 + u(i+1,j,N,nstp)**2&
-        &+v(i,j,N,nstp)**2 + v(i,j+1,N,nstp)**2)
+        kesrf(i,j)=0.25_8*( u(i,j,nz,nstp)**2 + u(i+1,j,nz,nstp)**2&
+        &+v(i,j,nz,nstp)**2 + v(i,j+1,nz,nstp)**2)
       enddo
-      do k=N,1,-1
+      do k=nz,1,-1
         do i=istr,iend
           v2=0.5_8*( u(i,j,k,nstp)**2 + u(i+1,j,k,nstp)**2&
           &+v(i,j,k,nstp)**2 + v(i,j+1,k,nstp)**2)
@@ -247,7 +247,7 @@ contains
 
           pe(i,j)=pe(i,j) + cff*Hz(i,j,k)&
 # ifdef SPLIT_EOS
-          &*(rho1(i,j,k)+qp1(i,j,k)*(z_w(i,j,N)-z_r(i,j,k)))&
+          &*(rho1(i,j,k)+qp1(i,j,k)*(z_w(i,j,nz)-z_r(i,j,k)))&
 # else
           &*rho(i,j,k)&
 # endif
@@ -262,7 +262,7 @@ contains
 # else
         dA=1._8/(pm(i,j)*pn(i,j))
 # endif
-        dVol(i,j) = dA * z_w(i,j,N)
+        dVol(i,j) = dA * z_w(i,j,nz)
         ke(i,j)   = dA * ke(i,j)
         pe(i,j)   = dA * pe(i,j)
         ke2b(i,j) = dA * ke2b(i,j)

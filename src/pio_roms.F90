@@ -17,7 +17,7 @@ module pio_roms
   use pionfatt_mod, only : put_att_desc_text
   use mpi, only: mpi_comm_world
   use mpi_f08, only: mpi_character, mpi_wtime
-  use param, only: LLm, MMm, N, ocean_grid_comm, nt, mynode
+  use param, only: LLm, MMm, nz, ocean_grid_comm, nt, mynode
   use timers, only: tstart
   implicit none
 
@@ -585,12 +585,12 @@ contains
 
     ! NORTH 2R
     pio_dimLen_n2r_r(1) = LLm+2
-    pio_dimLen_n2r_r(2) = N
+    pio_dimLen_n2r_r(2) = nz
     pio_start_n2r_r(1) = pio_xi_rho_start_bry
     pio_start_n2r_r(2) = 1
     if (PIO_NORTHERN_EDGE) then
       pio_count_n2r_r(1) = pio_xi_rho
-      pio_count_n2r_r(2) = N
+      pio_count_n2r_r(2) = nz
     else
       pio_count_n2r_r(1) = 0
       pio_count_n2r_r(2) = 0
@@ -603,12 +603,12 @@ contains
 
     ! NORTH 2U
     pio_dimLen_n2u_r(1) = LLm+1
-    pio_dimLen_n2u_r(2) = N
+    pio_dimLen_n2u_r(2) = nz
     pio_start_n2u_r(1) = pio_xi_u_start_bry
     pio_start_n2u_r(2) = 1
     if (PIO_NORTHERN_EDGE) then
       pio_count_n2u_r(1) = pio_xi_u
-      pio_count_n2u_r(2) = N
+      pio_count_n2u_r(2) = nz
     else
       pio_count_n2u_r(1) = 0
       pio_count_n2u_r(2) = 0
@@ -621,12 +621,12 @@ contains
 
     ! NORTH 2V
     pio_dimLen_n2v_r(1) = LLm+2
-    pio_dimLen_n2v_r(2) = N
+    pio_dimLen_n2v_r(2) = nz
     pio_start_n2v_r(1) = pio_xi_rho_start_bry
     pio_start_n2v_r(2) = 1
     if (PIO_NORTHERN_EDGE) then
       pio_count_n2v_r(1) = pio_xi_rho
-      pio_count_n2v_r(2) = N
+      pio_count_n2v_r(2) = nz
     else
       pio_count_n2v_r(1) = 0
       pio_count_n2v_r(2) = 0
@@ -681,12 +681,12 @@ contains
 
     ! SOUTH 2R
     pio_dimLen_s2r_r(1) = LLm+2
-    pio_dimLen_s2r_r(2) = N
+    pio_dimLen_s2r_r(2) = nz
     pio_start_s2r_r(1) = pio_xi_rho_start_bry
     pio_start_s2r_r(2) = 1
     if (PIO_SOUTHERN_EDGE) then
       pio_count_s2r_r(1) = pio_xi_rho
-      pio_count_s2r_r(2) = N
+      pio_count_s2r_r(2) = nz
     else
       pio_count_s2r_r(1) = 0
       pio_count_s2r_r(2) = 0
@@ -699,12 +699,12 @@ contains
 
     ! SOUTH 2U
     pio_dimLen_s2u_r(1) = LLm+1
-    pio_dimLen_s2u_r(2) = N
+    pio_dimLen_s2u_r(2) = nz
     pio_start_s2u_r(1) = pio_xi_u_start_bry
     pio_start_s2u_r(2) = 1
     if (PIO_SOUTHERN_EDGE) then
       pio_count_s2u_r(1) = pio_xi_u
-      pio_count_s2u_r(2) = N
+      pio_count_s2u_r(2) = nz
     else
       pio_count_s2u_r(1) = 0
       pio_count_s2u_r(2) = 0
@@ -717,12 +717,12 @@ contains
 
 
     pio_dimLen_s2v_r(1) = LLm+2
-    pio_dimLen_s2v_r(2) = N
+    pio_dimLen_s2v_r(2) = nz
     pio_start_s2v_r(1) = pio_xi_rho_start_bry
     pio_start_s2v_r(2) = 1
     if (PIO_SOUTHERN_EDGE) then
       pio_count_s2v_r(1) = pio_xi_rho
-      pio_count_s2v_r(2) = N
+      pio_count_s2v_r(2) = nz
     else
       pio_count_s2v_r(1) = 0
       pio_count_s2v_r(2) = 0
@@ -777,12 +777,12 @@ contains
 
     ! WEST 2R
     pio_dimLen_w2r_r(1) = MMm+2
-    pio_dimLen_w2r_r(2) = N
+    pio_dimLen_w2r_r(2) = nz
     pio_start_w2r_r(1) = pio_eta_rho_start_bry
     pio_start_w2r_r(2) = 1
     if (PIO_WESTERN_EDGE) then
       pio_count_w2r_r(1) = pio_eta_rho
-      pio_count_w2r_r(2) = N
+      pio_count_w2r_r(2) = nz
     else
       pio_count_w2r_r(1) = 0
       pio_count_w2r_r(2) = 0
@@ -795,12 +795,12 @@ contains
 
     ! WEST 2U
     pio_dimLen_w2u_r(1) = MMm+2
-    pio_dimLen_w2u_r(2) = N
+    pio_dimLen_w2u_r(2) = nz
     pio_start_w2u_r(1) = pio_eta_rho_start_bry
     pio_start_w2u_r(2) = 1
     if (PIO_WESTERN_EDGE) then
       pio_count_w2u_r(1) = pio_eta_rho
-      pio_count_w2u_r(2) = N
+      pio_count_w2u_r(2) = nz
     else
       pio_count_w2u_r(1) = 0
       pio_count_w2u_r(2) = 0
@@ -813,12 +813,12 @@ contains
 
     ! WEST 2V
     pio_dimLen_w2v_r(1) = MMm+1
-    pio_dimLen_w2v_r(2) = N
+    pio_dimLen_w2v_r(2) = nz
     pio_start_w2v_r(1) = pio_eta_v_start_bry
     pio_start_w2v_r(2) = 1
     if (PIO_WESTERN_EDGE) then
       pio_count_w2v_r(1) = pio_eta_v
-      pio_count_w2v_r(2) = N
+      pio_count_w2v_r(2) = nz
     else
       pio_count_w2v_r(1) = 0
       pio_count_w2v_r(2) = 0
@@ -873,12 +873,12 @@ contains
 
     ! EAST 2R
     pio_dimLen_e2r_r(1) = MMm+2
-    pio_dimLen_e2r_r(2) = N
+    pio_dimLen_e2r_r(2) = nz
     pio_start_e2r_r(1) = pio_eta_rho_start_bry
     pio_start_e2r_r(2) = 1
     if (PIO_EASTERN_EDGE) then
       pio_count_e2r_r(1) = pio_eta_rho
-      pio_count_e2r_r(2) = N
+      pio_count_e2r_r(2) = nz
     else
       pio_count_e2r_r(1) = 0
       pio_count_e2r_r(2) = 0
@@ -891,12 +891,12 @@ contains
 
     ! EAST 2U
     pio_dimLen_e2u_r(1) = MMm+2
-    pio_dimLen_e2u_r(2) = N
+    pio_dimLen_e2u_r(2) = nz
     pio_start_e2u_r(1) = pio_eta_rho_start_bry
     pio_start_e2u_r(2) = 1
     if (PIO_EASTERN_EDGE) then
       pio_count_e2u_r(1) = pio_eta_rho
-      pio_count_e2u_r(2) = N
+      pio_count_e2u_r(2) = nz
     else
       pio_count_e2u_r(1) = 0
       pio_count_e2u_r(2) = 0
@@ -909,12 +909,12 @@ contains
 
     ! EAST 2V
     pio_dimLen_e2v_r(1) = MMm+1
-    pio_dimLen_e2v_r(2) = N
+    pio_dimLen_e2v_r(2) = nz
     pio_start_e2v_r(1) = pio_eta_v_start_bry
     pio_start_e2v_r(2) = 1
     if (PIO_EASTERN_EDGE) then
       pio_count_e2v_r(1) = pio_eta_v
-      pio_count_e2v_r(2) = N
+      pio_count_e2v_r(2) = nz
     else
       pio_count_e2v_r(1) = 0
       pio_count_e2v_r(2) = 0
@@ -990,7 +990,7 @@ contains
     ! 3D R
     pio_dimLen_3Dr_r(1) = LLm+2
     pio_dimLen_3Dr_r(2) = MMm+2
-    pio_dimLen_3Dr_r(3) = N
+    pio_dimLen_3Dr_r(3) = nz
 
     pio_start_3Dr_r(1) = pio_xi_rho_start
     pio_start_3Dr_r(2) = pio_eta_rho_start
@@ -998,11 +998,11 @@ contains
 
     pio_count_3Dr_r(1) = pio_xi_rho+pio_i0+pio_i1
     pio_count_3Dr_r(2) = pio_eta_rho+pio_j0+pio_j1
-    pio_count_3Dr_r(3) = N
+    pio_count_3Dr_r(3) = nz
 
     pio_dimLen_3Dr_w(1) = LLm+2
     pio_dimLen_3Dr_w(2) = MMm+2
-    pio_dimLen_3Dr_w(3) = N
+    pio_dimLen_3Dr_w(3) = nz
 
     pio_start_3Dr_w(1) = pio_xi_rho_start+pio_i0
     pio_start_3Dr_w(2) = pio_eta_rho_start+pio_j0
@@ -1010,13 +1010,13 @@ contains
 
     pio_count_3Dr_w(1) = pio_xi_rho
     pio_count_3Dr_w(2) = pio_eta_rho
-    pio_count_3Dr_w(3) = N
+    pio_count_3Dr_w(3) = nz
 
 
     ! 3D U
     pio_dimLen_3Du_r(1) = LLm+1
     pio_dimLen_3Du_r(2) = MMm+2
-    pio_dimLen_3Du_r(3) = N
+    pio_dimLen_3Du_r(3) = nz
 
     pio_start_3Du_r(1) = pio_xi_u_start
     pio_start_3Du_r(2) = pio_eta_rho_start
@@ -1024,11 +1024,11 @@ contains
 
     pio_count_3Du_r(1) = pio_xi_u+pio_i0+pio_i1
     pio_count_3Du_r(2) = pio_eta_rho+pio_j0+pio_j1
-    pio_count_3Du_r(3) = N
+    pio_count_3Du_r(3) = nz
 
     pio_dimLen_3Du_w(1) = LLm+1
     pio_dimLen_3Du_w(2) = MMm+2
-    pio_dimLen_3Du_w(3) = N
+    pio_dimLen_3Du_w(3) = nz
 
     pio_start_3Du_w(1) = pio_xi_u_start+pio_i0
     pio_start_3Du_w(2) = pio_eta_rho_start+pio_j0
@@ -1036,13 +1036,13 @@ contains
 
     pio_count_3Du_w(1) = pio_xi_u
     pio_count_3Du_w(2) = pio_eta_rho
-    pio_count_3Du_w(3) = N
+    pio_count_3Du_w(3) = nz
 
 
     ! 3D V
     pio_dimLen_3Dv_r(1) = LLm+2
     pio_dimLen_3Dv_r(2) = MMm+1
-    pio_dimLen_3Dv_r(3) = N
+    pio_dimLen_3Dv_r(3) = nz
 
     pio_start_3Dv_r(1) = pio_xi_rho_start
     pio_start_3Dv_r(2) = pio_eta_v_start
@@ -1050,11 +1050,11 @@ contains
 
     pio_count_3Dv_r(1) = pio_xi_rho+pio_i0+pio_i1
     pio_count_3Dv_r(2) = pio_eta_v+pio_j0+pio_j1
-    pio_count_3Dv_r(3) = N
+    pio_count_3Dv_r(3) = nz
 
     pio_dimLen_3Dv_w(1) = LLm+2
     pio_dimLen_3Dv_w(2) = MMm+1
-    pio_dimLen_3Dv_w(3) = N
+    pio_dimLen_3Dv_w(3) = nz
 
     pio_start_3Dv_w(1) = pio_xi_rho_start+pio_i0
     pio_start_3Dv_w(2) = pio_eta_v_start+pio_j0
@@ -1062,13 +1062,13 @@ contains
 
     pio_count_3Dv_w(1) = pio_xi_rho
     pio_count_3Dv_w(2) = pio_eta_v
-    pio_count_3Dv_w(3) = N
+    pio_count_3Dv_w(3) = nz
 
 
     ! 3D W
     pio_dimLen_3Dw_w(1) = LLm+2
     pio_dimLen_3Dw_w(2) = MMm+2
-    pio_dimLen_3Dw_w(3) = N+1
+    pio_dimLen_3Dw_w(3) = nz+1
 
     pio_start_3Dw_w(1) = pio_xi_rho_start+pio_i0
     pio_start_3Dw_w(2) = pio_eta_rho_start+pio_j0
@@ -1076,7 +1076,7 @@ contains
 
     pio_count_3Dw_w(1) = pio_xi_rho
     pio_count_3Dw_w(2) = pio_eta_rho
-    pio_count_3Dw_w(3) = N+1
+    pio_count_3Dw_w(3) = nz+1
 
 
     pio_niotasks = MAX(1, int(pio_ntasks / pio_stride))

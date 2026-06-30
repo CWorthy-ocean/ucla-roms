@@ -4,7 +4,7 @@ module timers
   &llm, mmm, mynode, nnodes, np_eta, np_xi, nsub_e,&
   &nsub_x
   use comm_vars, only: trd_count
-  use scalars, only: cpu_init, n, numthreads, proc
+  use scalars, only: cpu_init, nz, numthreads, proc
 
   implicit none
 
@@ -64,12 +64,12 @@ contains
         write(*,'(/1x,2(A,I4,A,I2,A,I3),2(A,I4),A,I3)')&
         &'NUMBER OF NODES:', NNODES, '(', NP_XI, ' x', NP_ETA,&
         &') THREADS:',  numthreads,  ' TILING:',&
-        &NSUB_X,' x', NSUB_E, ' GRID:',  LLm,' x',MMm,' x',N
+        &NSUB_X,' x', NSUB_E, ' GRID:',  LLm,' x',MMm,' x',nz
       endif
 # else
       write(*,'(/3(1x,A,I3),4x,2(A,I4),A,I3)')&
       &'NUMBER OF THREADS:',     numthreads,     'TILING:',&
-      &NSUB_X,'x',NSUB_E, 'GRID SIZE:', Lm,' x',Mm,' x',N
+      &NSUB_X,'x',NSUB_E, 'GRID SIZE:', Lm,' x',Mm,' x',nz
 # endif
     endif
     trd_count=trd_count+1

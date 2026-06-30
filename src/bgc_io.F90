@@ -20,8 +20,8 @@ module bgc_io
 ! imports from bgc_shared_vars
   use bgc_shared_vars, only: wrt_bgc_his, wrt_bgc_avg,&
        & wrt_bgc_dia_his, wrt_bgc_dia_avg, interp_bgc_frc,&
-       & nrpf_avg, nrpf_his, nrpf_avg_dia,&
-       & nrpf_his_dia, t, nc_dust, nc_iron,&
+       & nrpf_bgc_avg, nrpf_bgc_his, nrpf_bgc_avg_dia,&
+       & nrpf_bgc_his_dia, t, nc_dust, nc_iron,&
 #ifdef PCO2AIR_FORCING
        & nc_xco2air,&
 #ifdef MARBL
@@ -29,7 +29,7 @@ module bgc_io
 #endif
 #endif
        & bgc_idx, t_idx, lm, mm, itands,&
-       & mynode, nt_passive, output_period_avg, output_period_his,&
+       & mynode, nt_passive, output_period_bgc_avg, output_period_bgc_his,&
        & t_vname, wrt_t, t_lname
 #ifdef NOX_FORCING
   use bgc_shared_vars, only: nc_nox
@@ -44,8 +44,8 @@ module bgc_io
 #if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
   use bgc_shared_vars, only: bgc_diag_2d_avg, bgc_diag_3d_avg,&
        &bgc_diag_2d, bgc_diag_3d, nr_bgc_diag_2d, nr_bgc_diag_3d,&
-       &nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d, output_period_avg_dia,&
-       &output_period_his_dia,&
+       &nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d, output_period_bgc_avg_dia,&
+       &output_period_bgc_his_dia,&
        &wrt_bgc_diag_2d, idx_bgc_diag_2d, vname_bgc_diag_2d,&
        &wrt_bgc_diag_3d, idx_bgc_diag_3d, vname_bgc_diag_3d
 #endif
@@ -58,7 +58,7 @@ module bgc_io
   use netcdf, only:&
   &nf90_write, nf90_open, nf90_close, nf90_redef, nf90_enddef,&
   &nf90_double, nf90_put_att
-  use scalars, only: nstp, nt, time, n, dt, iic, nnew, tdays
+  use scalars, only: nstp, nt, time, nz, dt, iic, nnew, tdays
   use dimensions, only: i0, i1, j0, j1, xi_rho, eta_rho&
   &, ds_xr, ds_yr, ds_zr, ds_xu, ds_yv, ds_zw
   use error_handling_mod, only: error_log
@@ -177,7 +177,7 @@ contains
         swrad_avg(i,j)= swrad_avg(i,j)/(rho0*Cp)
 
 #ifdef SEA_ICE_NOFLUX
-        if( t(i,j,N,nrhs,itemp) .le. -1.8_8 ) then    ! Restrict stflx to prevent surface temperature to go below -2 d
+        if( t(i,j,nz,nrhs,itemp) .le. -1.8_8 ) then    ! Restrict stflx to prevent surface temperature to go below -2 d
 #   if defined LMD_KPP
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
           swrad_avg(i,j)=0._8
@@ -223,22 +223,22 @@ contains
     logical,save           :: first_step_avg=.true.
     logical,save           :: first_step_his=.true.
 
-    if (wrt_bgc_his .and. mod(output_period_his, dt) /= 0) then
+    if (wrt_bgc_his .and. mod(output_period_bgc_his, dt) /= 0) then
       write(error_info, *)&
       &"dt (", dt, ") is not a factor of ",&
-      &"output_period_his (",&
-      &output_period_his, ")"
+      &"output_period_bgc_his (",&
+      &output_period_bgc_his, ")"
 
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info=error_info)
     endif
 
-    if (wrt_bgc_avg .and. mod(output_period_avg,dt) /= 0) then
+    if (wrt_bgc_avg .and. mod(output_period_bgc_avg,dt) /= 0) then
       write(error_info, *)&
       &"dt (", dt, ") is not a factor of ",&
-      &"output_period_avg (",&
-      &output_period_avg, ")"
+      &"output_period_bgc_avg (",&
+      &output_period_bgc_avg, ")"
 
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
@@ -246,12 +246,12 @@ contains
     endif
 
     if (first_step_his) then
-      record_his = nrpf_his
-      record_dia_his = nrpf_his_dia
+      record_his = nrpf_bgc_his
+      record_dia_his = nrpf_bgc_his_dia
     end if
     if (first_step_avg) then
-      record_avg = nrpf_avg
-      record_dia_avg = nrpf_avg_dia
+      record_avg = nrpf_bgc_avg
+      record_dia_avg = nrpf_bgc_avg_dia
     end if
 
     call error_log%abort_check()
@@ -269,11 +269,11 @@ contains
 !        if (mynode == 0) then
 !           write(*,'(7x,A,1x,F11.4,2x,A,F11.4,1x,A,I4)')
 !     &       'wrt_bgc_tracers :: average, time =', output_time_avg,
-!     &       'period =', output_period_avg, 'rec =', record_avg
+!     &       'period =', output_period_bgc_avg, 'rec =', record_avg
 !        endif
 
-      if (output_time_avg>=output_period_avg) then  ! time for an output
-        if (mod(record_avg,nrpf_avg)==0) then
+      if (output_time_avg>=output_period_bgc_avg) then  ! time for an output
+        if (mod(record_avg,nrpf_bgc_avg)==0) then
           if (mynode == 0) then
             call create_bgc_file(fname_avg,avg)
           endif
@@ -322,12 +322,12 @@ contains
 !        if (mynode == 0) then
 !           write(*,'(7x,A,1x,F11.4,2x,A,F11.4,1x,A,I4)')
 !     &       'wrt_bgc_tracers :: history, time =', output_time_his,
-!     &       'period =', output_period_his, 'rec =', record_his
+!     &       'period =', output_period_bgc_his, 'rec =', record_his
 !        endif
 
-      if (output_time_his>=output_period_his .or.&
+      if (output_time_his>=output_period_bgc_his .or.&
       &output_time_his==0                 ) then  ! time for an output
-        if (mod(record_his,nrpf_his)==0) then
+        if (mod(record_his,nrpf_bgc_his)==0) then
           if (mynode == 0) then
             call create_bgc_file(fname_his,avg)
           endif
@@ -379,11 +379,11 @@ contains
 !        if (mynode == 0) then
 !           write(*,'(7x,A,1x,F11.4,2x,A,F11.4,1x,A,I4)')
 !     &       'wrt_bgc_tracers :: average, time =', output_time_avg,
-!     &       'period =', output_period_avg, 'rec =', record_avg
+!     &       'period =', output_period_bgc_avg, 'rec =', record_avg
 !        endif
 
-      if (output_time_avg>=output_period_avg) then  ! time for an output
-        if (mod(record_avg,nrpf_avg)==0) then
+      if (output_time_avg>=output_period_bgc_avg) then  ! time for an output
+        if (mod(record_avg,nrpf_bgc_avg)==0) then
           call create_bgc_file(fname_avg,avg)
           record_avg = 0
         endif
@@ -420,12 +420,12 @@ contains
 !        if (mynode == 0) then
 !           write(*,'(7x,A,1x,F11.4,2x,A,F11.4,1x,A,I4)')
 !     &       'wrt_bgc_tracers :: history, time =', output_time_his,
-!     &       'period =', output_period_his, 'rec =', record_his
+!     &       'period =', output_period_bgc_his, 'rec =', record_his
 !        endif
 
-      if (output_time_his>=output_period_his .or.&
+      if (output_time_his>=output_period_bgc_his .or.&
       &output_time_his==0                 ) then  ! time for an output
-        if (mod(record_his,nrpf_his)==0) then
+        if (mod(record_his,nrpf_bgc_his)==0) then
           call create_bgc_file(fname_his,avg)
           record_his = 0
         endif
@@ -467,22 +467,22 @@ contains
     logical,save           :: first_step_dia_avg=.true.
     logical,save           :: first_step_dia_his=.true.
 
-    if (wrt_bgc_dia_his .and. mod(output_period_his_dia, dt) /= 0) then
+    if (wrt_bgc_dia_his .and. mod(output_period_bgc_his_dia, dt) /= 0) then
       write(error_info, *)&
       &"dt (", dt, ") is not a factor of ",&
-      &"output_period_his_dia (",&
-      &output_period_his_dia, ")"
+      &"output_period_bgc_his_dia (",&
+      &output_period_bgc_his_dia, ")"
 
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info=error_info)
     endif
 
-    if (wrt_bgc_dia_avg .and. mod(output_period_avg_dia,dt) /= 0) then
+    if (wrt_bgc_dia_avg .and. mod(output_period_bgc_avg_dia,dt) /= 0) then
       write(error_info, *)&
       &"dt (", dt, ") is not a factor of ",&
-      &"output_period_avg_dia (",&
-      &output_period_avg_dia, ")"
+      &"output_period_bgc_avg_dia (",&
+      &output_period_bgc_avg_dia, ")"
 
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
@@ -499,8 +499,8 @@ contains
 !         endif
 !         first_step_dia_avg=.false.
 
-      if (output_time_dia_avg>=output_period_avg_dia) then  ! time for an output
-        if (mod(record_dia_avg,nrpf_avg_dia)==0) then
+      if (output_time_dia_avg>=output_period_bgc_avg_dia) then  ! time for an output
+        if (mod(record_dia_avg,nrpf_bgc_avg_dia)==0) then
           if (mynode == 0) then
             call create_bgc_dia_file(fname_avg,.true.)
           endif
@@ -551,8 +551,8 @@ contains
 !         endif
 !         first_step_dia_avg=.false.
 
-      if (output_time_dia_avg>=output_period_avg_dia) then  ! time for an output
-        if (mod(record_dia_avg,nrpf_avg_dia)==0) then
+      if (output_time_dia_avg>=output_period_bgc_avg_dia) then  ! time for an output
+        if (mod(record_dia_avg,nrpf_bgc_avg_dia)==0) then
           call create_bgc_dia_file(fname_avg,.true.)
           record_dia_avg = 0
         endif
@@ -593,9 +593,9 @@ contains
       endif
       first_step_dia_his=.false.
 
-      if (output_time_dia_his>=output_period_his_dia .or.&
+      if (output_time_dia_his>=output_period_bgc_his_dia .or.&
       &output_time_dia_his==0                     ) then  ! time for an output
-        if (mod(record_dia_his,nrpf_his_dia)==0) then
+        if (mod(record_dia_his,nrpf_bgc_his_dia)==0) then
           if (mynode == 0) then
             call create_bgc_dia_file(fname_his,.false.)
           endif
@@ -647,9 +647,9 @@ contains
       endif
       first_step_dia_his=.false.
 
-      if (output_time_dia_his>=output_period_his_dia .or.&
+      if (output_time_dia_his>=output_period_bgc_his_dia .or.&
       &output_time_dia_his==0                     ) then  ! time for an output
-        if (mod(record_dia_his,nrpf_his_dia)==0) then
+        if (mod(record_dia_his,nrpf_bgc_his_dia)==0) then
           call create_bgc_dia_file(fname_his,.false.)
           record_dia_his = 0
         endif
@@ -804,7 +804,7 @@ contains
     if (coef==1) then                                    ! this refreshes average (1-coef)=0
       if (mynode==0) write(*,'(7x,2A,F9.1)')&
       &'bgc :: started averaging. ',&
-      &'output_period_avg (s) =', output_period_avg
+      &'output_period_bgc_avg (s) =', output_period_bgc_avg
     endif
 
     t_avg_bgc = t_avg_bgc*(1-coef) + time*coef
@@ -834,7 +834,7 @@ contains
     if (coef==1) then                                    ! this refreshes average (1-coef)=0
       if (mynode==0) write(*,'(7x,2A,F9.1)')&
       &'bgc diag :: started averaging. ',&
-      &'output_period_avg_dia (s) =', output_period_avg_dia
+      &'output_period_bgc_avg_dia (s) =', output_period_bgc_avg_dia
     endif
 
     t_avg_dia_bgc = t_avg_dia_bgc*(1-coef) + time*coef
@@ -844,7 +844,7 @@ contains
       &+ bgc_diag_2d(i0:i1,j0:j1,itrc)     *coef
     end do
     do itrc=1,nr_bgc_wrdiag_3d
-      do k=1,N
+      do k=1,nz
         bgc_diag_3d_avg(i0:i1,j0:j1,k,itrc) = bgc_diag_3d_avg(i0:i1,j0:j1,k,itrc) *(1-coef)&
         &+ bgc_diag_3d(i0:i1,j0:j1,k,itrc)     *coef
       end do
@@ -882,7 +882,7 @@ contains
     do idiag=1,nr_bgc_diag_3d
       if (wrt_bgc_diag_3d(idiag)) then
         varid = nccreate(ncid,vname_bgc_diag_3d(1,idiag),&
-        &(/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,N,0/), nf90_double)
+        &(/dn_xr,dn_yr,dn_zr,dn_tm/),(/xi_rho,eta_rho,nz,0/), nf90_double)
         ierr = nf90_put_att(ncid,varid,'long_name',vname_bgc_diag_3d(2,idiag))
         ierr = nf90_put_att(ncid,varid,'units',vname_bgc_diag_3d(3,idiag))
       endif

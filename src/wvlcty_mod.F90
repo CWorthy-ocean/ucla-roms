@@ -9,12 +9,12 @@ contains
 
   subroutine wvlcty (tile, Wvlc)
     use param, only:&
-    &n, ieast, iwest, jnorth, jsouth,&
+    &nz, ieast, iwest, jnorth, jsouth,&
     &lm, mm, nsub_e, nsub_x
     use private_scratch, only: a2d
     implicit none
     integer(kind=4) tile
-    real(kind=8) Wvlc(GLOBAL_2D_ARRAY,0:N)
+    real(kind=8) Wvlc(GLOBAL_2D_ARRAY,0:nz)
 # include "compute_tile_bounds.h"
     call wvlcty_tile (istr,iend,jstr,jend, Wvlc, A2d(1,1), A2d(1,1),&   ! looks like a bug here repeated A2d(1,1)?
     &A2d(1,2))
@@ -37,12 +37,12 @@ contains
 #ifdef NHMG
     use ocean_vars, only: w
 #endif
-    use scalars, only: n, nstp
+    use scalars, only: nz, nstp
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
-    real(kind=8) Wvlc(GLOBAL_2D_ARRAY,0:N)
-    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: Wrk
+    real(kind=8) Wvlc(GLOBAL_2D_ARRAY,0:nz)
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: Wrk
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: Wxi, Weta
 
 # include "compute_extended_bounds.h"
@@ -78,7 +78,7 @@ contains
       do i=imin,imax
         Wrk(i,0)=0._8
       enddo
-      do k=1,N,+1
+      do k=1,nz,+1
         do i=imin,imax
           Wrk(i,k)=Wrk(i,k-1)-pm(i,j)*pn(i,j)*(&
           &FlxU(i+1,j,k)-FlxU(i,j,k)&
@@ -87,10 +87,10 @@ contains
         enddo
       enddo
       do i=imin,imax
-        Wvlc(i,j,N)=+0.375_8*Wrk(i,N) +0.75_8*Wrk(i,N-1)&
-        &-0.125_8*Wrk(i,N-2)
+        Wvlc(i,j,nz)=+0.375_8*Wrk(i,nz) +0.75_8*Wrk(i,nz-1)&
+        &-0.125_8*Wrk(i,nz-2)
       enddo
-      do k=N-1,2,-1
+      do k=nz-1,2,-1
         do i=imin,imax
           Wvlc(i,j,k)=+0.5625_8*(Wrk(i,k  )+Wrk(i,k-1))&
           &-0.0625_8*(Wrk(i,k+1)+Wrk(i,k-2))
@@ -106,7 +106,7 @@ contains
 ! S=const surfaces by multiplying horizontal velocity components by
 ! slops S-coordinate surfaces:
 
-    do k=1,N
+    do k=1,nz
       do j=jmin,jmax
         do i=imin,imax+1
           Wxi(i,j)=u(i,j,k,nstp)*(z_r(i,j,k)-z_r(i-1,j,k))&
@@ -128,7 +128,7 @@ contains
     enddo
 # ifdef NHMG
     ! overwrite with w var
-    do k=1,N  ! WASTED COMPUTING TO OVERWRITE SOMETHING USE IF ELSE RATHER
+    do k=1,nz  ! WASTED COMPUTING TO OVERWRITE SOMETHING USE IF ELSE RATHER
       do j=jmin,jmax
         do i=imin,imax
           Wvlc(i,j,k) =  w(i,j,k,nstp)
@@ -141,14 +141,14 @@ contains
 
 # ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         do j=jmin,jmax
           Wvlc(imin-1,j,k)=Wvlc(imin,j,k)
         enddo
       enddo
     endif
     if (EASTERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         do j=jmin,jmax
           Wvlc(imax+1,j,k)=Wvlc(imax,j,k)
         enddo
@@ -157,14 +157,14 @@ contains
 # endif
 # ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         do i=imin,imax
           Wvlc(i,jmin-1,k)=Wvlc(i,jmin,k)
         enddo
       enddo
     endif
     if (NORTHERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         do i=imin,imax
           Wvlc(i,jmax+1,k)=Wvlc(i,jmax,k)
         enddo
@@ -172,22 +172,22 @@ contains
     endif
 #  ifndef EW_PERIODIC
     if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         Wvlc(imin-1,jmin-1,k)=Wvlc(imin,jmin,k)
       enddo
     endif
     if (WESTERN_EDGE .and. NORTHERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         Wvlc(imin-1,jmax+1,k)=Wvlc(imin,jmax,k)
       enddo
     endif
     if (EASTERN_EDGE .and. SOUTHERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         Wvlc(imax+1,jmin-1,k)=Wvlc(imax,jmin,k)
       enddo
     endif
     if (EASTERN_EDGE .and. NORTHERN_EDGE) then
-      do k=1,N
+      do k=1,nz
         Wvlc(imax+1,jmax+1,k)=Wvlc(imax,jmax,k)
       enddo
     endif

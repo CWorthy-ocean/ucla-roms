@@ -29,10 +29,10 @@ contains
 
   !----------------------------------------------------------------
   subroutine init_arrays_buffer  ![
-    use scalars, only: init, n
+    use scalars, only: init, nz
     implicit none
 
-    allocate( buff((Lm+5)*(Mm+5)*(N+1)) ); buff=init
+    allocate( buff((Lm+5)*(Mm+5)*(nz+1)) ); buff=init
 
   end subroutine init_arrays_buffer  !]
 

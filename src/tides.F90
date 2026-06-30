@@ -9,7 +9,7 @@ module tides
 ! For iic, ntstart, deg2rad, only:
   use roms_read_write, only:&
   &force_info, frctype, max_frc,&
-  &tide_opt, frcfile, store_string_att
+  &tide_opt, frcfiles, store_string_att
   use grid, only: xr, yr
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
@@ -24,7 +24,7 @@ module tides
 
   integer(kind=4) :: ntides = 0
   logical, public :: pot_tides, bry_tides, ana_tides
-  namelist /TIDES_SETTINGS/ ntides, pot_tides, bry_tides, ana_tides
+  namelist /TIDAL_FRC_SETTINGS/ ntides, pot_tides, bry_tides, ana_tides
 
   real(kind=8), dimension(:)    ,allocatable :: ftide
   real(kind=8), dimension(:,:,:),allocatable :: ztide_r,ztide_i
@@ -40,7 +40,7 @@ contains
 !-----------------------------------------------------------------------
   subroutine read_nml_tides
 
-!     Read the "TIDES_SETTINGS" section of the namelist file
+!     Read the "TIDAL_FRC_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_tides"
     character(len=512) :: msg = ""
@@ -48,12 +48,12 @@ contains
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
 
-    read (unit=namelist_unit, nml=TIDES_SETTINGS, iostat=ios, iomsg=msg)
+    read (unit=namelist_unit, nml=TIDAL_FRC_SETTINGS, iostat=ios, iomsg=msg)
 
     if (ios /= 0) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
-      &info='could not read TIDES_SETTINGS'&
+      &info='could not read TIDAL_FRC_SETTINGS'&
       &//' section of namelist file: '&
       &//trim(msg)&
       &)
@@ -314,7 +314,7 @@ contains
     ! search for forcing file with tidal information
     do while ((found_rec==0).and.(var_file_indx <= max_frc))
 
-      ierr=nf90_open(frcfile(var_file_indx), nf90_nowrite, ncid)
+      ierr=nf90_open(frcfiles(var_file_indx), nf90_nowrite, ncid)
       if(ierr/=0) then
         call error_log%check_netcdf_status(netcdf_status=ierr,&
         &context=module_name//"/"//sr_name,&
@@ -349,27 +349,27 @@ contains
       start(3) = itide
 
 #ifdef PARALLEL_IO
-      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(var_file_indx))
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(var_file_indx))
 #endif
 
       if (bry_tides) then
         pio_gtype = '2Drr'
-        call ncread(ncid,'ssh_Re',ztide_r(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
-        call ncread(ncid,'ssh_Im',ztide_i(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
+        call ncread(ncid,'ssh_Re',ztide_r(x0:x1,y0:y1,itide),start=start)!,fname=frcfiles(var_file_indx))
+        call ncread(ncid,'ssh_Im',ztide_i(x0:x1,y0:y1,itide),start=start)!,fname=frcfiles(var_file_indx))
 
         pio_gtype = '2Dur'
-        call ncread(ncid,'u_Re',utide_r(x_:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
-        call ncread(ncid,'u_Im',utide_i(x_:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
+        call ncread(ncid,'u_Re',utide_r(x_:x1,y0:y1,itide),start=start)!,fname=frcfiles(var_file_indx))
+        call ncread(ncid,'u_Im',utide_i(x_:x1,y0:y1,itide),start=start)!,fname=frcfiles(var_file_indx))
 
         pio_gtype = '2Dvr'
-        call ncread(ncid,'v_Re',vtide_r(x0:x1,y_:y1,itide),start=start)!,fname=frcfile(var_file_indx))
-        call ncread(ncid,'v_Im',vtide_i(x0:x1,y_:y1,itide),start=start)!,fname=frcfile(var_file_indx))
+        call ncread(ncid,'v_Re',vtide_r(x0:x1,y_:y1,itide),start=start)!,fname=frcfiles(var_file_indx))
+        call ncread(ncid,'v_Im',vtide_i(x0:x1,y_:y1,itide),start=start)!,fname=frcfiles(var_file_indx))
       endif
 
       if (pot_tides) then
         pio_gtype = '2Drr'
-        call ncread(ncid,'pot_Re',ptide_r(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
-        call ncread(ncid,'pot_Im',ptide_i(x0:x1,y0:y1,itide),start=start)!,fname=frcfile(var_file_indx))
+        call ncread(ncid,'pot_Re',ptide_r(x0:x1,y0:y1,itide),start=start)!,fname=frcfiles(var_file_indx))
+        call ncread(ncid,'pot_Im',ptide_i(x0:x1,y0:y1,itide),start=start)!,fname=frcfiles(var_file_indx))
       endif
     end do                    ! <-- itide=1,ntides
 

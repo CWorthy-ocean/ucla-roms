@@ -74,20 +74,20 @@ contains
   end subroutine read_nml_lin_rho_eos
 
   subroutine init_arrays_eos_vars  ![
-    use scalars, only: n, init
+    use scalars, only: nz, init
     implicit none
 
 #ifdef SOLVE3D
 # ifdef SPLIT_EOS
-    allocate(  rho1(GLOBAL_2D_ARRAY,N) ); rho1=0._8
-    allocate( qp1(GLOBAL_2D_ARRAY,N) ); qp1=0._8
+    allocate(  rho1(GLOBAL_2D_ARRAY,nz) ); rho1=0._8
+    allocate( qp1(GLOBAL_2D_ARRAY,nz) ); qp1=0._8
 # else
-    allocate( rho(GLOBAL_2D_ARRAY,N) ); rho=0._8
+    allocate( rho(GLOBAL_2D_ARRAY,nz) ); rho=0._8
 # endif
 # ifdef ADV_ISONEUTRAL
-    allocate( dRdx(GLOBAL_2D_ARRAY,N) ); dRdx=init
-    allocate( dRde(GLOBAL_2D_ARRAY,N) ); dRde=init
-    allocate( idRz(GLOBAL_2D_ARRAY,0:N) ); idRz=0._8       ! -> loop ranges need fixing before init will work
+    allocate( dRdx(GLOBAL_2D_ARRAY,nz) ); dRdx=init
+    allocate( dRde(GLOBAL_2D_ARRAY,nz) ); dRde=init
+    allocate( idRz(GLOBAL_2D_ARRAY,0:nz) ); idRz=0._8       ! -> loop ranges need fixing before init will work
 # endif
 #endif
 

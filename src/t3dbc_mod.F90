@@ -15,7 +15,7 @@ contains
     use dimensions, only: inode, jnode
     use grid, only: vmask, pm, pn, rmask, umask
     use ocean_vars, only: u, v
-    use scalars, only: dt, n, nnew, nrhs, nstp
+    use scalars, only: dt, nz, nnew, nrhs, nstp
     use sponge_tune, only:&
     &ub_west, ub_east, ub_south,&
     &ub_north, ub_tune
@@ -85,7 +85,7 @@ contains
         enddo
       enddo
 #  else
-      do k=1,N
+      do k=1,nz
         do j=jstr,jend
 #   if defined OBC_WEST && defined OBC_TSPECIFIED
           t(istr-1,j,k,nnew,itrc)=t_west(j,k,itrc)
@@ -104,7 +104,7 @@ contains
 #  if defined OBC_EAST && defined OBC_TORLANSKI
 
       !  Eastern edge radiation BC
-      do k=1,N                         !  ======= ==== ========= ==
+      do k=1,nz                         !  ======= ==== ========= ==
         do j=jstr,jend+1
           grad(iend  ,j)=( t(iend  ,j  ,k,nstp,itrc)&
           &-t(iend  ,j-1,k,nstp,itrc))&
@@ -151,7 +151,7 @@ contains
         enddo
       enddo
 #  else
-      do k=1,N
+      do k=1,nz
         do j=jstr,jend
 #   if defined OBC_EAST && defined OBC_TSPECIFIED
 #    ifdef T_FRC_BRY
@@ -180,7 +180,7 @@ contains
 # ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
 #  if defined OBC_SOUTH && defined OBC_TORLANSKI
-      do k=1,N
+      do k=1,nz
         do i=istr,iend+1
           grad(i,jstr  )=( t(i  ,jstr  ,k,nstp,itrc)&
           &-t(i-1,jstr  ,k,nstp,itrc))&
@@ -226,7 +226,7 @@ contains
         enddo
       enddo
 #  else
-      do k=1,N
+      do k=1,nz
         do i=istr,iend
 #   if defined OBC_SOUTH && defined OBC_TSPECIFIED
 #    ifdef T_FRC_BRY
@@ -248,7 +248,7 @@ contains
 
     if (NORTHERN_EDGE) then
 #  if defined OBC_NORTH && defined OBC_TORLANSKI
-      do k=1,N
+      do k=1,nz
         do i=istr,iend+1
           grad(i,jend  )=( t(i  ,jend  ,k,nstp,itrc)&
           &-t(i-1,jend  ,k,nstp,itrc))&
@@ -294,7 +294,7 @@ contains
         enddo
       enddo
 #  else
-      do k=1,N
+      do k=1,nz
         do i=istr,iend
 #   if defined OBC_NORTH && defined OBC_TSPECIFIED
 #    ifdef T_FRC_BRY
@@ -329,18 +329,18 @@ contains
       cff=rmask(istr,jstr-1)+rmask(istr-1,jstr)
       if (cff > 0._8) then
         cff=1._8/cff
-        do k=1,N
+        do k=1,nz
           t(istr-1,jstr-1,k,nnew,itrc)=cff*(&
           &rmask(istr,jstr-1)*t(istr,jstr-1,k,nnew,itrc)&
           &+rmask(istr-1,jstr)*t(istr-1,jstr,k,nnew,itrc))
         enddo
       else
-        do k=1,N
+        do k=1,nz
           t(istr-1,jstr-1,k,nnew,itrc)=0._8
         enddo
       endif
 #   else
-      do k=1,N
+      do k=1,nz
         t(istr-1,jstr-1,k,nnew,itrc)=0.5_8*( t(istr,jstr-1,k,nnew,&
         &itrc)+t(istr-1,jstr,k,nnew,itrc))
       enddo
@@ -352,18 +352,18 @@ contains
       cff=rmask(iend,jstr-1)+rmask(iend+1,jstr)
       if (cff > 0._8) then
         cff=1._8/cff
-        do k=1,N
+        do k=1,nz
           t(iend+1,jstr-1,k,nnew,itrc)=cff*(&
           &rmask(iend,jstr-1)*t(iend,jstr-1,k,nnew,itrc)&
           &+rmask(iend+1,jstr)*t(iend+1,jstr,k,nnew,itrc))
         enddo
       else
-        do k=1,N
+        do k=1,nz
           t(iend+1,jstr-1,k,nnew,itrc)=0._8
         enddo
       endif
 #   else
-      do k=1,N
+      do k=1,nz
         t(iend+1,jstr-1,k,nnew,itrc)=0.5_8*(t(iend,jstr-1,k,nnew,&
         &itrc)+t(iend+1,jstr,k,nnew,itrc))
       enddo
@@ -375,18 +375,18 @@ contains
       cff=rmask(istr,jend+1)+rmask(istr-1,jend)
       if (cff > 0._8) then
         cff=1._8/cff
-        do k=1,N
+        do k=1,nz
           t(istr-1,jend+1,k,nnew,itrc)=cff*(&
           &rmask(istr,jend+1)*t(istr,jend+1,k,nnew,itrc)&
           &+rmask(istr-1,jend)*t(istr-1,jend,k,nnew,itrc))
         enddo
       else
-        do k=1,N
+        do k=1,nz
           t(istr-1,jend+1,k,nnew,itrc)=0._8
         enddo
       endif
 #   else
-      do k=1,N
+      do k=1,nz
         t(istr-1,jend+1,k,nnew,itrc)=0.5_8*( t(istr,jend+1,k,nnew,&
         &itrc)+t(istr-1,jend,k,nnew,itrc))
       enddo
@@ -398,18 +398,18 @@ contains
       cff=rmask(iend,jend+1)+rmask(iend+1,jend)
       if (cff > 0._8) then
         cff=1._8/cff
-        do k=1,N
+        do k=1,nz
           t(iend+1,jend+1,k,nnew,itrc)=cff*(&
           &rmask(iend,jend+1)*t(iend,jend+1,k,nnew,itrc)&
           &+rmask(iend+1,jend)*t(iend+1,jend,k,nnew,itrc))
         enddo
       else
-        do k=1,N
+        do k=1,nz
           t(iend+1,jend+1,k,nnew,itrc)=0._8
         enddo
       endif
 #   else
-      do k=1,N
+      do k=1,nz
         t(iend+1,jend+1,k,nnew,itrc)=0.5_8*( t(iend,jend+1,k,nnew,&
         &itrc)+t(iend+1,jend,k,nnew,itrc))
       enddo

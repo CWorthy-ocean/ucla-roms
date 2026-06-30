@@ -5,7 +5,7 @@ module cdr_output
 #include "cppdefs.opt"
 
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
-  use cdr_frc, only: cdr_source, forcing_3d
+  use cdr_frc, only: cdr_source, cdr_forcing_3d
   use namelist_open_mod, only: open_namelist_file
   use tracers, only: t_units
   use param, only: itemp, isalt
@@ -23,7 +23,7 @@ module cdr_output
   use netcdf, only:&
   &nf90_noerr, nf90_write, nf90_double, nf90_open,&
   &nf90_put_att, nf90_close
-  use scalars, only: iic, knew, nnew, tdays, time, dt, n
+  use scalars, only: iic, knew, nnew, tdays, time, dt
   use ocean_vars, only: zeta, hz
   use error_handling_mod, only: error_log
   use cdr_frc, only: cdr_flx_3d_ALK, cdr_flx_3d_DIC, cdr_prf,&
@@ -33,10 +33,10 @@ module cdr_output
 
   private
 
-  real(kind=8)    :: output_period = 3600 ! in seconds
-  integer(kind=4) :: nrpf   = 4     ! number of frames per file
+  real(kind=8)    :: output_period_cdr = 3600 ! in seconds
+  integer(kind=4) :: nrpf_cdr   = 4     ! number of frames per file
   logical, public :: wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
-  namelist /CDR_OUTPUT_SETTINGS/ output_period, nrpf,&
+  namelist /CDR_OUTPUT_SETTINGS/ output_period_cdr, nrpf_cdr,&
   &wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
 
   character(len=10) :: module_name = "cdr_output"
@@ -116,7 +116,7 @@ contains
       &)
     end if
     close(namelist_unit)
-    record = nrpf
+    record = nrpf_cdr
   end subroutine read_cdr_output_nml
 
   subroutine add_cdr_output_variable(list, name, dimnames, dims,&
@@ -165,55 +165,55 @@ contains
     &'free-surface elevation','meters')
 
     call add_cdr_output_variable(cdr_varlist, 'temp',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &'potential temperature','degrees Celsius')
 
     call add_cdr_output_variable(cdr_varlist, 'salt',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &'salinity','PSU')
 
     call add_cdr_output_variable(cdr_varlist, 'ALK',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &t_lname(iALK), t_units(iALK))
 
     call add_cdr_output_variable(cdr_varlist, 'DIC',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &t_lname(iDIC), t_units(iDIC))
 
     call add_cdr_output_variable(cdr_varlist, 'ALK_ALT_CO2',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &t_lname(iALK_alt), t_units(iALK_alt))
 
     call add_cdr_output_variable(cdr_varlist, 'DIC_ALT_CO2',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &t_lname(iDIC_alt), t_units(iDIC_alt))
 
     call add_cdr_output_variable(cdr_varlist, 'hALK',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &'thickness-weighted ' // trim(t_lname(iALK)),&
     &'meters ' // trim(t_units(iALK)))
 
     call add_cdr_output_variable(cdr_varlist, 'hDIC',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &'instantaneous thickness-weighted ' // trim(t_lname(iDIC)),&
     &'meters ' // trim(t_units(iDIC)))
 
     call add_cdr_output_variable(cdr_varlist, 'hALK_ALT_CO2',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &'thickness-weighted ' // trim(t_lname(iALK_alt)),&
     &'meters ' // trim(t_units(iALK_alt)))
 
     call add_cdr_output_variable(cdr_varlist, 'hDIC_ALT_CO2',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &'instantaneous thickness-weighted ' // trim(t_lname(iDIC_alt)),&
     &'meters ' // trim(t_units(iDIC_alt)))
 
     call add_cdr_output_variable(cdr_varlist, 'pH',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &vname_marbl_ss_3d(2,iPH), vname_marbl_ss_3d(3,iPH))
 
     call add_cdr_output_variable(cdr_varlist, 'pH_ALT_CO2',&
-    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &vname_marbl_ss_3d(2,iPH_alt), vname_marbl_ss_3d(3,iPH_alt))
 
     call add_cdr_output_variable(cdr_varlist, 'FG_CO2',&
@@ -226,27 +226,27 @@ contains
 
     if (cdr_source) then
       call add_cdr_output_variable(cdr_varlist, 'ALK_source',&
-      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
       &'ALK source from CDR module','meq/s')
       call add_cdr_output_variable(cdr_varlist, 'ALK_ALT_source',&
-      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
       &'alt ALK source from CDR module','meq/s')
       call add_cdr_output_variable(cdr_varlist, 'DIC_source',&
-      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
       &'DIC source from CDR module','mmol/s')
       call add_cdr_output_variable(cdr_varlist, 'DIC_ALT_source',&
-      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
       &'alt DIC source from CDR module','mmol/s')
     endif
 
     if (wrt_cdr_avg) then
       call add_cdr_output_variable(cdr_varlist, 'hDIC_avg',&
-      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
       &'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),&
       &'meters ' // trim(t_units(iDIC)))
 
       call add_cdr_output_variable(cdr_varlist, 'hDIC_ALT_CO2_avg',&
-      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
       &'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),&
       &'meters ' // trim(t_units(iDIC)))
     endif
@@ -318,65 +318,65 @@ contains
     ! put the relevant part of your code here
 
     if (cdr_source) then
-      allocate(ALK_source(GLOBAL_2D_ARRAY,1:N) )
-      allocate(ALK_alt_source(GLOBAL_2D_ARRAY,1:N) )
-      allocate(DIC_source(GLOBAL_2D_ARRAY,1:N) )
-      allocate(DIC_alt_source(GLOBAL_2D_ARRAY,1:N) )
+      allocate(ALK_source(GLOBAL_2D_ARRAY,1:nz) )
+      allocate(ALK_alt_source(GLOBAL_2D_ARRAY,1:nz) )
+      allocate(DIC_source(GLOBAL_2D_ARRAY,1:nz) )
+      allocate(DIC_alt_source(GLOBAL_2D_ARRAY,1:nz) )
     endif
 
     if (wrt_cdr_avg) then
       allocate(zeta__avg(GLOBAL_2D_ARRAY) )
       zeta__avg(:,:)=0
-      allocate(temp_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(temp_avg(GLOBAL_2D_ARRAY,1:nz) )
       temp_avg(:,:,:)=0
-      allocate(salt_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(salt_avg(GLOBAL_2D_ARRAY,1:nz) )
       salt_avg(:,:,:)=0
-      allocate(ALK_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(ALK_avg(GLOBAL_2D_ARRAY,1:nz) )
       ALK_avg(:,:,:)=0
-      allocate(hALK_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(hALK_avg(GLOBAL_2D_ARRAY,1:nz) )
       hALK_avg(:,:,:)=0
-      allocate(DIC_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(DIC_avg(GLOBAL_2D_ARRAY,1:nz) )
       DIC_avg(:,:,:)=0
-      allocate(hDIC_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(hDIC_avg(GLOBAL_2D_ARRAY,1:nz) )
       hDIC_avg(:,:,:)=0
-      allocate(ALK_alt_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(ALK_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
       ALK_alt_avg(:,:,:)=0
-      allocate(hALK_alt_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(hALK_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
       hALK_alt_avg(:,:,:)=0
-      allocate(DIC_alt_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(DIC_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
       DIC_alt_avg(:,:,:)=0
-      allocate(hDIC_alt_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(hDIC_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
       hDIC_alt_avg(:,:,:)=0
-      allocate(pH_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(pH_avg(GLOBAL_2D_ARRAY,1:nz) )
       pH_avg(:,:,:)=0
-      allocate(pH_alt_avg(GLOBAL_2D_ARRAY,1:N) )
+      allocate(pH_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
       pH_alt_avg(:,:,:)=0
       allocate(FG_CO2_avg(GLOBAL_2D_ARRAY) )
       FG_CO2_avg(:,:)=0
       allocate(FG_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
       FG_ALT_CO2_avg(:,:)=0
       if (cdr_source) then
-        allocate(ALK_source_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(ALK_source_avg(GLOBAL_2D_ARRAY,1:nz) )
         ALK_source_avg(:,:,:)=0
-        allocate(ALK_alt_source_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(ALK_alt_source_avg(GLOBAL_2D_ARRAY,1:nz) )
         ALK_alt_source_avg(:,:,:)=0
-        allocate(DIC_source_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(DIC_source_avg(GLOBAL_2D_ARRAY,1:nz) )
         DIC_source_avg(:,:,:)=0
-        allocate(DIC_alt_source_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(DIC_alt_source_avg(GLOBAL_2D_ARRAY,1:nz) )
         DIC_alt_source_avg(:,:,:)=0
       endif
     endif
 
     ! Always output instantaneous hDIC
-    allocate(hDIC_tmp(GLOBAL_2D_ARRAY,1:N) )
+    allocate(hDIC_tmp(GLOBAL_2D_ARRAY,1:nz) )
     hDIC_tmp(:,:,:)=0
-    allocate(hDIC_alt_tmp(GLOBAL_2D_ARRAY,1:N) )
+    allocate(hDIC_alt_tmp(GLOBAL_2D_ARRAY,1:nz) )
     hDIC_alt_tmp(:,:,:)=0
 
     ! These have to be allocated for multiply_by_thickness call
-    allocate(hALK_tmp(GLOBAL_2D_ARRAY,1:N) )
+    allocate(hALK_tmp(GLOBAL_2D_ARRAY,1:nz) )
     hALK_tmp(:,:,:)=0
-    allocate(hALK_alt_tmp(GLOBAL_2D_ARRAY,1:N) )
+    allocate(hALK_alt_tmp(GLOBAL_2D_ARRAY,1:nz) )
     hALK_alt_tmp(:,:,:)=0
 
 
@@ -411,7 +411,7 @@ contains
           print *, 'cdr :: started monthly averaging.'
         else
           print *, 'cdr :: started averaging. ',&
-          &'output_period (s) =', output_period
+          &'output_period_cdr (s) =', output_period_cdr
         endif
       endif
     endif
@@ -485,7 +485,7 @@ contains
     DIC_source(:,:,:) = 0
     DIC_alt_source(:,:,:) = 0
 
-    if (forcing_3d) then
+    if (cdr_forcing_3d) then
       do k=1,nz
         do j=1,ny
           do i=1,nx
@@ -513,7 +513,7 @@ contains
         enddo
       enddo
 
-    endif ! forcing_3d
+    endif ! cdr_forcing_3d
 
   end subroutine calc_cdr_source !]
 
@@ -555,7 +555,7 @@ contains
 
       output_time = output_time + dt
 
-      if (output_time>=output_period) then
+      if (output_time>=output_period_cdr) then
         call wrt_cdr_output
         output_time = 0
       endif
@@ -575,7 +575,7 @@ contains
     integer(kind=4)                :: idx,ncid,ierr
 
 #ifdef PARALLEL_IO
-    if (record==nrpf) then
+    if (record==nrpf_cdr) then
       if (mynode == 0) then
         call create_file('_cdr',fname, nonode=.true.)
         ierr=nf90_open(fname,nf90_write,ncid)
@@ -681,7 +681,7 @@ contains
     navg = 0
 
 #else ! PARALLEL_IO
-    if (record==nrpf) then
+    if (record==nrpf_cdr) then
       call create_file('_cdr',fname)
       ierr=nf90_open(fname,nf90_write,ncid)
       call create_cdr_output_variables(ncid)
@@ -797,14 +797,14 @@ contains
       end if
 
       write(stdout_str,'(2(A,2x),I4)')&
-      &trim(stdout_str), 'recs/file = ', nrpf
+      &trim(stdout_str), 'recs/file = ', nrpf_cdr
 
       if (cdr_monthly_averages) then
         write(stdout_str,'(2(A,2x),1L)')&
         &trim(stdout_str), 'cdr_monthly_averages= ', cdr_monthly_averages
       else
         write(stdout_str,'(2(A,2x),F6.1)')&
-        &trim(stdout_str), 'output_period =', output_period
+        &trim(stdout_str), 'output_period_cdr =', output_period_cdr
       end if
       write(*, '(7x,A)') trim(stdout_str)
       if (.not. wrt_cdr_avg) then

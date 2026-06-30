@@ -31,7 +31,7 @@ module marbl_driver
   use MARBL_interface_public_types, only: marbl_diagnostics_type,&
   &marbl_saved_state_type
 #endif
-  use param                       , only: mynode,nt,ntrc_bio,&
+  use param                       , only: mynode,nt,nt_bgc,&
   &isalt,itemp,Lm,Mm,&
   &ocean_grid_comm
   use dimensions                  , only: nz
@@ -70,7 +70,8 @@ module marbl_driver
   integer(kind=4)                     :: idx            ! Looping variable
 
 !     MARBL config:
-  integer(kind=4), public :: marbl_timestep_ratio = 1
+  integer(kind=4), public :: marbl_timestep_ratio
+  real(kind=8), public :: marbl_timestep = 3600.0
   character(len=256), public :: marbl_config_file='marbl_in'
   character(len=32), public ::&
   &marbl_tracers_to_write(40) = ""
@@ -80,7 +81,7 @@ module marbl_driver
 #endif
 
   namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
-  &marbl_timestep_ratio, marbl_tracers_to_write&
+  &marbl_timestep, marbl_tracers_to_write&
 #ifdef MARBL_DIAGS
   &, marbl_diagnostics_to_write
 #endif
@@ -121,6 +122,10 @@ module marbl_driver
 
   real(kind=8),dimension(:,:,:,:),pointer, public :: marbl_diag_3d ! points to bec2_diag_3d
   real(kind=8),dimension(:,:,:)  ,pointer, public :: marbl_diag_2d ! points to bec2_diag_2d
+
+  ! Pre-computed 2D/3D flags: avoids repeated trim()/string compare in the hot per-column loop
+  logical, allocatable :: surface_flux_diag_is_2d(:)
+  logical, allocatable :: interior_tendency_diag_is_2d(:)
 
 #endif
 !     Saved state variables: (mimicking structure of bgc_shared_vars for bec2_diag arrays)
@@ -313,14 +318,14 @@ contains
 !     Number of MARBL tracers according to MARBL
     nt_marbl=size(marbl_instance%tracer_metadata)
 
-!     Check that the number of tracers in MARBL_instance agrees with ROMS' ntrc_bio:
-    if ( nt_marbl .ne. ntrc_bio ) then
+!     Check that the number of tracers in MARBL_instance agrees with ROMS' nt_bgc:
+    if ( nt_marbl .ne. nt_bgc ) then
       write(error_info, *)&
       &'Allocated no. of MARBL tracers'&
-      &,ntrc_bio&
+      &,nt_bgc&
       &,' does not match no. expected by MARBL: '&
       &,nt_marbl&
-      &,' set ntrc_bio = ',nt_marbl&
+      &,' set nt_bgc = ',nt_marbl&
       &,' in namelist and re-run'
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
@@ -438,6 +443,31 @@ contains
 !     5. Save carbonate system indices
 !     ---------------------------------------------------------
     call get_tracer_indices(t_vname)
+
+!     6. Set MARBL update frequency
+!     ---------------------------------------------------------
+
+    if (mynode==printnode) then
+      print *, 'The requested MARBL timestep is', marbl_timestep, '.'
+    end if
+
+    marbl_timestep_ratio = max(1,int(marbl_timestep / dt))
+    marbl_timestep = dt * marbl_timestep_ratio
+
+    if (mynode==printnode) then
+      print *, 'The ROMS timestep must divide the MARBL timestep evenly, ',&
+      &'so the timestep MARBL will actually use is ', marbl_timestep, ' seconds.'
+    end if
+
+    if (marbl_timestep > 10800.0) then
+      write(error_info, *)&
+        &"MARBL timestep is ", marbl_timestep,&
+        &", but the maximum allowable value ",&
+        &"is 10800.0."
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info=error_info)
+    endif
 
   end subroutine marbldrv_configure_tracers
 
@@ -690,7 +720,7 @@ contains
     use netcdf, only: nf90_noerr, nf90_inq_varid
     use dimensions, only : i0,i1,j0,j1,x0,x1,y0,y1
     use roms_mpi, only : exchange_xxx
-    use param, only : N
+    use param, only : nz
     use pio_roms, only: use_pio, pio_gtype
     use instant_output, only: wrt_instant
     implicit none
@@ -732,7 +762,7 @@ contains
       if (ierr == nf90_noerr) then
         call ncread(ncid, vname_marbl_ss_3d(1,itrc),&
         &marbl_saved_state_3d(x0:x1,y0:y1,:,itrc),start=start)
-        do k=1,N
+        do k=1,nz
           marbl_saved_state_3d(x0:x1,y0:y1,k,itrc)=&
           &marbl_saved_state_3d(x0:x1,y0:y1,k,itrc)*rmask(x0:x1,y0:y1)
         enddo
@@ -778,7 +808,7 @@ contains
     use nc_read_write, only: nccreate
     use roms_read_write, only: dn_xr,dn_yr,dn_zr,dn_tm
     use dimensions, only: xi_rho,eta_rho
-    use param, only : N
+    use param, only : nz
 
     implicit none
 
@@ -789,7 +819,7 @@ contains
     do itrc=1,nr_marbl_ss_3d
       varid = nccreate(ncid,vname_marbl_ss_3d(1,itrc),&
       &(/dn_xr,dn_yr,dn_zr,dn_tm/),&
-      &(/xi_rho,eta_rho,N,0/), nf90_double)
+      &(/xi_rho,eta_rho,nz,0/), nf90_double)
       ierr=nf90_put_att (ncid, varid, 'long_name', vname_marbl_ss_3d(2,itrc))
       ierr=nf90_put_att (ncid, varid, 'units', vname_marbl_ss_3d(3,itrc))
     enddo
@@ -1036,7 +1066,20 @@ contains
 !     Read user file to determine which diagnostics to write out
     call marbldrv_parse_diagnostic_output_list(&
     &vname_marbl_diag_2d,vname_marbl_diag_3d&
-    &)                    !
+    &)
+
+!     Pre-compute 2D/3D flags to avoid repeated trim()/string compare in hot loop
+    allocate(surface_flux_diag_is_2d(size(MARBL_instance%surface_flux_diags%diags)))
+    allocate(interior_tendency_diag_is_2d(size(MARBL_instance%interior_tendency_diags%diags)))
+    do m=1,size(MARBL_instance%surface_flux_diags%diags)
+      surface_flux_diag_is_2d(m) = trim(MARBL_instance%surface_flux_diags%diags(m)%vertical_grid) &
+                         .eq. "none"
+    end do
+    do m=1,size(MARBL_instance%interior_tendency_diags%diags)
+      interior_tendency_diag_is_2d(m) = trim(MARBL_instance%interior_tendency_diags%diags(m)%vertical_grid) &
+                         .eq. "none"
+    end do
+
   end subroutine marbldrv_configure_diagnostics
 
 !-----------------------------------------------------------------------
@@ -1715,8 +1758,7 @@ contains
     diagidx3d=1
 
     do m=1,size(MARBL_instance%surface_flux_diags%diags)
-      if (trim(MARBL_instance%surface_flux_diags%diags(m&
-      &)%vertical_grid) .eq. "none") then ! 2D field
+      if (surface_flux_diag_is_2d(m)) then ! 2D field
 
         if (wrt_marbl_diag_2d(diagidx2d)) then
           marbl_diag_2d(i,j,idx_marbl_diag_2d(diagidx2d))=&
@@ -1738,8 +1780,7 @@ contains
     diagidx3d=diag_cnt_sf_3d+1
 
     do m=1,size(MARBL_instance%interior_tendency_diags%diags)
-      if (trim(MARBL_instance%interior_tendency_diags%diags(m&
-      &)%vertical_grid) .eq. "none") then ! 2D field
+      if (interior_tendency_diag_is_2d(m)) then ! 2D field
         if (wrt_marbl_diag_2d(diagidx2d)) then
           marbl_diag_2d(i,j,idx_marbl_diag_2d(diagidx2d))=&
           &real(MARBL_instance%interior_tendency_diags%diags(m)%field_2d(1))
@@ -1930,7 +1971,7 @@ contains
     integer(kind=4) :: idx, itot
 
     itot = 0
-    do idx=1,ntrc_bio
+    do idx=1,nt_bgc
       itot=itot+1
       if (t_vname(itot)=='ALK') then
         iALK = itot

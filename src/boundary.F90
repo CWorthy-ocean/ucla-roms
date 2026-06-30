@@ -16,7 +16,7 @@ module boundary
 !      use error_handling_mod, only: error_log
   use param, only: nt
   use param, only:&
-  &lm, mm, n, obc_east, obc_north, obc_south,&
+  &lm, mm, nz, obc_east, obc_north, obc_south,&
   &obc_west
   use roms_read_write, only:&
   &ncforce, bc_options, set_frc_data,&
@@ -143,15 +143,15 @@ contains
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
-    allocate( u_west(0:Mm+1,N), v_west(0:Mm+1,N) )
+    allocate( u_west(0:Mm+1,nz), v_west(0:Mm+1,nz) )
     allocate( nc_u_w%vdata(j0:j1,nz,2) )
     allocate( nc_v_w%vdata( 1:j1,nz,2) )
 #    ifdef NHMG
-    allocate( w_west(0:Mm+1,N), nc_w_w%vdata(j0:j1,nz,2) )
+    allocate( w_west(0:Mm+1,nz), nc_w_w%vdata(j0:j1,nz,2) )
 #    endif
 #   endif
 #   ifdef T_FRC_BRY
-    allocate( t_west(0:Mm+1,N,NT) )
+    allocate( t_west(0:Mm+1,nz,NT) )
     do itrc=1,nt
       nc_t_w(itrc)%vname = trim(t_vname(itrc)) // '_west'
       allocate( nc_t_w(itrc)%vdata(j0:j1,nz,2) )
@@ -172,15 +172,15 @@ contains
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
-    allocate( u_east(0:Mm+1,N), v_east(0:Mm+1,N) )
+    allocate( u_east(0:Mm+1,nz), v_east(0:Mm+1,nz) )
     allocate( nc_u_e%vdata(j0:j1,nz,2) )
     allocate( nc_v_e%vdata( 1:j1,nz,2) )
 #    ifdef NHMG
-    allocate( w_east(0:Mm+1,N), nc_w_e%vdata(j0:j1,nz,2) )
+    allocate( w_east(0:Mm+1,nz), nc_w_e%vdata(j0:j1,nz,2) )
 #    endif
 #   endif
 #   ifdef T_FRC_BRY
-    allocate( t_east(0:Mm+1,N,NT) )
+    allocate( t_east(0:Mm+1,nz,NT) )
     do itrc=1,nt
       nc_t_e(itrc)%vname = trim(t_vname(itrc)) // '_east'
       allocate( nc_t_e(itrc)%vdata(j0:j1,nz,2) )
@@ -201,15 +201,15 @@ contains
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
-    allocate( u_south(0:Lm+1,N), v_south(0:Lm+1,N) )
+    allocate( u_south(0:Lm+1,nz), v_south(0:Lm+1,nz) )
     allocate( nc_u_s%vdata( 1:i1,nz,2) )
     allocate( nc_v_s%vdata(i0:i1,nz,2) )
 #    ifdef NHMG
-    allocate( w_south(0:Lm+1,N), nc_w_s%vdata(i0:i1,nz,2) )
+    allocate( w_south(0:Lm+1,nz), nc_w_s%vdata(i0:i1,nz,2) )
 #    endif
 #   endif
 #   ifdef T_FRC_BRY
-    allocate( t_south(0:Lm+1,N,NT) )
+    allocate( t_south(0:Lm+1,nz,NT) )
     do itrc=1,nt
       nc_t_s(itrc)%vname = trim(t_vname(itrc)) // '_south'
       allocate( nc_t_s(itrc)%vdata(i0:i1,nz,2) )
@@ -230,15 +230,15 @@ contains
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
-    allocate( u_north(0:Lm+1,N), v_north(0:Lm+1,N) )
+    allocate( u_north(0:Lm+1,nz), v_north(0:Lm+1,nz) )
     allocate( nc_u_n%vdata( 1:i1,nz,2) )
     allocate( nc_v_n%vdata(i0:i1,nz,2) )
 #    ifdef NHMG
-    allocate( w_north(0:Lm+1,N), nc_w_n%vdata(i0:i1,nz,2) )
+    allocate( w_north(0:Lm+1,nz), nc_w_n%vdata(i0:i1,nz,2) )
 #    endif
 #   endif
 #   ifdef T_FRC_BRY
-    allocate( t_north(0:Lm+1,N,NT) )
+    allocate( t_north(0:Lm+1,nz,NT) )
     do itrc=1,nt
       nc_t_n(itrc)%vname = trim(t_vname(itrc)) // '_north'
       allocate( nc_t_n(itrc)%vdata(i0:i1,nz,2) )
