@@ -23,7 +23,7 @@ def test_pipes_real(tmp_path, input_dir, reference_results):
     nml = create_test_namelist_dict(input_dir)
     nml["TIME_STEPPING"]["dt"] = 20
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
-    nml["FORCING_FILES"]["frcfile"].append(
+    nml["FORCING_FILES"]["frcfiles"].append(
         str(input_dir / "example_input_pipe_forcing.nc")
     )
     nml["PIPE_FRC_SETTINGS"] = {
@@ -55,9 +55,9 @@ def test_pipes_ana(tmp_path, input_dir, reference_results):
     nml["TIME_STEPPING"]["dt"] = 60
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 1200
     nml["GRID_SETTINGS"] = {"grdname": ""}
-    nml["INITIAL_CONDITIONS"] = {"ininame": ""}
-    nml["FORCING_FILES"] = {"frcfile": ""}
-    nml["PARAM_SETTINGS"].update({"NP_XI": 2, "NP_ETA": 2, "LLm": 100, "MMm": 100, "N": 10})
+    nml["INITIAL_CONDITIONS"] = {"inifile": ""}
+    nml["FORCING_FILES"] = {"frcfiles": ""}
+    nml["PARAM_SETTINGS"].update({"NP_XI": 2, "NP_ETA": 2, "LLm": 100, "MMm": 100, "nz": 10})
     nml["PIPE_FRC_SETTINGS"] = {
         "pipe_source": True,
         "p_analytical": True,

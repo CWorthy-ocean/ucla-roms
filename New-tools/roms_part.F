@@ -43,7 +43,7 @@
       integer,dimension(:,:),allocatable :: ilocc,jlocc
       integer,dimension(:,:),allocatable :: ilcuc,jlcvc
       integer,dimension(:,:),allocatable :: node_map
-      integer,dimension(:)  ,allocatable :: npi_c,npj_c
+      integer,dimension(:)  ,allocatable, public :: npi_c,npj_c
       integer,dimension(:)  ,allocatable :: boundary_nodes
 
       ! Dimension names for in netcdf files
@@ -95,6 +95,7 @@
       public :: cmd_args_map
       public :: cmd_args_partit
       public :: cmd_args_ncjoin
+      public :: cmd_args_write_tiling
       public :: partition_mask
       public :: check_mask
       public :: make_partial_files
@@ -102,6 +103,7 @@
       public :: make_joined_file
       public :: write_joined_file
       public :: show_use_optimal
+      public :: write_tiling_attributes
 
       contains
 ! ----------------------------------------------------------------------
@@ -216,6 +218,39 @@
 !      print *,grdfile,srcfiles(1)
 
       end subroutine cmd_args_partit !]
+! ----------------------------------------------------------------------
+      subroutine cmd_args_write_tiling(npartx,nparty)  ![
+      implicit none
+
+!     import/export
+      integer,intent(out) :: npartx,nparty
+
+      integer :: nargs,i
+      integer :: argcount = 1
+      character(len=128) :: arg
+
+      nargs =  command_argument_count()
+
+      if (nargs < 3) then
+      print*,'ERROR: Format must be "write_tiling npx npy gridfile".'
+      stop
+      endif
+
+      ! first 2 should be number of subdomains in x- or y- direction
+      call get_command_argument(argcount,arg);
+      read(arg,*) npartx
+      argcount = argcount + 1
+      call get_command_argument(argcount,arg);
+      read(arg,*) nparty
+      !print *,nargs,npartx,nparty
+      argcount = argcount + 1
+      call get_command_argument(argcount,arg)
+      grdfile = trim(adjustl(arg))
+      argcount = argcount + 1
+!     read(arg,*) grdfile
+!     print *,'gridfile: ',grdfile
+
+      end subroutine cmd_args_write_tiling !]
 ! ----------------------------------------------------------------------
       subroutine cmd_args_ncjoin  ![
       implicit none
@@ -574,6 +609,7 @@
       integer,dimension(:,:),allocatable :: iloc_grid,jloc_grid
       integer :: loc_x_grid, loc_y_grid
 
+      if (allocated(srcfiles)) then
       ! Read in source file
       ierr = nf90_open(trim(adjustl(srcfiles(1))), nf90_nowrite, ncid)
        if (ierr/=0) call handle_ierr(ierr,'opening: ',trim(adjustl(srcfiles(1))))
@@ -631,12 +667,12 @@
         loc_y = loc_y + jloc(npj,1)
       enddo
 
-      allocate(node_map(0:npy+1,0:npx+1))
-      node_map = -98
-      allocate(npi_c(npx*npy))
-      allocate(npj_c(npx*npy))
-      allocate(boundary_nodes(npx*npy))
-      boundary_nodes = 0
+!      allocate(node_map(0:npy+1,0:npx+1))
+!      node_map = -98
+!      allocate(npi_c(npx*npy))
+!      allocate(npj_c(npx*npy))
+!      allocate(boundary_nodes(npx*npy))
+!      boundary_nodes = 0
 
       ! adjust iloc/jloc to reflect rho-vars in netcdf files
       ! first and last subdomains have buffers, so 1 point larger
@@ -663,23 +699,29 @@
       ilcu(:,3) = ilcu(:,3)-1
       jlcv(2:npy,2) = jlcv(2:npy,2)-1
       jlcv(:,3) = jlcv(:,3)-1
+      endif
 
       !! Determine tiles to be ignored by MPI masking
+      allocate(node_map(0:npy+1,0:npx+1))
+      node_map = -98
+      allocate(npi_c(npx*npy))
+      allocate(npj_c(npx*npy))
+      allocate(boundary_nodes(npx*npy))
+      boundary_nodes = 0
 
       ! Read in grid file
       ierr = nf90_open(trim(adjustl(grdfile)), nf90_nowrite, ncid_grid)
        if (ierr/=0) call handle_ierr(ierr,'opening: ',trim(adjustl(grdfile)))
 
-      ierr = nf90_inq_dimid(ncid,'xi_rho',dimid)
+      ierr = nf90_inq_dimid(ncid_grid,'xi_rho',dimid)
        if (ierr/=0) call handle_ierr(ierr,'getting dimid: ','xi_rho')
-      ierr = nf90_inquire_dimension(ncid, dimid, len=gnx_grid)
+      ierr = nf90_inquire_dimension(ncid_grid, dimid, len=gnx_grid)
        if (ierr/=0) call handle_ierr(ierr,'getting dimension: ','xi_rho')
 
-      ierr = nf90_inq_dimid(ncid,'eta_rho',dimid)
+      ierr = nf90_inq_dimid(ncid_grid,'eta_rho',dimid)
        if (ierr/=0) call handle_ierr(ierr,'getting dimid: ','eta_rho')
-      ierr = nf90_inquire_dimension(ncid, dimid, len=gny_grid)
+      ierr = nf90_inquire_dimension(ncid_grid, dimid, len=gny_grid)
        if (ierr/=0) call handle_ierr(ierr,'getting dimension: ','eta_rho')
-
       gnx_grid = gnx_grid-2
       gny_grid = gny_grid-2
 
@@ -687,11 +729,8 @@
       nx_grid = ceiling(1.0*gnx_grid/npx)
       ny_grid = ceiling(1.0*gny_grid/npy)
 
-!      write(*,*) '(NX,NY) = ', nx_grid, ny_grid
       surplus_x_grid = nx_grid*npx - gnx_grid
       surplus_y_grid = ny_grid*npy - gny_grid
-
-!      write(*,*) 'Surplus (X,Y)=', surplus_x_grid, surplus_y_grid
 
       ! Array's to store the location and size of each subdomain
       allocate(iloc_grid(npx,3)) ! lnx = iloc(:,1), is = iloc(:,2), ie = iloc(:,3)
@@ -709,9 +748,7 @@
         iloc_grid(npi,2) = loc_x_grid
         iloc_grid(npi,3) = loc_x_grid + iloc_grid(npi,1) -1
         loc_x_grid = loc_x_grid + iloc_grid(npi,1)
-!        write(*,*) "X tile", npi, ":", iloc_grid(npi,2), iloc_grid(npi,3)
       enddo
-
       loc_y_grid = 1
       do npj = 1,npy
         if (npj==1) then ! left-most subdomain
@@ -727,11 +764,9 @@
 !        write(*,*) "Y tile", npj, ":", jloc_grid(npj,2), jloc_grid(npj,3)
       enddo
 
-
       allocate(mask(0:gnx_grid+1,0:gny_grid+1))
       call ncread(ncid_grid, 'mask_rho',mask)
       ierr = nf90_close(ncid_grid)
-
       count = 0
       do npj = 1,npy
         do npi = 1,npx
@@ -760,6 +795,57 @@
 
       end subroutine partition_mask  !]
 ! ----------------------------------------------------------------------
+      subroutine write_tiling_attributes  ![
+      implicit none
+
+      type(ncstructure)  :: ncinfo
+      integer :: part, i, j, ncid, npid, ierr
+      character(len=128) :: attname
+      integer,dimension(2) :: subdompos
+      integer,dimension(4) :: ibuff
+      integer,dimension(8) :: loc_neigh
+
+      ! open up reference netcdf for global attributes
+      ierr = nf90_open(trim(grdfile), nf90_nowrite, ncid)
+      if (ierr/=nf90_noerr)
+     &  call handle_ierr(ierr,'opening file: ',trim(srcfile) )
+      call get_nc_info(ncid, ncinfo)
+
+      ierr=nf90_create('tiling.nc',nf90_netcdf4,npid)
+      if (ierr/=nf90_noerr)
+     &  call handle_ierr(ierr,'creating file: tiling.nc' )
+
+      ! global rho-dimensions
+      ierr=nf90_put_att(npid, nf90_global, 'globaldims',
+     &         (/ncinfo%gsize(1)-2,ncinfo%gsize(2)-2/))
+
+      ! i and j nodes (how it was partitioned)
+      ierr=nf90_put_att(npid, nf90_global, 'ij_nodes', (/npartx,nparty/))
+
+        ! subdompos: i,j position of sub-domain
+      do part = 1,nparts
+        i = npi_c(part)
+        j = npj_c(part)
+
+        ! subdompos: i,j position of sub-domain
+        subdompos = (/ i-1, j-1 /) ! zero-based!
+        write (attname, "(A9,I0)") "subdompos", part
+        ierr=nf90_put_att(npid, nf90_global, trim(attname) , subdompos)
+
+        ! neighbors: N,NE,E,SE,S,SW,W,NW (READ IN THAT ORDER)
+        loc_neigh = (/ node_map(j+1,i), node_map(j+1,i+1),
+     &                 node_map(j,i+1), node_map(j-1,i+1),
+     &                 node_map(j-1,i), node_map(j-1,i-1),
+     &                 node_map(j,i-1), node_map(j+1,i-1) /)
+        write (attname, "(A9,I0)") "neighbors", part
+        ierr=nf90_put_att(npid, nf90_global, trim(attname) ,loc_neigh-1)
+      enddo
+
+      ierr = nf90_close(npid)
+
+      end subroutine write_tiling_attributes  !]
+! ----------------------------------------------------------------------
+
       subroutine make_partial_files  ![
       implicit none
 

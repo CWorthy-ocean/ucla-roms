@@ -7,6 +7,7 @@ RUN apt update && apt install -y \
     libc6-dev libstdc++-14-dev m4 libxml2-dev \
     libcurl4-openssl-dev zlib1g-dev wget \
     python3-numpy python-is-python3\
+    python3.12-venv python3-pip \
     git rsync cmake\
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,6 +24,11 @@ RUN wget -q https://registrationcenter-download.intel.com/akdlm/IRC_NAS/189a6c48
 RUN wget -q https://registrationcenter-download.intel.com/akdlm/IRC_NAS/9e86b555-f238-4dea-b4b2-01b243e42483/intel-fortran-essentials-2025.0.1.27_offline.sh \
     && sh ./intel-fortran-essentials-2025.0.1.27_offline.sh -a --silent --cli --eula accept \
     && rm intel-fortran-essentials-2025.0.1.27_offline.sh
+
+## Obtain and hardcode OneAPI environment variables:
+## Updated variables here using:
+# RUN bash -c "source /opt/intel/oneapi/setvars.sh \
+#     && printenv"
 
 ENV TBBROOT=/opt/intel/oneapi/tbb/2022.0/env/.. \
     ONEAPI_ROOT=/opt/intel/oneapi \
@@ -180,13 +186,18 @@ ENV PATH=$INSTALL_BASE_DIR/scorep_9.4_install/bin:$PATH
 ENV MARBL_ROOT=$INSTALL_BASE_DIR/MARBL
 WORKDIR $INSTALL_BASE_DIR
 RUN bash -c "source /opt/intel/oneapi/setvars.sh \
-    && wget https://github.com/marbl-ecosys/MARBL/archive/refs/tags/marbl0.45.0.tar.gz \
-    && tar xvf marbl0.45.0.tar.gz \
-    && rm marbl0.45.0.tar.gz \
-    && mv MARBL-marbl0.45.0 $MARBL_ROOT  \
-    && cd $MARBL_ROOT/src \
-    && make intel USEMPI=TRUE"
+     && wget https://github.com/marbl-ecosys/MARBL/archive/refs/tags/marbl0.45.0.tar.gz \
+     && tar xvf marbl0.45.0.tar.gz \
+     && rm marbl0.45.0.tar.gz \
+     && mv MARBL-marbl0.45.0 \$MARBL_ROOT \
+     && cd \$MARBL_ROOT/src \
+     && sed -i -e \"s/-fp-model source/-fp-model precise/g\" Makefile \
+     && make intel USEMPI=TRUE"
 
+RUN python3 -m venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir roms-tools==4.0.0a1 pytest==8 f90nml==1.4
 
 # Add a non-root user so OpenMPI doesn't warn:
 RUN useradd -ms /bin/bash container_user

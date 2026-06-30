@@ -26,14 +26,15 @@ def test_bgc_real_bec(tmp_path, input_dir, reference_results):
     nml["TIME_STEPPING"]["dt"] = 20
     nml["TIME_STEPPING"]["ntimes"] = 10
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 100
-    nml["BGC_SETTINGS"]["output_period_his"] = 400
-    nml["PARAM_SETTINGS"]["ntrc_bio"] = 26
-    nml["TIDES_SETTINGS"].update({"pot_tides": True, "ntides": 2})
+    nml["BGC_SETTINGS"]["output_period_bgc_his"] = 400
+    nml["PARAM_SETTINGS"]["nt_bgc"] = 26
+    nml["TIDAL_FRC_SETTINGS"].update({"pot_tides": True, "ntides": 2})
     nml["FORCING_FILES"] = {
-        "frcfile": [
+        "frcfiles": [
             str(input_dir / "example_input_boundary_forcing.nc"),
             str(input_dir / "example_input_surface_forcing.nc"),
             str(input_dir / "example_input_bgc_surface_forcing.nc"),
+            str(input_dir / "example_input_co2_surface_forcing.nc"),
             str(input_dir / "example_input_river_forcing.nc"),
             str(input_dir / "example_input_bgc_boundary_forcing.nc"),
             str(input_dir / "example_input_tides.nc"),
@@ -63,18 +64,20 @@ def test_bgc_real_marbl(tmp_path, input_dir, reference_results):
 
     nml = create_test_namelist_dict(input_dir)
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 100
-    nml["BGC_SETTINGS"]["output_period_his"] = 100
+    nml["BGC_SETTINGS"]["output_period_bgc_his"] = 100
     nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_diagnostics_to_write"] = [
         "DCO2STAR_ALT_CO2", "graze_diat_zint", "FESEDFLUX",
     ]
+    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = 20
     nml["TIME_STEPPING"].update({"dt": 20, "ntimes": 10})
-    nml["TIDES_SETTINGS"].update({"pot_tides": True, "ntides": 2})
-    nml["PARAM_SETTINGS"]["ntrc_bio"] = 32
+    nml["TIDAL_FRC_SETTINGS"].update({"pot_tides": True, "ntides": 2})
+    nml["PARAM_SETTINGS"]["nt_bgc"] = 32
     nml["FORCING_FILES"] = {
-        "frcfile": [
+        "frcfiles": [
             str(input_dir / "example_input_boundary_forcing.nc"),
             str(input_dir / "example_input_surface_forcing.nc"),
             str(input_dir / "example_input_bgc_surface_forcing.nc"),
+            str(input_dir / "example_input_co2_surface_forcing.nc"),
             str(input_dir / "example_input_river_forcing.nc"),
             str(input_dir / "example_input_bgc_boundary_forcing.nc"),
             str(input_dir / "example_input_tides.nc"),
