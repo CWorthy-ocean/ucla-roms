@@ -164,6 +164,8 @@ subroutine init_arrays_surf_flx ![
   ! local
   character(len=30) :: string
   character(len=512) :: surf_forcing_strings
+
+  surf_forcing_strings = ''   ! must be blank before store_string_att (len_trim) is used
   allocate( uwnd  (GLOBAL_2D_ARRAY)     ); uwnd = 0
   allocate( vwnd  (GLOBAL_2D_ARRAY)     ); vwnd = 0
   allocate( sustr  (GLOBAL_2D_ARRAY)    ); sustr=init

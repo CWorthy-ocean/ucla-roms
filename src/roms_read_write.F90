@@ -2065,12 +2065,13 @@ contains
     ie=len_trim( string_add )
     ie=ie+is-1
 
-    if (ie > max_options_string) then
+    if (ie > len(char_string)) then
       write(error_info,*)&
       &'character full:', trim(string_add)
       call error_log%raise_from_rank(&
       &context=module_name//"/"//sr_name,&
       &info=error_info)
+      return    ! don't write past the end of char_string
     endif
     char_string(is:ie) = string_add
 
