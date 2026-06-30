@@ -277,7 +277,6 @@ marbl_config_file = "marbl_in"  ! MARBL configuration file
 marbl_tracers_to_write = ""     ! MARBL tracers to include in BGC output
 marbl_diagnostics_to_write = "FG_CO2, FG_ALT_CO2" ! MARBL diagnostics to include in BGC output
 marbl_timestep = 3600.0           ! Desired MARBL timestep (s); rounded to a whole multiple of dt (max 10800)
-
 /
 
 !================================================================================
