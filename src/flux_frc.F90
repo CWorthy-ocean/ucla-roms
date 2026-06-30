@@ -9,8 +9,7 @@ module flux_frc
 
 ! Modules needed:
   use tracers, only: t
-  use surf_flux, only: sustr, svstr, stflx, srflx, sss, sst,&
-  &apply_surf_field_corr, swflx
+  use surf_flux, only: sustr, svstr, stflx, srflx, sss, sst, swflx
   use scalars, only: cp, rho0, day2sec, nz, nrhs, cmday2ms
   use roms_read_write, only: ncforce, flux_frc_opt, set_frc_data,&
   &store_string_att

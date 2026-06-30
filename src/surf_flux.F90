@@ -62,11 +62,11 @@ module surf_flux
 !#  endif
 !#endif
 
-  real(kind=8)           :: output_period = 120       ! output averaging period in seconds
-  integer(kind=4)        :: nrpf          = 10 ! total recs per file
+  real(kind=8)           :: output_period_sflx = 120       ! output averaging period in seconds
+  integer(kind=4)        :: nrpf_sflx          = 10 ! total recs per file
   logical, public ::&
   &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
-  namelist /SURF_FLX_SETTINGS/ output_period, nrpf,&
+  namelist /SURF_FLX_OUTPUT_SETTINGS/ output_period_sflx, nrpf_sflx,&
   &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
 
 #if defined SALINITY
