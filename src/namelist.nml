@@ -447,8 +447,8 @@ nrpf_random=10                    ! Number of records per output file
 ! Previously set in `surf_flx.opt`
 !-----------------
 wrt_smflx = .false.        ! Output surface momentum flux
-wrt_stflx = .false.        ! Output surface restoring fux (already accounted in stflx)
-wrt_rstflx = .false.        ! Output surface tracer flux
+wrt_stflx = .false.        ! Output surface tracer flux
+wrt_rstflx = .false.       ! Output surface restoring flux (already accounted in stflx)
 wrt_swflx = .false.        ! Output surface water flux (P-E)
 sflx_avg = .false.         ! Output average (T) or instantaneous (F) fields
 output_period_sflx = 120        ! Frequency of surface flux output (s)
