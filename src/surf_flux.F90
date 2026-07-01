@@ -34,11 +34,11 @@ module surf_flux
   ! edit variable name and time name to match input netcdf file if necessary:
   type (ncforce) :: nc_sst  = ncforce(vname='sst',tname='sst_time' )       ! sea-surface temperature (SST) data
   ! Restoring time-scale. coefficient expressed kinematically as piston velocity (m/s):
-  real,public :: dSSTdt = 7.777/(100.*86400.)  ! SST correction     (required QCORRECTION)
+  real,public :: dSSTdt = 7.777  ! SST correction     (required QCORRECTION)
 #endif
 
 #if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
-  real,public :: dSSSdt = 7.777/(100.*86400.)  ! SSS correction     (required SFLX_CORR)
+  real,public :: dSSSdt = 7.777  ! SSS correction     (required SFLX_CORR)
   type (ncforce) :: nc_sss  = ncforce(vname='sss' ,tname='sss_time'  ) ! sea-surface salinity (SSS) data
 #endif
 #if defined CFLX_CORR && defined MARBL
@@ -158,6 +158,34 @@ contains
       &//trim(msg)&
       &)
     end if
+
+#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=SSS_CORRECTION, iostat=ios, iomsg=msg)
+    if (ios /= 0) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='could not read SSS_CORRECTION'&
+      &//' section of namelist file: '&
+      &//trim(msg)&
+      &)
+    end if
+    dSSSdt = dSSSdt / (100.*86400.)
+#endif
+
+#if defined(QCORRECTION) && !defined(ANA_SST)
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=SST_CORRECTION, iostat=ios, iomsg=msg)
+    if (ios /= 0) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='could not read SST_CORRECTION'&
+      &//' section of namelist file: '&
+      &//trim(msg)&
+      &)
+    end if
+    dSSTdt = dSSTdt / (100.*86400.)
+#endif
 
   close(namelist_unit)
   record = nrpf_sflx
