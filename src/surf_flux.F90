@@ -34,11 +34,11 @@ module surf_flux
   ! edit variable name and time name to match input netcdf file if necessary:
   type (ncforce) :: nc_sst  = ncforce(vname='sst',tname='sst_time' )       ! sea-surface temperature (SST) data
   ! Restoring time-scale. coefficient expressed kinematically as piston velocity (m/s):
-  real,public,parameter :: dSSTdt = 7.777/(100.*86400.)  ! SST correction     (required QCORRECTION)
+  real,public :: dSSTdt = 7.777/(100.*86400.)  ! SST correction     (required QCORRECTION)
 #endif
 
 #if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
-  real,public,parameter :: dSSSdt = 7.777/(100.*86400.)  ! SSS correction     (required SFLX_CORR)
+  real,public :: dSSSdt = 7.777/(100.*86400.)  ! SSS correction     (required SFLX_CORR)
   type (ncforce) :: nc_sss  = ncforce(vname='sss' ,tname='sss_time'  ) ! sea-surface salinity (SSS) data
 #endif
 #if defined CFLX_CORR && defined MARBL
@@ -68,6 +68,12 @@ module surf_flux
   &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
   namelist /SURF_FLX_OUTPUT_SETTINGS/ output_period_sflx, nrpf_sflx,&
   &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
+#if defined(QCORRECTION) && !defined(ANA_SST)
+  namelist /SST_CORRECTION/ dSSTdt
+#endif
+#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
+  namelist /SSS_CORRECTION/ dSSSdt
+#endif
 
 #if defined SALINITY
   logical,parameter :: salinity=.true.
