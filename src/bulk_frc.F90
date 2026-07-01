@@ -861,7 +861,7 @@ contains
 !     &                               -cff14*sstg(i,j,it14)
 !     &                                                  )
         stflx(i,j,itemp)=stflx(i,j,itemp) -dSSTdt*(&
-        &t(i,j,N,nrhs,itemp) - sst(i,j)  )&
+        &t(i,j,nz,nrhs,itemp) - sst(i,j)  )&
 
 #  ifdef MASKING
         &*rmask(i,j)
@@ -875,13 +875,13 @@ contains
 # ifdef SFLX_CORR
 # ifdef SALINITY
      stflx(i,j,isalt)= -dSSSdt*(&
-     &t(i,j,N,nrhs,isalt)-sss(i,j))&
+     &t(i,j,nz,nrhs,isalt)-sss(i,j))&
 #  ifdef MASKING
      &*rmask(i,j)
 #  endif
      if (wrt_rstflx) then
           rstflx(i,j,isalt) = -dSSSdt*(&
-          &t(i,j,N,nrhs,isalt) - sss(i,j)  )&
+          &t(i,j,nz,nrhs,isalt) - sss(i,j)  )&
 #  ifdef MASKING
           &*rmask(i,j)
 #  endif
@@ -904,23 +904,23 @@ contains
       endif
     enddo
        stflx(i,j,itrc2read)= -dCdt*(&
-       &t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )&
+       &t(i,j,nz,nrhs,itrc2read) - sDIC(i,j)  )&
 #  ifdef MASKING
        &*rmask(i,j)
 #  endif
        stflx(i,j,itrc2writ)= -dCdt*(&
-       &t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )&
+       &t(i,j,nz,nrhs,itrc2read) - sDIC(i,j)  )&
 #  ifdef MASKING
        &*rmask(i,j)
 #  endif
        if (wrt_rstflx) then
            rstflx(i,j,itrc2read) = -dCdt*(&
-           &t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )&
+           &t(i,j,nz,nrhs,itrc2read) - sDIC(i,j)  )&
 #  ifdef MASKING
            &*rmask(i,j)
 #  endif
            rstflx(i,j,itrc2writ) = -dCdt*(&
-           &t(i,j,N,nrhs,itrc2read) - sDIC(i,j)  )&
+           &t(i,j,nz,nrhs,itrc2read) - sDIC(i,j)  )&
 #  ifdef MASKING
            &*rmask(i,j)
 #  endif
@@ -935,23 +935,23 @@ contains
          endif
        enddo
           stflx(i,j,itrc2read)= -dCdt*(&
-          &t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )&
+          &t(i,j,nz,nrhs,itrc2read) - sALK(i,j)  )&
 #  ifdef MASKING
           &*rmask(i,j)
 #  endif
           stflx(i,j,itrc2writ)= -dCdt*(&
-          &t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )&
+          &t(i,j,nz,nrhs,itrc2read) - sALK(i,j)  )&
 #  ifdef MASKING
           &*rmask(i,j)
 #  endif
        if (wrt_rstflx) then
            rstflx(i,j,itrc2read) = -dCdt*(&
-           &t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )&
+           &t(i,j,nz,nrhs,itrc2read) - sALK(i,j)  )&
 #  ifdef MASKING
            &*rmask(i,j)
 #  endif
            rstflx(i,j,itrc2writ) = -dCdt*(&
-           &t(i,j,N,nrhs,itrc2read) - sALK(i,j)  )&
+           &t(i,j,nz,nrhs,itrc2read) - sALK(i,j)  )&
 #  ifdef MASKING
            &*rmask(i,j)
 #  endif
