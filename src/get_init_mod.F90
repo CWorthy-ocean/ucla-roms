@@ -44,13 +44,13 @@ contains
     &nf90_strerror, nf90_inq_varid, nf90_get_var, nf90_close,&
     &nf90_open
     use nc_read_write, only: ncread
-    use roms_read_write, only: ininame
+    use roms_read_write, only: inifile
     use grid, only:&
     &riv_umask, riv_vmask, rmask, umask, vmask
     use dimensions, only: i0, i1, j0, j1, nz, x_,x0,x1,y_,y0,y1
     use param, only:&
     &ieast, iwest, jnorth, jsouth, mynode,&
-    &nsub_e, nsub_x, nnodes, n, nt,&
+    &nsub_e, nsub_x, nnodes, nz, nt,&
     &np_xi, np_eta
     use roms_mpi, only: exchange_xxx
     use error_handling_mod, only: error_log
@@ -109,16 +109,16 @@ contains
 !             (2b) nrrec < 0, THE LAST available record is used.
 
     init_type=0
-    ierr=nf90_open(ininame, nf90_nowrite, ncid)
+    ierr=nf90_open(inifile, nf90_nowrite, ncid)
     write(error_info, *)&
-    &'Cannot open netCDF file ''', trim(ininame), '''.'
+    &'Cannot open netCDF file ''', trim(inifile), '''.'
     call error_log%check_netcdf_status(&
     &netcdf_status=ierr,&
     &context=sr_name,&
     &info=error_info)
     call error_log%abort_check()
 
-    ierr=checkdims (ncid, ininame, max_rec)
+    ierr=checkdims (ncid, inifile, max_rec)
     call error_log%abort_check()
 
     if (max_rec > 0) then
@@ -131,7 +131,7 @@ contains
           &'record',req_rec,&
           &'exceeds number', 'of records',&
           &max_rec,  'available in netCDF file ''',&
-          &trim(ininame), '''.'
+          &trim(inifile), '''.'
           call error_log%raise_from_rank(&
           &context=sr_name,&
           &info=error_info)
@@ -244,7 +244,7 @@ contains
     else
       write(error_info, *)&
       &'unknown units for variable ''',trim(vname(1,indxTime)),&
-      &'''', 'in netCDF file ''', trim(ininame), '''.'
+      &'''', 'in netCDF file ''', trim(inifile), '''.'
       call error_log%raise_global(&
       &context=sr_name,&
       &info=error_info)
@@ -276,7 +276,7 @@ contains
             mpi_nonexit_warn write(*,'(1x,2A,2I4/10x,4A/10x,A/)')&
             &'WARNING: Exact restart is requested, but ',&
             &'is not possible: records', record,record+1,&
-            &'in ''', trim(ininame),  ''' are not ',&
+            &'in ''', trim(inifile),  ''' are not ',&
             &'consecutive time steps ==> proceeding ',&
             &'with forward initial time step.'
             iic = 0 ! set back to zero if exact restart fails
@@ -288,7 +288,7 @@ contains
           &trim(vname(1,indxTime)),&
           &'''',&
           &'rec =', record,&
-          &'file = ''', trim(ininame), '''',&
+          &'file = ''', trim(inifile), '''',&
           &nf90_strerror(ierr)
           call error_log%raise_global(&
           &context=sr_name,&
@@ -297,7 +297,7 @@ contains
       else
         mpi_nonexit_warn write(*,'(1x,2A/10x,4A)')&
         &'WARNING: Exact restart is requested, but is not ',&
-        &'possible: initial',  'file ''', trim(ininame),&
+        &'possible: initial',  'file ''', trim(inifile),&
         &''' does not contain sufficient records.'
       endif
       if (forw_start /= 1) return
@@ -364,7 +364,7 @@ contains
           mpi_nonexit_warn write(*,'(1x,2A,2I4/10x,4A/10x,A)')&
           &'WARNING: Exact restart is requested, but is not ',&
           &'possible: records',  record,   record+1,  'in ''',&
-          &trim(ininame),  ''' are not consecutive time ',&
+          &trim(inifile),  ''' are not consecutive time ',&
           &'steps ==> proceeding with',&
           &'forward initial time step.'
           iic = 0 ! set back to zero in case of fail
@@ -408,7 +408,7 @@ contains
 ! River mask (needed for exact restarts)
 
 #ifdef PARALLEL_IO
-    ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, ininame)
+    ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, inifile)
 #endif
 
     start=1; start(3)=record                                       ! 2D vars
@@ -416,7 +416,7 @@ contains
     ierr=nf90_inq_varid(ncid, 'riv_umask', varid)
     if (ierr == nf90_noerr) then
       pio_gtype = '2Dur'
-      call ncread(ncid,'riv_umask',riv_umask(x_:x1,y0:y1),start=start)!,fname=ininame)
+      call ncread(ncid,'riv_umask',riv_umask(x_:x1,y0:y1),start=start)!,fname=inifile)
     else
       if (mynode == 0) then
         write(*,*) 'riv_umask not found in initial file. Initializing ',&
@@ -426,7 +426,7 @@ contains
     ierr=nf90_inq_varid(ncid, 'riv_vmask', varid)
     if (ierr == nf90_noerr) then
       pio_gtype = '2Dvr'
-      call ncread(ncid,'riv_vmask',riv_vmask(x0:x1,y_:y1),start=start)!,fname=ininame)
+      call ncread(ncid,'riv_vmask',riv_vmask(x0:x1,y_:y1),start=start)!,fname=inifile)
     else
       if (mynode == 0) then
         write(*,*) 'riv_vmask not found in initial file. Initializing ',&
@@ -437,18 +437,18 @@ contains
 ! Free-surface and barotropic 2D momentuma, XI- and ETA-components
 
     pio_gtype = '2Drr'
-    call ncread(ncid,'zeta',zeta(x0:x1,y0:y1,1),start=(/1,1,record/))!,fname=ininame)
+    call ncread(ncid,'zeta',zeta(x0:x1,y0:y1,1),start=(/1,1,record/))!,fname=inifile)
     zeta(x0:x1,y0:y1,1)=zeta(x0:x1,y0:y1,1)*rmask(x0:x1,y0:y1)
     call exchange_xxx(zeta(:,:,1))
 
     pio_gtype = '2Dur'
-    call ncread(ncid,'ubar',ubar(x_:x1,y0:y1,1),start=(/1,1,record/))!,fname=ininame)
+    call ncread(ncid,'ubar',ubar(x_:x1,y0:y1,1),start=(/1,1,record/))!,fname=inifile)
     ubar(x_:x1,y0:y1,1) = ubar(x_:x1,y0:y1,1)*&
     &(umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
     call exchange_xxx(ubar(:,:,1))
 
     pio_gtype = '2Dvr'
-    call ncread(ncid,'vbar',vbar(x0:x1,y_:y1,1),start=(/1,1,record/))!,fname=ininame)
+    call ncread(ncid,'vbar',vbar(x0:x1,y_:y1,1),start=(/1,1,record/))!,fname=inifile)
     vbar(x0:x1,y_:y1,1) = vbar(x0:x1,y_:y1,1)*&
     &(vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
     call exchange_xxx(vbar(:,:,1))
@@ -479,17 +479,17 @@ contains
 
     if (exact_succes) then
       pio_gtype = '2Dur'
-      call ncread(ncid,'DU_avg1',DU_avg1(x_:x1,y0:y1),start=start)!,fname=ininame)
+      call ncread(ncid,'DU_avg1',DU_avg1(x_:x1,y0:y1),start=start)!,fname=inifile)
       pio_gtype = '2Dvr'
-      call ncread(ncid,'DV_avg1',DV_avg1(x0:x1,y_:y1),start=start)!,fname=ininame)
+      call ncread(ncid,'DV_avg1',DV_avg1(x0:x1,y_:y1),start=start)!,fname=inifile)
       pio_gtype = '2Dur'
-      call ncread(ncid,'DU_avg2',DU_avg2(x_:x1,y0:y1),start=start)!,fname=ininame)
+      call ncread(ncid,'DU_avg2',DU_avg2(x_:x1,y0:y1),start=start)!,fname=inifile)
       pio_gtype = '2Dvr'
-      call ncread(ncid,'DV_avg2',DV_avg2(x0:x1,y_:y1),start=start)!,fname=ininame)
+      call ncread(ncid,'DV_avg2',DV_avg2(x0:x1,y_:y1),start=start)!,fname=inifile)
       pio_gtype = '2Dur'
-      call ncread(ncid,'DU_avg_bak',DU_avg_bak(x_:x1,y0:y1),start=start)!,fname=ininame)
+      call ncread(ncid,'DU_avg_bak',DU_avg_bak(x_:x1,y0:y1),start=start)!,fname=inifile)
       pio_gtype = '2Dvr'
-      call ncread(ncid,'DV_avg_bak',DV_avg_bak(x0:x1,y_:y1),start=start)!,fname=ininame)
+      call ncread(ncid,'DV_avg_bak',DV_avg_bak(x0:x1,y_:y1),start=start)!,fname=inifile)
     else
       forw_start=ntstart    !--> cancel exact restart
       iic = 0 ! set back to zero
@@ -502,9 +502,9 @@ contains
       if (ierr == nf90_noerr) then
 
         pio_gtype = '2Dur'
-        call ncread(ncid,'rufrc_bak',rufrc_bak(x_:x1,y0:y1,tindx),start=start)!,fname=ininame)
+        call ncread(ncid,'rufrc_bak',rufrc_bak(x_:x1,y0:y1,tindx),start=start)!,fname=inifile)
         pio_gtype = '2Dvr'
-        call ncread(ncid,'rvfrc_bak',rvfrc_bak(x0:x1,y_:y1,tindx),start=start)!,fname=ininame)
+        call ncread(ncid,'rvfrc_bak',rvfrc_bak(x0:x1,y_:y1,tindx),start=start)!,fname=inifile)
         if (ierr/=nf90_noerr) then
           call error_log%check_netcdf_status(&
           &netcdf_status=ierr,&
@@ -527,7 +527,7 @@ contains
     start=1; start(4)=record                                       ! 3D vars
 
     pio_gtype = '3Dur'
-    call ncread(ncid,vname(1,indxU),u(x_:x1,y0:y1,:,tindx),start=start)!,fname=ininame)
+    call ncread(ncid,vname(1,indxU),u(x_:x1,y0:y1,:,tindx),start=start)!,fname=inifile)
     do k=1,nz
       u(x_:x1,y0:y1,k,tindx) = u(x_:x1,y0:y1,k,tindx)*&
       &(umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
@@ -535,7 +535,7 @@ contains
     call exchange_xxx(u(:,:,:,tindx))
 
     pio_gtype = '3Dvr'
-    call ncread(ncid,vname(1,indxV),v(x0:x1,y_:y1,:,tindx),start=start)!,fname=ininame)
+    call ncread(ncid,vname(1,indxV),v(x0:x1,y_:y1,:,tindx),start=start)!,fname=inifile)
     do k=1,nz
       v(x0:x1,y_:y1,k,tindx) = v(x0:x1,y_:y1,k,tindx)*&
       &(vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
@@ -550,8 +550,8 @@ contains
       ierr=nf90_inq_varid(ncid, t_vname(itrc), varid)
       if (ierr == nf90_noerr) then
         pio_gtype = '3Drr'
-        call ncread(ncid,t_vname(itrc),t(x0:x1,y0:y1,:,tindx,itrc),start=start)!,fname=ininame)
-        do k=1,N
+        call ncread(ncid,t_vname(itrc),t(x0:x1,y0:y1,:,tindx,itrc),start=start)!,fname=inifile)
+        do k=1,nz
           t(x0:x1,y0:y1,k,tindx,itrc)=t(x0:x1,y0:y1,k,tindx,itrc)*rmask(x0:x1,y0:y1)
         enddo
         call exchange_xxx(t(:,:,:,tindx,itrc))
@@ -564,7 +564,7 @@ contains
           &trim(t_vname(itrc)),&
           &'''',&
           &'in netCDF file ''',&
-          &trim(ininame),&
+          &trim(inifile),&
           &'''',&
           &nf90_strerror(ierr)
           call error_log%check_netcdf_status(&
@@ -588,13 +588,13 @@ contains
     ierr=nf90_inq_varid(ncid, vname(1,indxHbls), varid)
     if (ierr == nf90_noerr) then
       pio_gtype = '2Drr'
-      call ncread(ncid,vname(1,indxHbls),hbls(x0:x1,y0:y1),start=start)!,fname=ininame)
+      call ncread(ncid,vname(1,indxHbls),hbls(x0:x1,y0:y1),start=start)!,fname=inifile)
       hbls(x0:x1,y0:y1)=hbls(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
       call exchange_xxx(hbls(:,:))
     else
       mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',&
       &'variable ''', trim(vname(1,indxHbls)), ''' not found in ''',&
-      &trim(ininame), ''' ==> initialized to zero state.'
+      &trim(inifile), ''' ==> initialized to zero state.'
 
     endif
 # endif
@@ -602,13 +602,13 @@ contains
     ierr=nf90_inq_varid(ncid, vname(1,indxHbbl), varid)
     if (ierr == nf90_noerr) then
       pio_gtype = '2Drr'
-      call ncread(ncid,vname(1,indxHbbl),hbbl(x0:x1,y0:y1),start=start)!,fname=ininame)
+      call ncread(ncid,vname(1,indxHbbl),hbbl(x0:x1,y0:y1),start=start)!,fname=inifile)
       hbbl(x0:x1,y0:y1)=hbbl(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
       call exchange_xxx(hbbl(:,:))                               ! confirmed needs an exchange, not sure why
     else
       mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',&
       &'variable ''', trim(vname(1,indxHbbl)), ''' not found in ''',&
-      &trim(ininame), ''' ==> initialized to zero state.'
+      &trim(inifile), ''' ==> initialized to zero state.'
 
     endif
 # endif

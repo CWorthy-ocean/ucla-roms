@@ -22,11 +22,11 @@ contains
 
 !----------------------------------------------------------------------
   subroutine init_arrays_mess_buffers  ![
-    use scalars, only: init, n
+    use scalars, only: init, nz
     implicit none
 
-    size_Z=16*(N+1); size_X=8*(N+1)*(Lm+4)   ! DevinD 8=2x4= 2 for margin, up to 4 different arrays
-    size_E=8*(N+1)*(Mm+4)                    ! size_Z = 4 in corner, up to 4 different arrays
+    size_Z=16*(nz+1); size_X=8*(nz+1)*(Lm+4)   ! DevinD 8=2x4= 2 for margin, up to 4 different arrays
+    size_E=8*(nz+1)*(Mm+4)                    ! size_Z = 4 in corner, up to 4 different arrays
 
     allocate( sn_NW(size_Z),   sendN(size_X),   sn_NE(size_Z),&
     &rv_NW(size_Z),   recvN(size_X),   rv_NE(size_Z),&

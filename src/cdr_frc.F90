@@ -13,7 +13,7 @@ module cdr_frc
   use roms_read_write, only:&
   &ncforce, ncforce3d, cdr_frc_opt,&
   &set_frc_data, store_string_att
-  use scalars, only: nt, deg2rad, n, pi
+  use scalars, only: nt, deg2rad, nz, pi
   use grid, only: rmask, lonr,latr
   use dimensions, only: nx, ny, nz
   use ocean_vars, only: hz, z_r0, hz0
@@ -35,7 +35,7 @@ module cdr_frc
   character(len=7) :: module_name="cdr_frc"
   character(len=1024) :: error_info=""
   character(len=256) :: cdr_file = 'cdr_release.nc'
-  integer(kind=4),public :: ncdr_parm=0
+  integer(kind=4),public :: cdr_ncdr_parm=0
 
   ! Forcing file settings:
   ! Use either volume flux [m3/s] and tracer concentrations [mmol/m3], or use tracer flux [mmol/s]
@@ -66,15 +66,15 @@ module cdr_frc
   type (ncforce3d) :: nc_cdrflx_3d_DIC = ncforce3d(&
   &vname='cdr_trcflx_3d_DIC', tname='cdr_time')
 
-  integer(kind=4) :: nz_chd = 0  ! Number of vertical layers in the forcing file, or, if upscaling,
+  integer(kind=4) :: cdr_nz_chd = 0  ! Number of vertical layers in the forcing file, or, if upscaling,
 ! the number of vertical layers in the child grid.
   logical, public :: cdr_source,&
-  &forcing_depth_profiles, forcing_3d, forcing_parameterized,&
-  &time_interpolation, relocate_to_wet_pts, cdr_volume
+  &cdr_forcing_depth_profiles, cdr_forcing_3d, cdr_forcing_parameterized,&
+  &cdr_time_interpolation, cdr_relocate_to_wet_pts, cdr_volume
 
-  namelist /CDR_FRC_SETTINGS/ cdr_file, ncdr_parm, nz_chd, cdr_source,&
-  &forcing_depth_profiles, forcing_3d, forcing_parameterized,&
-  &time_interpolation, relocate_to_wet_pts, cdr_volume
+  namelist /CDR_FRC_SETTINGS/ cdr_file, cdr_ncdr_parm, cdr_nz_chd, cdr_source,&
+  &cdr_forcing_depth_profiles, cdr_forcing_3d, cdr_forcing_parameterized,&
+  &cdr_time_interpolation, cdr_relocate_to_wet_pts, cdr_volume
 
 
   !!! (1) Parameterized releases
@@ -142,18 +142,18 @@ contains
 
     call MPI_Barrier(ocean_grid_comm, ierr)
 
-    if (forcing_depth_profiles) then
+    if (cdr_forcing_depth_profiles) then
 
       call set_frc_data(nc_cdrhz,var2d=cdr_hz)          ! set layer thicknesses for all cdrs at current time
       call set_frc_data(nc_cdrflx_dp,var3d=cdr_flx_dp)
       call error_log%abort_check()
       call create_cdr_vertical_structure
 
-    else if (forcing_3d) then
+    else if (cdr_forcing_3d) then
 
       call set_frc_data(nc_cdrflx_3d_ALK,var3d=cdr_flx_3d_ALK)
       call set_frc_data(nc_cdrflx_3d_DIC,var3d=cdr_flx_3d_DIC)
-    else if (forcing_parameterized) then
+    else if (cdr_forcing_parameterized) then
 
       if (cdr_volume) then
         call set_frc_data(nc_cdrvol,cdr_vol)                ! set cdr volume for all cdrs at current time
@@ -206,9 +206,9 @@ contains
     character(1) :: tmp1
 
     ! Check if we selected too many forcing types
-    if (forcing_depth_profiles) type_count = type_count+1
-    if (forcing_3d)             type_count = type_count+1
-    if (forcing_parameterized)  type_count = type_count+1
+    if (cdr_forcing_depth_profiles) type_count = type_count+1
+    if (cdr_forcing_3d)             type_count = type_count+1
+    if (cdr_forcing_parameterized)  type_count = type_count+1
 
     if (type_count==0) then
       call error_log%raise_global(&
@@ -217,7 +217,7 @@ contains
       &"but no forcing type selected")
     endif
 
-    if (forcing_3d) then
+    if (cdr_forcing_3d) then
       call init_cdr_frc_3d
     else
 
@@ -234,14 +234,14 @@ contains
         &context=module_name//"/"//sr_name)
       end if
 
-      if (forcing_depth_profiles) then
+      if (cdr_forcing_depth_profiles) then
         call init_cdr_frc_dp(ncid)
-      else if (forcing_parameterized) then
+      else if (cdr_forcing_parameterized) then
         call init_cdr_frc_parm(ncid)
       endif
 
       ierr = nf90_close(ncid)
-    endif ! forcing_3d
+    endif ! cdr_forcing_3d
     call error_log%abort_check()
     init_cdr_done = .true.
     if(mynode==0) write(*,'(/7x,A/)') 'cdr_frc: init cdr locations'
@@ -314,8 +314,8 @@ contains
     integer(kind=4) :: ierr
     integer(kind=4) :: dimid
 
-    allocate(cdr_flx_3d_ALK(GLOBAL_2D_ARRAY,N))
-    allocate(cdr_flx_3d_DIC(GLOBAL_2D_ARRAY,N))
+    allocate(cdr_flx_3d_ALK(GLOBAL_2D_ARRAY,nz))
+    allocate(cdr_flx_3d_DIC(GLOBAL_2D_ARRAY,nz))
     cdr_flx_3d_ALK(:,:,:) = 0
     cdr_flx_3d_DIC(:,:,:) = 0
 
@@ -332,11 +332,11 @@ contains
 
     ! local
 
-    ncdr = ncdr_parm
-    allocate(cdr_vol(ncdr_parm)) ; cdr_vol(:) = 0
-    allocate(cdr_trc(ncdr_parm,nt)); cdr_trc(:,:) = 0
-    allocate(cdr_vsc(ncdr_parm)); cdr_vsc(:) = 0
-    allocate(cdr_dep(ncdr_parm)); cdr_vsc(:) = 0
+    ncdr = cdr_ncdr_parm
+    allocate(cdr_vol(cdr_ncdr_parm)) ; cdr_vol(:) = 0
+    allocate(cdr_trc(cdr_ncdr_parm,nt)); cdr_trc(:,:) = 0
+    allocate(cdr_vsc(cdr_ncdr_parm)); cdr_vsc(:) = 0
+    allocate(cdr_dep(cdr_ncdr_parm)); cdr_vsc(:) = 0
     allocate(cdr_hsc(ncdr));      cdr_hsc(:) = 0
     allocate(cdr_lon(ncdr));      cdr_lon(:) = 0
     allocate(cdr_lat(ncdr));      cdr_lat(:) = 0
@@ -410,7 +410,7 @@ contains
 
 
       ! Handler for single-point release
-      if ((forcing_depth_profiles) .or. (cdr_hsc(icdr) == 0)) then
+      if ((cdr_forcing_depth_profiles) .or. (cdr_hsc(icdr) == 0)) then
         if (mynode == global_minloc(2)) then
           frac(lmi(1),lmi(2),icdr) = 1
           cidx = cidx+1
@@ -437,7 +437,7 @@ contains
         endif
       endif ! cdr_hsc(icdr) = 0
 
-      if (.not. relocate_to_wet_pts) then
+      if (.not. cdr_relocate_to_wet_pts) then
         ! Check for releases on land
         if ((frac(lmi(1),lmi(2),icdr) ==1 ) .and.&
         &(rmask(lmi(1),lmi(2))==0)) then
@@ -495,11 +495,11 @@ contains
             cdr_jloc(cidx) = j
 
             ! PARAMETERIZED VERTICAL STRUCTURE
-            if (forcing_depth_profiles) then
+            if (cdr_forcing_depth_profiles) then
               ! VERTICAL STRUCTURE FROM DATA
               ! Conservatively remap the fluxes from the source grid to the current grid
               do itrc=1,2
-                call remap_src_to_grid(nz_chd, cdr_hz(icdr,:), cdr_flx_dp(icdr,itrc,:), nz, Hz(i,j,:), cdr_flx_dp_remap)
+                call remap_src_to_grid(cdr_nz_chd, cdr_hz(icdr,:), cdr_flx_dp(icdr,itrc,:), nz, Hz(i,j,:), cdr_flx_dp_remap)
                 cdr_prf(cidx,cdr_inds(itrc),:) = cdr_flx_dp_remap(:)
               enddo
             else
@@ -532,7 +532,7 @@ contains
 
       ! Normalize cdr_prf to make sure injection rate exactly equals cdr_trcflx
       ! Only do this step for analytical forcing
-      if (forcing_parameterized) then
+      if (cdr_forcing_parameterized) then
         cdr_nloc(icdr) = cidx
 
         ! Do this once for ALK and again for DIC
@@ -565,7 +565,7 @@ contains
 
     character(len=30) :: string
 
-    if (forcing_depth_profiles) then
+    if (cdr_forcing_depth_profiles) then
       allocate(nc_cdrhz%vdata(ncdr,N_src,2))
       nc_cdrhz%ungridded = .true.
       nc_cdrhz%ungridded_forcing_file = cdr_file
@@ -574,7 +574,7 @@ contains
       nc_cdrflx_dp%ungridded = .true.
       nc_cdrflx_dp%ungridded_forcing_file = cdr_file
 
-      if (time_interpolation) then
+      if (cdr_time_interpolation) then
         nc_cdrhz%time_interpolation = .true.
         nc_cdrflx_dp%time_interpolation = .true.
       else
@@ -582,13 +582,13 @@ contains
         nc_cdrflx_dp%time_interpolation = .false.
       endif
 
-    else if (forcing_3d) then
-      allocate(nc_cdrflx_3d_ALK%vdata(GLOBAL_2D_ARRAY,N,2))
-      allocate(nc_cdrflx_3d_DIC%vdata(GLOBAL_2D_ARRAY,N,2))
+    else if (cdr_forcing_3d) then
+      allocate(nc_cdrflx_3d_ALK%vdata(GLOBAL_2D_ARRAY,nz,2))
+      allocate(nc_cdrflx_3d_DIC%vdata(GLOBAL_2D_ARRAY,nz,2))
       nc_cdrflx_3d_ALK%ungridded = .false.
       nc_cdrflx_3d_DIC%ungridded = .false.
 
-      if (time_interpolation) then
+      if (cdr_time_interpolation) then
         nc_cdrflx_3d_ALK%time_interpolation = .true.
         nc_cdrflx_3d_DIC%time_interpolation = .true.
       else
@@ -607,7 +607,7 @@ contains
         nc_cdrtrc%ungridded = .true.
         nc_cdrtrc%ungridded_forcing_file = cdr_file
 
-        if (time_interpolation) then
+        if (cdr_time_interpolation) then
           nc_cdrvol%time_interpolation = .true.
           nc_cdrtrc%time_interpolation = .true.
         else
@@ -619,7 +619,7 @@ contains
         nc_cdrflx%ungridded = .true.
         nc_cdrflx%ungridded_forcing_file = cdr_file
 
-        if (time_interpolation) then
+        if (cdr_time_interpolation) then
           nc_cdrflx%time_interpolation = .true.
         else
           nc_cdrflx%time_interpolation = .false.
@@ -665,7 +665,7 @@ contains
       enddo
     enddo
 
-    if (relocate_to_wet_pts) then
+    if (cdr_relocate_to_wet_pts) then
       do j=1,ny
         do i=1,nx
           if (rmask(i,j) == 0) then

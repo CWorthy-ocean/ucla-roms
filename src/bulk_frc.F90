@@ -3,7 +3,7 @@ module bulk_frc
 #include "cppdefs.opt"
   use param, only: mynode, lm, mm
   use roms_read_write, only:&
-  &ncforce, bulk_frc_opt, frcfile,&
+  &ncforce, bulk_frc_opt, frcfiles,&
   &nc_check_units, set_frc_data, store_string_att
   use dimensions, only: inode, jnode, npx, npy
   use error_handling_mod, only: error_log
@@ -12,6 +12,7 @@ module bulk_frc
   use pio, only : PIO_closefile
 #endif
   use instant_output, only: wrt_instant
+  use flux_frc, only: interp_flux_frc   ! merged into SURF_FRC_SETTINGS (owned by flux_frc)
   implicit none
 
   private  ! make all variable private to this module unless public specified
@@ -54,36 +55,36 @@ module bulk_frc
 
   real(kind=8),public,allocatable,dimension(:,:) :: wspd_used  ! wind speed at rho point (also used in BGC routines)
   logical, public :: interp_bulk_frc, check_bulk_frc_units
-  namelist /BULK_FRC_SETTINGS/ interp_bulk_frc, check_bulk_frc_units
+  namelist /SURF_FRC_SETTINGS/ interp_bulk_frc, check_bulk_frc_units, interp_flux_frc
 
   public init_arrays_bulk_frc
   public set_bulk_frc
-  public read_nml_bulk_frc
+  public read_nml_surf_frc
 contains
 
 !     ----------------------------------------------------------------------
-  subroutine read_nml_bulk_frc
+  subroutine read_nml_surf_frc
     use error_handling_mod, only: error_log
     use namelist_open_mod, only: open_namelist_file
-!     Read the "BULK_FRC_SETTINGS" section of the namelist file
+!     Read the "SURF_FRC_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
-    character(len=20) :: sr_name = "read_nml_bulk_frc"
+    character(len=20) :: sr_name = "read_nml_surf_frc"
     character(len=512) :: msg = ""
     ! Read namelist
     call open_namelist_file(namelist_unit)
-    read (unit=namelist_unit, nml=BULK_FRC_SETTINGS, iostat=ios, iomsg=msg)
+    read (unit=namelist_unit, nml=SURF_FRC_SETTINGS, iostat=ios, iomsg=msg)
 
     if (ios /= 0) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
-      &info='could not read BULK_FRC_SETTINGS'&
+      &info='could not read SURF_FRC_SETTINGS'&
       &//' section of namelist file: '&
       &//trim(msg)&
       &)
     end if
     close(namelist_unit)
 
-  end subroutine read_nml_bulk_frc
+  end subroutine read_nml_surf_frc
 
 
   subroutine init_arrays_bulk_frc  ![
@@ -185,9 +186,9 @@ contains
 
     if (check_bulk_frc_units) then
       if(mynode==0) print *,'Checking Bulk force units'
-      call nc_check_units(frcfile(nc_Q%ifile),nc_Q%vname,'kg/kg')
+      call nc_check_units(frcfiles(nc_Q%ifile),nc_Q%vname,'kg/kg')
       call nc_check_units(&
-      &frcfile(nc_prate%ifile),nc_prate%vname,'cm/day')
+      &frcfiles(nc_prate%ifile),nc_prate%vname,'cm/day')
       check_bulk_frc_units = .false.
     endif
 #ifdef PARALLEL_IO
@@ -249,7 +250,7 @@ contains
     use grid, only: rmask, umask, vmask
     use mixing, only: ieast, isalt, itemp, iwest, jnorth, jsouth
     use ocean_vars, only: u, v
-    use scalars, only: cp, g, n, nrhs, pi, rho0, vonkar, cmday2ms
+    use scalars, only: cp, g, nz, nrhs, pi, rho0, vonkar, cmday2ms
 
     implicit none
 
@@ -522,7 +523,7 @@ contains
         TairC=tair(i,j) ! DevinD
         TairK=TairC+273.16_8
 
-        TseaC=t(i,j,N,nrhs,itemp)
+        TseaC=t(i,j,nz,nrhs,itemp)
         TseaK=TseaC+273.16_8
 
         ! label(HUMIDITY) - chose between specific or relative humidity
@@ -844,7 +845,7 @@ contains
 ! degrees C.
 !---------------------------------------------------------------
 #ifdef SEA_ICE_NOFLUX
-        if( t(i,j,N,nrhs,itemp) .le. -1.8_8 ) then
+        if( t(i,j,nz,nrhs,itemp) .le. -1.8_8 ) then
           stflx(i,j,itemp)=0._8
 #   if defined LMD_KPP
           srflx(i,j)=0._8
@@ -905,7 +906,7 @@ contains
         ! u values averaged to rho points as sustr still at rho-point
         ! Can't do this at rho2u step below because then sustr(i-1) doesn't
         ! include 'u' addition.
-        sustr_r(i,j)=sustr_r(i,j) + cff*0.5_8*(u(i,j,N,nrhs)+u(i+1,j,N,nrhs))/rho0
+        sustr_r(i,j)=sustr_r(i,j) + cff*0.5_8*(u(i,j,nz,nrhs)+u(i+1,j,nz,nrhs))/rho0
         !! This rho0 should be worked into the coefficients
         !! Do a mask multiply at reading time for input vars ?
 
@@ -945,7 +946,7 @@ contains
         endif
 
         ! v values averaged to rho points as svstr still at rho-point
-        svstr_r(i,j)=svstr_r(i,j) + cff*0.5_8*(v(i,j,N,nrhs)+v(i,j+1,N,nrhs))/rho0
+        svstr_r(i,j)=svstr_r(i,j) + cff*0.5_8*(v(i,j,nz,nrhs)+v(i,j+1,nz,nrhs))/rho0
 
 # ifdef TAU_CORRECTION
         ! Correction to bring bulk forcing towards observed fluxes.

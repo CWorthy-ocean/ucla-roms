@@ -11,7 +11,7 @@ module flux_frc
   use tracers, only: t
   use surf_flux, only: sustr, svstr, stflx, srflx, sss, sst,&
   &apply_surf_field_corr, swflx
-  use scalars, only: cp, rho0, day2sec, n, nrhs, cmday2ms
+  use scalars, only: cp, rho0, day2sec, nz, nrhs, cmday2ms
   use roms_read_write, only: ncforce, flux_frc_opt, set_frc_data,&
   &store_string_att
   use dimensions, only: i0, i1, j0, j1
@@ -42,39 +42,12 @@ module flux_frc
   type (ncforce) :: nc_swrad  = ncforce(&
   &vname='swrad', tname='srf_time' ) ! swrad - surface short-wave radiation flux (input data in W/m^2)
 
-  logical, public :: interp_flux_frc
-  namelist /FLUX_FRC_SETTINGS/ interp_flux_frc
+  logical, public :: interp_flux_frc   ! read via SURF_FRC_SETTINGS in bulk_frc::read_nml_surf_frc
   public set_flux_frc
   public init_arrays_flux_frc
-  public read_nml_flux_frc
 contains
 
 !     ----------------------------------------------------------------------
-  subroutine read_nml_flux_frc
-    use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
-!     Read the "FLUX_FRC_SETTINGS" section of the namelist file
-    integer(kind=4) ::  namelist_unit, ios
-    character(len=20) :: sr_name = "read_nml_flux_frc"
-    character(len=512) :: msg = ""
-    ! Read namelist
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-
-    read (unit=namelist_unit, nml=FLUX_FRC_SETTINGS, iostat=ios, iomsg=msg)
-
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read FLUX_FRC_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
-    end if
-    close(namelist_unit)
-
-  end subroutine read_nml_flux_frc
-
   subroutine init_arrays_flux_frc  ![
     implicit none
 

@@ -34,7 +34,7 @@ contains
 ! computations.
 
     use param, only:&
-    &n, nnodes, ieast, iwest, jnorth, jsouth,&
+    &nz, nnodes, ieast, iwest, jnorth, jsouth,&
     &mynode, nsub_e, nsub_x, ocean_grid_comm,&
     &np_xi, np_eta
     use comm_vars, only:&
@@ -64,7 +64,7 @@ contains
           my_rx0=max(my_rx0, abs( (z_w(i,j,0)-z_w(i-1,j,0))&
           &/(z_w(i,j,0)+z_w(i-1,j,0))&
           &))
-          do k=1,N
+          do k=1,nz
             my_rx1=max(my_rx1, abs(&
             &(z_w(i,j,k)-z_w(i-1,j,k)+z_w(i,j,k-1)-z_w(i-1,j,k-1))&
             &/(z_w(i,j,k)+z_w(i-1,j,k)-z_w(i,j,k-1)-z_w(i-1,j,k-1))&
@@ -84,7 +84,7 @@ contains
           my_rx0=max(my_rx0, abs( (z_w(i,j,0)-z_w(i,j-1,0))&
           &/(z_w(i,j,0)+z_w(i,j-1,0))&
           &))
-          do k=1,N
+          do k=1,nz
             my_rx1=max(my_rx1, abs(&
             &(z_w(i,j,k)-z_w(i,j-1,k)+z_w(i,j,k-1)-z_w(i,j-1,k-1))&
             &/(z_w(i,j,k)+z_w(i,j-1,k)-z_w(i,j,k-1)-z_w(i,j-1,k-1))&

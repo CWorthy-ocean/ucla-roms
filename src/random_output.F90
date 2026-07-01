@@ -30,10 +30,10 @@ module random_output
 
   private
 
-  real(kind=8)    :: output_period = 3600 ! in seconds
-  integer(kind=4) :: nrpf   = 10    ! number of frames per file
+  real(kind=8)    :: output_period_random = 3600 ! in seconds
+  integer(kind=4) :: nrpf_random   = 10    ! number of frames per file
   logical,public :: do_random
-  namelist /RANDOM_OUTPUT_SETTINGS/ output_period, nrpf, do_random
+  namelist /RANDOM_OUTPUT_SETTINGS/ output_period_random, nrpf_random, do_random
 
   character(len=13) :: module_name = "random_output"
   real(kind=8)    :: output_time = 0
@@ -66,7 +66,7 @@ contains
       &)
     end if
     close(namelist_unit)
-    record = nrpf
+    record = nrpf_random
   end subroutine read_nml_random
 
   subroutine init_random ![
@@ -133,9 +133,9 @@ contains
 
     output_time = output_time + dt
 
-    if (output_time>=output_period) then
+    if (output_time>=output_period_random) then
 
-      if (record==nrpf) then
+      if (record==nrpf_random) then
 #ifdef PARALLEL_IO
         if (mynode == 0) then
           call create_file('_rnd',fname, nonode=.true.)

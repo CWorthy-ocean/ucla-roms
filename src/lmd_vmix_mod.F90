@@ -61,14 +61,14 @@ contains
     use param, only:&
     &ieast, isalt, itemp, iwest, jnorth, jsouth, np_xi, np_eta
     use ocean_vars, only: z_r, u, v, z_w
-    use scalars, only: n, akv_bak, pi, akt_bak
+    use scalars, only: nz, akv_bak, pi, akt_bak
     use dimensions, only: inode, jnode
 
     implicit none
 
     integer(kind=4)  :: tind
     integer(kind=4) istr,iend,jstr,jend, i,j,k
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:N) :: Kv,Kt,Ks, Rig
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: Kv,Kt,Ks, Rig
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: FX,FE,FE1
 
     real(kind=8) nu_sx, cff,cff1, dudz,dvdz
@@ -162,7 +162,7 @@ contains
 ! Compute local Richardson number:   ! shear  (du/dz)^2+(dv/dz)^2  at
 !-------- ----- ---------- -------   ! horizontal RHO- and vertical
 !                                    ! W-points. Then compute gradient
-    do k=1,N-1                     ! Richardson number (already
+    do k=1,nz-1                     ! Richardson number (already
 # ifdef LMD_RIMIX
       do j=J_EXT_RANGE             ! divided by its critical value.
       do i=I_EXT_RANGE
@@ -372,7 +372,7 @@ enddo
 enddo     ! <-- k
 
 ! Supress mixing away near the bottom.
-do k=1,N-1
+do k=1,nz-1
   do j=jstr,jend
     do i=istr,iend
       dist = z_w(i,j,k)-z_w(i,j,0)
@@ -395,16 +395,16 @@ enddo
 
 do j=jstr,jend
   do i=istr,iend
-    Kv(i,j,N)=Kv(i,j,N-1) + Akv_bak
-    Ks(i,j,N)=Ks(i,j,N-1) + Akt_bak(isalt)
-    Kt(i,j,N)=Kt(i,j,N-1) + Akt_bak(itemp)
+    Kv(i,j,nz)=Kv(i,j,nz-1) + Akv_bak
+    Ks(i,j,nz)=Ks(i,j,nz-1) + Akt_bak(isalt)
+    Kt(i,j,nz)=Kt(i,j,nz-1) + Akt_bak(itemp)
     Kv(i,j,0)=Kv(i,j,  1) + Akv_bak
     Ks(i,j,0)=Ks(i,j,  1) + Akt_bak(isalt)
     Kt(i,j,0)=Kt(i,j,  1) + Akt_bak(itemp)
   enddo
 enddo
  ! vertical smoothing of interior mixing
-do k=1,N-1
+do k=1,nz-1
   do j=jstr,jend
     do i=istr,iend
       Kv(i,j,k)=0.5_8*Kv(i,j,k)+0.25_8*Kv(i,j,k-1)+0.25_8*Kv(i,j,k+1) + Akv_bak
@@ -417,7 +417,7 @@ enddo
 
 ! Finalize: Copy everything into shared arrays:
 
-do k=1,N-1
+do k=1,nz-1
   do j=jstr,jend
     do i=istr,iend
 !           Akv(i,j,k)=Kv(i,j,k)

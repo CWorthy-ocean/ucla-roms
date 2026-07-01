@@ -57,7 +57,7 @@ module extract_data
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u, hz_v
   use scalars, only: dt, knew, nstp, time
   use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
-  &nt_passive, mynode, lm, mm, N, ocean_grid_comm
+  &nt_passive, mynode, lm, mm, nz, ocean_grid_comm
   use scoord, only: theta_s, theta_b, hc
   use calc_pflx_mod, only:  up, vp
   use basic_output, only: &
@@ -84,7 +84,7 @@ module extract_data
   implicit none
   private
 
-  real(kind=8),public              :: extract_period = 0._8   ! output period (seconds)
+  real(kind=8),public              :: output_period_extract = 0._8   ! output period (seconds)
   character(len=256)        :: extract_file = 'sample_edata.nc'
   integer(kind=4),public :: nrpf_extract = 0    ! number of records per output file
   character(len=256)        :: extract_root_name
@@ -98,7 +98,7 @@ module extract_data
   real(kind=8)     :: hc_chd      = 250.0_8
   logical, public  :: do_extract
 
-  namelist /EXTRACT_DATA_SETTINGS/ extract_period, extract_file,&
+  namelist /EXTRACT_DATA_SETTINGS/ output_period_extract, extract_file,&
   &nrpf_extract, LLm_chd, MMm_chd, N_chd, theta_s_chd, theta_b_chd, hc_chd, do_extract, extract_root_name
 
   integer(kind=4),parameter        :: edat_prec = nf90_double  ! Precision of output variables (nf90_float/nf90_doub
@@ -207,7 +207,7 @@ contains
 
 
     if (wrt_file_rst .and. do_extract) then
-      extract_newfile_freq = nrpf_extract * extract_period
+      extract_newfile_freq = nrpf_extract * output_period_extract
 
       if (mod(output_period_rst,extract_newfile_freq) /= 0) then
         write(error_info,*) "Extract data frequency = ", extract_newfile_freq,&
@@ -259,7 +259,7 @@ contains
     call read_extraction_objects
     call error_log%abort_check()
 
-    if ((N == N_chd) .and. (theta_s == theta_s_chd) .and. (theta_b == theta_b_chd) .and. (hc == hc_chd)) then
+    if ((nz == N_chd) .and. (theta_s == theta_s_chd) .and. (theta_b == theta_b_chd) .and. (hc == hc_chd)) then
       parent_child_grid_mismatch = .false.
       if (mynode == 0) then
         mpi_nonexit_warn write(*,*) 'init_extract_data :: Parent ',&
@@ -478,6 +478,12 @@ contains
         child_dimsize_v(4) = MMm_chd-1
         child_bnd_name(4) = 'west'
       endif
+
+      ierr = nf90_get_att(ncid,iobj,'output_period',output_period_extract)
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &info="error when getting `output_period` attribute",&
+      &context=module_name//"/"//sr_name)
+      call error_log%abort_check()
 
 !      ierr = nf90_get_att(ncid,iobj,'output_period',extract_period)
 !      call error_log%check_netcdf_status(netcdf_status=ierr,&
@@ -723,7 +729,7 @@ contains
 
     otime = otime + dt
 
-    if (otime>=extract_period) then
+    if (otime>=output_period_extract) then
 
       if (obj(1)%record==nrpf_extract) then
         call create_edata_file(fname)
@@ -865,7 +871,7 @@ contains
             call interpolate(t(:,:,:,nstp,itemp),obj(i)%vari,coef,ip,jp)
             if (parent_child_grid_mismatch) then
               do j=1,obj(i)%np
-                call remap_src_to_grid(N, obj(i)%Hz_par(j,:),&
+                call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
                 &obj(i)%vari(j,:), N_chd,&
                 &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
               enddo
@@ -890,7 +896,7 @@ contains
             call interpolate(t(:,:,:,nstp,isalt),obj(i)%vari,coef,ip,jp)
             if (parent_child_grid_mismatch) then
               do j=1,obj(i)%np
-                call remap_src_to_grid(N, obj(i)%Hz_par(j,:),&
+                call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
                 &obj(i)%vari(j,:), N_chd,&
                 &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
               enddo
@@ -916,7 +922,7 @@ contains
               call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
               if (parent_child_grid_mismatch) then
                 do j=1,obj(i)%np
-                  call remap_src_to_grid(N, obj(i)%Hz_par(j,:),&
+                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
                   &obj(i)%vari(j,:), N_chd,&
                   &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
@@ -939,7 +945,7 @@ contains
             call interpolate(Wvl(-1:nx+2,-1:ny+2,1:nz),obj(i)%vari,coef,ip,jp)
             if (parent_child_grid_mismatch) then
               do j=1,obj(i)%np
-                call remap_src_to_grid(N, obj(i)%Hz_par(j,:),&
+                call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
                 &obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:),&
                 &obj(i)%vari_chd(j,:))
               enddo
@@ -1002,7 +1008,7 @@ contains
             enddo
             if (parent_child_grid_mismatch) then
               do j=1,obj(i)%np
-                call remap_src_to_grid(N, obj(i)%Hz_par_u(j,:),&
+                call remap_src_to_grid(nz, obj(i)%Hz_par_u(j,:),&
                 &obj(i)%vari(j,:), N_chd,&
                 &obj(i)%Hz_chd_u(j,:), obj(i)%vari_chd(j,:))
 !!! ADDED BY CURSOR
@@ -1104,7 +1110,7 @@ contains
             enddo
             if (parent_child_grid_mismatch) then
               do j=1,obj(i)%np
-                call remap_src_to_grid(N, obj(i)%Hz_par_v(j,:),&
+                call remap_src_to_grid(nz, obj(i)%Hz_par_v(j,:),&
                 &obj(i)%vari(j,:), N_chd,&
                 &obj(i)%Hz_chd_v(j,:), obj(i)%vari_chd(j,:))
               enddo

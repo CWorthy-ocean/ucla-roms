@@ -146,7 +146,8 @@ module roms_read_write
 
   ! from old ncvars **************:
   integer(kind=4), parameter, public :: max_frc_files=360
-  integer(kind=4), public :: max_frc, ncfrc(max_frc_files), nrrec
+  integer(kind=4), public :: max_frc, ncfrc(max_frc_files)
+  integer(kind=4), public :: nrrec = 2   ! IC record index: hardcoded, no longer namelist-configurable
   ! Horizontal Grid Type Codes =  0,1,2,3 for RHO-, U-, V-, PSI-points
   integer(kind=4), parameter, public :: r_var=0, u_var=1, v_var=2, q_var=3
   !            Horizontal array dimensions in netCDF files. In the case
@@ -169,17 +170,17 @@ module roms_read_write
 
   character, public :: date_str*44
   character(len=80), public :: title = "my roms run"
-!     character(len=max_name_size), public :: ininame, grdname, frcfile(max_frc_files)
-  character(len=max_name_size), public :: ininame = ""
+!     character(len=max_name_size), public :: inifile, grdname, frcfiles(max_frc_files)
+  character(len=max_name_size), public :: inifile = ""
   character(len=max_name_size), public ::&
-  &frcfile(max_frc_files) = ""
+  &frcfiles(max_frc_files) = ""
   character(len=max_name_size), public ::&
   &frcfile_full(max_frc_files) = ""
   namelist /SIMULATION_NAME_SETTINGS/ output_root_name, title
 #ifndef ANA_INITIAL
-  namelist /INITIAL_CONDITIONS/ nrrec, ininame
+  namelist /INITIAL_CONDITIONS/ inifile
 #endif
-  namelist /FORCING_FILES/ frcfile
+  namelist /FORCING_FILES/ frcfiles
 
   public :: insert_nodes
   public :: findstr,append_date_node
@@ -251,26 +252,26 @@ contains
     end if
 
 
-    lstr = lenstr(ininame)
+    lstr = lenstr(inifile)
 
 # if defined MPI && defined PARALLEL_FILES
 #ifndef PARALLEL_IO
-    call insert_node(ininame, lstr, mynode, nsize)
+    call insert_node(inifile, lstr, mynode, nsize)
 #endif
 # endif
-    open(newunit=testunit, file=trim(ininame), status='old',&
+    open(newunit=testunit, file=trim(inifile), status='old',&
     &iostat=ios)
     if (ios /= 0) then
       call error_log%raise_from_rank(&
-      &info="Cannot find input file '" // trim(ininame) // "'",&
+      &info="Cannot find input file '" // trim(inifile) // "'",&
       &context=module_name)
       return
     end if
     close(testunit)
-    ininame = trim(ininame)
+    inifile = trim(inifile)
     mpi_master_only write(*,'(1x,A,I3,2x,3A)')&
     &'initial condition :: rec =', nrrec,&
-    &'file = ''', trim(ininame), ''''
+    &'file = ''', trim(inifile), ''''
 
 #endif /*ANA_INITIAL*/
 !==========================================================================================
@@ -296,7 +297,7 @@ contains
 !  Read filenames until a blank line or max_frc_files reached.
     do while (lstr > 0 .and. max_frc < max_frc_files)
 
-      fname = trim(frcfile(max_frc+1))
+      fname = trim(frcfiles(max_frc+1))
       lstr = lenstr(trim(fname))
       if (lstr > 0) then
 # if defined MPI && defined PARALLEL_FILES
@@ -322,16 +323,16 @@ contains
         if (max_frc < max_frc_files) then
 
           max_frc = max_frc + 1
-          frcfile(max_frc) = trim(fname)
+          frcfiles(max_frc) = trim(fname)
 ! Write file info to output stream
 # ifdef MPI_SILENT_MODE
           if (mynode == 0) then
 # endif
             if (max_frc == 1) then
               write(*,'(1x,2A)') 'forcing data file(s): ',&
-              &trim(frcfile(max_frc))
+              &trim(frcfiles(max_frc))
             else
-              write(*,'(23x,A)') trim(frcfile(max_frc))
+              write(*,'(23x,A)') trim(frcfiles(max_frc))
             endif
 
 ! Add to attributes
@@ -339,7 +340,7 @@ contains
           end if
 # endif
           call store_string_att(force_files,&
-          &frcfile(max_frc)(1:lstr))
+          &frcfiles(max_frc)(1:lstr))
 
         else !(if max_frc < max_frc_files )
           write(error_info,*)&
@@ -614,7 +615,7 @@ contains
       var1d = cff1*nc%vdata(:,1,it1) + cff2*nc%vdata(:,1,it2)
 
       if (vtimes(it1)>modtime+dt.or.vtimes(it2)<modtime-dt) then
-        write(error_info,*) 'set_frc_data :: ', nc%vname,frcfile(nc%ifile),&
+        write(error_info,*) 'set_frc_data :: ', nc%vname,frcfiles(nc%ifile),&
         &'set_frc_data :: ', vtimes(it1), vtimes(it2), modtime,&
         &". time interpolation_error"
         call error_log%raise_global(&
@@ -702,7 +703,7 @@ contains
       var2d = cff1*nc%vdata(:,:,it1) + cff2*nc%vdata(:,:,it2)
 
       if (vtimes(it1)>modtime+dt.or.vtimes(it2)<modtime-dt) then
-        write(error_info,*) 'set_frc_data :: ', nc%vname,frcfile(nc%ifile),&
+        write(error_info,*) 'set_frc_data :: ', nc%vname,frcfiles(nc%ifile),&
         &'set_frc_data :: ', vtimes(it1), vtimes(it2), modtime,&
         &". time interpolation_error"
         call error_log%raise_global(&
@@ -787,7 +788,7 @@ contains
       var3d = cff1*nc%vdata(:,:,:,it1) + cff2*nc%vdata(:,:,:,it2)
 
       if (vtimes(it1)>modtime+dt.or.vtimes(it2)<modtime-dt) then
-        write(error_info,*) 'set_frc_data :: ', nc%vname,frcfile(nc%ifile),&
+        write(error_info,*) 'set_frc_data :: ', nc%vname,frcfiles(nc%ifile),&
         &'set_frc_data :: ', vtimes(it1), vtimes(it2), modtime,&
         &". time interpolation error"
         call error_log%raise_global(&
@@ -873,7 +874,7 @@ contains
       var2d = cff1*nc%vdata(:,:,it1) + cff2*nc%vdata(:,:,it2)
 
       if (vtimes(it1)>modtime+dt.or.vtimes(it2)<modtime-dt) then
-        write(error_info,*) 'set_frc_data :: ', nc%vname,frcfile(nc%ifile),&
+        write(error_info,*) 'set_frc_data :: ', nc%vname,frcfiles(nc%ifile),&
         &'set_frc_data :: ', vtimes(it1), vtimes(it2), modtime,&
         &". time interpolation error"
         call error_log%raise_global(&
@@ -947,12 +948,12 @@ contains
           &info=("error opening "//ungridded_filename))
         end if
       else
-        ierr = nf90_open(frcfile(ifile), nf90_nowrite, ncid)
+        ierr = nf90_open(frcfiles(ifile), nf90_nowrite, ncid)
         if (ierr/=nf90_noerr) then
           call error_log%check_netcdf_status(&
           &netcdf_status=ierr,&
           &context=module_name//"/"//sr_name,&
-          &info=("error opening "//frcfile(ifile)))
+          &info=("error opening "//frcfiles(ifile)))
         endif
       end if
       ierr = nf90_inq_varid(ncid, vname,vid)                       ! check if this file contains the variable
@@ -1178,14 +1179,14 @@ contains
       &nc%times(it) )
 #endif
 
-!      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+!      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
       if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
         pio_file_is_open = 1
       endif
 #else
-      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #endif
       ! The size of vdata must match the size of the data in the
       ! file. Ensure this in the allocation of vdata
@@ -1293,14 +1294,14 @@ contains
       call find_new_record(vname,tname,modtime,ifile,irec,&
       &nc%times(it) )
 #endif
-!      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+!      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
       if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
         pio_file_is_open = 1
       endif
 #else
-      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #endif
       call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,:,it),(/1,1,1,irec/))
       ! add force file info to output nc
@@ -1381,15 +1382,15 @@ contains
     &nc%times(it) )
 #endif
 
-!      ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+!      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
     if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
-      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfile(ifile))
-      pio_frcfile = frcfile(ifile)
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
+      pio_frcfile = frcfiles(ifile)
       pio_file_is_open = 1
     endif
 #else
-    ierr=nf90_open(frcfile(ifile),nf90_nowrite, ncid)
+    ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #endif
     if (nc%coarse>0) then
       if (.not.allocated(cdata)) then
@@ -1822,7 +1823,7 @@ contains
     integer(kind=4)           :: var_id
     character(len=20) :: file_var_units ! variable units in forcing file
 
-!     ierr = nf90_open(frcfile(ifile), nf90_nowrite, ncid)
+!     ierr = nf90_open(frcfiles(ifile), nf90_nowrite, ncid)
     ierr = nf90_open(file_name,nf90_nowrite,ncid)
     if (ierr/=nf90_noerr) then
       call error_log%check_netcdf_status(netcdf_status=ierr,&

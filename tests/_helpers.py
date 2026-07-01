@@ -58,26 +58,26 @@ def create_test_namelist_dict(input_dir: Path) -> dict:
     this_nml["PARAM_SETTINGS"]["NP_ETA"] = 2
     this_nml["PARAM_SETTINGS"]["LLm"] = 39
     this_nml["PARAM_SETTINGS"]["MMm"] = 19
-    this_nml["PARAM_SETTINGS"]["N"] = 10
+    this_nml["PARAM_SETTINGS"]["nz"] = 10
 
-    this_nml["INITIAL_CONDITIONS"]["ininame"] = str(
+    this_nml["INITIAL_CONDITIONS"]["inifile"] = str(
         input_dir / "example_input_bgc_initial_conditions.nc"
     )
 
-    this_nml["FORCING_FILES"]["frcfile"] = [
+    this_nml["FORCING_FILES"]["frcfiles"] = [
         str(input_dir / "example_input_boundary_forcing.nc"),
         str(input_dir / "example_input_surface_flux_forcing.nc"),
     ]
 
     this_nml["CALC_PFLX_SETTINGS"]["calc_pflx"] = False
-    this_nml["CALC_PFLX_SETTINGS"]["timescale"] = 0
+    this_nml["CALC_PFLX_SETTINGS"]["pflx_timescale"] = 0
 
     this_nml["BASIC_OUTPUT_SETTINGS"]["wrt_file_his"] = True
     this_nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 800
 
     this_nml["BGC_SETTINGS"]["wrt_bgc_his"] = True
     this_nml["BGC_SETTINGS"]["interp_bgc_frc"] = True
-    this_nml["BGC_SETTINGS"]["output_period_his"] = 400
+    this_nml["BGC_SETTINGS"]["output_period_bgc_his"] = 400
 
     this_nml["STDOUT_DIAG_SETTINGS"]["code_check_mode"] = True
 

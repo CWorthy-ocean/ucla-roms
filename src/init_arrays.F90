@@ -53,7 +53,7 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
   use work_mod, only: init_arrays_work_mod
   use boundary, only: init_arrays_boundary
   use buffer, only: init_arrays_buffer
-  use param, only: ieast, iwest, jnorth, jsouth, n
+  use param, only: ieast, iwest, jnorth, jsouth, nz
   use mess_buffers, only: init_arrays_mess_buffers
   use flux_frc, only: init_arrays_flux_frc
   use pipe_frc, only: init_arrays_pipes, pipe_source
@@ -116,7 +116,7 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
   call init_arrays_eos_vars
 
 #ifdef SOLVE3D
-  do k=0,N
+  do k=0,nz
     do j=jstrR,jendR
       do i=istrR,iendR
         We(i,j,k)=init0

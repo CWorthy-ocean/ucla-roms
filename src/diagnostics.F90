@@ -14,7 +14,7 @@ module diagnostics
   use ocean_vars, only: flxu, flxv, u, v, z_w, hz, wi, we
   use scalars, only: nt
   use scalars, only:&
-  &dt, iic, tdays, time, nrhs, n, nnew
+  &dt, iic, tdays, time, nrhs, nz, nnew
   use nc_read_write, only: ncwrite, ncread
   use roms_read_write, only:&
   &diag_avg_output, diagnostic_opt, bfx,&
@@ -39,10 +39,10 @@ module diagnostics
   private
 
   character(len=11) :: module_name = "diagnostics"
-  integer(kind=4)          :: output_period =  0       ! output period
-  integer(kind=4)          :: nrpf          =  0        ! total recs per file
+  integer(kind=4)          :: output_period_diag =  0       ! output period
+  integer(kind=4)          :: nrpf_diag          =  0        ! total recs per file
   logical, public  :: diag_avg, diag_uv, diag_trc
-  namelist /DIAGNOSTICS_SETTINGS/ output_period, nrpf,&
+  namelist /DIAGNOSTICS_SETTINGS/ output_period_diag, nrpf_diag,&
   &diag_avg, diag_uv, diag_trc
 
   integer(kind=4), parameter         :: diag_prec     = nf90_double ! Precision of output variables (nf90_float/nf90
@@ -188,7 +188,7 @@ contains
       &)
     end if
     close(namelist_unit)
-    record = nrpf
+    record = nrpf_diag
   end subroutine read_nml_diagnostics
 
 ! ----------------------------------------------------------------------
@@ -252,7 +252,7 @@ contains
     allocate( flx( GLOBAL_2D_ARRAY ) )       ! 4th order advection arrays. Used both uv & tracer, so always needed.
     allocate( FX4( GLOBAL_2D_ARRAY ) )       ! 4th order advection arrays. Used both uv & tracer, so always needed.
     allocate( FY4( GLOBAL_2D_ARRAY ) )       ! called within k loop so only need 2D slice per k
-    allocate( FZ4( GLOBAL_1DX_ARRAY, 0:N ) ) ! both u/v/tracer. vertical flux at z_w level.
+    allocate( FZ4( GLOBAL_1DX_ARRAY, 0:nz ) ) ! both u/v/tracer. vertical flux at z_w level.
     FZ4(:,0) = 0  ! top and bottom vertical fluxes are always zero
     FZ4(:,nz)= 0
 
@@ -473,13 +473,13 @@ contains
 
     ! inputs
     integer(kind=4),                                       intent(in) :: istr, iend, jstr, jend
-    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N), intent(in) :: DC
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:N), intent(in) :: rw
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz), intent(in) :: DC
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz), intent(in) :: rw
 
     ! local
     integer(kind=4) :: i, j, k
 
-    do k=1,N
+    do k=1,nz
       do j=jstr,jend
         do i=istr,iend
           Wdiag(i,j,k,iwprsgr)   = Wdiag(i,j,k,iwprsgr)   * DC(i,0)  ! need to convert to dz*w now that we have DC
@@ -503,7 +503,7 @@ contains
     integer(kind=4) :: i, j, k
 
     ! This could well be wrong. Need to confirm with Jeroen.
-    do k=1,N-1
+    do k=1,nz-1
       do j=jstr,jend  ! I changed istr to jstr...
         do i=Istr,Iend
           Wdiag(i,j,k,iwuv2) = w(i,j,k,nnew) * 0.5_8*( Hz(i,j,k+1)+Hz(i,j,k) ) - w_prev(i,j,k)
@@ -516,7 +516,7 @@ contains
     ! ifort compiler report could tell me if it fuses these loops...
     do j=jstr,jend  ! I changed istr to jstr...
       do i=Istr,Iend
-        Wdiag(i,j,N,iwuv2) = w(i,j,N,nnew) * Hz(i,j,N) - w_prev(i,j,N)
+        Wdiag(i,j,nz,iwuv2) = w(i,j,nz,nnew) * Hz(i,j,nz) - w_prev(i,j,nz)
       enddo
     enddo
 
@@ -536,42 +536,42 @@ contains
 
     if (WESTERN_EDGE) then
       i=istr-1
-      do k=1,N-1            ! N-1 because of k+1
+      do k=1,nz-1            ! N-1 because of k+1
         do j=jstr-1,jend+1
           Wdiag(i,j,k,iwbc) = w(i,j,k,nnew) * 0.5_8*(Hz(i,j,k+1)+Hz(i,j,k)) - wdz_old(i,j,k) ! w_prev is already u_cur
         enddo
       enddo
-      Wdiag(i,j,N,iwbc) = w(i,j,N,nnew) * Hz(i,j,N) - wdz_old(i,j,N)
+      Wdiag(i,j,nz,iwbc) = w(i,j,nz,nnew) * Hz(i,j,nz) - wdz_old(i,j,nz)
     endif
 
     if (EASTERN_EDGE) then
       i=iend+1
-      do k=1,N-1
+      do k=1,nz-1
         do j=jstr-1,jend+1
           Wdiag(i,j,k,iwbc) = w(i,j,k,nnew) * 0.5_8*(Hz(i,j,k+1)+Hz(i,j,k)) - wdz_old(i,j,k) ! w_prev is already u_cur
         enddo
       enddo
-      Wdiag(i,j,N,iwbc) = w(i,j,N,nnew) * Hz(i,j,N) - wdz_old(i,j,N)
+      Wdiag(i,j,nz,iwbc) = w(i,j,nz,nnew) * Hz(i,j,nz) - wdz_old(i,j,nz)
     endif
 
     if (SOUTHERN_EDGE) then
       j=jstr-1
-      do k=1,N-1
+      do k=1,nz-1
         do i=istr-1,iend+1
           Wdiag(i,j,k,iwbc) = w(i,j,k,nnew) * 0.5_8*(Hz(i,j,k+1)+Hz(i,j,k)) - wdz_old(i,j,k) ! w_prev is already u_cur
         enddo
       enddo
-      Wdiag(i,j,N,iwbc) = w(i,j,N,nnew) * Hz(i,j,N) - wdz_old(i,j,N)
+      Wdiag(i,j,nz,iwbc) = w(i,j,nz,nnew) * Hz(i,j,nz) - wdz_old(i,j,nz)
     endif
 
     if (NORTHERN_EDGE) then
       j=jend+1
-      do k=1,N-1
+      do k=1,nz-1
         do i=istr-1,iend+1
           Wdiag(i,j,k,iwbc) = w(i,j,k,nnew) * 0.5_8*(Hz(i,j,k+1)+Hz(i,j,k)) - wdz_old(i,j,k) ! w_prev is already u_cur
         enddo
       enddo
-      Wdiag(i,j,N,iwbc) = w(i,j,N,nnew) * Hz(i,j,N) - wdz_old(i,j,N)
+      Wdiag(i,j,nz,iwbc) = w(i,j,nz,nnew) * Hz(i,j,nz) - wdz_old(i,j,nz)
     endif
 
   end subroutine set_diags_w_at_bc  !]
@@ -585,7 +585,7 @@ contains
     ! local
     integer(kind=4) :: i, j, k, tmp
 
-    do k=1,N-1
+    do k=1,nz-1
       do j=jstrR,jendR
         do i=istrR,iendR
           ! Full loop ranges since u-change over every point including bry.
@@ -598,9 +598,9 @@ contains
 
     do j=jstrR,jendR
       do i=istrR,iendR
-        tmp = w(i,j,N,nnew) * Hz(i,j,N)
-        w_dif(i,j,N)   = tmp - wdz_old(i,j,N)
-        wdz_old(i,j,N) = tmp
+        tmp = w(i,j,nz,nnew) * Hz(i,j,nz)
+        w_dif(i,j,nz)   = tmp - wdz_old(i,j,nz)
+        wdz_old(i,j,nz) = tmp
       enddo
     enddo
 
@@ -621,7 +621,7 @@ contains
     ! local
     integer(kind=4) :: i,j,k
 
-    do k=1,N
+    do k=1,nz
       do j=1,ny
         do i=1,nx
           Tdiag(i,j,k,tmixx,td) = t(i,j,k,nnew,itrc)
@@ -776,7 +776,7 @@ contains
 
     output_time = output_time + dt
 
-    if (output_time>=output_period) then  ! time for an output
+    if (output_time>=output_period_diag) then  ! time for an output
 
       ! store averaging timescale in diagnostic output file
       if (diag_avg) then
@@ -787,7 +787,7 @@ contains
 
       output_time= 0
 
-      if (record==nrpf) then
+      if (record==nrpf_diag) then
         call create_diagnostics_file(fname)
         record = 0
       endif

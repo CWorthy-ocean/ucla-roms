@@ -220,8 +220,8 @@ if (river_source) then
   do j=jstr,jend
     do i=istr,iend+1
       if (abs(riv_uflx(i,j)).gt.1e-3) then
-        riv_depth = 0.5_8*( z_w(i-1,j,N)-z_w(i-1,j,0)&
-        &+ z_w(i  ,j,N)-z_w(i  ,j,0) )
+        riv_depth = 0.5_8*( z_w(i-1,j,nz)-z_w(i-1,j,0)&
+        &+ z_w(i  ,j,nz)-z_w(i  ,j,0) )
         iriver = nint(riv_uflx(i,j)/10)
         riv_uvel = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)/riv_depth
         FX(i,j)= riv_trc(iriver,itrc)*&
@@ -233,8 +233,8 @@ if (river_source) then
   do j=jstr,jend+1
     do i=istr,iend
       if (abs(riv_vflx(i,j)).gt.1e-3) then
-        riv_depth = 0.5_8*( z_w(i,j-1,N)-z_w(i,j-1,0)&
-        &+ z_w(i  ,j,N)-z_w(i  ,j,0) )
+        riv_depth = 0.5_8*( z_w(i,j-1,nz)-z_w(i,j-1,0)&
+        &+ z_w(i  ,j,nz)-z_w(i  ,j,0) )
         iriver = nint(riv_vflx(i,j)/10)
         riv_vvel = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)/riv_depth
         FE(i,j)= riv_trc(iriver,itrc)*&

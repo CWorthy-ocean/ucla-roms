@@ -153,7 +153,7 @@ contains
     use mixing, only: bvf
 #endif
     use ocean_vars, only: z_r, hz, z_w
-    use scalars, only: g, n, rho0
+    use scalars, only: g, nz, rho0
 
     implicit none
 
@@ -164,7 +164,7 @@ contains
     real(kind=8) Ts,Tt,sqrtTs, dr00, K0
 #  ifndef SPLIT_EOS
     real(kind=8) K1, K2
-    real(kind=8) dimension(PRIVATE_1D_SCRATCH_ARRAY,0:N) :: K_up,K_dw
+    real(kind=8) dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: K_up,K_dw
 #  endif
 
 ! EOS coefficient notation: first index is for salinity, second for
@@ -217,7 +217,7 @@ contains
 
     do j=jstrR,jendR
 # ifdef NONLIN_EOS
-      do k=1,N                                       ! NONLINEAR
+      do k=1,nz                                       ! NONLINEAR
         do i=istrR,iendR                             !  EQUATION
           Tt=t(i,j,k,tidx,itemp)                     !  OF STATE
 #  ifdef SALINITY
@@ -276,7 +276,7 @@ contains
       enddo
 
       cff=g/rho0
-      do k=1,N-1
+      do k=1,nz-1
         do i=istrR,iendR
 
 #   ifdef SPLIT_EOS
@@ -288,7 +288,7 @@ contains
           &*dpth*(1._8- qp2*dpth)&   ! difference
           &)/(z_r(i,j,k+1)-z_r(i,j,k))
 #   else
-          cff1=0.1_8*(z_w(i,j,N)-z_w(i,j,k))
+          cff1=0.1_8*(z_w(i,j,nz)-z_w(i,j,k))
           bvf(i,j,k)=-cff*(   (rho1(i,j,k+1)-rho1(i,j,k))&
           &*(K00+K_dw(i,k+1))*(K00+K_up(i,k))&
 
@@ -311,7 +311,7 @@ contains
 #  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
    || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING
       do i=istrR,iendR
-        bvf(i,j,N)=bvf(i,j,N-1)
+        bvf(i,j,nz)=bvf(i,j,nz-1)
         bvf(i,j,0)=bvf(i,j,  1)
       enddo
 #  endif
@@ -323,7 +323,7 @@ contains
 #  else
       cff=Tcoef*T0
 #  endif
-      do k=1,N
+      do k=1,nz
         do i=istrR,iendR
 #  ifdef SPLIT_EOS
           rho1(i,j,k)=cff -Tcoef*t(i,j,k,tidx,itemp)
@@ -350,14 +350,14 @@ contains
 #  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
    || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING
       cff=g/rho0
-      do k=1,N-1
+      do k=1,nz-1
         do i=istrR,iendR
           bvf(i,j,k)=cff*(rho(i,j,k)-rho(i,j,k+1))&
           &/(z_r(i,j,k+1)-z_r(i,j,k))
         enddo
       enddo
       do i=istrR,iendR
-        bvf(i,j,N)=bvf(i,j,N-1)
+        bvf(i,j,nz)=bvf(i,j,nz-1)
         bvf(i,j,0)=bvf(i,j,  1)
       enddo
 #  endif
@@ -375,16 +375,16 @@ contains
       do i=istrR,iendR
 #  ifdef SPLIT_EOS
 !**       dpth=z_w(i,j,N)-z_r(i,j,N)
-        dpth=-z_r(i,j,N)
+        dpth=-z_r(i,j,nz)
 
-        cff=Hz(i,j,N)*(rho1(i,j,N)+qp1(i,j,N)*dpth*(1._8-qp2*dpth))
+        cff=Hz(i,j,nz)*(rho1(i,j,nz)+qp1(i,j,nz)*dpth*(1._8-qp2*dpth))
 #  else
-        cff=Hz(i,j,N)*rho(i,j,N)
+        cff=Hz(i,j,nz)*rho(i,j,nz)
 #  endif
-        rhoS(i,j)=0.5_8*cff*Hz(i,j,N)
+        rhoS(i,j)=0.5_8*cff*Hz(i,j,nz)
         rhoA(i,j)=cff
       enddo
-      do k=N-1,1,-1
+      do k=nz-1,1,-1
         do i=istrR,iendR
 #  ifdef SPLIT_EOS
           dpth=-z_r(i,j,k)
@@ -398,14 +398,14 @@ contains
       enddo
       cff1=1._8/rho0
       do i=istrR,iendR
-        cff=1._8/(z_w(i,j,N)-z_w(i,j,0))
+        cff=1._8/(z_w(i,j,nz)-z_w(i,j,0))
         rhoA(i,j)=cff*cff1*rhoA(i,j)
         rhoS(i,j)=2._8*cff*cff*cff1*rhoS(i,j)
       enddo
 # endif         /* VAR_RHO_2D */
 # ifdef NON_TRADITIONAL
       cff=0.5_8*rho0/g
-      do k=1,N
+      do k=1,nz
         do i=istrR,iendR
           rho1(i,j,k)=rho1(i,j,k) +cff*(&
           &f_XI(i,j)*(v(i,j,k,tidx)+v(i,j+1,k,tidx))&

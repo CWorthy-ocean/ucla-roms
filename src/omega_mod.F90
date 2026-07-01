@@ -56,13 +56,13 @@ contains
 #endif
     use roms_mpi, only: exchange_xxx
     use ocean_vars, only: wi, flxv, flxu, z_w, we, hz
-    use scalars, only: n, dt, forw_start, iic, nrhs
+    use scalars, only: nz, dt, forw_start, iic, nrhs
     use surf_flux, only: swflx
     use pio_roms, only: use_pio
     use instant_output, only: wrt_instant
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k, icdr, cidx
-    real(kind=8) CX(PRIVATE_1D_SCRATCH_ARRAY,0:N),  dtau, c2d,dh, cw, cff,&
+    real(kind=8) CX(PRIVATE_1D_SCRATCH_ARRAY,0:nz),  dtau, c2d,dh, cw, cff,&
     &wrk(PRIVATE_1D_SCRATCH_ARRAY),      cw_min,cw_max,cw_max2
     real(kind=8), parameter :: cu_min=0.6D0, cu_max=1.0D0,&
     &cmnx_ratio=cu_min/cu_max,  cutoff=2.D0-cmnx_ratio,&
@@ -102,7 +102,7 @@ contains
       !!! For NHMG pipes, the flux needs to be out of the bottom.
       !!! Additionally, modify, where needed, the We to Wi split
       !!! for pipe sources
-      do k=1,N,+1        !--> recursive
+      do k=1,nz,+1        !--> recursive
         do i=istr,iend
           Wi(i,j,k)=Wi(i,j,k-1) -FlxU(i+1,j,k) +FlxU(i,j,k)&
           &-FlxV(i,j+1,k) +FlxV(i,j,k)
@@ -123,13 +123,13 @@ contains
         Wi(i,j,nz) = Wi(i,j,nz) + swflx(i,j)*dm_r(i,j)*dn_r(i,j)
       enddo
       do i=istr,iend
-        wrk(i)=Wi(i,j,N)/(z_w(i,j,N)-z_w(i,j,0))
-        Wi(i,j,N)=0._8
-        We(i,j,N)=0._8                      ! note that
+        wrk(i)=Wi(i,j,nz)/(z_w(i,j,nz)-z_w(i,j,0))
+        Wi(i,j,nz)=0._8
+        We(i,j,nz)=0._8                      ! note that
         We(i,j,0)=0._8                      ! CX(i,k)*CX(i,0)/Hz(i,j,k)
         CX(i,0)=dtau*pm(i,j)*pn(i,j)      ! is horizontal 2D Courant
       enddo                               ! number within Hz(i,j,k)
-      do k=N-1,1,-1
+      do k=nz-1,1,-1
         do i=istr,iend
           Wi(i,j,k)=Wi(i,j,k)-wrk(i)*(z_w(i,j,k)-z_w(i,j,0))  !! this removes the grid motion
 
@@ -178,7 +178,7 @@ contains
 
 # ifndef EW_PERIODIC
     if (WESTERN_EDGE) then                       ! Set lateral
-      do k=0,N                                   ! boundary
+      do k=0,nz                                   ! boundary
         do j=jstr,jend                           ! conditions
           We(istr-1,j,k)=We(istr,j,k)
           Wi(istr-1,j,k)=Wi(istr,j,k)
@@ -186,7 +186,7 @@ contains
       enddo
     endif
     if (EASTERN_EDGE) then
-      do k=0,N
+      do k=0,nz
         do j=jstr,jend
           We(iend+1,j,k)=We(iend,j,k)
           Wi(iend+1,j,k)=Wi(iend,j,k)
@@ -196,7 +196,7 @@ contains
 # endif
 # ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
-      do k=0,N
+      do k=0,nz
         do i=istr,iend
           We(i,jstr-1,k)=We(i,jstr,k)
           Wi(i,jstr-1,k)=Wi(i,jstr,k)
@@ -204,7 +204,7 @@ contains
       enddo
     endif
     if (NORTHERN_EDGE) then
-      do k=0,N
+      do k=0,nz
         do i=istr,iend
           We(i,jend+1,k)=We(i,jend,k)
           Wi(i,jend+1,k)=Wi(i,jend,k)
@@ -213,25 +213,25 @@ contains
     endif
 #  ifndef EW_PERIODIC
     if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
-      do k=0,N
+      do k=0,nz
         We(istr-1,jstr-1,k)=We(istr,jstr,k)
         Wi(istr-1,jstr-1,k)=Wi(istr,jstr,k)
       enddo
     endif
     if (WESTERN_EDGE .and. NORTHERN_EDGE) then
-      do k=0,N
+      do k=0,nz
         We(istr-1,jend+1,k)=We(istr,jend,k)
         Wi(istr-1,jend+1,k)=Wi(istr,jend,k)
       enddo
     endif
     if (EASTERN_EDGE .and. SOUTHERN_EDGE) then
-      do k=0,N
+      do k=0,nz
         We(iend+1, jstr-1,k)=We(iend,jstr,k)
         Wi(iend+1, jstr-1,k)=Wi(iend,jstr,k)
       enddo
     endif
     if (EASTERN_EDGE .and. NORTHERN_EDGE) then
-      do k=0,N
+      do k=0,nz
         We(iend+1,jend+1,k)=We(iend,jend,k)
         Wi(iend+1,jend+1,k)=Wi(iend,jend,k)
       enddo
