@@ -298,18 +298,18 @@ contains
         allocate(character(len=lpre) :: obj(i)%pre)
         obj(i)%pre = preamb(1:lpre)
 
-        allocate(obj(i)%Hz_par(np,nz))
-        allocate(obj(i)%Hz_par_u(np,nz))
-        allocate(obj(i)%Hz_par_v(np,nz))
-        allocate(obj(i)%h_par(np))
-        allocate(obj(i)%h_par_u(np))
-        allocate(obj(i)%h_par_v(np))
-        allocate(obj(i)%Hz_chd(np,N_chd))
-        allocate(obj(i)%Hz_chd_u(np,N_chd))
-        allocate(obj(i)%Hz_chd_v(np,N_chd))
+        allocate(obj(i)%Hz_par(np,nz));   obj(i)%Hz_par = 0
+        allocate(obj(i)%Hz_par_u(np,nz)); obj(i)%Hz_par_u = 0
+        allocate(obj(i)%Hz_par_v(np,nz)); obj(i)%Hz_par_v = 0
+        allocate(obj(i)%h_par(np));       obj(i)%h_par = 0
+        allocate(obj(i)%h_par_u(np));     obj(i)%h_par_u = 0
+        allocate(obj(i)%h_par_v(np));     obj(i)%h_par_v = 0
+        allocate(obj(i)%Hz_chd(np,N_chd));   obj(i)%Hz_chd = 0
+        allocate(obj(i)%Hz_chd_u(np,N_chd)); obj(i)%Hz_chd_u = 0
+        allocate(obj(i)%Hz_chd_v(np,N_chd)); obj(i)%Hz_chd_v = 0
 
-        allocate(obj(i)%vari(np,nz))
-        allocate(obj(i)%vari_chd(np,N_chd))
+        allocate(obj(i)%vari(np,nz));       obj(i)%vari = 0
+        allocate(obj(i)%vari_chd(np,N_chd)); obj(i)%vari_chd = 0
         allocate(obj(i)%coef(np,4))
         allocate(obj(i)%ip(np))                          ! DON'T NEED THESE FOR U or V objects
         allocate(obj(i)%jp(np))
@@ -1005,6 +1005,26 @@ contains
                 call remap_src_to_grid(N, obj(i)%Hz_par_u(j,:),&
                 &obj(i)%vari(j,:), N_chd,&
                 &obj(i)%Hz_chd_u(j,:), obj(i)%vari_chd(j,:))
+!!! ADDED BY CURSOR
+                if (obj(i)%bnd == '_east' .or. obj(i)%bnd == '_west') then
+                  write(*,'(a,1x,i0,4(1x,i0),3(1x,es23.16))')&
+                  &'DBGu'//trim(obj(i)%bnd), mynode, obj(i)%start_idx+j-1, j,&
+                  &maxval(abs(obj(i)%Hz_par(j,:)-obj(i)%Hz_par_u(j,:))),&
+                  &maxval(abs(obj(i)%vari(j,:))),&
+                  &maxval(abs(obj(i)%vari_chd(j,:)))
+                  write(*,'(a,1x,i0,4(1x,i0),3(1x,es23.16))')&
+                  &'DBGh'//trim(obj(i)%bnd), mynode, obj(i)%start_idx+j-1, j,&
+                  &sum(obj(i)%Hz_par_u(j,:)), sum(obj(i)%Hz_chd_u(j,:)),&
+                  &sum(obj(i)%Hz_par(j,:))
+                  if (dbg_u_gidx(obj(i)%bnd, obj(i)%start_idx+j-1)) then
+                    call dbg_u_thickness_profile(obj(i)%bnd, obj(i)%start_idx+j-1,&
+                    &j, obj(i)%ipos(j), obj(i)%jpos(j), obj(i)%ipu(j), obj(i)%jpu(j),&
+                    &obj(i)%cfu(j,:), obj(i)%h_par_u(j), obj(i)%Hz_par_u(j,:),&
+                    &obj(i)%Hz_chd_u(j,:), obj(i)%Hz_par(j,:), obj(i)%vari(j,:),&
+                    &obj(i)%vari_chd(j,:))
+                  endif
+                endif
+!!!
               enddo
               call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
             else
@@ -1370,6 +1390,52 @@ contains
     endif                                   ! article published in
   end subroutine calc_cs                  ! J. Comput. Phys.
 
+! ----------------------------------------------------------------------
+!!! ADDED BY CURSOR
+  logical function dbg_u_gidx(bnd, gidx)
+    character(len=*), intent(in) :: bnd
+    integer(kind=4), intent(in) :: gidx
+
+    dbg_u_gidx = .false.
+    if (trim(bnd) == '_east') then
+      if (gidx == 10 .or. gidx == 41 .or. gidx == 79) dbg_u_gidx = .true.
+    elseif (trim(bnd) == '_west') then
+      if (gidx == 10) dbg_u_gidx = .true.
+    endif
+  end function dbg_u_gidx
+
+! ----------------------------------------------------------------------
+  subroutine dbg_u_thickness_profile(bnd, gidx, j, ipos, jpos, ipu, jpu, cfu,&
+  &h_par_u, Hz_par_u, Hz_chd_u, Hz_par, vari, vari_chd)
+    character(len=*), intent(in) :: bnd
+    integer(kind=4), intent(in) :: gidx, j, ipu, jpu
+    real(kind=8), intent(in) :: ipos, jpos, h_par_u
+    real(kind=8), intent(in) :: cfu(4), Hz_par_u(:), Hz_chd_u(:), Hz_par(:),&
+    &vari(:), vari_chd(:)
+
+    character(len=256) :: fname
+    integer(kind=4) :: dbg_unit, k
+
+    write(fname,'("extract_u_dbg.",i0,".log")') mynode
+    open(newunit=dbg_unit, file=trim(fname), status='unknown',&
+    &position='append', action='write')
+
+    write(dbg_unit,'(a)') '---'
+    write(dbg_unit,'(a,1x,i0,4(1x,i0),10(1x,es23.16))')&
+    &'DBGp'//trim(bnd), mynode, gidx, j, ipu, jpu, ipos, jpos, h_par_u,&
+    &sum(Hz_par_u), sum(Hz_chd_u), sum(Hz_par), cfu(1), cfu(2), cfu(3), cfu(4)
+    do k = 1, N
+      write(dbg_unit,'(a,1x,i0,3(1x,i0),4(1x,es23.16))')&
+      &'DBGk_par'//trim(bnd), mynode, gidx, k, Hz_par_u(k), Hz_par(k), vari(k),&
+      &Hz_par_u(k) - Hz_par(k)
+    enddo
+    do k = 1, N_chd
+      write(dbg_unit,'(a,1x,i0,3(1x,i0),3(1x,es23.16))')&
+      &'DBGk_chd'//trim(bnd), mynode, gidx, k, Hz_chd_u(k), vari_chd(k)
+    enddo
+    close(dbg_unit)
+  end subroutine dbg_u_thickness_profile
+!!!
 ! ----------------------------------------------------------------------
   subroutine get_child_thickness(h_par, Hz_chd)
 
