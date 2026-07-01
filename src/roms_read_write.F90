@@ -2073,7 +2073,7 @@ contains
       &info=error_info)
       return    ! don't write past the end of char_string
     endif
-    char_string(is:ie) = string_add
+    char_string(is:ie) = trim(string_add)
 
   end subroutine store_string_att  !]
 ! ---------------------------------------------------------------------
