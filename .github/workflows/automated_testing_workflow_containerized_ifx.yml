@@ -11,25 +11,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cworthy-ocean/marbl_ifx_openmpi:0.1
+      image: ghcr.io/cworthy-ocean/marbl_ifx_openmpi:latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - example: "Rivers_real"
-          - example: "Rivers_ana"
-          - example: "Pipes_real"
-          - example: "Pipes_ana"
-          - example: "Flux_frc"
-          - example: "Filament"
-          - example: "CDR_3d"
-          - example: "CDR_dp"
-          - example: "CDR_parameterized"
-          - example: "bgc_real"
-            bgc_mode: "BEC"
-          - example: "bgc_real"
-            bgc_mode: "MARBL"
-    name: Test ${{ matrix.example }}${{ matrix.bgc_mode && format(' ({0})', matrix.bgc_mode) || '' }}
+    name: pytest_ifx
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -40,7 +25,6 @@ jobs:
           ROMS_ROOT=$(pwd)
           echo "ROMS_ROOT=$ROMS_ROOT" >> $GITHUB_ENV
           echo "PATH=./:$PATH:$ROMS_ROOT/Tools-Roms" >> $GITHUB_ENV
-
       - name: Print system info
         run: lscpu
 
@@ -51,49 +35,14 @@ jobs:
           cd Work/
           cd ${ROMS_ROOT}/Tools-Roms/
           make partit COMPILER=intel
+          make ncjoin COMPILER=intel
 
-      - name: Cache input_data
-        id: cache-input
-        uses: actions/cache@v4
-        with:
-          path: tests/input_data
-          key: roms-input-${{ hashFiles('tests/input_data/get_input_files.sh') }}
-
-      - name: Get input data (if not cached)
-        if: steps.cache-input.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          cd ${ROMS_ROOT}/tests/input_data/
-          ./get_input_files.sh
-      - name: Update COMPILER arg in make commands and allow OpenMPI oversubscription
-        shell: bash
-        run: |
-          sed -i -e "s/make /make COMPILER=intel PROFILER=scorep /g" $ROMS_ROOT/tests/scripts/do_test_roms.sh
-          sed -i -e "s/make /make COMPILER=intel PROFILER=scorep /g" $ROMS_ROOT/tests/bgc_real/do_test_roms.sh
-          sed -i -e "s/mpirun/mpirun --oversubscribe/g" $ROMS_ROOT/tests/scripts/do_test_roms.sh
-          sed -i -e "s/mpirun/mpirun --oversubscribe/g" $ROMS_ROOT/tests/bgc_real/do_test_roms.sh
-
-      - name: Run test for ${{ matrix.example }}
+      - name: Run tests
         shell: bash
         run: |
           source $GITHUB_ENV
-          cd $ROMS_ROOT/tests/${{ matrix.example }}
-          if [[ "${{ matrix.example }}" == "bgc_real" ]]; then
-          ./do_test_roms.sh github_ifx ${{ matrix.bgc_mode }}
-          else
-          ./do_test_roms.sh github_ifx
-          fi
-
-      - name: Print profiling report
-        shell: bash
-        run : |
-          cd ${ROMS_ROOT}/tests/${{ matrix.example}}/
-          scorep-score -r scorep-*/profile.cubex > scorep.out
-          python3 - <<"EOF"
-          s=open("scorep.out").read().rstrip("\n").split("\n\n")
-          k=lambda L: sorted(L, key=lambda x: float(x.split()[4]), reverse=True)
-          print(s[0]); print()
-          print("\n".join([s[1].splitlines()[0]] + k(s[1].splitlines()[1:]))); print("-"*74)
-          print("\n".join(k(s[2].splitlines())))
-          EOF
+          cd $ROMS_ROOT/tests/
+          sed -i -e "s/make BUILD_MODE=test/make COMPILER=intel BUILD_MODE=test/g" _helpers.py
+          sed -i -e "s/mpirun/mpirun --oversubscribe/g" _helpers.py
+          pytest -svvv . --environ=github_ifx
 

@@ -11,7 +11,7 @@ include Makedefs.inc
    SRCS = $(SRCS_F77) $(SRCS_F90)
 # Exclude files that are not part of main build (just f77 for now)
    EXCL = mpi_test srcscheck
-   EXCL += check_alfabeta check_rho_eos int_r3d sediment t3dmix_GP transp_nodes u3dbc_new visc3d_GP visc3d_S_FS
+   EXCL +=  int_r3d sediment transp_nodes visc3d_GP visc3d_S_FS
    EXCL := $(addsuffix $(UPF77_ext), $(EXCL))
    SRCS_F77 := $(filter-out $(EXCL), $(SRCS_F77))
 
@@ -102,9 +102,9 @@ check_srcs$(UPF77_ext): srcscheck Makefile
 .PHONY: depend
 depend: check_switches1$(UPF77_ext)
         # makedepf90 is preferable but does not work on e.g. osx-arm64. Offer python fallback.
-	@${ROMS_ROOT}/Tools-Roms/makedepf90 $(SRCS) > Make.depend  || \
-	(echo "failed to generate dependency list with makedepf90, using python fallback"; \
-	 ${ROMS_ROOT}/Tools-Roms/makedep.py  Make.depend)
+	@${ROMS_ROOT}/Tools-Roms/makedep.py  Make.depend  || \
+	(echo "failed to generate dependency list with makedep.py, attempting to use makedepf90"; \
+	 ${ROMS_ROOT}/Tools-Roms/makedepf90 $(SRCS) > Make.depend)
 	@echo 'Updated Make.depend (dependency list)'
 
 # Target to create tar file.
