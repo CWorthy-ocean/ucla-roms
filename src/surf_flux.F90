@@ -44,7 +44,7 @@ module surf_flux
 #if defined CFLX_CORR && defined MARBL
   type (ncforce) :: nc_sdic = ncforce(vname='sDIC',tname='sDIC_time' )     ! sea-surface DIC data
   type (ncforce) :: nc_salk = ncforce(vname='sALK',tname='sALK_time' ) ! sea-surface ALK data
-  real,public,parameter :: dCdt   = 7.777/(100.*86400.)  ! DIC/Alk correction (required CFLX_COR
+  real,public :: dCdt   = 7.777  ! DIC/Alk correction (required CFLX_CORR)
 #endif
 
 ! This block not used currently. It won't compile since the array to indicate which tracers to write diagnostics
@@ -73,6 +73,9 @@ module surf_flux
 #endif
 #if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
   namelist /SSS_CORRECTION/ dSSSdt
+#endif
+#if defined CFLX_CORR && defined MARBL
+  namelist /DIC_ALK_CORRECTION/ dCdt
 #endif
 
 #if defined SALINITY
@@ -185,6 +188,20 @@ contains
       &)
     end if
     dSSTdt = dSSTdt / (100.*86400.)
+#endif
+
+#if defined CFLX_CORR && defined MARBL
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=DIC_ALK_CORRECTION, iostat=ios, iomsg=msg)
+    if (ios /= 0) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='could not read DIC_ALK_CORRECTION'&
+      &//' section of namelist file: '&
+      &//trim(msg)&
+      &)
+    end if
+    dCdt = dCdt / (100.*86400.)
 #endif
 
   close(namelist_unit)

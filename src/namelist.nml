@@ -400,14 +400,21 @@ v_sponge = 1.0 ! Maximum viscosity in sponge layer (m2/s)
 !--------------
 ! Requires SFLX_CORR and SALINITY cppkeys
 !--------------
-dSSSdt = 0. ! SSS correction co-efficient as piston velocity (cm/day)
+dSSSdt = 7.777 ! SSS correction co-efficient as piston velocity (cm/day)
 /
 
 &SST_CORRECTION                                                       !surf_flx.F
 !--------------
 ! Requires QCORRECTION cppkey
 !--------------
-dSSTdt = 0. ! SST correction co-efficient as piston velocity (cm/day)
+dSSTdt = 7.777 ! SST correction co-efficient as piston velocity (cm/day)
+/
+
+&DIC_ALK_CORRECTION                                                   !surf_flx.F
+!--------------
+! Requires CFLX_CORR and MARBL cppkey
+!--------------
+dCTdt = 7.777 ! DIC/ALK correction co-efficient as piston velocity (cm/day)
 /
 
 !================================================================================
