@@ -1368,11 +1368,11 @@ contains                  !]
     ! local
     integer(kind=4) :: ierr, varid, itrc
     character(len=7)  :: dn_aux = 'auxil'
-
+#ifdef PARALLEL_IO
     varid = nccreate(ncid,'ocean_time',(/dn_tm/),(/0/),nf90_double)
     ierr = nf90_put_att(ncid,varid,'long_name', refdatestr)
     ierr = nf90_put_att(ncid,varid,'units','second' )
-
+#endif
 ! Time-step number and time-record indices: (history file only, this
 ! may be needed in the event when a history record is used to restart
 ! the current model run);
