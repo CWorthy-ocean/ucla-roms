@@ -85,12 +85,17 @@ def test_exact_restart(standard_configuration,input_dir,tmp_path):
     run2_path.mkdir()
 
     nml["INITIAL_CONDITIONS"]["ininame"] = str(run1_path/"roms_rst.20100101000640.nc")
+    nml["INITIAL_CONDITIONS"]["nrrec"] = 2
     nml["TIME_STEPPING"]["ntimes"] = 10
 
     standard_configuration.run(nml, cwd=run2_path)
 
-    # Compare restart file contents:
-    run1_val = get_summary_value(run1_path,"roms_rst.20100101001320")
-    run2_val = get_summary_value(run2_path,"roms_rst.20100101001320")
+    # Compare restart file contents (without time-step var, which records record no. since init):
+    run1_val = get_summary_value(test_dir=run1_path,
+                                 prefix="roms_rst.20100101001320",
+                                 vars_to_exclude=["time_step",])
+    run2_val = get_summary_value(test_dir=run2_path,
+                                 prefix="roms_rst.20100101001320",
+                                 vars_to_exclude=["time_step",])
     assert (run1_val == run2_val)
 
