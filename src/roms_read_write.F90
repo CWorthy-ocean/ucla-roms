@@ -42,7 +42,7 @@ module roms_read_write
   ! Time is in seconds relative to a reference date
 
   ! ---- user input begins
-  integer(kind=4),parameter,dimension(3) :: reference_date = (/2000,1,1/)  ! year, month, day
+  integer(kind=4),dimension(3) :: reference_date = (/2000,1,1/)  ! year, month, day
   integer(kind=4),parameter :: dt_format = 0
   integer(kind=4) :: cbf = 5  ! buffer size for coarse data array
   character(len=7),public :: frc_time
@@ -181,6 +181,7 @@ module roms_read_write
   namelist /INITIAL_CONDITIONS/ inifile
 #endif
   namelist /FORCING_FILES/ frcfiles
+  namelist /TIME_STEPPING/ reference_date
 
   public :: insert_nodes
   public :: findstr,append_date_node
@@ -234,6 +235,9 @@ contains
       &//trim(msg)&
       &)
     end if
+!     Read in `reference_date` from the "TIME_STEPPING" section of the namelist file
+    rewind(namelist_unit)
+    read(unit=namelist_unit, nml=TIME_STEPPING, iostat=ios, iomsg=msg)
     output_root_name=trim(output_root_name)
     instant_root_name = output_root_name
     mpi_master_only write(*,'(/1x,A)') trim(title)

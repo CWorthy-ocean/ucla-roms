@@ -15,13 +15,13 @@ module instant_output
   use scalars, only: time
   use dimensions, only: i0,i1,j0,j1,inode,jnode,gnx,gny
   use roms_mpi, only: new_part
+  use roms_read_write, only: reference_date
 
   implicit none
 
   private
 
   character(len=13) :: module_name = "instant_output"
-  integer(kind=4),parameter,dimension(3) :: reference_date = (/2000,1,1/)  ! year, month, day
 
   ! Dimension names for in netcdf files
   character(len=7),public,parameter :: dn_xr = 'xi_rho'
