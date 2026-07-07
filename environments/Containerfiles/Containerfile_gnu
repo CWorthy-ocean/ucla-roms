@@ -305,7 +305,7 @@ dependencies:
 - regionmask=0.13.0=pyhd8ed1ab_0
 - requests=2.33.1=pyhcf101f3_1
 - requests-oauthlib=2.0.0=pyhd8ed1ab_1
-- roms-tools=4.0.0a1=pyhd8ed1ab_0
+- roms-tools=4.0.0a2
 - rsa=4.9.1=pyhd8ed1ab_0
 - s2n=1.5.15=hd830067_0
 - s3transfer=0.17.0=pyhd8ed1ab_0
