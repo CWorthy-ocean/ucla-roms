@@ -1,0 +1,160 @@
+name: Build Containers
+
+# Rebuilds the CI container images documented in environments/Containerfiles/
+# and publishes them to GHCR. The automated testing workflows pull these images
+# by :latest, so keeping the build out of the test critical path lets tests
+# start fast while image maintenance happens deliberately here.
+#
+# Triggers:
+#   - workflow_dispatch: manual "rebuild now" button (pick gnu / ifx / both).
+#   - push to main touching a Containerfile: republish so the image can't
+#     silently drift from its definition.
+#   - pull_request touching a Containerfile: build only (verify it still
+#     builds) without publishing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Which image(s) to build and push
+        type: choice
+        options:
+          - both
+          - gnu
+          - ifx
+        default: both
+  push:
+    branches:
+      - main
+    paths:
+      - 'environments/Containerfiles/**'
+  pull_request:
+    paths:
+      - 'environments/Containerfiles/**'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          # Full history so we can diff against the push/PR base commit below.
+          fetch-depth: 0
+
+      - name: Select images to build
+        id: set
+        shell: bash
+        run: |
+          gnu='{"name":"gnu","file":"Containerfile_gnu","image":"ghcr.io/cworthy-ocean/marbl_gnu_mpich"}'
+          ifx='{"name":"ifx","file":"Containerfile_ifx","image":"ghcr.io/cworthy-ocean/marbl_ifx_openmpi"}'
+
+          build_gnu=false
+          build_ifx=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual runs pick images via the dropdown input.
+            case "${{ inputs.image }}" in
+              gnu) build_gnu=true ;;
+              ifx) build_ifx=true ;;
+              *)   build_gnu=true; build_ifx=true ;;
+            esac
+          else
+            # push/PR: build only the image(s) whose Containerfile changed, so a
+            # gnu-only edit doesn't trigger the (much longer) ifx build.
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              base='${{ github.event.pull_request.base.sha }}'
+              head='${{ github.event.pull_request.head.sha }}'
+            else
+              base='${{ github.event.before }}'
+              head='${{ github.sha }}'
+            fi
+
+            if [ -n "$base" ] \
+               && [ "$base" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "$base^{commit}" 2>/dev/null; then
+              changed="$(git diff --name-only "$base" "$head" -- environments/Containerfiles/)"
+              case "$changed" in *Containerfile_gnu*) build_gnu=true ;; esac
+              case "$changed" in *Containerfile_ifx*) build_ifx=true ;; esac
+            else
+              # Base commit unavailable (e.g. a new branch's first push); the
+              # top-level paths filter already guaranteed a Containerfile changed,
+              # so rebuild both rather than risk missing one.
+              build_gnu=true
+              build_ifx=true
+            fi
+          fi
+
+          entries=""
+          if [ "$build_gnu" = "true" ]; then entries="$gnu"; fi
+          if [ "$build_ifx" = "true" ]; then
+            if [ -n "$entries" ]; then entries="$entries,$ifx"; else entries="$ifx"; fi
+          fi
+          # An empty include (e.g. only a shared/non-Containerfile file changed)
+          # yields zero build jobs, which GitHub skips cleanly.
+          echo "matrix={\"include\":[$entries]}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    name: build-${{ matrix.name }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute tags
+        id: meta
+        shell: bash
+        run: |
+          date_tag="$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PRs verify the build only; nothing is published.
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "tags<<EOF"
+              echo "${{ matrix.image }}:pr-${{ github.event.number }}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "push=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "tags<<EOF"
+              echo "${{ matrix.image }}:latest"
+              echo "${{ matrix.image }}:$date_tag"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to GHCR
+        if: steps.meta.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: environments/Containerfiles
+          file: environments/Containerfiles/${{ matrix.file }}
+          push: ${{ steps.meta.outputs.push }}
+          tags: ${{ steps.meta.outputs.tags }}
+          # Keep a plain single-image manifest (no OCI attestation index), which
+          # matches the `podman --format=docker` intent for the micromamba image
+          # and keeps `:latest` pulls simple.
+          provenance: false
+          # Layer cache lives in the GitHub Actions cache, scoped per image, and
+          # only ever speeds up this build job -- never the test critical path.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
