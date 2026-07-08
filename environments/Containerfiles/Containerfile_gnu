@@ -310,7 +310,7 @@ dependencies:
 - s2n=1.5.15=hd830067_0
 - s3transfer=0.17.0=pyhd8ed1ab_0
 - scikit-learn=1.8.0=np2py312h3226591_1
-- scipy=1.16.0=py312hf734454_0
+- scipy>=1.18.0
 - semver=3.0.4=pyhcf101f3_1
 - setuptools=75.8.2=pyhff2d567_0
 - shapely=2.1.1=py312h56997f7_1
