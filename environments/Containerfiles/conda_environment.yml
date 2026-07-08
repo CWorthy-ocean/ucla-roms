@@ -11,3 +11,4 @@ dependencies:
   - compilers
   - netcdf-fortran
   - mpich
+  - pytest
