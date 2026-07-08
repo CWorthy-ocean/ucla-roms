@@ -181,7 +181,7 @@ module roms_read_write
   namelist /INITIAL_CONDITIONS/ inifile
 #endif
   namelist /FORCING_FILES/ frcfiles
-  namelist /TIME_STEPPING/ reference_date
+  namelist /REFERENCE_DATE_SETTINGS/ reference_date
 
   public :: insert_nodes
   public :: findstr,append_date_node
@@ -235,9 +235,9 @@ contains
       &//trim(msg)&
       &)
     end if
-!     Read in `reference_date` from the "TIME_STEPPING" section of the namelist file
+!     Read in `reference_date` from the "REFERENCE_DATE_SETTINGS" section of the namelist file
     rewind(namelist_unit)
-    read(unit=namelist_unit, nml=TIME_STEPPING, iostat=ios, iomsg=msg)
+    read(unit=namelist_unit, nml=REFERENCE_DATE_SETTINGS, iostat=ios, iomsg=msg)
     output_root_name=trim(output_root_name)
     instant_root_name = output_root_name
     mpi_master_only write(*,'(/1x,A)') trim(title)

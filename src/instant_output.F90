@@ -33,7 +33,7 @@ module instant_output
   character(len=7),public,parameter :: dn_tm = 'time'
   integer(kind=4),parameter :: dt_format = 0
   integer(kind=4) :: offset = 0
-  namelist /TIME_STEPPING/ reference_date
+  namelist /REFERENCE_DATE_SETTINGS/ reference_date
 
   interface wrt_instant
     module procedure  wrt_instant_2D, wrt_instant_3D
@@ -54,7 +54,7 @@ contains
     character(len=512) :: msg = ""
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
-    read(unit=namelist_unit, nml=TIME_STEPPING, iostat=ios, iomsg=msg)
+    read(unit=namelist_unit, nml=REFERENCE_DATE_SETTINGS, iostat=ios, iomsg=msg)
     ! ios /= 0 is acceptable — reference_date keeps its default if not in namelist
   end subroutine read_nml_instant_output
 !---------------------------------------------------------

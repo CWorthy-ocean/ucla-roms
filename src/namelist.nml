@@ -16,11 +16,15 @@ title = "roms_run"        ! title used in output metadata
 !================================================================================
 &TIME_STEPPING							       !scalars.F
 !-------------
-ntimes = 20                   ! Number of time steps in this run
-dt = 40                       ! Time step (seconds)
-ndtfast = 30                  ! Number of fast time-steps per slow timestep
-ninfo = 1                     ! Number of steps between runtime diagnostics (STDOUT)
-reference_date = (/2000,1,1/) ! Model reference date. year, month, day
+ntimes = 20               ! Number of time steps in this run
+dt = 40                   ! Time step (seconds)
+ndtfast = 30              ! Number of fast time-steps per slow timestep
+ninfo = 1                 ! Number of steps between runtime diagnostics (STDOUT)
+/
+
+&REFERENCE_DATE_SETTINGS                    !instant_output.F & roms_read_write.F
+!-------------
+reference_date = 2000, 1, 1 ! Model reference date. year, month, day
 /
 
 !================================================================================
