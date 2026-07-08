@@ -9,8 +9,7 @@ module flux_frc
 
 ! Modules needed:
   use tracers, only: t
-  use surf_flux, only: sustr, svstr, stflx, srflx, sss, sst,&
-  &apply_surf_field_corr, swflx
+  use surf_flux, only: sustr, svstr, stflx, srflx, sss, sst, swflx
   use scalars, only: cp, rho0, day2sec, nz, nrhs, cmday2ms
   use roms_read_write, only: ncforce, flux_frc_opt, set_frc_data,&
   &store_string_att
@@ -131,9 +130,6 @@ contains
 !      ! 4) set water flux: stflx(isalt)
 !      call set_swflux
 !#endif
-
-    ! 5) Apply sst and sss corrections, if desired
-    call apply_surf_field_corr
 
 #ifdef PARALLEL_IO
     if (pio_file_is_open == 1) then

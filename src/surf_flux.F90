@@ -7,17 +7,17 @@ module surf_flux
 
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
-  use param, only: mynode, lm, mm, ocean_grid_comm
+  use param, only: mynode, lm, mm, ocean_grid_comm, nt
   use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u&
   &, ds_xr, ds_yr, ds_xu, ds_yv
   use roms_read_write, only:&
   &ncforce, dn_tm, dn_xr, dn_xu, dn_yr&
-  &, dn_yv, create_file
+  &, dn_yv, create_file, store_string_att
   use nc_read_write, only: nccreate, ncwrite
   use netcdf, only:&
   &nf90_global, nf90_write, nf90_nofill,&
   &nf90_open, nf90_put_att, nf90_close, nf90_set_fill
-  use scalars, only: dt, iic, tdays, time
+  use scalars, only: dt, iic, nt, tdays, time, day2sec
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_file_is_open
@@ -30,16 +30,53 @@ module surf_flux
 
   private
   character(len=9) :: module_name = "surf_flx"
+#if defined(QCORRECTION) && !defined(ANA_SST)
   ! edit variable name and time name to match input netcdf file if necessary:
   type (ncforce) :: nc_sst  = ncforce(vname='sst',tname='sst_time' )       ! sea-surface temperature (SST) data
-  type (ncforce) :: nc_sss  = ncforce(vname='sss',tname='sss_time' )       ! sea-surface salinity (SSS) data
+  ! Restoring time-scale. coefficient expressed kinematically as piston velocity (m/s):
+  real,public :: dSSTdt = 7.777  ! SST correction     (required QCORRECTION)
+#endif
+
+#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
+  real,public :: dSSSdt = 7.777  ! SSS correction     (required SFLX_CORR)
+  type (ncforce) :: nc_sss  = ncforce(vname='sss' ,tname='sss_time'  ) ! sea-surface salinity (SSS) data
+#endif
+#if defined CFLX_CORR && defined MARBL
+  type (ncforce) :: nc_sdic = ncforce(vname='sDIC',tname='sDIC_time' )     ! sea-surface DIC data
+  type (ncforce) :: nc_salk = ncforce(vname='sALK',tname='sALK_time' ) ! sea-surface ALK data
+  real,public :: dCdt   = 7.777  ! DIC/Alk correction (required CFLX_CORR)
+#endif
+
+! This block not used currently. It won't compile since the array to indicate which tracers to write diagnostics
+! for (`rst2diag`), is fixed in length, but `nt` can vary.
+!  ! Diagnose restoring surface fluxes  :
+!#if defined(MARBL)
+!  integer, parameter :: rst2diag(nt) = (/ 0,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 /)
+!#elif defined(BIOLOGY_BEC2)
+!  integer, parameter :: rst2diag(nt) = (/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 /)
+!#else
+!#  ifdef SALINITY
+!     integer, parameter :: rst2diag(nt) = (/ 0,0 /)
+!#  else
+!     integer, parameter :: rst2diag(nt) = (/0 /)
+!#  endif
+!#endif
 
   real(kind=8)           :: output_period_sflx = 120       ! output averaging period in seconds
   integer(kind=4)        :: nrpf_sflx          = 10 ! total recs per file
   logical, public ::&
-  &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg
+  &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
   namelist /SURF_FLX_OUTPUT_SETTINGS/ output_period_sflx, nrpf_sflx,&
-  &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg
+  &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
+#if defined(QCORRECTION) && !defined(ANA_SST)
+  namelist /SST_CORRECTION/ dSSTdt
+#endif
+#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
+  namelist /SSS_CORRECTION/ dSSSdt
+#endif
+#if defined CFLX_CORR && defined MARBL
+  namelist /DIC_ALK_CORRECTION/ dCdt
+#endif
 
 #if defined SALINITY
   logical,parameter :: salinity=.true.
@@ -76,9 +113,18 @@ module surf_flux
 
   ! Sea-surface temperature (SST) and salinity (SSS) data for restoring
   real(kind=8),public,allocatable,dimension(:,:) :: sst
-  real(kind=8),public :: dSSTdt = 0._8
+  ! real(kind=8),public :: dSSTdt = 0._8
   real(kind=8),public,allocatable,dimension(:,:) :: sss
-  real(kind=8),public :: dSSSdt = 0._8                           ! input units (cm/day)
+  ! real(kind=8),public :: dSSSdt = 0._8                           ! input units (cm/day)
+
+  ! Sea-surface DIC (sDIC) and ALK (sALK) data for restoring
+  real(kind=8),public,allocatable,dimension(:,:) :: sDIC
+  real(kind=8),public,allocatable,dimension(:,:) :: sALK
+! real(kind=8),public :: dCdt                                  ! input units (cm/day)
+
+  ! Surface fluxes of restoring tracer type variables (rho-points)
+  real,public,allocatable,dimension(:,:,:) :: rstflx
+  real,allocatable,dimension(:,:,:):: rstflx_avg
 
   ! Netcdf outputting:
   real(kind=8)    :: output_time = 0
@@ -89,7 +135,7 @@ module surf_flux
   public init_arrays_surf_flx
   public set_surf_field_corr
   public wrt_sflux
-  public apply_surf_field_corr
+!  public apply_surf_field_corr
   public read_nml_surf_flx
 
 contains
@@ -116,7 +162,7 @@ contains
       &)
     end if
 
-#if defined SFLX_CORR && defined SALINITY
+#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=SSS_CORRECTION, iostat=ios, iomsg=msg)
     if (ios /= 0) then
@@ -127,31 +173,50 @@ contains
       &//trim(msg)&
       &)
     end if
+    dSSSdt = dSSSdt / (100.*86400.)
 #endif
 
-#ifdef QCORRECTION
+#if defined(QCORRECTION) && !defined(ANA_SST)
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=SST_CORRECTION, iostat=ios, iomsg=msg)
-    call error_log%raise_global(&
-    &context = module_name//'/'//sr_name,&
-    &info='could not read SST_CORRECTION'&
-    &//' section of namelist file: '&
-    &//trim(msg)&
-    &)
-  end if
+    if (ios /= 0) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='could not read SST_CORRECTION'&
+      &//' section of namelist file: '&
+      &//trim(msg)&
+      &)
+    end if
+    dSSTdt = dSSTdt / (100.*86400.)
 #endif
 
+#if defined CFLX_CORR && defined MARBL
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=DIC_ALK_CORRECTION, iostat=ios, iomsg=msg)
+    if (ios /= 0) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='could not read DIC_ALK_CORRECTION'&
+      &//' section of namelist file: '&
+      &//trim(msg)&
+      &)
+    end if
+    dCdt = dCdt / (100.*86400.)
+#endif
 
   close(namelist_unit)
   record = nrpf_sflx
 end subroutine read_nml_surf_flx
 
 subroutine init_arrays_surf_flx ![
-  use error_handling_mod, only: error_log
-  use scalars, only: init, nt
+  use scalars, only: init
   implicit none
 
   ! local
+  character(len=30) :: string
+  character(len=512) :: surf_forcing_strings
+
+  surf_forcing_strings = ''   ! must be blank before store_string_att (len_trim) is used
   allocate( uwnd  (GLOBAL_2D_ARRAY)     ); uwnd = 0
   allocate( vwnd  (GLOBAL_2D_ARRAY)     ); vwnd = 0
   allocate( sustr  (GLOBAL_2D_ARRAY)    ); sustr=init
@@ -169,6 +234,27 @@ subroutine init_arrays_surf_flx ![
 #if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
   allocate( sss(GLOBAL_2D_ARRAY)        ); sss=init
   allocate(nc_sss%vdata(GLOBAL_2D_ARRAY,2) )
+
+  call store_string_att(surf_forcing_strings,'<surf_flux.F>')
+  call store_string_att(surf_forcing_strings,'dSSSdt=')
+  write (string, "(F9.6)") dSSSdt*(100.*day2sec)                 ! convert number to string...
+  call store_string_att(surf_forcing_strings,string)
+  call store_string_att(surf_forcing_strings,'dSSSdt_units')
+  call store_string_att(surf_forcing_strings,'cm/day')
+#endif
+
+#if defined CFLX_CORR && defined MARBL
+  allocate( sDIC(GLOBAL_2D_ARRAY)        ); sDIC=init
+  allocate(nc_sDIC%vdata(GLOBAL_2D_ARRAY,2) )
+  allocate( sALK(GLOBAL_2D_ARRAY)        ); sALK=init
+  allocate(nc_sALK%vdata(GLOBAL_2D_ARRAY,2) )
+
+  call store_string_att(surf_forcing_strings,'<surf_flux.F>')
+  call store_string_att(surf_forcing_strings,'dCdt=')
+  write (string, "(F9.6)") dCdt*(100.*day2sec)                 ! convert number to string...
+  call store_string_att(surf_forcing_strings,string)
+  call store_string_att(surf_forcing_strings,'dCdt_units')
+  call store_string_att(surf_forcing_strings,'cm/day')
 #endif
 
   if (sflx_avg) then
@@ -178,10 +264,18 @@ subroutine init_arrays_surf_flx ![
     allocate(swflx_avg(i0:i1,j0:j1))
   endif
 
+  if (wrt_rstflx) then
+     allocate( rstflx  (GLOBAL_2D_ARRAY,nt) ); rstflx=init
+     if (sflx_avg) then
+        allocate( rstflx_avg(i0:i1,j0:j1,nt))
+     endif
+  endif
+
 end subroutine init_arrays_surf_flx  !]
 ! ----------------------------------------------------------------------
 subroutine set_surf_field_corr ![
   ! Set surface fields that will be restored towards
+  use roms_read_write, only: set_frc_data
 
   implicit none
 
@@ -201,6 +295,13 @@ subroutine set_surf_field_corr ![
   call error_log%abort_check()
 #endif
 
+#if defined CFLX_CORR && defined MARBL
+  ! Sea-surface DIC
+  call set_frc_data(nc_sDIC,sDIC,'r')
+  ! Sea-surface ALK
+  call set_frc_data(nc_sALK,sALK,'r')
+#endif
+
 #ifdef PARALLEL_IO
   if (pio_file_is_open == 1) then
     call PIO_closefile(pio_FileDesc)
@@ -209,40 +310,6 @@ subroutine set_surf_field_corr ![
 #endif
 
 end subroutine set_surf_field_corr  !]
-! ----------------------------------------------------------------------
-subroutine apply_surf_field_corr  ![
-  ! apply surface heat flux correction: stflx(itemp)
-  ! apply surface salinity  correction: stflx(isalt)
-
-  implicit none
-
-  ! local
-  integer(kind=4) i,j
-
-#if defined(QCORRECTION) && !defined(ANA_SST)
-! Add relaxation of sst back to climatological value to avoid long-
-! term drift. dSSTdt below is "piston velocity" expressed in [m/s].
-  do j=j0,j1
-    do i=i0,i1
-      stflx(i,j,itemp)=&
-      &-dSSTdt*(t(i,j,nz,nrhs,itemp)-sst(i,j))
-    enddo
-  enddo
-#endif
-
-# if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
-! Add relaxation of surface salinity back to climatological value to
-! avoid long-term drift.  Note that dSSSdt below is "piston velocity"
-! expressed in [m/s].
-  do j=j0,j1
-    do i=i0,i1
-      stflx(i,j,isalt)=stflx(i,j,isalt)-dSSSdt*&
-      &( t(i,j,nz,nrhs,isalt)-sss(i,j) )
-    enddo
-  enddo
-#endif
-
-end subroutine apply_surf_field_corr  !]
 ! ----------------------------------------------------------------------
 subroutine calc_sflx_avg  ![
   implicit none
@@ -262,6 +329,9 @@ subroutine calc_sflx_avg  ![
   endif
   if (wrt_swflx) then  ! surface water flux
     swflx_avg = swflx_avg*(1-coef)+swflx(i0:i1,j0:j1)*coef
+  end if
+  if (wrt_rstflx) then  ! surface tracer fluxes
+    rstflx_avg = rstflx_avg*(1-coef)+rstflx(i0:i1,j0:j1,:)*coef
   endif
 
 end subroutine calc_sflx_avg !]
@@ -273,7 +343,8 @@ subroutine create_sflx_vars(ncid)  ![
   ! input
   integer(kind=4),intent(in) :: ncid
   ! local
-  integer(kind=4)           :: ierr, varid
+  integer(kind=4)           :: ierr, varid, itrc
+  character(len=20) :: varname
 
   ! output surface flux as per Eq.Sys. units m^2/s^2 not N/m^2
   if (wrt_smflx) then
@@ -303,6 +374,18 @@ subroutine create_sflx_vars(ncid)  ![
       ierr = nf90_put_att(ncid,varid,'units','PSU m/s')
     endif
   endif
+!  if (wrt_rstflx) then
+!    do itrc = 1, nt
+!      if (rst2diag(itrc)==1) then
+!        write(varname,'("RSTFLX_tracer",I2.2)') itrc
+!        varid = nccreate(ncid,varname,&
+!        &(/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/))
+!        ierr = nf90_put_att(ncid,varid,'long_name',&
+!        &'Surface restoring flux (included in SRFFLX)')
+!        ierr = nf90_put_att(ncid,varid,'units','tracer units m/s')
+!      endif
+!    enddo
+!  endif
   if (wrt_swflx) then
     varid = nccreate(ncid,'swflx',(/dn_xr,dn_yr,dn_tm/),&
     &(/ds_xr,ds_yr,0/))
@@ -323,7 +406,8 @@ subroutine wrt_sflux  ![
   ! local
   integer(kind=4),dimension(4)   :: start
   character(len=99),save :: fname
-  integer(kind=4)                :: ierr
+  integer(kind=4)                :: ierr, itrc
+  character(len=20)      :: varname
 
   output_time = output_time + dt
 
@@ -354,17 +438,25 @@ subroutine wrt_sflux  ![
     start=1; start(3)=record
     if (sflx_avg) then
       if (wrt_smflx) then
-        call ncwrite(ncid,'sustr',sustr_avg,start,.true.)
-        call ncwrite(ncid,'svstr',svstr_avg,start,.true.)
+        call ncwrite(ncid,'sustr',sustr_avg(1:i1,j0:j1),start,.true.)
+        call ncwrite(ncid,'svstr',svstr_avg(i0:i1,1:j1),start,.true.)
       endif
       if (wrt_stflx) then
-        call ncwrite(ncid,'shflx',stflx_avg(:,:,1),start,.true.)
+        call ncwrite(ncid,'shflx',stflx_avg(i0:i1,j0:j1,1),start,.true.)
         if (salinity) then
-          call ncwrite(ncid,'ssflx',stflx_avg(:,:,2),start,.true.)
+          call ncwrite(ncid,'ssflx',stflx_avg(i0:i1,j0:j1,2),start,.true.)
         endif
       endif
+!      if (wrt_rstflx) then
+!        do itrc = 1, nt
+!         if (rst2diag(itrc)==1) then
+!         write(varname,'("RSTFLX_tracer",I2.2)') itrc
+!         call ncwrite(ncid,varname,rstflx_avg(i0:i1,j0:j1,itrc),start,.true.)
+!         endif
+!        enddo
+!      endif
       if (wrt_swflx) then
-        call ncwrite(ncid,'swflx',swflx_avg(:,:),start,.true.)
+        call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),start,.true.)
       endif
     else  ! snapshots
       if (wrt_smflx) then
@@ -377,6 +469,14 @@ subroutine wrt_sflux  ![
           call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,2),start,.true.)
         endif
       endif
+!      if (wrt_rstflx) then
+!        do itrc = 1, nt
+!         if (rst2diag(itrc)==1) then
+!         write(varname,'("RSTFLX_tracer",I2.2)') itrc
+!         call ncwrite(ncid,varname,rstflx(i0:i1,j0:j1,itrc),start,.true.)
+!         endif
+!        enddo
+!      endif
       if (wrt_swflx) then
         call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),start,.true.)
       endif

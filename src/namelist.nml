@@ -269,6 +269,8 @@ nrpf_bgc_his_dia = 10           ! Number of time records per BGC diagnostics fil
 wrt_bgc_dia_avg = .false.   ! Write averaged BGC diagnostics to output
 output_period_bgc_avg_dia = 100 ! Frequency/period of averaged diagnostic output
 nrpf_bgc_avg_dia = 10           ! Number of time records per BGC diagnostics file
+!
+xco2air_default = 284.7         ! Atmospheric xCO2 (ppm) when PCO2AIR_FORCING is off
 /
 
 &MARBL_BIOGEOCHEMISTRY_SETTINGS                                  !marbl_driver.F
@@ -402,14 +404,21 @@ v_sponge = 1.0 ! Maximum viscosity in sponge layer (m2/s)
 !--------------
 ! Requires SFLX_CORR and SALINITY cppkeys
 !--------------
-dSSSdt = 0. ! SSS correction co-efficient as piston velocity (cm/day)
+dSSSdt = 7.777 ! SSS correction co-efficient as piston velocity (cm/day)
 /
 
 &SST_CORRECTION                                                       !surf_flx.F
 !--------------
 ! Requires QCORRECTION cppkey
 !--------------
-dSSTdt = 0. ! SST correction co-efficient as piston velocity (cm/day)
+dSSTdt = 7.777 ! SST correction co-efficient as piston velocity (cm/day)
+/
+
+&DIC_ALK_CORRECTION                                                   !surf_flx.F
+!--------------
+! Requires CFLX_CORR and MARBL cppkey
+!--------------
+dCdt = 7.777 ! DIC/ALK correction co-efficient as piston velocity (cm/day)
 /
 
 !================================================================================
@@ -450,6 +459,7 @@ nrpf_random=10                    ! Number of records per output file
 !-----------------
 wrt_smflx = .false.        ! Output surface momentum flux
 wrt_stflx = .false.        ! Output surface tracer flux
+wrt_rstflx = .false.       ! Output surface restoring flux (already accounted in stflx)
 wrt_swflx = .false.        ! Output surface water flux (P-E)
 sflx_avg = .false.         ! Output average (T) or instantaneous (F) fields
 output_period_sflx = 120        ! Frequency of surface flux output (s)
