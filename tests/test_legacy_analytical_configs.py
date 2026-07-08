@@ -73,7 +73,7 @@ def test_rivers_ana(tmp_path, input_dir, reference_results):
 
     pv = get_summary_value(conf.location, prefix="roms_his.20000101000000")
     assert_output_matches_reference(reference_results, "rivers_ana", {"physics": pv})
-    
+
 def test_filament(tmp_path, input_dir, reference_results):
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + ANALYTICAL_CPP_KEYS
@@ -104,4 +104,4 @@ def test_filament(tmp_path, input_dir, reference_results):
 
     pv = get_summary_value(conf.location, prefix="roms_his.20000101000000")
     assert_output_matches_reference(reference_results, "filament", {"physics": pv})
-    
+

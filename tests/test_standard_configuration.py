@@ -68,7 +68,7 @@ def test_exact_restart(standard_configuration,input_dir,tmp_path):
             str(input_dir / "example_input_boundary_forcing.nc"),
             str(input_dir / "example_input_surface_forcing.nc"),
             str(input_dir / "example_input_bgc_surface_forcing.nc"),
-            str(input_dir / "example_input_co2_surface_forcing.nc"),            
+            str(input_dir / "example_input_co2_surface_forcing.nc"),
             str(input_dir / "example_input_river_forcing.nc"),
             str(input_dir / "example_input_bgc_boundary_forcing.nc"),
         ]
