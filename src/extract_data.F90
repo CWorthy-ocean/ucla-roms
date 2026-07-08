@@ -54,7 +54,7 @@ module extract_data
   &nf90_get_att, nf90_clobber, nf90_64bit_data, nf90_create, nf90_def_dim,&
   &nf90_def_var
   use tracers, only: t, t_vname, t_lname, t_units  ! need to get names of tracers
-  use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u, hz_v
+  use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u
   use scalars, only: dt, knew, nstp, time
   use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
   &nt_passive, mynode, lm, mm, nz, ocean_grid_comm
@@ -169,6 +169,8 @@ module extract_data
     integer(kind=4),dimension(:)  ,pointer     :: ipu,jpu   ! only for vectors
     integer(kind=4),dimension(:)  ,pointer     :: ipv,jpv   ! only for vectors
     real(kind=8)   ,dimension(:,:),pointer     :: cfu,cfv   ! only for vectors
+    real(kind=8)   ,dimension(:,:),pointer     :: coef_w,coef_s ! rho-grid Hz at west/south columns
+    integer(kind=4),dimension(:)  ,pointer     :: ip_w,jp_w,ip_s,jp_s
     real(kind=8)   ,dimension(:,:),pointer     :: ui,vi     ! only for vectors
 
     ! These logicals determine which variables are desired for an
@@ -322,6 +324,18 @@ contains
         &obj(i)%coef,obj(i)%ip,obj(i)%jp,rmask)
 
         if (.not.obj(i)%scalar) then
+          allocate(obj(i)%coef_w(np,4))
+          allocate(obj(i)%ip_w(np))
+          allocate(obj(i)%jp_w(np))
+          call compute_coef(obj(i)%ipos-1.0_8,obj(i)%jpos,&
+          &obj(i)%coef_w,obj(i)%ip_w,obj(i)%jp_w,rmask)
+
+          allocate(obj(i)%coef_s(np,4))
+          allocate(obj(i)%ip_s(np))
+          allocate(obj(i)%jp_s(np))
+          call compute_coef(obj(i)%ipos,obj(i)%jpos-1.0_8,&
+          &obj(i)%coef_s,obj(i)%ip_s,obj(i)%jp_s,rmask)
+
           allocate(obj(i)%cosa(np))
           allocate(obj(i)%sina(np))
 
@@ -341,11 +355,6 @@ contains
           obj(i)%ipos = obj(i)%ipos+0.5_8
           call compute_coef(obj(i)%ipos,obj(i)%jpos,&
           &obj(i)%cfu,obj(i)%ipu,obj(i)%jpu,umask)
-
-!            allocate(obj(i)%vi(obj(i)%np,nz))
-!            allocate(obj(i)%cfv(obj(i)%np,4))
-!            allocate(obj(i)%ipv(obj(i)%np))
-!            allocate(obj(i)%jpv(obj(i)%np))
 
           allocate(obj(i)%vi(np,nz))
           allocate(obj(i)%cfv(np,4))
@@ -478,18 +487,6 @@ contains
         child_dimsize_v(4) = MMm_chd-1
         child_bnd_name(4) = 'west'
       endif
-
-      ierr = nf90_get_att(ncid,iobj,'output_period',output_period_extract)
-      call error_log%check_netcdf_status(netcdf_status=ierr,&
-      &info="error when getting `output_period` attribute",&
-      &context=module_name//"/"//sr_name)
-      call error_log%abort_check()
-
-!      ierr = nf90_get_att(ncid,iobj,'output_period',extract_period)
-!      call error_log%check_netcdf_status(netcdf_status=ierr,&
-!      &info="error when getting `output_period` attribute",&
-!      &context=module_name//"/"//sr_name)
-!      call error_log%abort_check()
 
 !      if (obj(iobj)%np>0) then
 !! only for objects with a presences in this subdomain
@@ -674,14 +671,6 @@ contains
     ! local
     integer(kind=4) :: i,k,np
 
-
-!     if (mynode==1) then
-!       print *,'interp'
-!       print *,shape(var)
-!       print *, ip(10),jp(10)
-!       print *, nx,ny
-!       print *, var(ip(10),jp(10),nz)
-!     endif
     np = size(ip,1)
     do i = 1,np
       do k = 1,nz
@@ -959,8 +948,11 @@ contains
           if (obj(i)%np > 0) then
           if (parent_child_grid_mismatch) then
             if ((obj(i)%u) .or. (obj(i)%up)) then
-! Get thickness and depth at interpolated location
-              call interpolate(Hz_u(:,:,:),obj(i)%Hz_par_u,cfu,ipu,jpu)
+              ! u-staggered thickness from rho-grid Hz (matches set_depth_mod)
+              call interpolate(Hz(:,:,:),obj(i)%Hz_par_u,&
+              &obj(i)%coef_w,obj(i)%ip_w,obj(i)%jp_w)
+              obj(i)%Hz_par_u(:,:) = 0.5_8*&
+              &(obj(i)%Hz_par(:,:)+obj(i)%Hz_par_u(:,:))
               obj(i)%h_par_u(:) = 0
               do j=1,obj(i)%np
                 do k=1,nz
@@ -1011,26 +1003,6 @@ contains
                 call remap_src_to_grid(nz, obj(i)%Hz_par_u(j,:),&
                 &obj(i)%vari(j,:), N_chd,&
                 &obj(i)%Hz_chd_u(j,:), obj(i)%vari_chd(j,:))
-!!! ADDED BY CURSOR
-                if (obj(i)%bnd == '_east' .or. obj(i)%bnd == '_west') then
-                  write(*,'(a,1x,i0,4(1x,i0),3(1x,es23.16))')&
-                  &'DBGu'//trim(obj(i)%bnd), mynode, obj(i)%start_idx+j-1, j,&
-                  &maxval(abs(obj(i)%Hz_par(j,:)-obj(i)%Hz_par_u(j,:))),&
-                  &maxval(abs(obj(i)%vari(j,:))),&
-                  &maxval(abs(obj(i)%vari_chd(j,:)))
-                  write(*,'(a,1x,i0,4(1x,i0),3(1x,es23.16))')&
-                  &'DBGh'//trim(obj(i)%bnd), mynode, obj(i)%start_idx+j-1, j,&
-                  &sum(obj(i)%Hz_par_u(j,:)), sum(obj(i)%Hz_chd_u(j,:)),&
-                  &sum(obj(i)%Hz_par(j,:))
-                  if (dbg_u_gidx(obj(i)%bnd, obj(i)%start_idx+j-1)) then
-                    call dbg_u_thickness_profile(obj(i)%bnd, obj(i)%start_idx+j-1,&
-                    &j, obj(i)%ipos(j), obj(i)%jpos(j), obj(i)%ipu(j), obj(i)%jpu(j),&
-                    &obj(i)%cfu(j,:), obj(i)%h_par_u(j), obj(i)%Hz_par_u(j,:),&
-                    &obj(i)%Hz_chd_u(j,:), obj(i)%Hz_par(j,:), obj(i)%vari(j,:),&
-                    &obj(i)%vari_chd(j,:))
-                  endif
-                endif
-!!!
               enddo
               call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
             else
@@ -1063,7 +1035,11 @@ contains
           if (parent_child_grid_mismatch) then
             if ((obj(i)%v) .or. (obj(i)%vp)) then
 ! Get thickness and depth at interpolated location
-              call interpolate(Hz_v(:,:,:),obj(i)%Hz_par_v,cfv,ipv,jpv)
+              ! v-staggered thickness from rho-grid Hz (matches set_depth_mod)
+              call interpolate(Hz(:,:,:),obj(i)%Hz_par_v,&
+              &obj(i)%coef_s,obj(i)%ip_s,obj(i)%jp_s)
+              obj(i)%Hz_par_v(:,:) = 0.5_8*&
+              &(obj(i)%Hz_par(:,:)+obj(i)%Hz_par_v(:,:))
               obj(i)%h_par_v(:) = 0
               do j=1,obj(i)%np
                 do k=1,nz
@@ -1396,52 +1372,6 @@ contains
     endif                                   ! article published in
   end subroutine calc_cs                  ! J. Comput. Phys.
 
-! ----------------------------------------------------------------------
-!!! ADDED BY CURSOR
-  logical function dbg_u_gidx(bnd, gidx)
-    character(len=*), intent(in) :: bnd
-    integer(kind=4), intent(in) :: gidx
-
-    dbg_u_gidx = .false.
-    if (trim(bnd) == '_east') then
-      if (gidx == 10 .or. gidx == 41 .or. gidx == 79) dbg_u_gidx = .true.
-    elseif (trim(bnd) == '_west') then
-      if (gidx == 10) dbg_u_gidx = .true.
-    endif
-  end function dbg_u_gidx
-
-! ----------------------------------------------------------------------
-  subroutine dbg_u_thickness_profile(bnd, gidx, j, ipos, jpos, ipu, jpu, cfu,&
-  &h_par_u, Hz_par_u, Hz_chd_u, Hz_par, vari, vari_chd)
-    character(len=*), intent(in) :: bnd
-    integer(kind=4), intent(in) :: gidx, j, ipu, jpu
-    real(kind=8), intent(in) :: ipos, jpos, h_par_u
-    real(kind=8), intent(in) :: cfu(4), Hz_par_u(:), Hz_chd_u(:), Hz_par(:),&
-    &vari(:), vari_chd(:)
-
-    character(len=256) :: fname
-    integer(kind=4) :: dbg_unit, k
-
-    write(fname,'("extract_u_dbg.",i0,".log")') mynode
-    open(newunit=dbg_unit, file=trim(fname), status='unknown',&
-    &position='append', action='write')
-
-    write(dbg_unit,'(a)') '---'
-    write(dbg_unit,'(a,1x,i0,4(1x,i0),10(1x,es23.16))')&
-    &'DBGp'//trim(bnd), mynode, gidx, j, ipu, jpu, ipos, jpos, h_par_u,&
-    &sum(Hz_par_u), sum(Hz_chd_u), sum(Hz_par), cfu(1), cfu(2), cfu(3), cfu(4)
-    do k = 1, N
-      write(dbg_unit,'(a,1x,i0,3(1x,i0),4(1x,es23.16))')&
-      &'DBGk_par'//trim(bnd), mynode, gidx, k, Hz_par_u(k), Hz_par(k), vari(k),&
-      &Hz_par_u(k) - Hz_par(k)
-    enddo
-    do k = 1, N_chd
-      write(dbg_unit,'(a,1x,i0,3(1x,i0),3(1x,es23.16))')&
-      &'DBGk_chd'//trim(bnd), mynode, gidx, k, Hz_chd_u(k), vari_chd(k)
-    enddo
-    close(dbg_unit)
-  end subroutine dbg_u_thickness_profile
-!!!
 ! ----------------------------------------------------------------------
   subroutine get_child_thickness(h_par, Hz_chd)
 
