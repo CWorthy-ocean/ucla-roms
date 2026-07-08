@@ -67,8 +67,8 @@ dependencies:
 - cffi=2.0.0=py312h35888ee_0
 - cftime=1.6.5=py312h4f23490_1
 - charset-normalizer=3.4.7=pyhd8ed1ab_0
-- click=8.2.1=pyh707e725_0
-- click-plugins=1.1.1.2=pyhd8ed1ab_0
+- click
+- click-plugins
 - cligj=0.7.2=pyhd8ed1ab_2
 - cloudpickle=3.1.2=pyhcf101f3_1
 - colorama=0.4.6=pyhd8ed1ab_1
