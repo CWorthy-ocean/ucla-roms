@@ -52,7 +52,7 @@ module extract_data
   &nf90_put_att, nf90_inq_varid, nf90_open, nf90_close,&
   &nf90_inquire, nf90_inquire_variable, nf90_inquire_dimension,&
   &nf90_get_att, nf90_clobber, nf90_64bit_data, nf90_create, nf90_def_dim,&
-  &nf90_def_var
+  &nf90_def_var, nf90_inq_dimid
   use tracers, only: t, t_vname, t_lname, t_units  ! need to get names of tracers
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u
   use scalars, only: dt, knew, nstp, time
@@ -99,7 +99,7 @@ module extract_data
   logical, public  :: do_extract
 
   namelist /EXTRACT_DATA_SETTINGS/ output_period_extract, extract_file,&
-  &nrpf_extract, LLm_chd, MMm_chd, N_chd, theta_s_chd, theta_b_chd, hc_chd, do_extract, extract_root_name
+  &nrpf_extract, N_chd, theta_s_chd, theta_b_chd, hc_chd, do_extract, extract_root_name
 
   integer(kind=4),parameter        :: edat_prec = nf90_double  ! Precision of output variables (nf90_float/nf90_doub
 
@@ -389,6 +389,7 @@ contains
     real(kind=8),dimension(:,:),allocatable :: object
     integer(kind=4)               :: n1,n2,i0,i1,lstr
     integer(kind=4) ierr,sidx,sidx2
+    integer(kind=4) :: cxr, cer
 
     ! This should be very quick to read even serially, so for simplicity
     ! just have each rank open the file and read what it needs.
@@ -408,6 +409,19 @@ contains
     call error_log%check_netcdf_status(netcdf_status=ierr,&
     &context=module_name//"/"//sr_name,&
     &info="read extr")
+
+    ierr = nf90_inq_dimid(ncid, "child_xi_rho", cxr)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/"//sr_name,&
+    &info="error reading child_xi_rho")
+
+    ierr = nf90_inq_dimid(ncid, "child_eta_rho", cer)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/"//sr_name,&
+    &info="error reading child_eta_rho")
+
+    ierr = nf90_inquire_dimension(ncid,cxr,len=LLm_chd)
+    ierr = nf90_inquire_dimension(ncid,cer,len=MMm_chd)
 
     call error_log%abort_check()
 
