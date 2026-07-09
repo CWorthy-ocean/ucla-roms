@@ -330,6 +330,17 @@ contains
       &'alt DIC source from CDR module','mmol/s')
     endif
 
+!    if (wrt_cdr_avg) then
+!      call add_cdr_output_variable(cdr_varlist, 'hDIC_avg',&
+!      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+!      &'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),&
+!      &'meters ' // trim(t_units(iDIC)))
+!
+!      call add_cdr_output_variable(cdr_varlist, 'hDIC_ALT_CO2_avg',&
+!      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+!      &'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),&
+!      &'meters ' // trim(t_units(iDIC)))
+!    endif
     if (wrt_cdr_avg) then
       call add_cdr_output_variable(cdr_varlist, 'hALK_avg',&
       &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
@@ -1179,8 +1190,8 @@ contains
 
   end subroutine wrt_cdr_output !]
 !--------------------------------------------------------------------------
-        subroutine display_cdr_output_settings_to_terminal_cdr
-!     Basic header
+  subroutine display_cdr_output_settings_to_terminal_cdr
+
         character(len=120) :: stdout_str
         integer :: idx
         if (mynode==0) then
