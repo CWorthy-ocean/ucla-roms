@@ -303,12 +303,12 @@ def create_rti_restore_surf_dic_alk(target_dir: Path):
     ds["dic"].values  = np.tile(
         np.array([[[2128.926, 2126.35], [2126.53, 2130.384]],
                   [[2123.166, 2122.308], [2123.678, 2128.579]]], dtype=np.float32),
-        (516, 1, 1)
+        (258, 1, 1)
     )
     ds["talk"].values = np.tile(
         np.array([[[2307.035, 2310.081], [2310.379, 2307.275]],
                   [[2299.036, 2299.596], [2296.624, 2294.987]]], dtype=np.float32),
-        (516, 1, 1)
+        (258, 1, 1)
     )
 
     ds.to_netcdf(target_dir / "fake_restore_dic_alk_surf_data.nc")
