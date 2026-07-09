@@ -10,6 +10,7 @@ dependencies:
   - roms-tools>=4.0.0a2
   - compilers
   - netcdf-fortran
+  - h5netcdf
   - mpich
   - pytest
   - f90nml
