@@ -106,6 +106,9 @@ jobs:
             fi
             case "$changed" in *Containerfile_gnu*) build_gnu=true ;; esac
             case "$changed" in *Containerfile_ifx*) build_ifx=true ;; esac
+            # conda_environment.yml is consumed only by Containerfile_gnu
+            # (micromamba create), so a change to it rebuilds gnu only.
+            case "$changed" in *conda_environment.yml*) build_gnu=true ;; esac
           fi
 
           # 2. Can this run push to GHCR? Fork PRs get a read-only token.
