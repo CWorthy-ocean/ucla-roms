@@ -12,3 +12,4 @@ dependencies:
   - netcdf-fortran
   - mpich
   - pytest
+  - f90nml
