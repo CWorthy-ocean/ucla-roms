@@ -22,6 +22,11 @@ ndtfast = 30              ! Number of fast time-steps per slow timestep
 ninfo = 1                 ! Number of steps between runtime diagnostics (STDOUT)
 /
 
+&REFERENCE_DATE_SETTINGS                    !instant_output.F & roms_read_write.F
+!-------------
+reference_date = 2000, 1, 1 ! Model reference date. year, month, day
+/
+
 !================================================================================
 !                              GRID AND INPUT FILES
 !================================================================================
