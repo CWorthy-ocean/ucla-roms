@@ -14,7 +14,8 @@ Breaking Changes
 New Features
 ~~~~~~~~~~~~
 
-- N/A
+
+- Ability to specify `reference_date` in the namelist. (`#300 <https://github.com/CWorthy-ocean/ucla-roms/pull/300>`_)
 
 Bug Fixes
 ~~~~~~~~~
