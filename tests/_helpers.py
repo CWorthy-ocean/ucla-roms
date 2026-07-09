@@ -140,7 +140,7 @@ class ROMSConfiguration:
 # --------------------------------------------------------------------------
 # Output verification
 # --------------------------------------------------------------------------
-def get_summary_value(test_dir: Path, prefix: str) -> str:
+def get_summary_value(test_dir: Path, prefix: str, vars_to_exclude: list = []) -> str:
     """Join the per-tile output and return a SHA-256 of all data variables."""
     test_dir = test_dir.absolute()
     subprocess.run(
@@ -151,5 +151,6 @@ def get_summary_value(test_dir: Path, prefix: str) -> str:
 
     h = hashlib.sha256()
     for name in sorted(ds.data_vars):  # sort for determinism
-        h.update(ds[name].values.tobytes())
+        if name not in vars_to_exclude:
+            h.update(ds[name].values.tobytes())
     return h.hexdigest()
