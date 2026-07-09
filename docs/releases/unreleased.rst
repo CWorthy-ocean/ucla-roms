@@ -19,7 +19,8 @@ New Features
 Bug Fixes
 ~~~~~~~~~
 
-- N/A
+
+- Initialize `forcing_version` string to prevent errors from CDR forcing module (`#303 <https://github.com/CWorthy-ocean/ucla-roms/pull/303>`_)
 
 Improvements
 ~~~~~~~~~~~~
@@ -29,4 +30,4 @@ Improvements
 Miscellaneous
 ~~~~~~~~~~~~~
 
-- N/A
+- Adds github CI action to rebuild CI testing containers, either on-demand (via a workflow dispatch action) or whenever one of the containerfiles changes. (`#303 <https://github.com/CWorthy-ocean/ucla-roms/pull/303>`_)
