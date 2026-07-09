@@ -24,7 +24,7 @@ module cdr_output
       use netcdf, only:&
      &     nf90_noerr, nf90_write, nf90_double, nf90_open,&
      &     nf90_put_att, nf90_close
-      use scalars, only: iic, knew, nnew, tdays, time, dt, n
+      use scalars, only: iic, knew, nnew, tdays, time, dt
       use ocean_vars, only: zeta, hz
       use error_handling_mod, only: error_log
       use cdr_frc, only: cdr_flx_3d_ALK, cdr_flx_3d_DIC, cdr_prf,&
@@ -36,6 +36,7 @@ module cdr_output
 
   real(kind=8)    :: output_period_cdr = 3600 ! in seconds
   integer(kind=4) :: nrpf_cdr   = 4     ! number of frames per file
+
   logical, public :: wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
   namelist /CDR_OUTPUT_SETTINGS/ output_period_cdr, nrpf_cdr,&
   &wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
@@ -101,6 +102,15 @@ module cdr_output
       real(kind=8),allocatable,dimension(:,:) :: zsatcalc_avg
       real(kind=8),allocatable,dimension(:,:) :: Chl_TOT_surf_avg
       real(kind=8),allocatable,dimension(:,:) :: C_TOT_100m_avg
+
+      real(kind=8),allocatable,dimension(:,:,:) :: hALK_tmp
+      real(kind=8),allocatable,dimension(:,:,:) :: hALK_alt_tmp
+      real(kind=8),allocatable,dimension(:,:,:) :: hDIC_tmp
+      real(kind=8),allocatable,dimension(:,:,:) :: hDIC_alt_tmp
+      real(kind=8),allocatable,dimension(:,:,:) :: hALK_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: hALK_alt_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: hDIC_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: hDIC_alt_avg
 
   type CStarOutputVariable
     character(len=32)              :: name
@@ -254,19 +264,19 @@ contains
      &      vname_bgc_diag_2d(2,ipCO2SURF_ALT_CO2), vname_bgc_diag_2d(3,ipCO2SURF_ALT_CO2))
 
       call add_cdr_output_variable(cdr_varlist, 'CO3',&
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
      &      vname_bgc_diag_3d(2,iCO3), vname_bgc_diag_3d(3,iCO3))
 
       call add_cdr_output_variable(cdr_varlist, 'CO3_ALT_CO2',&
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
      &      vname_bgc_diag_3d(2,iCO3_ALT_CO2), vname_bgc_diag_3d(3,iCO3_ALT_CO2))
 
       call add_cdr_output_variable(cdr_varlist, 'co3_sat_arag',&
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
      &      vname_bgc_diag_3d(2,ico3_sat_arag), vname_bgc_diag_3d(3,ico3_sat_arag))
 
       call add_cdr_output_variable(cdr_varlist, 'co3_sat_calc',&
-     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,N,0/),&
+     &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
      &      vname_bgc_diag_3d(2,ico3_sat_calc), vname_bgc_diag_3d(3,ico3_sat_calc))
 
       call add_cdr_output_variable(cdr_varlist, 'zsatarag',&
@@ -284,6 +294,26 @@ contains
       call add_cdr_output_variable(cdr_varlist, 'C_TOT_100m',&
      &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
      &      'Total biomass over top 100m', 'mmol/m2')
+
+      call add_cdr_output_variable(cdr_varlist, 'hALK',&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
+      &'instantaneous thickness-weighted ' // trim(t_lname(iALK)),&
+      &'meters ' // trim(t_units(iALK)))
+
+      call add_cdr_output_variable(cdr_varlist, 'hALK_ALT_CO2',&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
+      &'instantaneous thickness-weighted ' // trim(t_lname(iALK_alt)),&
+      &'meters ' // trim(t_units(iALK_alt)))
+
+      call add_cdr_output_variable(cdr_varlist, 'hDIC',&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
+      &'instantaneous thickness-weighted ' // trim(t_lname(iDIC)),&
+      &'meters ' // trim(t_units(iDIC)))
+
+      call add_cdr_output_variable(cdr_varlist, 'hDIC_ALT_CO2',&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
+      &'instantaneous thickness-weighted ' // trim(t_lname(iDIC_alt)),&
+      &'meters ' // trim(t_units(iDIC_alt)))
 
     if (cdr_source) then
       call add_cdr_output_variable(cdr_varlist, 'ALK_source',&
@@ -312,6 +342,16 @@ contains
 !      &'meters ' // trim(t_units(iDIC)))
 !    endif
     if (wrt_cdr_avg) then
+      call add_cdr_output_variable(cdr_varlist, 'hALK_avg',&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
+      &'time-averaged thickness-weighted ' // trim(t_lname(iALK)),&
+      &'meters ' // trim(t_units(iALK)))
+
+      call add_cdr_output_variable(cdr_varlist, 'hALK_ALT_CO2_avg',&
+      &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
+      &'time-averaged thickness-weighted ' // trim(t_lname(iALK_alt)),&
+      &'meters ' // trim(t_units(iALK_alt)))
+
       call add_cdr_output_variable(cdr_varlist, 'hDIC_avg',&
       &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
       &'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),&
@@ -319,8 +359,8 @@ contains
 
       call add_cdr_output_variable(cdr_varlist, 'hDIC_ALT_CO2_avg',&
       &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
-      &'time-averaged thickness-weighted ' // trim(t_lname(iDIC)),&
-      &'meters ' // trim(t_units(iDIC)))
+      &'time-averaged thickness-weighted ' // trim(t_lname(iDIC_alt)),&
+      &'meters ' // trim(t_units(iDIC_alt)))
     endif
 
   end subroutine define_cdr_output_variables
@@ -335,7 +375,7 @@ contains
       integer :: itot=0
       integer :: idx
 
-      record = nrpf
+      record = nrpf_cdr
 
       if (done) then
         return
@@ -387,185 +427,7 @@ contains
            izsatcalc = itot
            izsatcalc_idiag = idx_bgc_diag_2d(izsatcalc)
          endif
-
-    if (cdr_source) then
-      allocate(ALK_source(GLOBAL_2D_ARRAY,1:nz) )
-      allocate(ALK_alt_source(GLOBAL_2D_ARRAY,1:nz) )
-      allocate(DIC_source(GLOBAL_2D_ARRAY,1:nz) )
-      allocate(DIC_alt_source(GLOBAL_2D_ARRAY,1:nz) )
-    endif
-
-    if (wrt_cdr_avg) then
-      allocate(zeta__avg(GLOBAL_2D_ARRAY) )
-      zeta__avg(:,:)=0
-      allocate(temp_avg(GLOBAL_2D_ARRAY,1:nz) )
-      temp_avg(:,:,:)=0
-      allocate(salt_avg(GLOBAL_2D_ARRAY,1:nz) )
-      salt_avg(:,:,:)=0
-      allocate(ALK_avg(GLOBAL_2D_ARRAY,1:nz) )
-      ALK_avg(:,:,:)=0
-      allocate(hALK_avg(GLOBAL_2D_ARRAY,1:nz) )
-      hALK_avg(:,:,:)=0
-      allocate(DIC_avg(GLOBAL_2D_ARRAY,1:nz) )
-      DIC_avg(:,:,:)=0
-      allocate(hDIC_avg(GLOBAL_2D_ARRAY,1:nz) )
-      hDIC_avg(:,:,:)=0
-      allocate(ALK_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
-      ALK_alt_avg(:,:,:)=0
-      allocate(hALK_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
-      hALK_alt_avg(:,:,:)=0
-      allocate(DIC_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
-      DIC_alt_avg(:,:,:)=0
-      allocate(hDIC_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
-      hDIC_alt_avg(:,:,:)=0
-      allocate(pH_avg(GLOBAL_2D_ARRAY,1:nz) )
-      pH_avg(:,:,:)=0
-      allocate(pH_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
-      pH_alt_avg(:,:,:)=0
-      allocate(FG_CO2_avg(GLOBAL_2D_ARRAY) )
-      FG_CO2_avg(:,:)=0
-      allocate(FG_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
-      FG_ALT_CO2_avg(:,:)=0
-      if (cdr_source) then
-        allocate(ALK_source_avg(GLOBAL_2D_ARRAY,1:nz) )
-        ALK_source_avg(:,:,:)=0
-        allocate(ALK_alt_source_avg(GLOBAL_2D_ARRAY,1:nz) )
-        ALK_alt_source_avg(:,:,:)=0
-        allocate(DIC_source_avg(GLOBAL_2D_ARRAY,1:nz) )
-        DIC_source_avg(:,:,:)=0
-        allocate(DIC_alt_source_avg(GLOBAL_2D_ARRAY,1:nz) )
-        DIC_alt_source_avg(:,:,:)=0
-      endif
-    endif
-
-    ! Always output instantaneous hDIC
-    allocate(hDIC_tmp(GLOBAL_2D_ARRAY,1:nz) )
-    hDIC_tmp(:,:,:)=0
-    allocate(hDIC_alt_tmp(GLOBAL_2D_ARRAY,1:nz) )
-    hDIC_alt_tmp(:,:,:)=0
-
-    ! These have to be allocated for multiply_by_thickness call
-    allocate(hALK_tmp(GLOBAL_2D_ARRAY,1:nz) )
-    hALK_tmp(:,:,:)=0
-    allocate(hALK_alt_tmp(GLOBAL_2D_ARRAY,1:nz) )
-    hALK_alt_tmp(:,:,:)=0
-
-
-
-    call define_cdr_output_variables
-    call display_cdr_output_settings_to_terminal_cdr
-
-  end subroutine init_cdr_output  !]
-!----------------------------------------------------------------------
-  subroutine calc_average ![
-    ! Update averages
-    ! The average is always scaled properly throughout
-    ! reset navg_rnd=0 after an output of the average
-    implicit none
-
-    ! local
-    real(kind=8) :: coef
-
-    if (navg == 0) then
-      ! By the time the code enters here, it will have advanced one timestep,
-      ! so save the time from one timestep previous
-      avg_begin_time = time - dt
-    endif
-
-    navg = navg+1
-
-    coef = 1._8/navg
-
-    if (coef==1) then                                    ! this refreshes average (1-coef)=0
-      if (mynode==0) then
-        if (cdr_monthly_averages) then
-          print *, 'cdr :: started monthly averaging.'
-        else
-          print *, 'cdr :: started averaging. ',&
-          &'output_period_cdr (s) =', output_period_cdr
-        endif
-      endif
-    endif
-
-    zeta__avg(:,:) = zeta__avg(:,:)*(1-coef) + zeta(:,:,knew)*coef
-
-    temp_avg(:,:,:) = temp_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,itemp)*coef
-
-    salt_avg(:,:,:) = salt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,isalt)*coef
-
-    ALK_avg(:,:,:) = ALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*coef
-
-    hALK_avg(:,:,:) = hALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*Hz(:,:,:)*coef
-
-    DIC_avg(:,:,:) = DIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*coef
-
-    hDIC_avg(:,:,:) = hDIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*Hz(:,:,:)*coef
-
-    ALK_alt_avg(:,:,:) = ALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*coef
-
-    hALK_alt_avg(:,:,:) = hALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*Hz(:,:,:)*coef
-
-    DIC_alt_avg(:,:,:) = DIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*coef
-
-    hDIC_alt_avg(:,:,:) = hDIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*Hz(:,:,:)*coef
-
-    pH_avg(:,:,:) = pH_avg(:,:,:)*(1-coef) + marbl_saved_state_3d(:,:,:,iPH)*coef
-
-    pH_alt_avg(:,:,:) = pH_alt_avg(:,:,:)*(1-coef) + marbl_saved_state_3d(:,:,:,iPH_alt)*coef
-
-    FG_CO2_avg(:,:) = FG_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,iFG_idiag)*coef
-
-    FG_ALT_CO2_avg(:,:) = FG_ALT_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,iFG_alt_idiag)*coef
-
-    if (cdr_source) then
-      ALK_source_avg(:,:,:) = ALK_source_avg(:,:,:)*(1-coef) + ALK_source(:,:,:)*coef
-
-      ALK_alt_source_avg(:,:,:) = ALK_alt_source_avg(:,:,:)*(1-coef) + ALK_alt_source(:,:,:)*coef
-
-      DIC_source_avg(:,:,:) = DIC_source_avg(:,:,:)*(1-coef) + DIC_source(:,:,:)*coef
-
-      DIC_alt_source_avg(:,:,:) = DIC_alt_source_avg(:,:,:)*(1-coef) + DIC_alt_source(:,:,:)*coef
-    endif
-
-  end subroutine calc_average !]
-! ----------------------------------------------------------------------
-  subroutine multiply_by_thickness ![
-    ! Update averages
-    ! The average is always scaled properly throughout
-    ! reset navg_rnd=0 after an output of the average
-    implicit none
-
-    hALK_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK)*Hz(i0:i1,j0:j1,:)
-
-    hDIC_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC)*Hz(i0:i1,j0:j1,:)
-
-    hALK_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK_alt)*Hz(i0:i1,j0:j1,:)
-
-    hDIC_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC_alt)*Hz(i0:i1,j0:j1,:)
-
-  end subroutine multiply_by_thickness !]
-!----------------------------------------------------------------------
-  subroutine calc_cdr_source ![
-    ! Update source terms from the CDR module
-    implicit none
-
-    integer(kind=4) :: i,j,k,icdr,cidx
-
-    ALK_source(:,:,:) = 0
-    ALK_alt_source(:,:,:) = 0
-    DIC_source(:,:,:) = 0
-    DIC_alt_source(:,:,:) = 0
-
-    if (cdr_forcing_3d) then
-      do k=1,nz
-        do j=1,ny
-          do i=1,nx
-            ALK_source(i,j,k) = cdr_flx_3d_ALK(i,j,k)
-            DIC_source(i,j,k) = cdr_flx_3d_DIC(i,j,k)
-          enddo
-        enddo
       enddo
-    endif
 
       itot = 0
       ! Loop over 3D BGC diagnostics...
@@ -628,49 +490,48 @@ contains
          endif
       enddo
 
-      ! put the relevant part of your code here
 
-        if (cdr_source) then
-          allocate(ALK_source(GLOBAL_2D_ARRAY,1:N) )
-          allocate(ALK_alt_source(GLOBAL_2D_ARRAY,1:N) )
-          allocate(DIC_source(GLOBAL_2D_ARRAY,1:N) )
-          allocate(DIC_alt_source(GLOBAL_2D_ARRAY,1:N) )
-        endif
+    if (cdr_source) then
+      allocate(ALK_source(GLOBAL_2D_ARRAY,1:nz) )
+      allocate(ALK_alt_source(GLOBAL_2D_ARRAY,1:nz) )
+      allocate(DIC_source(GLOBAL_2D_ARRAY,1:nz) )
+      allocate(DIC_alt_source(GLOBAL_2D_ARRAY,1:nz) )
+    endif
 
       if (wrt_cdr_avg) then
         allocate(zeta__avg(GLOBAL_2D_ARRAY) )
         zeta__avg(:,:)=0
-        allocate(temp_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(temp_avg(GLOBAL_2D_ARRAY,1:nz) )
         temp_avg(:,:,:)=0
-        allocate(salt_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(salt_avg(GLOBAL_2D_ARRAY,1:nz) )
         salt_avg(:,:,:)=0
-        allocate(ALK_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(ALK_avg(GLOBAL_2D_ARRAY,1:nz) )
         ALK_avg(:,:,:)=0
-!        allocate(hALK_avg(GLOBAL_2D_ARRAY,1:N) )
-!        hALK_avg(:,:,:)=0
+        allocate(hALK_avg(GLOBAL_2D_ARRAY,1:nz) )
+        hALK_avg(:,:,:)=0
         allocate(int_z_ALK_avg(GLOBAL_2D_ARRAY) )
         int_z_ALK_avg(:,:)=0
-        allocate(DIC_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(DIC_avg(GLOBAL_2D_ARRAY,1:nz) )
         DIC_avg(:,:,:)=0
-!        allocate(hDIC_avg(GLOBAL_2D_ARRAY,1:N) )
-!        hDIC_avg(:,:,:)=0
+        allocate(hDIC_avg(GLOBAL_2D_ARRAY,1:nz) )
+        hDIC_avg(:,:,:)=0
         allocate(int_z_DIC_avg(GLOBAL_2D_ARRAY) )
         int_z_DIC_avg(:,:)=0
-        allocate(ALK_alt_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(ALK_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
         ALK_alt_avg(:,:,:)=0
-!        allocate(hALK_alt_avg(GLOBAL_2D_ARRAY,1:N) )
-!        hALK_alt_avg(:,:,:)=0
+        allocate(hALK_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
+        hALK_alt_avg(:,:,:)=0
         allocate(int_z_ALK_alt_avg(GLOBAL_2D_ARRAY) )
         int_z_ALK_alt_avg(:,:)=0
-        allocate(DIC_alt_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(DIC_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
         DIC_alt_avg(:,:,:)=0
-!        allocate(hDIC_alt_avg(GLOBAL_2D_ARRAY,1:N) )
-!        hDIC_alt_avg(:,:,:)=0
+        allocate(hDIC_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
+        hDIC_alt_avg(:,:,:)=0
         allocate(int_z_DIC_alt_avg(GLOBAL_2D_ARRAY) )
         int_z_DIC_alt_avg(:,:)=0
-        allocate(pH_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(pH_avg(GLOBAL_2D_ARRAY,1:nz) )
         pH_avg(:,:,:)=0
-        allocate(pH_alt_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(pH_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
         pH_alt_avg(:,:,:)=0
         allocate(FG_CO2_avg(GLOBAL_2D_ARRAY) )
         FG_CO2_avg(:,:)=0
@@ -684,13 +545,13 @@ contains
         zsatarag_avg(:,:)=0
         allocate(zsatcalc_avg(GLOBAL_2D_ARRAY) )
         zsatcalc_avg(:,:)=0
-        allocate(CO3_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(CO3_avg(GLOBAL_2D_ARRAY,1:nz) )
         CO3_avg(:,:,:)=0
-        allocate(CO3_ALT_CO2_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(CO3_ALT_CO2_avg(GLOBAL_2D_ARRAY,1:nz) )
         CO3_ALT_CO2_avg(:,:,:)=0
-        allocate(co3_sat_arag_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(co3_sat_arag_avg(GLOBAL_2D_ARRAY,1:nz) )
         co3_sat_arag_avg(:,:,:)=0
-        allocate(co3_sat_calc_avg(GLOBAL_2D_ARRAY,1:N) )
+        allocate(co3_sat_calc_avg(GLOBAL_2D_ARRAY,1:nz) )
         co3_sat_calc_avg(:,:,:)=0
         allocate(Chl_TOT_surf_avg(GLOBAL_2D_ARRAY) )
         Chl_TOT_surf_avg(:,:)=0
@@ -698,53 +559,51 @@ contains
         C_TOT_100m_avg(:,:)=0
 
         if (cdr_source) then
-          allocate(ALK_source_avg(GLOBAL_2D_ARRAY,1:N) )
+          allocate(ALK_source_avg(GLOBAL_2D_ARRAY,1:nz) )
           ALK_source_avg(:,:,:)=0
-          allocate(ALK_alt_source_avg(GLOBAL_2D_ARRAY,1:N) )
+          allocate(ALK_alt_source_avg(GLOBAL_2D_ARRAY,1:nz) )
           ALK_alt_source_avg(:,:,:)=0
-          allocate(DIC_source_avg(GLOBAL_2D_ARRAY,1:N) )
+          allocate(DIC_source_avg(GLOBAL_2D_ARRAY,1:nz) )
           DIC_source_avg(:,:,:)=0
-          allocate(DIC_alt_source_avg(GLOBAL_2D_ARRAY,1:N) )
+          allocate(DIC_alt_source_avg(GLOBAL_2D_ARRAY,1:nz) )
           DIC_alt_source_avg(:,:,:)=0
         endif
       endif
 
-!      ! Always output instantaneous hDIC
-!      allocate(hDIC_tmp(GLOBAL_2D_ARRAY,1:N) )
-!      hDIC_tmp(:,:,:)=0
-!      allocate(hDIC_alt_tmp(GLOBAL_2D_ARRAY,1:N) )
-!      hDIC_alt_tmp(:,:,:)=0
-      ! Always output instantaneous int_z_DIC
+      ! Always output instantaneous hDIC
+      allocate(hDIC_tmp(GLOBAL_2D_ARRAY,1:nz) )
+      hDIC_tmp(:,:,:)=0
+      allocate(hDIC_alt_tmp(GLOBAL_2D_ARRAY,1:nz) )
+      hDIC_alt_tmp(:,:,:)=0
+
       allocate(int_z_DIC_tmp(GLOBAL_2D_ARRAY) )
       int_z_DIC_tmp(:,:)=0
       allocate(int_z_DIC_alt_tmp(GLOBAL_2D_ARRAY) )
       int_z_DIC_alt_tmp(:,:)=0
 
-        allocate(Chl_TOT_surf_tmp(GLOBAL_2D_ARRAY) )
-        Chl_TOT_surf_tmp(:,:)=0
-        allocate(C_TOT_100m_tmp(GLOBAL_2D_ARRAY) )
-        C_TOT_100m_tmp(:,:)=0
-        allocate(C_TOT_tmp(GLOBAL_2D_ARRAY,1:N) )
-        C_TOT_tmp(:,:,:)=0
+      allocate(hALK_tmp(GLOBAL_2D_ARRAY,1:nz) )
+      hALK_tmp(:,:,:)=0
+      allocate(hALK_alt_tmp(GLOBAL_2D_ARRAY,1:nz) )
+      hALK_alt_tmp(:,:,:)=0
 
-!      ! These have to be allocated for multiply_by_thickness call
-!      allocate(hALK_tmp(GLOBAL_2D_ARRAY,1:N) )
-!      hALK_tmp(:,:,:)=0
-!      allocate(hALK_alt_tmp(GLOBAL_2D_ARRAY,1:N) )
-!      hALK_alt_tmp(:,:,:)=0
-
-      ! These have to be allocated for multiply_by_thickness call
       allocate(int_z_ALK_tmp(GLOBAL_2D_ARRAY) )
       int_z_ALK_tmp(:,:)=0
       allocate(int_z_ALK_alt_tmp(GLOBAL_2D_ARRAY) )
       int_z_ALK_alt_tmp(:,:)=0
 
 
+      allocate(Chl_TOT_surf_tmp(GLOBAL_2D_ARRAY) )
+      Chl_TOT_surf_tmp(:,:)=0
+      allocate(C_TOT_100m_tmp(GLOBAL_2D_ARRAY) )
+      C_TOT_100m_tmp(:,:)=0
+      allocate(C_TOT_tmp(GLOBAL_2D_ARRAY,1:nz) )
+      C_TOT_tmp(:,:,:)=0
 
-      call define_cdr_output_variables
-      call display_cdr_output_settings_to_terminal_cdr
 
-      end subroutine init_cdr_output  !]
+    call define_cdr_output_variables
+    call display_cdr_output_settings_to_terminal_cdr
+
+  end subroutine init_cdr_output  !]
 !----------------------------------------------------------------------
       subroutine calc_average ![
       ! Update averages
@@ -772,7 +631,7 @@ contains
             print *, 'cdr :: started monthly averaging.'
           else
             print *, 'cdr :: started averaging. ',&
-     &      'output_period (s) =', output_period
+     &      'output_period (s) =', output_period_cdr
           endif
         endif
       endif
@@ -785,7 +644,8 @@ contains
 
       ALK_avg(:,:,:) = ALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*coef
 
-!      hALK_avg(:,:,:) = hALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*Hz(:,:,:)*coef
+      hALK_avg(:,:,:) = hALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*Hz(:,:,:)*coef
+
       int_z_ALK_tmp(:,:) = 0
       do k=1,nz
         int_z_ALK_tmp(:,:) = int_z_ALK_tmp(:,:) + t(:,:,k,nnew,iALK)*Hz(:,:,k)
@@ -794,7 +654,8 @@ contains
 
       DIC_avg(:,:,:) = DIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*coef
 
-!      hDIC_avg(:,:,:) = hDIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*Hz(:,:,:)*coef
+      hDIC_avg(:,:,:) = hDIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*Hz(:,:,:)*coef
+
       int_z_DIC_tmp(:,:) = 0
       do k=1,nz
         int_z_DIC_tmp(:,:) = int_z_DIC_tmp(:,:) + t(:,:,k,nnew,iDIC)*Hz(:,:,k)
@@ -803,7 +664,8 @@ contains
 
       ALK_alt_avg(:,:,:) = ALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*coef
 
-!      hALK_alt_avg(:,:,:) = hALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*Hz(:,:,:)*coef
+      hALK_alt_avg(:,:,:) = hALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*Hz(:,:,:)*coef
+
       int_z_ALK_alt_tmp(:,:) = 0
       do k=1,nz
         int_z_ALK_alt_tmp(:,:) = int_z_ALK_alt_tmp(:,:) + t(:,:,k,nnew,iALK_alt)*Hz(:,:,k)
@@ -812,7 +674,8 @@ contains
 
       DIC_alt_avg(:,:,:) = DIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*coef
 
-!      hDIC_alt_avg(:,:,:) = hDIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*Hz(:,:,:)*coef
+      hDIC_alt_avg(:,:,:) = hDIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*Hz(:,:,:)*coef
+
       int_z_DIC_alt_tmp(:,:) = 0
       do k=1,nz
         int_z_DIC_alt_tmp(:,:) = int_z_DIC_alt_tmp(:,:) + t(:,:,k,nnew,iDIC_alt)*Hz(:,:,k)
@@ -867,13 +730,13 @@ contains
 
       integer :: k
 
-!      hALK_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK)*Hz(i0:i1,j0:j1,:)
-!
-!      hDIC_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC)*Hz(i0:i1,j0:j1,:)
-!
-!      hALK_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK_alt)*Hz(i0:i1,j0:j1,:)
-!
-!      hDIC_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC_alt)*Hz(i0:i1,j0:j1,:)
+      hALK_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK)*Hz(i0:i1,j0:j1,:)
+
+      hDIC_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC)*Hz(i0:i1,j0:j1,:)
+
+      hALK_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK_alt)*Hz(i0:i1,j0:j1,:)
+
+      hDIC_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC_alt)*Hz(i0:i1,j0:j1,:)
 
       int_z_ALK_tmp(:,:) = 0
       int_z_ALK_alt_tmp(:,:) = 0
@@ -899,7 +762,7 @@ contains
       DIC_source(:,:,:) = 0
       DIC_alt_source(:,:,:) = 0
 
-      if (forcing_3d) then
+      if (cdr_forcing_3d) then
         do k=1,nz
           do j=1,ny
             do i=1,nx
@@ -1069,12 +932,20 @@ contains
       ALK_alt_avg(:,:,:)=0
       call ncwrite(ncid,'DIC_ALT_CO2',DIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       DIC_alt_avg(:,:,:)=0
-      call ncwrite(ncid,'hALK',hALK_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      hALK_tmp(:,:,:)=0
+      call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      hALK_alt_tmp(:,:,:)=0
+      call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      hDIC_tmp(:,:,:)=0
+      call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      hDIC_alt_tmp(:,:,:)=0
+      call ncwrite(ncid,'hALK_avg',hALK_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       hALK_avg(:,:,:)=0
+      call ncwrite(ncid,'hALK_ALT_CO2_avg',hALK_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      hALK_alt_avg(:,:,:)=0
       call ncwrite(ncid,'hDIC_avg',hDIC_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       hDIC_avg(:,:,:)=0
-      call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
-      hALK_alt_avg(:,:,:)=0
       call ncwrite(ncid,'hDIC_ALT_CO2_avg',hDIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       hDIC_alt_avg(:,:,:)=0
       call ncwrite(ncid,'pH',pH_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
@@ -1085,6 +956,34 @@ contains
       FG_CO2_avg(:,:)=0
       call ncwrite(ncid,'FG_ALT_CO2'  ,FG_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
       FG_ALT_CO2_avg(:,:)=0
+      call ncwrite(ncid,'int_z_ALK',int_z_ALK_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      int_z_ALK_avg(:,:)=0
+      call ncwrite(ncid,'int_z_DIC',int_z_DIC_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      int_z_DIC_avg(:,:)=0
+      call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      int_z_ALK_alt_avg(:,:)=0
+      call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      int_z_DIC_alt_avg(:,:)=0
+      call ncwrite(ncid,'pCO2SURF'  ,pCO2SURF_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      pCO2SURF_avg(:,:)=0
+      call ncwrite(ncid,'pCO2SURF_ALT_CO2'  ,pCO2SURF_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      pCO2SURF_ALT_CO2_avg(:,:)=0
+      call ncwrite(ncid,'zsatarag'  ,zsatarag_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      zsatarag_avg(:,:)=0
+      call ncwrite(ncid,'zsatcalc'  ,zsatcalc_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      zsatcalc_avg(:,:)=0
+      call ncwrite(ncid,'CO3',CO3_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      CO3_avg(:,:,:)=0
+      call ncwrite(ncid,'CO3_ALT_CO2',CO3_ALT_CO2_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      CO3_ALT_CO2_avg(:,:,:)=0
+      call ncwrite(ncid,'co3_sat_arag',co3_sat_arag_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      co3_sat_arag_avg(:,:,:)=0
+      call ncwrite(ncid,'co3_sat_calc',co3_sat_calc_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      co3_sat_calc_avg(:,:,:)=0
+      call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      Chl_TOT_surf_avg(:,:)=0
+      call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      C_TOT_100m_avg(:,:)=0
       if (cdr_source) then
         call ncwrite(ncid,'ALK_source',ALK_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
         ALK_source_avg(:,:,:)=0
@@ -1105,10 +1004,26 @@ contains
       call ncwrite(ncid,'DIC_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iDIC_alt),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'pH',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'pH_ALT_CO2',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH_alt),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG),(/1,1,record/),.true.)
       call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt),(/1,1,record/),.true.)
+      call ncwrite(ncid,'int_z_ALK',int_z_ALK_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
+      call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
+      call ncwrite(ncid,'int_z_DIC',int_z_DIC_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
+      call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
+      call ncwrite(ncid,'pCO2SURF'  ,bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_idiag),(/1,1,record/),.true.)
+      call ncwrite(ncid,'pCO2SURF_ALT_CO2'  , bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_ALT_CO2_idiag),(/1,1,record/),.true.)
+      call ncwrite(ncid,'zsatarag'  ,bgc_diag_2d(i0:i1,j0:j1,izsatarag_idiag),(/1,1,record/),.true.)
+      call ncwrite(ncid,'zsatcalc'  ,bgc_diag_2d(i0:i1,j0:j1,izsatcalc_idiag),(/1,1,record/),.true.)
+      call ncwrite(ncid,'CO3',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_idiag),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'CO3_ALT_CO2',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_ALT_CO2_idiag),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'co3_sat_arag',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_arag_idiag),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'co3_sat_calc',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_calc_idiag),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
+      call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
       if (cdr_source) then
         call ncwrite(ncid,'ALK_source',ALK_source(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
         call ncwrite(ncid,'ALK_ALT_source',ALK_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
@@ -1116,10 +1031,6 @@ contains
         call ncwrite(ncid,'DIC_ALT_source',DIC_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       endif
     endif
-    ! Always write instantaneous hDIC vars
-    call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
-    call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),&
-    &(/1,1,1,record/),.true.)
 
     call PIO_closefile(pio_FileDesc)
 
@@ -1169,12 +1080,16 @@ contains
       ALK_alt_avg(:,:,:)=0
       call ncwrite(ncid,'DIC_ALT_CO2',DIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
       DIC_alt_avg(:,:,:)=0
-      call ncwrite(ncid,'hALK',hALK_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+      call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
+      call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
+      call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
+      call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
+      call ncwrite(ncid,'hALK_avg',hALK_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
       hALK_avg(:,:,:)=0
+      call ncwrite(ncid,'hALK_ALT_CO2_avg',hALK_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+      hALK_alt_avg(:,:,:)=0
       call ncwrite(ncid,'hDIC_avg',hDIC_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
       hDIC_avg(:,:,:)=0
-      call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-      hALK_alt_avg(:,:,:)=0
       call ncwrite(ncid,'hDIC_ALT_CO2_avg',hDIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
       hDIC_alt_avg(:,:,:)=0
       call ncwrite(ncid,'pH',pH_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
@@ -1185,6 +1100,35 @@ contains
       FG_CO2_avg(:,:)=0
       call ncwrite(ncid,'FG_ALT_CO2'  ,FG_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
       FG_ALT_CO2_avg(:,:)=0
+      call ncwrite(ncid,'int_z_ALK',int_z_ALK_avg(i0:i1,j0:j1),(/1,1,record/))
+      int_z_ALK_avg(:,:)=0
+      call ncwrite(ncid,'int_z_DIC',int_z_DIC_avg(i0:i1,j0:j1),(/1,1,record/))
+      int_z_DIC_avg(:,:)=0
+      call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_avg(i0:i1,j0:j1),(/1,1,record/))
+      int_z_ALK_alt_avg(:,:)=0
+      call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_avg(i0:i1,j0:j1),(/1,1,record/))
+      int_z_DIC_alt_avg(:,:)=0
+      call ncwrite(ncid,'pCO2SURF'  ,pCO2SURF_avg(i0:i1,j0:j1),(/1,1,record/))
+      pCO2SURF_avg(:,:)=0
+      call ncwrite(ncid,'pCO2SURF_ALT_CO2'  ,pCO2SURF_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
+      pCO2SURF_ALT_CO2_avg(:,:)=0
+      call ncwrite(ncid,'zsatarag'  ,zsatarag_avg(i0:i1,j0:j1),(/1,1,record/))
+      zsatarag_avg(:,:)=0
+      call ncwrite(ncid,'zsatcalc'  ,zsatcalc_avg(i0:i1,j0:j1),(/1,1,record/))
+      zsatcalc_avg(:,:)=0
+      call ncwrite(ncid,'CO3',CO3_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+      CO3_avg(:,:,:)=0
+      call ncwrite(ncid,'CO3_ALT_CO2',CO3_ALT_CO2_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+      CO3_ALT_CO2_avg(:,:,:)=0
+      call ncwrite(ncid,'co3_sat_arag',co3_sat_arag_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+      co3_sat_arag_avg(:,:,:)=0
+      call ncwrite(ncid,'co3_sat_calc',co3_sat_calc_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+      co3_sat_calc_avg(:,:,:)=0
+      call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_avg(i0:i1,j0:j1),(/1,1,record/))
+      Chl_TOT_surf_avg(:,:)=0
+      call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_avg(i0:i1,j0:j1),(/1,1,record/))
+      C_TOT_100m_avg(:,:)=0
+
       if (cdr_source) then
         call ncwrite(ncid,'ALK_source',ALK_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
         ALK_source_avg(:,:,:)=0
@@ -1205,10 +1149,26 @@ contains
       call ncwrite(ncid,'DIC_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iDIC_alt),(/1,1,1,record/))
       call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
+      call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
+      call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'pH',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH),(/1,1,1,record/))
       call ncwrite(ncid,'pH_ALT_CO2',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH_alt),(/1,1,1,record/))
       call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG),(/1,1,record/))
       call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt),(/1,1,record/))
+      call ncwrite(ncid,'int_z_ALK',int_z_ALK_tmp(i0:i1,j0:j1),(/1,1,record/))
+      call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_tmp(i0:i1,j0:j1),(/1,1,record/))
+      call ncwrite(ncid,'int_z_DIC',int_z_DIC_tmp(i0:i1,j0:j1),(/1,1,record/))
+      call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_tmp(i0:i1,j0:j1),(/1,1,record/))
+      call ncwrite(ncid,'pCO2SURF'  ,bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_idiag),(/1,1,record/))
+      call ncwrite(ncid,'pCO2SURF_ALT_CO2'  , bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_ALT_CO2_idiag),(/1,1,record/))
+      call ncwrite(ncid,'zsatarag'  ,bgc_diag_2d(i0:i1,j0:j1,izsatarag_idiag),(/1,1,record/))
+      call ncwrite(ncid,'zsatcalc'  ,bgc_diag_2d(i0:i1,j0:j1,izsatcalc_idiag),(/1,1,record/))
+      call ncwrite(ncid,'CO3',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_idiag),(/1,1,1,record/))
+      call ncwrite(ncid,'CO3_ALT_CO2',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_ALT_CO2_idiag),(/1,1,1,record/))
+      call ncwrite(ncid,'co3_sat_arag',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_arag_idiag),(/1,1,1,record/))
+      call ncwrite(ncid,'co3_sat_calc',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_calc_idiag),(/1,1,1,record/))
+      call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_tmp(i0:i1,j0:j1),(/1,1,record/))
+      call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_tmp(i0:i1,j0:j1),(/1,1,record/))
       if (cdr_source) then
         call ncwrite(ncid,'ALK_source',ALK_source(i0:i1,j0:j1,:),(/1,1,1,record/))
         call ncwrite(ncid,'ALK_ALT_source',ALK_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/))
@@ -1216,10 +1176,6 @@ contains
         call ncwrite(ncid,'DIC_ALT_source',DIC_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/))
       endif
     endif
-    ! Always write instantaneous hDIC vars
-    call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
-    call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),&
-    &(/1,1,1,record/))
 
     ierr=nf90_close (ncid)
 
@@ -1231,218 +1187,11 @@ contains
 
     navg = 0
 #endif ! PARALLEL_IO
-!
+
   end subroutine wrt_cdr_output !]
-
+!--------------------------------------------------------------------------
   subroutine display_cdr_output_settings_to_terminal_cdr
-!     Basic header
-    character(len=120) :: stdout_str
-    integer(kind=4) :: idx
-    if (mynode==0) then
-      if (.not. wrt_cdr_avg) then
-        write(stdout_str,'(7x,A)')&
-        &'cdr_output :: history file '
-      else
-        write(stdout_str,'(7x,A)')&
-        &'cdr_output :: average file '
-      end if
 
-      write(stdout_str,'(2(A,2x),I4)')&
-      &trim(stdout_str), 'recs/file = ', nrpf_cdr
-
-      if (cdr_monthly_averages) then
-        write(stdout_str,'(2(A,2x),1L)')&
-        &trim(stdout_str), 'cdr_monthly_averages= ', cdr_monthly_averages
-      else
-        write(stdout_str,'(2(A,2x),F6.1)')&
-        &trim(stdout_str), 'output_period_cdr =', output_period_cdr
-      end if
-      write(*, '(7x,A)') trim(stdout_str)
-      if (.not. wrt_cdr_avg) then
-        write(*, '(/7x,A)') 'his fields to be saved: (T/F)'
-      else
-        write(*, '(/7x,A)') 'avg fields to be saved: (T/F)'
-      end if
->>>>>>> dev_cw
-
-        if ((date(2) - month_at_prev_timestep) /= 0) call wrt_cdr_output
-
-        month_at_prev_timestep = date(2)
-      else
-
-        output_time = output_time + dt
-
-        if (output_time>=output_period) then
-          call wrt_cdr_output
-          output_time = 0
-        endif
-
-      endif
-
-      end subroutine wrt_cdr  !]
-!----------------------------------------------------------------------
-      subroutine wrt_cdr_output  ![
-      ! Call wrt after completion of the time-step
-      implicit none
-
-! local
-      character(len=14) :: sr_name = "wrt_cdr_output"
-      character(len=99),save :: fname
-      integer,dimension(3)   :: start
-      integer                :: idx,ncid,ierr
-
-      if (record==nrpf) then
-          call create_file('_cdr',fname)
-          ierr=nf90_open(fname,nf90_write,ncid)
-          call create_cdr_output_variables(ncid)
-          ierr = nf90_close(ncid)
-          record = 0
-      endif
-
-        record = record+1
-
-        ierr=nf90_open(fname,nf90_write,ncid)
-        call error_log%check_netcdf_status(netcdf_status=ierr,&
-     &       info="error opening "//fname,&
-     &       context=module_name//"/"//sr_name)
-        call error_log%abort_check()
-
-        call multiply_by_thickness
-        ! always add time
-        call ncwrite(ncid,'ocean_time',(/time/),(/record/))
-
-        if (wrt_cdr_avg) then
-          call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
-          call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
-          call ncwrite(ncid,'zeta'  ,zeta__avg(i0:i1,j0:j1),(/1,1,record/))
-          zeta__avg(:,:)=0
-          call ncwrite(ncid,'temp',temp_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          temp_avg(:,:,:)=0
-          call ncwrite(ncid,'salt',salt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          salt_avg(:,:,:)=0
-          call ncwrite(ncid,'ALK',ALK_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          ALK_avg(:,:,:)=0
-          call ncwrite(ncid,'DIC',DIC_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          DIC_avg(:,:,:)=0
-          call ncwrite(ncid,'ALK_ALT_CO2',ALK_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          ALK_alt_avg(:,:,:)=0
-          call ncwrite(ncid,'DIC_ALT_CO2',DIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          DIC_alt_avg(:,:,:)=0
-!          call ncwrite(ncid,'hALK',hALK_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-!          hALK_avg(:,:,:)=0
-!          call ncwrite(ncid,'hDIC_avg',hDIC_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-!          hDIC_avg(:,:,:)=0
-!          call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-!          hALK_alt_avg(:,:,:)=0
-!          call ncwrite(ncid,'hDIC_ALT_CO2_avg',hDIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-!          hDIC_alt_avg(:,:,:)=0
-          call ncwrite(ncid,'int_z_ALK',int_z_ALK_avg(i0:i1,j0:j1),(/1,1,record/))
-          int_z_ALK_avg(:,:)=0
-          call ncwrite(ncid,'int_z_DIC',int_z_DIC_avg(i0:i1,j0:j1),(/1,1,record/))
-          int_z_DIC_avg(:,:)=0
-          call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_avg(i0:i1,j0:j1),(/1,1,record/))
-          int_z_ALK_alt_avg(:,:)=0
-          call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_avg(i0:i1,j0:j1),(/1,1,record/))
-          int_z_DIC_alt_avg(:,:)=0
-          call ncwrite(ncid,'pH',pH_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          pH_avg(:,:,:)=0
-          call ncwrite(ncid,'pH_ALT_CO2',pH_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          pH_alt_avg(:,:,:)=0
-          call ncwrite(ncid,'FG_CO2'  ,FG_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
-          FG_CO2_avg(:,:)=0
-          call ncwrite(ncid,'FG_ALT_CO2'  ,FG_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
-          FG_ALT_CO2_avg(:,:)=0
-          call ncwrite(ncid,'pCO2SURF'  ,pCO2SURF_avg(i0:i1,j0:j1),(/1,1,record/))
-          pCO2SURF_avg(:,:)=0
-          call ncwrite(ncid,'pCO2SURF_ALT_CO2'  ,pCO2SURF_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
-          pCO2SURF_ALT_CO2_avg(:,:)=0
-          call ncwrite(ncid,'zsatarag'  ,zsatarag_avg(i0:i1,j0:j1),(/1,1,record/))
-          zsatarag_avg(:,:)=0
-          call ncwrite(ncid,'zsatcalc'  ,zsatcalc_avg(i0:i1,j0:j1),(/1,1,record/))
-          zsatcalc_avg(:,:)=0
-          call ncwrite(ncid,'CO3',CO3_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          CO3_avg(:,:,:)=0
-          call ncwrite(ncid,'CO3_ALT_CO2',CO3_ALT_CO2_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          CO3_ALT_CO2_avg(:,:,:)=0
-          call ncwrite(ncid,'co3_sat_arag',co3_sat_arag_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          co3_sat_arag_avg(:,:,:)=0
-          call ncwrite(ncid,'co3_sat_calc',co3_sat_calc_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-          co3_sat_calc_avg(:,:,:)=0
-          call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_avg(i0:i1,j0:j1),(/1,1,record/))
-          Chl_TOT_surf_avg(:,:)=0
-          call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_avg(i0:i1,j0:j1),(/1,1,record/))
-          C_TOT_100m_avg(:,:)=0
-
-          if (cdr_source) then
-            call ncwrite(ncid,'ALK_source',ALK_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-            ALK_source_avg(:,:,:)=0
-            call ncwrite(ncid,'ALK_ALT_source',ALK_alt_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-            ALK_alt_source_avg(:,:,:)=0
-            call ncwrite(ncid,'DIC_source',DIC_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-            DIC_source_avg(:,:,:)=0
-            call ncwrite(ncid,'DIC_ALT_source',DIC_alt_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
-            DIC_alt_source_avg(:,:,:)=0
-          endif
-        else
-          call ncwrite(ncid,'zeta'  ,zeta(i0:i1,j0:j1,knew),(/1,1,record/))
-          call ncwrite(ncid,'temp',t(i0:i1,j0:j1,:,nnew,itemp),(/1,1,1,record/))
-          call ncwrite(ncid,'salt',t(i0:i1,j0:j1,:,nnew,isalt),(/1,1,1,record/))
-          call ncwrite(ncid,'ALK',t(i0:i1,j0:j1,:,nnew,iALK),(/1,1,1,record/))
-          call ncwrite(ncid,'DIC',t(i0:i1,j0:j1,:,nnew,iDIC),(/1,1,1,record/))
-          call ncwrite(ncid,'ALK_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iALK_alt),(/1,1,1,record/))
-          call ncwrite(ncid,'DIC_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iDIC_alt),(/1,1,1,record/))
-!          call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
-!          call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
-          call ncwrite(ncid,'int_z_ALK',int_z_ALK_tmp(i0:i1,j0:j1),(/1,1,record/))
-          call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_tmp(i0:i1,j0:j1),(/1,1,record/))
-          call ncwrite(ncid,'int_z_DIC',int_z_DIC_tmp(i0:i1,j0:j1),(/1,1,record/))
-          call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_tmp(i0:i1,j0:j1),(/1,1,record/))
-          call ncwrite(ncid,'pH',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH),(/1,1,1,record/))
-          call ncwrite(ncid,'pH_ALT_CO2',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH_alt),(/1,1,1,record/))
-          call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_idiag),(/1,1,record/))
-          call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt_idiag),(/1,1,record/))
-          call ncwrite(ncid,'pCO2SURF'  ,bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_idiag),(/1,1,record/))
-          call ncwrite(ncid,'pCO2SURF_ALT_CO2'  , bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_ALT_CO2_idiag),(/1,1,record/))
-          call ncwrite(ncid,'zsatarag'  ,bgc_diag_2d(i0:i1,j0:j1,izsatarag_idiag),(/1,1,record/))
-          call ncwrite(ncid,'zsatcalc'  ,bgc_diag_2d(i0:i1,j0:j1,izsatcalc_idiag),(/1,1,record/))
-          call ncwrite(ncid,'CO3',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_idiag),(/1,1,1,record/))
-          call ncwrite(ncid,'CO3_ALT_CO2',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_ALT_CO2_idiag),(/1,1,1,record/))
-          call ncwrite(ncid,'co3_sat_arag',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_arag_idiag),(/1,1,1,record/))
-          call ncwrite(ncid,'co3_sat_calc',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_calc_idiag),(/1,1,1,record/))
-          call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_tmp(i0:i1,j0:j1),(/1,1,record/))
-          call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_tmp(i0:i1,j0:j1),(/1,1,record/))
-
-          if (cdr_source) then
-            call ncwrite(ncid,'ALK_source',ALK_source(i0:i1,j0:j1,:),(/1,1,1,record/))
-            call ncwrite(ncid,'ALK_ALT_source',ALK_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/))
-            call ncwrite(ncid,'DIC_source',DIC_source(i0:i1,j0:j1,:),(/1,1,1,record/))
-            call ncwrite(ncid,'DIC_ALT_source',DIC_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/))
-          endif
-       endif
-!       ! Always write instantaneous hDIC vars
-!       call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
-!       call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),
-!     &      (/1,1,1,record/))
-       ! Always write instantaneous depth-integrated DIC vars
-       call ncwrite(ncid,'int_z_DIC',int_z_DIC_tmp(i0:i1,j0:j1),(/1,1,record/))
-       call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_tmp(i0:i1,j0:j1),&
-     &      (/1,1,record/))
-
-        ierr=nf90_close (ncid)
-
-        if (mynode == 0) then
-          write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
-     &     'wrt_cdr :: wrote cdr, tdays =', tdays,&
-     &     'step =', iic-1, 'rec =', record
-        endif
-
-        navg = 0
-
-!
-        end subroutine wrt_cdr_output !]
-
-        subroutine display_cdr_output_settings_to_terminal_cdr
-!     Basic header
         character(len=120) :: stdout_str
         integer :: idx
         if (mynode==0) then
@@ -1455,14 +1204,14 @@ contains
            end if
 
            write(stdout_str,'(2(A,2x),I4)')&
-     &          trim(stdout_str), 'recs/file = ', nrpf
+     &          trim(stdout_str), 'recs/file = ', nrpf_cdr
 
            if (cdr_monthly_averages) then
               write(stdout_str,'(2(A,2x),1L)')&
      &             trim(stdout_str), 'monthly_averages= ', cdr_monthly_averages
            else
               write(stdout_str,'(2(A,2x),F6.1)')&
-     &             trim(stdout_str), 'output_period =', output_period
+     &             trim(stdout_str), 'output_period =', output_period_cdr
            end if
            write(*, '(7x,A)') trim(stdout_str)
            if (.not. wrt_cdr_avg) then
@@ -1487,7 +1236,6 @@ contains
         end subroutine display_cdr_output_settings_to_terminal_cdr
 
 !----------------------------------------------------------------------
-
 #else /* MARBL && MARBL_DIAGS && CDR_FORCING */
 !----------------------------------------------------------------------
       use error_handling_mod, only : error_log
