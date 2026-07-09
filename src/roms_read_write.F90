@@ -1203,11 +1203,12 @@ contains
       ! add force file info to output nc
 #ifndef PARALLEL_IO
       if (mynode == 0) then
+        forcing_version = ''
         ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
-        ! if forcing netcdf has information
-        if (len(trim(forcing_version)) /= 0) then
+        ! if forcing netcdf has information (attribute present and non-empty)
+        if (ierr == nf90_noerr .and. len_trim(forcing_version) /= 0) then
 !     if attribute has not been set yet
-          if (index(force_info,forcing_version) == 0) then
+          if (index(force_info,trim(forcing_version)) == 0) then
             write(frcstr,'(2A)') trim(adjustl(frctype)),&
             &trim(adjustl(forcing_version))
             frcstr = trim(adjustl(frcstr))
@@ -1311,11 +1312,12 @@ contains
       ! add force file info to output nc
 #ifndef PARALLEL_IO
       if (mynode == 0) then
+        forcing_version = ''
         ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
-        ! if forcing netcdf has information
-        if (len(trim(forcing_version)) /= 0) then
+        ! if forcing netcdf has information (attribute present and non-empty)
+        if (ierr == nf90_noerr .and. len_trim(forcing_version) /= 0) then
           ! if attribute has not been set yet
-          if (index(force_info,forcing_version) == 0) then
+          if (index(force_info,trim(forcing_version)) == 0) then
             write(frcstr,'(2A)') trim(adjustl(frctype)),&
             &trim(adjustl(forcing_version))
             frcstr = trim(adjustl(frcstr))
@@ -1428,11 +1430,12 @@ contains
 #ifndef PARALLEL_IO
     ! add force file info to output nc
 !      if (mynode == 0) then
+    forcing_version = ''
     ierr = nf90_get_att(ncid,nf90_global,'data_source',forcing_version)
-    ! if forcing netcdf has information
-    if (len(trim(forcing_version)) /= 0) then
+    ! if forcing netcdf has information (attribute present and non-empty)
+    if (ierr == nf90_noerr .and. len_trim(forcing_version) /= 0) then
       ! if attribute has not been set yet
-      if (index(force_info,forcing_version) == 0) then
+      if (index(force_info,trim(forcing_version)) == 0) then
         write(frcstr,'(2A)') trim(adjustl(frctype)),trim(adjustl(forcing_version))
         frcstr = trim(adjustl(frcstr))
         call store_string_att(force_info,frcstr)
