@@ -305,7 +305,6 @@ contains
     call ana_vmix
 #endif
 
-    write(*,*) 'Finished inits'
     ! Set initial model clock: at this
     time=start_time             ! moment "start_time" (global scalar)
     ! is set by get_init or analytically
