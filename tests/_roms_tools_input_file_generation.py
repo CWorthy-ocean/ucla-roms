@@ -286,7 +286,7 @@ def create_rti_restore_surf_sss(target_dir: Path):
 
 
 def create_rti_restore_surf_dic_alk(target_dir: Path):
-    time = pd.date_range("2010-01-01", periods=2, freq="MS")
+    time = pd.date_range("1982-01-01", periods=516, freq="MS")
     lat  = np.array([34.75, 34.0], dtype=np.float64)
     lon = np.array([239.0, 240.25], dtype=np.float64)
 
