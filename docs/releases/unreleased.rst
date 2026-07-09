@@ -25,7 +25,9 @@ Bug Fixes
 Improvements
 ~~~~~~~~~~~~
 
-- N/A
+
+- Adds exact restart test (`#301 <https://github.com/CWorthy-ocean/ucla-roms/pull/301>`_)
+- Adds test that default cppkey set has not changed (`#301 <https://github.com/CWorthy-ocean/ucla-roms/pull/301>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
