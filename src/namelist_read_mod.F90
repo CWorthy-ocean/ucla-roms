@@ -59,7 +59,6 @@ contains
 #endif
     use roms_read_write, only: read_nml_roms_read_write  ! SIMULATION_NAME_SETTINGS,
                                                          ! INITIAL_CONDITIONS
-    use instant_output, only: read_nml_instant_output    ! INSTANT_OUTPUT_SETTINGS
 #ifdef MARBL
     use marbl_driver, only: read_nml_marbl         !MARBL_BIOGEOCHEMISTRY_SETTINGS
 #endif
@@ -107,7 +106,6 @@ contains
     call read_nml_lin_rho_eos
 #endif
     call read_nml_roms_read_write
-    call read_nml_instant_output
 #ifdef MARBL
     call read_nml_marbl
 #endif
