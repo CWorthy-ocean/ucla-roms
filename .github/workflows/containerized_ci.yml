@@ -1,0 +1,340 @@
+name: Containerized CI
+
+# Builds the CI container images documented in environments/Containerfiles/ when
+# a Containerfile changes, then runs the gfortran and ifx test suites -- against
+# the freshly built image when one was built this run, otherwise against the
+# published :latest (the previous behavior).
+#
+# Job graph:
+#   prepare ─┬─ build_gnu ── test_gnu ─┐
+#            └─ build_ifx ── test_ifx ─┴─ cleanup
+#
+# prepare decides which images to (re)build and resolves the exact image ref
+# each test job should pull. build_* only run when their Containerfile changed
+# (or on a manual dispatch); when skipped, the test job falls back to :latest.
+#
+# Publishing rules:
+#   - push to main / workflow_dispatch: push :latest + a dated :YYYY-MM-DD-<sha> tag.
+#   - pull_request (same-repo): push a throwaway :ci-<run_id> tag so the tests can
+#     run against the new image; cleanup deletes it afterward. :latest is never
+#     touched from unmerged code.
+#   - pull_request from a fork: the token is read-only, so the image is built to
+#     verify it compiles but not pushed, and the tests fall back to :latest.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Which image(s) to rebuild and publish
+        type: choice
+        options:
+          - both
+          - gnu
+          - ifx
+        default: both
+  push:
+    branches:
+      - main
+  pull_request:
+    branches: ['*']
+
+# Cancel superseded runs for the same PR so rapid pushes don't stack up the
+# expensive from-source ifx builds. Main pushes are never cancelled (each commit
+# gets its own run).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      build_gnu: ${{ steps.set.outputs.build_gnu }}
+      build_ifx: ${{ steps.set.outputs.build_ifx }}
+      can_push: ${{ steps.set.outputs.can_push }}
+      gnu_image: ${{ steps.set.outputs.gnu_image }}
+      ifx_image: ${{ steps.set.outputs.ifx_image }}
+      gnu_push_tags: ${{ steps.set.outputs.gnu_push_tags }}
+      ifx_push_tags: ${{ steps.set.outputs.ifx_push_tags }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          # Full history so we can diff against the push/PR base commit below.
+          fetch-depth: 0
+
+      - name: Resolve build plan and image refs
+        id: set
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_IMAGE: ${{ inputs.image }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          GNU_IMG="ghcr.io/cworthy-ocean/marbl_gnu_mpich"
+          IFX_IMG="ghcr.io/cworthy-ocean/marbl_ifx_openmpi"
+
+          # 1. Which images to (re)build?
+          build_gnu=false
+          build_ifx=false
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            case "$INPUT_IMAGE" in
+              gnu) build_gnu=true ;;
+              ifx) build_ifx=true ;;
+              *)   build_gnu=true; build_ifx=true ;;
+            esac
+          else
+            if [ "$EVENT" = "pull_request" ]; then
+              base="$PR_BASE"; head="$PR_HEAD"
+            else
+              base="$PUSH_BEFORE"; head="$PUSH_AFTER"
+            fi
+            if [ -n "$base" ] \
+               && [ "$base" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "$base^{commit}" 2>/dev/null; then
+              changed="$(git diff --name-only "$base" "$head" -- environments/Containerfiles/)"
+            else
+              # Base commit unavailable (e.g. a new branch's first push); assume
+              # both Containerfiles changed rather than risk missing a rebuild.
+              changed="Containerfile_gnu Containerfile_ifx"
+            fi
+            case "$changed" in *Containerfile_gnu*) build_gnu=true ;; esac
+            case "$changed" in *Containerfile_ifx*) build_ifx=true ;; esac
+          fi
+
+          # 2. Can this run push to GHCR? Fork PRs get a read-only token.
+          can_push=false
+          if [ "$EVENT" = "pull_request" ]; then
+            if [ "$HEAD_REPO" = "$THIS_REPO" ]; then can_push=true; fi
+          else
+            can_push=true
+          fi
+
+          # 3. Tags to push, and the freshly-built ref tests would pull.
+          if [ "$EVENT" = "pull_request" ]; then
+            ci_tag="ci-${RUN_ID}"
+            gnu_push_tags="$GNU_IMG:$ci_tag"
+            ifx_push_tags="$IFX_IMG:$ci_tag"
+            gnu_built_ref="$GNU_IMG:$ci_tag"
+            ifx_built_ref="$IFX_IMG:$ci_tag"
+          else
+            date_tag="$(date -u +%Y-%m-%d)-$(printf '%.7s' "$PUSH_AFTER")"
+            gnu_push_tags="$(printf '%s\n%s' "$GNU_IMG:latest" "$GNU_IMG:$date_tag")"
+            ifx_push_tags="$(printf '%s\n%s' "$IFX_IMG:latest" "$IFX_IMG:$date_tag")"
+            gnu_built_ref="$GNU_IMG:latest"
+            ifx_built_ref="$IFX_IMG:latest"
+          fi
+
+          # 4. Image each test job pulls: the fresh build if we built AND could
+          #    push it, otherwise :latest (the previous behavior).
+          gnu_image="$GNU_IMG:latest"
+          ifx_image="$IFX_IMG:latest"
+          if [ "$build_gnu" = "true" ] && [ "$can_push" = "true" ]; then gnu_image="$gnu_built_ref"; fi
+          if [ "$build_ifx" = "true" ] && [ "$can_push" = "true" ]; then ifx_image="$ifx_built_ref"; fi
+
+          {
+            echo "build_gnu=$build_gnu"
+            echo "build_ifx=$build_ifx"
+            echo "can_push=$can_push"
+            echo "gnu_image=$gnu_image"
+            echo "ifx_image=$ifx_image"
+            echo "gnu_push_tags<<EOF"
+            echo "$gnu_push_tags"
+            echo "EOF"
+            echo "ifx_push_tags<<EOF"
+            echo "$ifx_push_tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Plan: build_gnu=$build_gnu build_ifx=$build_ifx can_push=$can_push"
+          echo "gnu test image: $gnu_image"
+          echo "ifx test image: $ifx_image"
+
+  build_gnu:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.build_gnu == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    name: build_gnu
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        if: ${{ needs.prepare.outputs.can_push == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push gnu image
+        uses: docker/build-push-action@v6
+        with:
+          context: environments/Containerfiles
+          file: environments/Containerfiles/Containerfile_gnu
+          push: ${{ needs.prepare.outputs.can_push }}
+          tags: ${{ needs.prepare.outputs.gnu_push_tags }}
+          # Keep a plain single-image manifest (matches the podman --format=docker
+          # intent for the micromamba image) and keep :latest pulls simple.
+          provenance: false
+          cache-from: type=gha,scope=gnu
+          cache-to: type=gha,mode=max,scope=gnu
+
+  build_ifx:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.build_ifx == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    name: build_ifx
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        if: ${{ needs.prepare.outputs.can_push == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push ifx image
+        uses: docker/build-push-action@v6
+        with:
+          context: environments/Containerfiles
+          file: environments/Containerfiles/Containerfile_ifx
+          push: ${{ needs.prepare.outputs.can_push }}
+          tags: ${{ needs.prepare.outputs.ifx_push_tags }}
+          provenance: false
+          cache-from: type=gha,scope=ifx
+          cache-to: type=gha,mode=max,scope=ifx
+
+  test_gnu:
+    needs: [prepare, build_gnu]
+    # Run when build_gnu succeeded or was skipped (no Containerfile change). If
+    # build_gnu FAILED, this job is skipped so tests never run against a stale
+    # :latest and report a false green. Merge-gating on a broken Containerfile
+    # then comes from the red build_gnu job itself -- add build_gnu (and
+    # build_ifx) to branch protection's required checks. A skipped build_gnu
+    # (no change) counts as passing, so unrelated PRs are not blocked.
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.build_gnu.result == 'success' || needs.build_gnu.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.prepare.outputs.gnu_image }}
+    name: pytest_gnu
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+    - name: Set Environment Variables
+      run: |
+        ROMS_ROOT=$(pwd)
+        echo "ROMS_ROOT=$ROMS_ROOT" >> $GITHUB_ENV
+        echo "PATH=./:$PATH:$ROMS_ROOT/Tools-Roms" >> $GITHUB_ENV
+      shell: bash
+    - name: Print system info
+      run: lscpu
+    - name: Compile Fortran Code
+      shell: bash
+      run: |
+        micromamba run -n roms-ci bash -c '
+        cd Work/
+        cd ${ROMS_ROOT}/Tools-Roms/
+        make partit COMPILER=gnu
+        make ncjoin COMPILER=gnu
+        '
+
+    - name: Run tests
+      shell: bash
+      run: |
+        micromamba run -n roms-ci bash -c '
+        cd ${ROMS_ROOT}/tests/
+        pytest -svvv . --environ=github_gnu
+        '
+
+  test_ifx:
+    needs: [prepare, build_ifx]
+    # See test_gnu: a failed build_ifx skips this job; gate merges via build_ifx
+    # being a required check, not via this test job.
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.build_ifx.result == 'success' || needs.build_ifx.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.prepare.outputs.ifx_image }}
+    name: pytest_ifx
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Environment Variables
+        shell: bash
+        run: |
+          ROMS_ROOT=$(pwd)
+          echo "ROMS_ROOT=$ROMS_ROOT" >> $GITHUB_ENV
+          echo "PATH=./:$PATH:$ROMS_ROOT/Tools-Roms" >> $GITHUB_ENV
+      - name: Print system info
+        run: lscpu
+
+      - name: Compile Fortran Code
+        shell: bash
+        run: |
+          source $GITHUB_ENV
+          cd Work/
+          cd ${ROMS_ROOT}/Tools-Roms/
+          make partit COMPILER=intel
+          make ncjoin COMPILER=intel
+
+      - name: Run tests
+        shell: bash
+        run: |
+          source $GITHUB_ENV
+          cd $ROMS_ROOT/tests/
+          sed -i -e "s/make BUILD_MODE=test/make COMPILER=intel BUILD_MODE=test/g" _helpers.py
+          sed -i -e "s/mpirun/mpirun --oversubscribe/g" _helpers.py
+          pytest -svvv . --environ=github_ifx
+
+  cleanup:
+    # Delete the throwaway :ci-<run_id> tags pushed for a PR. Best-effort: a
+    # failure here never fails the run.
+    needs: [prepare, build_gnu, build_ifx, test_gnu, test_ifx]
+    if: ${{ always() && github.event_name == 'pull_request' && needs.prepare.outputs.can_push == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete ephemeral CI image tags
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_TAG: ci-${{ github.run_id }}
+          BUILD_GNU: ${{ needs.prepare.outputs.build_gnu }}
+          BUILD_IFX: ${{ needs.prepare.outputs.build_ifx }}
+        run: |
+          org="cworthy-ocean"
+          delete_tag() {
+            pkg="$1"
+            ids="$(gh api --paginate "/orgs/$org/packages/container/$pkg/versions" \
+              --jq ".[] | select(.metadata.container.tags[]? == \"$CI_TAG\") | .id" 2>/dev/null || true)"
+            for id in $ids; do
+              echo "Deleting $pkg version $id (tag $CI_TAG)"
+              gh api -X DELETE "/orgs/$org/packages/container/$pkg/versions/$id" || true
+            done
+          }
+          if [ "$BUILD_GNU" = "true" ]; then delete_tag "marbl_gnu_mpich"; fi
+          if [ "$BUILD_IFX" = "true" ]; then delete_tag "marbl_ifx_openmpi"; fi
