@@ -293,17 +293,23 @@ def create_rti_restore_surf_dic_alk(target_dir: Path):
     coords = {"time": time, "lat": lat, "lon": lon}
 
     dims   = ("time", "lat", "lon")
-    shape  = (2, 2, 2)
+    shape  = (516, 2, 2)
 
     data_vars = {}
     for v in ["dic", "talk"]:
         data_vars[v] = xr.DataArray(np.full(shape, np.nan, dtype=np.float32), dims=dims)
 
     ds = xr.Dataset(data_vars, coords=coords)
-    ds["dic"].values   = np.array([[[2128.926, 2126.35], [2126.53, 2130.384]],
-                                   [[2123.166, 2122.308], [2123.678, 2128.579]]], dtype=np.float32)
-    ds["talk"].values   = np.array([[[2307.035, 2310.081], [2310.379, 2307.275]],
-                                   [[2299.036, 2299.596], [2296.624, 2294.987]]], dtype=np.float32)
+    ds["dic"].values  = np.tile(
+        np.array([[[2128.926, 2126.35], [2126.53, 2130.384]],
+                  [[2123.166, 2122.308], [2123.678, 2128.579]]], dtype=np.float32),
+        (515, 1, 1, 1)
+    )
+    ds["talk"].values = np.tile(
+        np.array([[[2307.035, 2310.081], [2310.379, 2307.275]],
+                  [[2299.036, 2299.596], [2296.624, 2294.987]]], dtype=np.float32),
+        (515, 1, 1, 1)
+    )
 
     ds.to_netcdf(target_dir / "fake_restore_dic_alk_surf_data.nc")
 
