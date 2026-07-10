@@ -162,16 +162,19 @@ ifeq ($(USEMARBL),true)
 endif
 
 # PIO
+# Link the archives by full path rather than -L/-l: compiler wrappers (e.g.
+# conda's mpifort) put their own -L dirs first, which can contain an
+# incompatible libpioc (e.g. from a serial ESMF build)
 ifeq ($(USEPIO),true)
     ifeq ($(COMPILER),gnu)
         PIO_INC = -I/$(PIO_ROOT)/build/src/flib/ -I/$(PIO_ROOT)/build/src/clib/
-        PIO_LIB = -L/$(PIO_ROOT)/build/src/flib/ -L/$(PIO_ROOT)/build/src/clib/ -lpiof -lpioc
+        PIO_LIB = $(PIO_ROOT)/build/src/flib/libpiof.a $(PIO_ROOT)/build/src/clib/libpioc.a
     else ifeq ($(COMPILER),intel)
         PIO_INC = -I/$(PIO_ROOT)/build/src/flib/ -I/$(PIO_ROOT)/build/src/clib/
-        PIO_LIB = -L/$(PIO_ROOT)/build/src/flib/ -L/$(PIO_ROOT)/build/src/clib/ -lpiof -lpioc
+        PIO_LIB = $(PIO_ROOT)/build/src/flib/libpiof.a $(PIO_ROOT)/build/src/clib/libpioc.a
     else ifeq ($(COMPILER),ifort)
         PIO_INC = -I/$(PIO_ROOT)/build/src/flib/ -I/$(PIO_ROOT)/build/src/clib/
-        PIO_LIB = -L/$(PIO_ROOT)/build/src/flib/ -L/$(PIO_ROOT)/build/src/clib/ -lpiof -lpioc
+        PIO_LIB = $(PIO_ROOT)/build/src/flib/libpiof.a $(PIO_ROOT)/build/src/clib/libpioc.a
     endif
 endif
 

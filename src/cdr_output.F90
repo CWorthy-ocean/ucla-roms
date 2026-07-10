@@ -30,6 +30,10 @@ module cdr_output
       use cdr_frc, only: cdr_flx_3d_ALK, cdr_flx_3d_DIC, cdr_prf,&
      &                   cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,&
      &                   cdr_jloc, cdr_source, cdr_forcing_3d
+#ifdef PARALLEL_IO
+      use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
+      use pio, only: PIO_openfile, PIO_closefile, PIO_write
+#endif
   implicit none
 
   private
@@ -915,7 +919,7 @@ contains
     ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
 
     call multiply_by_thickness
-    if (do_avg) then
+    if (wrt_cdr_avg) then
       call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
       call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
       call ncwrite(ncid,'zeta'  ,zeta__avg(i0:i1,j0:j1),(/1,1,record/),.true.)
