@@ -296,7 +296,7 @@ def create_rti_restore_surf_dic_alk(target_dir: Path):
     shape  = (516, 2, 2)
 
     data_vars = {}
-    for v in ["dic", "talk"]:
+    for v in ["dic", "talk", "temperature", "salinity"]:
         data_vars[v] = xr.DataArray(np.full(shape, np.nan, dtype=np.float32), dims=dims)
 
     ds = xr.Dataset(data_vars, coords=coords)
@@ -308,6 +308,16 @@ def create_rti_restore_surf_dic_alk(target_dir: Path):
     ds["talk"].values = np.tile(
         np.array([[[2307.035, 2310.081], [2310.379, 2307.275]],
                   [[2299.036, 2299.596], [2296.624, 2294.987]]], dtype=np.float32),
+        (258, 1, 1)
+    )
+    ds["temperature"].values = np.tile(
+        np.array([[[26.42634, 26.4874], [26.53066, 26.38324]],
+                  [[26.25505, 26.27447], [26.10228, 26.0264]]], dtype=np.float32),
+        (258, 1, 1)
+    )
+    ds["salinity"].values = np.tile(
+        np.array([[[34.81231, 34.80766], [34.80254, 34.82835]],
+                  [[34.94736, 35.03485], [34.99258, 35.00729]]], dtype=np.float32),
         (258, 1, 1)
     )
 
