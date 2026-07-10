@@ -1907,7 +1907,9 @@ contains
     endif
 
     ! Add 4 main x and y dimensions so that ncjoin will work,
-    if (pio_gtype == '----') then
+    ! With PIO, files are joined and always need global dimensions;
+    ! pio_gtype is transient read/write state and must not be used here
+    if (.not. use_pio) then
       ierr=nf90_def_dim(ncid,'xi_rho', xi_rho, dimid)
       ierr=nf90_def_dim(ncid,'xi_u',   xi_u,   dimid)
       ierr=nf90_def_dim(ncid,'eta_rho',eta_rho,dimid)
