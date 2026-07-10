@@ -98,6 +98,7 @@ contains
     character(len=9) :: sr_name = "mpi_setup"
     character(len=256) :: grdname_tile
     integer(kind=4) :: lstr
+    logical :: grid_tile_open
 
     npx = NP_XI
     npy = NP_ETA
@@ -116,14 +117,22 @@ contains
     else
       ! Check in gridfile to check if mpi masking is present
       ierr=nf90_open(grdname_tile,nf90_nowrite,ncid)
+#ifndef PARALLEL_IO
 !        if (ierr/=nf90_noerr) call handle_ierr(ierr)
       call error_log%check_netcdf_status(&
       &netcdf_status=ierr,&
       &context=module_name//"/"//sr_name,&
       &info=("error opening "//grdname_tile))
-      ierr=nf90_get_att(ncid,nf90_global,"neighbors",neighbors)
+#endif
+      ! With PARALLEL_IO the grid may be a single joined file read via PIO,
+      ! in which case there are no per-node tiles carrying mpi-masking
+      ! attributes and the standard rectangular layout applies
+      grid_tile_open = ierr.eq.nf90_noerr
+      if (grid_tile_open) then
+        ierr=nf90_get_att(ncid,nf90_global,"neighbors",neighbors)
+      endif
       ! new style partitioning has the neighbors global attribute
-      if (ierr.eq.nf90_noerr) then
+      if (grid_tile_open .and. ierr.eq.nf90_noerr) then
         if (mynode.eq.0) print * ,'neighbors att found',grdname_tile
         new_part = .true.
         ierr=nf90_get_att(ncid,nf90_global,"partition",partition)
@@ -135,7 +144,7 @@ contains
         new_part = .false.
         nnodes = np_xi*np_eta
       endif
-      ierr=nf90_close(ncid)
+      if (grid_tile_open) ierr=nf90_close(ncid)
     endif
 
 

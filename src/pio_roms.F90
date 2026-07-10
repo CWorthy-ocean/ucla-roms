@@ -26,7 +26,8 @@ module pio_roms
 #include "pio_roms.opt"
 
   logical, parameter, public  :: use_pio = .true.
-  character(len=50),public :: pio_frcfile
+  ! Name of the currently open forcing file (must fit max_name_size paths)
+  character(len=256),public :: pio_frcfile
   !> @brief Rank of processor running the code.
   integer(kind=4), public :: pio_myRank
   !> @brief Number of processors participating in MPI communicator.

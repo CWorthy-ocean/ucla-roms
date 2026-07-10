@@ -19,6 +19,11 @@ module cdr_frc
   use ocean_vars, only: hz, z_r0, hz0
   use param, only: mynode, lm, mm, ocean_grid_comm
   use nc_read_write, only: ncread
+  use pio_roms, only: pio_gtype
+#ifdef PARALLEL_IO
+  use pio_roms, only: pio_file_is_open, pio_FileDesc
+  use pio, only: PIO_closefile
+#endif
   use marbl_driver, only: iALK, iDIC
   use vertical_remapping, only: remap_src_to_grid
   use error_handling_mod, only: error_log
@@ -144,8 +149,19 @@ contains
 
     if (cdr_forcing_depth_profiles) then
 
+      ! per-release point data is read serially by each rank (as in river_frc)
+      pio_gtype='----'
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
       call set_frc_data(nc_cdrhz,var2d=cdr_hz)          ! set layer thicknesses for all cdrs at current time
       call set_frc_data(nc_cdrflx_dp,var3d=cdr_flx_dp)
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
+#endif
       call error_log%abort_check()
       call create_cdr_vertical_structure
 
@@ -155,6 +171,11 @@ contains
       call set_frc_data(nc_cdrflx_3d_DIC,var3d=cdr_flx_3d_DIC)
     else if (cdr_forcing_parameterized) then
 
+      ! per-release point data is read serially by each rank (as in river_frc)
+      pio_gtype='----'
+#ifdef PARALLEL_IO
+      pio_file_is_open = 0
+#endif
       if (cdr_volume) then
         call set_frc_data(nc_cdrvol,cdr_vol)                ! set cdr volume for all cdrs at current time
         call set_frc_data(nc_cdrtrc,var2d=cdr_trc)          ! set cdr tracers conc. for all cdrs at current time
@@ -166,6 +187,12 @@ contains
       else
         call set_frc_data(nc_cdrflx,var2d=cdr_flx)          ! set cdr tracer flux for all cdrs at current time
       endif
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
+#endif
 
     endif
     call error_log%abort_check()
@@ -227,6 +254,10 @@ contains
       &netcdf_status=ierr,&
       &info="Cannot open CDR forcing file",&
       &context=module_name//"/"//sr_name)
+
+      ! release locations/profiles are read serially by each rank; without
+      ! this, ncread would route through PIO using a stale grid type
+      pio_gtype='----'
 
       if (type_count>1) then
         call error_log%raise_global(&
