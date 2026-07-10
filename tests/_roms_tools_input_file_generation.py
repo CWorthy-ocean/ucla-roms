@@ -287,11 +287,11 @@ def create_rti_restore_surf_sss(target_dir: Path):
 
 def create_rti_restore_surf_dic_alk(target_dir: Path):
     time = pd.date_range("1982-01-01", periods=516, freq="MS")
+    year = time.year.to_numpy(dtype=np.int32)
     lat  = np.array([34.75, 34.0], dtype=np.float64)
     lon = np.array([239.0, 240.25], dtype=np.float64)
 
-    coords = {"time": time, "lat": lat, "lon": lon}
-
+    coords = {"time": time, "year": ("time", year), "lat": lat, "lon": lon}
     dims   = ("time", "lat", "lon")
     shape  = (516, 2, 2)
 
