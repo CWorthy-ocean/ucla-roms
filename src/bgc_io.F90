@@ -309,8 +309,9 @@ contains
           &'bgc :: wrote average, tdays =', tdays,&
           &'step =', iic, 'rec =', record_avg
         endif
+        ! close inside the output block: the file is only open when writing
+        call PIO_closefile(pio_FileDesc)
       endif
-      call PIO_closefile(pio_FileDesc)
 
     else
 
@@ -359,9 +360,9 @@ contains
           &'bgc :: wrote history, tdays =', tdays,&
           &'step =', iic-1, 'rec =', record_his
         endif
+        ! close inside the output block: the file is only open when writing
+        call PIO_closefile(pio_FileDesc)
       endif  ! <-- wrt_file_his
-
-      call PIO_closefile(pio_FileDesc)
 
     endif
 
