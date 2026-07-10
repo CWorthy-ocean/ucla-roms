@@ -22,6 +22,7 @@ Bug Fixes
 
 
 - Initialize `forcing_version` string to prevent errors from CDR forcing module (`#303 <https://github.com/CWorthy-ocean/ucla-roms/pull/303>`_)
+- Bugfixes from initial PIO testing (`#306 <https://github.com/CWorthy-ocean/ucla-roms/pull/306>`_)
 
 Improvements
 ~~~~~~~~~~~~
