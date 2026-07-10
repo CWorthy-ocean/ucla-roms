@@ -29,7 +29,7 @@ module roms_read_write
   &pio_xi_rho_coarse, pio_eta_rho_coarse, pio_xi_u_coarse, pio_eta_v_coarse,&
   &pio_i0c, pio_i1c, pio_j0c, pio_j1c, pio_initialize_coarse, pio_IoSystem, pio_FileDesc, pio_type,&
   &pio_file_is_open, pio_frcfile
-  use pio, only : PIO_openfile
+  use pio, only : PIO_openfile, PIO_closefile
 #endif
   use error_handling_mod, only: error_log ! Note, abort_check should be called by caller of set_frc_data
   use instant_output, only: wrt_instant, instant_root_name
@@ -1181,9 +1181,19 @@ contains
 
 !      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
-      if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
-        pio_file_is_open = 1
+      if (pio_gtype /= '----') then
+        ! close and re-open if a different forcing file is currently open
+        ! (e.g. physical and bgc boundary data read in the same pass)
+        if ((pio_file_is_open == 1) .and.&
+        &   (trim(pio_frcfile) /= trim(frcfiles(ifile)))) then
+          call PIO_closefile(pio_FileDesc)
+          pio_file_is_open = 0
+        endif
+        if (pio_file_is_open == 0) then
+          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
+          pio_frcfile = frcfiles(ifile)
+          pio_file_is_open = 1
+        endif
       endif
 #else
       ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
@@ -1297,9 +1307,19 @@ contains
 #endif
 !      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
-      if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
-        pio_file_is_open = 1
+      if (pio_gtype /= '----') then
+        ! close and re-open if a different forcing file is currently open
+        ! (e.g. physical and bgc boundary data read in the same pass)
+        if ((pio_file_is_open == 1) .and.&
+        &   (trim(pio_frcfile) /= trim(frcfiles(ifile)))) then
+          call PIO_closefile(pio_FileDesc)
+          pio_file_is_open = 0
+        endif
+        if (pio_file_is_open == 0) then
+          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
+          pio_frcfile = frcfiles(ifile)
+          pio_file_is_open = 1
+        endif
       endif
 #else
       ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
@@ -1386,10 +1406,19 @@ contains
 
 !      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
-    if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
-      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
-      pio_frcfile = frcfiles(ifile)
-      pio_file_is_open = 1
+    if (pio_gtype /= '----') then
+      ! close and re-open if a different forcing file is currently open
+      ! (e.g. physical and bgc boundary data read in the same pass)
+      if ((pio_file_is_open == 1) .and.&
+      &   (trim(pio_frcfile) /= trim(frcfiles(ifile)))) then
+        call PIO_closefile(pio_FileDesc)
+        pio_file_is_open = 0
+      endif
+      if (pio_file_is_open == 0) then
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
+        pio_frcfile = frcfiles(ifile)
+        pio_file_is_open = 1
+      endif
     endif
 #else
     ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
