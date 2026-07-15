@@ -12,7 +12,7 @@ module pipe_frc
 ! we have no PIPE_SOURCE flag here anymore, since we are moving away from cpp flags.
 !     Variables still need to be visible within code even when pipes are not used.
   use namelist_open_mod, only: open_namelist_file
-  use dimensions, only: i0, i1, j0, j1, nx, ny, grdname
+  use dimensions, only: i0, i1, j0, j1, x0, x1, y0, y1, nx, ny, grdname
   use roms_read_write, only:&
   &ncforce, pipe_frc_opt,&
   &set_frc_data, store_string_att
@@ -20,8 +20,9 @@ module pipe_frc
   use param, only: nz, lm, mm, nt, mynode
   use error_handling_mod, only: error_log
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_file_is_open, pio_FileDesc
-  use pio, only : PIO_closefile
+  use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_IoSystem,&
+  &pio_type, pio_gtype
+  use pio, only : PIO_openfile, PIO_closefile
 #endif
 
   implicit none
@@ -150,8 +151,16 @@ contains
       ierr = ierr * nf90_inq_varid(ncid, "pipe_fraction", varid)
 
       if (ierr == nf90_noerr) then
+#ifdef PARALLEL_IO
+        pio_gtype = '2Drr'
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(nc_pvol%ifile))
+        call ncread(ncid, "pipe_index", pidx_real(x0:x1,y0:y1))
+        call ncread(ncid, "pipe_fraction", pipe_fraction(x0:x1,y0:y1))
+        call PIO_closefile(pio_FileDesc)
+#else
         call ncread(ncid, "pipe_index", pidx_real(i0:i1,j0:j1))
         call ncread(ncid, "pipe_fraction", pipe_fraction(i0:i1,j0:j1))
+#endif
         ierr = nf90_close(ncid)
 
         ! Check if any river indices are greater than the chosen
@@ -185,7 +194,14 @@ contains
         ierr=nf90_open(grdname, nf90_nowrite, ncid)
         ! Temporarily store as pipe_fraction to avoid extra array,
         ! but value still pipe_idx + pipe_fraction
+#ifdef PARALLEL_IO
+        pio_gtype = '2Drr'
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, grdname)
+        call ncread(ncid,pipe_flx_name, pipe_fraction(x0:x1,y0:y1))
+        call PIO_closefile(pio_FileDesc)
+#else
         call ncread(ncid,pipe_flx_name, pipe_fraction(i0:i1,j0:j1))
+#endif
         if(ierr/=0) then
           ierr = nf90_close(ncid) ! close grid file
           write(error_info,*)&

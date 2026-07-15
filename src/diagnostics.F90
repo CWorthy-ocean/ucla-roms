@@ -33,7 +33,11 @@ module diagnostics
   use roms_mpi, only: exchange_xxx
   use grid, only: vmask, rmask
   use pio_roms, only: use_pio, pio_gtype
-  use mpi_f08, only: MPI_CHARACTER, mpi_bcast
+#ifdef PARALLEL_IO
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
+  use pio, only: PIO_openfile, PIO_closefile, PIO_write
+#endif
+  use mpi_f08, only: MPI_CHARACTER, mpi_bcast, MPI_Barrier
 
   implicit none
   private
@@ -799,7 +803,10 @@ contains
         ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
 
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+        ierr=nf90_close(ncid)
       endif
+      call MPI_Barrier(ocean_grid_comm, ierr)
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
 #else
       ierr=nf90_open(fname,nf90_write,ncid)
       ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
@@ -817,7 +824,11 @@ contains
 
       navg_diag = 0
 
+#ifdef PARALLEL_IO
+      call PIO_closefile(pio_FileDesc)
+#else
       ierr=nf90_close(ncid)
+#endif
 
       if (mynode == 0) then
         write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&      ! confirm work completed
@@ -982,6 +993,7 @@ contains
     if (inode.eq.0) ud(1,:,:,:) = 0
     start = (/1, bfy, 1, record/)
 
+    pio_gtype = '3Duw'
     call ncwrite(ncid,'u_pgr',ud(:,:,:,1),start,.true.)
     call ncwrite(ncid,'u_cor',ud(:,:,:,2),start,.true.)
     call ncwrite(ncid,'u_adv',ud(:,:,:,3),start,.true.)
@@ -993,6 +1005,7 @@ contains
     if (jnode.eq.0) vd(:,1,:,:) = 0
     start = (/bfx, 1, 1, record/)
 
+    pio_gtype = '3Dvw'
     call ncwrite(ncid,'v_pgr',vd(:,:,:,1),start,.true.)
     call ncwrite(ncid,'v_cor',vd(:,:,:,2),start,.true.)
     call ncwrite(ncid,'v_adv',vd(:,:,:,3),start,.true.)
@@ -1017,6 +1030,7 @@ contains
     integer(kind=4) :: it
     integer(kind=4),   dimension(4) :: start    ! start vector for writing
 
+    pio_gtype = '3Drw'
     do it = 1,nt
       if (wrt_t_dia(it)) then
         start = (/1, 1, 1, record/)
