@@ -1176,7 +1176,9 @@ contains
         &nc%times(it) )
       endif
       call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1303,7 +1305,9 @@ contains
         &nc%times(it) )
       endif
       call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1401,7 +1405,9 @@ contains
       &nc%times(it) )
     endif
     call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
     call find_new_record(vname,tname,modtime,ifile,irec,&
