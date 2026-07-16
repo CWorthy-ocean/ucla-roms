@@ -65,14 +65,19 @@ Tools-Roms/extract_data_join
 Tools-Roms/particle_join
 Tools-Roms/sample
 
+New-tools/ncjoin
+New-tools/partit
+New-tools/optimal
+
 # For Examples/code_check/
 # and Expanse run logs:
 *.log
 *.out
 
-# DevinD related ignores:
+# IDES / tool-chain artifacts
 benchmark.result_laptop
 .settings
 .project
 .cproject
 .pydevproject
+__pycache__

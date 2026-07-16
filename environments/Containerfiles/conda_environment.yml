@@ -1,0 +1,17 @@
+name: roms-ci
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy
+  - xarray
+  - ipykernel
+  - jupyter
+  - roms-tools>=4.0.0a2
+  - compilers
+  - netcdf-fortran
+  - h5netcdf
+  - h5py
+  - mpich
+  - pytest
+  - f90nml

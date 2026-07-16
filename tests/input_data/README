@@ -1,6 +1,0 @@
-In order to reduce the size of the repo, the input and forcing data
-that are needed to run the examples are stored separately.
-
-In order to download those files; execute: get_input_files.sh
-
-

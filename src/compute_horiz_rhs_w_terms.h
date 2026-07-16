@@ -19,151 +19,151 @@
 # define grad wrk1
 #endif
 #ifndef EW_PERIODIC
-          if (WESTERN_EDGE) then       ! Determine extended index
-            imin=istr                  ! range for computation of
-          else                         ! elementary differences: it
-            imin=istr-1                ! needs to be restricted
-          endif                        ! because in the vicinity of
-          if (EASTERN_EDGE) then       ! physical boundary the extra
-            imax=iend                  ! point may be not available,
-          else                         ! and extrapolation of slope
-            imax=iend+1                ! is used instead.
-          endif
+if (WESTERN_EDGE) then       ! Determine extended index
+  imin=istr                  ! range for computation of
+else                         ! elementary differences: it
+  imin=istr-1                ! needs to be restricted
+endif                        ! because in the vicinity of
+if (EASTERN_EDGE) then       ! physical boundary the extra
+  imax=iend                  ! point may be not available,
+else                         ! and extrapolation of slope
+  imax=iend+1                ! is used instead.
+endif
 #else
-          imin=istr-1
-          imax=iend+1
+imin=istr-1
+imax=iend+1
 #endif
-          do j=jstr,jend
-            do i=imin,imax+1
-              FX(i,j)=(w(i,j,k,nrhs)-w(i-1,j,k,nrhs))
+do j=jstr,jend
+  do i=imin,imax+1
+    FX(i,j)=(w(i,j,k,nrhs)-w(i-1,j,k,nrhs))&
 #ifdef MASKING
-     &                                               *umask(i,j)
+    &*umask(i,j)
 #endif
-            enddo
-          enddo
+  enddo
+enddo
 #ifndef EW_PERIODIC
-          if (WESTERN_EDGE) then
-            do j=jstr,jend
-              FX(istr-1,j)=FX(istr,j)
-            enddo
-          endif
-          if (EASTERN_EDGE) then
-            do j=jstr,jend
-              FX(iend+2,j)=FX(iend+1,j)
-            enddo
-          endif
+if (WESTERN_EDGE) then
+  do j=jstr,jend
+    FX(istr-1,j)=FX(istr,j)
+  enddo
+endif
+if (EASTERN_EDGE) then
+  do j=jstr,jend
+    FX(iend+2,j)=FX(iend+1,j)
+  enddo
+endif
 #endif
-          do j=jstr,jend
-            do i=istr-1,iend+1
+do j=jstr,jend
+  do i=istr-1,iend+1
 #if defined UPSTREAM_W
-              curv(i,j)=FX(i+1,j)-FX(i,j)
+    curv(i,j)=FX(i+1,j)-FX(i,j)
 #else
-              grad(i,j)=0.5*(FX(i+1,j)+FX(i,j))
+    grad(i,j)=0.5_8*(FX(i+1,j)+FX(i,j))
 #endif
-            enddo
-          enddo             !--> discard FX
-          do j=jstr,jend
-            do i=istr,iend+1
-              if (k<N) then
-                Uflxw= 0.5*(FlxU(i,j,k)+FlxU(i,j,k+1))
-              else
-                Uflxw= 0.5*(FlxU(i,j,k)              )
-              endif
+  enddo
+enddo             !--> discard FX
+do j=jstr,jend
+  do i=istr,iend+1
+    if (k<nz) then
+      Uflxw= 0.5_8*(FlxU(i,j,k)+FlxU(i,j,k+1))
+    else
+      Uflxw= 0.5_8*(FlxU(i,j,k)              )
+    endif
 #ifdef UPSTREAM_W
-              FX(i,j)=0.5*(w(i,j,k,nrhs)+w(i-1,j,k,nrhs))
-     &                                       *Uflxw
-     &          -0.1666666666666666*( curv(i-1,j)*max(Uflxw,0.)
-     &                               +curv(i  ,j)*min(Uflxw,0.))
+    FX(i,j)=0.5_8*(w(i,j,k,nrhs)+w(i-1,j,k,nrhs))&
+    &*Uflxw&
+    &-0.1666666666666666_8*( curv(i-1,j)*max(Uflxw,0._8)&
+    &+curv(i  ,j)*min(Uflxw,0._8))
 !# ifdef DIAGNOSTICS_W
-!              TruncFX(i,j)=0.04166666666666667*(curv(i,j)-curv(i-1,j))
+!              TruncFX(i,j)=0.04166666666666667_8*(curv(i,j)-curv(i-1,j))
 !     &                                               *abs(Uflxw)
 !# endif
 #else
-              FX(i,j)=0.5*( w(i,j,k,nrhs)+w(i-1,j,k,nrhs)
-     &                   -0.3333333333333333*(grad(i,j)-grad(i-1,j))
-     &                                                 )*Uflxw
+    FX(i,j)=0.5_8*( w(i,j,k,nrhs)+w(i-1,j,k,nrhs)&
+    &-0.3333333333333333_8*(grad(i,j)-grad(i-1,j))&
+    &)*Uflxw
 #endif
-            enddo           !--> discard curv,grad, keep FX
-          enddo
+  enddo           !--> discard curv,grad, keep FX
+enddo
 
 #ifndef NS_PERIODIC
-          if (SOUTHERN_EDGE) then
-            jmin=jstr
-          else
-            jmin=jstr-1
-          endif
-          if (NORTHERN_EDGE) then
-            jmax=jend
-          else
-            jmax=jend+1
-          endif
+if (SOUTHERN_EDGE) then
+  jmin=jstr
+else
+  jmin=jstr-1
+endif
+if (NORTHERN_EDGE) then
+  jmax=jend
+else
+  jmax=jend+1
+endif
 #else
-          jmin=jstr-1
-          jmax=jend+1
+jmin=jstr-1
+jmax=jend+1
 #endif
-          do j=jmin,jmax+1
-            do i=istr,iend
-              FE(i,j)=(w(i,j,k,nrhs)-w(i,j-1,k,nrhs))
+do j=jmin,jmax+1
+  do i=istr,iend
+    FE(i,j)=(w(i,j,k,nrhs)-w(i,j-1,k,nrhs))&
 #ifdef MASKING
-     &                                               *vmask(i,j)
+    &*vmask(i,j)
 #endif
-            enddo
-          enddo
+  enddo
+enddo
 #ifndef NS_PERIODIC
-          if (SOUTHERN_EDGE) then
-            do i=istr,iend
-              FE(i,jstr-1)=FE(i,jstr)
-            enddo
-          endif
-          if (NORTHERN_EDGE) then
-            do i=istr,iend
-              FE(i,jend+2)=FE(i,jend+1)
-            enddo
-          endif
+if (SOUTHERN_EDGE) then
+  do i=istr,iend
+    FE(i,jstr-1)=FE(i,jstr)
+  enddo
+endif
+if (NORTHERN_EDGE) then
+  do i=istr,iend
+    FE(i,jend+2)=FE(i,jend+1)
+  enddo
+endif
 #endif
-          do j=jstr-1,jend+1
-            do i=istr,iend
+do j=jstr-1,jend+1
+  do i=istr,iend
 #if defined UPSTREAM_W
-              curv(i,j)=FE(i,j+1)-FE(i,j)
+    curv(i,j)=FE(i,j+1)-FE(i,j)
 #else
-              grad(i,j)=0.5*(FE(i,j+1)+FE(i,j))
+    grad(i,j)=0.5_8*(FE(i,j+1)+FE(i,j))
 #endif
-            enddo
-          enddo            !--> discard FE
+  enddo
+enddo            !--> discard FE
 
-          do j=jstr,jend+1
-            do i=istr,iend
-              if (k<N) then
-                Vflxw= 0.5*(FlxV(i,j,k)+FlxV(i,j,k+1))
-              else
-                Vflxw= 0.5*(FlxV(i,j,k)              )
-              endif
+do j=jstr,jend+1
+  do i=istr,iend
+    if (k<nz) then
+      Vflxw= 0.5_8*(FlxV(i,j,k)+FlxV(i,j,k+1))
+    else
+      Vflxw= 0.5_8*(FlxV(i,j,k)              )
+    endif
 #ifdef UPSTREAM_W
-              FE(i,j)=0.5*(w(i,j,k,nrhs)+w(i,j-1,k,nrhs))
-     &                                                  *Vflxw
-     &          -0.1666666666666666*( curv(i,j-1)*max(Vflxw,0.)
-     &                               +curv(i,j  )*min(Vflxw,0.))
+    FE(i,j)=0.5_8*(w(i,j,k,nrhs)+w(i,j-1,k,nrhs))&
+    &*Vflxw&
+    &-0.1666666666666666_8*( curv(i,j-1)*max(Vflxw,0._8)&
+    &+curv(i,j  )*min(Vflxw,0._8))
 !# ifdef DIAGNOSTICS_W
-!              TruncFE(i,j)=0.04166666666666667*(curv(i,j)-curv(i-1,j))
+!              TruncFE(i,j)=0.04166666666666667_8*(curv(i,j)-curv(i-1,j))
 !     &                                               *abs(Vflxw)
 !# endif
 #else
-              FE(i,j)=0.5*( w(i,j,k,nrhs)+w(i,j-1,k,nrhs)
-     &                   -0.3333333333333333*(grad(i,j)-grad(i,j-1))
-     &                                                 )*Vflxw
+    FE(i,j)=0.5_8*( w(i,j,k,nrhs)+w(i,j-1,k,nrhs)&
+    &-0.3333333333333333_8*(grad(i,j)-grad(i,j-1))&
+    &)*Vflxw
 #endif
-            enddo
-          enddo             !--> discard curv,grad, keep FE
+  enddo
+enddo             !--> discard curv,grad, keep FE
 
-        do j=jstr,jend
-          do i=istr,iend
-            rw(i,j,k)=rw(i,j,k)-(FX(i+1,j)-FX(i,j))
-     &                         -(FE(i,j+1)-FE(i,j))
+do j=jstr,jend
+  do i=istr,iend
+    rw(i,j,k)=rw(i,j,k)-(FX(i+1,j)-FX(i,j))&
+    &-(FE(i,j+1)-FE(i,j))
 #ifdef DIAGNOSTICS_NHMG
-            Wdiag(i,j,k,iwhoriadv)=rw(i,j,k)-Wdiag(i,j,k,iwprsgr) ! loop also 1:N. Only called if NHMG anyway
+    Wdiag(i,j,k,iwhoriadv)=rw(i,j,k)-Wdiag(i,j,k,iwprsgr) ! loop also 1:N. Only called if NHMG anyway
 #endif
-          enddo
-        enddo
+  enddo
+enddo
 #endif
 
 #undef curv

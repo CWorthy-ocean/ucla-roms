@@ -5,10 +5,8 @@
 COMPILER ?=gnu
 # Set MPI wrapper (auto, mpifort, mpiifx, mpiifort)
 MPI_WRAPPER ?=auto
-# Configure FFLAGS by setting BUILD_MODE to "debug","strict", or "test"
+# Configure FFLAGS by setting BUILD_MODE to "debug","strict","vtune",or "grof"
 BUILD_MODE ?=regular
-# Include profiling in the compilation by setting PROFILER to "none","gprof","vtune", or "scorep"
-PROFILER?=none
 # Keep pre-processed source code or not:
 KEEP_PPSRC ?=false
 # Allow additional FFLAGS to defaults without overriding them:
@@ -90,16 +88,14 @@ ifeq ($(findstring $(expected_fc),$(MPIVER)),)
 endif
 
 # Set compiler and linker to chosen wrapper
-ifeq ($(PROFILER),scorep)
-   CFT := scorep $(MPI_WRAPPER)
-   LDR := scorep $(MPI_WRAPPER)
-else
-   CFT := $(MPI_WRAPPER)
-   LDR := $(MPI_WRAPPER)
-endif
+CFT := $(MPI_WRAPPER)
+LDR := $(MPI_WRAPPER)
 
-# For BUILD_MODE = "debug", always keep source code
-ifeq ($(BUILD_MODE),debug)
+
+# For BUILD_MODE = "vtune" or "grof" always keep source code:
+ifeq ($(BUILD_MODE),vtune)
+   KEEP_PPSRC=true
+else ifeq ($(BUILD_MODE),grof)
    KEEP_PPSRC=true
 else ifeq ($(BUILD_MODE),scorep)
    CFT := scorep $(CFT)
@@ -110,7 +106,7 @@ endif
 ifeq ($(wildcard cppdefs.opt),cppdefs.opt)
 	USEMARBL := $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*MARBL' cppdefs.opt && echo true || echo false )
 	USENHMG :=  $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*NHMG' cppdefs.opt && echo true || echo false )
-
+        USEPIO := $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*PARALLEL_IO' cppdefs.opt && echo true || echo false )
 endif
 
 # C-preprocessor (cpp):
@@ -149,6 +145,11 @@ endif
 	NETCDFC_INC=$(or $(shell nc-config --cflags), -I$(NETCDFHOME)include)
 	NETCDFC_LIB=$(or $(shell nc-config --libs),   -L$(NETCDFHOME)lib -lnetcdf)
 
+ifeq ($(USEPIO),true)
+        PNETCDF_INC= -I$(PNETCDFHOME)include
+        PNETCDF_LIB= -L$(PNETCDFHOME)lib -lpnetcdf
+endif
+
 # MARBL
 ifeq ($(USEMARBL),true)
     ifeq ($(COMPILER),gnu)
@@ -160,6 +161,23 @@ ifeq ($(USEMARBL),true)
     else ifeq ($(COMPILER),ifort)
         MARBL_INC = -I$(MARBL_ROOT)/include/intel-mpi
         MARBL_LIB = -L$(MARBL_ROOT)/lib -lmarbl-intel-mpi
+    endif
+endif
+
+# PIO
+# Link the archives by full path rather than -L/-l: compiler wrappers (e.g.
+# conda's mpifort) put their own -L dirs first, which can contain an
+# incompatible libpioc (e.g. from a serial ESMF build)
+ifeq ($(USEPIO),true)
+    ifeq ($(COMPILER),gnu)
+        PIO_INC = -I/$(PIO_ROOT)/build/src/flib/ -I/$(PIO_ROOT)/build/src/clib/
+        PIO_LIB = $(PIO_ROOT)/build/src/flib/libpiof.a $(PIO_ROOT)/build/src/clib/libpioc.a
+    else ifeq ($(COMPILER),intel)
+        PIO_INC = -I/$(PIO_ROOT)/build/src/flib/ -I/$(PIO_ROOT)/build/src/clib/
+        PIO_LIB = $(PIO_ROOT)/build/src/flib/libpiof.a $(PIO_ROOT)/build/src/clib/libpioc.a
+    else ifeq ($(COMPILER),ifort)
+        PIO_INC = -I/$(PIO_ROOT)/build/src/flib/ -I/$(PIO_ROOT)/build/src/clib/
+        PIO_LIB = $(PIO_ROOT)/build/src/flib/libpiof.a $(PIO_ROOT)/build/src/clib/libpioc.a
     endif
 endif
 
@@ -190,20 +208,21 @@ else ifeq ($(COMPILER),intel)
     FFLAGS = -O3      # Do NOT use -ip for ifx
 endif
 
-# Apply debug, strict, vtune, or gprof settings for Intel compilers
+# Apply debug, strict, vtune, or grof settings for Intel compilers
 ifeq ($(COMPILER),$(filter ifort intel, $(COMPILER)))
     ifeq ($(BUILD_MODE),debug)
-        FFLAGS = -g -traceback -check all
+        FFLAGS = -g -traceback
+# -check all
     else ifeq ($(BUILD_MODE),test)
-	FFLAGS = -O0
+	FFLAGS = -O0 -init=zero -init=arrays
     else ifeq ($(BUILD_MODE),strict)
         FFLAGS += -fp-model strict
-    endif
-    ifeq ($(PROFILER),vtune)
+    else ifeq ($(BUILD_MODE),vtune)
         FFLAGS = -g -debug inline-debug-info -parallel-source-info=2
+    else ifeq ($(BUILD_MODE),grof)
+        FFLAGS += -pg
     endif
 endif
-
 
 # GNU compiler settings
 ifeq ($(COMPILER),gnu)
@@ -215,24 +234,33 @@ ifeq ($(COMPILER),gnu)
     endif
 endif
 
-ifeq ($(PROFILER),gprof)
-   FFLAGS += -pg
-endif
-
 # Options to link to libraries & modules (NetCDF, etc):
         LCDF =  $(NETCDFF_LIB) $(NETCDFC_LIB) $(SCOREP_LIB)
+ifeq ($(USEPIO),true)
+        LCDF +=  $(PNETCDF_LIB)
+endif
 ifeq ($(USEMARBL),true)
 	LCDF += $(MARBL_LIB)
 endif
 ifeq ($(USENHMG),true)
 	LCDF += $(NHMG_LIB)
 endif
-	LCDF +=$(NETCDFF_INC) $(NETCDFC_INC) 
+	LCDF +=$(NETCDFF_INC) $(NETCDFC_INC)
+ifeq ($(USEPIO),true)
+        LCDF +=$(PNETCDF_INC)
+endif
 ifeq ($(USEMARBL),true)
 	LCDF += $(MARBL_INC)
 endif
 ifeq ($(USENHMG),true)
 	LCDF += $(NHMG_INC)
+endif
+
+ifeq ($(USEPIO),true)
+        LCDF += $(PIO_LIB)
+endif
+ifeq ($(USEPIO),true)
+        LCDF += $(PIO_INC)
 endif
 
 FFLAGS+=$(USER_FFLAGS)

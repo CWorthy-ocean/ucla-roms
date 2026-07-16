@@ -1,0 +1,322 @@
+module calc_pflx_mod
+
+#include "cppdefs.opt"
+  use namelist_open_mod, only: open_namelist_file
+  use error_handling_mod, only: error_log
+  use netcdf, only: nf90_noerr, nf90_inq_varid
+  use dimensions, only: nx, ny, nz, i0, i1, j0, j1,x_,x0,x1,y_,y0,y1
+  use scalars, only: dt, knew, nrhs
+  use param, only: lm, mm, mynode
+  use grid, only: pn, pm, umask, vmask, rmask
+  use ocean_vars, only: flxu, flxv, u, v, z_w, hz
+  use nc_read_write, only: ncwrite, ncread
+  use diagnostics, only: dxdyi
+  use roms_mpi, only: exchange_xxx
+  use pio_roms, only: pio_gtype
+
+  implicit none
+  private
+
+  ! Pressure flux terms
+! --------------
+  character(len=14) :: module_name = "calc_pflx_mod"
+  real(kind=8),public,allocatable,dimension(:,:,:) :: p_slow        ! filtered pressure
+  real(kind=8),public,allocatable,dimension(:,:,:) :: u_slow,v_slow
+
+  real(kind=8),public,allocatable,dimension(:,:) :: p_fast,u_fast,v_fast
+
+  real(kind=8),allocatable,dimension(:,:),public :: up,vp         ! u'p' (at upoint) and v'p' (at v_point)
+
+  real(kind=8),public,allocatable,dimension(:,:)  :: dzt ! dzeta/dt
+  real(kind=8),public,allocatable,dimension(:,:)  :: Uflx,Vflx
+
+  real(kind=8) :: alpha, beta       ! filtering constants (needed for child bry)
+
+  logical, public :: calc_pflx
+  real(kind=8) :: pflx_timescale     = 0._8 ! pflx_timescale for filtering pressure fluxes (in seconds)
+  namelist /CALC_PFLX_SETTINGS/ pflx_timescale, calc_pflx
+
+  public init_pflx
+  public calc_pressure_flux
+  public get_init_slow
+  public wrt_rst_diag_slow
+  public read_nml_pflx
+
+contains
+!     ----------------------------------------------------------------------
+  subroutine read_nml_pflx
+!     Read the "CALC_PFLX_SETTINGS" section of the namelist file
+
+    integer(kind=4) ::  namelist_unit, ios
+    character(len=20) :: sr_name = "read_nml_pflx"
+    ! Read namelist
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=CALC_PFLX_SETTINGS, iostat=ios)
+    if (ios /= 0) then
+      call error_log%raise_global(&
+      &context=module_name//'/'//sr_name, info=&
+      &'could not read CALC_PFLX_SETTINGS section of namelist file'&
+      &)
+    end if
+    close(namelist_unit)
+
+  end subroutine read_nml_pflx
+
+  subroutine init_pflx  ![
+
+    implicit none
+
+    if (calc_pflx) then
+
+      ! Coefficients for exponential smoothing
+      alpha = dt / pflx_timescale
+      beta  = 1 - alpha
+
+      if (mynode==0) print *,'allocating pflux vars'
+      if (.not. allocated( p_slow )) then         ! in case already read in with get_init
+        allocate(p_slow(GLOBAL_2D_ARRAY,nz) )     ! global 2D needed for exchange in get_init.F
+        p_slow = 0
+      endif
+!        allocate(p_fast(0:nx,0:ny) )
+      allocate(p_fast(GLOBAL_2D_ARRAY))
+      p_fast = 0
+
+!        allocate( up(nx,ny) )
+!        allocate( vp(nx,ny) )
+      allocate(up(GLOBAL_2D_ARRAY))
+      allocate(vp(GLOBAL_2D_ARRAY))
+      up = 0
+      vp = 0
+
+      if (.not. allocated( u_slow )) then         ! in case already read in with get_init
+!          allocate(u_slow(1:nx+1,0:ny+1,nz) )
+        allocate(u_slow(GLOBAL_2D_ARRAY,nz))
+        u_slow = 0
+      endif
+      if (.not. allocated( v_slow )) then
+!          allocate(v_slow(0:nx+1,1:ny+1,nz) )
+        allocate(v_slow(GLOBAL_2D_ARRAY,nz))
+        v_slow = 0
+      endif
+!        allocate(u_fast(nx+1,ny) )
+      allocate(u_fast(GLOBAL_2D_ARRAY))
+      u_fast = 0
+!        allocate(v_fast(nx,ny+1) )
+      allocate(v_fast(GLOBAL_2D_ARRAY))
+      v_fast = 0
+!        allocate( Uflx(nx+1,ny) )
+      allocate(Uflx(GLOBAL_2D_ARRAY))
+      Uflx = 0
+!        allocate( Vflx(nx,ny+1) )
+      allocate(Vflx(GLOBAL_2D_ARRAY))
+      Vflx = 0
+
+      ! strictly speaking for barotropic/baroclinic balance only
+!        allocate( dzt(nx,ny) )
+      allocate(dzt(GLOBAL_2D_ARRAY))
+    endif
+
+  end subroutine init_pflx !]
+! ----------------------------------------------------------------------
+  subroutine calc_pressure_flux(p) ![
+    implicit none
+    !! W => kg m2 s-3
+    !!  p dz => m3 s-2, u*p*dz => m4 s-3, rho0*u*p*dz=> kg m s-3 = W/m
+    !! rho u p dz
+
+    !import/export
+    real(kind=8),dimension(GLOBAL_2D_ARRAY,nz) :: p
+
+    !local
+    integer(kind=4) :: i,j,k
+    real(kind=8)  :: uint,vint
+    real(kind=8)  :: huint,hvint
+    real(kind=8)  :: gHzx,gHzy,gHTx,gHty
+    real(kind=8)  :: tst
+
+# if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
+    integer(kind=4) :: kbak
+
+    kbak=knew-1
+    if (kbak < 1) kbak=4
+# endif
+
+    if (calc_pflx) then
+      Uflx =  sum(Flxu(1:nx+1,1:ny,:),dim=3)
+      Vflx =  sum(Flxv(1:nx,1:ny+1,:),dim=3)
+
+      ! Strictly speaking only neccesary for barotropic/baroclinic
+      ! balance
+      dzt  = -dxdyi*( Uflx(2:nx+1,:)-Uflx(1:nx,:) +&
+      &Vflx(:,2:ny+1)-Vflx(:,1:ny) )
+
+      ! Divide the barotropic fluxes into velocities [m/s]
+      do j=1,ny
+        do i=1,nx+1
+          Uflx(i,j) =  Uflx(i,j)*(pn(i,j)+pn(i-1,j))/&
+          &(z_w(i,j,nz)-z_w(i,j,0)+z_w(i-1,j,nz)-z_w(i-1,j,0))
+        enddo
+      enddo
+      do j=1,ny+1
+        do i=1,nx
+          Vflx(i,j) =  Vflx(i,j)*(pm(i,j)+pm(i,j-1))/&
+          &(z_w(i,j,nz)-z_w(i,j,0)+z_w(i,j-1,nz)-z_w(i,j-1,0))
+        enddo
+      enddo
+
+      up = 0
+      vp = 0
+      tst = 0
+      do k=1,nz
+        do j=0,ny
+          do i=0,nx
+            p_slow(i,j,k) = (beta*p_slow(i,j,k) + alpha*p(i,j,k))*rmask(i,j)
+            p_fast(i,j)   = (p(i,j,k) - p_slow(i,j,k))*rmask(i,j)
+          enddo
+        enddo
+        ! u_slow, and u_fast are baroclinic velocities
+        do j=1,ny
+          do i=1,nx+1
+            u_slow(i,j,k) = (beta*u_slow(i,j,k)&
+            &+ alpha*( u(i,j,k,nrhs)-Uflx(i,j)))*umask(i,j)
+            u_fast(i,j) = (u(i,j,k,nrhs)-Uflx(i,j)- u_slow(i,j,k))*umask(i,j)
+          enddo
+        enddo
+        ! v_slow, and v_fast are baroclinic velocities
+        do j=1,ny+1
+          do i=1,nx
+            v_slow(i,j,k) = (beta*v_slow(i,j,k)&
+            &+ alpha*( v(i,j,k,nrhs)-Vflx(i,j) ))*vmask(i,j)
+            v_fast(i,j) = (v(i,j,k,nrhs)-Vflx(i,j)- v_slow(i,j,k))*vmask(i,j)
+          enddo
+        enddo
+
+        do j=1,ny
+          do i=1,nx
+            up(i,j) = up(i,j) + u_fast(i,j)&
+            &* 0.25_8*( p_fast(i-1,j)+p_fast(i,j) )*( Hz(i-1,j,k)+Hz(i,j,k) )
+            vp(i,j) = vp(i,j) + v_fast(i,j)&
+            &* 0.25_8*( p_fast(i,j-1)+p_fast(i,j) )*( Hz(i,j-1,k)+Hz(i,j,k) )
+          enddo
+        enddo
+      enddo
+    endif  ! if pflux
+
+  end subroutine calc_pressure_flux  !]
+! ----------------------------------------------------------------------
+  subroutine get_init_slow(ncid,record,tindx )  ![
+    ! get initial slow u,v and p
+    implicit none
+
+    ! input
+    integer(kind=4),intent(in) :: ncid, record,tindx
+
+    ! local
+    integer(kind=4) :: i,j
+    integer(kind=4) :: ierr, varid
+    integer(kind=4),dimension(4) :: start
+
+    start=1; start(4)=record                                       ! 3D vars
+
+
+    if (mynode==0) print *,'getting u,v,p slow'
+    if (.not. allocated(u_slow)) then
+!        allocate(u_slow(nx+1,0:ny+1,nz ))
+      allocate(u_slow(GLOBAL_2D_ARRAY,nz))
+      u_slow = 0
+    endif
+    if (.not. allocated(v_slow)) then
+!        allocate( v_slow(0:nx+1,ny+1,nz ))
+      allocate(v_slow(GLOBAL_2D_ARRAY,nz))
+      v_slow = 0
+    endif
+    if (.not. allocated(p_slow)) then
+      allocate( p_slow( GLOBAL_2D_ARRAY, nz ))
+      p_slow = 0
+    endif
+
+    ierr=nf90_inq_varid (ncid, 'u_slow', varid)
+    if (ierr == nf90_noerr) then
+      call ncread(ncid,'u_slow', u_slow(x_:x1,y0:y1,:),start)
+#ifdef MASKING
+      do j = y0,y1
+        do i = x_,x1
+          if (umask(i,j)<1) u_slow(i,j,:) = 0
+        enddo
+      enddo
+#endif
+    else
+!       u_slow = 0.0_8
+      u_slow(x_:x1,y0:y1,:) = u(x_:x1,y0:y1,:,tindx)
+      mpi_master_only write(*,*) ' --- WARNING: '&
+      &,'u_slow not in initial file.'&
+      &,'  Initialized to u'
+      ierr=nf90_noerr
+    endif
+
+    ierr=nf90_inq_varid (ncid, 'v_slow', varid)
+    if (ierr == nf90_noerr) then
+      call ncread(ncid,'v_slow', v_slow(x0:x1,y_:y1,:),start)
+#ifdef MASKING
+      do j = y_,y1
+        do i = x0,x1
+          if (vmask(i,j)<1) v_slow(i,j,:) = 0
+        enddo
+      enddo
+#endif
+    else
+!       v_slow = 0.0_8
+      v_slow(x0:x1,y_:y1,:) = v(x0:x1,y_:y1,:,tindx)
+      mpi_master_only write(*,*) ' --- WARNING: '&
+      &,'v_slow not in initial file.'&
+      &,'  Initialized to v'
+      ierr=nf90_noerr
+    endif
+
+    ierr=nf90_inq_varid (ncid, 'p_slow', varid)
+    if (ierr == nf90_noerr) then
+      call ncread(ncid, 'p_slow', p_slow(x0:x1,y0:y1,:), start)
+      call exchange_xxx(p_slow)  ! need exchange since r2u to get u'p'
+#ifdef MASKING
+      do j = y0,y1
+        do i = x0,x1
+          if (rmask(i,j)<1) p_slow(i,j,:) = 0
+        enddo
+      enddo
+#endif
+    else
+      p_slow = 0.0_8
+      mpi_master_only write(*,*) ' --- WARNING: '&
+      &, 'p_slow'&
+      &, ' not in initial file.  Initialized to 0.0'
+      ierr=nf90_noerr
+    endif
+
+  end subroutine get_init_slow  !]
+! ----------------------------------------------------------------------
+  subroutine wrt_rst_diag_slow(ncid,record)  ![
+    ! write the slow components of u, v and P to restart file
+
+    implicit none
+
+    ! import/exprot
+    integer(kind=4),intent(in) :: ncid
+    integer(kind=4),intent(in) :: record
+
+#ifdef PARALLEL_IO
+    pio_gtype = '3Duw'
+    call ncwrite(ncid,'u_slow',u_slow( 1:i1,j0:j1,:),(/1,1,1,record/),.true.)
+    pio_gtype = '3Dvw'
+    call ncwrite(ncid,'v_slow',v_slow(i0:i1, 1:j1,:),(/1,1,1,record/),.true.)
+    pio_gtype = '3Drw'
+    call ncwrite(ncid,'p_slow',p_slow(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+#else
+    call ncwrite(ncid,'u_slow',u_slow( 1:i1,j0:j1,:),(/1,1,1,record/))
+    call ncwrite(ncid,'v_slow',v_slow(i0:i1, 1:j1,:),(/1,1,1,record/))
+    call ncwrite(ncid,'p_slow',p_slow(i0:i1,j0:j1,:),(/1,1,1,record/))
+#endif
+
+  end subroutine wrt_rst_diag_slow  !]
+! ----------------------------------------------------------------------
+end module calc_pflx_mod

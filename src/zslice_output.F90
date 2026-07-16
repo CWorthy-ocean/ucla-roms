@@ -1,0 +1,561 @@
+module zslice_output
+  ! Collection of zslice variables for output
+
+#include "cppdefs.opt"
+  use namelist_open_mod, only: open_namelist_file
+  use grid, only: rmask
+  use param, only: lm, mm, mynode, ocean_grid_comm
+  use roms_mpi, only: exchange_xxx
+  use dimensions, only: nx, ny, nz, i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u&
+&, ds_xr, ds_yr, ds_xu, ds_yv
+  use roms_read_write, only:&
+  &dn_tm, dn_xr, dn_xu, dn_yr,&
+  &dn_yv, create_file
+  use nc_read_write, only: nccreate, ncwrite
+  use netcdf, only:&
+  &nf90_noerr, nf90_write, nf90_open,&
+  &nf90_put_att, nf90_close, nf90_double, nf90_redef, nf90_enddef
+  use scalars, only: dt, iic, tdays, time, nnew
+  use ocean_vars, only: u, v, z_w, z_r
+  use tracers, only: t, t_vname, t_lname, t_units
+  use error_handling_mod, only: error_log
+  use pio_roms, only: pio_gtype
+#ifdef PARALLEL_IO
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_z
+  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+#endif
+  use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
+
+  implicit none
+
+  private
+  character(len=13) :: module_name = "zslice_output"
+  integer(kind=4),parameter :: max_ndep = 20
+  integer(kind=4),parameter :: max_nt_z = 10
+
+  real(kind=8)           :: output_period_zslice = 1200 ! in seconds
+  integer(kind=4)        :: nrpf_zslice   = 72          ! number of frames per file
+  integer(kind=4)        :: ndep   =  6          ! number of depth slice
+  real(kind=8), dimension(max_ndep) :: vecdep = (/0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0/) ! depths slice
+  integer(kind=4)        :: nt_zslice   =  2        ! number of tracers to slice
+  integer(kind=4), dimension(max_nt_z) :: trc2zsc = (/0,0,0,0,0,0,0,0,0,0/) ! index of the tracer to slice
+  logical, public :: do_zslice,&
+  &zslice_avg, wrt_T_zslice, wrt_U_zslice, wrt_V_zslice
+
+  namelist /ZSLICE_SETTINGS/ output_period_zslice, nrpf_zslice, ndep,&
+  &vecdep, nt_zslice, trc2zsc,&
+  &zslice_avg, wrt_T_zslice, wrt_U_zslice, wrt_V_zslice, do_zslice
+
+  real(kind=8)    :: output_time = 0
+  integer(kind=4) :: record = 0    ! to trigger the first file creation
+  integer(kind=4) :: navg = 0         ! number of samples in average
+  real(kind=8)    :: FillValue=1.D+33 !
+
+  ! Variables to z-slice
+  real(kind=8),allocatable,dimension(:,:,:,:) :: Tz, Tz_avg
+  real(kind=8),allocatable,dimension(:,:,:) :: Uz, Uz_avg
+  real(kind=8),allocatable,dimension(:,:,:) :: Vz, Vz_avg
+
+  ! Needed for z-slicing
+  real(kind=8),allocatable,dimension(:,:) :: zz
+  real(kind=8),allocatable,dimension(:,:) :: var
+  real(kind=8),allocatable,dimension(:,:) :: var_zlv
+
+  ! Public functions
+  public wrt_zslice, read_nml_zslice
+
+contains
+
+!----------------------------------------------------------------------
+  subroutine read_nml_zslice
+
+!     Read the "ZSLICE_SETTINGS" section of the namelist file
+    integer(kind=4) ::  namelist_unit, ios
+    character(len=20) :: sr_name = "read_nml_zslice"
+    character(len=512) :: msg = ""
+    ! Read namelist
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
+
+    read (unit=namelist_unit, nml=ZSLICE_SETTINGS, iostat=ios, iomsg=msg)
+
+    if (ios /= 0) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='could not read ZSLICE_SETTINGS'&
+      &//' section of namelist file: '&
+      &//trim(msg)&
+      &)
+    end if
+    close(namelist_unit)
+    record = nrpf_zslice
+  end subroutine read_nml_zslice
+
+  subroutine init_zslice ![
+    ! Allocate and initialize arrays.
+    implicit none
+
+    integer(kind=4) m
+
+#ifdef PARALLEL_IO
+    call pio_initialize_z(ndep)
+#endif
+
+    if (wrt_T_zslice)  then
+      allocate( Tz(GLOBAL_2D_ARRAY,ndep,nt_zslice) )
+      Tz=0._8
+      if (zslice_avg)  then
+        allocate( Tz_avg(GLOBAL_2D_ARRAY,ndep,nt_zslice) )
+        Tz_avg=0._8
+      endif
+    endif
+
+    if (wrt_U_zslice)  then
+      allocate( Uz(GLOBAL_2D_ARRAY,ndep) )
+      Uz=0._8
+      if (zslice_avg)  then
+        allocate( Uz_avg(GLOBAL_2D_ARRAY,ndep) )
+        Uz_avg=0._8
+      endif
+    endif
+
+    if (wrt_V_zslice)  then
+      allocate( Vz(GLOBAL_2D_ARRAY,ndep) )
+      Vz=0._8
+      if (zslice_avg)  then
+        allocate( Vz_avg(GLOBAL_2D_ARRAY,ndep) )
+        Vz_avg=0._8
+      endif
+    endif
+
+    allocate(zz(1:nx,0:nz+1))
+    allocate(var(1:nx,1:nz))
+    allocate(var_zlv(nx,ndep))
+
+    if (mynode==0) write(*,'(7x,A,I2,A,I2,A)')&
+    &'init zslice : nb depth =',ndep , ' to be done on ',&
+    &nt_zslice , ' tracers '
+    if (mynode==0) then
+      do m=1,ndep
+        write(*,'(7x,A,I2,A,F8.2)') 'depth(',m,')=',vecdep(m)
+      enddo
+      if (wrt_T_zslice) then
+        do m=1,nt_zslice
+          if (trc2zsc(m) < 1) then
+            call error_log%raise_global(&
+            &context=module_name//"/init_zslice",&
+            &info="trc2zsc entries must be positive tracer indices")
+          end if
+          write(*,'(7x,A,I2,A,A)') 'tracers(',trc2zsc(m),')=',t_vname(trc2zsc(m))
+        enddo
+      endif
+    endif
+
+  end subroutine init_zslice  !]
+!----------------------------------------------------------------------
+  subroutine calc_zslice ![
+    ! Calculate variables for zslice output
+    ! inspired from zslice in Tools-Roms
+    ! only the vertical RHO-point (kmin==1) are implemented
+    !
+
+    implicit none
+
+    ! local
+    integer(kind=4) i, j, k, m, trcz
+    real(kind=8) zlev, dpth
+    integer(kind=4) km(1:nx)
+
+    if (wrt_T_zslice) then
+      do j=1,ny
+        do k=1,nz
+          do i=1,nx
+            zz(i,k)=z_r(i,j,k)-z_w(i,j,nz)
+          enddo
+        enddo
+        do i=1,nx
+          zz(i,nz+1)=z_w(i,j,nz)-z_w(i,j,nz)
+          zz(i,  0)=z_w(i,j,0)-z_w(i,j,nz)
+        enddo
+        do trcz=1,nt_zslice
+!         if (mynode==0 .and. j==10) print *, j, zz(10,0), zz(10,N), zz(10,N+1)
+!         if (mynode==0 .and. j==10) print *, t(10,j,nz,nnew,trc2zsc(trcz))
+          call sigma_to_z(var_zlv,t(1:nx,j,1:nz,nnew,trc2zsc(trcz)),zz,j)
+          do i=1,nx
+            do m=1,ndep
+              Tz(i,j,m,trcz)=var_zlv(i,m)
+            enddo
+          enddo
+        enddo
+      enddo
+    endif
+
+    if (wrt_U_zslice) then
+      do j=1,ny
+        do k=1,nz
+          do i=1,nx
+            zz(i,k)=0.5_8*(z_r(i,j,k)+z_r(i-1,j,k))-0.5_8*(z_w(i-1,j,nz)+z_w(i,j,nz))
+          enddo
+        enddo
+        do i=1,nx
+          zz(i,nz+1)=0.5_8*(z_w(i-1,j,nz)+z_w(i,j,nz))-0.5_8*(z_w(i-1,j,nz)+z_w(i,j,nz))
+          zz(i,  0)=0.5_8*(z_w(i-1,j,0)+z_w(i,j,0))-0.5_8*(z_w(i-1,j,nz)+z_w(i,j,nz))
+        enddo
+        call sigma_to_z(var_zlv,u(1:nx,j,1:nz,nnew),zz,j)
+        do i=1,nx
+          do m=1,ndep
+            Uz(i,j,m)=var_zlv(i,m)
+          enddo
+        enddo
+      enddo
+      call exchange_xxx(Uz)
+
+    endif
+
+    if (wrt_V_zslice) then
+      do j=1,ny
+        do k=1,nz
+          do i=1,nx
+            zz(i,k)=0.5_8*(z_r(i,j,k)+z_r(i,j-1,k))-0.5_8*(z_w(i,j,nz)+z_w(i,j-1,nz))
+          enddo
+        enddo
+        do i=1,nx
+          zz(i,nz+1)=0.5_8*(z_w(i,j,nz)+z_w(i,j-1,nz))-0.5_8*(z_w(i,j,nz)+z_w(i,j-1,nz))
+          zz(i,  0)=0.5_8*(z_w(i,j,0)+z_w(i,j-1,0))-0.5_8*(z_w(i,j,nz)+z_w(i,j-1,nz))
+        enddo
+        call sigma_to_z(var_zlv,v(1:nx,j,1:nz,nnew),zz,j)
+        do i=1,nx
+          do m=1,ndep
+            Vz(i,j,m)=var_zlv(i,m)
+          enddo
+        enddo
+      enddo
+      call exchange_xxx(Vz)
+    endif
+
+  end subroutine calc_zslice  !]
+!----------------------------------------------------------------------
+  subroutine sigma_to_z(var_zlv,var,zz,j) ![
+
+    implicit none
+
+    !import/export
+    integer(kind=4), intent(in) :: j
+    real(kind=8), dimension(1:nx,0:nz+1), intent(in) :: zz
+    real(kind=8), dimension(:,:), intent(in) :: var
+    real(kind=8), dimension(:,:), intent(out) :: var_zlv
+
+    ! local
+    integer(kind=4) i, k, m
+    real(kind=8) zlev, dpth
+    integer(kind=4) km(1:nx)
+
+!         if (mynode==0 .and. j==10) print *, j, zz(10,0), zz(10,N), zz(10,N+1)
+!         if (mynode==0 .and. j==10) print *, var(10,nz)
+    var_zlv=0
+
+    do m=1,ndep
+
+      zlev=vecdep(m)
+
+      do i=1,nx
+        dpth=zz(i,nz+1)-zz(i,0)
+        if (rmask(i,j) < 0.5_8) then
+          km(i)=-3          !--> masked out
+        elseif (dpth*(zlev-zz(i,nz+1)) > 0._8) then
+          km(i)=nz+2         !<-- above surface
+        elseif (dpth*(zlev-zz(i,nz)) > 0._8) then
+          km(i)=nz           !<-- below surface, but above z_r(N)
+        elseif (dpth*(zz(i,0)-zlev) > 0._8) then
+          km(i)=-2          !<-- below bottom
+        elseif (dpth*(zz(i,1)-zlev) > 0._8) then
+          km(i)=0           !<-- above bottom, but below z_r(1)
+        else
+          km(i)=-1          !--> to search
+        endif
+      enddo
+
+      do k=nz-1,1,-1
+        do i=1,nx
+          if (km(i) == -1) then
+            if ((zz(i,k+1)-zlev)*(zlev-zz(i,k)) >= 0._8) then
+              km(i)=k
+            endif
+          endif
+        enddo
+      enddo
+
+      do i=1,nx
+        if (km(i) == -3) then
+          var_zlv(i,m)=0._8             !<-- masked out
+        elseif (km(i) == -2) then
+          var_zlv(i,m)=0._8             !<-- below bottom
+        elseif (km(i) == nz+2) then
+          var_zlv(i,m)=0._8             !<-- above surface
+        elseif (km(i) == nz) then
+          var_zlv(i,m)=var(i,nz)&       !-> R-point, above z_r(N)
+          &+(zlev-zz(i,nz))*(var(i,nz)-var(i,nz-1))&
+          &/(zz(i,nz)-zz(i,nz-1))
+        elseif (km(i) == 0) then   !-> R-point below z_r(1),
+          var_zlv(i,m)=var(i,1)&  !     but above bottom
+          &-(zz(i,1)-zlev)*(var(i,2)-var(i,1))&
+          &/(zz(i,2)-zz(i,1))
+        else
+          k=km(i)
+          var_zlv(i,m)=( var(i,k)*(zz(i,k+1)-zlev)&
+          &+var(i,k+1)*(zlev-zz(i,k))&
+          &)/(zz(i,k+1)-zz(i,k))
+        endif
+      enddo
+
+    enddo
+
+  end subroutine sigma_to_z  !]
+!----------------------------------------------------------------------
+  subroutine calc_average ![
+    ! Update averages
+    ! The average is always scaled properly throughout
+    ! reset navg_rnd=0 after an output of the average
+    implicit none
+
+    ! local
+    real(kind=8) :: coef
+
+    navg = navg+1
+
+    coef = 1._8/navg
+
+    if (coef==1) then                                    ! this refreshes average (1-coef)=0
+      if (mynode==0) write(*,'(7x,2A,F9.1)')&
+      &'zslice :: started averaging. ',&
+      &'output_period_zslice (s) =', output_period_zslice
+    endif
+
+    if (wrt_T_zslice)  Tz_avg = Tz_avg*(1-coef) + Tz*coef
+    if (wrt_U_zslice)  Uz_avg = Uz_avg*(1-coef) + Uz*coef
+    if (wrt_V_zslice)  Vz_avg = Vz_avg*(1-coef) + Vz*coef
+
+  end subroutine calc_average !]
+!----------------------------------------------------------------------
+  subroutine def_vars_zslice(ncid)  ![
+    implicit none
+
+    ! input
+    integer(kind=4),intent(in) :: ncid
+    ! local
+    integer(kind=4)                        :: ierr, varid, n
+
+    varid = nccreate(ncid,'depth',(/'depth'/),(/ndep/),nf90_double)
+
+    if (wrt_T_zslice) then
+      do n=1,nt_zslice
+        varid = nccreate(ncid,t_vname(trc2zsc(n)),&
+        &(/dn_xr,dn_yr,'depth',dn_tm/),(/ds_xr,ds_yr,ndep,0/),nf90_double)
+        if (zslice_avg) then
+          ierr = nf90_put_att(ncid,varid,'long_name','averaged'//t_lname(trc2zsc(n)))
+        else
+          ierr = nf90_put_att(ncid,varid,'long_name',t_lname(trc2zsc(n)))
+        endif
+        ierr = nf90_put_att(ncid,varid,'units',t_units(trc2zsc(n)))
+      enddo
+    endif
+
+    if (wrt_U_zslice) then
+      varid = nccreate(ncid,'u',(/dn_xu,dn_yr,'depth',dn_tm/),(/ds_xu,ds_yr,ndep,0/),nf90_double)
+      if (zslice_avg) then
+        ierr = nf90_put_att(ncid,varid,'long_name','averaged u-momentum component')
+      else
+        ierr = nf90_put_att(ncid,varid,'long_name','u-momentum component')
+      endif
+      ierr = nf90_put_att(ncid,varid,'units','meter second-1')
+    endif
+
+    if (wrt_V_zslice) then
+      varid = nccreate(ncid,'v',(/dn_xr,dn_yv,'depth',dn_tm/),(/ds_xr,ds_yv,ndep,0/),nf90_double)
+      if (zslice_avg) then
+        ierr = nf90_put_att(ncid,varid,'long_name','averaged v-momentum component')
+      else
+        ierr = nf90_put_att(ncid,varid,'long_name','v-momentum component')
+      endif
+      ierr = nf90_put_att(ncid,varid,'units','meter second-1')
+    endif
+
+  end subroutine def_vars_zslice  !]
+!----------------------------------------------------------------------
+  subroutine wrt_zslice  ![
+    ! Call wrt_zslice after completion of the time-step
+    ! (After step3d_uv2)
+    implicit none
+    character(len=10) :: sr_name= "wrt_zslice"
+    ! local
+    character(len=99),save :: fname
+    integer(kind=4),dimension(3)   :: start
+    integer(kind=4)                :: ncid,ierr
+    integer(kind=4)                :: i,j,k,n
+    logical,save           :: first_step=.true.
+
+    if (first_step) then
+      first_step=.false.
+      call init_zslice
+    endif
+
+    if (zslice_avg) call calc_zslice
+    if (zslice_avg) call calc_average
+
+    output_time = output_time + dt
+
+    if (output_time>=output_period_zslice) then
+
+#ifdef PARALLEL_IO
+
+      if (record==nrpf_zslice) then
+        if (mynode == 0) then
+          call create_file('_zsl',fname,nonode=.true.)
+          ierr=nf90_open(fname,nf90_write,ncid)
+          ierr=nf90_redef(ncid)
+          if (ierr/=nf90_noerr) then
+            call error_log%check_netcdf_status(netcdf_status=ierr, &
+              context=module_name//"/"//sr_name, &
+              info="nf90_redef for file "//trim(fname))
+          end if
+          call def_vars_zslice(ncid)
+          ierr = nf90_enddef(ncid)
+          if (ierr/=nf90_noerr) then
+            call error_log%check_netcdf_status(netcdf_status=ierr, &
+              context=module_name//"/"//sr_name, &
+              info="nf90_enddef for file "//trim(fname))
+          end if
+          call ncwrite(ncid,'depth',vecdep(1:ndep))
+          ierr = nf90_close(ncid)
+        endif
+        call error_log%abort_check()
+        call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+        call MPI_Barrier(ocean_grid_comm, ierr)
+        record = 0
+      endif
+
+      if (.not. zslice_avg) call calc_zslice
+      record = record+1
+
+      if (mynode == 0) then
+        ierr=nf90_open(fname,nf90_write,ncid)
+        if (ierr/=nf90_noerr) then
+          call error_log%check_netcdf_status(netcdf_status=ierr, &
+            info="error opening "//trim(fname), &
+            context=module_name//"/"//sr_name)
+        end if
+        call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+        ierr=nf90_close(ncid)
+      endif
+      call error_log%abort_check()
+      call MPI_Barrier(ocean_grid_comm, ierr)
+
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+
+      pio_gtype = '3Drz'
+      if (wrt_T_zslice) then
+        do n=1,nt_zslice
+          if (zslice_avg) then
+            call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz_avg(i0:i1,j0:j1,:,n),&
+            &(/1,1,1,record/),.true.)
+          else
+            call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz(i0:i1,j0:j1,:,n),&
+            &(/1,1,1,record/),.true.)
+          endif
+        enddo
+      endif
+      pio_gtype = '3Duz'
+      if (wrt_U_zslice) then
+        if (zslice_avg) then
+          call ncwrite(ncid,'u',Uz_avg(1:i1,j0:j1,:),(/1,1,1,record/),.true.)
+        else
+          call ncwrite(ncid,'u',Uz(1:i1,j0:j1,:),(/1,1,1,record/),.true.)
+        endif
+      endif
+      pio_gtype = '3Dvz'
+      if (wrt_V_zslice) then
+        if (zslice_avg) then
+          call ncwrite(ncid,'v',Vz_avg(i0:i1,1:j1,:),(/1,1,1,record/),.true.)
+        else
+          call ncwrite(ncid,'v',Vz(i0:i1,1:j1,:),(/1,1,1,record/),.true.)
+        endif
+      endif
+
+      call PIO_closefile(pio_FileDesc)
+
+      if (mynode == 0) then
+        write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
+        &'wrt_zslice :: wrote zslice, tdays =', tdays,&
+        &'step =', iic-1, 'rec =', record
+      endif
+
+      output_time=0
+      navg = 0
+
+#else ! PARALLEL_IO
+
+      if (record==nrpf_zslice) then
+        call create_file('_zsl',fname)
+        ierr=nf90_open(fname,nf90_write,ncid)
+        ierr=nf90_redef(ncid)
+        call def_vars_zslice(ncid)
+        ierr = nf90_enddef(ncid)
+        call ncwrite(ncid,'depth',vecdep(1:ndep))
+        ierr = nf90_close(ncid)
+        record = 0
+      endif
+
+      if (.not. zslice_avg) call calc_zslice
+      record = record+1
+
+      ierr=nf90_open(fname,nf90_write,ncid)
+
+      if (ierr/=nf90_noerr) then
+        call error_log%check_netcdf_status(netcdf_status=ierr,&
+        &info="error opening "//fname,&
+        &context=module_name//"/"//sr_name)
+      end if
+      call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+
+      if (wrt_T_zslice) then
+        do n=1,nt_zslice
+          if (zslice_avg) then
+            call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz_avg(i0:i1,j0:j1,:,n),&
+            &(/1,1,1,record/))
+          else
+            call ncwrite(ncid,trim(t_vname(trc2zsc(n))),Tz(i0:i1,j0:j1,:,n),(/1,1,1,record/))
+          endif
+        enddo
+      endif
+      if (wrt_U_zslice) then
+        if (zslice_avg) then
+          call ncwrite(ncid,'u',Uz_avg(1:i1,j0:j1,:),(/1,1,1,record/))
+        else
+          call ncwrite(ncid,'u',Uz(1:i1,j0:j1,:),(/1,1,1,record/))
+        endif
+      endif
+      if (wrt_V_zslice) then
+        if (zslice_avg) then
+          call ncwrite(ncid,'v',Vz_avg(i0:i1,1:j1,:),(/1,1,1,record/))
+        else
+          call ncwrite(ncid,'v',Vz(i0:i1,1:j1,:),(/1,1,1,record/))
+        endif
+      endif
+      ierr=nf90_close (ncid)
+
+      if (mynode == 0) then
+        write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
+        &'wrt_zslice :: wrote zslice, tdays =', tdays,&
+        &'step =', iic-1, 'rec =', record
+      endif
+
+      output_time=0
+      navg = 0
+#endif ! PARALLEL_IO
+
+    endif
+    call error_log%abort_check()
+  end subroutine wrt_zslice !]
+!----------------------------------------------------------------------
+
+end module zslice_output

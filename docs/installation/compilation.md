@@ -16,19 +16,12 @@ As with any environment variables described on the [previous page](dependencies)
 
 ## Compiling internal dependencies
 
-The ROMS repository includes two additional directories that should be compiled the first time ROMS is installed:
-
-```bash
-cd $ROMS_ROOT/NHMG/src
-make
-```
-
-compiles the optional non-hydrostatic modeling library, while
+The ROMS repository includes an additional directory of tools that should be compiled the first time ROMS is installed:
 
 ```bash
 cd $ROMS_ROOT/Tools-Roms/
 make
 ```
 
-compiles a series of programs used to manage ROMS input and output. More on these later.
+More on these tools later.
 

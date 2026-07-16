@@ -1,19 +1,19 @@
 # Compiling and running an example configuration
 
 ## Compiling
-ROMS does not have a single, central executable, and each configuration must be compiled individually. This is because ROMS takes advantage of several configuration-dependent compile-time optimizations. ROMS includes a number of simple example configurations in the `Examples` directory that can easily be compiled and run on a modern laptop. To verify everything has gone as expected up to this point, we'll compile the `Rivers_real` example, which is a small simulation of a river outflow using netCDF input and output on 6 processors.
+ROMS does not have a single, central executable, and each configuration must be compiled individually. This is because ROMS takes advantage of several configuration-dependent compile-time optimizations. ROMS includes a number of simple example configurations in the `tests` directory that can easily be compiled and run on a modern laptop. To verify everything has gone as expected up to this point, we'll compile the `Rivers_real` example, which is a small simulation of a river outflow using netCDF input and output on 6 processors.
 
 First, obtain the necessary netCDF input files for the examples:
 
 ```
-cd $ROMS_ROOT/Examples/input_data/
+cd $ROMS_ROOT/tests/input_data/
 ./get_input_files.sh
 ```
 
 Next, compile the model:
 
 ```
-cd $ROMS_ROOT/Examples/Rivers_real
+cd $ROMS_ROOT/tests/Rivers_real
 make
 ```
 
@@ -23,11 +23,11 @@ You should now have an executable, `roms`, in the directory.
 To run the model, do
 
 ```
-mpirun -n 6 ./roms rivers.in
+mpirun -n 6 ./roms benchmark.in
 ```
 
-where `-n 6` is the number of processors, and `rivers.in` is a text file defining runtime parameters such as the number of time steps.
-Unless edited, the model will run for 50 time steps.
+where `-n 6` is the number of processors, and `benchmark.in` is a text file defining runtime parameters such as the number of time steps.
+Unless edited, the model will run for 20 time steps.
 
 :::{warning}
 On HPC systems, you will likely need to wrap the above MPI run command in a script and submit it to a scheduler. Consult your system's documentation.

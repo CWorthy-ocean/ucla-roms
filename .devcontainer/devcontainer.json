@@ -1,0 +1,4 @@
+{
+  "name": "dev_gnu",
+    "image": "ghcr.io/cworthy-ocean/marbl_gnu_mpich:0.0",
+}
