@@ -1145,6 +1145,9 @@ contains
     tname = nc%tname
 
     if (nc%ungridded) then
+      pio_gtype = '----'  ! ungridded data is read serially on rank 0 only;
+                          ! a stale gtype here would turn the ncread below
+                          ! into a rank-0-only PIO collective (deadlock)
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it), nc%ungridded_forcing_file)
@@ -1176,7 +1179,10 @@ contains
         &nc%times(it) )
       endif
       call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1278,6 +1284,9 @@ contains
     tname = nc%tname
 
     if (nc%ungridded) then
+      pio_gtype = '----'  ! ungridded data is read serially on rank 0 only;
+                          ! a stale gtype here would turn the ncread below
+                          ! into a rank-0-only PIO collective (deadlock)
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it), nc%ungridded_forcing_file)
@@ -1303,7 +1312,10 @@ contains
         &nc%times(it) )
       endif
       call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1401,7 +1413,10 @@ contains
       &nc%times(it) )
     endif
     call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
     call find_new_record(vname,tname,modtime,ifile,irec,&

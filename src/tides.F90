@@ -336,6 +336,12 @@ contains
     call error_log%abort_check()
     start = 1                                                      ! netcdf start indices
 
+#ifdef PARALLEL_IO
+    ! open once for all constituents (re-opening per constituent leaked
+    ! the previous PIO file handle)
+    ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(var_file_indx))
+#endif
+
     do itide = 1,ntides
 
       ierr=nf90_inq_varid(ncid, 'omega', var_id)
@@ -347,10 +353,6 @@ contains
       end if
       call error_log%abort_check()
       start(3) = itide
-
-#ifdef PARALLEL_IO
-      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(var_file_indx))
-#endif
 
       if (bry_tides) then
         pio_gtype = '2Drr'
