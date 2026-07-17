@@ -24,6 +24,8 @@ Bug Fixes
 - Initialize `forcing_version` string to prevent errors from CDR forcing module (`#303 <https://github.com/CWorthy-ocean/ucla-roms/pull/303>`_)
 - Bugfixes from initial PIO testing (`#306 <https://github.com/CWorthy-ocean/ucla-roms/pull/306>`_)
 - Tests were missing were the new restoring force functionality. (`#299 <https://github.com/CWorthy-ocean/ucla-roms/pull/299>`_)
+- Fix a PIO deadlock related to skipping reads (`#307 <https://github.com/CWorthy-ocean/ucla-roms/pull/307>`_)
+- Guard against other deadlock conditions (`#307 <https://github.com/CWorthy-ocean/ucla-roms/pull/307>`_)
 
 Improvements
 ~~~~~~~~~~~~
