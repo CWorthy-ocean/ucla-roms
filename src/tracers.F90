@@ -22,6 +22,10 @@ module tracers
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rath
+#ifdef CDR_TRACER
+  use surf_flux, only: ddic_dco2, ddic_dalk, k_gas, uwnd, vwnd
+  use ocean_vars, only: Hz
+#endif
   use scalars, only: nz, nstp, nnew, forw_start, iic, nt
 ! for 'FIRST_TIME_STEP' and nstp, only:
   use nc_read_write, only: nccreate, ncwrite
@@ -123,6 +127,11 @@ contains
     integer(kind=4)           :: itrc       ! tracer number for loop index
     character(len=46) :: t_flx_name ! Tracer time name
 
+#ifdef CDR_TRACER
+      call exchange_xxx(t(:,:,nz,nrhs,itemp) )
+      call set_gas_transfer_velocity(istr,iend,jstr,jend)
+#endif
+
 #ifdef PARALLEL_IO
     pio_file_is_open = 0
 #endif
@@ -136,6 +145,16 @@ contains
       elseif(t_ana_frc(itrc)==1) then ! Analytical forcing
 
         call set_ana_surf_tracer_flx(itrc)
+
+#ifdef CDR_TRACER
+      elseif (t_ana_frc(itrc)==2) then
+            call set_frc_data(nc_t(itrc), stflx(:,:,itrc), 'r' )
+            call exchange_xxx(stflx(:,:,itrc))
+
+            call exchange_xxx(t(:,:,nz,nrhs,itrc) )
+            call subtract_gas_exchange_from_tracer_flx(itrc,istr,iend,jstr,jend)
+            call exchange_xxx(stflx(:,:,itrc))
+#endif
 
       else
 
@@ -196,6 +215,80 @@ contains
 !     endif
 
   end subroutine set_ana_surf_tracer_flx  !]
+! ----------------------------------------------------------------------
+      subroutine set_gas_transfer_velocity(istr,iend,jstr,jend) ![
+
+      implicit none
+      integer istr, iend, jstr, jend
+
+#if defined CDR_TRACER
+      ! coefficients to compute Schmidt number
+      real, parameter :: a = 2116.8
+      real, parameter :: b = -136.25
+      real, parameter :: c = 4.7353
+      real, parameter :: d = -0.092307
+      real, parameter :: e = 0.0007555
+      real, parameter :: xkw_coef = 6.97e-07
+      real schmidt_nr, sst
+      integer i, j
+
+      do j=jstr,jend
+        do i=istr,iend+1
+
+          sst = t(i,j,nz,nrhs,itemp)
+          schmidt_nr = a + sst * (b + sst * (c + sst * (d + e * sst)))
+          k_gas(i,j) = xkw_coef * (uwnd(i,j)**2 + vwnd(i,j)**2) * sqrt(660.0 / schmidt_nr)
+#ifdef SEA_ICE_NOFLUX
+          if( sst .le. -1.8 ) then
+              k_gas(i,j)=0.                    ! If SST colder than -1.8 C, assume zero piston velocity due to sea ice
+          endif
+#endif
+        enddo
+      enddo
+
+#endif /* defined CDR_TRACER */
+
+      end subroutine set_gas_transfer_velocity  !]
+! ----------------------------------------------------------------------
+      subroutine subtract_gas_exchange_from_tracer_flx(itrc,istr,iend,jstr,jend)  ![
+      ! Modify surface tracer flux by subtracting the air-sea gas exchange term
+
+      implicit none
+
+      integer itrc ! Current tracer index number
+      integer istr, iend, jstr, jend
+
+#ifdef CDR_TRACER
+
+      ! local
+      integer i, j, iALK
+      real beta, eta, cALK
+
+      iALK = itrc_alk_pair(itrc) ! Identify if this tracer has a pair
+
+      do j=jstr,jend
+        do i=istr,iend+1
+          beta = max(ddic_dco2(i,j), 1.0e-5) ! avoid division by zero
+          eta = ddic_dalk(i,j)
+          if (iALK > 0) then
+             cALK = t(i,j,nz,nrhs,iALK)
+          else
+             cALK = 0.0
+          endif
+
+          ! Implementation: Flux = Flux - (k / beta) * (C_dic - ddic_dalk * C_alk)
+          stflx(i,j,itrc) = stflx(i,j,itrc) -
+     &      ( k_gas(i,j) / beta ) * ( t(i,j,nz,nrhs,itrc) - eta * cALK )
+
+          ! Here, stflx is stored as (stflx * Hz) to maintain consistency
+          ! with t, which is also in (t * Hz) form. This ensures the units match
+          ! when stflx is added to t in step3d_t_ISO.
+          ! After the implicit vertical mixing step in step3d_t_ISO, (t * Hz)
+          ! is divided by Hz to yield the updated tracer t.
+        enddo
+      enddo
+#endif
+      end subroutine subtract_gas_exchange_from_tracer_flx  !]
 ! ----------------------------------------------------------------------
   subroutine def_his_trc( ncid )  ![
     ! Define history file variables in def_his.F
@@ -335,6 +428,7 @@ contains
 
     ! local
     integer(kind=4) :: cnt=0, itrc
+    character(len=8) :: passive_tracer_num
     allocate(t_vname(nt))
     allocate(t_lname(nt))
     allocate(t_units(nt))
@@ -361,6 +455,17 @@ contains
     iTandS = 2         ! if both temp and salt.
 #endif
     itot=iTandS        ! set up counting for additional tracers
+
+    do itrc=iTandS+1,iTandS+nt_passive
+      write(passive_tracer_num, '(I0)') (itrc-iTandS)
+      t_vname(itrc)='passive_tracer' // TRIM(passive_tracer_num)
+      t_units(itrc)='mMol m-3'
+      t_lname(itrc)='passive tracer' // TRIM(passive_tracer_num)
+      wrt_t(itrc) = .false.
+      wrt_t_dia(itrc) = .false.
+      t_ana_frc(itrc)=1
+      itot = itot+1
+    enddo
 
     ! Additional passive tracers:
 #ifdef BIOLOGY_BEC2
