@@ -68,8 +68,8 @@ module roms_read_write
   ! Set the name and time_name of variable to match what is in the input forcing files.
   ! Use same name as bulk_frc variable name, e.g. uwnd has nc_uwnd for netcdf vars.
   type,public  :: ncforce
-    character(len=20)                 :: vname     ! name of variable in input file
-    character(len=20)                 :: tname     ! time variable name for variable
+    character(len=64)                 :: vname     ! name of variable in input file
+    character(len=64)                 :: tname     ! time variable name for variable
     real(kind=8),dimension(:,:,:),allocatable :: vdata     ! currently must be exact size of sub-domain (no buffer)
     integer(kind=4)                           :: coarse=0  ! Flag to indicate interpolation of the input data
     integer(kind=4)                           :: ifile=0   ! Index to file in list of filenames
@@ -82,8 +82,8 @@ module roms_read_write
   end type ncforce
 
   type,public  :: ncforce3d
-    character(len=20)                 :: vname     ! name of variable in input file
-    character(len=20)                 :: tname     ! time variable name for variable
+    character(len=64)                 :: vname     ! name of variable in input file
+    character(len=64)                 :: tname     ! time variable name for variable
     real(kind=8),dimension(:,:,:,:),allocatable :: vdata     ! currently must be exact size of sub-domain (no buffer
     integer(kind=4)                           :: coarse=0  ! Flag to indicate interpolation of the input data
     integer(kind=4)                           :: ifile=0   ! Index to file in list of filenames
@@ -1132,8 +1132,8 @@ contains
     ! local
     integer(kind=4) :: ierr,ncid
 
-    character(len=20)  :: vname  ! name of variable in input file
-    character(len=20)  :: tname  ! time variable name for variable
+    character(len=64)  :: vname  ! name of variable in input file
+    character(len=64)  :: tname  ! time variable name for variable
     character(len=100) :: forcing_version ! version of forcing input data
     character(len=300) :: frcstr
     integer(kind=4)            :: irec,ifile
@@ -1265,8 +1265,8 @@ contains
     ! local
     integer(kind=4) :: ierr,ncid
 
-    character(len=20)  :: vname  ! name of variable in input file
-    character(len=20)  :: tname  ! time variable name for variable
+    character(len=64)  :: vname  ! name of variable in input file
+    character(len=64)  :: tname  ! time variable name for variable
     character(len=100) :: forcing_version ! version of forcing input data
     character(len=300) :: frcstr
     integer(kind=4)            :: irec,ifile
@@ -1384,8 +1384,8 @@ contains
     ! local
     integer(kind=4) :: ierr,ncid
 
-    character(len=20)  :: vname  ! name of variable in input file
-    character(len=20)  :: tname  ! time variable name for variable
+    character(len=64)  :: vname  ! name of variable in input file
+    character(len=64)  :: tname  ! time variable name for variable
     character(len=100) :: forcing_version ! version of forcing input data
     character(len=300) :: frcstr
     integer(kind=4)            :: irec,ifile

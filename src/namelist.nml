@@ -50,13 +50,13 @@ hc = 25.0D0                     ! Critical depth (m)
 !------------------------------
 ! Previously set in `param.opt`
 !------------------------------
-NP_XI = 3                      ! Number of processors following X
-NP_ETA = 2                     ! Number of processors following Y
-LLm = 199                      ! Number of grid points in X
-MMm = 99                       ! Number of grid points in Y
-nz = 50                         ! Number of vertical levels
-nt_passive = 0                 ! Number of passive tracers
-nt_bgc = 0                   ! Number of BGC tracers
+NP_XI = 3           ! Number of processors following X
+NP_ETA = 2          ! Number of processors following Y
+LLm = 199           ! Number of grid points in X
+MMm = 99            ! Number of grid points in Y
+nz = 50             ! Number of vertical levels
+nt_passive = 0      ! Number of passive tracers; must be named passive_tracer1, etc.
+nt_bgc = 0          ! Number of BGC tracers
 /
 
 

@@ -117,6 +117,15 @@ module surf_flux
   real(kind=8),public,allocatable,dimension(:,:) :: sss
   ! real(kind=8),public :: dSSSdt = 0._8                           ! input units (cm/day)
 
+#if defined CDR_TRACER
+      real,public,allocatable,dimension(:,:) :: ddic_dco2  ! time interpolated carbonate sensitivity
+      real,public,allocatable,dimension(:,:) :: ddic_dalk  ! time interpolated carbonate sensitivity
+      real,public,allocatable,dimension(:,:) :: k_gas      ! time interpolated gas transfer velocity
+
+      type (ncforce) :: nc_ddic_dco2 = ncforce(vname='ddic_dco2',tname='ddic_dco2_time' )  ! carbonate sensitivity
+      type (ncforce) :: nc_ddic_dalk = ncforce(vname='ddic_dalk',tname='ddic_dalk_time' )  ! carbonate sensitivity
+#endif
+
   ! Sea-surface DIC (sDIC) and ALK (sALK) data for restoring
   real(kind=8),public,allocatable,dimension(:,:) :: sDIC
   real(kind=8),public,allocatable,dimension(:,:) :: sALK
@@ -243,6 +252,14 @@ subroutine init_arrays_surf_flx ![
   call store_string_att(surf_forcing_strings,'cm/day')
 #endif
 
+#if defined CDR_TRACER
+      allocate( nc_ddic_dco2%vdata( GLOBAL_2D_ARRAY,2) )
+      allocate( ddic_dco2(GLOBAL_2D_ARRAY)  )
+      allocate( nc_ddic_dalk%vdata( GLOBAL_2D_ARRAY,2) )
+      allocate( ddic_dalk(GLOBAL_2D_ARRAY)  )
+      allocate( k_gas(GLOBAL_2D_ARRAY)      ); k_gas=0.
+#endif
+
 #if defined CFLX_CORR && defined MARBL
   allocate( sDIC(GLOBAL_2D_ARRAY)        ); sDIC=init
   allocate(nc_sDIC%vdata(GLOBAL_2D_ARRAY,2) )
@@ -310,6 +327,17 @@ subroutine set_surf_field_corr ![
 #endif
 
 end subroutine set_surf_field_corr  !]
+! ----------------------------------------------------------------------
+      subroutine set_carbonate_sensitivity ![
+
+      implicit none
+
+#ifdef CDR_TRACER
+      call set_frc_data(nc_ddic_dco2, ddic_dco2, 'r')
+      call set_frc_data(nc_ddic_dalk, ddic_dalk, 'r')
+#endif
+
+      end subroutine set_carbonate_sensitivity  !]
 ! ----------------------------------------------------------------------
 subroutine calc_sflx_avg  ![
   implicit none
