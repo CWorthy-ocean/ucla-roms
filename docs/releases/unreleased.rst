@@ -26,6 +26,7 @@ Bug Fixes
 - Tests were missing were the new restoring force functionality. (`#299 <https://github.com/CWorthy-ocean/ucla-roms/pull/299>`_)
 - Fix a PIO deadlock related to skipping reads (`#307 <https://github.com/CWorthy-ocean/ucla-roms/pull/307>`_)
 - Guard against other deadlock conditions (`#307 <https://github.com/CWorthy-ocean/ucla-roms/pull/307>`_)
+- Fix a bug where rivers could not be read in with PIO activated (`#309 <https://github.com/CWorthy-ocean/ucla-roms/pull/309>`_)
 
 Improvements
 ~~~~~~~~~~~~
