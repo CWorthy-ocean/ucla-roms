@@ -101,6 +101,9 @@ contains
 
     else
 
+      pio_gtype = '----'  ! pipe volume/tracers are non-distributed (per-pipe) and
+                          ! read serially; clear any stale gridded gtype so ncread
+                          ! below takes the serial path, not a PIO collective read.
 #ifdef PARALLEL_IO
       pio_file_is_open = 0
 #endif
