@@ -1,10 +1,7 @@
 .. _unreleased:
 
-Unreleased
+0.3.0
 ----------
-
-.. note::
-    This release is currently in development
 
 Breaking Changes
 ~~~~~~~~~~~~~~~~
@@ -14,7 +11,7 @@ Breaking Changes
 New Features
 ~~~~~~~~~~~~
 
-
+- The extract_data module now produces either the old .ext files (w/o PIO) or a fully-formed child boundary file (w/ PIO).
 - Ability to specify `reference_date` in the namelist. (`#300 <https://github.com/CWorthy-ocean/ucla-roms/pull/300>`_)
 
 Bug Fixes
@@ -27,6 +24,7 @@ Bug Fixes
 - Fix a PIO deadlock related to skipping reads (`#307 <https://github.com/CWorthy-ocean/ucla-roms/pull/307>`_)
 - Guard against other deadlock conditions (`#307 <https://github.com/CWorthy-ocean/ucla-roms/pull/307>`_)
 - Fix a bug where rivers could not be read in with PIO activated (`#309 <https://github.com/CWorthy-ocean/ucla-roms/pull/309>`_)
+- Restore ability to use passive tracers, which was accidentally removed
 
 Improvements
 ~~~~~~~~~~~~
@@ -39,3 +37,4 @@ Miscellaneous
 ~~~~~~~~~~~~~
 
 - Adds github CI action to rebuild CI testing containers, either on-demand (via a workflow dispatch action) or whenever one of the containerfiles changes. (`#303 <https://github.com/CWorthy-ocean/ucla-roms/pull/303>`_)
+- Partial implementation of CDR Tracer (not fully functional yet, still in development)
