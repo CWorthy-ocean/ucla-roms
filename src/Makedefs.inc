@@ -195,6 +195,9 @@ CFT += $(CFTFLAGS)
 
 # Fortran loader options:
 LDFLAGS = $(CFTFLAGS) $(LARGE_MEM_FLAG)
+ifeq ($(shell uname -s),Darwin)
+LDFLAGS += -Wl,-syslibroot,$(shell xcrun --show-sdk-path)
+endif
 LDR += $(LDFLAGS)
 
 # Fortran compiler options/flags:
