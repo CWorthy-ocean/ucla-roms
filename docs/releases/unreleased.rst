@@ -19,7 +19,8 @@ New Features
 Bug Fixes
 ~~~~~~~~~
 
-- N/A
+
+- Add explicit NETCDFF paths to `make` linking (`#313 <https://github.com/CWorthy-ocean/ucla-roms/pull/313>`_)
 
 Improvements
 ~~~~~~~~~~~~
@@ -34,3 +35,5 @@ Miscellaneous
 - CI: Pins parts of the gnu compiler stack (`#316 <https://github.com/CWorthy-ocean/ucla-roms/pull/316>`_)
 - CI: xfail on hash mismatches, hard fail on other errors (`#316 <https://github.com/CWorthy-ocean/ucla-roms/pull/316>`_)
 - CI: update roms-tools to fix test construction failures (`#316 <https://github.com/CWorthy-ocean/ucla-roms/pull/316>`_)
+- Standardize trailing `/` convention for Makedefs (`#313 <https://github.com/CWorthy-ocean/ucla-roms/pull/313>`_)
+- Allow additional link flags to be passed via USER_LDFLAGS (`#313 <https://github.com/CWorthy-ocean/ucla-roms/pull/313>`_)
