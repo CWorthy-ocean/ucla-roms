@@ -21,6 +21,8 @@ Bug Fixes
 
 
 - Add explicit NETCDFF paths to `make` linking (`#313 <https://github.com/CWorthy-ocean/ucla-roms/pull/313>`_)
+- Fix missing cdr tracer param usage (`#317 <https://github.com/CWorthy-ocean/ucla-roms/pull/317>`_)
+- Fix SSS test using coarse dims, which isn't supported for restoring (`#317 <https://github.com/CWorthy-ocean/ucla-roms/pull/317>`_)
 
 Improvements
 ~~~~~~~~~~~~
