@@ -463,6 +463,7 @@ contains                  !]
         call error_log%abort_check()
         call MPI_Barrier(ocean_grid_comm, ierr)
 
+        if (mynode==0) print *, 'PIO fname len=', len_trim(fname_his), trim(fname_his)
         ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_his), PIO_write)
 
         start=1; start(3)=rec_his                                    ! back to 2D vars
