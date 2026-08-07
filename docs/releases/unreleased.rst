@@ -39,3 +39,5 @@ Miscellaneous
 - CI: update roms-tools to fix test construction failures (`#316 <https://github.com/CWorthy-ocean/ucla-roms/pull/316>`_)
 - Standardize trailing `/` convention for Makedefs (`#313 <https://github.com/CWorthy-ocean/ucla-roms/pull/313>`_)
 - Allow additional link flags to be passed via USER_LDFLAGS (`#313 <https://github.com/CWorthy-ocean/ucla-roms/pull/313>`_)
+- Update release notes finalizer to remove sections with nothing in them (`#319 <https://github.com/CWorthy-ocean/ucla-roms/pull/319>`_)
+- Update release notes updater to handle unbulleted content (`#319 <https://github.com/CWorthy-ocean/ucla-roms/pull/319>`_)
