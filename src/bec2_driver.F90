@@ -23,6 +23,7 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
   use bgc_shared_vars, only:&
   &t, ialk, idic, ife, io2, ipo4, isio3,&
   &mynode, nt_passive, bgc_idx
+  use param, only: nt_cdr_oae, nt_cdr_dor
   use bec2_vars, only:&
 #ifdef Ncycle_SY
   &lflux_gas_n2, lflux_gas_n2o,&

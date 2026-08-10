@@ -18,7 +18,8 @@ module tracers
   !]
 
 #include "cppdefs.opt"
-  use param, only: isalt, itemp, lm, mm, mynode, nt_passive, nt_cdr_oae, nt_cdr_dor
+  use param, only: isalt, itemp, lm, mm, mynode, nt_passive, nt_cdr_oae, nt_cdr_dor&
+  &,ieast, iwest, jnorth, jsouth
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rath
@@ -26,7 +27,7 @@ module tracers
   use surf_flux, only: ddic_dco2, ddic_dalk, k_gas, uwnd, vwnd
   use ocean_vars, only: Hz
 #endif
-  use scalars, only: nz, nstp, nnew, forw_start, iic, nt
+  use scalars, only: nz, nstp, nrhs, nnew, forw_start, iic, nt
 ! for 'FIRST_TIME_STEP' and nstp, only:
   use nc_read_write, only: nccreate, ncwrite
   use roms_read_write, only:&
@@ -40,6 +41,7 @@ module tracers
   use pio_roms, only: pio_file_is_open, pio_FileDesc
   use pio, only : PIO_closefile
 #endif
+  use roms_mpi, only: exchange_xxx
 
   implicit none
   private
@@ -123,11 +125,15 @@ contains
   subroutine set_surf_tracer_flx ![
     ! set tracer flux at surface
     use error_handling_mod, only: error_log
+    use private_scratch, only: nsub_e, nsub_x
     implicit none
     character(len=20) :: sr_name = "set_surf_tracer_flx"
     ! local
     integer(kind=4)           :: itrc       ! tracer number for loop index
     character(len=46) :: t_flx_name ! Tracer time name
+    integer(kind=4) :: tile
+
+#include "compute_tile_bounds.h"
 
 #ifdef CDR_TRACER
       call exchange_xxx(t(:,:,nz,nrhs,itemp) )
@@ -279,7 +285,7 @@ contains
           endif
 
           ! Implementation: Flux = Flux - (k / beta) * (C_dic - ddic_dalk * C_alk)
-          stflx(i,j,itrc) = stflx(i,j,itrc) -
+          stflx(i,j,itrc) = stflx(i,j,itrc) -&
      &      ( k_gas(i,j) / beta ) * ( t(i,j,nz,nrhs,itrc) - eta * cALK )
 
           ! Here, stflx is stored as (stflx * Hz) to maintain consistency
@@ -474,7 +480,7 @@ contains
       itot = itot+1
     enddo
 
-    do itrc=iTandS+nt_passive+1,iTandS+nt_passive+nt_cdr_oae,2
+    do itrc=iTandS+nt_passive+1,iTandS+nt_passive+2*nt_cdr_oae,2
       write(passive_tracer_num, '(I0)') (itrc-iTandS-nt_passive)
       t_vname(itrc)='CDR_OAE_ALK' // TRIM(passive_tracer_num)
       t_tname(itrc)='CDR_OAE_ALK' // TRIM(passive_tracer_num) // '_time'
