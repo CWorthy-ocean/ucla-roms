@@ -429,7 +429,7 @@ contains
     integer(kind=4) :: ierr,diag, prev_fill_mode,ncid
     character(len=99),save  :: fname
     integer(kind=4),save            :: record=0
-    logical :: first_step
+    logical,save :: first_step=.true.
     integer(kind=4),dimension(3) :: start
 
     if (first_step) then

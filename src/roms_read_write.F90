@@ -1145,6 +1145,9 @@ contains
     tname = nc%tname
 
     if (nc%ungridded) then
+      pio_gtype = '----'  ! ungridded data is read serially on rank 0 only;
+                          ! a stale gtype here would turn the ncread below
+                          ! into a rank-0-only PIO collective (deadlock)
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it), nc%ungridded_forcing_file)
@@ -1176,7 +1179,10 @@ contains
         &nc%times(it) )
       endif
       call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1198,6 +1204,12 @@ contains
           pio_frcfile = frcfiles(ifile)
           pio_file_is_open = 1
         endif
+      else
+        ! Non-distributed forcing (pio_gtype=='----', e.g. river fluxes) is read
+        ! serially through the plain netCDF handle below, exactly as in the
+        ! non-PIO build. Open it here so ncid is valid: otherwise ncread hits an
+        ! unopened ncid and fails with NF90 EBADID ("Not a valid ID").
+        ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
       endif
 #else
       ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
@@ -1210,6 +1222,12 @@ contains
       else
         call ncread(ncid,vname,nc%vdata(:,:,it),start=(/1,1,irec/))
       endif
+#ifdef PARALLEL_IO
+      ! The serial (pio_gtype=='----') branch above opened its own ncid; close it.
+      if (pio_gtype == '----') then
+        ierr = nf90_close(ncid)
+      endif
+#endif
       ! add force file info to output nc
 #ifndef PARALLEL_IO
       if (mynode == 0) then
@@ -1278,6 +1296,9 @@ contains
     tname = nc%tname
 
     if (nc%ungridded) then
+      pio_gtype = '----'  ! ungridded data is read serially on rank 0 only;
+                          ! a stale gtype here would turn the ncread below
+                          ! into a rank-0-only PIO collective (deadlock)
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it), nc%ungridded_forcing_file)
@@ -1303,7 +1324,10 @@ contains
         &nc%times(it) )
       endif
       call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1324,11 +1348,23 @@ contains
           pio_frcfile = frcfiles(ifile)
           pio_file_is_open = 1
         endif
+      else
+        ! Non-distributed forcing (pio_gtype=='----', e.g. river fluxes) is read
+        ! serially through the plain netCDF handle below, exactly as in the
+        ! non-PIO build. Open it here so ncid is valid: otherwise ncread hits an
+        ! unopened ncid and fails with NF90 EBADID ("Not a valid ID").
+        ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
       endif
 #else
       ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #endif
       call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,:,it),(/1,1,1,irec/))
+#ifdef PARALLEL_IO
+      ! The serial (pio_gtype=='----') branch above opened its own ncid; close it.
+      if (pio_gtype == '----') then
+        ierr = nf90_close(ncid)
+      endif
+#endif
       ! add force file info to output nc
 #ifndef PARALLEL_IO
       if (mynode == 0) then
@@ -1401,7 +1437,10 @@ contains
       &nc%times(it) )
     endif
     call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
     call find_new_record(vname,tname,modtime,ifile,irec,&

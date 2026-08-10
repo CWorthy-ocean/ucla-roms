@@ -31,8 +31,10 @@ module cdr_output
      &                   cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,&
      &                   cdr_jloc, cdr_source, cdr_forcing_3d
 #ifdef PARALLEL_IO
-      use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
+      use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_gtype
       use pio, only: PIO_openfile, PIO_closefile, PIO_write
+      use param, only: ocean_grid_comm
+      use mpi_f08, only: MPI_Bcast, MPI_Barrier, MPI_CHARACTER
 #endif
   implicit none
 
@@ -900,6 +902,7 @@ contains
         call create_cdr_output_variables(ncid)
         ierr = nf90_close(ncid)
       endif
+      call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
       record = 0
     endif
 
@@ -913,17 +916,22 @@ contains
 !        call error_log%abort_check()
       ! always add time
       call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+      if (wrt_cdr_avg) then
+        call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
+        call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
+      endif
       ierr=nf90_close (ncid)
     endif
 
+    call MPI_Barrier(ocean_grid_comm, ierr)
     ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
 
     call multiply_by_thickness
     if (wrt_cdr_avg) then
-      call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
-      call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
+      pio_gtype = '2Drw'
       call ncwrite(ncid,'zeta'  ,zeta__avg(i0:i1,j0:j1),(/1,1,record/),.true.)
       zeta__avg(:,:)=0
+      pio_gtype = '3Drw'
       call ncwrite(ncid,'temp',temp_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       temp_avg(:,:,:)=0
       call ncwrite(ncid,'salt',salt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
@@ -956,6 +964,7 @@ contains
       pH_avg(:,:,:)=0
       call ncwrite(ncid,'pH_ALT_CO2',pH_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       pH_alt_avg(:,:,:)=0
+      pio_gtype = '2Drw'
       call ncwrite(ncid,'FG_CO2'  ,FG_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
       FG_CO2_avg(:,:)=0
       call ncwrite(ncid,'FG_ALT_CO2'  ,FG_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
@@ -976,6 +985,7 @@ contains
       zsatarag_avg(:,:)=0
       call ncwrite(ncid,'zsatcalc'  ,zsatcalc_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
       zsatcalc_avg(:,:)=0
+      pio_gtype = '3Drw'
       call ncwrite(ncid,'CO3',CO3_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       CO3_avg(:,:,:)=0
       call ncwrite(ncid,'CO3_ALT_CO2',CO3_ALT_CO2_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
@@ -984,11 +994,13 @@ contains
       co3_sat_arag_avg(:,:,:)=0
       call ncwrite(ncid,'co3_sat_calc',co3_sat_calc_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       co3_sat_calc_avg(:,:,:)=0
+      pio_gtype = '2Drw'
       call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
       Chl_TOT_surf_avg(:,:)=0
       call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
       C_TOT_100m_avg(:,:)=0
       if (cdr_source) then
+        pio_gtype = '3Drw'
         call ncwrite(ncid,'ALK_source',ALK_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
         ALK_source_avg(:,:,:)=0
         call ncwrite(ncid,'ALK_ALT_source',ALK_alt_source_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
@@ -999,7 +1011,9 @@ contains
         DIC_alt_source_avg(:,:,:)=0
       endif
     else
+      pio_gtype = '2Drw'
       call ncwrite(ncid,'zeta'  ,zeta(i0:i1,j0:j1,knew),(/1,1,record/),.true.)
+      pio_gtype = '3Drw'
       call ncwrite(ncid,'temp',t(i0:i1,j0:j1,:,nnew,itemp),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'salt',t(i0:i1,j0:j1,:,nnew,isalt),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'ALK',t(i0:i1,j0:j1,:,nnew,iALK),(/1,1,1,record/),.true.)
@@ -1012,6 +1026,7 @@ contains
       call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'pH',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'pH_ALT_CO2',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH_alt),(/1,1,1,record/),.true.)
+      pio_gtype = '2Drw'
       call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG),(/1,1,record/),.true.)
       call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt),(/1,1,record/),.true.)
       call ncwrite(ncid,'int_z_ALK',int_z_ALK_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
@@ -1022,13 +1037,16 @@ contains
       call ncwrite(ncid,'pCO2SURF_ALT_CO2'  , bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_ALT_CO2_idiag),(/1,1,record/),.true.)
       call ncwrite(ncid,'zsatarag'  ,bgc_diag_2d(i0:i1,j0:j1,izsatarag_idiag),(/1,1,record/),.true.)
       call ncwrite(ncid,'zsatcalc'  ,bgc_diag_2d(i0:i1,j0:j1,izsatcalc_idiag),(/1,1,record/),.true.)
+      pio_gtype = '3Drw'
       call ncwrite(ncid,'CO3',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_idiag),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'CO3_ALT_CO2',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_ALT_CO2_idiag),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'co3_sat_arag',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_arag_idiag),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'co3_sat_calc',bgc_diag_3d(i0:i1,j0:j1,:,ico3_sat_calc_idiag),(/1,1,1,record/),.true.)
+      pio_gtype = '2Drw'
       call ncwrite(ncid,'Chl_TOT_surf'  ,Chl_TOT_surf_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
       call ncwrite(ncid,'C_TOT_100m'  ,C_TOT_100m_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
       if (cdr_source) then
+        pio_gtype = '3Drw'
         call ncwrite(ncid,'ALK_source',ALK_source(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
         call ncwrite(ncid,'ALK_ALT_source',ALK_alt_source(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
         call ncwrite(ncid,'DIC_source',DIC_source(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
