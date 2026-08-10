@@ -418,6 +418,7 @@ contains
       pio_gtype = '2Dur'
       call ncread(ncid,'riv_umask',riv_umask(x_:x1,y0:y1),start=start)!,fname=inifile)
     else
+      riv_umask = 0._8
       if (mynode == 0) then
         write(*,*) 'riv_umask not found in initial file. Initializing ',&
         &'to zero.'
@@ -428,11 +429,25 @@ contains
       pio_gtype = '2Dvr'
       call ncread(ncid,'riv_vmask',riv_vmask(x0:x1,y_:y1),start=start)!,fname=inifile)
     else
+      riv_vmask = 0._8
       if (mynode == 0) then
         write(*,*) 'riv_vmask not found in initial file. Initializing ',&
         &'to zero.'
       endif
     endif
+    ! MASK_LAND_DATA may store NetCDF fill on land.  riv_*mask enters
+    ! (umask+riv_umask) below, so fill on land would turn land ubar/u
+    ! into ~1e73 and blow up kinetic energy on restart.
+    where (riv_umask(x_:x1,y0:y1) < 0._8 .or.&
+    &      riv_umask(x_:x1,y0:y1) > 1._8)
+      riv_umask(x_:x1,y0:y1) = 0._8
+    end where
+    where (riv_vmask(x0:x1,y_:y1) < 0._8 .or.&
+    &      riv_vmask(x0:x1,y_:y1) > 1._8)
+      riv_vmask(x0:x1,y_:y1) = 0._8
+    end where
+    riv_umask(x_:x1,y0:y1) = riv_umask(x_:x1,y0:y1)*umask(x_:x1,y0:y1)
+    riv_vmask(x0:x1,y_:y1) = riv_vmask(x0:x1,y_:y1)*vmask(x0:x1,y_:y1)
 
 ! Free-surface and barotropic 2D momentuma, XI- and ETA-components
 
@@ -490,6 +505,13 @@ contains
       call ncread(ncid,'DU_avg_bak',DU_avg_bak(x_:x1,y0:y1),start=start)!,fname=inifile)
       pio_gtype = '2Dvr'
       call ncread(ncid,'DV_avg_bak',DV_avg_bak(x0:x1,y_:y1),start=start)!,fname=inifile)
+      ! Zero land (incl. NetCDF fill left by MASK_LAND_DATA on write)
+      DU_avg1(x_:x1,y0:y1) = DU_avg1(x_:x1,y0:y1)*umask(x_:x1,y0:y1)
+      DV_avg1(x0:x1,y_:y1) = DV_avg1(x0:x1,y_:y1)*vmask(x0:x1,y_:y1)
+      DU_avg2(x_:x1,y0:y1) = DU_avg2(x_:x1,y0:y1)*umask(x_:x1,y0:y1)
+      DV_avg2(x0:x1,y_:y1) = DV_avg2(x0:x1,y_:y1)*vmask(x0:x1,y_:y1)
+      DU_avg_bak(x_:x1,y0:y1) = DU_avg_bak(x_:x1,y0:y1)*umask(x_:x1,y0:y1)
+      DV_avg_bak(x0:x1,y_:y1) = DV_avg_bak(x0:x1,y_:y1)*vmask(x0:x1,y_:y1)
     else
       forw_start=ntstart    !--> cancel exact restart
       iic = 0 ! set back to zero
