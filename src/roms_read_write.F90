@@ -96,7 +96,7 @@ module roms_read_write
   end type ncforce3d
 
   integer(kind=4), target :: test_var
-  integer(kind=4), parameter, public :: max_name_size=512
+  integer(kind=4), parameter, public :: max_name_size=256
   character(len=max_name_size), public  :: output_root_name
   ! Dimension names for in and output in netcdf files
   ! All dimension names need to be strings of 7 characters
