@@ -238,6 +238,7 @@ contains
 
     ierr=nf90_inq_varid (ncid, 'u_slow', varid)
     if (ierr == nf90_noerr) then
+      pio_gtype = '3Dur'
       call ncread(ncid,'u_slow', u_slow(x_:x1,y0:y1,:),start)
 #ifdef MASKING
       do j = y0,y1
@@ -257,6 +258,7 @@ contains
 
     ierr=nf90_inq_varid (ncid, 'v_slow', varid)
     if (ierr == nf90_noerr) then
+      pio_gtype = '3Dvr'
       call ncread(ncid,'v_slow', v_slow(x0:x1,y_:y1,:),start)
 #ifdef MASKING
       do j = y_,y1
@@ -276,6 +278,7 @@ contains
 
     ierr=nf90_inq_varid (ncid, 'p_slow', varid)
     if (ierr == nf90_noerr) then
+      pio_gtype = '3Drr'
       call ncread(ncid, 'p_slow', p_slow(x0:x1,y0:y1,:), start)
       call exchange_xxx(p_slow)  ! need exchange since r2u to get u'p'
 #ifdef MASKING
