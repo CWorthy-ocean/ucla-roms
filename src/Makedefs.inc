@@ -252,6 +252,12 @@ endif
 ifeq ($(USENHMG),true)
 	LCDF += $(NHMG_LIB)
 endif
+# PIO_INC must precede the netcdf includes: conda envs (e.g. via esmf) ship a
+# stock parallelio whose pio.mod sits in the same include dir as netcdf, and
+# gfortran searches -I paths in order — the fork's modules must win.
+ifeq ($(USEPIO),true)
+        LCDF += $(PIO_INC)
+endif
 	LCDF +=$(NETCDFF_INC) $(NETCDFC_INC)
 ifeq ($(USEPIO),true)
         LCDF +=$(PNETCDF_INC)
@@ -265,9 +271,6 @@ endif
 
 ifeq ($(USEPIO),true)
         LCDF += $(PIO_LIB)
-endif
-ifeq ($(USEPIO),true)
-        LCDF += $(PIO_INC)
 endif
 
 FFLAGS+=$(USER_FFLAGS)
