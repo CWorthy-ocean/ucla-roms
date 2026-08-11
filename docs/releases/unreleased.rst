@@ -9,21 +9,31 @@ Unreleased
 Breaking Changes
 ~~~~~~~~~~~~~~~~
 
-- N/A
+- This code must be compiled against [C]Worthy's fork of PIO, because NCAR's version does not have the dummy argument corresponding to the new optional flag mentioned above (i.e. it will break).
 
 New Features
 ~~~~~~~~~~~~
 
-- N/A
+- Adds a new optional flag to the PIO_initdecomp calls that will let it skip PIO's internal check that the whole domain is being mapped from memory to file. This will allow us to use MPI masking with PIO.
 
 Bug Fixes
 ~~~~~~~~~
-
 
 - Add explicit NETCDFF paths to `make` linking (`#313 <https://github.com/CWorthy-ocean/ucla-roms/pull/313>`_)
 - Fix missing cdr tracer param usage (`#317 <https://github.com/CWorthy-ocean/ucla-roms/pull/317>`_)
 - Fix SSS test using coarse dims, which isn't supported for restoring (`#317 <https://github.com/CWorthy-ocean/ucla-roms/pull/317>`_)
 - `calc_pflx` now works with nesting and pio. missing variables are no longer missing. (`#320 <https://github.com/CWorthy-ocean/ucla-roms/pull/320>`_)
+- A possible segfault and netcdf errors associated with CDR output are fixed.
+- Fix restart corruption for river masks and exact-restart barotropic fluxes: NetCDF fill values on land were being written/read and then mixed into umask+riv_umask / vmask+riv_vmask, producing huge velocities and KE blow-ups after restart.
+- On write (basic_output.F90) and read (get_init_mod.F90), clamp riv_umask/riv_vmask to [0,1], zero missing masks, and multiply by umask/vmask. Also mask DU_avg*/DV_avg* with land masks so fill does not persist across restarts.
+- Fix MARBL saved-state restart I/O: set pio_gtype to 3Drw then 2Drw inside marbldrv_write_ss_vars_to_rst so 2D fields are not written with a leftover 3D decomposition; on read, replace absurd fill/garbage (>1e30) with a neutral pH guess before land masking.
+- Fixed a PIO restart crash when calc_pflx=.true. and the IC/restart file contains u_slow, v_slow, and p_slow.
+- get_init_slow was calling ncread without setting pio_gtype, so it reused the previous field’s decomposition (often 3Drr/2Drr) for u/v/rho 3D fields.
+- That produced NetCDF: Start+count exceeds dimension bound during getting u,v,p slow. Cold starts from files without *_slow vars skipped the reads and hid the bug.
+- Set pio_gtype to 3Dur / 3Dvr / 3Drr before each read, matching get_init and the existing write path in wrt_rst_diag_slow.
+- Move pio_initialize_extract from the per-write loop in do_extract_data into init_extract_data, so PIO extract decompositions are built once per object.
+- Avoids leaking MPI communicators: repeated PIO_initdecomp without PIO_freedecomp was exhausting MPICH’s 2048-communicator limit and aborting with Too many communicators after ~1–2 days of runtime with extract enabled.
+- Write path still sets pio_bnd for pio_gtype; only the decomposition setup was moved.
 
 Improvements
 ~~~~~~~~~~~~
