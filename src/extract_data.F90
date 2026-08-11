@@ -57,7 +57,7 @@ module extract_data
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u
   use scalars, only: dt, knew, nstp, time
   use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
-  &nt_passive, mynode, lm, mm, nz, ocean_grid_comm
+  &nt_passive, mynode, lm, mm, nz, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor
   use scoord, only: theta_s, theta_b, hc
   use calc_pflx_mod, only:  up, vp
   use basic_output, only: &
@@ -123,6 +123,9 @@ module extract_data
   real(kind=8)    :: otime=0   ! time since last output
 
   logical, dimension(4) :: child_bnds = .false.
+  logical, dimension(4) :: child_w    = .false.
+  logical, dimension(4) :: child_up   = .false.
+  logical, dimension(4) :: child_vp   = .false.
   integer, dimension(4) :: child_dimsize_t
   integer, dimension(4) :: child_dimsize_u
   integer, dimension(4) :: child_dimsize_v
@@ -184,6 +187,9 @@ module extract_data
     logical :: w    = .false.
     logical :: temp = .false.
     logical :: salt = .false.
+    logical :: passive = .false.
+    logical :: cdr_oae = .false.
+    logical :: cdr_dor = .false.
     logical :: up   = .false.
     logical :: vp   = .false.
     logical :: bgc     = .false.
@@ -256,6 +262,7 @@ contains
     character(len=30) :: preamb
     integer(kind=4) :: i,np,ierr,lpre
     real(kind=8),dimension(:),allocatable :: angp ! grid angle
+    character(len=1) :: pio_stag
     character(len=17) :: sr_name = "init_extract_data"
 
     call read_extraction_objects
@@ -373,6 +380,34 @@ contains
       call MPI_Barrier(ocean_grid_comm, ierr)
 #endif
     enddo
+
+    ! Build PIO extract decompositions once. Re-initing every write
+    ! leaks MPI communicators (MPICH 2048 limit).
+#ifdef PARALLEL_IO
+    do i = 1,nobj
+      if (obj(i)%bnd /= ' ') then
+        if (obj(i)%bnd == '_south' .or. obj(i)%bnd == '_north') then
+          if (obj(i)%dsize == LLm_chd-1) then
+            pio_stag = 'u'
+          else if (obj(i)%scalar) then
+            pio_stag = 'r'
+          else
+            pio_stag = 'v'
+          endif
+        else if (obj(i)%bnd == '_east' .or. obj(i)%bnd == '_west') then
+          if (obj(i)%dsize == MMm_chd-1) then
+            pio_stag = 'v'
+          else if (obj(i)%scalar) then
+            pio_stag = 'r'
+          else
+            pio_stag = 'u'
+          endif
+        endif
+        call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,&
+        &LLm_chd,MMm_chd,N_chd,obj(i)%bnd,pio_stag)
+      endif
+    enddo
+#endif
 
   end subroutine init_extract_data !]
 ! ----------------------------------------------------------------------
@@ -521,6 +556,9 @@ contains
         if (findstr(variables,'zeta') ) obj(iobj)%zeta = .True.
         if (findstr(variables,'temp') ) obj(iobj)%temp = .True.
         if (findstr(variables,'salt') ) obj(iobj)%salt = .True.
+        if (findstr(variables,'passive') ) obj(iobj)%passive = .True.
+        if (findstr(variables,'cdr_oae') ) obj(iobj)%cdr_oae = .True.
+        if (findstr(variables,'cdr_dor') ) obj(iobj)%cdr_dor = .True.
         if (findstr(variables,'ubar') ) obj(iobj)%ubar = .True.
         if (findstr(variables,'vbar') ) obj(iobj)%vbar = .True.
         if (findstr(variables,'u'   ) ) obj(iobj)%u    = .True.
@@ -529,6 +567,26 @@ contains
         if (findstr(variables,'up'  ) ) obj(iobj)%up   = .True.
         if (findstr(variables,'vp'  ) ) obj(iobj)%vp   = .True.
         if (findstr(variables,'bgc'    ) ) obj(iobj)%bgc     = .True.
+
+        ! Record which boundaries request w/up/vp, so the PIO define
+        ! (create_edata_file) defines exactly what do_extract_data writes.
+        if (obj(iobj)%bnd == '_north') then
+          if (obj(iobj)%w)  child_w(1)  = .true.
+          if (obj(iobj)%up) child_up(1) = .true.
+          if (obj(iobj)%vp) child_vp(1) = .true.
+        else if (obj(iobj)%bnd == '_south') then
+          if (obj(iobj)%w)  child_w(2)  = .true.
+          if (obj(iobj)%up) child_up(2) = .true.
+          if (obj(iobj)%vp) child_vp(2) = .true.
+        else if (obj(iobj)%bnd == '_east') then
+          if (obj(iobj)%w)  child_w(3)  = .true.
+          if (obj(iobj)%up) child_up(3) = .true.
+          if (obj(iobj)%vp) child_vp(3) = .true.
+        else if (obj(iobj)%bnd == '_west') then
+          if (obj(iobj)%w)  child_w(4)  = .true.
+          if (obj(iobj)%up) child_up(4) = .true.
+          if (obj(iobj)%vp) child_vp(4) = .true.
+        endif
 
         if (obj(iobj)%up.and. .not.calc_pflx) then
           call error_log%raise_global(&
@@ -711,7 +769,6 @@ contains
     character(len=20)              :: tname
     character(len=40) :: oname
     character(len=1) :: pio_bnd
-    character(len=1) :: pio_stag
     integer(kind=4) :: lpre
     real(kind=8), dimension(:,:),pointer :: vi
     real(kind=8), dimension(:,:),pointer :: ui
@@ -774,30 +831,6 @@ contains
           pio_bnd = 'e'
         else if (obj(i)%bnd == '_west') then
           pio_bnd = 'w'
-        endif
-
-        if (obj(i)%bnd == '_south' .or. obj(i)%bnd == '_north') then
-          if (obj(i)%dsize == LLm_chd-1) then
-            pio_stag = 'u'
-          else if (obj(i)%scalar) then
-            pio_stag = 'r'
-          else
-            pio_stag = 'v'
-          endif
-        else if (obj(i)%bnd == '_east' .or. obj(i)%bnd == '_west') then
-          if (obj(i)%dsize == MMm_chd-1) then
-            pio_stag = 'v'
-          else if (obj(i)%scalar) then
-            pio_stag = 'r'
-          else
-            pio_stag = 'u'
-          endif
-        endif
-
-!    call MPI_Barrier(ocean_grid_comm, ierr)
-        if (obj(i)%bnd /= ' ') then
-          call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,&
-          &LLm_chd,MMm_chd,N_chd,obj(i)%bnd,pio_stag)
         endif
 #endif
 
@@ -913,8 +946,108 @@ contains
           endif
 #endif
 
+          if (obj(i)%passive) then
+            do indt=isalt+1,nt_passive
+#ifdef PARALLEL_IO
+              oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
+              pio_gtype = pio_bnd // '2rc'
+#else
+              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
+              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
+              if (parent_child_grid_mismatch) then
+                do j=1,obj(i)%np
+                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
+                  &obj(i)%vari(j,:), N_chd,&
+                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                enddo
+                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
+              else
+                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
+              endif
+          else
+            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
+          endif
+            enddo ! indt
+          endif  ! passive
+
+          if (obj(i)%cdr_oae) then
+            do indt=isalt+nt_passive+1,isalt+nt_passive+nt_cdr_oae,2
+#ifdef PARALLEL_IO
+              oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
+              pio_gtype = pio_bnd // '2rc'
+#else
+              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
+              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
+              if (parent_child_grid_mismatch) then
+                do j=1,obj(i)%np
+                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
+                  &obj(i)%vari(j,:), N_chd,&
+                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                enddo
+                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
+              else
+                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
+              endif
+          else
+            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
+          endif
+
+#ifdef PARALLEL_IO
+              oname = trim(t_vname(indt+1)) // trim(obj(i)%bnd)
+              pio_gtype = pio_bnd // '2rc'
+#else
+              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt+1))//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
+              call interpolate(t(:,:,:,nstp,indt+1),obj(i)%vari,coef,ip,jp)
+              if (parent_child_grid_mismatch) then
+                do j=1,obj(i)%np
+                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
+                  &obj(i)%vari(j,:), N_chd,&
+                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                enddo
+                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
+              else
+                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
+              endif
+          else
+            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
+          endif
+            enddo ! indt
+          endif  ! cdr_oae
+
+          if (obj(i)%cdr_dor) then
+            do indt=isalt+nt_passive+2*nt_cdr_oae+1,isalt+nt_passive+2*nt_cdr_oae+nt_cdr_dor
+#ifdef PARALLEL_IO
+              oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
+              pio_gtype = pio_bnd // '2rc'
+#else
+              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
+#endif
+          if (obj(i)%np > 0) then
+              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
+              if (parent_child_grid_mismatch) then
+                do j=1,obj(i)%np
+                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
+                  &obj(i)%vari(j,:), N_chd,&
+                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
+                enddo
+                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
+              else
+                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
+              endif
+          else
+            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
+          endif
+            enddo ! indt
+          endif  ! cdr_dor
+
           if (obj(i)%bgc) then
-            do indt=isalt+nt_passive+1,NT
+            do indt=isalt+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
 #ifdef PARALLEL_IO
               oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
               pio_gtype = pio_bnd // '2rc'
@@ -1220,6 +1353,26 @@ contains
         ierr=nf90_def_var(ncid,'v_' // trim(child_bnd_name(bnd)),nf90_double,dimid3d,varid)
         ierr = nf90_put_att(ncid,varid,'long_name',"v-momentum component")
         ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
+
+
+        if (child_w(bnd)) then
+          dimid3d = (/child_dimnums_t(bnd), dimid5, dimid0/)
+          ierr=nf90_def_var(ncid,'w_' // trim(child_bnd_name(bnd)),nf90_double,dimid3d,varid)
+          ierr = nf90_put_att(ncid,varid,'long_name',"vertical velocity")
+          ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
+        endif
+        if (child_up(bnd)) then
+          dimid2d = (/child_dimnums_u(bnd), dimid0/)
+          ierr=nf90_def_var(ncid,'up_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
+          ierr = nf90_put_att(ncid,varid,'long_name',"u-momentum pressure flux")
+          ierr = nf90_put_att(ncid,varid,'units',"meter3 second-2")
+        endif
+        if (child_vp(bnd)) then
+          dimid2d = (/child_dimnums_v(bnd), dimid0/)
+          ierr=nf90_def_var(ncid,'vp_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
+          ierr = nf90_put_att(ncid,varid,'long_name',"v-momentum pressure flux")
+          ierr = nf90_put_att(ncid,varid,'units',"meter3 second-2")
+        endif
         endif
       enddo
 
@@ -1294,8 +1447,28 @@ contains
         if (obj(i)%w)    call create_var(ncid,obj(i),'w',dname3,dsize3,indxW)
         if (obj(i)%up)   call create_var(ncid,obj(i),'up',dname,dsize)
         if (obj(i)%vp)   call create_var(ncid,obj(i),'vp',dname,dsize)
+
+        if (obj(i)%passive) then
+          do indt=isalt+1,nt_passive
+            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
+          enddo
+        endif
+
+        if (obj(i)%cdr_oae) then
+          do indt=isalt+nt_passive+1,isalt+nt_passive+nt_cdr_oae,2
+            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
+            call create_var(ncid,obj(i),t_vname(indt+1),dname3,dsize3,-99)
+          enddo
+        endif
+
+        if (obj(i)%cdr_dor) then
+          do indt=isalt+nt_passive+2*nt_cdr_oae+1,isalt+nt_passive+2*nt_cdr_oae+nt_cdr_dor
+            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
+          enddo
+        endif
+
         if (obj(i)%bgc) then
-          do indt=isalt+nt_passive+1,NT
+          do indt=isalt+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
             call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
           enddo
         endif

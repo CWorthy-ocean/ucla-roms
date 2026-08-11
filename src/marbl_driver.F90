@@ -740,6 +740,11 @@ contains
         call ncread(ncid,vname_marbl_ss_2d(1,itrc),&
         &marbl_saved_state_2d(x0:x1,y0:y1,itrc),start=start)
 
+        ! Replace NetCDF fill / garbage (e.g. failed PARALLEL_IO 2D write)
+        ! with a neutral pH guess before masking land.
+        where (abs(marbl_saved_state_2d(x0:x1,y0:y1,itrc)) > 1.0e30_8)
+          marbl_saved_state_2d(x0:x1,y0:y1,itrc) = 8.0_8
+        end where
         marbl_saved_state_2d(x0:x1,y0:y1,itrc)=&
         &marbl_saved_state_2d(x0:x1,y0:y1,itrc)*rmask(x0:x1,y0:y1)
         call exchange_xxx(marbl_saved_state_2d(:,:,itrc))!,skip=use_pio)
@@ -859,6 +864,7 @@ contains
 
     use nc_read_write, only: ncwrite
     use dimensions, only : i0,i1,j0,j1
+    use pio_roms, only: pio_gtype
 
     implicit none
 
@@ -867,12 +873,14 @@ contains
     integer(kind=4) :: itrc
 
 #ifdef PARALLEL_IO
+    pio_gtype = '3Drw'
     ! Add MARBL saved_state variables to restart file
     start=1; start(4)=rec_rst
     do itrc=1,nr_marbl_ss_3d
       call ncwrite(ncid,vname_marbl_ss_3d(1,itrc),&
       &marbl_saved_state_3d(i0:i1,j0:j1,:,itrc),start,.true.)
     enddo
+    pio_gtype = '2Drw'
     start=1;start(3)=rec_rst        ! back to 2D vars
     do itrc=1,nr_marbl_ss_2d
       call ncwrite(ncid,vname_marbl_ss_2d(1,itrc),&

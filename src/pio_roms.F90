@@ -26,7 +26,14 @@ module pio_roms
 #include "pio_roms.opt"
 
   logical, parameter, public  :: use_pio = .true.
-  character(len=50),public :: pio_frcfile
+  ! When PARALLEL_IO is on, skip PIO's needsfill coverage check (force needsfill=false).
+#ifdef PARALLEL_IO
+  logical, parameter :: pio_force_nofill = .true.
+#else
+  logical, parameter :: pio_force_nofill = .false.
+#endif
+  ! Name of the currently open forcing file (must fit max_name_size paths)
+  character(len=256),public :: pio_frcfile
   !> @brief Rank of processor running the code.
   integer(kind=4), public :: pio_myRank
   !> @brief Number of processors participating in MPI communicator.
@@ -1212,7 +1219,7 @@ contains
     &pio_niotasks,&              ! Number of iotasks (ntasks/stride)
     &pio_numAggregator,&         ! number of aggregators to use
     &pio_stride,&                ! stride
-    &PIO_rearr_subset,&           ! do not use any form of rearrangement (can be BOX or SUBSET)
+    &PIO_rearr_box,&              ! BOX avoids buggy subset needsfill/holegrid path
     &pio_IoSystem,&           ! iosystem
     &base=pio_optBase)          ! base (optional argument)
 
@@ -1254,11 +1261,11 @@ contains
     pio_count_2Cv_r(2) = pio_eta_v_coarse+pio_j0c+pio_j1c
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Cr_r, pio_start_2Cr_r, pio_count_2Cr_r,&
-    &pio_desc_2Cr_r)
+    &pio_desc_2Cr_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Cu_r, pio_start_2Cu_r, pio_count_2Cu_r,&
-    &pio_desc_2Cu_r)
+    &pio_desc_2Cu_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Cv_r, pio_start_2Cv_r, pio_count_2Cv_r,&
-    &pio_desc_2Cv_r)
+    &pio_desc_2Cv_r, force_nofill=pio_force_nofill)
 
 
   end subroutine pio_initialize_coarse
@@ -1310,11 +1317,11 @@ contains
 
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dr_z, pio_start_3Dr_z, pio_count_3Dr_z,&
-    &pio_desc_3Dr_z)
+    &pio_desc_3Dr_z, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Du_z, pio_start_3Du_z, pio_count_3Du_z,&
-    &pio_desc_3Du_z)
+    &pio_desc_3Du_z, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dv_z, pio_start_3Dv_z, pio_count_3Dv_z,&
-    &pio_desc_3Dv_z)
+    &pio_desc_3Dv_z, force_nofill=pio_force_nofill)
 
   end subroutine pio_initialize_z
 ! ----------------------------------------------------------------------
@@ -1395,8 +1402,8 @@ contains
         pio_count_2Chdnr_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnr_w, pio_start_1Chdnr_w, pio_count_1Chdnr_w, pio_desc_1Chdnr_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnr_w, pio_start_2Chdnr_w, pio_count_2Chdnr_w, pio_desc_2Chdnr_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnr_w, pio_start_1Chdnr_w, pio_count_1Chdnr_w, pio_desc_1Chdnr_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnr_w, pio_start_2Chdnr_w, pio_count_2Chdnr_w, pio_desc_2Chdnr_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'u') then
       pio_start_1Chdnu_w(1) = start
@@ -1410,8 +1417,8 @@ contains
         pio_count_2Chdnu_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnu_w, pio_start_1Chdnu_w, pio_count_1Chdnu_w, pio_desc_1Chdnu_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnu_w, pio_start_2Chdnu_w, pio_count_2Chdnu_w, pio_desc_2Chdnu_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnu_w, pio_start_1Chdnu_w, pio_count_1Chdnu_w, pio_desc_1Chdnu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnu_w, pio_start_2Chdnu_w, pio_count_2Chdnu_w, pio_desc_2Chdnu_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'v') then
       pio_start_1Chdnv_w(1) = start
@@ -1425,8 +1432,8 @@ contains
         pio_count_2Chdnv_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnv_w, pio_start_1Chdnv_w, pio_count_1Chdnv_w, pio_desc_1Chdnv_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnv_w, pio_start_2Chdnv_w, pio_count_2Chdnv_w, pio_desc_2Chdnv_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnv_w, pio_start_1Chdnv_w, pio_count_1Chdnv_w, pio_desc_1Chdnv_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnv_w, pio_start_2Chdnv_w, pio_count_2Chdnv_w, pio_desc_2Chdnv_w, force_nofill=pio_force_nofill)
     endif
 
   endif ! north
@@ -1444,8 +1451,8 @@ contains
         pio_count_2Chdsr_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsr_w, pio_start_1Chdsr_w, pio_count_1Chdsr_w, pio_desc_1Chdsr_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsr_w, pio_start_2Chdsr_w, pio_count_2Chdsr_w, pio_desc_2Chdsr_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsr_w, pio_start_1Chdsr_w, pio_count_1Chdsr_w, pio_desc_1Chdsr_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsr_w, pio_start_2Chdsr_w, pio_count_2Chdsr_w, pio_desc_2Chdsr_w, force_nofill=pio_force_nofill)
     else if (stag == 'u') then
       pio_start_1Chdsu_w(1) = start
       pio_start_2Chdsu_w(1) = start
@@ -1458,8 +1465,8 @@ contains
         pio_count_2Chdsu_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsu_w, pio_start_1Chdsu_w, pio_count_1Chdsu_w, pio_desc_1Chdsu_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsu_w, pio_start_2Chdsu_w, pio_count_2Chdsu_w, pio_desc_2Chdsu_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsu_w, pio_start_1Chdsu_w, pio_count_1Chdsu_w, pio_desc_1Chdsu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsu_w, pio_start_2Chdsu_w, pio_count_2Chdsu_w, pio_desc_2Chdsu_w, force_nofill=pio_force_nofill)
     else if (stag == 'v') then
       pio_start_1Chdsv_w(1) = start
       pio_start_2Chdsv_w(1) = start
@@ -1472,8 +1479,8 @@ contains
         pio_count_2Chdsv_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsv_w, pio_start_1Chdsv_w, pio_count_1Chdsv_w, pio_desc_1Chdsv_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsv_w, pio_start_2Chdsv_w, pio_count_2Chdsv_w, pio_desc_2Chdsv_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsv_w, pio_start_1Chdsv_w, pio_count_1Chdsv_w, pio_desc_1Chdsv_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsv_w, pio_start_2Chdsv_w, pio_count_2Chdsv_w, pio_desc_2Chdsv_w, force_nofill=pio_force_nofill)
     endif
 
   endif ! south
@@ -1491,8 +1498,8 @@ contains
         pio_count_2Chder_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chder_w, pio_start_1Chder_w, pio_count_1Chder_w, pio_desc_1Chder_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chder_w, pio_start_2Chder_w, pio_count_2Chder_w, pio_desc_2Chder_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chder_w, pio_start_1Chder_w, pio_count_1Chder_w, pio_desc_1Chder_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chder_w, pio_start_2Chder_w, pio_count_2Chder_w, pio_desc_2Chder_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'u') then
       pio_start_1Chdeu_w(1) = start
@@ -1506,8 +1513,8 @@ contains
         pio_count_2Chdeu_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdeu_w, pio_start_1Chdeu_w, pio_count_1Chdeu_w, pio_desc_1Chdeu_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdeu_w, pio_start_2Chdeu_w, pio_count_2Chdeu_w, pio_desc_2Chdeu_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdeu_w, pio_start_1Chdeu_w, pio_count_1Chdeu_w, pio_desc_1Chdeu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdeu_w, pio_start_2Chdeu_w, pio_count_2Chdeu_w, pio_desc_2Chdeu_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'v') then
       pio_start_1Chdev_w(1) = start
@@ -1521,8 +1528,8 @@ contains
         pio_count_2Chdev_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdev_w, pio_start_1Chdev_w, pio_count_1Chdev_w, pio_desc_1Chdev_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdev_w, pio_start_2Chdev_w, pio_count_2Chdev_w, pio_desc_2Chdev_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdev_w, pio_start_1Chdev_w, pio_count_1Chdev_w, pio_desc_1Chdev_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdev_w, pio_start_2Chdev_w, pio_count_2Chdev_w, pio_desc_2Chdev_w, force_nofill=pio_force_nofill)
     endif
 
   endif ! east
@@ -1540,8 +1547,8 @@ contains
         pio_count_2Chdwr_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwr_w, pio_start_1Chdwr_w, pio_count_1Chdwr_w, pio_desc_1Chdwr_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwr_w, pio_start_2Chdwr_w, pio_count_2Chdwr_w, pio_desc_2Chdwr_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwr_w, pio_start_1Chdwr_w, pio_count_1Chdwr_w, pio_desc_1Chdwr_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwr_w, pio_start_2Chdwr_w, pio_count_2Chdwr_w, pio_desc_2Chdwr_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'u') then
       pio_start_1Chdwu_w(1) = start
@@ -1555,8 +1562,8 @@ contains
         pio_count_2Chdwu_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwu_w, pio_start_1Chdwu_w, pio_count_1Chdwu_w, pio_desc_1Chdwu_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwu_w, pio_start_2Chdwu_w, pio_count_2Chdwu_w, pio_desc_2Chdwu_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwu_w, pio_start_1Chdwu_w, pio_count_1Chdwu_w, pio_desc_1Chdwu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwu_w, pio_start_2Chdwu_w, pio_count_2Chdwu_w, pio_desc_2Chdwu_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'v') then
       pio_start_1Chdwv_w(1) = start
@@ -1570,8 +1577,8 @@ contains
         pio_count_2Chdwv_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwv_w, pio_start_1Chdwv_w, pio_count_1Chdwv_w, pio_desc_1Chdwv_w)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwv_w, pio_start_2Chdwv_w, pio_count_2Chdwv_w, pio_desc_2Chdwv_w)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwv_w, pio_start_1Chdwv_w, pio_count_1Chdwv_w, pio_desc_1Chdwv_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwv_w, pio_start_2Chdwv_w, pio_count_2Chdwv_w, pio_desc_2Chdwv_w, force_nofill=pio_force_nofill)
     endif
 
   endif ! west
@@ -1586,149 +1593,149 @@ contains
 
 #ifdef OBC_NORTH
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1r_r, pio_start_n1r_r, pio_count_n1r_r,&
-    &pio_desc_n1r_r)
+    &pio_desc_n1r_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1u_r, pio_start_n1u_r, pio_count_n1u_r,&
-    &pio_desc_n1u_r)
+    &pio_desc_n1u_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1v_r, pio_start_n1v_r, pio_count_n1v_r,&
-    &pio_desc_n1v_r)
+    &pio_desc_n1v_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2r_r, pio_start_n2r_r, pio_count_n2r_r,&
-    &pio_desc_n2r_r)
+    &pio_desc_n2r_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2u_r, pio_start_n2u_r, pio_count_n2u_r,&
-    &pio_desc_n2u_r)
+    &pio_desc_n2u_r, force_nofill=pio_force_nofill)
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2v_r, pio_start_n2v_r, pio_count_n2v_r,&
-    &pio_desc_n2v_r)
+    &pio_desc_n2v_r, force_nofill=pio_force_nofill)
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1r_w, pio_start_n1r_w, pio_count_n1r_w,&
-    &pio_desc_n1r_w)
+    &pio_desc_n1r_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1u_w, pio_start_n1u_w, pio_count_n1u_w,&
-    &pio_desc_n1u_w)
+    &pio_desc_n1u_w, force_nofill=pio_force_nofill)
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n1v_w, pio_start_n1v_w, pio_count_n1v_w,&
-    &pio_desc_n1v_w)
+    &pio_desc_n1v_w, force_nofill=pio_force_nofill)
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2r_w, pio_start_n2r_w, pio_count_n2r_w,&
-    &pio_desc_n2r_w)
+    &pio_desc_n2r_w, force_nofill=pio_force_nofill)
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2u_w, pio_start_n2u_w, pio_count_n2u_w,&
-    &pio_desc_n2u_w)
+    &pio_desc_n2u_w, force_nofill=pio_force_nofill)
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_n2v_w, pio_start_n2v_w, pio_count_n2v_w,&
-    &pio_desc_n2v_w)
+    &pio_desc_n2v_w, force_nofill=pio_force_nofill)
 #endif
 
 #ifdef OBC_SOUTH
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1r_r, pio_start_s1r_r, pio_count_s1r_r,&
-    &pio_desc_s1r_r)
+    &pio_desc_s1r_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1u_r, pio_start_s1u_r, pio_count_s1u_r,&
-    &pio_desc_s1u_r)
+    &pio_desc_s1u_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1v_r, pio_start_s1v_r, pio_count_s1v_r,&
-    &pio_desc_s1v_r)
+    &pio_desc_s1v_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2r_r, pio_start_s2r_r, pio_count_s2r_r,&
-    &pio_desc_s2r_r)
+    &pio_desc_s2r_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2u_r, pio_start_s2u_r, pio_count_s2u_r,&
-    &pio_desc_s2u_r)
+    &pio_desc_s2u_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2v_r, pio_start_s2v_r, pio_count_s2v_r,&
-    &pio_desc_s2v_r)
+    &pio_desc_s2v_r, force_nofill=pio_force_nofill)
 #endif
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1r_w, pio_start_s1r_w, pio_count_s1r_w,&
-    &pio_desc_s1r_w)
+    &pio_desc_s1r_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1u_w, pio_start_s1u_w, pio_count_s1u_w,&
-    &pio_desc_s1u_w)
+    &pio_desc_s1u_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s1v_w, pio_start_s1v_w, pio_count_s1v_w,&
-    &pio_desc_s1v_w)
+    &pio_desc_s1v_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2r_w, pio_start_s2r_w, pio_count_s2r_w,&
-    &pio_desc_s2r_w)
+    &pio_desc_s2r_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2u_w, pio_start_s2u_w, pio_count_s2u_w,&
-    &pio_desc_s2u_w)
+    &pio_desc_s2u_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_s2v_w, pio_start_s2v_w, pio_count_s2v_w,&
-    &pio_desc_s2v_w)
+    &pio_desc_s2v_w, force_nofill=pio_force_nofill)
 
 #ifdef OBC_EAST
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1r_r, pio_start_e1r_r, pio_count_e1r_r,&
-    &pio_desc_e1r_r)
+    &pio_desc_e1r_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1u_r, pio_start_e1u_r, pio_count_e1u_r,&
-    &pio_desc_e1u_r)
+    &pio_desc_e1u_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1v_r, pio_start_e1v_r, pio_count_e1v_r,&
-    &pio_desc_e1v_r)
+    &pio_desc_e1v_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2r_r, pio_start_e2r_r, pio_count_e2r_r,&
-    &pio_desc_e2r_r)
+    &pio_desc_e2r_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2u_r, pio_start_e2u_r, pio_count_e2u_r,&
-    &pio_desc_e2u_r)
+    &pio_desc_e2u_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2v_r, pio_start_e2v_r, pio_count_e2v_r,&
-    &pio_desc_e2v_r)
+    &pio_desc_e2v_r, force_nofill=pio_force_nofill)
 #endif
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1r_w, pio_start_e1r_w, pio_count_e1r_w,&
-    &pio_desc_e1r_w)
+    &pio_desc_e1r_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1u_w, pio_start_e1u_w, pio_count_e1u_w,&
-    &pio_desc_e1u_w)
+    &pio_desc_e1u_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e1v_w, pio_start_e1v_w, pio_count_e1v_w,&
-    &pio_desc_e1v_w)
+    &pio_desc_e1v_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2r_w, pio_start_e2r_w, pio_count_e2r_w,&
-    &pio_desc_e2r_w)
+    &pio_desc_e2r_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2u_w, pio_start_e2u_w, pio_count_e2u_w,&
-    &pio_desc_e2u_w)
+    &pio_desc_e2u_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_e2v_w, pio_start_e2v_w, pio_count_e2v_w,&
-    &pio_desc_e2v_w)
+    &pio_desc_e2v_w, force_nofill=pio_force_nofill)
 
 #ifdef OBC_WEST
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1r_r, pio_start_w1r_r, pio_count_w1r_r,&
-    &pio_desc_w1r_r)
+    &pio_desc_w1r_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1u_r, pio_start_w1u_r, pio_count_w1u_r,&
-    &pio_desc_w1u_r)
+    &pio_desc_w1u_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1v_r, pio_start_w1v_r, pio_count_w1v_r,&
-    &pio_desc_w1v_r)
+    &pio_desc_w1v_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2r_r, pio_start_w2r_r, pio_count_w2r_r,&
-    &pio_desc_w2r_r)
+    &pio_desc_w2r_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2u_r, pio_start_w2u_r, pio_count_w2u_r,&
-    &pio_desc_w2u_r)
+    &pio_desc_w2u_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2v_r, pio_start_w2v_r, pio_count_w2v_r,&
-    &pio_desc_w2v_r)
+    &pio_desc_w2v_r, force_nofill=pio_force_nofill)
 #endif
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1r_w, pio_start_w1r_w, pio_count_w1r_w,&
-    &pio_desc_w1r_w)
+    &pio_desc_w1r_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1u_w, pio_start_w1u_w, pio_count_w1u_w,&
-    &pio_desc_w1u_w)
+    &pio_desc_w1u_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w1v_w, pio_start_w1v_w, pio_count_w1v_w,&
-    &pio_desc_w1v_w)
+    &pio_desc_w1v_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2r_w, pio_start_w2r_w, pio_count_w2r_w,&
-    &pio_desc_w2r_w)
+    &pio_desc_w2r_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2u_w, pio_start_w2u_w, pio_count_w2u_w,&
-    &pio_desc_w2u_w)
+    &pio_desc_w2u_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_w2v_w, pio_start_w2v_w, pio_count_w2v_w,&
-    &pio_desc_w2v_w)
+    &pio_desc_w2v_w, force_nofill=pio_force_nofill)
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dr_r, pio_start_2Dr_r, pio_count_2Dr_r,&
-    &pio_desc_2Dr_r)
+    &pio_desc_2Dr_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Du_r, pio_start_2Du_r, pio_count_2Du_r,&
-    &pio_desc_2Du_r)
+    &pio_desc_2Du_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dv_r, pio_start_2Dv_r, pio_count_2Dv_r,&
-    &pio_desc_2Dv_r)
+    &pio_desc_2Dv_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dr_r, pio_start_3Dr_r, pio_count_3Dr_r,&
-    &pio_desc_3Dr_r)
+    &pio_desc_3Dr_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Du_r, pio_start_3Du_r, pio_count_3Du_r,&
-    &pio_desc_3Du_r)
+    &pio_desc_3Du_r, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dv_r, pio_start_3Dv_r, pio_count_3Dv_r,&
-    &pio_desc_3Dv_r)
+    &pio_desc_3Dv_r, force_nofill=pio_force_nofill)
 
 
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dr_w, pio_start_2Dr_w, pio_count_2Dr_w,&
-    &pio_desc_2Dr_w)
+    &pio_desc_2Dr_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Du_w, pio_start_2Du_w, pio_count_2Du_w,&
-    &pio_desc_2Du_w)
+    &pio_desc_2Du_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Dv_w, pio_start_2Dv_w, pio_count_2Dv_w,&
-    &pio_desc_2Dv_w)
+    &pio_desc_2Dv_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dr_w, pio_start_3Dr_w, pio_count_3Dr_w,&
-    &pio_desc_3Dr_w)
+    &pio_desc_3Dr_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Du_w, pio_start_3Du_w, pio_count_3Du_w,&
-    &pio_desc_3Du_w)
+    &pio_desc_3Du_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dv_w, pio_start_3Dv_w, pio_count_3Dv_w,&
-    &pio_desc_3Dv_w)
+    &pio_desc_3Dv_w, force_nofill=pio_force_nofill)
     call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_3Dw_w, pio_start_3Dw_w, pio_count_3Dw_w,&
-    &pio_desc_3Dw_w)
+    &pio_desc_3Dw_w, force_nofill=pio_force_nofill)
 
   end subroutine pio_createDecomps
 ! ----------------------------------------------------------------------

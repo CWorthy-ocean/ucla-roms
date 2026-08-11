@@ -11,7 +11,7 @@ module bgc_io
 #if defined BIOLOGY_BEC2 || defined MARBL
 
   ! param needed for GLOBAL_2D_array to work. NT = number tracer from param
-  use param, only: ieast, itemp, iwest, jnorth, jsouth, ocean_grid_comm
+  use param, only: ieast, itemp, iwest, jnorth, jsouth, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor
   use tracers, only: t_avg, wrt_t_avg, nt_2_t_avg, t_units
 #ifdef MARBL_DIAGS
   use marbl_driver, only: marbldrv_compute_init_diagnostics
@@ -293,7 +293,7 @@ contains
         ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_avg), PIO_write)
 
         pio_gtype = '3Drw'
-        do itrc=iTandS+nt_passive+1, nt
+        do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1, nt
           if (wrt_t_avg(itrc)) then
             if (mynode == 0) then
               write(*,'(7x,A,1x,A)')&
@@ -309,8 +309,9 @@ contains
           &'bgc :: wrote average, tdays =', tdays,&
           &'step =', iic, 'rec =', record_avg
         endif
+        ! close inside the output block: the file is only open when writing
+        call PIO_closefile(pio_FileDesc)
       endif
-      call PIO_closefile(pio_FileDesc)
 
     else
 
@@ -344,7 +345,7 @@ contains
         endif
         ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_his), PIO_write)
         pio_gtype = '3Drw'
-        do itrc=iTandS+nt_passive+1, nt
+        do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1, nt
           if (wrt_t(itrc)) then
             if (mynode == 0) then
               write(*,'(7x,A,1x,A)')&
@@ -359,9 +360,9 @@ contains
           &'bgc :: wrote history, tdays =', tdays,&
           &'step =', iic-1, 'rec =', record_his
         endif
+        ! close inside the output block: the file is only open when writing
+        call PIO_closefile(pio_FileDesc)
       endif  ! <-- wrt_file_his
-
-      call PIO_closefile(pio_FileDesc)
 
     endif
 
@@ -392,7 +393,7 @@ contains
         navg_bgc = 0
         ierr=nf90_open(fname_avg,nf90_write,ncid)
         call ncwrite(ncid,'ocean_time',(/time/),(/record_avg/))
-        do itrc=iTandS+nt_passive+1, nt
+        do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1, nt
           if (wrt_t_avg(itrc)) then
             if (mynode == 0) then
               write(*,'(7x,A,1x,A)')&
@@ -433,7 +434,7 @@ contains
         output_time_his=0
         ierr=nf90_open(fname_his,nf90_write,ncid)
         call ncwrite(ncid,'ocean_time',(/time/),(/record_his/))
-        do itrc=iTandS+nt_passive+1, nt
+        do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1, nt
           if (wrt_t(itrc)) then
             if (mynode == 0) then
               write(*,'(7x,A,1x,A)')&
@@ -767,7 +768,7 @@ contains
     character(len=64) :: text_lname
 
     if (avg) then
-      do itrc=iTandS+nt_passive+1,NT
+      do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
         if (wrt_t_avg(itrc)) then
           text_lname='avg_'//t_lname(itrc)
           varid = nccreate(ncid,t_vname(itrc),&
@@ -778,7 +779,7 @@ contains
         endif
       enddo
     else
-      do itrc=iTandS+nt_passive+1,NT
+      do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
         if (wrt_t(itrc)) then
           text_lname=t_lname(itrc)
           varid = nccreate(ncid,t_vname(itrc),&
@@ -810,7 +811,7 @@ contains
     t_avg_bgc = t_avg_bgc*(1-coef) + time*coef
 
     ! need i0:i1 indices because arrays still GLOBAL_2D therefore wasted margin
-    do itrc=iTandS+nt_passive+1, NT
+    do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1, NT
       if (wrt_t_avg(itrc)) then
         itavg = NT_2_t_avg(itrc)                         ! get respective index for t_avg(itavg) -> t(itrc)
         t_avg(i0:i1,j0:j1,:,itavg) = t_avg(i0:i1,j0:j1,:,itavg)    *(1-coef)&

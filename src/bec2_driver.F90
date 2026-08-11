@@ -20,9 +20,11 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
   use grid, only: isalt, rmask
   use ocean_vars, only: hz
   use scalars, only: cp, dt, nmol_cm2_to_mmol_m2, nnew, rho0
+  use param, only: nt_cdr_oae, nt_cdr_dor
   use bgc_shared_vars, only:&
   &t, ialk, idic, ife, io2, ipo4, isio3,&
   &mynode, nt_passive, bgc_idx
+  use param, only: nt_cdr_oae, nt_cdr_dor
   use bec2_vars, only:&
 #ifdef Ncycle_SY
   &lflux_gas_n2, lflux_gas_n2o,&
@@ -574,8 +576,8 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
 
   do k=1,nz
     do m=1,nt_bgc
-      t(istr:iend,jstr:jend,k,nnew,isalt+nt_passive+m) =&
-      &t(istr:iend,jstr:jend,k,nnew,isalt+nt_passive+m)&
+      t(istr:iend,jstr:jend,k,nnew,isalt+nt_passive+2*nt_cdr_oae+nt_cdr_dor+m) =&
+      &t(istr:iend,jstr:jend,k,nnew,isalt+nt_passive+2*nt_cdr_oae+nt_cdr_dor+m)&
       &+ dt * DTRACER_MODULE(istr:iend,jstr:jend,k,m)
     enddo
 

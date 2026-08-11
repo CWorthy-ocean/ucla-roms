@@ -29,7 +29,7 @@ module roms_read_write
   &pio_xi_rho_coarse, pio_eta_rho_coarse, pio_xi_u_coarse, pio_eta_v_coarse,&
   &pio_i0c, pio_i1c, pio_j0c, pio_j1c, pio_initialize_coarse, pio_IoSystem, pio_FileDesc, pio_type,&
   &pio_file_is_open, pio_frcfile
-  use pio, only : PIO_openfile
+  use pio, only : PIO_openfile, PIO_closefile
 #endif
   use error_handling_mod, only: error_log ! Note, abort_check should be called by caller of set_frc_data
   use instant_output, only: wrt_instant, instant_root_name
@@ -42,7 +42,7 @@ module roms_read_write
   ! Time is in seconds relative to a reference date
 
   ! ---- user input begins
-  integer(kind=4),parameter,dimension(3) :: reference_date = (/2000,1,1/)  ! year, month, day
+  integer(kind=4),dimension(3) :: reference_date = (/2000,1,1/)  ! year, month, day
   integer(kind=4),parameter :: dt_format = 0
   integer(kind=4) :: cbf = 5  ! buffer size for coarse data array
   character(len=7),public :: frc_time
@@ -68,8 +68,8 @@ module roms_read_write
   ! Set the name and time_name of variable to match what is in the input forcing files.
   ! Use same name as bulk_frc variable name, e.g. uwnd has nc_uwnd for netcdf vars.
   type,public  :: ncforce
-    character(len=20)                 :: vname     ! name of variable in input file
-    character(len=20)                 :: tname     ! time variable name for variable
+    character(len=64)                 :: vname     ! name of variable in input file
+    character(len=64)                 :: tname     ! time variable name for variable
     real(kind=8),dimension(:,:,:),allocatable :: vdata     ! currently must be exact size of sub-domain (no buffer)
     integer(kind=4)                           :: coarse=0  ! Flag to indicate interpolation of the input data
     integer(kind=4)                           :: ifile=0   ! Index to file in list of filenames
@@ -82,8 +82,8 @@ module roms_read_write
   end type ncforce
 
   type,public  :: ncforce3d
-    character(len=20)                 :: vname     ! name of variable in input file
-    character(len=20)                 :: tname     ! time variable name for variable
+    character(len=64)                 :: vname     ! name of variable in input file
+    character(len=64)                 :: tname     ! time variable name for variable
     real(kind=8),dimension(:,:,:,:),allocatable :: vdata     ! currently must be exact size of sub-domain (no buffer
     integer(kind=4)                           :: coarse=0  ! Flag to indicate interpolation of the input data
     integer(kind=4)                           :: ifile=0   ! Index to file in list of filenames
@@ -181,6 +181,7 @@ module roms_read_write
   namelist /INITIAL_CONDITIONS/ inifile
 #endif
   namelist /FORCING_FILES/ frcfiles
+  namelist /REFERENCE_DATE_SETTINGS/ reference_date
 
   public :: insert_nodes
   public :: findstr,append_date_node
@@ -234,6 +235,9 @@ contains
       &//trim(msg)&
       &)
     end if
+!     Read in `reference_date` from the "REFERENCE_DATE_SETTINGS" section of the namelist file
+    rewind(namelist_unit)
+    read(unit=namelist_unit, nml=REFERENCE_DATE_SETTINGS, iostat=ios, iomsg=msg)
     output_root_name=trim(output_root_name)
     instant_root_name = output_root_name
     mpi_master_only write(*,'(/1x,A)') trim(title)
@@ -1128,8 +1132,8 @@ contains
     ! local
     integer(kind=4) :: ierr,ncid
 
-    character(len=20)  :: vname  ! name of variable in input file
-    character(len=20)  :: tname  ! time variable name for variable
+    character(len=64)  :: vname  ! name of variable in input file
+    character(len=64)  :: tname  ! time variable name for variable
     character(len=100) :: forcing_version ! version of forcing input data
     character(len=300) :: frcstr
     integer(kind=4)            :: irec,ifile
@@ -1141,6 +1145,9 @@ contains
     tname = nc%tname
 
     if (nc%ungridded) then
+      pio_gtype = '----'  ! ungridded data is read serially on rank 0 only;
+                          ! a stale gtype here would turn the ncread below
+                          ! into a rank-0-only PIO collective (deadlock)
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it), nc%ungridded_forcing_file)
@@ -1172,7 +1179,10 @@ contains
         &nc%times(it) )
       endif
       call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1181,9 +1191,25 @@ contains
 
 !      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
-      if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
-        pio_file_is_open = 1
+      if (pio_gtype /= '----') then
+        ! close and re-open if a different forcing file is currently open
+        ! (e.g. physical and bgc boundary data read in the same pass)
+        if ((pio_file_is_open == 1) .and.&
+        &   (trim(pio_frcfile) /= trim(frcfiles(ifile)))) then
+          call PIO_closefile(pio_FileDesc)
+          pio_file_is_open = 0
+        endif
+        if (pio_file_is_open == 0) then
+          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
+          pio_frcfile = frcfiles(ifile)
+          pio_file_is_open = 1
+        endif
+      else
+        ! Non-distributed forcing (pio_gtype=='----', e.g. river fluxes) is read
+        ! serially through the plain netCDF handle below, exactly as in the
+        ! non-PIO build. Open it here so ncid is valid: otherwise ncread hits an
+        ! unopened ncid and fails with NF90 EBADID ("Not a valid ID").
+        ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
       endif
 #else
       ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
@@ -1196,6 +1222,12 @@ contains
       else
         call ncread(ncid,vname,nc%vdata(:,:,it),start=(/1,1,irec/))
       endif
+#ifdef PARALLEL_IO
+      ! The serial (pio_gtype=='----') branch above opened its own ncid; close it.
+      if (pio_gtype == '----') then
+        ierr = nf90_close(ncid)
+      endif
+#endif
       ! add force file info to output nc
 #ifndef PARALLEL_IO
       if (mynode == 0) then
@@ -1251,8 +1283,8 @@ contains
     ! local
     integer(kind=4) :: ierr,ncid
 
-    character(len=20)  :: vname  ! name of variable in input file
-    character(len=20)  :: tname  ! time variable name for variable
+    character(len=64)  :: vname  ! name of variable in input file
+    character(len=64)  :: tname  ! time variable name for variable
     character(len=100) :: forcing_version ! version of forcing input data
     character(len=300) :: frcstr
     integer(kind=4)            :: irec,ifile
@@ -1264,6 +1296,9 @@ contains
     tname = nc%tname
 
     if (nc%ungridded) then
+      pio_gtype = '----'  ! ungridded data is read serially on rank 0 only;
+                          ! a stale gtype here would turn the ncread below
+                          ! into a rank-0-only PIO collective (deadlock)
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it), nc%ungridded_forcing_file)
@@ -1289,7 +1324,10 @@ contains
         &nc%times(it) )
       endif
       call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1297,14 +1335,36 @@ contains
 #endif
 !      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
-      if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
-        pio_file_is_open = 1
+      if (pio_gtype /= '----') then
+        ! close and re-open if a different forcing file is currently open
+        ! (e.g. physical and bgc boundary data read in the same pass)
+        if ((pio_file_is_open == 1) .and.&
+        &   (trim(pio_frcfile) /= trim(frcfiles(ifile)))) then
+          call PIO_closefile(pio_FileDesc)
+          pio_file_is_open = 0
+        endif
+        if (pio_file_is_open == 0) then
+          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
+          pio_frcfile = frcfiles(ifile)
+          pio_file_is_open = 1
+        endif
+      else
+        ! Non-distributed forcing (pio_gtype=='----', e.g. river fluxes) is read
+        ! serially through the plain netCDF handle below, exactly as in the
+        ! non-PIO build. Open it here so ncid is valid: otherwise ncread hits an
+        ! unopened ncid and fails with NF90 EBADID ("Not a valid ID").
+        ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
       endif
 #else
       ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #endif
       call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,:,it),(/1,1,1,irec/))
+#ifdef PARALLEL_IO
+      ! The serial (pio_gtype=='----') branch above opened its own ncid; close it.
+      if (pio_gtype == '----') then
+        ierr = nf90_close(ncid)
+      endif
+#endif
       ! add force file info to output nc
 #ifndef PARALLEL_IO
       if (mynode == 0) then
@@ -1360,8 +1420,8 @@ contains
     ! local
     integer(kind=4) :: ierr,ncid
 
-    character(len=20)  :: vname  ! name of variable in input file
-    character(len=20)  :: tname  ! time variable name for variable
+    character(len=64)  :: vname  ! name of variable in input file
+    character(len=64)  :: tname  ! time variable name for variable
     character(len=100) :: forcing_version ! version of forcing input data
     character(len=300) :: frcstr
     integer(kind=4)            :: irec,ifile
@@ -1377,7 +1437,10 @@ contains
       &nc%times(it) )
     endif
     call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
     call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1386,10 +1449,19 @@ contains
 
 !      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
-    if ((pio_file_is_open == 0) .and. (pio_gtype /= '----')) then
-      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
-      pio_frcfile = frcfiles(ifile)
-      pio_file_is_open = 1
+    if (pio_gtype /= '----') then
+      ! close and re-open if a different forcing file is currently open
+      ! (e.g. physical and bgc boundary data read in the same pass)
+      if ((pio_file_is_open == 1) .and.&
+      &   (trim(pio_frcfile) /= trim(frcfiles(ifile)))) then
+        call PIO_closefile(pio_FileDesc)
+        pio_file_is_open = 0
+      endif
+      if (pio_file_is_open == 0) then
+        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
+        pio_frcfile = frcfiles(ifile)
+        pio_file_is_open = 1
+      endif
     endif
 #else
     ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
@@ -1907,7 +1979,9 @@ contains
     endif
 
     ! Add 4 main x and y dimensions so that ncjoin will work,
-    if (pio_gtype == '----') then
+    ! With PIO, files are joined and always need global dimensions;
+    ! pio_gtype is transient read/write state and must not be used here
+    if (.not. use_pio) then
       ierr=nf90_def_dim(ncid,'xi_rho', xi_rho, dimid)
       ierr=nf90_def_dim(ncid,'xi_u',   xi_u,   dimid)
       ierr=nf90_def_dim(ncid,'eta_rho',eta_rho,dimid)

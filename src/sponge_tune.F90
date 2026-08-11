@@ -126,8 +126,12 @@ contains
     !! max value based of cfl condition
 !     sp_mx = 0.06_8/(maxval(pm)*maxval(pn)*dt)
 
-    if (obc_west.and.inode.eq.0) then
+    ! Allocate on all ranks, not just boundary-adjacent ones: under
+    ! PARALLEL_IO every rank participates in the collective boundary
+    ! reads/writes (with zero-count contributions away from the edge)
+    if (obc_west) then
       allocate(nc_pflx_w%vdata(ny,1,2))
+      nc_pflx_w%vdata = 0
       allocate(pflx_west(ny))
       pflx_west = 0
       allocate(pflx_west_avg(ny))
@@ -143,8 +147,9 @@ contains
       allocate(ub_west_avg(ny))
       ub_west_avg = 0._8
     endif
-    if (obc_east.and.inode.eq.np_xi-1) then
+    if (obc_east) then
       allocate(nc_pflx_e%vdata(ny,1,2))
+      nc_pflx_e%vdata = 0
       allocate(pflx_east(ny))
       pflx_east = 0
       allocate(cflx_east(ny))
@@ -154,8 +159,9 @@ contains
         ub_east = 0._8
       endif
     endif
-    if (obc_north.and.jnode.eq.np_eta-1) then
+    if (obc_north) then
       allocate(nc_pflx_n%vdata(nx,1,2))
+      nc_pflx_n%vdata = 0
       allocate(pflx_north(nx))
       pflx_north = 0
       allocate(cflx_north(nx))
@@ -165,8 +171,9 @@ contains
         ub_north = 0._8
       endif
     endif
-    if (obc_south.and.jnode.eq.0) then
+    if (obc_south) then
       allocate(nc_pflx_s%vdata(nx,1,2))
+      nc_pflx_s%vdata = 0
       allocate(pflx_south(nx))
       pflx_south = 0
       allocate(pflx_south_avg(nx))
@@ -199,25 +206,47 @@ contains
 #ifdef PARALLEL_IO
     pio_file_is_open = 0
 #endif
-    if (obc_west.and.inode.eq.0) then
+    ! Under PARALLEL_IO all ranks must call set_frc_data (collective
+    ! PIO read; off-edge ranks contribute zero-count decompositions)
+    if (obc_west&
+#ifndef PARALLEL_IO
+    &.and.inode.eq.0&
+#endif
+    &) then
+      pio_gtype = 'w1rr'
       call set_frc_data(nc_pflx_w,pflx_west)
       do j=1,ny
         if (abs(pflx_west(j))>100) pflx_west(j) = 0._8
       enddo
     endif
-    if (obc_east.and.inode.eq.np_xi-1) then
+    if (obc_east&
+#ifndef PARALLEL_IO
+    &.and.inode.eq.np_xi-1&
+#endif
+    &) then
+      pio_gtype = 'e1rr'
       call set_frc_data(nc_pflx_e,pflx_east)
       do j=1,ny
         if (abs(pflx_east(j))>100) pflx_east(j) = 0._8
       enddo
     endif
-    if (obc_south.and.jnode.eq.0) then
+    if (obc_south&
+#ifndef PARALLEL_IO
+    &.and.jnode.eq.0&
+#endif
+    &) then
+      pio_gtype = 's1rr'
       call set_frc_data(nc_pflx_s,pflx_south)
       do i=1,nx
         if (abs(pflx_south(i))>100) pflx_south(i) = 0._8
       enddo
     endif
-    if (obc_north.and.jnode.eq.np_eta-1) then
+    if (obc_north&
+#ifndef PARALLEL_IO
+    &.and.jnode.eq.np_eta-1&
+#endif
+    &) then
+      pio_gtype = 'n1rr'
       call set_frc_data(nc_pflx_n,pflx_north)
       do i=1,nx
         if (rmask(i,ny+1)<1) pflx_north(i) = 0._8
@@ -376,7 +405,10 @@ contains
 
     ! fluxes and ub coefficients are defined as nx, ny sized arrays
     ! so use method 2 for output (see roms_read_write)
-    if (obc_south.and.(jnode==0)) then
+    ! All ranks must call ncwrite: PIO_write_darray is collective and
+    ! off-edge ranks participate with zero-count decompositions
+    pio_gtype = 's1rw'
+    if (obc_south) then
       call ncwrite(ncid,'cf_south',cflx_south_avg,(/bfx,record /),.true.)
       call ncwrite(ncid,'pf_south',pflx_south_avg,(/bfx,record /),.true.)
       call ncwrite(ncid,'ub_south',  ub_south_avg,(/bfx,record /),.true.)
@@ -384,7 +416,8 @@ contains
     if (obc_east.and.(inode==np_xi-1)) then
 !       call ncwrite(ncid,'ub_east',ub_east(j0:j1),(/1,record /))
     endif
-    if (obc_west.and.(inode==0)) then
+    pio_gtype = 'w1rw'
+    if (obc_west) then
       call ncwrite(ncid,'cf_west',cflx_west_avg,(/ bfy,record /),.true.)
       call ncwrite(ncid,'pf_west',pflx_west_avg,(/ bfy,record /),.true.)
       call ncwrite(ncid,'ub_west',  ub_west_avg,(/ bfy,record /),.true.)
@@ -411,7 +444,6 @@ contains
 
     ! fluxes and ub coefficients are defined as nx, ny sized arrays
     ! so use method 2 for output (see roms_read_write)
-    pio_gtype = 's1rw'
     if (obc_south.and.(jnode==0)) then
       call ncwrite(ncid,'cf_south',cflx_south_avg,(/bfx,record /))
       call ncwrite(ncid,'pf_south',pflx_south_avg,(/bfx,record /))
@@ -420,7 +452,6 @@ contains
     if (obc_east.and.(inode==np_xi-1)) then
 !       call ncwrite(ncid,'ub_east',ub_east(j0:j1),(/1,record /))
     endif
-    pio_gtype = 'w1rw'
     if (obc_west.and.(inode==0)) then
       call ncwrite(ncid,'cf_west',cflx_west_avg,(/ bfy,record /))
       call ncwrite(ncid,'pf_west',pflx_west_avg,(/ bfy,record /))
@@ -539,20 +570,22 @@ contains
     if (tune_init) call init_orlanski_tune
 
 #ifdef PARALLEL_IO
+    ! All ranks must call ncwrite: PIO_write_darray is collective and
+    ! off-edge ranks participate with zero-count decompositions
     pio_gtype = 's1rw'
-    if (obc_south.and.(jnode==0)) then
+    if (obc_south) then
       call ncwrite(ncid,'ub_south',ub_south,(/bfx,record/),.true.)
     endif
     pio_gtype = 'n1rw'
-    if (obc_north.and.(jnode==np_eta-1)) then
+    if (obc_north) then
       call ncwrite(ncid,'ub_north',ub_north,(/bfx,record/),.true.)
     endif
     pio_gtype = 'e1rw'
-    if (obc_east.and.(inode==np_xi-1)) then
+    if (obc_east) then
       call ncwrite(ncid,'ub_east' ,ub_east ,(/bfy,record/),.true.)
     endif
     pio_gtype = 'w1rw'
-    if (obc_west.and.(inode==0)) then
+    if (obc_west) then
       call ncwrite(ncid,'ub_west' ,ub_west ,(/bfy,record/),.true.)
     endif
 #else
@@ -584,10 +617,17 @@ contains
     integer(kind=4) :: ierr, varid
 
     if (mynode==0) print *,'getting ub coefficients'
-    if (obc_south.and.(jnode==0)) then
+    ! Under PARALLEL_IO all ranks must call ncread (collective PIO read;
+    ! off-edge ranks contribute zero-count decompositions)
+    if (obc_south&
+#ifndef PARALLEL_IO
+    &.and.(jnode==0)&
+#endif
+    &) then
       if (.not. allocated(ub_south)) allocate(ub_south(nx))
       ierr=nf90_inq_varid (ncid, 'ub_south', varid)
       if (ierr == nf90_noerr) then
+        pio_gtype = 's1rr'
         call ncread(ncid,'ub_south', ub_south,(/bfx,record/))
       else
         if (mynode==0) print *,'--WARNING: ub_south'&
@@ -595,10 +635,15 @@ contains
         ub_south = 0
       endif
     endif
-    if (obc_north.and.(jnode==np_eta-1)) then
+    if (obc_north&
+#ifndef PARALLEL_IO
+    &.and.(jnode==np_eta-1)&
+#endif
+    &) then
       if (.not. allocated(ub_north)) allocate(ub_north(nx))
       ierr=nf90_inq_varid (ncid, 'ub_north', varid)
       if (ierr == nf90_noerr) then
+        pio_gtype = 'n1rr'
         call ncread(ncid,'ub_north', ub_north,(/bfx,record/))
       else
         if (mynode==0) print *,'--WARNING: ub_north'&
@@ -607,10 +652,15 @@ contains
       endif
     endif
 
-    if (obc_east.and.(inode==np_xi-1)) then
+    if (obc_east&
+#ifndef PARALLEL_IO
+    &.and.(inode==np_xi-1)&
+#endif
+    &) then
       if (.not. allocated(ub_east)) allocate(ub_east(ny))
       ierr=nf90_inq_varid (ncid, 'ub_east', varid)
       if (ierr == nf90_noerr) then
+        pio_gtype = 'e1rr'
         call ncread(ncid,'ub_east', ub_east,(/bfy,record/))
       else
         if (mynode==0) print *,'--WARNING: ub_east'&
@@ -619,10 +669,15 @@ contains
       endif
     endif
 
-    if (obc_west.and.(inode==0)) then
+    if (obc_west&
+#ifndef PARALLEL_IO
+    &.and.(inode==0)&
+#endif
+    &) then
       if (.not. allocated(ub_west)) allocate(ub_west(ny))
       ierr=nf90_inq_varid (ncid, 'ub_west', varid)
       if (ierr == nf90_noerr) then
+        pio_gtype = 'w1rr'
         call ncread(ncid,'ub_west', ub_west,(/bfy,record/))
       else
         if (mynode==0) print *,'--WARNING: ub_west'&

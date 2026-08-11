@@ -18,11 +18,16 @@ module tracers
   !]
 
 #include "cppdefs.opt"
-  use param, only: isalt, itemp, lm, mm, mynode, nt_passive
+  use param, only: isalt, itemp, lm, mm, mynode, nt_passive, nt_cdr_oae, nt_cdr_dor&
+  &,ieast, iwest, jnorth, jsouth
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rath
-  use scalars, only: nz, nstp, nnew, forw_start, iic, nt
+#ifdef CDR_TRACER
+  use surf_flux, only: ddic_dco2, ddic_dalk, k_gas, uwnd, vwnd
+  use ocean_vars, only: Hz
+#endif
+  use scalars, only: nz, nstp, nrhs, nnew, forw_start, iic, nt
 ! for 'FIRST_TIME_STEP' and nstp, only:
   use nc_read_write, only: nccreate, ncwrite
   use roms_read_write, only:&
@@ -36,6 +41,7 @@ module tracers
   use pio_roms, only: pio_file_is_open, pio_FileDesc
   use pio, only : PIO_closefile
 #endif
+  use roms_mpi, only: exchange_xxx
 
   implicit none
   private
@@ -53,6 +59,8 @@ module tracers
   logical, dimension(:), public, allocatable      :: wrt_t_dia      ! t/f diagnostics tracer.
 
   integer(kind=4), dimension(:), allocatable              :: t_ana_frc               ! whether surface flux is read
+
+  integer, dimension(:), public, allocatable :: itrc_alk_pair ! Pairing logic
 
   !-- Tracer netcdf variables as arrays/matrices of 'NT' length:
   ! Final tracer concentrations live in 't' in ocean3d
@@ -117,11 +125,20 @@ contains
   subroutine set_surf_tracer_flx ![
     ! set tracer flux at surface
     use error_handling_mod, only: error_log
+    use private_scratch, only: nsub_e, nsub_x
     implicit none
     character(len=20) :: sr_name = "set_surf_tracer_flx"
     ! local
     integer(kind=4)           :: itrc       ! tracer number for loop index
     character(len=46) :: t_flx_name ! Tracer time name
+    integer(kind=4) :: tile
+
+#include "compute_tile_bounds.h"
+
+#ifdef CDR_TRACER
+      call exchange_xxx(t(:,:,nz,nrhs,itemp) )
+      call set_gas_transfer_velocity(istr,iend,jstr,jend)
+#endif
 
 #ifdef PARALLEL_IO
     pio_file_is_open = 0
@@ -136,6 +153,16 @@ contains
       elseif(t_ana_frc(itrc)==1) then ! Analytical forcing
 
         call set_ana_surf_tracer_flx(itrc)
+
+#ifdef CDR_TRACER
+      elseif (t_ana_frc(itrc)==2) then
+            call set_frc_data(nc_t(itrc), stflx(:,:,itrc), 'r' )
+            call exchange_xxx(stflx(:,:,itrc))
+
+            call exchange_xxx(t(:,:,nz,nrhs,itrc) )
+            call subtract_gas_exchange_from_tracer_flx(itrc,istr,iend,jstr,jend)
+            call exchange_xxx(stflx(:,:,itrc))
+#endif
 
       else
 
@@ -197,6 +224,80 @@ contains
 
   end subroutine set_ana_surf_tracer_flx  !]
 ! ----------------------------------------------------------------------
+      subroutine set_gas_transfer_velocity(istr,iend,jstr,jend) ![
+
+      implicit none
+      integer istr, iend, jstr, jend
+
+#if defined CDR_TRACER
+      ! coefficients to compute Schmidt number
+      real, parameter :: a = 2116.8
+      real, parameter :: b = -136.25
+      real, parameter :: c = 4.7353
+      real, parameter :: d = -0.092307
+      real, parameter :: e = 0.0007555
+      real, parameter :: xkw_coef = 6.97e-07
+      real schmidt_nr, sst
+      integer i, j
+
+      do j=jstr,jend
+        do i=istr,iend+1
+
+          sst = t(i,j,nz,nrhs,itemp)
+          schmidt_nr = a + sst * (b + sst * (c + sst * (d + e * sst)))
+          k_gas(i,j) = xkw_coef * (uwnd(i,j)**2 + vwnd(i,j)**2) * sqrt(660.0 / schmidt_nr)
+#ifdef SEA_ICE_NOFLUX
+          if( sst .le. -1.8 ) then
+              k_gas(i,j)=0.                    ! If SST colder than -1.8 C, assume zero piston velocity due to sea ice
+          endif
+#endif
+        enddo
+      enddo
+
+#endif /* defined CDR_TRACER */
+
+      end subroutine set_gas_transfer_velocity  !]
+! ----------------------------------------------------------------------
+      subroutine subtract_gas_exchange_from_tracer_flx(itrc,istr,iend,jstr,jend)  ![
+      ! Modify surface tracer flux by subtracting the air-sea gas exchange term
+
+      implicit none
+
+      integer itrc ! Current tracer index number
+      integer istr, iend, jstr, jend
+
+#ifdef CDR_TRACER
+
+      ! local
+      integer i, j, iALK
+      real beta, eta, cALK
+
+      iALK = itrc_alk_pair(itrc) ! Identify if this tracer has a pair
+
+      do j=jstr,jend
+        do i=istr,iend+1
+          beta = max(ddic_dco2(i,j), 1.0e-5) ! avoid division by zero
+          eta = ddic_dalk(i,j)
+          if (iALK > 0) then
+             cALK = t(i,j,nz,nrhs,iALK)
+          else
+             cALK = 0.0
+          endif
+
+          ! Implementation: Flux = Flux - (k / beta) * (C_dic - ddic_dalk * C_alk)
+          stflx(i,j,itrc) = stflx(i,j,itrc) -&
+     &      ( k_gas(i,j) / beta ) * ( t(i,j,nz,nrhs,itrc) - eta * cALK )
+
+          ! Here, stflx is stored as (stflx * Hz) to maintain consistency
+          ! with t, which is also in (t * Hz) form. This ensures the units match
+          ! when stflx is added to t in step3d_t_ISO.
+          ! After the implicit vertical mixing step in step3d_t_ISO, (t * Hz)
+          ! is divided by Hz to yield the updated tracer t.
+        enddo
+      enddo
+#endif
+      end subroutine subtract_gas_exchange_from_tracer_flx  !]
+! ----------------------------------------------------------------------
   subroutine def_his_trc( ncid )  ![
     ! Define history file variables in def_his.F
 
@@ -207,7 +308,7 @@ contains
     ! local
     integer(kind=4) itrc, ierr, varid
 
-    do itrc=1,iTandS+nt_passive
+    do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
       if (wrt_t(itrc)) then
         varid = nccreate(ncid,t_vname(itrc),&
         &(/dn_xr,dn_yr,dn_zr,dn_tm/),(/ds_xr,ds_yr,ds_zr,0/),nf90_double)
@@ -227,7 +328,7 @@ contains
     integer(kind=4) :: itrc, ierr, varid
     character(len=64) :: long_name
 
-    do itrc=1,iTandS+nt_passive
+    do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
       if (wrt_t_avg(itrc)) then
         long_name='averaged '//t_lname(itrc) ! Add averaged to long name
         varid = nccreate(ncid,t_vname(itrc),&
@@ -250,7 +351,7 @@ contains
     ! local
     integer(kind=4) :: itrc
 
-    do itrc=1,iTandS+nt_passive
+    do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
       if (wrt_t(itrc)) call ncwrite(ncid,t_vname(itrc),t(i0:i1,j0:j1,:,nnew,itrc),start, .true.)
     enddo
 
@@ -267,7 +368,7 @@ contains
     ! local
     integer(kind=4) :: itrc, itavg
 
-    do itrc=1,iTandS+nt_passive
+    do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
       if (wrt_t_avg(itrc)) then
         itavg = NT_2_t_avg(itrc)                                   ! get respective index for t_avg(itavg) -> t(itrc)
         call ncwrite(ncid,t_vname(itrc),t_avg(i0:i1,j0:j1,:,itavg),start, .true.)
@@ -302,7 +403,7 @@ contains
     ! local
     integer(kind=4) :: itrc, itavg
 
-    do itrc=1,iTandS+nt_passive
+    do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
       if (wrt_t_avg(itrc)) then
         itavg = NT_2_t_avg(itrc)                         ! get respective index for t_avg(itavg) -> t(itrc)
         t_avg(i0:i1,j0:j1,:,itavg) = t_avg(i0:i1,j0:j1,:,itavg)     *(1-coef) +&
@@ -335,6 +436,7 @@ contains
 
     ! local
     integer(kind=4) :: cnt=0, itrc
+    character(len=8) :: passive_tracer_num
     allocate(t_vname(nt))
     allocate(t_lname(nt))
     allocate(t_units(nt))
@@ -345,7 +447,12 @@ contains
     allocate(t_ana_frc(nt))
     allocate(nc_t(nt))
     allocate(NT_2_t_avg(nt))
+    allocate(itrc_alk_pair(nt))
+    wrt_t(:) = .false.
+    wrt_t_avg(:) = .false.
     wrt_t_dia(:) = .false.
+
+    itrc_alk_pair(:) = 0
 
     ! Core tracers - temp and salt:
     t_vname(itemp)='temp';        t_units(itemp)='Celsius'
@@ -361,6 +468,53 @@ contains
     iTandS = 2         ! if both temp and salt.
 #endif
     itot=iTandS        ! set up counting for additional tracers
+
+    do itrc=iTandS+1,iTandS+nt_passive
+      write(passive_tracer_num, '(I0)') (itrc-iTandS)
+      t_vname(itrc)='passive_tracer' // TRIM(passive_tracer_num)
+      t_units(itrc)='mMol m-3'
+      t_lname(itrc)='passive tracer' // TRIM(passive_tracer_num)
+      wrt_t(itrc) = .false.
+      wrt_t_dia(itrc) = .false.
+      t_ana_frc(itrc)=1
+      itot = itot+1
+    enddo
+
+    do itrc=iTandS+nt_passive+1,iTandS+nt_passive+2*nt_cdr_oae,2
+      write(passive_tracer_num, '(I0)') (itrc-iTandS-nt_passive)
+      t_vname(itrc)='CDR_OAE_ALK' // TRIM(passive_tracer_num)
+      t_tname(itrc)='CDR_OAE_ALK' // TRIM(passive_tracer_num) // '_time'
+      t_units(itrc)='mMol m-3'
+      t_lname(itrc)='CDR OAE ALK tracer' // TRIM(passive_tracer_num)
+      wrt_t(itrc) = .false.
+      wrt_t_dia(itrc) = .false.
+      t_ana_frc(itrc)=2
+      itot = itot+1
+
+      write(passive_tracer_num, '(I0)') (itrc+1-iTandS-nt_passive)
+      t_vname(itrc+1)='CDR_OAE_DIC' // TRIM(passive_tracer_num)
+      t_tname(itrc+1)='CDR_OAE_DIC' // TRIM(passive_tracer_num) // '_time'
+      t_units(itrc+1)='mMol m-3'
+      t_lname(itrc+1)='CDR OAE DIC tracer' // TRIM(passive_tracer_num)
+      wrt_t(itrc+1) = .false.
+      wrt_t_dia(itrc+1) = .false.
+      t_ana_frc(itrc+1)=2
+      ! Identify the corresponding ALK tracer
+      itrc_alk_pair(itrc+1) = itrc
+      itot = itot+1
+    enddo
+
+    do itrc=iTandS+nt_passive+2*nt_cdr_oae+1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
+      write(passive_tracer_num, '(I0)') (itrc-iTandS-nt_passive-2*nt_cdr_oae)
+      t_vname(itrc)='CDR_DOR_DIC' // TRIM(passive_tracer_num)
+      t_tname(itrc)='CDR_DOR_DIC' // TRIM(passive_tracer_num) // '_time'
+      t_units(itrc)='mMol m-3'
+      t_lname(itrc)='CDR DOR DIC tracer' // TRIM(passive_tracer_num)
+      wrt_t(itrc) = .false.
+      wrt_t_dia(itrc) = .false.
+      t_ana_frc(itrc)=2
+      itot = itot+1
+    enddo
 
     ! Additional passive tracers:
 #ifdef BIOLOGY_BEC2
@@ -413,7 +567,7 @@ contains
 
     ! initialize read in forcing data arrays
     do itrc=iTandS+1,NT
-      if (t_ana_frc(itrc)==0) then
+      if ((t_ana_frc(itrc)==0) .or. (t_ana_frc(itrc)==2)) then
 
         allocate( nc_t(itrc)%vdata( GLOBAL_2D_ARRAY,2) )
 

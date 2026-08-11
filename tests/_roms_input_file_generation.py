@@ -31,6 +31,9 @@ def create_roms_inputs(target_dir: Path):
 
     create_roms_physical_surface_forcing(grid, target_dir)
     create_roms_bgc_surface_forcing(grid, target_dir)
+    create_roms_surface_forcing_restoring_sss(grid, target_dir)
+    create_roms_surface_forcing_restoring_dic_alk(grid, target_dir)
+
     create_roms_co2_surface_forcing(grid, target_dir)
 
     create_roms_initial_conditions(grid, target_dir)
@@ -159,6 +162,42 @@ def create_roms_bgc_surface_forcing(grid, target_dir: Path):
                 "path": target_dir / "fake_bgc_surf_data.nc"},
     )
     rsf.save(target_dir / "example_input_bgc_surface_forcing.nc", group=False)
+
+
+def create_roms_surface_forcing_restoring_sss(grid, target_dir: Path):
+    rsf = rt.SurfaceForcing(
+        grid=grid,
+        type="restoring",
+        restoring_forces=['sss'],
+        # roms-tools' default coarse_grid_mode="auto" coarsens by a factor of 2
+        # for low-resolution sources like this synthetic one. ROMS reads the
+        # restoring fields at full resolution (surf_flux.F90 never sets
+        # ncforce%coarse, unlike bulk_frc/flux_frc/bgc_io), so a coarse file
+        # aborts with NetCDF "Start+count exceeds dimension bound".
+        coarse_grid_mode="never",
+        start_time=dt.datetime(2010, 1, 1),
+        end_time=dt.datetime(2010, 1, 2),
+        source={"name": "WOA",
+                "path": target_dir / "fake_restore_sss_surf_data.nc",
+                "climatology": True},
+    )
+    rsf.save(target_dir / "example_input_restoring_sss.nc", group=False)
+
+
+def create_roms_surface_forcing_restoring_dic_alk(grid, target_dir: Path):
+    rsf = rt.SurfaceForcing(
+        grid=grid,
+        type="restoring",
+        restoring_forces=['sDIC', 'sALK'],
+        # See create_roms_surface_forcing_restoring_sss: ROMS reads sDIC/sALK at
+        # full resolution too, so keep this file on the fine grid.
+        coarse_grid_mode="never",
+        start_time=dt.datetime(2010, 1, 1),
+        end_time=dt.datetime(2010, 1, 2),
+        source={"name": "SODA",
+                "path": target_dir / "fake_restore_dic_alk_surf_data.nc"},
+    )
+    rsf.save(target_dir / "example_input_restoring_dic_alk.nc", group=False)
 
 
 def create_roms_co2_surface_forcing(grid, target_dir: Path):

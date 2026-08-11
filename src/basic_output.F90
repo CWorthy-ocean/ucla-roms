@@ -26,7 +26,7 @@ module basic_output
   use ocean_vars, only:&
   &zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,&
   &w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
-  use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive, ocean_grid_comm
+  use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
@@ -869,7 +869,7 @@ contains                  !]
     use coupling, only:&
     &du_avg1, dv_avg1, du_avg2, dv_avg2,&
     &du_avg_bak, dv_avg_bak
-    use grid, only: riv_umask, riv_vmask
+    use grid, only: riv_umask, riv_vmask, umask, vmask
 #ifdef MARBL
 !     add MARBL saved state to restart to restart file
     use marbl_driver, only: marbldrv_write_ss_vars_to_rst
@@ -936,6 +936,13 @@ contains                  !]
 
 # ifdef EXACT_RESTART
 #  ifdef EXTRAP_BAR_FLUXES
+    ! Keep land at 0 so MASK_LAND_DATA does not persist NetCDF fill
+    DU_avg1 = DU_avg1*umask
+    DV_avg1 = DV_avg1*vmask
+    DU_avg2 = DU_avg2*umask
+    DV_avg2 = DV_avg2*vmask
+    DU_avg_bak = DU_avg_bak*umask
+    DV_avg_bak = DV_avg_bak*vmask
     pio_gtype = '2Duw'
     call ncwrite(ncid,'DU_avg1',    DU_avg1( 1:i1,j0:j1),start,.true.)
     pio_gtype = '2Dvw'
@@ -978,13 +985,16 @@ contains                  !]
 #endif
     if (calc_pflx) call wrt_rst_diag_slow(ncid,rec_rst)
 
+    where (riv_umask < 0._8 .or. riv_umask > 1._8) riv_umask = 0._8
+    where (riv_vmask < 0._8 .or. riv_vmask > 1._8) riv_vmask = 0._8
+    riv_umask = riv_umask*umask
+    riv_vmask = riv_vmask*vmask
     pio_gtype = '2Duw'
     call ncwrite(ncid,'riv_umask',    riv_umask( 1:i1,j0:j1),start,.true.)
     pio_gtype = '2Dvw'
     call ncwrite(ncid,'riv_vmask',    riv_vmask(i0:i1, 1:j1),start,.true.)
 
 #ifdef MARBL
-    pio_gtype = '3Drw'
     call marbldrv_write_ss_vars_to_rst(ncid,rec_rst)
 #endif
 
@@ -1038,6 +1048,12 @@ contains                  !]
 
 # ifdef EXACT_RESTART
 #  ifdef EXTRAP_BAR_FLUXES
+    DU_avg1 = DU_avg1*umask
+    DV_avg1 = DV_avg1*vmask
+    DU_avg2 = DU_avg2*umask
+    DV_avg2 = DV_avg2*vmask
+    DU_avg_bak = DU_avg_bak*umask
+    DV_avg_bak = DV_avg_bak*vmask
     call ncwrite(ncid,'DU_avg1',    DU_avg1( 1:i1,j0:j1),start)
     call ncwrite(ncid,'DV_avg1',    DV_avg1(i0:i1, 1:j1),start)
     call ncwrite(ncid,'DU_avg2',    DU_avg2( 1:i1,j0:j1),start)
@@ -1070,6 +1086,10 @@ contains                  !]
 #endif
     if (calc_pflx) call wrt_rst_diag_slow(ncid,rec_rst)
 
+    where (riv_umask < 0._8 .or. riv_umask > 1._8) riv_umask = 0._8
+    where (riv_vmask < 0._8 .or. riv_vmask > 1._8) riv_vmask = 0._8
+    riv_umask = riv_umask*umask
+    riv_vmask = riv_vmask*vmask
     call ncwrite(ncid,'riv_umask',    riv_umask( 1:i1,j0:j1),start)
     call ncwrite(ncid,'riv_vmask',    riv_vmask(i0:i1, 1:j1),start)
 
@@ -1684,7 +1704,7 @@ contains                  !]
       &, 'hbbl',   wrt_Hbbl, vname(2,indxHbbl)&
 # endif
       &, ''
-      do itrc=1,iTandS+nt_passive
+      do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
       write(*,'(11x,A,I2,A,T30,L1,T36,A)') 't(',&
       &itrc, ')', wrt_t(itrc), t_vname(itrc)
       enddo
@@ -1738,7 +1758,7 @@ contains                  !]
         &, 'hbbl',   wrt_avg_Hbbl, vname(2,indxHbbl)&
 # endif
         &,''
-        do itrc=1,iTandS+nt_passive
+        do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
         write(*,'(11x,A,I2,A,T30,L1,T36,A)') 't(',&
         &itrc, ')', wrt_t_avg(itrc), t_vname(itrc)
         enddo

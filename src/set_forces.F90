@@ -33,7 +33,7 @@ subroutine set_forces
 #endif
   &ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, itemp
   use flux_frc, only: set_flux_frc
-  use surf_flux, only: set_surf_field_corr
+  use surf_flux, only: set_surf_field_corr, set_carbonate_sensitivity
   use tracers, only: set_surf_tracer_flx, iTandS
   use river_frc, only:  set_river_frc, river_source
   use pipe_frc, only: set_pipe_frc, pipe_source
@@ -102,6 +102,9 @@ subroutine set_forces
 
 #if defined QCORRECTION || defined SFLX_CORR || defined CFLX_CORR
   call set_surf_field_corr
+# endif
+# if defined CDR_TRACER
+      call set_carbonate_sensitivity
 # endif
 # ifdef BULK_FRC
 #  ifdef LMD_KPP
