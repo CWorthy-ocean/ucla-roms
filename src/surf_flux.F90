@@ -118,9 +118,9 @@ module surf_flux
   ! real(kind=8),public :: dSSSdt = 0._8                           ! input units (cm/day)
 
 #if defined CDR_TRACER
-      real,public,allocatable,dimension(:,:) :: ddic_dco2  ! time interpolated carbonate sensitivity
-      real,public,allocatable,dimension(:,:) :: ddic_dalk  ! time interpolated carbonate sensitivity
-      real,public,allocatable,dimension(:,:) :: k_gas      ! time interpolated gas transfer velocity
+      real(kind=8),public,allocatable,dimension(:,:) :: ddic_dco2  ! time interpolated carbonate sensitivity
+      real(kind=8),public,allocatable,dimension(:,:) :: ddic_dalk  ! time interpolated carbonate sensitivity
+      real(kind=8),public,allocatable,dimension(:,:) :: k_gas      ! time interpolated gas transfer velocity
 
       type (ncforce) :: nc_ddic_dco2 = ncforce(vname='ddic_dco2',tname='ddic_dco2_time' )  ! carbonate sensitivity
       type (ncforce) :: nc_ddic_dalk = ncforce(vname='ddic_dalk',tname='ddic_dalk_time' )  ! carbonate sensitivity
@@ -146,6 +146,7 @@ module surf_flux
   public wrt_sflux
 !  public apply_surf_field_corr
   public read_nml_surf_flx
+  public set_carbonate_sensitivity
 
 contains
 
@@ -328,8 +329,9 @@ subroutine set_surf_field_corr ![
 
 end subroutine set_surf_field_corr  !]
 ! ----------------------------------------------------------------------
-      subroutine set_carbonate_sensitivity ![
-
+subroutine set_carbonate_sensitivity ![
+  ! Set surface fields that will be restored towards
+  use roms_read_write, only: set_frc_data
       implicit none
 
 #ifdef CDR_TRACER
@@ -337,7 +339,7 @@ end subroutine set_surf_field_corr  !]
       call set_frc_data(nc_ddic_dalk, ddic_dalk, 'r')
 #endif
 
-      end subroutine set_carbonate_sensitivity  !]
+end subroutine set_carbonate_sensitivity  !]
 ! ----------------------------------------------------------------------
 subroutine calc_sflx_avg  ![
   implicit none
