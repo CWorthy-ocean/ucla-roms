@@ -186,6 +186,12 @@ ifeq ($(USEPIO),true)
         PIO_INC = -I/$(PIO_ROOT)/build/src/flib/ -I/$(PIO_ROOT)/build/src/clib/
         PIO_LIB = $(PIO_ROOT)/build/src/flib/libpiof.a $(PIO_ROOT)/build/src/clib/libpioc.a
     endif
+    # Compiler wrappers can also inject -I$CONDA_PREFIX/include ahead of all
+    # user flags, so a stock parallelio's .mod files there (pulled in as a hard
+    # dependency of esmf) shadow $(PIO_ROOT)'s regardless of PIO_INC ordering.
+    # The module search checks the compile directory before any -I path, so
+    # copy the fork's .mod files here to guarantee they win.
+    PIO_MOD_COPY := $(shell cp -p $(PIO_ROOT)/build/src/flib/*.mod . 2>/dev/null)
 endif
 
 # Large memory runs (e.g. for bgc):
