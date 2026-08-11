@@ -32,6 +32,8 @@ Bug Fixes
 - Move pio_initialize_extract from the per-write loop in do_extract_data into init_extract_data, so PIO extract decompositions are built once per object.
 - Avoids leaking MPI communicators: repeated PIO_initdecomp without PIO_freedecomp was exhausting MPICH’s 2048-communicator limit and aborting with Too many communicators after ~1–2 days of runtime with extract enabled.
 - Write path still sets pio_bnd for pio_gtype; only the decomposition setup was moved.
+- Prior to this PR the passive tracers would not have been written to the output files correctly (`#314 <https://github.com/CWorthy-ocean/ucla-roms/pull/314>`_)
+- The fact that this variable was not present may be the cause of some recent trouble with PIO extract_data writes. (`#318 <https://github.com/CWorthy-ocean/ucla-roms/pull/318>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -45,3 +47,4 @@ Miscellaneous
 - Allow additional link flags to be passed via USER_LDFLAGS (`#313 <https://github.com/CWorthy-ocean/ucla-roms/pull/313>`_)
 - Update release notes finalizer to remove sections with nothing in them (`#319 <https://github.com/CWorthy-ocean/ucla-roms/pull/319>`_)
 - Update release notes updater to handle unbulleted content (`#319 <https://github.com/CWorthy-ocean/ucla-roms/pull/319>`_)
+- Passive tracers are expected to be named passive_tracer1, passive_tracer2, etc.   (Will be different for the CDR tracers) (`#314 <https://github.com/CWorthy-ocean/ucla-roms/pull/314>`_)
