@@ -1,10 +1,8 @@
-.. _unreleased:
+.. _0.4.0:
 
-Unreleased
+0.4.0
 ----------
 
-.. note::
-    This release is currently in development
 
 Breaking Changes
 ~~~~~~~~~~~~~~~~
@@ -34,11 +32,6 @@ Bug Fixes
 - Move pio_initialize_extract from the per-write loop in do_extract_data into init_extract_data, so PIO extract decompositions are built once per object.
 - Avoids leaking MPI communicators: repeated PIO_initdecomp without PIO_freedecomp was exhausting MPICH’s 2048-communicator limit and aborting with Too many communicators after ~1–2 days of runtime with extract enabled.
 - Write path still sets pio_bnd for pio_gtype; only the decomposition setup was moved.
-
-Improvements
-~~~~~~~~~~~~
-
-- N/A
 
 Miscellaneous
 ~~~~~~~~~~~~~
