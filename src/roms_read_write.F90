@@ -1204,6 +1204,12 @@ contains
           pio_frcfile = frcfiles(ifile)
           pio_file_is_open = 1
         endif
+      else
+        ! Non-distributed forcing (pio_gtype=='----', e.g. river fluxes) is read
+        ! serially through the plain netCDF handle below, exactly as in the
+        ! non-PIO build. Open it here so ncid is valid: otherwise ncread hits an
+        ! unopened ncid and fails with NF90 EBADID ("Not a valid ID").
+        ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
       endif
 #else
       ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
@@ -1216,6 +1222,12 @@ contains
       else
         call ncread(ncid,vname,nc%vdata(:,:,it),start=(/1,1,irec/))
       endif
+#ifdef PARALLEL_IO
+      ! The serial (pio_gtype=='----') branch above opened its own ncid; close it.
+      if (pio_gtype == '----') then
+        ierr = nf90_close(ncid)
+      endif
+#endif
       ! add force file info to output nc
 #ifndef PARALLEL_IO
       if (mynode == 0) then
@@ -1336,11 +1348,23 @@ contains
           pio_frcfile = frcfiles(ifile)
           pio_file_is_open = 1
         endif
+      else
+        ! Non-distributed forcing (pio_gtype=='----', e.g. river fluxes) is read
+        ! serially through the plain netCDF handle below, exactly as in the
+        ! non-PIO build. Open it here so ncid is valid: otherwise ncread hits an
+        ! unopened ncid and fails with NF90 EBADID ("Not a valid ID").
+        ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
       endif
 #else
       ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #endif
       call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,:,it),(/1,1,1,irec/))
+#ifdef PARALLEL_IO
+      ! The serial (pio_gtype=='----') branch above opened its own ncid; close it.
+      if (pio_gtype == '----') then
+        ierr = nf90_close(ncid)
+      endif
+#endif
       ! add force file info to output nc
 #ifndef PARALLEL_IO
       if (mynode == 0) then
