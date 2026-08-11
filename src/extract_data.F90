@@ -123,9 +123,9 @@ module extract_data
   real(kind=8)    :: otime=0   ! time since last output
 
   logical, dimension(4) :: child_bnds = .false.
-  logical, dimension(4) :: child_w    = .false.   ! boundary requests vertical velocity w
-  logical, dimension(4) :: child_up   = .false.   ! boundary requests u-pressure-flux up
-  logical, dimension(4) :: child_vp   = .false.   ! boundary requests v-pressure-flux vp
+  logical, dimension(4) :: child_w    = .false.
+  logical, dimension(4) :: child_up   = .false.
+  logical, dimension(4) :: child_vp   = .false.
   integer, dimension(4) :: child_dimsize_t
   integer, dimension(4) :: child_dimsize_u
   integer, dimension(4) :: child_dimsize_v
@@ -537,6 +537,7 @@ contains
         if (findstr(variables,'w'   ) ) obj(iobj)%w    = .True.
         if (findstr(variables,'up'  ) ) obj(iobj)%up   = .True.
         if (findstr(variables,'vp'  ) ) obj(iobj)%vp   = .True.
+        if (findstr(variables,'bgc'    ) ) obj(iobj)%bgc     = .True.
 
         ! Record which boundaries request w/up/vp, so the PIO define
         ! (create_edata_file) defines exactly what do_extract_data writes.
@@ -557,8 +558,6 @@ contains
           if (obj(iobj)%up) child_up(4) = .true.
           if (obj(iobj)%vp) child_vp(4) = .true.
         endif
-
-        if (findstr(variables,'bgc'    ) ) obj(iobj)%bgc     = .True.
 
         if (obj(iobj)%up.and. .not.calc_pflx) then
           call error_log%raise_global(&
@@ -1352,21 +1351,18 @@ contains
         ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
 
 
-        ! vertical velocity (rho-grid, 3D: line x s_rho x time) -- matches w write
         if (child_w(bnd)) then
           dimid3d = (/child_dimnums_t(bnd), dimid5, dimid0/)
           ierr=nf90_def_var(ncid,'w_' // trim(child_bnd_name(bnd)),nf90_double,dimid3d,varid)
           ierr = nf90_put_att(ncid,varid,'long_name',"vertical velocity")
           ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
         endif
-        ! u-momentum pressure flux (u-grid, 2D: line x time) -- matches up write
         if (child_up(bnd)) then
           dimid2d = (/child_dimnums_u(bnd), dimid0/)
           ierr=nf90_def_var(ncid,'up_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
           ierr = nf90_put_att(ncid,varid,'long_name',"u-momentum pressure flux")
           ierr = nf90_put_att(ncid,varid,'units',"meter3 second-2")
         endif
-        ! v-momentum pressure flux (v-grid, 2D: line x time) -- matches vp write
         if (child_vp(bnd)) then
           dimid2d = (/child_dimnums_v(bnd), dimid0/)
           ierr=nf90_def_var(ncid,'vp_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
