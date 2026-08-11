@@ -259,6 +259,7 @@ contains
     character(len=30) :: preamb
     integer(kind=4) :: i,np,ierr,lpre
     real(kind=8),dimension(:),allocatable :: angp ! grid angle
+    character(len=1) :: pio_stag
     character(len=17) :: sr_name = "init_extract_data"
 
     call read_extraction_objects
@@ -376,6 +377,34 @@ contains
       call MPI_Barrier(ocean_grid_comm, ierr)
 #endif
     enddo
+
+    ! Build PIO extract decompositions once. Re-initing every write
+    ! leaks MPI communicators (MPICH 2048 limit).
+#ifdef PARALLEL_IO
+    do i = 1,nobj
+      if (obj(i)%bnd /= ' ') then
+        if (obj(i)%bnd == '_south' .or. obj(i)%bnd == '_north') then
+          if (obj(i)%dsize == LLm_chd-1) then
+            pio_stag = 'u'
+          else if (obj(i)%scalar) then
+            pio_stag = 'r'
+          else
+            pio_stag = 'v'
+          endif
+        else if (obj(i)%bnd == '_east' .or. obj(i)%bnd == '_west') then
+          if (obj(i)%dsize == MMm_chd-1) then
+            pio_stag = 'v'
+          else if (obj(i)%scalar) then
+            pio_stag = 'r'
+          else
+            pio_stag = 'u'
+          endif
+        endif
+        call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,&
+        &LLm_chd,MMm_chd,N_chd,obj(i)%bnd,pio_stag)
+      endif
+    enddo
+#endif
 
   end subroutine init_extract_data !]
 ! ----------------------------------------------------------------------
@@ -717,7 +746,6 @@ contains
     character(len=20)              :: tname
     character(len=40) :: oname
     character(len=1) :: pio_bnd
-    character(len=1) :: pio_stag
     integer(kind=4) :: lpre
     real(kind=8), dimension(:,:),pointer :: vi
     real(kind=8), dimension(:,:),pointer :: ui
@@ -780,30 +808,6 @@ contains
           pio_bnd = 'e'
         else if (obj(i)%bnd == '_west') then
           pio_bnd = 'w'
-        endif
-
-        if (obj(i)%bnd == '_south' .or. obj(i)%bnd == '_north') then
-          if (obj(i)%dsize == LLm_chd-1) then
-            pio_stag = 'u'
-          else if (obj(i)%scalar) then
-            pio_stag = 'r'
-          else
-            pio_stag = 'v'
-          endif
-        else if (obj(i)%bnd == '_east' .or. obj(i)%bnd == '_west') then
-          if (obj(i)%dsize == MMm_chd-1) then
-            pio_stag = 'v'
-          else if (obj(i)%scalar) then
-            pio_stag = 'r'
-          else
-            pio_stag = 'u'
-          endif
-        endif
-
-!    call MPI_Barrier(ocean_grid_comm, ierr)
-        if (obj(i)%bnd /= ' ') then
-          call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,&
-          &LLm_chd,MMm_chd,N_chd,obj(i)%bnd,pio_stag)
         endif
 #endif
 
