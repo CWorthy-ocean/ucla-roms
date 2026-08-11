@@ -23,7 +23,7 @@ module cdr_output
       use nc_read_write, only: nccreate, ncwrite
       use netcdf, only:&
      &     nf90_noerr, nf90_write, nf90_double, nf90_open,&
-     &     nf90_put_att, nf90_close
+     &     nf90_put_att, nf90_close, nf90_redef, nf90_enddef
       use scalars, only: iic, knew, nnew, tdays, time, dt
       use ocean_vars, only: zeta, hz
       use error_handling_mod, only: error_log
@@ -496,6 +496,27 @@ contains
          endif
       enddo
 
+      ! idx_bgc_diag_2d/3d map onto the *write-selected* diagnostic arrays
+      ! (bgc_diag_2d/3d), which are only sized/populated for diagnostics
+      ! listed in `marbl_diagnostics_to_write` (or all of them, if that list
+      ! is left empty). CDR output unconditionally needs the diagnostics
+      ! below for calc_average/wrt_cdr_output; a missing one leaves its
+      ! *_idiag index at 0, which previously segfaulted this module in
+      ! calc_average() on the first timestep instead of erroring here.
+      if (iFG_idiag<=0 .or. iFG_alt_idiag<=0 .or. ipCO2SURF_idiag<=0 .or.&
+     &    ipCO2SURF_ALT_CO2_idiag<=0 .or. izsatarag_idiag<=0 .or.&
+     &    izsatcalc_idiag<=0 .or. iCO3_idiag<=0 .or. iCO3_ALT_CO2_idiag<=0 .or.&
+     &    ico3_sat_arag_idiag<=0 .or. ico3_sat_calc_idiag<=0 .or.&
+     &    iPH<=0 .or. iPH_alt<=0) then
+        call error_log%raise_global(&
+     &    context=module_name//"/"//sr_name,&
+     &    info="CDR output requires FG_CO2, FG_ALT_CO2, pCO2SURF, "//&
+     &    "pCO2SURF_ALT_CO2, zsatarag, zsatcalc, CO3, CO3_ALT_CO2, "//&
+     &    "co3_sat_arag, co3_sat_calc, MARBL_PH_3D, and MARBL_PH_3D_ALT_CO2 "//&
+     &    "to be present in marbl_diagnostics_to_write (or leave that "//&
+     &    "namelist entry empty to write all diagnostics)")
+      endif
+      call error_log%abort_check()
 
     if (cdr_source) then
       allocate(ALK_source(GLOBAL_2D_ARRAY,1:nz) )
@@ -899,7 +920,9 @@ contains
       if (mynode == 0) then
         call create_file('_cdr',fname, nonode=.true.)
         ierr=nf90_open(fname,nf90_write,ncid)
+        ierr=nf90_redef(ncid)
         call create_cdr_output_variables(ncid)
+        ierr=nf90_enddef(ncid)
         ierr = nf90_close(ncid)
       endif
       call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
@@ -1027,8 +1050,8 @@ contains
       call ncwrite(ncid,'pH',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'pH_ALT_CO2',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH_alt),(/1,1,1,record/),.true.)
       pio_gtype = '2Drw'
-      call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG),(/1,1,record/),.true.)
-      call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt),(/1,1,record/),.true.)
+      call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_idiag),(/1,1,record/),.true.)
+      call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt_idiag),(/1,1,record/),.true.)
       call ncwrite(ncid,'int_z_ALK',int_z_ALK_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
       call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
       call ncwrite(ncid,'int_z_DIC',int_z_DIC_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
@@ -1068,7 +1091,9 @@ contains
     if (record==nrpf_cdr) then
       call create_file('_cdr',fname)
       ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_redef(ncid)
       call create_cdr_output_variables(ncid)
+      ierr=nf90_enddef(ncid)
       ierr = nf90_close(ncid)
       record = 0
     endif
@@ -1175,8 +1200,8 @@ contains
       call ncwrite(ncid,'hDIC_ALT_CO2',hDIC_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'pH',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH),(/1,1,1,record/))
       call ncwrite(ncid,'pH_ALT_CO2',marbl_saved_state_3d(i0:i1,j0:j1,:,iPH_alt),(/1,1,1,record/))
-      call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG),(/1,1,record/))
-      call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt),(/1,1,record/))
+      call ncwrite(ncid,'FG_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_idiag),(/1,1,record/))
+      call ncwrite(ncid,'FG_ALT_CO2'  ,bgc_diag_2d(i0:i1,j0:j1,iFG_alt_idiag),(/1,1,record/))
       call ncwrite(ncid,'int_z_ALK',int_z_ALK_tmp(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'int_z_ALK_ALT_CO2',int_z_ALK_alt_tmp(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'int_z_DIC',int_z_DIC_tmp(i0:i1,j0:j1),(/1,1,record/))
