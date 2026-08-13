@@ -6,8 +6,10 @@ name: Containerized CI
 # published :latest (the previous behavior).
 #
 # Job graph:
-#   prepare ─┬─ build_gnu ── test_gnu ─┐
-#            └─ build_ifx ── test_ifx ─┴─ cleanup
+#   prepare ─┬─ build_gnu ─┬─ test_gnu ────┐
+#            │             └─ compile_gnu ─┤
+#            └─ build_ifx ─┬─ test_ifx ────┤
+#                          └─ compile_ifx ─┴─ cleanup
 #
 # prepare decides which images to (re)build and resolves the exact image ref
 # each test job should pull. build_* only run when their Containerfile changed
@@ -113,9 +115,10 @@ jobs:
             fi
             case "$changed" in *Containerfile_gnu*) build_gnu=true ;; esac
             case "$changed" in *Containerfile_ifx*) build_ifx=true ;; esac
-            # conda_environment.yml is consumed only by Containerfile_gnu
-            # (micromamba create), so a change to it rebuilds gnu only.
-            case "$changed" in *conda_environment.yml*) build_gnu=true ;; esac
+            # conda_gnu_toolchain.yml is consumed only by Containerfile_gnu;
+            # the shared conda_python_deps.yml is consumed by both images.
+            case "$changed" in *conda_gnu_toolchain.yml*) build_gnu=true ;; esac
+            case "$changed" in *conda_python_deps.yml*) build_gnu=true; build_ifx=true ;; esac
           fi
 
           # 2. Can this run push to GHCR? Fork PRs get a read-only token.
@@ -275,6 +278,113 @@ jobs:
         pytest -svvv -rfEx . --environ=github_gnu --tolerate-hash-mismatch
         '
 
+  compile_gnu:
+    needs: [prepare, build_gnu]
+    # Compile-only coverage for code paths the pytest suite never builds.
+    # Without this, a gnu-only compile break in such code (e.g. gfortran's
+    # 132-column free-form limit, enforced as an error since GCC 10) surfaces
+    # only in production runs. Same build_gnu gating as test_gnu.
+    #
+    # - PARALLEL_IO: the pytest configs all use per-rank output. The key set
+    #   mirrors the production cson roms-marbl configuration (test_bgc's keys
+    #   plus CDR_FORCING and UPSCALING) with PARALLEL_IO on top, so
+    #   MARBL+CDR+PIO interactions are compiled too.
+    # - DIAGNOSTICS: term-by-term budget output, never enabled by any test.
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.build_gnu.result == 'success' || needs.build_gnu.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.prepare.outputs.gnu_image }}
+    name: compile_gnu
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Environment Variables
+        shell: bash
+        run: |
+          ROMS_ROOT=$(pwd)
+          echo "ROMS_ROOT=$ROMS_ROOT" >> $GITHUB_ENV
+          echo "PATH=./:$PATH:$ROMS_ROOT/Tools-Roms" >> $GITHUB_ENV
+
+      - name: Compile PARALLEL_IO configuration
+        shell: bash
+        run: |
+          micromamba run -n roms-ci bash -c '
+          ci/compile_only.sh /tmp/pio_build \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SALINITY NONLIN_EOS SPLIT_EOS \
+            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
+            CURVGRID SPHERICAL \
+            OBC_WEST OBC_EAST OBC_NORTH OBC_SOUTH \
+            OBC_M2FLATHER OBC_M3ORLANSKI OBC_TORLANSKI \
+            Z_FRC_BRY M2_FRC_BRY M3_FRC_BRY T_FRC_BRY \
+            BULK_FRC SPONGE SPONGE_TUNE PCO2AIR_FORCING \
+            MARBL MARBL_DIAGS NOX_FORCING NHY_FORCING \
+            TIDES SFLX_CORR CFLX_CORR \
+            CDR_FORCING UPSCALING \
+            PARALLEL_IO
+          '
+
+      - name: Compile DIAGNOSTICS configuration
+        shell: bash
+        run: |
+          micromamba run -n roms-ci bash -c '
+          ci/compile_only.sh /tmp/diag_build \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SALINITY NONLIN_EOS SPLIT_EOS \
+            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
+            CURVGRID SPHERICAL \
+            OBC_WEST OBC_EAST OBC_NORTH OBC_SOUTH \
+            OBC_M2FLATHER OBC_M3ORLANSKI OBC_TORLANSKI \
+            Z_FRC_BRY M2_FRC_BRY M3_FRC_BRY T_FRC_BRY \
+            DIAGNOSTICS
+          '
+
+  compile_ifx:
+    needs: [prepare, build_ifx]
+    # ifx counterpart of compile_gnu's PARALLEL_IO check: the same production
+    # key set compiled with COMPILER=intel against the ifx image's from-source
+    # PnetCDF + ParallelIO fork. Same build_ifx gating as test_ifx.
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.build_ifx.result == 'success' || needs.build_ifx.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.prepare.outputs.ifx_image }}
+    name: compile_ifx
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Environment Variables
+        shell: bash
+        run: |
+          ROMS_ROOT=$(pwd)
+          echo "ROMS_ROOT=$ROMS_ROOT" >> $GITHUB_ENV
+          echo "PATH=./:$PATH:$ROMS_ROOT/Tools-Roms" >> $GITHUB_ENV
+
+      - name: Compile PARALLEL_IO configuration
+        shell: bash
+        run: |
+          export COMPILER=intel
+          ci/compile_only.sh /tmp/pio_build \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SALINITY NONLIN_EOS SPLIT_EOS \
+            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
+            CURVGRID SPHERICAL \
+            OBC_WEST OBC_EAST OBC_NORTH OBC_SOUTH \
+            OBC_M2FLATHER OBC_M3ORLANSKI OBC_TORLANSKI \
+            Z_FRC_BRY M2_FRC_BRY M3_FRC_BRY T_FRC_BRY \
+            BULK_FRC SPONGE SPONGE_TUNE PCO2AIR_FORCING \
+            MARBL MARBL_DIAGS NOX_FORCING NHY_FORCING \
+            TIDES SFLX_CORR CFLX_CORR \
+            CDR_FORCING UPSCALING \
+            PARALLEL_IO
+
   test_ifx:
     needs: [prepare, build_ifx]
     # See test_gnu: a failed build_ifx skips this job; gate merges via build_ifx
@@ -321,7 +431,7 @@ jobs:
   cleanup:
     # Delete the throwaway :ci-<run_id> tags pushed for a PR. Best-effort: a
     # failure here never fails the run.
-    needs: [prepare, build_gnu, build_ifx, test_gnu, test_ifx]
+    needs: [prepare, build_gnu, build_ifx, test_gnu, compile_gnu, test_ifx, compile_ifx]
     if: ${{ always() && github.event_name == 'pull_request' && needs.prepare.outputs.can_push == 'true' }}
     runs-on: ubuntu-latest
     permissions:

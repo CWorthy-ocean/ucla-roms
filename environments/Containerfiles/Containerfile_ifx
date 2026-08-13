@@ -8,7 +8,7 @@ RUN apt update && apt install -y \
     libcurl4-openssl-dev zlib1g-dev wget \
     python3-numpy python-is-python3\
     python3.12-venv python3-pip \
-    git rsync cmake\
+    git rsync cmake bzip2 pkg-config\
     && rm -rf /var/lib/apt/lists/*
 
 # Set base install directory
@@ -163,6 +163,50 @@ ENV PATH=$NETCDF_FORTRAN_HOME/bin:$PATH \
     CPATH=$NETCDF_FORTRAN_HOME/include:$CPATH \
     LIBRARY_PATH=$NETCDF_FORTRAN_HOME/lib:$LIBRARY_PATH
 
+# Install PnetCDF (required to build ParallelIO below; ROMS also links
+# -lpnetcdf whenever PARALLEL_IO is defined in cppdefs.opt)
+WORKDIR $INSTALL_BASE_DIR
+ENV PNETCDF_HOME=$INSTALL_BASE_DIR/pnetcdf-1.14.0-install
+RUN bash -c "source /opt/intel/oneapi/setvars.sh \
+    && wget -q https://parallel-netcdf.github.io/Release/pnetcdf-1.14.0.tar.gz \
+    && tar xf pnetcdf-1.14.0.tar.gz \
+    && rm pnetcdf-1.14.0.tar.gz \
+    && cd pnetcdf-1.14.0 \
+    && ./configure --prefix=$PNETCDF_HOME \
+       MPICC=mpicc MPICXX=mpicxx MPIF77=mpifort MPIF90=mpifort \
+       CFLAGS='-fPIC -O2' FCFLAGS='-fPIC -O2' FFLAGS='-fPIC -O2' \
+    && make -j$(nproc) && make install"
+RUN rm -rf $INSTALL_BASE_DIR/pnetcdf-1.14.0
+# PNETCDFHOME is the name ROMS' Makedefs.inc expects
+ENV PNETCDFHOME=$PNETCDF_HOME \
+    PATH=$PNETCDF_HOME/bin:$PATH \
+    CPATH=$PNETCDF_HOME/include:$CPATH \
+    LIBRARY_PATH=$PNETCDF_HOME/lib:$LIBRARY_PATH
+
+# Install ParallelIO (PIO), needed when ROMS is compiled with PARALLEL_IO.
+# The CWorthy-ocean fork is required: src/pio_roms.F90 passes force_nofill= to
+# PIO_initdecomp, which stock NCAR ParallelIO (through pio2_7_0) does not
+# accept. Built in-tree in a directory literally named `build` with no install
+# step because ROMS' Makedefs.inc links $(PIO_ROOT)/build/src/{clib,flib}
+# directly. Mirrors the recipe in Containerfile_gnu / C-Star's
+# PIOExternalCodeBase.
+ENV PIO_ROOT=$INSTALL_BASE_DIR/ParallelIO
+RUN bash -c "source /opt/intel/oneapi/setvars.sh \
+    && git clone --depth 1 --branch 2.7.1-fork https://github.com/CWorthy-ocean/ParallelIO.git $PIO_ROOT \
+    && cd $PIO_ROOT \
+    && PKG_CONFIG_PATH=$NETCDF_HOME/lib/pkgconfig:$PNETCDF_HOME/lib/pkgconfig:$PKG_CONFIG_PATH \
+       cmake -S . -B build \
+        -DCMAKE_C_COMPILER=mpicc \
+        -DCMAKE_Fortran_COMPILER=mpif90 \
+        -DCMAKE_PREFIX_PATH='$NETCDF_HOME;$PNETCDF_HOME' \
+        -DHAVE_PAR_FILTERS=FALSE \
+        -DPIO_ENABLE_TIMING=OFF \
+        -DPIO_ENABLE_TESTS=OFF \
+        -DPIO_ENABLE_EXAMPLES=OFF \
+        -DPIO_ENABLE_DOC=OFF \
+        -DBUILD_SHARED_LIBS=OFF \
+    && cmake --build build --parallel 4"
+
 # Install Score-P
 WORKDIR $INSTALL_BASE_DIR
 RUN bash -c "source /opt/intel/oneapi/setvars.sh \
@@ -194,10 +238,16 @@ RUN bash -c "source /opt/intel/oneapi/setvars.sh \
      && sed -i -e \"s/-fp-model source/-fp-model precise/g\" Makefile \
      && make intel USEMPI=TRUE"
 
-RUN python3 -m venv /opt/venv
-ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir roms-tools==4.0.0 pytest==8 f90nml==1.4 h5py h5netcdf
+# Python tooling via micromamba, consuming the same conda_python_deps.yml as
+# the gnu image (replaces the former pip venv, whose pins had drifted from the
+# gnu environment's). Only the env's bin dir goes on PATH — no library paths —
+# so the conda python stack cannot leak into the from-source Fortran builds
+# above.
+RUN wget -qO- https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj -C /usr/local bin/micromamba
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+COPY conda_python_deps.yml /tmp/conda_python_deps.yml
+RUN micromamba create -y -n roms-ci -f /tmp/conda_python_deps.yml
+ENV PATH=/opt/conda/envs/roms-ci/bin:$PATH
 
 # Add a non-root user so OpenMPI doesn't warn:
 RUN useradd -ms /bin/bash container_user
@@ -208,5 +258,5 @@ WORKDIR /home/container_user
 ENV OMPI_MCA_rmaps_base_oversubscribe=true
 
 # Container metadata:
-LABEL org.opencontainers.image.description="Intel OneAPI-based ROMS build env with ifx 2025.0.1, OpenMPI 5.0.2, HDF5 1.14.6, NetCDF-C 4.9.3, NetCDF-Fortran 4.6.1, MARBL 0.45.0, and Score-P 9.4.0"
+LABEL org.opencontainers.image.description="Intel OneAPI-based ROMS build env with ifx 2025.0.1, OpenMPI 5.0.2, HDF5 1.14.6, NetCDF-C 4.9.3, NetCDF-Fortran 4.6.1, PnetCDF 1.14.0, ParallelIO 2.7.1-fork, MARBL 0.45.0, and Score-P 9.4.0"
 COPY Containerfile_ifx /image-metadata/Containerfile
