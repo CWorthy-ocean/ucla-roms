@@ -1,0 +1,11 @@
+.. _0.4.2:
+
+0.4.2
+----------
+
+
+Bug Fixes
+~~~~~~~~~
+
+
+- Fix lines that are too long causing a compile error when using PIO (`#330 <https://github.com/CWorthy-ocean/ucla-roms/pull/330>`_)
