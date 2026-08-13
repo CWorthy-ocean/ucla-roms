@@ -483,7 +483,7 @@ contains
     do itrc=iTandS+nt_passive+1,iTandS+nt_passive+2*nt_cdr_oae,2
       write(passive_tracer_num, '(I0)') (itrc-iTandS-nt_passive)
       t_vname(itrc)='CDR_OAE_ALK' // TRIM(passive_tracer_num)
-      t_tname(itrc)='CDR_OAE_ALK' // TRIM(passive_tracer_num) // '_time'
+      t_tname(itrc)='CDR_time'
       t_units(itrc)='mMol m-3'
       t_lname(itrc)='CDR OAE ALK tracer' // TRIM(passive_tracer_num)
       wrt_t(itrc) = .false.
@@ -491,9 +491,8 @@ contains
       t_ana_frc(itrc)=2
       itot = itot+1
 
-      write(passive_tracer_num, '(I0)') (itrc+1-iTandS-nt_passive)
       t_vname(itrc+1)='CDR_OAE_DIC' // TRIM(passive_tracer_num)
-      t_tname(itrc+1)='CDR_OAE_DIC' // TRIM(passive_tracer_num) // '_time'
+      t_tname(itrc+1)='CDR_time'
       t_units(itrc+1)='mMol m-3'
       t_lname(itrc+1)='CDR OAE DIC tracer' // TRIM(passive_tracer_num)
       wrt_t(itrc+1) = .false.
@@ -507,7 +506,7 @@ contains
     do itrc=iTandS+nt_passive+2*nt_cdr_oae+1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
       write(passive_tracer_num, '(I0)') (itrc-iTandS-nt_passive-2*nt_cdr_oae)
       t_vname(itrc)='CDR_DOR_DIC' // TRIM(passive_tracer_num)
-      t_tname(itrc)='CDR_DOR_DIC' // TRIM(passive_tracer_num) // '_time'
+      t_tname(itrc)='CDR_time'
       t_units(itrc)='mMol m-3'
       t_lname(itrc)='CDR DOR DIC tracer' // TRIM(passive_tracer_num)
       wrt_t(itrc) = .false.
