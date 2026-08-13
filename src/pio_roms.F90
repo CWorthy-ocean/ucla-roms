@@ -1402,8 +1402,10 @@ contains
         pio_count_2Chdnr_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnr_w, pio_start_1Chdnr_w, pio_count_1Chdnr_w, pio_desc_1Chdnr_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnr_w, pio_start_2Chdnr_w, pio_count_2Chdnr_w, pio_desc_2Chdnr_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnr_w, pio_start_1Chdnr_w, pio_count_1Chdnr_w,&
+      &pio_desc_1Chdnr_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnr_w, pio_start_2Chdnr_w, pio_count_2Chdnr_w,&
+      &pio_desc_2Chdnr_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'u') then
       pio_start_1Chdnu_w(1) = start
@@ -1417,8 +1419,10 @@ contains
         pio_count_2Chdnu_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnu_w, pio_start_1Chdnu_w, pio_count_1Chdnu_w, pio_desc_1Chdnu_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnu_w, pio_start_2Chdnu_w, pio_count_2Chdnu_w, pio_desc_2Chdnu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnu_w, pio_start_1Chdnu_w, pio_count_1Chdnu_w,&
+      &pio_desc_1Chdnu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnu_w, pio_start_2Chdnu_w, pio_count_2Chdnu_w,&
+      &pio_desc_2Chdnu_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'v') then
       pio_start_1Chdnv_w(1) = start
@@ -1432,8 +1436,10 @@ contains
         pio_count_2Chdnv_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnv_w, pio_start_1Chdnv_w, pio_count_1Chdnv_w, pio_desc_1Chdnv_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnv_w, pio_start_2Chdnv_w, pio_count_2Chdnv_w, pio_desc_2Chdnv_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnv_w, pio_start_1Chdnv_w, pio_count_1Chdnv_w,&
+      &pio_desc_1Chdnv_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnv_w, pio_start_2Chdnv_w, pio_count_2Chdnv_w,&
+      &pio_desc_2Chdnv_w, force_nofill=pio_force_nofill)
     endif
 
   endif ! north
@@ -1451,8 +1457,10 @@ contains
         pio_count_2Chdsr_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsr_w, pio_start_1Chdsr_w, pio_count_1Chdsr_w, pio_desc_1Chdsr_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsr_w, pio_start_2Chdsr_w, pio_count_2Chdsr_w, pio_desc_2Chdsr_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsr_w, pio_start_1Chdsr_w, pio_count_1Chdsr_w,&
+      &pio_desc_1Chdsr_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsr_w, pio_start_2Chdsr_w, pio_count_2Chdsr_w,&
+      &pio_desc_2Chdsr_w, force_nofill=pio_force_nofill)
     else if (stag == 'u') then
       pio_start_1Chdsu_w(1) = start
       pio_start_2Chdsu_w(1) = start
@@ -1465,8 +1473,10 @@ contains
         pio_count_2Chdsu_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsu_w, pio_start_1Chdsu_w, pio_count_1Chdsu_w, pio_desc_1Chdsu_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsu_w, pio_start_2Chdsu_w, pio_count_2Chdsu_w, pio_desc_2Chdsu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsu_w, pio_start_1Chdsu_w, pio_count_1Chdsu_w,&
+      &pio_desc_1Chdsu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsu_w, pio_start_2Chdsu_w, pio_count_2Chdsu_w,&
+      &pio_desc_2Chdsu_w, force_nofill=pio_force_nofill)
     else if (stag == 'v') then
       pio_start_1Chdsv_w(1) = start
       pio_start_2Chdsv_w(1) = start
@@ -1479,8 +1489,10 @@ contains
         pio_count_2Chdsv_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsv_w, pio_start_1Chdsv_w, pio_count_1Chdsv_w, pio_desc_1Chdsv_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsv_w, pio_start_2Chdsv_w, pio_count_2Chdsv_w, pio_desc_2Chdsv_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsv_w, pio_start_1Chdsv_w, pio_count_1Chdsv_w,&
+      &pio_desc_1Chdsv_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsv_w, pio_start_2Chdsv_w, pio_count_2Chdsv_w,&
+      &pio_desc_2Chdsv_w, force_nofill=pio_force_nofill)
     endif
 
   endif ! south
@@ -1498,8 +1510,10 @@ contains
         pio_count_2Chder_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chder_w, pio_start_1Chder_w, pio_count_1Chder_w, pio_desc_1Chder_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chder_w, pio_start_2Chder_w, pio_count_2Chder_w, pio_desc_2Chder_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chder_w, pio_start_1Chder_w, pio_count_1Chder_w,&
+      &pio_desc_1Chder_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chder_w, pio_start_2Chder_w, pio_count_2Chder_w,&
+      &pio_desc_2Chder_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'u') then
       pio_start_1Chdeu_w(1) = start
@@ -1513,8 +1527,10 @@ contains
         pio_count_2Chdeu_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdeu_w, pio_start_1Chdeu_w, pio_count_1Chdeu_w, pio_desc_1Chdeu_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdeu_w, pio_start_2Chdeu_w, pio_count_2Chdeu_w, pio_desc_2Chdeu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdeu_w, pio_start_1Chdeu_w, pio_count_1Chdeu_w,&
+      &pio_desc_1Chdeu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdeu_w, pio_start_2Chdeu_w, pio_count_2Chdeu_w,&
+      &pio_desc_2Chdeu_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'v') then
       pio_start_1Chdev_w(1) = start
@@ -1528,8 +1544,10 @@ contains
         pio_count_2Chdev_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdev_w, pio_start_1Chdev_w, pio_count_1Chdev_w, pio_desc_1Chdev_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdev_w, pio_start_2Chdev_w, pio_count_2Chdev_w, pio_desc_2Chdev_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdev_w, pio_start_1Chdev_w, pio_count_1Chdev_w,&
+      &pio_desc_1Chdev_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdev_w, pio_start_2Chdev_w, pio_count_2Chdev_w,&
+      &pio_desc_2Chdev_w, force_nofill=pio_force_nofill)
     endif
 
   endif ! east
@@ -1547,8 +1565,10 @@ contains
         pio_count_2Chdwr_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwr_w, pio_start_1Chdwr_w, pio_count_1Chdwr_w, pio_desc_1Chdwr_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwr_w, pio_start_2Chdwr_w, pio_count_2Chdwr_w, pio_desc_2Chdwr_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwr_w, pio_start_1Chdwr_w, pio_count_1Chdwr_w,&
+      &pio_desc_1Chdwr_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwr_w, pio_start_2Chdwr_w, pio_count_2Chdwr_w,&
+      &pio_desc_2Chdwr_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'u') then
       pio_start_1Chdwu_w(1) = start
@@ -1562,8 +1582,10 @@ contains
         pio_count_2Chdwu_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwu_w, pio_start_1Chdwu_w, pio_count_1Chdwu_w, pio_desc_1Chdwu_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwu_w, pio_start_2Chdwu_w, pio_count_2Chdwu_w, pio_desc_2Chdwu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwu_w, pio_start_1Chdwu_w, pio_count_1Chdwu_w,&
+      &pio_desc_1Chdwu_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwu_w, pio_start_2Chdwu_w, pio_count_2Chdwu_w,&
+      &pio_desc_2Chdwu_w, force_nofill=pio_force_nofill)
 
     else if (stag == 'v') then
       pio_start_1Chdwv_w(1) = start
@@ -1577,8 +1599,10 @@ contains
         pio_count_2Chdwv_w(2) = N_chd
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwv_w, pio_start_1Chdwv_w, pio_count_1Chdwv_w, pio_desc_1Chdwv_w, force_nofill=pio_force_nofill)
-      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwv_w, pio_start_2Chdwv_w, pio_count_2Chdwv_w, pio_desc_2Chdwv_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwv_w, pio_start_1Chdwv_w, pio_count_1Chdwv_w,&
+      &pio_desc_1Chdwv_w, force_nofill=pio_force_nofill)
+      call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwv_w, pio_start_2Chdwv_w, pio_count_2Chdwv_w,&
+      &pio_desc_2Chdwv_w, force_nofill=pio_force_nofill)
     endif
 
   endif ! west
