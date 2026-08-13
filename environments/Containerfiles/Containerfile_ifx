@@ -173,7 +173,8 @@ RUN bash -c "source /opt/intel/oneapi/setvars.sh \
     && rm pnetcdf-1.14.0.tar.gz \
     && cd pnetcdf-1.14.0 \
     && ./configure --prefix=$PNETCDF_HOME \
-       MPICC=mpicc MPICXX=mpicxx MPIF77=mpifort MPIF90=mpifort \
+       MPICC=$OPENMPI_HOME/bin/mpicc MPICXX=$OPENMPI_HOME/bin/mpicxx \
+       MPIF77=$OPENMPI_HOME/bin/mpifort MPIF90=$OPENMPI_HOME/bin/mpifort \
        CFLAGS='-fPIC -O2' FCFLAGS='-fPIC -O2' FFLAGS='-fPIC -O2' \
     && make -j$(nproc) && make install"
 RUN rm -rf $INSTALL_BASE_DIR/pnetcdf-1.14.0
@@ -190,15 +191,21 @@ ENV PNETCDFHOME=$PNETCDF_HOME \
 # step because ROMS' Makedefs.inc links $(PIO_ROOT)/build/src/{clib,flib}
 # directly. Mirrors the recipe in Containerfile_gnu / C-Star's
 # PIOExternalCodeBase.
+#
+# PnetCDF and PIO pin OpenMPI's wrappers by absolute path: sourcing
+# setvars.sh puts Intel MPI's mpicc/mpifort first on PATH, but ROMS compiled
+# in this image auto-selects mpifort = OpenMPI (Makedefs.inc MPI_WRAPPER
+# detection), and PIO's .mod files and MPI ABI must match the MPI ROMS uses.
+# (OpenMPI 5 ships only mpifort — the mpif90 alias was removed.)
 ENV PIO_ROOT=$INSTALL_BASE_DIR/ParallelIO
 RUN bash -c "source /opt/intel/oneapi/setvars.sh \
     && git clone --depth 1 --branch 2.7.1-fork https://github.com/CWorthy-ocean/ParallelIO.git $PIO_ROOT \
     && cd $PIO_ROOT \
-    && PKG_CONFIG_PATH=$NETCDF_HOME/lib/pkgconfig:$PNETCDF_HOME/lib/pkgconfig:$PKG_CONFIG_PATH \
+    && PKG_CONFIG_PATH=$NETCDF_HOME/lib/pkgconfig:$NETCDF_FORTRAN_HOME/lib/pkgconfig:$PNETCDF_HOME/lib/pkgconfig:$PKG_CONFIG_PATH \
        cmake -S . -B build \
-        -DCMAKE_C_COMPILER=mpicc \
-        -DCMAKE_Fortran_COMPILER=mpif90 \
-        -DCMAKE_PREFIX_PATH='$NETCDF_HOME;$PNETCDF_HOME' \
+        -DCMAKE_C_COMPILER=$OPENMPI_HOME/bin/mpicc \
+        -DCMAKE_Fortran_COMPILER=$OPENMPI_HOME/bin/mpifort \
+        -DCMAKE_PREFIX_PATH='$NETCDF_HOME;$NETCDF_FORTRAN_HOME;$PNETCDF_HOME' \
         -DHAVE_PAR_FILTERS=FALSE \
         -DPIO_ENABLE_TIMING=OFF \
         -DPIO_ENABLE_TESTS=OFF \
