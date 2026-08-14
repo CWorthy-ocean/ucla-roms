@@ -22,7 +22,7 @@ SHELL ["micromamba", "run", "-n", "roms-ci", "/bin/bash", "-c"]
 CMD ["bash"]
 ENV MPIHOME=/opt/conda/envs/roms-ci \
     NETCDFHOME=/opt/conda/envs/roms-ci \
-    LD_LIBRARY_PATH=/opt/conda/envs/roms-ci/lib:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/opt/conda/envs/roms-ci/lib
 
 # Install Score-P
 WORKDIR /opt/
@@ -55,8 +55,8 @@ WORKDIR /opt/
 RUN rm -rf /opt/scorep-9.4
 ENV PATH=$SCOREP_ROOT/bin:$PATH
 ENV LD_LIBRARY_PATH=$SCOREP_ROOT/lib:$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib:$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib:${LD_LIBRARY_PATH}
-ENV LIBRARY_PATH=$SCOREP_ROOT/lib:$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib:$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib:${LIBRARY_PATH}
-ENV LDFLAGS="-Wl,-rpath,$SCOREP_ROOT/lib -Wl,-rpath,$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib -Wl,-rpath,$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib -Wl,-rpath-link,$SCOREP_ROOT/lib -Wl,-rpath-link,$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib -Wl,-rpath-link,$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib ${LDFLAGS}"
+ENV LIBRARY_PATH=$SCOREP_ROOT/lib:$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib:$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib
+ENV LDFLAGS="-Wl,-rpath,$SCOREP_ROOT/lib -Wl,-rpath,$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib -Wl,-rpath,$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib -Wl,-rpath-link,$SCOREP_ROOT/lib -Wl,-rpath-link,$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib -Wl,-rpath-link,$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib"
 
 # Install MARBL
 ENV MARBL_ROOT=/opt/MARBL
