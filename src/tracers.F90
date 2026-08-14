@@ -435,7 +435,7 @@ contains
     implicit none
 
     ! local
-    integer(kind=4) :: cnt=0, itrc
+    integer(kind=4) :: cnt=0, itrc, ioae
     character(len=8) :: passive_tracer_num
     allocate(t_vname(nt))
     allocate(t_lname(nt))
@@ -480,8 +480,10 @@ contains
       itot = itot+1
     enddo
 
-    do itrc=iTandS+nt_passive+1,iTandS+nt_passive+2*nt_cdr_oae,2
-      write(passive_tracer_num, '(I0)') (itrc-iTandS-nt_passive)
+    ! Number OAE pairs consecutively 1..nt_cdr_oae (ALK_i paired with DIC_i)
+    do ioae=1,nt_cdr_oae
+      itrc = iTandS + nt_passive + 2*(ioae-1) + 1
+      write(passive_tracer_num, '(I0)') ioae
       t_vname(itrc)='CDR_OAE_ALK' // TRIM(passive_tracer_num)
       t_tname(itrc)='CDR_time'
       t_units(itrc)='mMol m-3'
