@@ -26,6 +26,13 @@ repos:
           )
   - repo: local
     hooks:
+      - id: fortran-line-length
+        name: Enforce 132-char limit in free-form Fortran
+        entry: ci/pre-commit/check_line_length.sh
+        language: system
+        files: \.F90$
+  - repo: local
+    hooks:
       - id: block-large-files
         name: Prevent large files from being committed
         entry: ci/pre-commit/block_large_files.sh

@@ -1,0 +1,16 @@
+# Python tooling shared by BOTH CI images (gnu and ifx): the pytest suite and
+# its input-generation dependencies. Compiler/MPI/NetCDF toolchains are
+# per-image — conda_gnu_toolchain.yml for the gnu image, from-source OneAPI
+# builds for the ifx image — so nothing compiled may appear in this file.
+name: roms-ci
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy
+  - xarray
+  - roms-tools>=4.0.0
+  - pytest
+  - f90nml
+  - h5netcdf
+  - h5py

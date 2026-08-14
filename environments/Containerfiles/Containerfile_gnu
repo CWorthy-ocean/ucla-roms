@@ -3,13 +3,17 @@ FROM docker.io/mambaorg/micromamba:1.5.5
 ENV ENV_NAME=roms-ci
 USER root
 RUN apt update && apt install -y \
-    rsync make wget git cpp cmake\
+    rsync make wget git cpp cmake pkg-config\
     && rm -rf /var/lib/apt/lists/*
 
-# Create the environment
-COPY conda_environment.yml /tmp/environment.yml
+# Create the environment: toolchain + the python deps shared with the ifx
+# image. Two steps because micromamba 1.5.5 accepts only one yaml per command;
+# the install step re-solves against the pinned toolchain, so toolchain pins
+# win over anything the python deps would drag in.
+COPY conda_gnu_toolchain.yml conda_python_deps.yml /tmp/
 
-RUN micromamba create -n $ENV_NAME -f /tmp/environment.yml
+RUN micromamba create -n $ENV_NAME -f /tmp/conda_gnu_toolchain.yml \
+    && micromamba install -y -n $ENV_NAME -f /tmp/conda_python_deps.yml
 ENV MAMBA_DOCKERFILE_ACTIVATE=1
 
 # Set the default shell to run inside the environment
@@ -18,7 +22,7 @@ SHELL ["micromamba", "run", "-n", "roms-ci", "/bin/bash", "-c"]
 CMD ["bash"]
 ENV MPIHOME=/opt/conda/envs/roms-ci \
     NETCDFHOME=/opt/conda/envs/roms-ci \
-    LD_LIBRARY_PATH=/opt/conda/envs/roms-ci/lib:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/opt/conda/envs/roms-ci/lib
 
 # Install Score-P
 WORKDIR /opt/
@@ -51,8 +55,8 @@ WORKDIR /opt/
 RUN rm -rf /opt/scorep-9.4
 ENV PATH=$SCOREP_ROOT/bin:$PATH
 ENV LD_LIBRARY_PATH=$SCOREP_ROOT/lib:$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib:$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib:${LD_LIBRARY_PATH}
-ENV LIBRARY_PATH=$SCOREP_ROOT/lib:$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib:$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib:${LIBRARY_PATH}
-ENV LDFLAGS="-Wl,-rpath,$SCOREP_ROOT/lib -Wl,-rpath,$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib -Wl,-rpath,$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib -Wl,-rpath-link,$SCOREP_ROOT/lib -Wl,-rpath-link,$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib -Wl,-rpath-link,$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib ${LDFLAGS}"
+ENV LIBRARY_PATH=$SCOREP_ROOT/lib:$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib:$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib
+ENV LDFLAGS="-Wl,-rpath,$SCOREP_ROOT/lib -Wl,-rpath,$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib -Wl,-rpath,$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib -Wl,-rpath-link,$SCOREP_ROOT/lib -Wl,-rpath-link,$SCOREP_ROOT/lib/scorep/libbfd/2.45/lib -Wl,-rpath-link,$SCOREP_ROOT/lib/scorep/libgotcha/1.0.8/lib"
 
 # Install MARBL
 ENV MARBL_ROOT=/opt/MARBL
@@ -64,6 +68,29 @@ RUN bash -c "wget https://github.com/marbl-ecosys/MARBL/archive/refs/tags/marbl0
 	&& cd $MARBL_ROOT/src \
 	&& make gnu USEMPI=TRUE"
 
+# Install ParallelIO (PIO), needed when ROMS is compiled with PARALLEL_IO.
+# The CWorthy-ocean fork is required: src/pio_roms.F90 passes force_nofill= to
+# PIO_initdecomp, which stock NCAR ParallelIO (through pio2_7_0) does not
+# accept. Built in-tree in a directory literally named `build` with no install
+# step because ROMS' Makedefs.inc links $(PIO_ROOT)/build/src/{clib,flib}
+# directly. The cmake invocation mirrors C-Star's PIOExternalCodeBase.
+ENV PIO_ROOT=/opt/ParallelIO \
+    PNETCDFHOME=/opt/conda/envs/roms-ci
+RUN bash -c "git clone --depth 1 --branch 2.7.1-fork https://github.com/CWorthy-ocean/ParallelIO.git \$PIO_ROOT \
+    && cd \$PIO_ROOT \
+    && PKG_CONFIG_PATH=/opt/conda/envs/roms-ci/lib/pkgconfig:\${PKG_CONFIG_PATH:-} \
+       cmake -S . -B build \
+        -DCMAKE_C_COMPILER=/opt/conda/envs/roms-ci/bin/mpicc \
+        -DCMAKE_Fortran_COMPILER=/opt/conda/envs/roms-ci/bin/mpif90 \
+        -DCMAKE_PREFIX_PATH=/opt/conda/envs/roms-ci \
+        -DHAVE_PAR_FILTERS=FALSE \
+        -DPIO_ENABLE_TIMING=OFF \
+        -DPIO_ENABLE_TESTS=OFF \
+        -DPIO_ENABLE_EXAMPLES=OFF \
+        -DPIO_ENABLE_DOC=OFF \
+        -DBUILD_SHARED_LIBS=OFF \
+    && cmake --build build --parallel 4"
+
 # Container metadata:
-LABEL org.opencontainers.image.description="gfortran-based, conda-managed ROMS build env with MARBL 0.45.0 and Score-P 9.4.0"
+LABEL org.opencontainers.image.description="gfortran-based, conda-managed ROMS build env with MARBL 0.45.0, ParallelIO 2.7.1-fork, and Score-P 9.4.0"
 COPY Containerfile_gnu /image-metadata/Containerfile

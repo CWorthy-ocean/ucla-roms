@@ -46,7 +46,8 @@ High-performance computing systems typically have internal package management sy
 The necessary (GNU) dependencies for ROMS can be installed via conda in an environment created from an included `yaml` file:
 
 ```
-conda env create -f environments/conda_environment.yml --name roms_env
+conda env create -f environments/Containerfiles/conda_gnu_toolchain.yml --name roms_env
+conda env update -f environments/Containerfiles/conda_python_deps.yml --name roms_env
 conda activate roms_env
 ```
 
