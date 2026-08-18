@@ -34,8 +34,8 @@ module upscale_output
   implicit none
   private
 
-  integer(kind=4) :: nrpf_uscl = 48                  ! number of records per output file
-  real(kind=8)    :: output_period_uscl = 100         ! output period in seconds
+  integer(kind=4), public :: nrpf_uscl = 48                  ! number of records per output file
+  real(kind=8), public    :: output_period_uscl = 100         ! output period in seconds
 
   logical, public :: do_upscale
   namelist /UPSCALE_SETTINGS/ nrpf_uscl, output_period_uscl, do_upscale

@@ -39,7 +39,6 @@ module extract_data
   !]
 
 #include "cppdefs.opt"
-  use basic_output, only: wrt_file_rst
   use calc_pflx_mod, only: calc_pflx
   use namelist_open_mod, only: open_namelist_file
   use grid, only: angler, rmask, umask, vmask
@@ -68,7 +67,7 @@ module extract_data
 #ifdef SALINITY
   &indxs,&
 #endif
-  &vn=>vname, output_period_rst
+  &vn=>vname
   use vertical_remapping, only: remap_src_to_grid
   use roms_mpi, only: exchange_xxx
   use error_handling_mod, only: error_log
@@ -202,38 +201,9 @@ module extract_data
     module procedure  interpolate_2D, interpolate_3D
   end interface interpolate
 
-  public do_extract_data, extract_data_precheck, read_nml_extract
+  public do_extract_data, read_nml_extract
 contains
-!     ----------------------------------------------------------------------
-  subroutine extract_data_precheck
-
-    implicit none
-
-    character(len=21) :: sr_name = "extract_data_precheck"
-    character(len=1024) :: error_info
-    real(kind=8) :: extract_newfile_freq
-
-
-    if (wrt_file_rst .and. do_extract) then
-      extract_newfile_freq = nrpf_extract * output_period_extract
-
-      if (mod(output_period_rst,extract_newfile_freq) /= 0) then
-        write(error_info,*) "Extract data frequency = ", extract_newfile_freq,&
-        &". Restart freuency = ", output_period_rst, ". The frequency of",&
-        &" writing the extract_data file must evenly divide the restart ",&
-        &"frequency (this prevents writing partial extract_data files)."
-        call error_log%raise_global(&
-        &context=module_name//"/"//sr_name,&
-        &info=error_info)
-        call error_log%abort_check()
-      endif
-
-    endif
-
-  end subroutine extract_data_precheck
-
-
-  subroutine read_nml_extract
+!     ----------------------------------------------------------------------  subroutine read_nml_extract
 !     Read the "EXTRACT_DATA_SETTINGS" section of the namelist file
 
     integer(kind=4) ::  namelist_unit, ios

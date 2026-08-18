@@ -31,8 +31,8 @@ module particles
   real(kind=8)    :: exchange_facy = 0.1_8     ! maximum number of particles for transfer in EW
   real(kind=8)    :: exchange_facc = 0.01_8    ! maximum number of particles for transfer in corners
 
-  real(kind=8)    :: output_period = 400
-  integer(kind=4) :: nrpf = 100
+  real(kind=8), public    :: output_period = 400
+  integer(kind=4), public :: nrpf = 100
   real(kind=8)    :: ppm3 = 1e-6          ! target particles per cubic meter
   integer(kind=4) :: pmin = 200 ! minimum of allocated space for particle array
 
