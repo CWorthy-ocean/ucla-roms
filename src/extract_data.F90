@@ -203,7 +203,8 @@ module extract_data
 
   public do_extract_data, read_nml_extract
 contains
-!     ----------------------------------------------------------------------  subroutine read_nml_extract
+!     ----------------------------------------------------------------------
+  subroutine read_nml_extract
 !     Read the "EXTRACT_DATA_SETTINGS" section of the namelist file
 
     integer(kind=4) ::  namelist_unit, ios
