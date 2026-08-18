@@ -15,7 +15,6 @@ module pio_roms
   use pio, only : PIO_setdebuglevel
   use pio_nf, only : PIO_inq_varid, PIO_inq_dimid
   use pionfatt_mod, only : put_att_desc_text
-  use mpi, only: mpi_comm_world
   use mpi_f08, only: mpi_character, mpi_wtime
   use param, only: LLm, MMm, nz, ocean_grid_comm, nt, mynode
   use timers, only: tstart
@@ -1215,7 +1214,7 @@ contains
     endif
 
     call PIO_init(pio_myRank,&       ! MPI rank
-    &MPI_COMM_WORLD,&             ! MPI communicator
+    &ocean_grid_comm%mpi_val,&    ! MPI communicator (may be a split comm)
     &pio_niotasks,&              ! Number of iotasks (ntasks/stride)
     &pio_numAggregator,&         ! number of aggregators to use
     &pio_stride,&                ! stride
