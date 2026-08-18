@@ -88,6 +88,9 @@ contains
     use utils_mod, only: lenstr
     use param, only: NP_XI, NP_ETA, LLm, MMm
     use dimensions, only: npx, npy, gnx, gny
+#ifdef MPI_MASKING
+    use mpi_masking_mod, only: build_mpi_masking_map, get_mpi_masking_topology
+#endif
     implicit none
     integer(kind=4) :: ierr,ncid
     integer(kind=4),dimension(8) :: neighbors
@@ -114,6 +117,16 @@ contains
     if (analytical_grid) then
       nnodes = np_xi*np_eta
       new_part = .false.
+#ifdef MPI_MASKING
+    else
+      ! Runtime tiling: neighbors / partition / subdompos from roms_part logic
+      new_part = .true.
+      call build_mpi_masking_map(npx, npy)
+      call get_mpi_masking_topology(mynode, neighbors, subdompos, nnodes)
+      if (mynode.eq.0) then
+        print *,'MPI_MASKING :: runtime neighbors for rank 0', neighbors
+      endif
+#else
     else
       ! Check in gridfile to check if mpi masking is present
       ierr=nf90_open(grdname_tile,nf90_nowrite,ncid)
@@ -145,6 +158,7 @@ contains
         nnodes = np_xi*np_eta
       endif
       if (grid_tile_open) ierr=nf90_close(ncid)
+#endif
     endif
 
 

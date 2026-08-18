@@ -13,6 +13,9 @@ program main              ! Open MP version of ROMS driver
   use roms_mpi, only: mpi_setup
   use init_scalars_mod, only: init_scalars
   use namelist_read_mod, only: read_namelists
+#ifdef MPI_MASKING
+  use mpi_masking_mod, only: find_optimal_tiling
+#endif
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_initialize, pio_myRank, pio_ntasks
 #endif
@@ -43,6 +46,9 @@ program main              ! Open MP version of ROMS driver
 #ifdef MPI
 !     Git hash
   mpi_master_only write(*,'(/1x,2A)') "Git hash: ", git_hash
+#ifdef MPI_MASKING
+  call find_optimal_tiling
+#endif
   call mpi_setup
 
 #ifdef PARALLEL_IO

@@ -101,6 +101,13 @@
 ! Usage notes: The magnitude is set under the header "v_sponge" in the runtime .in file
 #define SPONGE
 
+! Choose MPI tiling at runtime from the land mask (skip fully-masked tiles).
+! Usage notes: Requires MPI and PARALLEL_IO (joined grid file). Launch with at
+! least as many ranks as the selected tiling needs; extra ranks exit after
+! MPI_Comm_split. NP_XI and NP_ETA from the namelist are overwritten.
+! Neighbors / partition / subdompos are computed at runtime (no partit step).
+#undef MPI_MASKING
+
 !----------------------------------------------------------
 
 ! Analytically prescribe the grid

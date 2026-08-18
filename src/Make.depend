@@ -52,7 +52,8 @@ check_switches_mod.o : check_switches_mod.F90 cppdefs.opt error_handling_mod.o p
 frc_output.o : frc_output.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o param.o dimensions.o nc_read_write.o roms_read_write.o scalars.o marbl_driver.o bulk_frc.o surf_flux.o pio_roms.o compute_tile_bounds.h
 pio_roms.o : pio_roms.opt
 param.o : param.opt
-roms_mpi.o : roms_mpi.F90 cppdefs.opt param.o dimensions.o error_handling_mod.o pio_roms.o insert_node_mod.o utils_mod.o
+mpi_masking_mod.o : mpi_masking_mod.F90 cppdefs.opt param.o dimensions.o error_handling_mod.o
+roms_mpi.o : roms_mpi.F90 cppdefs.opt param.o dimensions.o error_handling_mod.o pio_roms.o insert_node_mod.o utils_mod.o mpi_masking_mod.o
 t3dmix_mod.o : t3dmix_mod.F90 cppdefs.opt param.o private_scratch.o grid.o roms_mpi.o dimensions.o mixing.o ocean_vars.o scalars.o tracers.o diagnostics.o
 mess_buffers.o : mess_buffers.F90 cppdefs.opt param.o scalars.o
 bgc_io.o : bgc_io.F90 cppdefs.opt param.o tracers.o marbl_driver.o bgc_shared_vars.o nc_read_write.o roms_read_write.o scalars.o dimensions.o error_handling_mod.o pio_roms.o bgc_forces.o compute_tile_bounds.h
@@ -70,7 +71,7 @@ pipe_frc.o : pipe_frc.F90 cppdefs.opt namelist_open_mod.o dimensions.o roms_read
 bgc_shared_vars.o : bgc_shared_vars.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o param.o roms_read_write.o bgc_forces.o tracers.o bec2_vars.o marbl_driver.o BEC_2Ddiagnostics.h BEC_3Ddiagnostics.h
 set_scoord_mod.o : set_scoord_mod.F90 cppdefs.opt param.o comm_vars.o scoord.o scalars.o
 nc_read_write.o : nc_read_write.F90 cppdefs.opt error_handling_mod.o pio_roms.o param.o
-main.o : main.F90 cppdefs.opt add_git_hash_mod.o param.o check_switches_mod.o tracers.o timers.o roms_mpi.o init_scalars_mod.o namelist_read_mod.o pio_roms.o basic_output.o scalars.o error_handling_mod.o upscale_output.o ocean_vars.o diag_mod.o particles.o random_output.o cdr_output.o frc_output.o analytical.o get_init_mod.o grid_stiffness_mod.o diagnostics.o bgc_io.o bec2_params.o grid.o roms_read_write.o sponge_tune.o precheck.o calc_pflx_mod.o lmd_swr_frac_mod.o omega_mod.o rho_eos_mod.o set_depth_mod.o set_scoord_mod.o set_nudgcof_mod.o setup_grid_mod.o extract_data.o surf_flux.o marbl_driver.o zslice_output.o boundary.o tides.o pre_step3d_mod.o prsgrd_mod.o t3dmix_mod.o lmd_vmix_mod.o step2d_mod.o step3d_t_mod.o step3d_uv_mod.o visc3d_mod.o
+main.o : main.F90 cppdefs.opt add_git_hash_mod.o param.o check_switches_mod.o tracers.o timers.o roms_mpi.o init_scalars_mod.o namelist_read_mod.o pio_roms.o mpi_masking_mod.o basic_output.o scalars.o error_handling_mod.o upscale_output.o ocean_vars.o diag_mod.o particles.o random_output.o cdr_output.o frc_output.o analytical.o get_init_mod.o grid_stiffness_mod.o diagnostics.o bgc_io.o bec2_params.o grid.o roms_read_write.o sponge_tune.o precheck.o calc_pflx_mod.o lmd_swr_frac_mod.o omega_mod.o rho_eos_mod.o set_depth_mod.o set_scoord_mod.o set_nudgcof_mod.o setup_grid_mod.o extract_data.o surf_flux.o marbl_driver.o zslice_output.o boundary.o tides.o pre_step3d_mod.o prsgrd_mod.o t3dmix_mod.o lmd_vmix_mod.o step2d_mod.o step3d_t_mod.o step3d_uv_mod.o visc3d_mod.o
 t3dbc_mod.o : t3dbc_mod.F90 cppdefs.opt param.o tracers.o boundary.o dimensions.o grid.o ocean_vars.o scalars.o sponge_tune.o
 dimensions.o : dimensions.F90 cppdefs.opt param.o insert_node_mod.o pio_roms.o error_handling_mod.o namelist_open_mod.o utils_mod.o
 w3dbc_mod.o : w3dbc_mod.F90 cppdefs.opt param.o boundary.o grid.o ocean_vars.o scalars.o
