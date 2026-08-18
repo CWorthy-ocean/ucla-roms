@@ -288,7 +288,8 @@ jobs:
     # - PARALLEL_IO: the pytest configs all use per-rank output. The key set
     #   mirrors the production cson roms-marbl configuration (test_bgc's keys
     #   plus CDR_FORCING and UPSCALING) with PARALLEL_IO on top, so
-    #   MARBL+CDR+PIO interactions are compiled too.
+    #   MARBL+CDR+PIO interactions are compiled too. Built once without
+    #   MPI_MASKING and once with it.
     # - DIAGNOSTICS: term-by-term budget output, never enabled by any test.
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_gnu.result == 'success' || needs.build_gnu.result == 'skipped') }}
     runs-on: ubuntu-latest
@@ -328,6 +329,25 @@ jobs:
             PARALLEL_IO
           '
 
+      - name: Compile PARALLEL_IO configuration with MPI_MASKING
+        shell: bash
+        run: |
+          micromamba run -n roms-ci bash -c '
+          ci/compile_only.sh /tmp/pio_masking_build \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SALINITY NONLIN_EOS SPLIT_EOS \
+            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
+            CURVGRID SPHERICAL \
+            OBC_WEST OBC_EAST OBC_NORTH OBC_SOUTH \
+            OBC_M2FLATHER OBC_M3ORLANSKI OBC_TORLANSKI \
+            Z_FRC_BRY M2_FRC_BRY M3_FRC_BRY T_FRC_BRY \
+            BULK_FRC SPONGE SPONGE_TUNE PCO2AIR_FORCING \
+            MARBL MARBL_DIAGS NOX_FORCING NHY_FORCING \
+            TIDES SFLX_CORR CFLX_CORR \
+            CDR_FORCING UPSCALING \
+            PARALLEL_IO MPI_MASKING
+          '
+
       - name: Compile DIAGNOSTICS configuration
         shell: bash
         run: |
@@ -345,9 +365,10 @@ jobs:
 
   compile_ifx:
     needs: [prepare, build_ifx]
-    # ifx counterpart of compile_gnu's PARALLEL_IO check: the same production
+    # ifx counterpart of compile_gnu's PARALLEL_IO checks: the same production
     # key set compiled with COMPILER=intel against the ifx image's from-source
-    # PnetCDF + ParallelIO fork. Same build_ifx gating as test_ifx.
+    # PnetCDF + ParallelIO fork, once without MPI_MASKING and once with it.
+    # Same build_ifx gating as test_ifx.
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_ifx.result == 'success' || needs.build_ifx.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
@@ -384,6 +405,24 @@ jobs:
             TIDES SFLX_CORR CFLX_CORR \
             CDR_FORCING UPSCALING \
             PARALLEL_IO
+
+      - name: Compile PARALLEL_IO configuration with MPI_MASKING
+        shell: bash
+        run: |
+          export COMPILER=intel
+          ci/compile_only.sh /tmp/pio_masking_build \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SALINITY NONLIN_EOS SPLIT_EOS \
+            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
+            CURVGRID SPHERICAL \
+            OBC_WEST OBC_EAST OBC_NORTH OBC_SOUTH \
+            OBC_M2FLATHER OBC_M3ORLANSKI OBC_TORLANSKI \
+            Z_FRC_BRY M2_FRC_BRY M3_FRC_BRY T_FRC_BRY \
+            BULK_FRC SPONGE SPONGE_TUNE PCO2AIR_FORCING \
+            MARBL MARBL_DIAGS NOX_FORCING NHY_FORCING \
+            TIDES SFLX_CORR CFLX_CORR \
+            CDR_FORCING UPSCALING \
+            PARALLEL_IO MPI_MASKING
 
   test_ifx:
     needs: [prepare, build_ifx]
