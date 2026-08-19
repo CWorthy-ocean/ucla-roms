@@ -40,8 +40,8 @@ module cdr_output
 
   private
 
-  real(kind=8)    :: output_period_cdr = 3600 ! in seconds
-  integer(kind=4) :: nrpf_cdr   = 4     ! number of frames per file
+  real(kind=8), public    :: output_period_cdr = 3600 ! in seconds
+  integer(kind=4), public :: nrpf_cdr   = 4     ! number of frames per file
 
   logical, public :: wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
   namelist /CDR_OUTPUT_SETTINGS/ output_period_cdr, nrpf_cdr,&

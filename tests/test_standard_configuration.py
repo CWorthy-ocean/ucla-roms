@@ -59,10 +59,14 @@ def test_exact_restart(standard_configuration,input_dir,tmp_path):
     nml = create_test_namelist_dict(input_dir)
     nml["TIME_STEPPING"]["dt"] = 40
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
+    nml["BASIC_OUTPUT_SETTINGS"]["nrpf_his"] = 1
     nml["BASIC_OUTPUT_SETTINGS"]["wrt_file_rst"] = True
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_rst"] = 400
     nml["BASIC_OUTPUT_SETTINGS"]["nrpf_rst"] = 2
     nml["BGC_SETTINGS"]["output_period_bgc_his"] = 400
+    nml["BGC_SETTINGS"]["nrpf_bgc_his"] = 1
+    nml["SPONGE_TUNE_SETTINGS"]["output_period_sponge"] = 400
+    nml["SPONGE_TUNE_SETTINGS"]["nrpf_sponge"] = 1
     nml["FORCING_FILES"] = {
         "frcfiles": [
             str(input_dir / "example_input_boundary_forcing.nc"),

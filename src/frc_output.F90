@@ -35,8 +35,8 @@ module frc_output
   implicit none
   private
   character(len=10) :: module_name = "frc_output"
-  real(kind=8) :: output_period_frc = 0._8   ! in seconds
-  integer(kind=4) :: nrpf_frc   = 0          ! number of frames per file
+  real(kind=8), public :: output_period_frc = 0._8   ! in seconds
+  integer(kind=4), public :: nrpf_frc   = 0          ! number of frames per file
   logical, public :: wrt_frc, wrt_frc_avg
   namelist /FRC_OUTPUT_SETTINGS/ output_period_frc, nrpf_frc, wrt_frc, wrt_frc_avg
 

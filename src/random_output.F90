@@ -30,8 +30,8 @@ module random_output
 
   private
 
-  real(kind=8)    :: output_period_random = 3600 ! in seconds
-  integer(kind=4) :: nrpf_random   = 10    ! number of frames per file
+  real(kind=8), public    :: output_period_random = 3600 ! in seconds
+  integer(kind=4), public :: nrpf_random   = 10    ! number of frames per file
   logical,public :: do_random
   namelist /RANDOM_OUTPUT_SETTINGS/ output_period_random, nrpf_random, do_random
 

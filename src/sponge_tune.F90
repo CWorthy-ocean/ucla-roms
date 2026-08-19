@@ -45,8 +45,8 @@ module sponge_tune
 
   real(kind=8)    :: sponge_timescale = 24*3600 ! filtering time scale
 
-  integer(kind=4) :: nrpf_sponge = 7              ! Number of records per file
-  real(kind=8)    :: output_period_sponge = 24*3600 ! time between outputs in seconds
+  integer(kind=4), public :: nrpf_sponge = 7              ! Number of records per file
+  real(kind=8), public    :: output_period_sponge = 24*3600 ! time between outputs in seconds
   logical, public ::&
   &ub_tune, wrt_sponge, sponge_avg
   namelist /SPONGE_TUNE_SETTINGS/ sponge_timescale, nrpf_sponge, output_period_sponge,&

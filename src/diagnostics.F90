@@ -43,8 +43,8 @@ module diagnostics
   private
 
   character(len=11) :: module_name = "diagnostics"
-  integer(kind=4)          :: output_period_diag =  0       ! output period
-  integer(kind=4)          :: nrpf_diag          =  0        ! total recs per file
+  integer(kind=4), public  :: output_period_diag =  0       ! output period
+  integer(kind=4), public  :: nrpf_diag          =  0        ! total recs per file
   logical, public  :: diag_avg, diag_uv, diag_trc
   namelist /DIAGNOSTICS_SETTINGS/ output_period_diag, nrpf_diag,&
   &diag_avg, diag_uv, diag_trc

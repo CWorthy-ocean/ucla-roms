@@ -41,11 +41,11 @@ module basic_output
   real(kind=8), public :: output_period_rst = 100        ! output period in seconds
   real(kind=8)    :: nrpf_rst          = 10
 
-  real(kind=8)    :: output_period_his = 100         ! output period in seconds
-  integer(kind=4) :: nrpf_his          = 20          ! total recs per file
+  real(kind=8), public    :: output_period_his = 100         ! output period in seconds
+  integer(kind=4), public :: nrpf_his          = 20          ! total recs per file
 
-  real(kind=8)    :: output_period_avg = 100         ! output averaging period in seconds
-  integer(kind=4) :: nrpf_avg          = 20          ! total recs per file
+  real(kind=8), public    :: output_period_avg = 100         ! output averaging period in seconds
+  integer(kind=4), public :: nrpf_avg          = 20          ! total recs per file
 
   logical, public ::&
   &wrt_file_rst, wrt_file_avg, wrt_file_his, monthly_restarts,&

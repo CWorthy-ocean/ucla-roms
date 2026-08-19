@@ -33,8 +33,8 @@ module zslice_output
   integer(kind=4),parameter :: max_ndep = 20
   integer(kind=4),parameter :: max_nt_z = 10
 
-  real(kind=8)           :: output_period_zslice = 1200 ! in seconds
-  integer(kind=4)        :: nrpf_zslice   = 72          ! number of frames per file
+  real(kind=8), public    :: output_period_zslice = 1200 ! in seconds
+  integer(kind=4), public :: nrpf_zslice   = 72          ! number of frames per file
   integer(kind=4)        :: ndep   =  6          ! number of depth slice
   real(kind=8), dimension(max_ndep) :: vecdep = (/0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0/) ! depths slice
   integer(kind=4)        :: nt_zslice   =  2        ! number of tracers to slice

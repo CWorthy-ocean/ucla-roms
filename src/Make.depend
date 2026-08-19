@@ -23,7 +23,7 @@ bgc_forces.o : bgc_forces.F90 cppdefs.opt param.o
 bec2_vars.o : bec2_vars.F90 cppdefs.opt param.o
 diagnostics.o : diagnostics.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o tracers.o ocean_vars.o scalars.o nc_read_write.o roms_read_write.o dimensions.o param.o grid.o roms_mpi.o pio_roms.o
 init_arrays.o : init_arrays.F90 cppdefs.opt param.o private_scratch.o compute_tile_bounds.h dimensions.o surf_flux.o tracers.o coupling.o eos_vars.o grid.o mixing.o ocean_vars.o basic_output.o work_mod.o boundary.o buffer.o mess_buffers.o flux_frc.o pipe_frc.o bgc_shared_vars.o bgc_forces.o bgc_io.o bulk_frc.o
-precheck.o : precheck.F90 cppdefs.opt error_handling_mod.o extract_data.o bgc_shared_vars.o basic_output.o check_switches_mod.o lmd_kpp_mod.o pre_step3d_mod.o set_depth_mod.o step3d_t_mod.o step3d_uv_mod.o
+precheck.o : precheck.F90 cppdefs.opt error_handling_mod.o extract_data.o bgc_shared_vars.o basic_output.o frc_output.o random_output.o zslice_output.o surf_flux.o particles.o sponge_tune.o diagnostics.o cdr_output.o upscale_output.o check_switches_mod.o lmd_kpp_mod.o pre_step3d_mod.o set_depth_mod.o step3d_t_mod.o step3d_uv_mod.o
 comm_vars.o : comm_vars.F90 cppdefs.opt param.o
 error_handling_mod.o : error_handling_mod.F90 cppdefs.opt param.o utils_mod.o
 marbl_driver.o : marbl_driver.F90 cppdefs.opt param.o dimensions.o surf_flux.o bgc_forces.o scalars.o grid.o ocean_vars.o error_handling_mod.o namelist_open_mod.o utils_mod.o nc_read_write.o roms_mpi.o pio_roms.o instant_output.o roms_read_write.o
