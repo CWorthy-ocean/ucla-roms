@@ -64,6 +64,7 @@ module cdr_output
       integer(kind=4) :: ico3_sat_arag_idiag, ico3_sat_calc_idiag, izsatarag_idiag, izsatcalc_idiag
       integer(kind=4) :: ispChl, idiatChl, idiazChl
       integer(kind=4) :: ispC, idiatC, idiazC
+      integer(kind=4) :: iPO4, iSiO3
 
       real(kind=8),allocatable,dimension(:,:) :: int_z_ALK_tmp
       real(kind=8),allocatable,dimension(:,:) :: int_z_DIC_tmp
@@ -90,6 +91,8 @@ module cdr_output
       real(kind=8),allocatable,dimension(:,:) :: int_z_ALK_alt_avg
       real(kind=8),allocatable,dimension(:,:,:) :: DIC_alt_avg
       real(kind=8),allocatable,dimension(:,:) :: int_z_DIC_alt_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: PO4_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: SiO3_avg
       real(kind=8),allocatable,dimension(:,:,:) :: pH_avg
       real(kind=8),allocatable,dimension(:,:,:) :: pH_alt_avg
       real(kind=8),allocatable,dimension(:,:) :: FG_CO2_avg
@@ -224,6 +227,14 @@ contains
     call add_cdr_output_variable(cdr_varlist, 'DIC_ALT_CO2',&
     &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &t_lname(iDIC_alt), t_units(iDIC_alt))
+
+    call add_cdr_output_variable(cdr_varlist, 'PO4',&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
+    &t_lname(iPO4), t_units(iPO4))
+
+    call add_cdr_output_variable(cdr_varlist, 'SiO3',&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
+    &t_lname(iSiO3), t_units(iSiO3))
 
     call add_cdr_output_variable(cdr_varlist, 'int_z_ALK',&
      &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
@@ -404,6 +415,9 @@ contains
 
       if (mynode==0) print *,'init cdr output'
 
+      iPO4 = 0
+      iSiO3 = 0
+
       itot = 0
       ! Loop over 2D BGC diagnostics...
       ! ...but use itot as index (to include other diagnostics)
@@ -472,7 +486,7 @@ contains
       enddo
 
       itot = 0
-      ! Loop over 3D BGC diagnostics...
+      ! Loop over tracers...
       ! ...but use itot as index (to include other diagnostics)
       do idx=1,nt
          itot=itot+1
@@ -494,6 +508,12 @@ contains
          if (t_vname(idx)=='diazC') then
            idiazC = itot
          endif
+         if (t_vname(idx)=='PO4') then
+           iPO4 = itot
+         endif
+         if (t_vname(idx)=='SiO3') then
+           iSiO3 = itot
+         endif
       enddo
 
       ! idx_bgc_diag_2d/3d map onto the *write-selected* diagnostic arrays
@@ -507,14 +527,15 @@ contains
      &    ipCO2SURF_ALT_CO2_idiag<=0 .or. izsatarag_idiag<=0 .or.&
      &    izsatcalc_idiag<=0 .or. iCO3_idiag<=0 .or. iCO3_ALT_CO2_idiag<=0 .or.&
      &    ico3_sat_arag_idiag<=0 .or. ico3_sat_calc_idiag<=0 .or.&
-     &    iPH<=0 .or. iPH_alt<=0) then
+     &    iPH<=0 .or. iPH_alt<=0 .or. iPO4<=0 .or. iSiO3<=0) then
         call error_log%raise_global(&
      &    context=module_name//"/"//sr_name,&
      &    info="CDR output requires FG_CO2, FG_ALT_CO2, pCO2SURF, "//&
      &    "pCO2SURF_ALT_CO2, zsatarag, zsatcalc, CO3, CO3_ALT_CO2, "//&
      &    "co3_sat_arag, co3_sat_calc, MARBL_PH_3D, and MARBL_PH_3D_ALT_CO2 "//&
      &    "to be present in marbl_diagnostics_to_write (or leave that "//&
-     &    "namelist entry empty to write all diagnostics)")
+     &    "namelist entry empty to write all diagnostics), and MARBL "//&
+     &    "tracers PO4 and SiO3")
       endif
       call error_log%abort_check()
 
@@ -556,6 +577,10 @@ contains
         hDIC_alt_avg(:,:,:)=0
         allocate(int_z_DIC_alt_avg(GLOBAL_2D_ARRAY) )
         int_z_DIC_alt_avg(:,:)=0
+        allocate(PO4_avg(GLOBAL_2D_ARRAY,1:nz) )
+        PO4_avg(:,:,:)=0
+        allocate(SiO3_avg(GLOBAL_2D_ARRAY,1:nz) )
+        SiO3_avg(:,:,:)=0
         allocate(pH_avg(GLOBAL_2D_ARRAY,1:nz) )
         pH_avg(:,:,:)=0
         allocate(pH_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
@@ -708,6 +733,10 @@ contains
         int_z_DIC_alt_tmp(:,:) = int_z_DIC_alt_tmp(:,:) + t(:,:,k,nnew,iDIC_alt)*Hz(:,:,k)
       enddo
       int_z_DIC_alt_avg(:,:) = int_z_DIC_alt_avg(:,:)*(1-coef) + int_z_DIC_alt_tmp(:,:)*coef
+
+      PO4_avg(:,:,:) = PO4_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iPO4)*coef
+
+      SiO3_avg(:,:,:) = SiO3_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iSiO3)*coef
 
       pH_avg(:,:,:) = pH_avg(:,:,:)*(1-coef) + marbl_saved_state_3d(:,:,:,iPH)*coef
 
@@ -967,6 +996,10 @@ contains
       ALK_alt_avg(:,:,:)=0
       call ncwrite(ncid,'DIC_ALT_CO2',DIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       DIC_alt_avg(:,:,:)=0
+      call ncwrite(ncid,'PO4',PO4_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      PO4_avg(:,:,:)=0
+      call ncwrite(ncid,'SiO3',SiO3_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      SiO3_avg(:,:,:)=0
       call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       hALK_tmp(:,:,:)=0
       call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
@@ -1043,6 +1076,8 @@ contains
       call ncwrite(ncid,'DIC',t(i0:i1,j0:j1,:,nnew,iDIC),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'ALK_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iALK_alt),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'DIC_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iDIC_alt),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'PO4',t(i0:i1,j0:j1,:,nnew,iPO4),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'SiO3',t(i0:i1,j0:j1,:,nnew,iSiO3),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
@@ -1127,6 +1162,10 @@ contains
       ALK_alt_avg(:,:,:)=0
       call ncwrite(ncid,'DIC_ALT_CO2',DIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
       DIC_alt_avg(:,:,:)=0
+      call ncwrite(ncid,'PO4',PO4_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+      PO4_avg(:,:,:)=0
+      call ncwrite(ncid,'SiO3',SiO3_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+      SiO3_avg(:,:,:)=0
       call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
@@ -1194,6 +1233,8 @@ contains
       call ncwrite(ncid,'DIC',t(i0:i1,j0:j1,:,nnew,iDIC),(/1,1,1,record/))
       call ncwrite(ncid,'ALK_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iALK_alt),(/1,1,1,record/))
       call ncwrite(ncid,'DIC_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iDIC_alt),(/1,1,1,record/))
+      call ncwrite(ncid,'PO4',t(i0:i1,j0:j1,:,nnew,iPO4),(/1,1,1,record/))
+      call ncwrite(ncid,'SiO3',t(i0:i1,j0:j1,:,nnew,iSiO3),(/1,1,1,record/))
       call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
