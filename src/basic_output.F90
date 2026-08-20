@@ -39,7 +39,7 @@ module basic_output
   private
 
   real(kind=8), public :: output_period_rst = 100        ! output period in seconds
-  real(kind=8)    :: nrpf_rst          = 10
+  real(kind=8)    :: nrpf_rst          = 2
 
   real(kind=8), public    :: output_period_his = 100         ! output period in seconds
   integer(kind=4), public :: nrpf_his          = 20          ! total recs per file
@@ -56,7 +56,7 @@ module basic_output
   &wrt_avg_Aks, wrt_avg_Hbls, wrt_avg_Hbbl
 
   namelist /BASIC_OUTPUT_SETTINGS/&
-  &output_period_rst, nrpf_rst,&
+  &output_period_rst, &
   &output_period_his, nrpf_his,&
   &output_period_avg, nrpf_avg,&
   &wrt_file_rst, wrt_file_avg, wrt_file_his, monthly_restarts,&

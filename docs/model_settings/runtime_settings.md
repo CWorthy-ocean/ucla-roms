@@ -153,7 +153,6 @@ Controls setting specifying the output of the basic physical model state (not in
 | `wrt_file_rst` | Enable restart file output (capturing full model state to be used as initial conditions for subsequent runs) if `.true.` | `ocean_vars.opt: wrt_file_rst` |
 | `monthly_restarts` | Output restarts at the beginning of each calendar month if `.true.` | `ocean_vars.opt: monthly_restarts` |
 | `output_period_rst` | Restart interval (s) (if not `monthly_restarts`)| `ocean_vars.opt: output_period_rst` |
-| `nrpf_rst` | Records per restart file | `ocean_vars.opt: nrpf_rst` |
 
 
 ### `TS_OUTPUT_SETTINGS`
@@ -468,8 +467,8 @@ These settings control "pipe forcing", i.e. the input of water and tracers at a 
 | `exchange_facx` | Maximum number of particles for transfer in N-S | `particles.opt: exchange_facx` |
 | `exchange_facy` | Maximum number of particles for transfer in E-W | `particles.opt: exchange_facy` |
 | `exchange_facc` | Maximum number of particles for transfer in corners | `particles.opt: exchange_facc` |
-| `output_period` | Frequency of outputs | `particles.opt: output_period` |
-| `nrpf` | Number of records per file | `particles.opt: nrpf` |
+| `output_period_particles` | Frequency of outputs | `particles.opt: output_period` |
+| `nrpf_particles` | Number of records per file | `particles.opt: nrpf` |
 | `ppm3` | Target particles per cubic meter | `particles.opt: ppm3` |
 | `pmin` | Minimum of allocated space for particle array | `particles.opt: pmin` |
 

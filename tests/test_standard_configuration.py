@@ -62,7 +62,6 @@ def test_exact_restart(standard_configuration,input_dir,tmp_path):
     nml["BASIC_OUTPUT_SETTINGS"]["nrpf_his"] = 1
     nml["BASIC_OUTPUT_SETTINGS"]["wrt_file_rst"] = True
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_rst"] = 400
-    nml["BASIC_OUTPUT_SETTINGS"]["nrpf_rst"] = 2
     nml["BGC_SETTINGS"]["output_period_bgc_his"] = 400
     nml["BGC_SETTINGS"]["nrpf_bgc_his"] = 1
     nml["SPONGE_TUNE_SETTINGS"]["output_period_sponge"] = 400
