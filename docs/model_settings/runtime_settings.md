@@ -153,7 +153,6 @@ Controls setting specifying the output of the basic physical model state (not in
 | `wrt_file_rst` | Enable restart file output (capturing full model state to be used as initial conditions for subsequent runs) if `.true.` | `ocean_vars.opt: wrt_file_rst` |
 | `monthly_restarts` | Output restarts at the beginning of each calendar month if `.true.` | `ocean_vars.opt: monthly_restarts` |
 | `output_period_rst` | Restart interval (s) (if not `monthly_restarts`)| `ocean_vars.opt: output_period_rst` |
-| `nrpf_rst` | Records per restart file | `ocean_vars.opt: nrpf_rst` |
 
 
 ### `TS_OUTPUT_SETTINGS`

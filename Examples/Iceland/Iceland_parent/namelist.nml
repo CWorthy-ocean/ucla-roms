@@ -161,7 +161,6 @@ wrt_avg_Hbbl=.true.         ! Include `hbbl`
 wrt_file_rst = .true.       ! Write restart files (containing full model state)
 monthly_restarts = .true.  ! Write restart files at start of calendar month
 output_period_rst = 0    ! Write restart files at regular frequency (s)
-nrpf_rst = 2               ! Number of time records in restart files
 /
 
 &TS_OUTPUT_SETTINGS
