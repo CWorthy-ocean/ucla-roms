@@ -31,14 +31,14 @@ module particles
   real(kind=8)    :: exchange_facy = 0.1_8     ! maximum number of particles for transfer in EW
   real(kind=8)    :: exchange_facc = 0.01_8    ! maximum number of particles for transfer in corners
 
-  real(kind=8), public    :: output_period = 400
-  integer(kind=4), public :: nrpf = 100
+  real(kind=8), public    :: output_period_particles = 400
+  integer(kind=4), public :: nrpf_particles = 100
   real(kind=8)    :: ppm3 = 1e-6          ! target particles per cubic meter
   integer(kind=4) :: pmin = 200 ! minimum of allocated space for particle array
 
   logical, public :: floats, full_seed
   namelist /PARTICLES_SETTINGS/ np, extra_space_fac, exchange_facx,&
-  &exchange_facy, exchange_facc, output_period, nrpf, ppm3, pmin,&
+  &exchange_facy, exchange_facc, output_period_particles, nrpf_particles, ppm3, pmin,&
   &floats, full_seed
 
   character(len=9) :: module_name = "particles"
@@ -161,7 +161,7 @@ contains
 
     call sort_particles
 
-    if (output_time > output_period) then
+    if (output_time > output_period_particles) then
       call wrt_particles
       output_time = 0
     endif
@@ -433,11 +433,11 @@ contains
     integer(kind=4),dimension(3) :: start
 
     if (first_step) then
-      record = nrpf
+      record = nrpf_particles
       first_step=.false.
     end if
 
-    if (record==nrpf) then
+    if (record==nrpf_particles) then
       call create_particles_file(fname)
       record = 0
     endif

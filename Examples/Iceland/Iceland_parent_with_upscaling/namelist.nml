@@ -479,8 +479,8 @@ extra_space_fac = 1.5    ! Buffer space to receive extra exchanged particles
 exchange_facx = 0.1      ! Maximum number of particles for transfer in N-S
 exchange_facy = 0.1      ! Maximum number of particles for transfer in E-W
 exchange_facc = 0.01     ! Maximum number of particles for transfer in corners
-output_period = 400      ! Frequency of outputs
-nrpf = 100               ! Number of records per file
+output_period_particles = 400      ! Frequency of outputs
+nrpf_particles = 100               ! Number of records per file
 ppm3 = 1e-6              ! Target particles per cubic meter
 pmin = 200               ! Minimum of allocated space for particle array
 /

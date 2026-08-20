@@ -468,8 +468,8 @@ These settings control "pipe forcing", i.e. the input of water and tracers at a 
 | `exchange_facx` | Maximum number of particles for transfer in N-S | `particles.opt: exchange_facx` |
 | `exchange_facy` | Maximum number of particles for transfer in E-W | `particles.opt: exchange_facy` |
 | `exchange_facc` | Maximum number of particles for transfer in corners | `particles.opt: exchange_facc` |
-| `output_period` | Frequency of outputs | `particles.opt: output_period` |
-| `nrpf` | Number of records per file | `particles.opt: nrpf` |
+| `output_period_particles` | Frequency of outputs | `particles.opt: output_period` |
+| `nrpf_particles` | Number of records per file | `particles.opt: nrpf` |
 | `ppm3` | Target particles per cubic meter | `particles.opt: ppm3` |
 | `pmin` | Minimum of allocated space for particle array | `particles.opt: pmin` |
 
