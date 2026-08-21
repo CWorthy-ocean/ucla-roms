@@ -1,0 +1,47 @@
+.. _0.5.0:
+
+0.5.0
+----------
+
+Breaking Changes
+~~~~~~~~~~~~~~~~
+
+- When MPI_MASKING is enabled: (`#334 <https://github.com/CWorthy-ocean/ucla-roms/pull/334>`_)
+
+  - Namelist NP_XI and NP_ETA are overwritten by the selected tiling.
+  - Extra launched MPI ranks exit after MPI_Comm_split; only nparts ocean ranks continue.
+  - Requires PARALLEL_IO and a joined grid file; incompatible with ANA_GRID.
+  - PIO is initialized on the split ocean communicator rather than MPI_COMM_WORLD.
+
+- With MPI_MASKING off, tiling is unchanged: namelist NP_XI/NP_ETA, or grid-file neighbors/partition/subdompos if those attributes are present. (`#334 <https://github.com/CWorthy-ocean/ucla-roms/pull/334>`_)
+- If wrt_file_rst is true, a run now aborts at startup when an enabled output type has nrpf * output_period that does not evenly divide output_period_rst. Previously this was enforced only for extract/bry files. (`#335 <https://github.com/CWorthy-ocean/ucla-roms/pull/335>`_)
+- Namelist files will have to be updated so as not to include nrpf_rst, and the variables in the Particles section will have to have their names changed. (`#336 <https://github.com/CWorthy-ocean/ucla-roms/pull/336>`_)
+
+New Features
+~~~~~~~~~~~~
+
+- CPP key MPI_MASKING in cppdefs.opt. (`#334 <https://github.com/CWorthy-ocean/ucla-roms/pull/334>`_)
+- At startup, find_optimal_tiling searches candidate (NP_XI, NP_ETA) pairs (same scan as New-tools/optimal_part.F), selects the tiling with the lowest horizontal points per tile that does not trigger the coarse-grid / Parallel IO warnings, then splits the communicator to nparts ranks. (`#334 <https://github.com/CWorthy-ocean/ucla-roms/pull/334>`_)
+- Rank 0 writes the scan and selected NP_XI, NP_ETA, and nparts to the run logfile. (`#334 <https://github.com/CWorthy-ocean/ucla-roms/pull/334>`_)
+- mpi_setup computes neighbors, partition, and subdompos at runtime (no partit / tiled grid attributes required). (`#334 <https://github.com/CWorthy-ocean/ucla-roms/pull/334>`_)
+
+Bug Fixes
+~~~~~~~~~
+
+- Fix pairing of CDR tracers, where ``CDR_OAE_ALK(N)`` was incorrectly paired with ``CDR_OAE_DIC(N+1)``; the time variable for CDR tracers is now ``CDR_time``. (`#329 <https://github.com/CWorthy-ocean/ucla-roms/pull/329>`_)
+- Correctly count and read OAE tracers in ``tracers.F90``. (`#333 <https://github.com/CWorthy-ocean/ucla-roms/pull/333>`_)
+- Prevents partially written his, avg, frc, sflx, zslice, random, particles, sponge, diagnostics, cdr, upscale, and BGC output files when restarting, matching the existing extract/bry safeguard. (`#335 <https://github.com/CWorthy-ocean/ucla-roms/pull/335>`_)
+
+Improvements
+~~~~~~~~~~~~
+
+- Land-masked MPI decompositions no longer need the offline optimal_part + partit workflow. (`#334 <https://github.com/CWorthy-ocean/ucla-roms/pull/334>`_)
+- Replace extract_data_precheck with check_output_divides_rst, applied only when that output is enabled (e.g. do_extract, wrt_file_his, wrt_frc). (`#335 <https://github.com/CWorthy-ocean/ucla-roms/pull/335>`_)
+- Make the needed output_period_* / nrpf_* namelist variables public so precheck can see them. (`#335 <https://github.com/CWorthy-ocean/ucla-roms/pull/335>`_)
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+- Add pre-commit check for too-long Fortran lines (`#332 <https://github.com/CWorthy-ocean/ucla-roms/pull/332>`_)
+- Add compile tests for PIO and DIAGNOSTICS optionality (`#332 <https://github.com/CWorthy-ocean/ucla-roms/pull/332>`_)
+- Make ifx container more consistent with gnu container w.r.t. python environment setup (`#332 <https://github.com/CWorthy-ocean/ucla-roms/pull/332>`_)
