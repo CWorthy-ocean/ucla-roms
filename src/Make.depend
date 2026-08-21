@@ -18,7 +18,8 @@ scoord.o : scoord.F90 cppdefs.opt param.o error_handling_mod.o namelist_open_mod
 visc3d_mod.o : visc3d_mod.F90 cppdefs.opt param.o private_scratch.o coupling.o grid.o dimensions.o mixing.o ocean_vars.o scalars.o diagnostics.o compute_tile_bounds.h
 buffer.o : buffer.F90 cppdefs.opt param.o scalars.o
 bec2_params.o : bec2_params.F90 cppdefs.opt grid.o tracers.o param.o bgc_shared_vars.o bec2_vars.o
-cdr_output.o : cdr_output.F90 cppdefs.opt cdr_frc.o namelist_open_mod.o tracers.o param.o marbl_driver.o bgc_shared_vars.o dimensions.o roms_read_write.o nc_read_write.o scalars.o ocean_vars.o error_handling_mod.o
+cdr_output.o : cdr_output.F90 cppdefs.opt cdr_frc.o namelist_open_mod.o tracers.o param.o marbl_driver.o bgc_shared_vars.o dimensions.o roms_read_write.o nc_read_write.o scalars.o ocean_vars.o error_handling_mod.o grid.o carbonate_sensitivity.o
+carbonate_sensitivity.o : carbonate_sensitivity.F90
 bgc_forces.o : bgc_forces.F90 cppdefs.opt param.o
 bec2_vars.o : bec2_vars.F90 cppdefs.opt param.o
 diagnostics.o : diagnostics.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o tracers.o ocean_vars.o scalars.o nc_read_write.o roms_read_write.o dimensions.o param.o grid.o roms_mpi.o pio_roms.o
