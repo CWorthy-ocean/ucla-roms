@@ -1,7 +1,9 @@
 name: Update Release Notes
 
+# pull_request_target (not pull_request) so fork PRs get a writable GITHUB_TOKEN.
+# Safe here: only base-repo code is checked out and executed, never the PR head.
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
     branches:
       - main
