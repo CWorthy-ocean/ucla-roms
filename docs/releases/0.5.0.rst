@@ -1,30 +1,8 @@
-.. _unreleased:
+.. _0.5.0:
 
-Unreleased
+0.5.0
 ----------
 
-.. note::
-    This release is currently in development
-
-Breaking Changes
-~~~~~~~~~~~~~~~~
-
-- N/A
-
-New Features
-~~~~~~~~~~~~
-
-- N/A
-
-Bug Fixes
-~~~~~~~~~
-
-- N/A
-
-Improvements
-~~~~~~~~~~~~
-
-- N/A
 
 Miscellaneous
 ~~~~~~~~~~~~~
