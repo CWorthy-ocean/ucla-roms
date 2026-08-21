@@ -26,7 +26,9 @@ module cdr_output
      &     nf90_put_att, nf90_close, nf90_redef, nf90_enddef
       use scalars, only: iic, knew, nnew, tdays, time, dt
       use ocean_vars, only: zeta, hz
+      use grid, only: rmask
       use error_handling_mod, only: error_log
+      use carbonate_sensitivity, only: compute_surface_beta_eta
       use cdr_frc, only: cdr_flx_3d_ALK, cdr_flx_3d_DIC, cdr_prf,&
      &                   cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,&
      &                   cdr_jloc, cdr_source, cdr_forcing_3d
@@ -64,6 +66,7 @@ module cdr_output
       integer(kind=4) :: ico3_sat_arag_idiag, ico3_sat_calc_idiag, izsatarag_idiag, izsatcalc_idiag
       integer(kind=4) :: ispChl, idiatChl, idiazChl
       integer(kind=4) :: ispC, idiatC, idiazC
+      integer(kind=4) :: iPO4, iSiO3
 
       real(kind=8),allocatable,dimension(:,:) :: int_z_ALK_tmp
       real(kind=8),allocatable,dimension(:,:) :: int_z_DIC_tmp
@@ -90,6 +93,8 @@ module cdr_output
       real(kind=8),allocatable,dimension(:,:) :: int_z_ALK_alt_avg
       real(kind=8),allocatable,dimension(:,:,:) :: DIC_alt_avg
       real(kind=8),allocatable,dimension(:,:) :: int_z_DIC_alt_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: PO4_avg
+      real(kind=8),allocatable,dimension(:,:,:) :: SiO3_avg
       real(kind=8),allocatable,dimension(:,:,:) :: pH_avg
       real(kind=8),allocatable,dimension(:,:,:) :: pH_alt_avg
       real(kind=8),allocatable,dimension(:,:) :: FG_CO2_avg
@@ -100,6 +105,8 @@ module cdr_output
       real(kind=8),allocatable,dimension(:,:,:) :: DIC_alt_source_avg
       real(kind=8),allocatable,dimension(:,:) :: pCO2SURF_avg
       real(kind=8),allocatable,dimension(:,:) :: pCO2SURF_ALT_CO2_avg
+      real(kind=8),allocatable,dimension(:,:) :: ddic_dco2_tmp
+      real(kind=8),allocatable,dimension(:,:) :: ddic_dalk_tmp
       real(kind=8),allocatable,dimension(:,:,:) :: CO3_avg
       real(kind=8),allocatable,dimension(:,:,:) :: CO3_ALT_CO2_avg
       real(kind=8),allocatable,dimension(:,:,:) :: co3_sat_arag_avg
@@ -225,6 +232,14 @@ contains
     &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
     &t_lname(iDIC_alt), t_units(iDIC_alt))
 
+    call add_cdr_output_variable(cdr_varlist, 'PO4',&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
+    &t_lname(iPO4), t_units(iPO4))
+
+    call add_cdr_output_variable(cdr_varlist, 'SiO3',&
+    &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
+    &t_lname(iSiO3), t_units(iSiO3))
+
     call add_cdr_output_variable(cdr_varlist, 'int_z_ALK',&
      &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
      &      'depth-integrated ' // trim(t_lname(iALK)),&
@@ -268,6 +283,16 @@ contains
       call add_cdr_output_variable(cdr_varlist, 'pCO2SURF_ALT_CO2',&
      &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
      &      vname_bgc_diag_2d(2,ipCO2SURF_ALT_CO2), vname_bgc_diag_2d(3,ipCO2SURF_ALT_CO2))
+
+      call add_cdr_output_variable(cdr_varlist, 'ddic_dco2',&
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
+     &      'surface carbonate sensitivity beta = dDIC/dCO2 (ALT_CO2)',&
+     &      'nondimensional')
+
+      call add_cdr_output_variable(cdr_varlist, 'ddic_dalk',&
+     &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
+     &      'surface carbonate sensitivity eta = dDIC/dALK (ALT_CO2)',&
+     &      'nondimensional')
 
       call add_cdr_output_variable(cdr_varlist, 'CO3',&
      &      (/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
@@ -404,6 +429,9 @@ contains
 
       if (mynode==0) print *,'init cdr output'
 
+      iPO4 = 0
+      iSiO3 = 0
+
       itot = 0
       ! Loop over 2D BGC diagnostics...
       ! ...but use itot as index (to include other diagnostics)
@@ -472,7 +500,7 @@ contains
       enddo
 
       itot = 0
-      ! Loop over 3D BGC diagnostics...
+      ! Loop over tracers...
       ! ...but use itot as index (to include other diagnostics)
       do idx=1,nt
          itot=itot+1
@@ -494,6 +522,12 @@ contains
          if (t_vname(idx)=='diazC') then
            idiazC = itot
          endif
+         if (t_vname(idx)=='PO4') then
+           iPO4 = itot
+         endif
+         if (t_vname(idx)=='SiO3') then
+           iSiO3 = itot
+         endif
       enddo
 
       ! idx_bgc_diag_2d/3d map onto the *write-selected* diagnostic arrays
@@ -507,14 +541,15 @@ contains
      &    ipCO2SURF_ALT_CO2_idiag<=0 .or. izsatarag_idiag<=0 .or.&
      &    izsatcalc_idiag<=0 .or. iCO3_idiag<=0 .or. iCO3_ALT_CO2_idiag<=0 .or.&
      &    ico3_sat_arag_idiag<=0 .or. ico3_sat_calc_idiag<=0 .or.&
-     &    iPH<=0 .or. iPH_alt<=0) then
+     &    iPH<=0 .or. iPH_alt<=0 .or. iPO4<=0 .or. iSiO3<=0) then
         call error_log%raise_global(&
      &    context=module_name//"/"//sr_name,&
      &    info="CDR output requires FG_CO2, FG_ALT_CO2, pCO2SURF, "//&
      &    "pCO2SURF_ALT_CO2, zsatarag, zsatcalc, CO3, CO3_ALT_CO2, "//&
      &    "co3_sat_arag, co3_sat_calc, MARBL_PH_3D, and MARBL_PH_3D_ALT_CO2 "//&
      &    "to be present in marbl_diagnostics_to_write (or leave that "//&
-     &    "namelist entry empty to write all diagnostics)")
+     &    "namelist entry empty to write all diagnostics), and MARBL "//&
+     &    "tracers PO4 and SiO3")
       endif
       call error_log%abort_check()
 
@@ -556,6 +591,10 @@ contains
         hDIC_alt_avg(:,:,:)=0
         allocate(int_z_DIC_alt_avg(GLOBAL_2D_ARRAY) )
         int_z_DIC_alt_avg(:,:)=0
+        allocate(PO4_avg(GLOBAL_2D_ARRAY,1:nz) )
+        PO4_avg(:,:,:)=0
+        allocate(SiO3_avg(GLOBAL_2D_ARRAY,1:nz) )
+        SiO3_avg(:,:,:)=0
         allocate(pH_avg(GLOBAL_2D_ARRAY,1:nz) )
         pH_avg(:,:,:)=0
         allocate(pH_alt_avg(GLOBAL_2D_ARRAY,1:nz) )
@@ -596,6 +635,11 @@ contains
           DIC_alt_source_avg(:,:,:)=0
         endif
       endif
+
+      allocate(ddic_dco2_tmp(GLOBAL_2D_ARRAY) )
+      ddic_dco2_tmp(:,:)=0
+      allocate(ddic_dalk_tmp(GLOBAL_2D_ARRAY) )
+      ddic_dalk_tmp(:,:)=0
 
       ! Always output instantaneous hDIC
       allocate(hDIC_tmp(GLOBAL_2D_ARRAY,1:nz) )
@@ -708,6 +752,10 @@ contains
         int_z_DIC_alt_tmp(:,:) = int_z_DIC_alt_tmp(:,:) + t(:,:,k,nnew,iDIC_alt)*Hz(:,:,k)
       enddo
       int_z_DIC_alt_avg(:,:) = int_z_DIC_alt_avg(:,:)*(1-coef) + int_z_DIC_alt_tmp(:,:)*coef
+
+      PO4_avg(:,:,:) = PO4_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iPO4)*coef
+
+      SiO3_avg(:,:,:) = SiO3_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iSiO3)*coef
 
       pH_avg(:,:,:) = pH_avg(:,:,:)*(1-coef) + marbl_saved_state_3d(:,:,:,iPH)*coef
 
@@ -857,6 +905,38 @@ contains
 
       end subroutine calc_biomass_and_chl
 ! ----------------------------------------------------------------------
+      subroutine calc_carbonate_sensitivity(use_avg) ![
+      ! Surface beta/eta once per CDR write (not every timestep).
+      ! If use_avg, diagnose from time-averaged tracers; else instantaneous.
+      implicit none
+      logical, intent(in) :: use_avg
+
+      if (use_avg) then
+        call compute_surface_beta_eta(&
+     &    temp_avg(i0:i1,j0:j1,nz),&
+     &    salt_avg(i0:i1,j0:j1,nz),&
+     &    ALK_alt_avg(i0:i1,j0:j1,nz),&
+     &    DIC_alt_avg(i0:i1,j0:j1,nz),&
+     &    PO4_avg(i0:i1,j0:j1,nz),&
+     &    SiO3_avg(i0:i1,j0:j1,nz),&
+     &    rmask(i0:i1,j0:j1),&
+     &    ddic_dco2_tmp(i0:i1,j0:j1),&
+     &    ddic_dalk_tmp(i0:i1,j0:j1))
+      else
+        call compute_surface_beta_eta(&
+     &    t(i0:i1,j0:j1,nz,nnew,itemp),&
+     &    t(i0:i1,j0:j1,nz,nnew,isalt),&
+     &    t(i0:i1,j0:j1,nz,nnew,iALK_alt),&
+     &    t(i0:i1,j0:j1,nz,nnew,iDIC_alt),&
+     &    t(i0:i1,j0:j1,nz,nnew,iPO4),&
+     &    t(i0:i1,j0:j1,nz,nnew,iSiO3),&
+     &    rmask(i0:i1,j0:j1),&
+     &    ddic_dco2_tmp(i0:i1,j0:j1),&
+     &    ddic_dalk_tmp(i0:i1,j0:j1))
+      endif
+
+      end subroutine calc_carbonate_sensitivity !]
+! ----------------------------------------------------------------------
       subroutine create_cdr_output_variables(ncid)
         implicit none
         integer, intent(in) :: ncid
@@ -951,6 +1031,8 @@ contains
 
     call multiply_by_thickness
     if (wrt_cdr_avg) then
+      ! Diagnose beta/eta once from averaged surface tracers before they are reset
+      call calc_carbonate_sensitivity(.true.)
       pio_gtype = '2Drw'
       call ncwrite(ncid,'zeta'  ,zeta__avg(i0:i1,j0:j1),(/1,1,record/),.true.)
       zeta__avg(:,:)=0
@@ -967,6 +1049,10 @@ contains
       ALK_alt_avg(:,:,:)=0
       call ncwrite(ncid,'DIC_ALT_CO2',DIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       DIC_alt_avg(:,:,:)=0
+      call ncwrite(ncid,'PO4',PO4_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      PO4_avg(:,:,:)=0
+      call ncwrite(ncid,'SiO3',SiO3_avg(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
+      SiO3_avg(:,:,:)=0
       call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       hALK_tmp(:,:,:)=0
       call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
@@ -1004,6 +1090,8 @@ contains
       pCO2SURF_avg(:,:)=0
       call ncwrite(ncid,'pCO2SURF_ALT_CO2'  ,pCO2SURF_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
       pCO2SURF_ALT_CO2_avg(:,:)=0
+      call ncwrite(ncid,'ddic_dco2'  ,ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
+      call ncwrite(ncid,'ddic_dalk'  ,ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
       call ncwrite(ncid,'zsatarag'  ,zsatarag_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
       zsatarag_avg(:,:)=0
       call ncwrite(ncid,'zsatcalc'  ,zsatcalc_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
@@ -1034,6 +1122,7 @@ contains
         DIC_alt_source_avg(:,:,:)=0
       endif
     else
+      call calc_carbonate_sensitivity(.false.)
       pio_gtype = '2Drw'
       call ncwrite(ncid,'zeta'  ,zeta(i0:i1,j0:j1,knew),(/1,1,record/),.true.)
       pio_gtype = '3Drw'
@@ -1043,6 +1132,8 @@ contains
       call ncwrite(ncid,'DIC',t(i0:i1,j0:j1,:,nnew,iDIC),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'ALK_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iALK_alt),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'DIC_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iDIC_alt),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'PO4',t(i0:i1,j0:j1,:,nnew,iPO4),(/1,1,1,record/),.true.)
+      call ncwrite(ncid,'SiO3',t(i0:i1,j0:j1,:,nnew,iSiO3),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
       call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/),.true.)
@@ -1058,6 +1149,8 @@ contains
       call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
       call ncwrite(ncid,'pCO2SURF'  ,bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_idiag),(/1,1,record/),.true.)
       call ncwrite(ncid,'pCO2SURF_ALT_CO2'  , bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_ALT_CO2_idiag),(/1,1,record/),.true.)
+      call ncwrite(ncid,'ddic_dco2'  ,ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
+      call ncwrite(ncid,'ddic_dalk'  ,ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
       call ncwrite(ncid,'zsatarag'  ,bgc_diag_2d(i0:i1,j0:j1,izsatarag_idiag),(/1,1,record/),.true.)
       call ncwrite(ncid,'zsatcalc'  ,bgc_diag_2d(i0:i1,j0:j1,izsatcalc_idiag),(/1,1,record/),.true.)
       pio_gtype = '3Drw'
@@ -1111,6 +1204,7 @@ contains
     call ncwrite(ncid,'ocean_time',(/time/),(/record/))
 
     if (wrt_cdr_avg) then
+      call calc_carbonate_sensitivity(.true.)
       call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
       call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
       call ncwrite(ncid,'zeta'  ,zeta__avg(i0:i1,j0:j1),(/1,1,record/))
@@ -1127,6 +1221,10 @@ contains
       ALK_alt_avg(:,:,:)=0
       call ncwrite(ncid,'DIC_ALT_CO2',DIC_alt_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
       DIC_alt_avg(:,:,:)=0
+      call ncwrite(ncid,'PO4',PO4_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+      PO4_avg(:,:,:)=0
+      call ncwrite(ncid,'SiO3',SiO3_avg(i0:i1,j0:j1,:),(/1,1,1,record/))
+      SiO3_avg(:,:,:)=0
       call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
@@ -1159,6 +1257,8 @@ contains
       pCO2SURF_avg(:,:)=0
       call ncwrite(ncid,'pCO2SURF_ALT_CO2'  ,pCO2SURF_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
       pCO2SURF_ALT_CO2_avg(:,:)=0
+      call ncwrite(ncid,'ddic_dco2'  ,ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/))
+      call ncwrite(ncid,'ddic_dalk'  ,ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'zsatarag'  ,zsatarag_avg(i0:i1,j0:j1),(/1,1,record/))
       zsatarag_avg(:,:)=0
       call ncwrite(ncid,'zsatcalc'  ,zsatcalc_avg(i0:i1,j0:j1),(/1,1,record/))
@@ -1187,6 +1287,7 @@ contains
         DIC_alt_source_avg(:,:,:)=0
       endif
     else
+      call calc_carbonate_sensitivity(.false.)
       call ncwrite(ncid,'zeta'  ,zeta(i0:i1,j0:j1,knew),(/1,1,record/))
       call ncwrite(ncid,'temp',t(i0:i1,j0:j1,:,nnew,itemp),(/1,1,1,record/))
       call ncwrite(ncid,'salt',t(i0:i1,j0:j1,:,nnew,isalt),(/1,1,1,record/))
@@ -1194,6 +1295,8 @@ contains
       call ncwrite(ncid,'DIC',t(i0:i1,j0:j1,:,nnew,iDIC),(/1,1,1,record/))
       call ncwrite(ncid,'ALK_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iALK_alt),(/1,1,1,record/))
       call ncwrite(ncid,'DIC_ALT_CO2',t(i0:i1,j0:j1,:,nnew,iDIC_alt),(/1,1,1,record/))
+      call ncwrite(ncid,'PO4',t(i0:i1,j0:j1,:,nnew,iPO4),(/1,1,1,record/))
+      call ncwrite(ncid,'SiO3',t(i0:i1,j0:j1,:,nnew,iSiO3),(/1,1,1,record/))
       call ncwrite(ncid,'hALK',hALK_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'hALK_ALT_CO2',hALK_alt_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
       call ncwrite(ncid,'hDIC',hDIC_tmp(i0:i1,j0:j1,:),(/1,1,1,record/))
@@ -1208,6 +1311,8 @@ contains
       call ncwrite(ncid,'int_z_DIC_ALT_CO2',int_z_DIC_alt_tmp(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'pCO2SURF'  ,bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_idiag),(/1,1,record/))
       call ncwrite(ncid,'pCO2SURF_ALT_CO2'  , bgc_diag_2d(i0:i1,j0:j1,ipCO2SURF_ALT_CO2_idiag),(/1,1,record/))
+      call ncwrite(ncid,'ddic_dco2'  ,ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/))
+      call ncwrite(ncid,'ddic_dalk'  ,ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'zsatarag'  ,bgc_diag_2d(i0:i1,j0:j1,izsatarag_idiag),(/1,1,record/))
       call ncwrite(ncid,'zsatcalc'  ,bgc_diag_2d(i0:i1,j0:j1,izsatcalc_idiag),(/1,1,record/))
       call ncwrite(ncid,'CO3',bgc_diag_3d(i0:i1,j0:j1,:,iCO3_idiag),(/1,1,1,record/))
