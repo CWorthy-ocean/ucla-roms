@@ -437,7 +437,9 @@ contains
     endif
     ! MASK_LAND_DATA may store NetCDF fill on land.  riv_*mask enters
     ! (umask+riv_umask) below, so fill on land would turn land ubar/u
-    ! into ~1e73 and blow up kinetic energy on restart.
+    ! into ~1e73 and blow up kinetic energy on restart.  Clamp only;
+    ! do not multiply by umask/vmask here or river faces (umask=0,
+    ! riv_umask=1) are lost and exact restart breaks.
     where (riv_umask(x_:x1,y0:y1) < 0._8 .or.&
     &      riv_umask(x_:x1,y0:y1) > 1._8)
       riv_umask(x_:x1,y0:y1) = 0._8
@@ -446,8 +448,6 @@ contains
     &      riv_vmask(x0:x1,y_:y1) > 1._8)
       riv_vmask(x0:x1,y_:y1) = 0._8
     end where
-    riv_umask(x_:x1,y0:y1) = riv_umask(x_:x1,y0:y1)*umask(x_:x1,y0:y1)
-    riv_vmask(x0:x1,y_:y1) = riv_vmask(x0:x1,y_:y1)*vmask(x0:x1,y_:y1)
 
 ! Free-surface and barotropic 2D momentuma, XI- and ETA-components
 
@@ -505,13 +505,20 @@ contains
       call ncread(ncid,'DU_avg_bak',DU_avg_bak(x_:x1,y0:y1),start=start)!,fname=inifile)
       pio_gtype = '2Dvr'
       call ncread(ncid,'DV_avg_bak',DV_avg_bak(x0:x1,y_:y1),start=start)!,fname=inifile)
-      ! Zero land (incl. NetCDF fill left by MASK_LAND_DATA on write)
-      DU_avg1(x_:x1,y0:y1) = DU_avg1(x_:x1,y0:y1)*umask(x_:x1,y0:y1)
-      DV_avg1(x0:x1,y_:y1) = DV_avg1(x0:x1,y_:y1)*vmask(x0:x1,y_:y1)
-      DU_avg2(x_:x1,y0:y1) = DU_avg2(x_:x1,y0:y1)*umask(x_:x1,y0:y1)
-      DV_avg2(x0:x1,y_:y1) = DV_avg2(x0:x1,y_:y1)*vmask(x0:x1,y_:y1)
-      DU_avg_bak(x_:x1,y0:y1) = DU_avg_bak(x_:x1,y0:y1)*umask(x_:x1,y0:y1)
-      DV_avg_bak(x0:x1,y_:y1) = DV_avg_bak(x0:x1,y_:y1)*vmask(x0:x1,y_:y1)
+      ! Zero true land (incl. NetCDF fill) but keep river faces where
+      ! umask=0 and riv_umask=1 (same mask as ubar/u below).
+      DU_avg1(x_:x1,y0:y1) = DU_avg1(x_:x1,y0:y1)*&
+      &(umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
+      DV_avg1(x0:x1,y_:y1) = DV_avg1(x0:x1,y_:y1)*&
+      &(vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
+      DU_avg2(x_:x1,y0:y1) = DU_avg2(x_:x1,y0:y1)*&
+      &(umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
+      DV_avg2(x0:x1,y_:y1) = DV_avg2(x0:x1,y_:y1)*&
+      &(vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
+      DU_avg_bak(x_:x1,y0:y1) = DU_avg_bak(x_:x1,y0:y1)*&
+      &(umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
+      DV_avg_bak(x0:x1,y_:y1) = DV_avg_bak(x0:x1,y_:y1)*&
+      &(vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
     else
       forw_start=ntstart    !--> cancel exact restart
       iic = 0 ! set back to zero
