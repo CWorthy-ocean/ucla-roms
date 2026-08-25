@@ -54,7 +54,7 @@ module extract_data
   &nf90_def_var, nf90_inq_dimid
   use tracers, only: t, t_vname, t_lname, t_units  ! need to get names of tracers
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u
-  use scalars, only: dt, knew, nstp, time
+  use scalars, only: dt, knew, nstp, time, tdays
   use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
   &nt_passive, mynode, lm, mm, nz, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor
   use scoord, only: theta_s, theta_b, hc
@@ -778,7 +778,7 @@ contains
 #ifdef PARALLEL_IO
       if (mynode == 0) then
         ierr=nf90_open(fname,nf90_write,ncid)
-        call ncwrite(ncid,'bry_time',(/time/),(/(obj(1)%record+1)/))
+        call ncwrite(ncid,'bry_time',(/tdays/),(/(obj(1)%record+1)/))
         ierr=nf90_close(ncid)
       endif
 
@@ -831,7 +831,11 @@ contains
 
 #ifndef PARALLEL_IO
           tname = trim(obj(i)%set)//'_time'
-          call ncwrite(ncid,tname,(/time/),(/record/))
+          if (trim(obj(i)%set) == 'bry') then
+            call ncwrite(ncid,tname,(/tdays/),(/record/))
+          else
+            call ncwrite(ncid,tname,(/time/),(/record/))
+          endif
 #endif
 !if (mynode==0) print *,'writing extract: ',time,mynode,tname
 
