@@ -1,6 +1,8 @@
 Release notes
 #############
 
+.. include:: releases/0.5.1.rst
+
 .. include:: releases/0.5.0.rst
 
 .. include:: releases/0.4.2.rst
