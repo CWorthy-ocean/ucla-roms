@@ -61,6 +61,12 @@ nt_cdr_dor = 0      ! Number of DOR (DIC-mimicking) passive CDR tracers
 nt_bgc = 0          ! Number of BGC tracers
 /
 
+&PIO_SETTINGS                                                          !pio_roms.F90
+!---------------------------
+! Stride between MPI ranks assigned as PIO I/O tasks (requires PARALLEL_IO)
+!---------------------------
+pio_stride = 1
+/
 
 &INITIAL_CONDITIONS                                            !roms_read_write.F
 !---------------------------

@@ -18,11 +18,18 @@ module pio_roms
   use mpi_f08, only: mpi_character, mpi_wtime
   use param, only: LLm, MMm, nz, ocean_grid_comm, nt, mynode
   use timers, only: tstart
+  use namelist_open_mod, only: open_namelist_file
+  use error_handling_mod, only: error_log
   implicit none
 
   private
 
-#include "pio_roms.opt"
+  character(len=8) :: module_name = "pio_roms"
+
+  integer(kind=4), public :: pio_stride = 1
+  integer(kind=4), public :: pio_type = PIO_iotype_pnetcdf
+
+  namelist /PIO_SETTINGS/ pio_stride
 
   logical, parameter, public  :: use_pio = .true.
   ! When PARALLEL_IO is on, skip PIO's needsfill coverage check (force needsfill=false).
@@ -592,6 +599,7 @@ module pio_roms
   public  :: pio_initialize_coarse
   public  :: pio_initialize_z
   public  :: pio_initialize_extract
+  public  :: read_nml_pio
 
   !! This subroutine reads the data array from the netCDF input file.
   public  :: pio_ncread1
@@ -646,6 +654,29 @@ module pio_roms
 !        procedure,  private :: errorHandle
 
 contains
+
+  subroutine read_nml_pio
+    integer(kind=4) :: namelist_unit, ios
+    character(len=20) :: sr_name = "read_nml_pio"
+    character(len=512) :: msg = ""
+
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=PIO_SETTINGS, iostat=ios, iomsg=msg)
+    if (ios /= 0) then
+      call error_log%raise_global(&
+      &context=module_name//'/'//sr_name,&
+      &info='could not read PIO_SETTINGS section of namelist file: '//trim(msg))
+    end if
+    close(namelist_unit)
+
+    if (pio_stride < 1) then
+      call error_log%raise_global(&
+      &context=module_name//'/'//sr_name,&
+      &info='pio_stride must be >= 1')
+    end if
+    call error_log%abort_check()
+  end subroutine read_nml_pio
 
 ! ----------------------------------------------------------------------
 !! Initialize the MPI and ParallelIO libraries. Also allocate
