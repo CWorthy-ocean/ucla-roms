@@ -69,6 +69,9 @@ contains
 #ifdef SOLVE3D
     use scoord, only: read_nml_scoord !SCOORD_SETTINGS
 #endif
+#ifdef PARALLEL_IO
+    use pio_roms, only: read_nml_pio              !PIO_SETTINGS
+#endif
     use diag_mod, only: read_nml_stdout_diag
     implicit none
     call read_nml_param
@@ -115,6 +118,9 @@ contains
 #endif
    call read_nml_surf_frc
    call read_nml_tracers
+#ifdef PARALLEL_IO
+   call read_nml_pio
+#endif
    call read_nml_stdout_diag
   end subroutine read_namelists
 
