@@ -1,10 +1,8 @@
-.. _unreleased:
+.. _0.6.0:
 
-Unreleased
+0.6.0
 ----------
 
-.. note::
-    This release is currently in development
 
 Breaking Changes
 ~~~~~~~~~~~~~~~~
@@ -18,11 +16,6 @@ New Features
 
 - Added PIO_SETTINGS namelist block with pio_stride (default 1). (`#346 <https://github.com/CWorthy-ocean/ucla-roms/pull/346>`_)
 - Added read_nml_pio in pio_roms.F90, called from namelist_read_mod when PARALLEL_IO is enabled, before pio_initialize. (`#346 <https://github.com/CWorthy-ocean/ucla-roms/pull/346>`_)
-
-Bug Fixes
-~~~~~~~~~
-
-- N/A
 
 Improvements
 ~~~~~~~~~~~~
