@@ -1,0 +1,33 @@
+.. _0.6.0:
+
+0.6.0
+----------
+
+
+Breaking Changes
+~~~~~~~~~~~~~~~~
+
+
+- pio_stride is no longer set in pio_roms.opt (that file is removed). Runs that previously customized pio_stride in pio_roms.opt must add a PIO_SETTINGS section to namelist.nml instead. (`#346 <https://github.com/CWorthy-ocean/ucla-roms/pull/346>`_)
+
+New Features
+~~~~~~~~~~~~
+
+
+- Added PIO_SETTINGS namelist block with pio_stride (default 1). (`#346 <https://github.com/CWorthy-ocean/ucla-roms/pull/346>`_)
+- Added read_nml_pio in pio_roms.F90, called from namelist_read_mod when PARALLEL_IO is enabled, before pio_initialize. (`#346 <https://github.com/CWorthy-ocean/ucla-roms/pull/346>`_)
+
+Improvements
+~~~~~~~~~~~~
+
+
+- pio_stride can be changed at runtime via namelist.nml rather than editing source and recompiling. (`#346 <https://github.com/CWorthy-ocean/ucla-roms/pull/346>`_)
+- read_nml_pio validates that pio_stride >= 1 at startup. (`#346 <https://github.com/CWorthy-ocean/ucla-roms/pull/346>`_)
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+- The tagged GitHub release is now created automatically when the "Finalize release notes for ``<tag>``" PR is merged, using the release notes just finalized in the docs as the release body — instead of the manual tag-and-publish step with GitHub's weaker auto-generated summary. (`#345 <https://github.com/CWorthy-ocean/ucla-roms/pull/345>`_)
+- Merging the release-notes finalization PR no longer causes the release-notes updater to re-open a spurious "Unreleased" section. (`#345 <https://github.com/CWorthy-ocean/ucla-roms/pull/345>`_)
+- Removed src/pio_roms.opt; pio_type default remains in pio_roms.F90. (`#346 <https://github.com/CWorthy-ocean/ucla-roms/pull/346>`_)
+- Updated Make.depend for the new namelist dependencies and removal of the .opt include. (`#346 <https://github.com/CWorthy-ocean/ucla-roms/pull/346>`_)
