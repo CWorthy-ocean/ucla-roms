@@ -52,7 +52,7 @@ module extract_data
   &nf90_inquire, nf90_inquire_variable, nf90_inquire_dimension,&
   &nf90_get_att, nf90_clobber, nf90_64bit_data, nf90_create, nf90_def_dim,&
   &nf90_def_var, nf90_inq_dimid
-  use tracers, only: t, t_vname, t_lname, t_units  ! need to get names of tracers
+  use tracers, only: t, t_vname, t_lname, t_units, iTandS  ! need to get names of tracers
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u
   use scalars, only: dt, knew, nstp, time, tdays
   use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
@@ -922,7 +922,7 @@ contains
 #endif
 
           if (obj(i)%passive) then
-            do indt=isalt+1,nt_passive
+            do indt=iTandS+1,iTandS+nt_passive
 #ifdef PARALLEL_IO
               oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
               pio_gtype = pio_bnd // '2rc'
@@ -948,7 +948,7 @@ contains
           endif  ! passive
 
           if (obj(i)%cdr_oae) then
-            do indt=isalt+nt_passive+1,isalt+nt_passive+nt_cdr_oae,2
+            do indt=iTandS+nt_passive+1,iTandS+nt_passive+2*nt_cdr_oae,2
 #ifdef PARALLEL_IO
               oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
               pio_gtype = pio_bnd // '2rc'
@@ -996,7 +996,7 @@ contains
           endif  ! cdr_oae
 
           if (obj(i)%cdr_dor) then
-            do indt=isalt+nt_passive+2*nt_cdr_oae+1,isalt+nt_passive+2*nt_cdr_oae+nt_cdr_dor
+            do indt=iTandS+nt_passive+2*nt_cdr_oae+1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
 #ifdef PARALLEL_IO
               oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
               pio_gtype = pio_bnd // '2rc'
@@ -1022,7 +1022,7 @@ contains
           endif  ! cdr_dor
 
           if (obj(i)%bgc) then
-            do indt=isalt+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
+            do indt=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
 #ifdef PARALLEL_IO
               oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
               pio_gtype = pio_bnd // '2rc'
@@ -1424,26 +1424,26 @@ contains
         if (obj(i)%vp)   call create_var(ncid,obj(i),'vp',dname,dsize)
 
         if (obj(i)%passive) then
-          do indt=isalt+1,nt_passive
+          do indt=iTandS+1,iTandS+nt_passive
             call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
           enddo
         endif
 
         if (obj(i)%cdr_oae) then
-          do indt=isalt+nt_passive+1,isalt+nt_passive+nt_cdr_oae,2
+          do indt=iTandS+nt_passive+1,iTandS+nt_passive+2*nt_cdr_oae,2
             call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
             call create_var(ncid,obj(i),t_vname(indt+1),dname3,dsize3,-99)
           enddo
         endif
 
         if (obj(i)%cdr_dor) then
-          do indt=isalt+nt_passive+2*nt_cdr_oae+1,isalt+nt_passive+2*nt_cdr_oae+nt_cdr_dor
+          do indt=iTandS+nt_passive+2*nt_cdr_oae+1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
             call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
           enddo
         endif
 
         if (obj(i)%bgc) then
-          do indt=isalt+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
+          do indt=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
             call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
           enddo
         endif
