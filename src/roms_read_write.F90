@@ -418,6 +418,20 @@ contains
     nxc = (gnxc+NP_xi-1)/np_xi
     nyc = (gnyc+NP_eta-1)/np_eta
 
+    ! Coarse tiles of <= 2 points cannot hold the interpolation halo
+    ! (cbf >= 3): the exchange would need data from beyond adjacent
+    ! tiles and the PIO decomposition below gets out-of-range starts.
+    ! Fail loudly here rather than corrupt the interpolated forcing.
+    if ((nxc <= 2) .or. (nyc <= 2)) then
+      call error_log%raise_global(&
+      &context=module_name//'/init_coarse',&
+      &info='tiling too fine for coarse-resolution forcing inputs'//&
+      &' (coarse tile <= 2 points); disable interp_*_frc or run'//&
+      &' with fewer subdomains.')
+      call error_log%abort_check()
+      return
+    endif
+
     off_xc = NP_XI*nxc - gnxc
     if (inode==0) then
       iSWc = 0
