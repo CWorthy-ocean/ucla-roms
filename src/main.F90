@@ -15,6 +15,16 @@ program main              ! Open MP version of ROMS driver
   use namelist_read_mod, only: read_namelists
 #ifdef MPI_MASKING
   use mpi_masking_mod, only: find_optimal_tiling
+! Coarse-resolution forcing flags: only the flag belonging to the active
+! forcing module matters (interp_flux_frc is inert under BULK_FRC).
+# ifdef BULK_FRC
+  use bulk_frc, only: interp_bulk_frc
+# else
+  use flux_frc, only: interp_flux_frc
+# endif
+# if defined(BIOLOGY_BEC2) || defined(MARBL)
+  use bgc_shared_vars, only: interp_bgc_frc
+# endif
 #endif
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_initialize, pio_myRank, pio_ntasks
@@ -22,6 +32,9 @@ program main              ! Open MP version of ROMS driver
 
   implicit none                                        ! with single parallel region using
   integer(kind=4) :: ierr                                      ! explicit barrier synchronization.
+#ifdef MPI_MASKING
+  logical :: coarse_frc
+#endif
 # ifdef MPI
 !$ $$      real*8 tstart, tend
 !$ integer level,req_lev
@@ -47,7 +60,15 @@ program main              ! Open MP version of ROMS driver
 !     Git hash
   mpi_master_only write(*,'(/1x,2A)') "Git hash: ", git_hash
 #ifdef MPI_MASKING
-  call find_optimal_tiling
+# ifdef BULK_FRC
+  coarse_frc = interp_bulk_frc
+# else
+  coarse_frc = interp_flux_frc
+# endif
+# if defined(BIOLOGY_BEC2) || defined(MARBL)
+  coarse_frc = coarse_frc .or. interp_bgc_frc
+# endif
+  call find_optimal_tiling(coarse_frc)
 #endif
   call mpi_setup
 

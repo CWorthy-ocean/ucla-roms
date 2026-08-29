@@ -29,11 +29,14 @@ contains
 
 #ifdef MPI_MASKING
 !----------------------------------------------------------------------
-  subroutine find_optimal_tiling
+  subroutine find_optimal_tiling(coarse_frc)
     ! Search candidate (NP_XI, NP_ETA) pairs as in optimal_part, pick the
     ! tiling with the lowest horizontal points per tile that does not
     ! trigger the coarse-grid / Parallel-IO warnings, then split MPI so
     ! ocean_grid_comm has that many ranks.
+    ! coarse_frc: the run reads coarse-resolution forcing (interp_*_frc),
+    ! so tilings with coarse-grid caveats are unusable rather than merely
+    ! warned about.
 
     use param, only: mynode, nsize, nnodes, NP_XI, NP_ETA, ocean_grid_comm,&
     &LLm, MMm
@@ -45,6 +48,7 @@ contains
     &nf90_inq_dimid, nf90_inquire_dimension, nf90_inq_varid, nf90_get_var
     implicit none
 
+    logical, intent(in) :: coarse_frc
     character(len=19) :: sr_name = "find_optimal_tiling"
     integer(kind=4) :: ncid, dimid, varid, ierr, color
     integer(kind=4) :: gnx, gny, gnx_rho, gny_rho
@@ -54,18 +58,21 @@ contains
     real(kind=8) :: cores, ocean, prct
     real(kind=8), allocatable :: msk(:,:), active(:,:)
     integer(kind=4) :: nparts_loc
+    logical :: fallback
 
 #ifndef PARALLEL_IO
     call error_log%raise_global(&
     &context=module_name//'/'//sr_name,&
     &info='MPI_MASKING requires PARALLEL_IO (joined grid file).')
     call error_log%abort_check()
+    return
 #endif
     if (analytical_grid) then
       call error_log%raise_global(&
       &context=module_name//'/'//sr_name,&
       &info='MPI_MASKING cannot be used with ANA_GRID.')
       call error_log%abort_check()
+      return
     endif
 
     launched = nsize
@@ -78,6 +85,7 @@ contains
       &context=module_name//'/'//sr_name,&
       &info='error opening grid file '//trim(grdname))
       call error_log%abort_check()
+      return
     endif
 
     ierr = nf90_inq_dimid(ncid, 'xi_rho', dimid)
@@ -97,6 +105,7 @@ contains
       &context=module_name//'/'//sr_name,&
       &info='error reading mask_rho from '//trim(grdname))
       call error_log%abort_check()
+      return
     endif
 
     ocean = sum(msk) / real(gnx*gny, kind=8)
@@ -105,6 +114,7 @@ contains
       &context=module_name//'/'//sr_name,&
       &info='mask_rho has no ocean points.')
       call error_log%abort_check()
+      return
     endif
 
     npx1 = ceiling(cores/ocean)
@@ -121,7 +131,10 @@ contains
         &(npx < gnx) .and. (npy < gny)) then
           call check_mask(npx, npy, gnx, gny, msk, nx, ny, nxc, nyc,&
           &nparts_loc)
-          if ((nparts_loc <= cores) .and. (nparts_loc >= (cores*prct))) then
+          ! nparts_loc == 0 flags a decomposition check_mask could not
+          ! partition at all; it must never enter the candidate list.
+          if ((nparts_loc >= 1) .and. (nparts_loc <= cores) .and.&
+          &(nparts_loc >= (cores*prct))) then
             i = i + 1
             active(i,1) = real(nparts_loc, kind=8)
             active(i,2) = real(npx, kind=8)
@@ -140,6 +153,11 @@ contains
     if (i > 0) call sort_active(active(1:i,:))
 
     ! After sort, largest tiles are first; smallest (most efficient) are last.
+    ! Prefer a tiling free of coarse-grid caveats. Those caveats only matter
+    ! for runs reading coarse-resolution forcing (interp_*_frc), so when the
+    ! run does not (coarse_frc false) and every candidate carries one
+    ! (typical for small grids), fall back to the most efficient candidate
+    ! rather than refusing to run.
     best = 0
     do k = i, 1, -1
       if (tiling_has_warning(active(k,:))) cycle
@@ -147,12 +165,34 @@ contains
       exit
     enddo
 
+    fallback = (best == 0) .and. (i > 0) .and. (.not. coarse_frc)
+    if (fallback) then
+      do k = i, 1, -1
+        if ((nint(active(k,8)) == invalid_coarse) .or.&
+        &(nint(active(k,9)) == invalid_coarse)) cycle
+        best = k
+        exit
+      enddo
+      if (best == 0) best = i
+    endif
+
     if (best == 0) then
       if (mynode == 0) call report_tiling_scan(active, i, 0, launched)
-      call error_log%raise_global(&
-      &context=module_name//'/'//sr_name,&
-      &info='no valid MPI_MASKING tiling found for the launched core count.')
+      if (i > 0) then
+        call error_log%raise_global(&
+        &context=module_name//'/'//sr_name,&
+        &info='every candidate MPI_MASKING tiling is incompatible with'//&
+        &' coarse-resolution forcing (interp_*_frc enabled); disable'//&
+        &' forcing interpolation or relaunch with a different number'//&
+        &' of ranks.')
+      else
+        call error_log%raise_global(&
+        &context=module_name//'/'//sr_name,&
+        &info='no candidate MPI_MASKING tiling for the launched core'//&
+        &' count; relaunch with a different number of ranks.')
+      endif
       call error_log%abort_check()
+      return
     endif
 
     nparts_saved = int(active(best,1))
@@ -164,6 +204,12 @@ contains
 
     if (mynode == 0) then
       call report_tiling_scan(active, i, best, launched)
+      if (fallback) then
+        write(*,'(a)') 'MPI_MASKING WARNING: every candidate tiling has'//&
+        &' coarse-grid caveats; selected the most efficient one anyway.'
+        write(*,'(a)') 'MPI_MASKING WARNING: this run cannot read'//&
+        &' coarse-grid inputs with this tiling.'
+      endif
       if (nparts_saved < launched) then
         write(*,'(a,i0,a,i0,a)')&
         &'MPI_MASKING :: splitting communicator to ', nparts_saved,&
@@ -285,6 +331,7 @@ contains
     integer(kind=4) :: surplus_x, surplus_y, loc_x, loc_y
     integer(kind=4) :: gnxc, gnyc, surplus_xc, surplus_yc, loc_xc, loc_yc
     integer(kind=4) :: npi, npj, count
+    logical :: edge_w, edge_e, edge_s, edge_n
     integer(kind=4), allocatable :: iloc(:,:), jloc(:,:), ilcu(:,:), jlcv(:,:)
     integer(kind=4), allocatable :: ilocc(:,:), jlocc(:,:), ilcuc(:,:), jlcvc(:,:)
 
@@ -393,13 +440,30 @@ contains
     endif
 
     count = 0
+    edge_w = .false.
+    edge_e = .false.
+    edge_s = .false.
+    edge_n = .false.
     do npj = 1, npy
       do npi = 1, npx
         msk_mx = maxval(mask(iloc(npi,2):iloc(npi,3), jloc(npj,2):jloc(npj,3)))
-        if (msk_mx > 0.0_8) count = count + 1
+        if (msk_mx > 0.0_8) then
+          count = count + 1
+          if (npi == 1)   edge_w = .true.
+          if (npi == npx) edge_e = .true.
+          if (npj == 1)   edge_s = .true.
+          if (npj == npy) edge_n = .true.
+        endif
       enddo
     enddo
-    nparts_out = count
+    ! The PIO boundary decompositions require at least one active (ocean)
+    ! tile on each physical edge of the domain; a tiling whose edge tiles
+    ! are all land is unusable (PIO aborts with totiosize <= 0).
+    if (edge_w .and. edge_e .and. edge_s .and. edge_n) then
+      nparts_out = count
+    else
+      nparts_out = 0
+    endif
 
     deallocate(iloc, jloc, ilcu, jlcv, ilocc, jlocc, ilcuc, jlcvc)
   end subroutine check_mask
