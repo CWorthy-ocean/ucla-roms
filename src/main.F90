@@ -138,6 +138,10 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only:  init_cdr_output, do_cdr_output
 #endif
+#if defined MARBL && defined CDR_FORCING
+    use cdr_tracer_output, only: init_cdr_tracer_output, do_cdr_tracer_output
+    use cdr_gas_exch_output, only: init_cdr_gas_exch_output, do_cdr_gas_exch_output
+#endif
     use frc_output, only: init_frc_output, wrt_frc
     use analytical, only: &
 #ifdef ANA_INITIAL
@@ -366,6 +370,10 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     if (do_cdr_output)  call init_cdr_output
 #endif
+#if defined MARBL && defined CDR_FORCING
+    if (do_cdr_tracer_output) call init_cdr_tracer_output
+    if (do_cdr_gas_exch_output) call init_cdr_gas_exch_output
+#endif
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     if (do_upscale) then
       call init_upscale
@@ -405,6 +413,10 @@ contains
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only:  wrt_cdr, do_cdr_output
+#endif
+#if defined MARBL && defined CDR_FORCING
+    use cdr_tracer_output, only: wrt_cdr_trc, do_cdr_tracer_output
+    use cdr_gas_exch_output, only: wrt_cdr_gas, do_cdr_gas_exch_output
 #endif
     use frc_output, only:  wrt_frc_output, wrt_frc
     use zslice_output, only: wrt_zslice, do_zslice
@@ -601,6 +613,10 @@ contains
     if (do_random) call wrt_random
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     if (do_cdr_output)  call wrt_cdr
+#endif
+#if defined MARBL && defined CDR_FORCING
+    if (do_cdr_tracer_output) call wrt_cdr_trc
+    if (do_cdr_gas_exch_output) call wrt_cdr_gas
 #endif
     if (do_zslice) call wrt_zslice
     if (wrt_frc)    call wrt_frc_output

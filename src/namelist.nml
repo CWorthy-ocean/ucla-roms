@@ -325,6 +325,36 @@ output_period_cdr = 3600           ! Frequency of CDR-relevant output
 nrpf_cdr = 4                       ! Time records per output file
 /
 
+&CDR_TRACER_OUTPUT_SETTINGS                             !cdr_tracer_output.F90
+!--------------------------
+! Output for CDR_OAE_ALK/DIC and CDR_DOR_DIC
+! Requires MARBL and CDR_FORCING cppkeys
+!--------------------------
+do_cdr_tracer_output = .false.       ! Output dedicated CDR tracers
+wrt_cdr_trc_avg = .true.             ! Write averaged (T) or instantaneous (F)
+cdr_trc_monthly_averages = .false.   ! Write averaged outputs per calendar month
+output_period_cdr_trc = 3600         ! Frequency of CDR tracer output (s)
+nrpf_cdr_trc = 4                     ! Time records per output file
+wrt_tracers = .true.                 ! Write CDR tracer concentrations
+wrt_vertical_integrals = .true.      ! Write int_z_* fields
+wrt_thickness_weighted = .true.      ! Write h* and h*_avg fields
+wrt_sources = .true.                 ! Write *_source fields (if cdr_source)
+wrt_alk = .true.                     ! Write CDR_OAE_ALK and its variants
+wrt_dic = .true.                     ! Write CDR_OAE_DIC, CDR_DOR_DIC and variants
+/
+
+&CDR_GAS_EXCH_OUTPUT_SETTINGS                       !cdr_gas_exch_output.F90
+!----------------------------
+! Output for ddic_dco2 (beta) and ddic_dalk (eta)
+! Requires MARBL and CDR_FORCING cppkeys
+!----------------------------
+do_cdr_gas_exch_output = .false.     ! Output CDR gas-exchange sensitivities
+wrt_cdr_gas_avg = .true.             ! Write averaged (T) or instantaneous (F)
+cdr_gas_monthly_averages = .false.   ! Write averaged outputs per calendar month
+output_period_cdr_gas = 3600         ! Frequency of CDR gas-exch output (s)
+nrpf_cdr_gas = 4                     ! Time records per output file
+/
+
 &UPSCALE_SETTINGS                                              !upscale_output.F
 !----------------
 ! Previously set in `upscale_output.opt`

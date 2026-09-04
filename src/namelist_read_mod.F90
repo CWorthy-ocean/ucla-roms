@@ -34,6 +34,10 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only: read_cdr_output_nml     !CDR_OUTPUT_SETTINGS
 #endif
+#if defined MARBL && defined CDR_FORCING
+    use cdr_tracer_output, only: read_cdr_tracer_output_nml  !CDR_TRACER_OUTPUT_SETTINGS
+    use cdr_gas_exch_output, only: read_cdr_gas_exch_output_nml  !CDR_GAS_EXCH_OUTPUT_SETTINGS
+#endif
 #ifdef DIAGNOSTICS
     use diagnostics, only: read_nml_diagnostics   !DIAGNOSTICS_SETTINGS
 #endif
@@ -91,6 +95,10 @@ contains
     call read_nml_pflx
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     call read_cdr_output_nml
+#endif
+#if defined MARBL && defined CDR_FORCING
+    call read_cdr_tracer_output_nml
+    call read_cdr_gas_exch_output_nml
 #endif
     call read_nml_extract
     call read_nml_frc_output
