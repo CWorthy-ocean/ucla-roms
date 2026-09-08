@@ -119,6 +119,11 @@ module roms_read_write
   real(kind=8),dimension(:,:),allocatable   :: cdata     ! Array to read in coarse surface forcing data
 
   integer(kind=4),parameter :: max_options_string=20000
+  ! forcing file list attribute: sized to hold every allowed forcing file
+  ! path (max_frc_files) plus a separating ', ' each, so it can't overflow
+  integer(kind=4), parameter, public :: max_frc_files=360
+  integer(kind=4),parameter :: max_frc_string=&
+  &max_frc_files*(max_name_size+2)
 
   ! option string to go into output file attributes
 
@@ -133,7 +138,7 @@ module roms_read_write
   ! forcing file specifications
   character(len=max_options_string),public::grid_files='N/A'
   character(len=max_options_string),public::ini_files='N/A'
-  character(len=max_options_string),public::force_files='N/A'
+  character(len=max_frc_string),public::force_files='N/A'
   character(len=max_options_string),public::force_info='N/A'
   character(len=100),public::frctype ! variable across netcdf files (forcing module)
   ! average files
@@ -145,7 +150,6 @@ module roms_read_write
 
 
   ! from old ncvars **************:
-  integer(kind=4), parameter, public :: max_frc_files=360
   integer(kind=4), public :: max_frc, ncfrc(max_frc_files)
   integer(kind=4), public :: nrrec = 2   ! IC record index: hardcoded, no longer namelist-configurable
   ! Horizontal Grid Type Codes =  0,1,2,3 for RHO-, U-, V-, PSI-points
@@ -2128,26 +2132,33 @@ contains
 ! ---------------------------------------------------------------------
   subroutine store_string_att( char_string, string_add )  ![
     ! Add settings that affect the solution to a string
-    ! which will be added to global attributes of all nc files
+    ! which will be added to global attributes of all nc files.
+    ! These strings are provenance metadata only: nothing reads them
+    ! back, so running out of room truncates with a warning rather
+    ! than aborting the run.
     implicit none
-    character(len=17) :: sr_name = "store_string_att"
     ! input
     character(len=*),intent(inout) :: char_string
     character(len=*),intent(in)    :: string_add
 
     ! local
-    integer(kind=4) :: is, ie
+    integer(kind=4) :: is, ie, ie_fit
     is=len_trim( char_string )
     is=is+2
     ie=len_trim( string_add )
     ie=ie+is-1
 
     if (ie > len(char_string)) then
-      write(error_info,*)&
-      &'character full:', trim(string_add)
-      call error_log%raise_from_rank(&
-      &context=module_name//"/"//sr_name,&
-      &info=error_info)
+      if (mynode == 0) then
+        write(*,'(1x,4A,I0,A)') 'WARNING: store_string_att: ',&
+        &'output attribute string full, truncating entry: ',&
+        &trim(string_add), ' (limit ', len(char_string),&
+        &' chars). Run unaffected; only file metadata is incomplete.'
+      endif
+      ie_fit = len(char_string)
+      if (is <= ie_fit) then    ! store whatever fits
+        char_string(is:ie_fit) = string_add(1:ie_fit-is+1)
+      endif
       return    ! don't write past the end of char_string
     endif
     char_string(is:ie) = trim(string_add)
