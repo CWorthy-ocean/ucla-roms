@@ -145,7 +145,7 @@ module marbl_driver
   logical                             :: print_values = .false. ! Print example values to stdout during loop
 
 !     Indices of carbonate system tracers
-  integer(kind=4), public :: iALK, iDIC, iALK_alt, iDIC_alt
+  integer(kind=4), public :: iALK, iDIC, iALK_alt, iDIC_alt, iFe
   character(len=1024) :: error_info
 ! ----------------------------------------------------------------------
 
@@ -1731,6 +1731,7 @@ contains
       &marbl_instance%interior_tendencies(m,nz:1:-1)&
       &*(dt*marbl_timestep_ratio)
     end do
+    tracer_array(i,j,:,nnew,iFe) = 3.0e-3 
   end subroutine marbldrv_update_roms_tracers_interior
 !-----------------------------------------------------------------------
 
@@ -1992,6 +1993,9 @@ contains
       endif
       if (t_vname(itot)=='DIC_ALT_CO2') then
         iDIC_alt = itot
+      endif
+      if (t_vname(itot)=='Fe') then
+        iFe = itot
       endif
     enddo
 
