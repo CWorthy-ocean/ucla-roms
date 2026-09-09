@@ -127,7 +127,7 @@ contains
     implicit none
     character(len=10) :: sr_name = "wrt_random"
     ! local
-    character(len=99),save :: fname
+    character(len=256),save :: fname
     integer(kind=4),dimension(3)   :: start
     integer(kind=4)                :: ncid,ierr
 
@@ -143,7 +143,7 @@ contains
           call def_vars_random(ncid)
           ierr = nf90_close(ncid)
         endif
-        call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+        call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
         call MPI_Barrier(ocean_grid_comm, ierr)
 
         if (mynode == 0) then

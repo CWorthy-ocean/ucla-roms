@@ -736,7 +736,7 @@ contains
     ! local
     integer(kind=4) :: i,j,itrc,ierr,ncid,k,record,indt
     character(len=30) :: obj_name
-    character(len=99),save :: fname
+    character(len=256),save :: fname
     character(len=20)              :: tname
     character(len=40) :: oname
     character(len=1) :: pio_bnd
@@ -1260,7 +1260,7 @@ contains
     implicit none
 
     !input/output
-    character(len=99),intent(out) :: fname
+    character(len=256),intent(out) :: fname
 
     !local
     integer(kind=4) :: ncid,ierr,varid,indt
@@ -1353,7 +1353,7 @@ contains
 
       ierr = nf90_close(ncid)
     endif ! mynode == 0
-    call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
 #else
     call create_file('_ext',fname)

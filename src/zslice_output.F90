@@ -388,7 +388,7 @@ contains
     implicit none
     character(len=10) :: sr_name= "wrt_zslice"
     ! local
-    character(len=99),save :: fname
+    character(len=256),save :: fname
     integer(kind=4),dimension(3)   :: start
     integer(kind=4)                :: ncid,ierr
     integer(kind=4)                :: i,j,k,n
@@ -429,7 +429,7 @@ contains
           ierr = nf90_close(ncid)
         endif
         call error_log%abort_check()
-        call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+        call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
         call MPI_Barrier(ocean_grid_comm, ierr)
         record = 0
       endif

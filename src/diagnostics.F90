@@ -774,7 +774,7 @@ contains
     ! local
     integer(kind=4) :: ierr = 0
     integer(kind=4) :: dim,diag, prev_fill_mode
-    character(len=99),save  :: fname
+    character(len=256),save  :: fname
     character(len=100) :: output_time_string
     call calc_diag_avg
 
@@ -1071,7 +1071,7 @@ contains
 
       ierr = nf90_close(ncid)
     endif
-    call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
 #else
     call create_file('_dia',fname)

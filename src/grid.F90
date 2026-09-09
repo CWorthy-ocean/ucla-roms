@@ -113,7 +113,7 @@ module grid
 
   real(kind=8) :: xl,el
 
-  character(len=99),public  :: ana_grdname
+  character(len=256),public  :: ana_grdname
 
   public :: get_grid
 
