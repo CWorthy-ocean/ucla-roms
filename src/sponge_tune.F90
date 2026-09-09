@@ -377,7 +377,7 @@ contains
     character(len=13) :: sr_name = "write_sponge_tune"
     !local
     integer(kind=4)            :: ncid,ierr
-    character(len=99)  :: fname
+    character(len=256)  :: fname
     save fname
 
 #ifdef PARALLEL_IO
@@ -385,7 +385,7 @@ contains
       call create_sp_tune_file(fname)
       record = 0
     endif
-    call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
     record = record + 1
 

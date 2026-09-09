@@ -435,7 +435,7 @@ subroutine wrt_sflux  ![
 
   ! local
   integer(kind=4),dimension(4)   :: start
-  character(len=99),save :: fname
+  character(len=256),save :: fname
   integer(kind=4)                :: ierr, itrc
   character(len=20)      :: varname
 
@@ -567,7 +567,7 @@ subroutine create_sflx_file(fname)  ![
   implicit none
 
   !input/output
-  character(len=99),intent(out) :: fname
+  character(len=256),intent(out) :: fname
 
   ! local
   integer(kind=4) :: ierr,varid
@@ -594,7 +594,7 @@ subroutine create_sflx_file(fname)  ![
 
   ierr = nf90_close(ncid)
   endif
-  call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+  call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
   call MPI_Barrier(ocean_grid_comm, ierr)
 #else
 

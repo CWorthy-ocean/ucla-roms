@@ -612,7 +612,7 @@ module pio_roms
 !      public  :: pio_createFile
 !      public  :: pio_createVar
 
-  character(len=99), public     :: pio_root_name
+  character(len=256), public     :: pio_root_name
   character(len=21), public     :: pio_refdatestr
 
 !! WRITER

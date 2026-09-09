@@ -991,7 +991,7 @@ contains
 
 ! local
     character(len=14) :: sr_name = "wrt_cdr_output"
-    character(len=99),save :: fname
+    character(len=256),save :: fname
     integer(kind=4),dimension(3)   :: start
     integer(kind=4)                :: idx,ncid,ierr
 
@@ -1005,7 +1005,7 @@ contains
         ierr=nf90_enddef(ncid)
         ierr = nf90_close(ncid)
       endif
-      call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
       record = 0
     endif
 
