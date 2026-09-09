@@ -1,0 +1,27 @@
+.. _0.6.2:
+
+0.6.2
+----------
+
+
+Bug Fixes
+~~~~~~~~~
+
+
+- Runs with many forcing files (roughly 130 or more with long absolute paths) aborted at startup with ``store_string_att: character full``. The ``forcing_files`` output attribute is now sized to hold all 360 files that ROMS allows, so it can no longer overflow before the existing "too many forcing files" check. (`#352 <https://github.com/CWorthy-ocean/ucla-roms/pull/352>`_)
+- Overflow of an output-attribute option string no longer aborts the run. The entry is truncated and a single warning is printed from rank 0. The model reads forcing files from a separate array that was never affected by the overflow. (`#352 <https://github.com/CWorthy-ocean/ucla-roms/pull/352>`_)
+- MPI_MASKING auto-tiling no longer refuses to run on small grids where every candidate tiling has coarse-grid caveats: when the run reads no coarse-resolution forcing (``interp_*_frc`` all off), the most efficient candidate is selected with a prominent warning instead of aborting with "no valid MPI_MASKING tiling found". (`#350 <https://github.com/CWorthy-ocean/ucla-roms/pull/350>`_)
+- MPI_MASKING tilings that leave a physical domain edge with no ocean tile are now rejected during the scan; previously they passed selection and crashed later in PIO initialization with a cryptic ``totiosize <= 0`` assert. (`#350 <https://github.com/CWorthy-ocean/ucla-roms/pull/350>`_)
+- Coarse-resolution forcing (``interp_*_frc``) on a tiling too fine for the coarse grid now fails at the first coarse read with a clear error; previously it produced out-of-range PIO decompositions or silently wrong interpolated forcing near tile seams. This guard applies to all runs, including fixed ``np_xi``/``np_eta`` tilings without MPI_MASKING. (`#350 <https://github.com/CWorthy-ocean/ucla-roms/pull/350>`_)
+- A failed tiling scan no longer emits garbage output ("splitting communicator to 0 ranks", a duplicate scan printout, nonsense candidates like "mpirun -n 0" with overflowed points-per-tile): ranks running briefly past ``MPI_Abort`` were reading past the end of the candidate array, and unpartitionable decompositions were entering the candidate list. (`#350 <https://github.com/CWorthy-ocean/ucla-roms/pull/350>`_)
+
+Improvements
+~~~~~~~~~~~~
+
+
+- When coarse-resolution forcing is enabled and no compatible tiling exists for the launched core count, MPI_MASKING now errors at startup with a message naming the conflict and the remedies (disable forcing interpolation or change the rank count), instead of failing mid-run. (`#350 <https://github.com/CWorthy-ocean/ucla-roms/pull/350>`_)
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+- Regenerated ``src/Make.depend`` for the new dependencies of ``main.F90``. (`#350 <https://github.com/CWorthy-ocean/ucla-roms/pull/350>`_)
