@@ -1,0 +1,35 @@
+.. _unreleased:
+
+Unreleased
+----------
+
+.. note::
+    This release is currently in development
+
+Breaking Changes
+~~~~~~~~~~~~~~~~
+
+- N/A
+
+New Features
+~~~~~~~~~~~~
+
+- N/A
+
+Bug Fixes
+~~~~~~~~~
+
+
+- Prevent truncation of long output/I/O filenames and paths that previously overflowed character(len=99) buffers (and related MPI_Bcast transfers of only 99 characters). (`#354 <https://github.com/CWorthy-ocean/ucla-roms/pull/354>`_)
+
+Improvements
+~~~~~~~~~~~~
+
+
+- Widen filename/path buffers to character(len=256) in cdr_output, diagnostics, extract_data, frc_output, grid (ana_grdname), instant_output, particles, pio_roms (pio_root_name), random_output, sponge_tune, surf_flux, upscale_output, and zslice_output. (`#354 <https://github.com/CWorthy-ocean/ucla-roms/pull/354>`_)
+- Align MPI_Bcast(fname, …) counts with the new buffer length. (`#354 <https://github.com/CWorthy-ocean/ucla-roms/pull/354>`_)
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+- N/A
