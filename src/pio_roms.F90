@@ -13,7 +13,8 @@ module pio_roms
   use pio, only : PIO_iotype_pnetcdf
   use pio, only : PIO_offset_kind
   use pio, only : PIO_setdebuglevel
-  use pio_nf, only : PIO_inq_varid, PIO_inq_dimid
+  use pio, only : PIO_seterrorhandling, PIO_BCAST_ERROR
+  use pio_nf, only : PIO_inq_varid, PIO_inq_dimid, PIO_strerror
   use pionfatt_mod, only : put_att_desc_text
   use mpi_f08, only: mpi_character, mpi_wtime
   use param, only: LLm, MMm, nz, ocean_grid_comm, nt, mynode
@@ -38,8 +39,11 @@ module pio_roms
 #else
   logical, parameter :: pio_force_nofill = .false.
 #endif
-  ! Name of the currently open forcing file (must fit max_name_size paths)
-  character(len=256),public :: pio_frcfile
+  ! Name of the file currently open in pio_FileDesc (must fit max_name_size
+  ! paths). Set only by pio_open_or_abort; the forcing readers compare against
+  ! it to decide whether a re-open is needed, and pio_inq_varid_or_abort uses
+  ! it to name the file in its error message.
+  character(len=256), public :: pio_current_file = ''
   !> @brief Rank of processor running the code.
   integer(kind=4), public :: pio_myRank
   !> @brief Number of processors participating in MPI communicator.
@@ -608,6 +612,10 @@ module pio_roms
   public  :: pio_ncwrite1
   public  :: pio_ncwrite2
   public  :: pio_ncwrite3
+
+  !! Checked wrapper around PIO_openfile: aborts with a ROMS-side message
+  !! (file name + calling context) instead of PIO's bare strerror.
+  public  :: pio_open_or_abort
 
 !      public  :: pio_createFile
 !      public  :: pio_createVar
@@ -1793,6 +1801,80 @@ contains
 
   end subroutine pio_createDecomps
 ! ----------------------------------------------------------------------
+  subroutine pio_open_or_abort(fname, context, mode) ![
+    ! Open fname into pio_FileDesc, aborting with a ROMS-side message on
+    ! failure. PIO is switched to PIO_BCAST_ERROR for the duration of the
+    ! open so that every rank receives the same status (this is safe because
+    ! PIO_openfile is always called collectively by every rank in the
+    ! iosystem) and the failure can be reported with the file name and
+    ! calling context, instead of PIO's own unhelpful
+    ! "Abort with message <strerror> in file pioc_support.c at line N".
+    implicit none
+
+    ! input
+    character(len=*), intent(in) :: fname, context
+    integer(kind=4), intent(in), optional :: mode   ! PIO_write etc.; default PIO_nowrite
+
+    ! local
+    integer(kind=4) :: ierr, ierr2, old_method
+    character(len=256) :: errmsg
+    character(len=600) :: msg
+
+    ! PIO_openfile is collective, so every rank passes through here: flush any
+    ! error recorded by a preceding rank-0-only step (e.g. the serial
+    ! nf90_create/nf90_open of an output file) before the collective open,
+    ! rather than relying on each caller to remember an abort_check.
+    call error_log%abort_check()
+
+    call PIO_seterrorhandling(pio_IoSystem, PIO_BCAST_ERROR, old_method)
+    if (present(mode)) then
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), mode)
+    else
+      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname))
+    endif
+    call PIO_seterrorhandling(pio_IoSystem, old_method)
+
+    if (ierr /= PIO_noerr) then
+      ierr2 = PIO_strerror(ierr, errmsg)
+      msg = "PIO could not open '"//trim(fname)//"': "//trim(errmsg)
+      call error_log%raise_global(context=context, info=trim(msg))
+      call error_log%abort_check()
+    else
+      pio_current_file = fname
+    endif
+
+  end subroutine pio_open_or_abort !]
+! ----------------------------------------------------------------------
+  subroutine pio_inq_varid_or_abort(varName, varId, context) ![
+    ! Look up varName in the currently open pio_FileDesc, aborting with a
+    ! ROMS-side message (naming the file and variable) on failure, using the
+    ! same PIO_BCAST_ERROR trick as pio_open_or_abort. PIO_inq_varid is a
+    ! collective call, so every rank sees the same ierr.
+    implicit none
+
+    ! input
+    character(len=*), intent(in) :: varName, context
+    type(var_desc_t), intent(out) :: varId
+
+    ! local
+    integer(kind=4) :: ierr, ierr2, old_method
+    character(len=256) :: errmsg
+    character(len=600) :: msg
+
+    call PIO_seterrorhandling(pio_FileDesc, PIO_BCAST_ERROR, old_method)
+    ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
+    call PIO_seterrorhandling(pio_FileDesc, old_method)
+
+    if (ierr /= PIO_noerr) then
+      ierr2 = PIO_strerror(ierr, errmsg)
+      msg = "variable '"//trim(varName)//"' not found in PIO file '"&
+      &//trim(pio_current_file)//"': "//trim(errmsg)
+      call error_log%raise_global(context=context, info=trim(msg))
+      call error_log%abort_check()
+    endif
+
+  end subroutine pio_inq_varid_or_abort !]
+! ----------------------------------------------------------------------
   subroutine pio_ncread1(varName, arr, irec)
 
     implicit none
@@ -1804,7 +1886,7 @@ contains
     type(var_desc_t) :: varId
     integer(kind=4) :: ierr
 
-    ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
+    call pio_inq_varid_or_abort(trim(varName), varId, "pio_roms/pio_ncread1")
 
     if (present(irec)) then
       frame = irec
@@ -1850,7 +1932,7 @@ contains
     type(var_desc_t) :: varId
     integer(kind=4) :: ierr
 
-    ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
+    call pio_inq_varid_or_abort(trim(varName), varId, "pio_roms/pio_ncread2")
 
     if (present(irec)) then
       frame = irec
@@ -1908,7 +1990,7 @@ contains
     type(var_desc_t) :: varId
     integer(kind=4) :: ierr
 
-    ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
+    call pio_inq_varid_or_abort(trim(varName), varId, "pio_roms/pio_ncread3")
 
     if (present(irec)) then
       frame = irec
@@ -1936,7 +2018,7 @@ contains
     type(var_desc_t) :: varId
     integer(kind=4) :: ierr
 
-    ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
+    call pio_inq_varid_or_abort(trim(varName), varId, "pio_roms/pio_ncwrite1")
 
     if (present(irec)) then
       frame = irec
@@ -2008,7 +2090,7 @@ contains
     type(var_desc_t) :: varId
     integer(kind=4) :: ierr
 
-    ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
+    call pio_inq_varid_or_abort(trim(varName), varId, "pio_roms/pio_ncwrite2")
 
     if (present(irec)) then
       frame = irec
@@ -2092,7 +2174,7 @@ contains
     type(var_desc_t) :: varId
     integer(kind=4) :: ierr
 
-    ierr = PIO_inq_varid(pio_FileDesc, trim(varName), varId)
+    call pio_inq_varid_or_abort(trim(varName), varId, "pio_roms/pio_ncwrite3")
 
     if (present(irec)) then
       frame = irec

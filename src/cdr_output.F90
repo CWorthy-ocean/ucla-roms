@@ -33,8 +33,8 @@ module cdr_output
      &                   cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,&
      &                   cdr_jloc, cdr_source, cdr_forcing_3d
 #ifdef PARALLEL_IO
-      use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_gtype
-      use pio, only: PIO_openfile, PIO_closefile, PIO_write
+      use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_gtype, pio_open_or_abort
+      use pio, only: PIO_closefile, PIO_write
       use param, only: ocean_grid_comm
       use mpi_f08, only: MPI_Bcast, MPI_Barrier, MPI_CHARACTER
 #endif
@@ -1027,7 +1027,7 @@ contains
     endif
 
     call MPI_Barrier(ocean_grid_comm, ierr)
-    ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+    call pio_open_or_abort(trim(fname), module_name//"/"//sr_name, PIO_write)
 
     call multiply_by_thickness
     if (wrt_cdr_avg) then
