@@ -1,0 +1,20 @@
+.. _0.6.4:
+
+0.6.4
+----------
+
+
+Bug Fixes
+~~~~~~~~~
+
+
+- A forcing variable with no record at or before the model start time (or with no records left, or absent from every forcing file) now aborts with ROMS's message, e.g. ``First available forcing record is past current time for var: xco2_air``, instead of PIO's misleading "Invalid file name" abort. Previously ``frcfiles(0)`` was read out of bounds. (`#356 <https://github.com/CWorthy-ocean/ucla-roms/pull/356>`_)
+- A failed rank-0 creation of an output file (history, averages, restart, BGC, CDR, diagnostics, random, extract, forcing output) is now reported before the collective PIO open, instead of surfacing later as a PIO open failure on every rank. (`#356 <https://github.com/CWorthy-ocean/ucla-roms/pull/356>`_)
+
+Improvements
+~~~~~~~~~~~~
+
+
+- All PIO file opens report ``PIO could not open '<file>': <PIO/PnetCDF error text>`` with the ROMS routine as context. PIO is switched to ``PIO_BCAST_ERROR`` only for the duration of the open, so every rank receives the same status; the default handler is restored afterwards. (`#356 <https://github.com/CWorthy-ocean/ucla-roms/pull/356>`_)
+- Variable lookups inside the PIO ``ncread``/``ncwrite`` paths report ``variable '<name>' not found in PIO file '<file>'`` instead of a bare PIO error. (`#356 <https://github.com/CWorthy-ocean/ucla-roms/pull/356>`_)
+- ``gather_errors_on_main_rank`` is exported from ``error_handling_mod`` so the forcing readers can pick the right abort strategy (collective vs. rank-0 print with the other ranks parked in a barrier). (`#356 <https://github.com/CWorthy-ocean/ucla-roms/pull/356>`_)
