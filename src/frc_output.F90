@@ -27,8 +27,8 @@ module frc_output
   use surf_flux, only: stflx, sustr, svstr, srflx, uwnd, vwnd, swflx
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
-  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
+  use pio, only : PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
 
@@ -246,7 +246,7 @@ contains
       endif
       call error_log%abort_check()
       call MPI_Barrier(ocean_grid_comm, ierr)
-      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+      call pio_open_or_abort(trim(fname), module_name//"/wrt_frc_output", PIO_write)
 
       if (wrt_frc_avg) then
 #ifdef BULK_FRC

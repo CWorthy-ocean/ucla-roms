@@ -12,8 +12,8 @@ module tides
   &tide_opt, frcfiles, store_string_att
   use grid, only: xr, yr
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
-  use pio, only : PIO_openfile, PIO_closefile
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
+  use pio, only : PIO_closefile
 #endif
   use error_handling_mod, only: error_log
 
@@ -339,7 +339,7 @@ contains
 #ifdef PARALLEL_IO
     ! open once for all constituents (re-opening per constituent leaked
     ! the previous PIO file handle)
-    ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(var_file_indx))
+    call pio_open_or_abort(frcfiles(var_file_indx), module_name//"/"//sr_name)
 #endif
 
     do itide = 1,ntides

@@ -20,8 +20,8 @@ module random_output
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
-  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
+  use pio, only : PIO_closefile, PIO_write
 #endif
 #ifdef MPI
   use mpi_f08, only: MPI_CHARACTER, mpi_bcast
@@ -159,7 +159,7 @@ contains
         endif
         call MPI_Barrier(ocean_grid_comm, ierr)
 
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+        call pio_open_or_abort(trim(fname), module_name//"/"//sr_name, PIO_write)
         record = 0
 
         record = record+1

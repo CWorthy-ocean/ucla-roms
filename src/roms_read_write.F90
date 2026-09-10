@@ -28,8 +28,8 @@ module roms_read_write
   use pio_roms, only: pio_xi_rho_coarse_start, pio_eta_rho_coarse_start,pio_xi_u_coarse_start, pio_eta_v_coarse_start,&
   &pio_xi_rho_coarse, pio_eta_rho_coarse, pio_xi_u_coarse, pio_eta_v_coarse,&
   &pio_i0c, pio_i1c, pio_j0c, pio_j1c, pio_initialize_coarse, pio_IoSystem, pio_FileDesc, pio_type,&
-  &pio_file_is_open, pio_frcfile
-  use pio, only : PIO_openfile, PIO_closefile
+  &pio_file_is_open, pio_current_file, pio_open_or_abort
+  use pio, only : PIO_closefile
 #endif
   use error_handling_mod, only: error_log ! Note, abort_check should be called by caller of set_frc_data
   use instant_output, only: wrt_instant, instant_root_name
@@ -1132,6 +1132,55 @@ contains
 
   end subroutine find_new_record_cycle !]
 ! ----------------------------------------------------------------------
+  subroutine abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file) ![
+    ! find_new_record only records its failures ("First available forcing
+    ! record is past current time", "Ran out of time records", "Could not
+    ! find var") in the error log and leaves irec=0 and ifile=0 (or
+    ! ifile>max_frc). Stop here, before the caller opens frcfiles(ifile):
+    ! with PARALLEL_IO that open aborts every rank with PIO's misleading
+    ! "Invalid file name (e.g., path name too long)" and the recorded message
+    ! is never printed; the serial path fails later with "Not a valid ID".
+    !
+    ! Under PARALLEL_IO only rank 0 ran find_new_record and holds the message,
+    ! so rank 0 prints and aborts while the other ranks park in a barrier
+    ! until its MPI_Abort takes the job down. With gather_errors_on_main_rank
+    ! abort_check is collective and every rank calls it instead.
+    use param, only: ocean_grid_comm
+    use mpi_f08, only: MPI_Barrier
+    use error_handling_mod, only: gather_errors_on_main_rank
+    implicit none
+
+    ! input
+    integer(kind=4), intent(in) :: ifile, irec
+    character(len=*), intent(in) :: vname   ! forcing variable being read
+    character(len=*), intent(in) :: sr_name ! calling routine, for the log context
+    logical, intent(in) :: check_file       ! .false. for ungridded data (fixed file)
+
+    ! local
+    integer(kind=4) :: ierr
+
+    if (irec >= 1) then
+      if (.not. check_file) return
+      if (ifile >= 1 .and. ifile <= max_frc) return
+    endif
+
+    if (mynode == 0 .and. .not. error_log%abort_requested) then
+      write(error_info, *) 'no usable forcing record for ', trim(vname)
+      call error_log%raise_from_rank(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+    endif
+
+    if (gather_errors_on_main_rank) then
+      call error_log%abort_check()
+    elseif (mynode == 0) then
+      call error_log%abort_check()
+    else
+      call MPI_Barrier(ocean_grid_comm, ierr)  ! wait to be killed by rank 0's abort
+    endif
+
+  end subroutine abort_if_no_frc_record !]
+! ----------------------------------------------------------------------
   subroutine fill_frc_slice_aux(nc,modtime,it,d1,bry) ![
     ! Fill a time slice of forcing data, not surface forcing
 
@@ -1186,6 +1235,7 @@ contains
       call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file=.false.)
 !     Send time and vdata to each rankg
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%vdata(:,:,it),msg_size,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
@@ -1207,19 +1257,20 @@ contains
       &nc%times(it) )
 #endif
 
+      call abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file=.true.)
+
 !      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
       if (pio_gtype /= '----') then
         ! close and re-open if a different forcing file is currently open
         ! (e.g. physical and bgc boundary data read in the same pass)
         if ((pio_file_is_open == 1) .and.&
-        &   (trim(pio_frcfile) /= trim(frcfiles(ifile)))) then
+        &   (trim(pio_current_file) /= trim(frcfiles(ifile)))) then
           call PIO_closefile(pio_FileDesc)
           pio_file_is_open = 0
         endif
         if (pio_file_is_open == 0) then
-          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
-          pio_frcfile = frcfiles(ifile)
+          call pio_open_or_abort(frcfiles(ifile), module_name//"/"//sr_name)
           pio_file_is_open = 1
         endif
       else
@@ -1332,6 +1383,7 @@ contains
       call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file=.false.)
 ! Send time and vdata to each rank
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%vdata(:,:,:,it),msg_size,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
@@ -1351,19 +1403,20 @@ contains
       call find_new_record(vname,tname,modtime,ifile,irec,&
       &nc%times(it) )
 #endif
+
+      call abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file=.true.)
 !      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
       if (pio_gtype /= '----') then
         ! close and re-open if a different forcing file is currently open
         ! (e.g. physical and bgc boundary data read in the same pass)
         if ((pio_file_is_open == 1) .and.&
-        &   (trim(pio_frcfile) /= trim(frcfiles(ifile)))) then
+        &   (trim(pio_current_file) /= trim(frcfiles(ifile)))) then
           call PIO_closefile(pio_FileDesc)
           pio_file_is_open = 0
         endif
         if (pio_file_is_open == 0) then
-          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
-          pio_frcfile = frcfiles(ifile)
+          call pio_open_or_abort(frcfiles(ifile), module_name//"/"//sr_name)
           pio_file_is_open = 1
         endif
       else
@@ -1428,6 +1481,7 @@ contains
     use mpi_f08, only: mpi_double_precision, mpi_integer, mpi_bcast, mpi_barrier
 
     implicit none
+    character(len=19) :: sr_name = "fill_frc_slice_surf"
 
     ! input/outputs
     type(ncforce)      ,intent(inout) :: nc      ! derived type containing all neccesary supporting data
@@ -1465,19 +1519,20 @@ contains
     &nc%times(it) )
 #endif
 
+    call abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file=.true.)
+
 !      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
     if (pio_gtype /= '----') then
       ! close and re-open if a different forcing file is currently open
       ! (e.g. physical and bgc boundary data read in the same pass)
       if ((pio_file_is_open == 1) .and.&
-      &   (trim(pio_frcfile) /= trim(frcfiles(ifile)))) then
+      &   (trim(pio_current_file) /= trim(frcfiles(ifile)))) then
         call PIO_closefile(pio_FileDesc)
         pio_file_is_open = 0
       endif
       if (pio_file_is_open == 0) then
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(ifile))
-        pio_frcfile = frcfiles(ifile)
+        call pio_open_or_abort(frcfiles(ifile), module_name//"/"//sr_name)
         pio_file_is_open = 1
       endif
     endif
