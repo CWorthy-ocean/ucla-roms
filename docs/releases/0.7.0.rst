@@ -1,0 +1,28 @@
+.. _0.7.0:
+
+0.7.0
+----------
+
+
+Breaking Changes
+~~~~~~~~~~~~~~~~
+
+
+- ddic_dco2 and ddic_dalk are no longer written to _cdr files; they go to _cdrgas files when do_cdr_gas_exch_output = .true. (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
+- Cases that previously relied on CDR tracer / beta–eta fields from cdr_output must enable the new namelist sections and expect _cdrtrc / _cdrgas output filenames (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
+- Existing namelists need &CDR_TRACER_OUTPUT_SETTINGS and &CDR_GAS_EXCH_OUTPUT_SETTINGS (both default off) (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
+
+New Features
+~~~~~~~~~~~~
+
+
+- cdr_tracer_output.F90: writes CDR_OAE_ALK / CDR_OAE_DIC / CDR_DOR_DIC and variants (int_z_*, h* / h*_avg, *_source) to _cdrtrc files (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
+- Namelist toggles for frequency, records per file, averaging/monthly mode, and field groups (wrt_tracers, wrt_vertical_integrals, wrt_thickness_weighted, wrt_sources, wrt_alk, wrt_dic) (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
+- cdr_gas_exch_output.F90: computes and writes ddic_dco2 and ddic_dalk to _cdrgas files under do_cdr_gas_exch_output (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
+
+Improvements
+~~~~~~~~~~~~
+
+
+- Separates CDR tracer and gas-exchange I/O from cdr_output so each stream can use its own write frequency and content filters (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
+- Wires the new modules through main, namelist reading, precheck, and Make.depend (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
