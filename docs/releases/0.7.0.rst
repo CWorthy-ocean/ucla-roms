@@ -1,10 +1,8 @@
-.. _unreleased:
+.. _0.7.0:
 
-Unreleased
+0.7.0
 ----------
 
-.. note::
-    This release is currently in development
 
 Breaking Changes
 ~~~~~~~~~~~~~~~~
@@ -22,19 +20,9 @@ New Features
 - Namelist toggles for frequency, records per file, averaging/monthly mode, and field groups (wrt_tracers, wrt_vertical_integrals, wrt_thickness_weighted, wrt_sources, wrt_alk, wrt_dic) (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
 - cdr_gas_exch_output.F90: computes and writes ddic_dco2 and ddic_dalk to _cdrgas files under do_cdr_gas_exch_output (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
 
-Bug Fixes
-~~~~~~~~~
-
-- N/A
-
 Improvements
 ~~~~~~~~~~~~
 
 
 - Separates CDR tracer and gas-exchange I/O from cdr_output so each stream can use its own write frequency and content filters (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
 - Wires the new modules through main, namelist reading, precheck, and Make.depend (`#351 <https://github.com/CWorthy-ocean/ucla-roms/pull/351>`_)
-
-Miscellaneous
-~~~~~~~~~~~~~
-
-- N/A
