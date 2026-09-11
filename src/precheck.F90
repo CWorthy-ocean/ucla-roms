@@ -37,6 +37,12 @@ module precheck
   use cdr_output, only:&
   &do_cdr_output, output_period_cdr, nrpf_cdr
 #endif
+#if defined MARBL && defined CDR_FORCING
+  use cdr_tracer_output, only:&
+  &do_cdr_tracer_output, output_period_cdr_trc, nrpf_cdr_trc
+  use cdr_gas_exch_output, only:&
+  &do_cdr_gas_exch_output, output_period_cdr_gas, nrpf_cdr_gas
+#endif
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
   use upscale_output, only:&
   &do_upscale, output_period_uscl, nrpf_uscl
@@ -105,6 +111,12 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     call check_output_divides_rst(do_cdr_output,&
     &output_period_cdr, nrpf_cdr, 'cdr')
+#endif
+#if defined MARBL && defined CDR_FORCING
+    call check_output_divides_rst(do_cdr_tracer_output,&
+    &output_period_cdr_trc, nrpf_cdr_trc, 'cdrtrc')
+    call check_output_divides_rst(do_cdr_gas_exch_output,&
+    &output_period_cdr_gas, nrpf_cdr_gas, 'cdrgas')
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     call check_output_divides_rst(do_upscale,&
