@@ -79,6 +79,10 @@ module roms_read_write
     logical                           :: ungridded = .false.
     character(len=1024)                :: ungridded_forcing_file=''
     logical                           :: time_interpolation = .true.
+    ! If true and the variable is absent from all forcing files, leave
+    ! the field at zero instead of aborting (used for optional tracers).
+    logical                           :: allow_missing = .false.
+    logical                           :: missing = .false.  ! set once var is confirmed absent
   end type ncforce
 
   type,public  :: ncforce3d
@@ -577,6 +581,11 @@ contains
     integer(kind=4)           :: it1,it2
     real(kind=8),dimension(2) :: vtimes
 
+    if (nc%missing) then
+      var1d = 0._8
+      return
+    endif
+
     d1 = .true.
 
     if (present(obry)) then
@@ -666,6 +675,11 @@ contains
 
     integer(kind=4)           :: it1,it2
     real(kind=8),dimension(2) :: vtimes
+
+    if (nc%missing) then
+      var2d = 0._8
+      return
+    endif
 
     d1 = .false.
 
@@ -909,7 +923,7 @@ contains
 
   end subroutine set_frc_data_surf  !]
 ! ----------------------------------------------------------------------
-  subroutine find_new_record(vname,tname,time,ifile,irec,vtime,ungridded_filename) ![
+  subroutine find_new_record(vname,tname,time,ifile,irec,vtime,ungridded_filename,allow_missing,var_absent) ![
     ! Finds the index for the filename and record number of the first record
     ! with a time that is larger than the model time. It will stores
     ! the corresponding time of the record in vtime.
@@ -929,11 +943,14 @@ contains
     ! read this file only on the head node.
     ! It is assumed that this function is only being called on
     ! local
+    logical, optional             ,intent(in)   :: allow_missing ! if .true., absent var is not fatal
+    logical, optional             ,intent(out)  :: var_absent    ! .true. if var was not in any file
     integer(kind=4), dimension(1) :: dimids     ! time dimension ID
     real(kind=8)    :: time_old
     logical :: found_var                ! is variable in file
     logical :: found_rec                ! is correct record found of var
     logical :: found_var_ever           ! if variable was found in any previous files
+    logical :: allow_miss
     integer(kind=4) :: ncid, ierr
     integer(kind=4) :: nfiles                   ! total number of forcing files
     integer(kind=4) :: irec_old, ifile_old
@@ -943,6 +960,10 @@ contains
     logical :: first                    ! first time call for this variable
 
     real(kind=8),dimension(1)    :: ltime
+
+    allow_miss = .false.
+    if (present(allow_missing)) allow_miss = allow_missing
+    if (present(var_absent)) var_absent = .false.
 
     if (ifile==0) then                                             ! first time for this variable
       first = .true.
@@ -1047,6 +1068,13 @@ contains
 
 
     if (.not. found_var_ever) then
+      if (allow_miss) then
+        if (present(var_absent)) var_absent = .true.
+        ifile = 0
+        irec = 0
+        vtime = 0._8
+        return
+      endif
       write(error_info, *)&
       &'Could not find var: ', vname, 'in forcing files.'
       call error_log%raise_from_rank(&
@@ -1185,7 +1213,8 @@ contains
     ! Fill a time slice of forcing data, not surface forcing
 
     use param, only: ocean_grid_comm
-    use mpi_f08, only: mpi_double_precision, mpi_integer, mpi_bcast, mpi_barrier
+    use mpi_f08, only: mpi_double_precision, mpi_integer, mpi_bcast, mpi_barrier,&
+    &mpi_logical
 
     implicit none
     character(len=19) :: sr_name = "fill_frc_slice_aux"
@@ -1205,11 +1234,15 @@ contains
     character(len=300) :: frcstr
     integer(kind=4)            :: irec,ifile
     integer(kind=4)            :: msg_size
+    logical :: var_absent
+
+    if (nc%missing) return
 
     irec  = nc%irec
     ifile = nc%ifile
     vname = nc%vname
     tname = nc%tname
+    var_absent = .false.
 
     if (nc%ungridded) then
       pio_gtype = '----'  ! ungridded data is read serially on rank 0 only;
@@ -1217,17 +1250,25 @@ contains
                           ! into a rank-0-only PIO collective (deadlock)
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
-        &nc%times(it), nc%ungridded_forcing_file)
+        &nc%times(it), nc%ungridded_forcing_file,&
+        &allow_missing=nc%allow_missing, var_absent=var_absent)
 
-        ierr=nf90_open(nc%ungridded_forcing_file,nf90_nowrite, ncid)
-        if (d1) then
-          call ncread(ncid,vname,nc%vdata(:,1,it),(/1,irec/))
-        else
-          call ncread(ncid,vname,nc%vdata(:,:,it),(/1,1,irec/))
+        if (.not. var_absent) then
+          ierr=nf90_open(nc%ungridded_forcing_file,nf90_nowrite, ncid)
+          if (d1) then
+            call ncread(ncid,vname,nc%vdata(:,1,it),(/1,irec/))
+          else
+            call ncread(ncid,vname,nc%vdata(:,:,it),(/1,1,irec/))
+          endif
+          ierr = nf90_close(ncid)
         endif
-        ierr = nf90_close(ncid)
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
+      call MPI_Bcast(var_absent,1,MPI_LOGICAL,0,ocean_grid_comm,ierr)
+      if (var_absent) then
+        call mark_ncforce_missing(nc, bry)
+        return
+      endif
       msg_size = size(nc%vdata(:,:,it))
       ! These are needed to make sure each rank follows the same
       ! code pathway in set_frc_data
@@ -1244,7 +1285,13 @@ contains
 #ifdef PARALLEL_IO
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
-        &nc%times(it) )
+        &nc%times(it),&
+        &allow_missing=nc%allow_missing, var_absent=var_absent)
+      endif
+      call MPI_Bcast(var_absent,1,MPI_LOGICAL,0,ocean_grid_comm,ierr)
+      if (var_absent) then
+        call mark_ncforce_missing(nc, bry)
+        return
       endif
       call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
@@ -1254,7 +1301,12 @@ contains
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
-      &nc%times(it) )
+      &nc%times(it),&
+      &allow_missing=nc%allow_missing, var_absent=var_absent)
+      if (var_absent) then
+        call mark_ncforce_missing(nc, bry)
+        return
+      endif
 #endif
 
       call abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file=.true.)
@@ -1335,6 +1387,30 @@ contains
     nc%ifile = ifile
 
   end subroutine fill_frc_slice_aux !]
+! ----------------------------------------------------------------------
+  subroutine mark_ncforce_missing(nc, bry) ![
+    ! Mark an optional forcing field as absent and leave it at zero.
+    implicit none
+    type(ncforce), intent(inout) :: nc
+    integer(kind=4), intent(in) :: bry
+
+    nc%missing = .true.
+    nc%vdata = 0._8
+    ! Spanning times so set_frc_data never retries find_new_record.
+    nc%times(1) = -1.0d30
+    nc%times(2) =  1.0d30
+    nc%ifile = 1
+    nc%irec = 1
+    if (mynode==0) then
+      if (bry==0 .or. bry==2) then
+        write(*,*) ' --- WARNING: ', trim(nc%vname),&
+        & ' not in forcing files.  Initialized to 0.0'
+      else
+        write(*,*) ' --- WARNING: ', trim(nc%vname),&
+        & ' not in boundary forcing files.  Initialized to 0.0'
+      endif
+    endif
+  end subroutine mark_ncforce_missing !]
 ! ----------------------------------------------------------------------
   subroutine fill_frc_slice_aux3d(nc,modtime,it,bry) ![
     ! Fill a time slice of forcing data, not surface forcing

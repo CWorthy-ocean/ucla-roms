@@ -94,7 +94,7 @@ contains
 
 !----------------------------------------------------------------------
   subroutine init_arrays_boundary  ![
-    use tracers, only: t_vname
+    use tracers, only: t_vname, iTandS
     implicit none
 
     ! local
@@ -151,10 +151,12 @@ contains
 #    endif
 #   endif
 #   ifdef T_FRC_BRY
-    allocate( t_west(0:Mm+1,nz,NT) )
+    allocate( t_west(0:Mm+1,nz,NT) ); t_west=0._8
     do itrc=1,nt
       nc_t_w(itrc)%vname = trim(t_vname(itrc)) // '_west'
+      nc_t_w(itrc)%allow_missing = (itrc > iTandS)
       allocate( nc_t_w(itrc)%vdata(j0:j1,nz,2) )
+      nc_t_w(itrc)%vdata=0._8
     enddo
 #   endif
 #  endif
@@ -180,10 +182,12 @@ contains
 #    endif
 #   endif
 #   ifdef T_FRC_BRY
-    allocate( t_east(0:Mm+1,nz,NT) )
+    allocate( t_east(0:Mm+1,nz,NT) ); t_east=0._8
     do itrc=1,nt
       nc_t_e(itrc)%vname = trim(t_vname(itrc)) // '_east'
+      nc_t_e(itrc)%allow_missing = (itrc > iTandS)
       allocate( nc_t_e(itrc)%vdata(j0:j1,nz,2) )
+      nc_t_e(itrc)%vdata=0._8
     enddo
 #   endif
 #  endif
@@ -209,10 +213,12 @@ contains
 #    endif
 #   endif
 #   ifdef T_FRC_BRY
-    allocate( t_south(0:Lm+1,nz,NT) )
+    allocate( t_south(0:Lm+1,nz,NT) ); t_south=0._8
     do itrc=1,nt
       nc_t_s(itrc)%vname = trim(t_vname(itrc)) // '_south'
+      nc_t_s(itrc)%allow_missing = (itrc > iTandS)
       allocate( nc_t_s(itrc)%vdata(i0:i1,nz,2) )
+      nc_t_s(itrc)%vdata=0._8
     enddo
 #   endif
 #  endif
@@ -238,10 +244,12 @@ contains
 #    endif
 #   endif
 #   ifdef T_FRC_BRY
-    allocate( t_north(0:Lm+1,nz,NT) )
+    allocate( t_north(0:Lm+1,nz,NT) ); t_north=0._8
     do itrc=1,nt
       nc_t_n(itrc)%vname = trim(t_vname(itrc)) // '_north'
+      nc_t_n(itrc)%allow_missing = (itrc > iTandS)
       allocate( nc_t_n(itrc)%vdata(i0:i1,nz,2) )
+      nc_t_n(itrc)%vdata=0._8
     enddo
 #   endif
 #  endif

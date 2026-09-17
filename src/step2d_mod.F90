@@ -34,7 +34,7 @@ contains
     &iriver, river_flux, riv_uflx,&
     &riv_vol, riv_vflx, river_source
     use pipe_frc, only: pipe_idx, pipe_flx, pipe_source
-#if defined(CDR_FORCING)
+#if defined CDR_FORCING && defined MARBL
     use cdr_frc, only: cdr_source, cdr_volume,&
     &cdr_prf, cdr_nprf,&
     &cdr_icdr, cdr_iloc, cdr_jloc, cdr_vol
