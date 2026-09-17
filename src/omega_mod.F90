@@ -48,7 +48,7 @@ contains
     use pipe_frc, only:&
     &pidx, pipe_idx, pipe_prf,&
     &pipe_flx, pipe_source
-#if defined(CDR_FORCING)
+#if defined CDR_FORCING && defined MARBL
     use cdr_frc, only:&
     &cdr_nprf, cdr_icdr,&
     &cdr_iloc, cdr_prf, cdr_vol,&
