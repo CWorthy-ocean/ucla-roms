@@ -81,6 +81,8 @@ module roms_read_write
     logical                           :: time_interpolation = .true.
     ! If true and the variable is absent from all forcing files, leave
     ! the field at zero instead of aborting (used for optional tracers).
+    ! Only honoured by set_frc_data_1d/2d; set_frc_data_surf rejects it and
+    ! ncforce3d has no equivalent.
     logical                           :: allow_missing = .false.
     logical                           :: missing = .false.  ! set once var is confirmed absent
   end type ncforce
@@ -857,6 +859,14 @@ contains
     integer(kind=4)           :: it1,it2
     real(kind=8),dimension(2) :: vtimes
 
+    if (nc%allow_missing) then
+      write(error_info, *)&
+      &'allow_missing is not supported for surface forcing: ', nc%vname
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+    endif
+
     d1 = .false.
 
     if (frc_time == 'current') then
@@ -1053,12 +1063,21 @@ contains
         ifile = ifile+1
         irec = 0                                                   ! Reset irec for new file
         if (present(ungridded_filename)) then
-          write(error_info, *)&
-          &'find_new_record: Ran out of time records ',&
-          &'for ', vname, ' in single file ', ungridded_filename
-          call error_log%raise_from_rank(&
-          &context=module_name//"/"//sr_name,&
-          &info=error_info)
+          ! An optional variable that is simply absent from the file is not an
+          ! error: stop searching so the found_var_ever check below can return
+          ! var_absent. raise_from_rank only logs, so raising here would still
+          ! abort the run at the next abort_check(). End the search through the
+          ! loop condition rather than 'exit' so that ncid is still closed below.
+          if (allow_miss .and. .not.found_var_ever) then
+            ifile = max_frc + 1
+          else
+            write(error_info, *)&
+            &'find_new_record: Ran out of time records ',&
+            &'for ', vname, ' in single file ', ungridded_filename
+            call error_log%raise_from_rank(&
+            &context=module_name//"/"//sr_name,&
+            &info=error_info)
+          endif
         endif
       endif
 
@@ -1401,8 +1420,18 @@ contains
     nc%times(2) =  1.0d30
     nc%ifile = 1
     nc%irec = 1
-    if (mynode==0) then
-      if (bry==0 .or. bry==2) then
+    ! The callers return before broadcasting the strides, so rank 0 (which ran
+    ! find_new_record) and the other ranks would otherwise disagree on them and
+    ! take different branches in set_frc_data. All ranks reach this after the
+    ! var_absent broadcast, so reset them here on every rank.
+    irec_stride = 0
+    ifile_stride = 0
+#ifdef PARALLEL_IO
+    if (mynode==0) then                          ! every rank gets here, warn once
+#else
+    if (mynode==0 .or. mynode==nnodes-1) then    ! 2 nodes catch e/w/s/n boundaries
+#endif
+      if (bry==0) then
         write(*,*) ' --- WARNING: ', trim(nc%vname),&
         & ' not in forcing files.  Initialized to 0.0'
       else
