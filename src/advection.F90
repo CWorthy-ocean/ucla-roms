@@ -1,7 +1,7 @@
 module advection
 
-  ! Tracer vertical advection from CESR-lab/ucla-roms branch adv_module
-  ! (src/advection.F).  Horizontal tracer fluxes stay in
+  ! Tracer vertical advection adapted from CESR-lab/ucla-roms branch
+  ! adv_module (src/advection.F).  Horizontal tracer fluxes stay in
   ! compute_horiz_tracer_fluxes.h (including UPSTREAM_TS_LAND_CURV).
   ! Momentum advection is unchanged.
   !
@@ -10,26 +10,38 @@ module advection
   ! uses thickness-aware U3.  Define PARABOLIC_SPLINES in cppdefs.opt to
   ! restore the old spline reconstruction instead.
   !
-  ! Thickness-aware faces use a local cubic that matches cell averages
-  ! in physical z (layer thickness Hz), not uniform s-index spacing.
-  ! At interface k (between layers k and k+1):
+  ! Thickness-aware faces use a local parabola that matches the cell
+  ! averages of three adjacent layers in physical z (layer thickness Hz),
+  ! not uniform s-index spacing.  At interface k (between layers k and k+1):
   !   dlt(k) = (t(k+1)-t(k)) / (Hz(k)+Hz(k+1))
   !   tlin   = (Hz(k+1)*t(k) + Hz(k)*t(k+1)) / (Hz(k)+Hz(k+1))
   !   t+     = tlin - Hz(k)*Hz(k+1)*(dlt(k)-dlt(k-1))
   !                    / (Hz(k-1)+Hz(k)+Hz(k+1))     (We > 0)
   !   t-     = tlin - Hz(k)*Hz(k+1)*(dlt(k+1)-dlt(k))
   !                    / (Hz(k)+Hz(k+1)+Hz(k+2))     (We < 0)
-  ! C4 uses (t+ + t-)/2; U3 uses the upwind face.  Boundary closures
-  ! match the previous uniform-index schemes: dlt(0)=0 with mirrored
-  ! Hz(0)=Hz(1), and linear extrapolation of dlt at the free surface
-  ! with mirrored Hz(nz+1)=Hz(nz).
+  ! t+ is exact for the parabola through the averages of layers k-1,k,k+1
+  ! and t- for layers k,k+1,k+2.  C4 uses (t+ + t-)/2; U3 uses the upwind
+  ! face.  On a uniform grid these reduce to the classical (5,2,-1)/6
+  ! upwind and (7,7,-1,-1)/12 centered stencils.
+  !
+  ! Boundary closures: dlt(0)=0 and dlt(nz)=0 (zero tracer gradient across
+  ! the bottom and the free surface) with mirrored thicknesses Hz(0)=Hz(1)
+  ! and Hz(nz+1)=Hz(nz).  On a uniform grid this reproduces the one-sided
+  ! C4 closures of the previous compute_vert_tracer_fluxes.h at both ends:
+  !   face(1)    = 0.5*t(1)  + 7/12*t(2)    - 1/12*t(3)
+  !   face(nz-1) = 0.5*t(nz) + 7/12*t(nz-1) - 1/12*t(nz-2)
+  !
+  ! Index bounds: callers pass their tile bounds istr,iend together with a
+  ! flux array dimensioned like PRIVATE_1D_SCRATCH_ARRAY (istr-2:iend+2),
+  ! so nothing here assumes istr=1 or iend=nx.  Only Fz(istr:iend,0:nz)
+  ! is set.
   !
   ! Pay attention!
   ! The t_vadv routines overwrite advective fluxes (Fz).
 
 #include "cppdefs.opt"
 
-  use dimensions, only: nx, nz, bf
+  use dimensions, only: nz
   use ocean_vars, only: Hz, We
   use tracers, only: t
   use scalars, only: nrhs
@@ -38,33 +50,6 @@ module advection
   implicit none
 
   private
-
-  ! CPP-mirrored flags folded from the former advection.opt file.
-  ! Horizontal / momentum advection is still compiled from the include
-  ! files; these logicals just record the same switches here.
-#if defined UV_ADV
-  logical, parameter :: uv_adv = .true.
-#else
-  logical, parameter :: uv_adv = .false.
-#endif
-#if defined UV_COR
-  logical, parameter :: uv_cor = .true.
-#else
-  logical, parameter :: uv_cor = .false.
-#endif
-#if defined CURVGRID && defined UV_ADV
-  logical, parameter :: curvgrid = .true.
-#else
-  logical, parameter :: curvgrid = .false.
-#endif
-#if defined ADV_ISONEUTRAL
-  logical, parameter :: adv_isoneutral = .true.
-#else
-  logical, parameter :: adv_isoneutral = .false.
-#endif
-
-  integer, parameter :: adv_up3 = 1, adv_c4 = 2, adv_weno = 3, adv_spline = 4
-  integer, parameter :: hadv_scheme = adv_up3
 
   public :: init_advection
   public :: t_vadv_pre
@@ -87,49 +72,49 @@ contains
   end subroutine init_advection
 
 !------------------------------------------------------------------------------
-  subroutine t_vadv_pre(Fz, j, itrc)
+  subroutine t_vadv_pre(Fz, istr, iend, j, itrc)
 
-    integer(kind=4), intent(in) :: j, itrc
-    real(kind=8) :: Fz(1-bf:nx+bf, 0:nz)
+    integer(kind=4), intent(in)  :: istr, iend, j, itrc
+    real(kind=8),    intent(out) :: Fz(istr-2:iend+2, 0:nz)
 
 #ifdef PARABOLIC_SPLINES
-    call t_vadv_spline(Fz, j, itrc)
+    call t_vadv_spline(Fz, istr, iend, j, itrc)
 #else
     ! Leave the dissipative part of U3 for the corrector step
-    call t_vadv_c4(Fz, j, itrc)
+    call t_vadv_c4(Fz, istr, iend, j, itrc)
 #endif
 
   end subroutine t_vadv_pre
 
 !------------------------------------------------------------------------------
-  subroutine t_vadv_cor(Fz, j, itrc)
+  subroutine t_vadv_cor(Fz, istr, iend, j, itrc)
 
-    integer(kind=4), intent(in) :: j, itrc
-    real(kind=8) :: Fz(1-bf:nx+bf, 0:nz)
+    integer(kind=4), intent(in)  :: istr, iend, j, itrc
+    real(kind=8),    intent(out) :: Fz(istr-2:iend+2, 0:nz)
 
 #ifdef PARABOLIC_SPLINES
-    call t_vadv_spline(Fz, j, itrc)
+    call t_vadv_spline(Fz, istr, iend, j, itrc)
 #else
-    call t_vadv_up3(Fz, j, itrc)
+    call t_vadv_up3(Fz, istr, iend, j, itrc)
 #endif
 
   end subroutine t_vadv_cor
 
 !------------------------------------------------------------------------------
-  subroutine t_vadv_spline(Fz, j, itrc)
+  subroutine t_vadv_spline(Fz, istr, iend, j, itrc)
 
-    integer(kind=4), intent(in) :: j, itrc
-    real(kind=8) :: Fz(1-bf:nx+bf, 0:nz)
+    integer(kind=4), intent(in)  :: istr, iend, j, itrc
+    real(kind=8),    intent(out) :: Fz(istr-2:iend+2, 0:nz)
     integer(kind=4) :: i, k
     real(kind=8) :: cff
-    real(kind=8) :: CF(nx, 0:nz)
+    real(kind=8) :: CF(istr:iend, 0:nz)
 
-    do i=1,nx
+    do i=istr,iend
       CF(i,1)=1._8
       Fz(i,0)=2.0_8*t(i,j,1,nrhs,itrc)
     enddo
     do k=1,nz-1,+1    !--> recursive
-      do i=1,nx
+      do i=istr,iend
         cff=1._8/(2._8*Hz(i,j,k)+Hz(i,j,k+1)*(2._8-CF(i,k)))
         CF(i,k+1)=cff*Hz(i,j,k)
         Fz(i,k)=cff*( 3._8*( Hz(i,j,k  )*t(i,j,k+1,nrhs,itrc) &
@@ -137,16 +122,16 @@ contains
                                   -Hz(i,j,k+1)*Fz(i,k-1))
       enddo
     enddo
-    do i=1,nx
+    do i=istr,iend
       Fz(i,nz)=(2._8*t(i,j,nz,nrhs,itrc)-Fz(i,nz-1))/(1._8-CF(i,nz))
     enddo
     do k=nz-1,0,-1    !<-- recursive
-      do i=1,nx
+      do i=istr,iend
         Fz(i,k)=Fz(i,k)-CF(i,k+1)*Fz(i,k+1)
         Fz(i,k+1)=Fz(i,k+1)*We(i,j,k+1)  ! Convert interface value
       enddo                               ! into vertical flux
     enddo
-    do i=1,nx
+    do i=istr,iend
       Fz(i,nz)=0._8                       ! Set top and bottom
       Fz(i,0)=0._8                        ! boundary conditions.
     enddo
@@ -154,31 +139,27 @@ contains
   end subroutine t_vadv_spline
 
 !------------------------------------------------------------------------------
-  subroutine thickness_aware_ifaces(j, itrc, tplus, tminus)
+  subroutine thickness_aware_ifaces(istr, iend, j, itrc, tplus, tminus)
 
-    integer(kind=4), intent(in) :: j, itrc
-    real(kind=8), intent(out) :: tplus(nx,nz), tminus(nx,nz)
+    integer(kind=4), intent(in)  :: istr, iend, j, itrc
+    real(kind=8),    intent(out) :: tplus(istr:iend,nz), tminus(istr:iend,nz)
     integer(kind=4) :: i, k
-    real(kind=8) :: dlt(nx,0:nz)
+    real(kind=8) :: dlt(istr:iend,0:nz)
     real(kind=8) :: tlin, hk, hkp, hkm, hkp2
 
     do k=1,nz-1
-      do i=1,nx
+      do i=istr,iend
         dlt(i,k) = (t(i,j,k+1,nrhs,itrc)-t(i,j,k,nrhs,itrc)) &
                    / max(Hz(i,j,k)+Hz(i,j,k+1), 1.d-30)
       enddo
     enddo
-    do i=1,nx
-      dlt(i,0) = 0._8
-      if (nz >= 3) then
-        dlt(i,nz) = 2._8*dlt(i,nz-1) - dlt(i,nz-2)
-      else
-        dlt(i,nz) = dlt(i,nz-1)
-      endif
+    do i=istr,iend
+      dlt(i,0)  = 0._8                    ! zero gradient across the bottom
+      dlt(i,nz) = 0._8                    ! and across the free surface
     enddo
 
     do k=1,nz-1
-      do i=1,nx
+      do i=istr,iend
         hk  = Hz(i,j,k)
         hkp = Hz(i,j,k+1)
         tlin = (hkp*t(i,j,k,nrhs,itrc) + hk*t(i,j,k+1,nrhs,itrc)) &
@@ -187,7 +168,7 @@ contains
         if (k >= 2) then
           hkm = Hz(i,j,k-1)
         else
-          hkm = hk
+          hkm = hk                        ! mirrored Hz(0)=Hz(1)
         endif
         tplus(i,k) = tlin - hk*hkp*(dlt(i,k)-dlt(i,k-1)) &
                              / max(hkm+hk+hkp, 1.d-30)
@@ -195,7 +176,7 @@ contains
         if (k <= nz-2) then
           hkp2 = Hz(i,j,k+2)
         else
-          hkp2 = hkp
+          hkp2 = hkp                      ! mirrored Hz(nz+1)=Hz(nz)
         endif
         tminus(i,k) = tlin - hk*hkp*(dlt(i,k+1)-dlt(i,k)) &
                               / max(hk+hkp+hkp2, 1.d-30)
@@ -205,45 +186,45 @@ contains
   end subroutine thickness_aware_ifaces
 
 !------------------------------------------------------------------------------
-  subroutine t_vadv_up3(Fz, j, itrc)
+  subroutine t_vadv_up3(Fz, istr, iend, j, itrc)
 
-    integer(kind=4), intent(in) :: j, itrc
-    real(kind=8) :: Fz(1-bf:nx+bf, 0:nz)
+    integer(kind=4), intent(in)  :: istr, iend, j, itrc
+    real(kind=8),    intent(out) :: Fz(istr-2:iend+2, 0:nz)
     integer(kind=4) :: i, k
-    real(kind=8) :: tplus(nx,nz), tminus(nx,nz)
+    real(kind=8) :: tplus(istr:iend,nz), tminus(istr:iend,nz)
 
-    call thickness_aware_ifaces(j, itrc, tplus, tminus)
+    call thickness_aware_ifaces(istr, iend, j, itrc, tplus, tminus)
 
     do k=1,nz-1
-      do i=1,nx
+      do i=istr,iend
         Fz(i,k) = tplus(i,k)*max(We(i,j,k),0._8) &
                 + tminus(i,k)*min(We(i,j,k),0._8)
       enddo
     enddo
 
-    Fz(1:nx,0 ) = 0._8
-    Fz(1:nx,nz) = 0._8
+    Fz(istr:iend,0 ) = 0._8
+    Fz(istr:iend,nz) = 0._8
 
   end subroutine t_vadv_up3
 
 !------------------------------------------------------------------------------
-  subroutine t_vadv_c4(Fz, j, itrc)
+  subroutine t_vadv_c4(Fz, istr, iend, j, itrc)
 
-    integer(kind=4), intent(in) :: j, itrc
-    real(kind=8) :: Fz(1-bf:nx+bf, 0:nz)
+    integer(kind=4), intent(in)  :: istr, iend, j, itrc
+    real(kind=8),    intent(out) :: Fz(istr-2:iend+2, 0:nz)
     integer(kind=4) :: i, k
-    real(kind=8) :: tplus(nx,nz), tminus(nx,nz)
+    real(kind=8) :: tplus(istr:iend,nz), tminus(istr:iend,nz)
 
-    call thickness_aware_ifaces(j, itrc, tplus, tminus)
+    call thickness_aware_ifaces(istr, iend, j, itrc, tplus, tminus)
 
     do k=1,nz-1
-      do i=1,nx
+      do i=istr,iend
         Fz(i,k) = 0.5_8*(tplus(i,k)+tminus(i,k))*We(i,j,k)
       enddo
     enddo
 
-    Fz(1:nx,0)  = 0._8
-    Fz(1:nx,nz) = 0._8
+    Fz(istr:iend,0)  = 0._8
+    Fz(istr:iend,nz) = 0._8
 
   end subroutine t_vadv_c4
 

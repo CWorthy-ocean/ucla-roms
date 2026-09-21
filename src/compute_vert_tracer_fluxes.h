@@ -31,9 +31,9 @@ else
 #endif
 
   if (CORR_STAGE) then
-    call t_vadv_cor(FC, j, itrc)
+    call t_vadv_cor(FC, istr, iend, j, itrc)
   else
-    call t_vadv_pre(FC, j, itrc)
+    call t_vadv_pre(FC, istr, iend, j, itrc)
   endif
 
 #ifdef BIO_1ST_USTREAM_TEST
