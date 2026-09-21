@@ -72,6 +72,7 @@ contains
   &riv_uflx, riv_vol, riv_trc, riv_vflx
   use surf_flux, only: stflx, srflx
   use tracers, only: t, itands, wrt_t_dia
+  use advection, only: t_vadv_pre, t_vadv_cor
 #ifdef MARBL
   use marbl_driver, only: marbldrv_column_physics, iALK, iDIC,&
   &marbl_timestep_ratio

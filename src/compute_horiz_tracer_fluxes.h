@@ -86,6 +86,12 @@ else       !--> standard code applies for T,S
     do i=istr-1,iend+1
 #if defined UPSTREAM_TS
       curv(i,j)=FX(i+1,j)-FX(i,j)
+# if defined MASKING && defined UPSTREAM_TS_LAND_CURV
+!     Land u-faces have FX=0, so FX(wet)-0 is a huge curvature at the
+!     first ocean point.  Zero that 3rd-order term (open-boundary
+!     edges already copy the interior slope for the same reason).
+      curv(i,j)=curv(i,j)*umask(i,j)*umask(i+1,j)
+# endif
 #elif defined AKIMA
       cff=2._8*FX(i+1,j)*FX(i,j)
       if (cff>epsil) then
@@ -167,6 +173,9 @@ else       !--> standard code applies for T,S
     do i=istr,iend
 #if defined UPSTREAM_TS
       curv(i,j)=FE(i,j+1)-FE(i,j)
+# if defined MASKING && defined UPSTREAM_TS_LAND_CURV
+      curv(i,j)=curv(i,j)*vmask(i,j)*vmask(i,j+1)
+# endif
 #elif defined AKIMA
       cff=2._8*FE(i,j+1)*FE(i,j)
       if (cff>epsil) then

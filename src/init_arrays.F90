@@ -66,6 +66,7 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
   use bulk_frc, only: init_arrays_bulk_frc
 #endif
   use dimensions, only: npx, npy
+  use advection, only: init_advection
   implicit none
   integer(kind=4), intent(in) :: istr, iend, jstr, jend
   integer(kind=4)             :: i, j, k, itrc, itavg
@@ -103,6 +104,7 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
 #endif
 
   call init_arrays_ocean
+  call init_advection
 
   call init_avg_arrays
 
