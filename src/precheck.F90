@@ -37,6 +37,8 @@ module precheck
   use cdr_output, only:&
   &do_cdr_output, output_period_cdr, nrpf_cdr
 #endif
+  use carb_output, only:&
+  &do_carb_output, output_period_carb, nrpf_carb
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
   use upscale_output, only:&
   &do_upscale, output_period_uscl, nrpf_uscl
@@ -106,6 +108,8 @@ contains
     call check_output_divides_rst(do_cdr_output,&
     &output_period_cdr, nrpf_cdr, 'cdr')
 #endif
+    call check_output_divides_rst(do_carb_output,&
+    &output_period_carb, nrpf_carb, 'carb')
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     call check_output_divides_rst(do_upscale,&
     &output_period_uscl, nrpf_uscl, 'upscale')

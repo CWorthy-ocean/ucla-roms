@@ -138,6 +138,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only:  init_cdr_output, do_cdr_output
 #endif
+    use carb_output, only:  init_carb_output, do_carb_output
     use frc_output, only: init_frc_output, wrt_frc
     use analytical, only: &
 #ifdef ANA_INITIAL
@@ -366,6 +367,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     if (do_cdr_output)  call init_cdr_output
 #endif
+    if (do_carb_output) call init_carb_output
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     if (do_upscale) then
       call init_upscale
@@ -406,6 +408,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only:  wrt_cdr, do_cdr_output
 #endif
+    use carb_output, only:  wrt_carb, do_carb_output
     use frc_output, only:  wrt_frc_output, wrt_frc
     use zslice_output, only: wrt_zslice, do_zslice
     use basic_output, only:&
@@ -602,6 +605,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     if (do_cdr_output)  call wrt_cdr
 #endif
+    if (do_carb_output) call wrt_carb
     if (do_zslice) call wrt_zslice
     if (wrt_frc)    call wrt_frc_output
 

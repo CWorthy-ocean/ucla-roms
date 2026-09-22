@@ -319,6 +319,52 @@ output_period_cdr = 3600           ! Frequency of CDR-relevant output
 nrpf_cdr = 4                       ! Time records per output file
 /
 
+!================================================================================
+!                  CARBONATE BUFFER FACTORS (carb_lite)
+!================================================================================
+&CARB_LITE_SETTINGS                                                  !carb_lite.F
+!------------------
+! Seawater carbonate chemistry used by the eta/beta diagnostics.
+! Option numbering follows CO2SYS / PyCO2SYS so the Fortran and the
+! analysis notebooks can be pointed at the same parameterization.
+!------------------
+carb_k_carbonic = 10       ! K1,K2: 4=Mehrbach/DM87 (SWS), 10=Lueker 2000
+                           !        (total, matches MARBL & PyCO2SYS default),
+                           !        14=Millero 2010 (SWS)
+carb_total_borate = 1      ! Total boron: 1=Uppstrom 1974, 2=Lee et al. 2010
+carb_use_nutrients = .true. ! Include PO4/SiO3 in the pH solve
+carb_po4_default = 0.5     ! PO4 (mmol/m3) when no PO4 tracer exists
+carb_sio3_default = 5.0    ! SiO3 (mmol/m3) when no SiO3 tracer exists
+carb_pressure_correction = .false. ! Millero pressure corrections on K's
+                                   ! (leave F for surface-only diagnostics)
+carb_rho_sw = 1025.0       ! Reference density (kg/m3) for mmol/m3 -> mol/kg
+carb_ph_tol = 1.0d-10      ! pH solver relative tolerance
+carb_ph_maxit = 100        ! pH solver maximum iterations
+carb_ph_lo = 4.0           ! Lower bound of the pH search window
+carb_ph_hi = 10.0          ! Upper bound of the pH search window
+carb_ph_win = 0.5          ! Half-width of the bracket around a previous pH
+carb_xco2_air = 284.7      ! Atmospheric xCO2 (ppm), diagnostics only
+/
+
+&CARB_OUTPUT_SETTINGS                                              !carb_output.F
+!--------------------
+! 2D surface eta/beta output, computed from the ALK_ALT_CO2 and
+! DIC_ALT_CO2 tracers.  Requires those tracers to be present.
+!--------------------
+do_carb_output = .false.       ! Output surface CO2 buffer factors
+carb_use_avg = .true.          ! Solve from period-averaged (T) or
+                               ! instantaneous (F) surface tracers.
+                               ! T gives eta(mean state), matching what the
+                               ! notebooks compute from ROMS *_avg files.
+output_period_carb = 3600      ! Frequency/averaging period of output (s)
+nrpf_carb = 3                  ! Time records per output file
+carb_wrt_ph = .false.          ! Also write pH_carb
+carb_wrt_pco2 = .false.        ! Also write pCO2_carb (uatm)
+carb_wrt_isoq = .false.        ! Also write isocapnic_quotient (= 1/eta)
+carb_wrt_gamma_dic = .false.   ! Also write gamma_dic (mmol/m3)
+carb_wrt_inputs = .false.      ! Also write the surface T,S,ALK,DIC used
+/
+
 &UPSCALE_SETTINGS                                              !upscale_output.F
 !----------------
 ! Previously set in `upscale_output.opt`

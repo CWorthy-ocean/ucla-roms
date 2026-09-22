@@ -34,6 +34,8 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only: read_cdr_output_nml     !CDR_OUTPUT_SETTINGS
 #endif
+    use carb_lite, only: read_carb_lite_nml       !CARB_LITE_SETTINGS
+    use carb_output, only: read_carb_output_nml   !CARB_OUTPUT_SETTINGS
 #ifdef DIAGNOSTICS
     use diagnostics, only: read_nml_diagnostics   !DIAGNOSTICS_SETTINGS
 #endif
@@ -89,6 +91,8 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     call read_cdr_output_nml
 #endif
+    call read_carb_lite_nml
+    call read_carb_output_nml
     call read_nml_extract
     call read_nml_frc_output
     call read_nml_particles
