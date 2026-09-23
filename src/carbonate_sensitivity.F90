@@ -12,8 +12,9 @@ module carbonate_sensitivity
   !    (opt_k_carbonic=10, opt_pH_scale=1) use.  The original used the
   !    Mehrbach/DM87 SWS-scale fit, which left K1/K2 on the seawater scale
   !    while KB, KW and KF were on the total scale.  That hybrid shifted pH by
-  !    ~0.011 and pCO2 by ~0.6%.  Set k_carbonic_opt = 4 below to reproduce the
-  !    original numbers for an A/B regression check.
+  !    ~0.011 and pCO2 by ~0.6%.  Set k_carbonic_opt = 4 below to restore the
+  !    original K1/K2 for an A/B check; this does not reproduce pre-fix output
+  !    bit-for-bit, since the solver, floors and bisulfate term also changed.
   !
   ! 2. The pH solver is now bracketed Newton-Raphson with bisection fallback
   !    (Numerical Recipes rtsafe, as in MARBL and kei_CO2), with a RELATIVE
@@ -28,8 +29,9 @@ module carbonate_sensitivity
   !    perturbation creates.  None were flagged.
   !
   ! 3. Salinity floor raised from 1e-4 to MARBL's salt_min = 0.1 PSU, and
-  !    MARBL's ALK/DIC floors added, so near-zero cells cannot drive the
-  !    solver into a region where every K fit is extrapolated.
+  !    MARBL's ALK/DIC floor values added, so near-empty cells are skipped
+  !    rather than handed to the solver.  (K1/K2 are still extrapolated below
+  !    S = 19, the lower limit of the Lueker et al. fit.)
   !
   ! 4. Bisulfate term in the alkalinity residual corrected.  [H]free = h/cs
   !    with cs = 1 + ST/KS, so [HSO4] = ST/(1 + KS*cs/h); the original had
@@ -70,19 +72,23 @@ module carbonate_sensitivity
   ! relative tolerance on [H+]; 1e-10 is ~4e-11 in pH.
   real(kind=8), parameter :: xacc = 1.0e-10_8
   integer(kind=4), parameter :: maxit = 100
-  real(kind=8), parameter :: ph_lo = 4.0_8    ! bracket, low-pH end
-  real(kind=8), parameter :: ph_hi = 10.0_8   ! bracket, high-pH end
+  ! The bracket is wide enough for OAE injection cells, where ALK can exceed
+  ! 2*DIC and pH rises above 10.  Cost is irrelevant: this runs once per
+  ! output write on surface cells only.
+  real(kind=8), parameter :: ph_lo = 2.0_8    ! bracket, low-pH end
+  real(kind=8), parameter :: ph_hi = 13.0_8   ! bracket, high-pH end
 
   ! Accept a root only if the alkalinity residual is this small relative to
   ! TA.  Cheap insurance: this check alone would have rejected every one of
   ! the silent failures described in revision note 2.
   real(kind=8), parameter :: resid_tol = 1.0e-8_8
 
-  ! Floors, following MARBL (marbl_co2calc_mod.F90).  Below these a cell is
-  ! treated as land/dry rather than handed to the pH solver.
+  ! Floor values from MARBL (marbl_co2calc_mod.F90), in model units
+  ! (PSU, mmol/m3).  MARBL clamps inputs to these floors and still computes;
+  ! here a cell below any floor is skipped and left at zero instead.
   real(kind=8), parameter :: salt_min = 0.1_8
-  real(kind=8), parameter :: dic_min = salt_min / 35.0_8 * 1944.0_8 * 1.0e-6_8
-  real(kind=8), parameter :: alk_min = salt_min / 35.0_8 * 2225.0_8 * 1.0e-6_8
+  real(kind=8), parameter :: dic_min = salt_min / 35.0_8 * 1944.0_8
+  real(kind=8), parameter :: alk_min = salt_min / 35.0_8 * 2225.0_8
 
 contains
 
@@ -119,6 +125,7 @@ contains
       do i = 1, ni
         if (rmask(i,j) <= 0.5_8) cycle
         if (salt(i,j) < salt_min) cycle
+        if (alk(i,j) < alk_min .or. dic(i,j) < dic_min) cycle
 
         t_c = temp(i,j)
         s = salt(i,j)
@@ -126,8 +133,6 @@ contains
         tc = dic(i,j) * vol_to_mass
         pt = max(po4(i,j), 0.0_8) * vol_to_mass
         sit = max(sio3(i,j), 0.0_8) * vol_to_mass
-
-        if (ta < alk_min .or. tc < dic_min) cycle
 
         call equilibrium_constants(t_c, s, k0, k1, k2, kw, kb, ks, kf,&
         &k1p, k2p, k3p, ksi, bt, st, ft)
@@ -285,8 +290,9 @@ contains
     ! bisection whenever a step would leave the bracket or converge too
     ! slowly.  Same algorithm as MARBL's drtsafe_row and kei_CO2.
     !
-    ! ok = .false. means the root was not bracketed in [ph_lo, ph_hi], the
-    ! iteration hit maxit, or the residual at exit was not acceptably small.
+    ! ok = .false. means the root was not bracketed in [ph_lo, ph_hi] or the
+    ! residual at exit was not acceptably small.  Reaching maxit is not by
+    ! itself a failure: the final x is accepted if its residual passes.
     ! Callers must honour it: h is not meaningful when ok is .false.
     implicit none
     real(kind=8), intent(in) :: ta, dic, pt, sit
@@ -434,8 +440,8 @@ contains
     &  - 2.0_8 * pt * k123p * da / a2&
     &  - sit / ksi / (ksi_den * ksi_den)&
     &  - 1.0_8 / c&
-    &  + st * (ks * c / x2) / (hso4_den * hso4_den)&
-    &  + ft * (kf / x2) / (hf_den * hf_den)&
+    &  - st * (ks * c / x2) / (hso4_den * hso4_den)&
+    &  - ft * (kf / x2) / (hf_den * hf_den)&
     &  - pt * x2 * (3.0_8 * a - x1 * da) / a2
   end subroutine talk_residual
 
