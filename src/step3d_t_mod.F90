@@ -81,7 +81,7 @@ contains
   use param, only: mynode, np_eta, np_xi
   use roms_mpi, only: exchange_xxx
   use mixing, only: &
-#ifdef LMD_NONLOCAL
+#if defined LMD_KPP && defined LMD_NONLOCAL
        &ghat,&
 #endif
        &akt, &
@@ -980,9 +980,11 @@ contains
     if (itrc == itemp) then
       do k=nz-1,1,-1
         do i=istr,iend
-          cff=srflx(i,j)*swr_frac(i,j,k)&
 #  ifdef LMD_NONLOCAL
+          cff=srflx(i,j)*swr_frac(i,j,k)&
           &-ghat(i,j,k)*(stflx(i,j,itemp)-srflx(i,j))
+#  else
+          cff=srflx(i,j)*swr_frac(i,j,k)
 #  endif
           t(i,j,k+1,nnew,itemp)=t(i,j,k+1,nnew,itemp) -dt*cff
           t(i,j,k  ,nnew,itemp)=t(i,j,k  ,nnew,itemp) +dt*cff
