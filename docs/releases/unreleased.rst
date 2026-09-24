@@ -18,6 +18,7 @@ New Features
 
 
 - Compile-time switch ``k_carbonic_opt``: 10 (default) selects Lueker, Dickson & Keeling (2000) K1/K2 on the total pH scale, and 4 restores the original Mehrbach/Dickson & Millero (1987) SWS-scale constants for A/B regression checks. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- ``do_cdr_tracer_output`` works in runs without MARBL, including the ``CDR_TRACER`` passive-tracer mode; previously the stub aborted at init with "cdr_tracer_output must have MARBL enabled." (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
 
 Bug Fixes
 ~~~~~~~~~
@@ -27,6 +28,7 @@ Bug Fixes
 - **Mixed pH scales.** K1/K2 were on the seawater scale while KB, KW and KF were on the total scale, which shifted pH by ~0.011 and pCO2 by ~0.6%. All constants are now on the total scale. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - **Bisulfate term.** In the alkalinity residual it is corrected from ``ST/(1 + KS/(h*c))`` to ``ST/(1 + KS*c/h)``, with the matching derivative. This is small (~1e-3 µmol/kg in TA) but was wrong. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Extracted child boundary files (``bry_time``, and ``<set>_time`` in non-PIO builds) were labelled ``"Time since 2000"`` even when the namelist ``reference_date`` was different, misdescribing the time values' origin to any tool that reads the label. (`#365 <https://github.com/CWorthy-ocean/ucla-roms/pull/365>`_)
+- Enabling ``do_cdr_tracer_output`` with ``nt_cdr_oae = 0`` and ``nt_cdr_dor = 0`` now aborts at init with a clear message instead of creating an output file with no tracer variables. (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
 
 Improvements
 ~~~~~~~~~~~~
@@ -42,3 +44,5 @@ Miscellaneous
 - Header revision notes, plus source and pH-scale comments for each equilibrium constant. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Verified against PyCO2SYS 1.8.3 (``opt_k_carbonic=10``, ``opt_pH_scale=1``, ``pressure=0``): worst case over 8 test cases is |ΔpH| < 1.3e-4, eta within 0.0013%, beta within 0.019%. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Tested in the Iceland1 case over 10 output records. 99.98% of surface points shift by −0.53% in beta and +0.03% in eta. The other 0.02%, all within 28 cells of the open boundaries, previously had beta ~10¹² and eta ~0; they now give beta 39–430 and eta 0.10–0.99, or zero where the solve is rejected (6 points). (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- ``namelist.nml``'s ``&CDR_TRACER_OUTPUT_SETTINGS`` comment states the real requirement (CDR tracers configured; ``*_source`` fields need MARBL and CDR_FORCING). (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
+- ``Make.depend`` regenerated (``cdr_tracer_output.o`` drops ``bgc_shared_vars.o``; the stale ``check_srcs.o`` entry for a file that no longer exists goes with it). (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
