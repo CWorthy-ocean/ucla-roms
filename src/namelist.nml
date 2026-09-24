@@ -328,7 +328,8 @@ nrpf_cdr = 4                       ! Time records per output file
 &CDR_TRACER_OUTPUT_SETTINGS                             !cdr_tracer_output.F90
 !--------------------------
 ! Output for CDR_OAE_ALK/DIC and CDR_DOR_DIC
-! Requires MARBL and CDR_FORCING cppkeys
+! Requires nt_cdr_oae or nt_cdr_dor > 0 (PARAM_SETTINGS); works with or
+! without MARBL. The *_source fields need MARBL and CDR_FORCING (cdr_frc).
 !--------------------------
 do_cdr_tracer_output = .false.       ! Output dedicated CDR tracers
 wrt_cdr_trc_avg = .true.             ! Write averaged (T) or instantaneous (F)
