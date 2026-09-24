@@ -488,6 +488,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
   enddo
 # endif   /* LMD_KPP */
 
+# ifdef LMD_BKPP
   do i=istr,iend
     kbbl(i)=nz          !<-- initialize search
   enddo
@@ -534,6 +535,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
       endif
     enddo      !<-- k
   enddo      !<-- i
+# endif   /* LMD_BKPP */
 
 
   do i=istr,iend
@@ -664,7 +666,7 @@ if (EASTERN_EDGE .and. NORTHERN_EDGE) then
 endif
 #   endif
 #  endif
-# endif   /* LMD_KPP */
+# endif   /* LMD_BKPP */
 
 # ifdef EXCHANGE
 #  ifdef LMD_KPP
