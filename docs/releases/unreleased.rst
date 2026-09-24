@@ -12,6 +12,7 @@ Breaking Changes
 
 - ``ddic_dco2`` and ``ddic_dalk`` values change. With the new total-scale K1/K2 constants, beta is about 0.5% lower and eta about 0.03% higher almost everywhere. Results will not reproduce pre-PR output bit-for-bit. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Cells where the pH solve fails or is rejected, or that fall below the new salinity/ALK/DIC floors, are now written as 0. Previously the routine could return garbage values there without flagging them. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- Results change for any configuration using ``LMD_KPP`` with shortwave forcing. The change scales with sea level divided by depth: it is largest in shallow, tidal regions and negligible in deep water. Regression-test reference hashes for KPP tests need to be updated. (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
 
 New Features
 ~~~~~~~~~~~~
@@ -29,6 +30,14 @@ Bug Fixes
 - **Bisulfate term.** In the alkalinity residual it is corrected from ``ST/(1 + KS/(h*c))`` to ``ST/(1 + KS*c/h)``, with the matching derivative. This is small (~1e-3 µmol/kg in TA) but was wrong. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Extracted child boundary files (``bry_time``, and ``<set>_time`` in non-PIO builds) were labelled ``"Time since 2000"`` even when the namelist ``reference_date`` was different, misdescribing the time values' origin to any tool that reads the label. (`#365 <https://github.com/CWorthy-ocean/ucla-roms/pull/365>`_)
 - Enabling ``do_cdr_tracer_output`` with ``nt_cdr_oae = 0`` and ``nt_cdr_dor = 0`` now aborts at init with a clear message instead of creating an output file with no tracer variables. (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
+- ``swr_frac`` (the fraction of surface shortwave reaching each w-level) was computed only once, in ``main.F90`` at startup. That was before the initial conditions were read, so it used resting-depth layer thicknesses, and it was never updated. KPP's surface buoyancy flux and the solar heating in ``step3d_t`` therefore ignored the free surface, and a restart likewise ignored the restart sea level. ``lmd_vmix`` now calls ``swr_frac`` from the current layer thicknesses on every call, as Rutgers ROMS (``lmd_skpp.F``, ``pre_step3d.F``) and CROCO (``lmd_skpp2005.F``, ``step3d_t.F``) do. The startup call is kept for ``ana_init``. In MiniPac after one hour, surface temperature changes by 3.9e-3 °C RMS where h < 20 m, versus 3.8e-5 °C where h > 1000 m. (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
+- Fixed compile failures in configurations without both surface and bottom KPP: (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
+
+  - **Bottom KPP only:** ``lmd_kpp_mod`` only compiled its contents when ``LMD_KPP`` was on. Surface-layer code (``alphabeta``, ``Bo``/``Bosol``, ``hbls``, ``swr_frac``, the surface-layer search) was unguarded. The 2017 code's guards and its surface-only and bottom-only Richardson kernels are restored. ``basic_output`` and ``precheck`` now handle ``LMD_BKPP`` on its own. ``step3d_t`` only imports ``ghat`` when ``LMD_KPP`` and ``LMD_NONLOCAL`` are both on.
+  - **Surface KPP only:** the ``use mixing`` continuation list in ``lmd_kpp_mod`` broke when ``LMD_BKPP`` was off. It is now split into separate ``use`` statements.
+  - **No KPP:** the no-KPP branch of ``lmd_vmix_tile`` used ``Akv``, ``Akt`` and ``exchange_xxx`` without importing them.
+  - **KPP without ``LMD_NONLOCAL``:** the solar-heating statement in ``step3d_t`` had a dangling continuation.
+
 
 Improvements
 ~~~~~~~~~~~~
@@ -49,3 +58,12 @@ Miscellaneous
 - Release notes no longer truncate PR-description bullets that are wrapped across several lines, and no longer include ``N/A (reason)``-style placeholders. (`#368 <https://github.com/CWorthy-ocean/ucla-roms/pull/368>`_)
 - The release-notes branch is now deleted by the publish workflow when a release is published, and is always recreated from ``main``. (`#368 <https://github.com/CWorthy-ocean/ucla-roms/pull/368>`_)
 - The release-notes workflows run ``main``'s copy of their scripts, so a fix to them applies immediately rather than on the next release cycle. (`#368 <https://github.com/CWorthy-ocean/ucla-roms/pull/368>`_)
+- ``Make.depend``: ``lmd_vmix_mod.o`` now depends on ``lmd_swr_frac_mod.o`` and ``roms_mpi.o``. (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
+- Testing on Derecho with the MiniPac domain (512x432x100, 256 ranks): (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
+
+  - Builds cleanly with ifx and gfortran in all six combinations of surface KPP, bottom KPP and ``LMD_NONLOCAL``.
+  - Exact restart: 4 steps straight and 2 steps + restart + 2 steps are bit-for-bit identical in all history and restart fields.
+  - The guard fixes leave default-configuration results bit-for-bit unchanged.
+  - Bottom-only and no-KPP runs complete without errors or NaNs.
+  - No measurable change in time per step.
+
