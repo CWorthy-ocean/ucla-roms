@@ -45,7 +45,7 @@ module extract_data
   use dimensions, only: nx, ny, nz
   use nc_read_write, only: nccreate, ncread, ncwrite
   use roms_read_write, only: findstr, create_file, output_root_name, append_date_node,&
-  &dn_tm
+  &dn_tm, refdatestr
   use netcdf, only:&
   &nf90_double, nf90_write, nf90_nowrite,&
   &nf90_put_att, nf90_inq_varid, nf90_open, nf90_close,&
@@ -1290,7 +1290,7 @@ contains
       ierr=nf90_def_dim(ncid,'s_rho', N_chd, dimid5)
 
       varid = nccreate(ncid,'bry_time',(/dn_tm/),(/0/), nf90_double)
-      ierr = nf90_put_att(ncid,varid,'long_name',"Time since 2000")
+      ierr = nf90_put_att(ncid,varid,'long_name',refdatestr)
       ierr = nf90_put_att(ncid,varid,'units',"days")
 
       child_dimnums_t = (/dimid1, dimid1, dimid3, dimid3/)
@@ -1408,7 +1408,7 @@ contains
         if (ierr/=0) then   ! Only create if not already present
           varid = nccreate(ncid,tname,(/dname(2)/),(/0/),nf90_double)
           ierr = nf90_put_att(ncid,varid,'long_name',&
-          &'Time since 2000')
+          &refdatestr)
           ierr = nf90_put_att(ncid,varid,'units','second' )
         endif
 
