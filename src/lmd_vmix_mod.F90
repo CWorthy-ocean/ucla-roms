@@ -400,21 +400,25 @@ do k=1,nz-1
   enddo
 enddo
 
-# if defined LMD_KPP || defined LMD_BKPP
-! Pad out surface and bottom values for lmd_blmix calculations.
+! Pad out surface and bottom values: the vertical smoothing below
+! reads k=0 and k=nz, and so do the lmd_kpp_tile boundary layers.
 ! The interior values used here may not be the best values to
 ! use for the padding.
 
 do j=jstr,jend
   do i=istr,iend
     Kv(i,j,nz)=Kv(i,j,nz-1) + Akv_bak
-    Ks(i,j,nz)=Ks(i,j,nz-1) + Akt_bak(isalt)
     Kt(i,j,nz)=Kt(i,j,nz-1) + Akt_bak(itemp)
     Kv(i,j,0)=Kv(i,j,  1) + Akv_bak
-    Ks(i,j,0)=Ks(i,j,  1) + Akt_bak(isalt)
     Kt(i,j,0)=Kt(i,j,  1) + Akt_bak(itemp)
+# ifdef SALINITY
+    Ks(i,j,nz)=Ks(i,j,nz-1) + Akt_bak(isalt)
+    Ks(i,j,0)=Ks(i,j,  1) + Akt_bak(isalt)
+# endif
   enddo
 enddo
+
+# if defined LMD_KPP || defined LMD_BKPP
  ! vertical smoothing of interior mixing
 do k=1,nz-1
   do j=jstr,jend

@@ -191,9 +191,6 @@ contains
     use precheck, only: do_precheck
     use error_handling_mod, only: error_log
     use calc_pflx_mod, only: init_pflx
-#ifdef LMD_KPP
-    use lmd_swr_frac_mod, only: swr_frac
-#endif
 #ifdef SOLVE3D
     use omega_mod, only: omega
     use rho_eos_mod, only: rho_eos
@@ -293,12 +290,9 @@ contains
 !R      write(*,*) ' -8' MYID
 
 #ifdef SOLVE3D
-    do tile=my_last,my_first,-1
+    do tile=my_last,my_first,-1      ! Create three-dimensional
       call set_depth(tile)           ! S-coordinate system, which
-# ifdef LMD_KPP
-      call swr_frac(tile)            ! may be needed by ana_init.
-# endif
-    enddo
+    enddo                            ! may be needed by ana_init.
 !$  OMP BARRIER                          ! Here it is assumed that free
     do tile=my_first,my_last,+1
       call grid_stiffness(tile)      ! zeta=0). Also find and report
