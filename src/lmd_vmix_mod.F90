@@ -17,11 +17,17 @@ contains
 # if defined LMD_KPP || defined LMD_BKPP
     use lmd_kpp_mod, only: lmd_kpp_tile
 #endif
+# ifdef LMD_KPP
+    use lmd_swr_frac_mod, only: swr_frac
+# endif
     implicit none
     integer(kind=4),save :: tile=0
     integer(kind=4)      :: tind
 
 # include "compute_tile_bounds.h"
+# ifdef LMD_KPP
+    call swr_frac(tile)   ! Hz changes with zeta every step
+# endif
     call lmd_vmix_tile (istr,iend,jstr,jend,  A3d(1,1), A3d(1,2),&
     &A3d(1,3), A3d(1,4),&
     &A2d(1,1), A2d(1,2), A2d(1,3),&
@@ -58,6 +64,12 @@ contains
     use tracers, only: t
     use grid, only: umask, vmask
     use mixing, only: bvf
+# if !defined LMD_KPP && !defined LMD_BKPP
+    use mixing, only: akv, akt
+#  ifdef EXCHANGE
+    use roms_mpi, only: exchange_xxx
+#  endif
+# endif
     use param, only:&
     &ieast, isalt, itemp, iwest, jnorth, jsouth, np_xi, np_eta
     use ocean_vars, only: z_r, u, v, z_w
@@ -388,21 +400,25 @@ do k=1,nz-1
   enddo
 enddo
 
-# if defined LMD_KPP || defined LMD_BKPP
-! Pad out surface and bottom values for lmd_blmix calculations.
+! Pad out surface and bottom values: the vertical smoothing below
+! reads k=0 and k=nz, and so do the lmd_kpp_tile boundary layers.
 ! The interior values used here may not be the best values to
 ! use for the padding.
 
 do j=jstr,jend
   do i=istr,iend
     Kv(i,j,nz)=Kv(i,j,nz-1) + Akv_bak
-    Ks(i,j,nz)=Ks(i,j,nz-1) + Akt_bak(isalt)
     Kt(i,j,nz)=Kt(i,j,nz-1) + Akt_bak(itemp)
     Kv(i,j,0)=Kv(i,j,  1) + Akv_bak
-    Ks(i,j,0)=Ks(i,j,  1) + Akt_bak(isalt)
     Kt(i,j,0)=Kt(i,j,  1) + Akt_bak(itemp)
+# ifdef SALINITY
+    Ks(i,j,nz)=Ks(i,j,nz-1) + Akt_bak(isalt)
+    Ks(i,j,0)=Ks(i,j,  1) + Akt_bak(isalt)
+# endif
   enddo
 enddo
+
+# if defined LMD_KPP || defined LMD_BKPP
  ! vertical smoothing of interior mixing
 do k=1,nz-1
   do j=jstr,jend

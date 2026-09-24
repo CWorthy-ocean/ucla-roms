@@ -48,7 +48,7 @@ module precheck
   &do_upscale, output_period_uscl, nrpf_uscl
 #endif
   use check_switches_mod, only: check_switches2, print_switches
-#ifdef LMD_KPP
+#if defined LMD_KPP || defined LMD_BKPP
   use lmd_kpp_mod, only: check_kpp_switches
 #endif
 #ifdef SOLVE3D
@@ -78,7 +78,7 @@ contains
     call check_step_uv2_switches()
     call check_step_t_switches()
     call check_set_HUV1_switches()
-# ifdef LMD_KPP
+# if defined LMD_KPP || defined LMD_BKPP
     call check_kpp_switches()
 # endif
     call check_switches2()

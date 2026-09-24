@@ -862,7 +862,10 @@ contains                  !]
     ! ocean_vars variables are calculated for t=n in timestep t=n
     ! (unlike u/v/etc which are calculated for t=n+1 in timestep t=n)
 #if defined LMD_KPP
-    use mixing, only: hbls, hbbl
+    use mixing, only: hbls
+#endif
+#if defined LMD_BKPP
+    use mixing, only: hbbl
 #endif
     use dimensions, only: i0, i1, j0,j1
     use tracers, only: wrt_rst_trc
@@ -1549,11 +1552,13 @@ contains                  !]
     use eos_vars, only: rho
 #endif
     use work_mod, only: work
-    use mixing, only: &
+    use mixing, only: akv, akt
 #ifdef LMD_KPP
-    & hbls, hbbl, &
+    use mixing, only: hbls
 #endif
-    & akv, akt
+#ifdef LMD_BKPP
+    use mixing, only: hbbl
+#endif
     use private_scratch, only: a2d
     use dimensions, only: i0, i1, j0, j1, nx, ny
     use tracers, only: set_avg_trc
