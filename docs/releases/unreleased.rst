@@ -26,6 +26,7 @@ Bug Fixes
 - **Silent pH-solver failures.** The unsafeguarded Newton solver used an absolute convergence test (``abs(dx) < 1e-12``) and clamped ``x <= 0`` to ``1e-14``, so any excursion into the clamp "converged" at pH ~13.7 with ``ok = .true.``. Over 15,795 T/S/ALK/DIC combinations this gave wrong beta/eta in 41% of cases at pH 8.0–8.5 and 100% above pH 8.5, which is the high-alkalinity regime OAE produces. None were flagged. It is replaced by a bracketed Newton–Raphson with bisection fallback (Numerical Recipes ``rtsafe``, as in MARBL), with a relative convergence test and a final alkalinity-residual check. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - **Mixed pH scales.** K1/K2 were on the seawater scale while KB, KW and KF were on the total scale, which shifted pH by ~0.011 and pCO2 by ~0.6%. All constants are now on the total scale. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - **Bisulfate term.** In the alkalinity residual it is corrected from ``ST/(1 + KS/(h*c))`` to ``ST/(1 + KS*c/h)``, with the matching derivative. This is small (~1e-3 µmol/kg in TA) but was wrong. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- Extracted child boundary files (``bry_time``, and ``<set>_time`` in non-PIO builds) were labelled ``"Time since 2000"`` even when the namelist ``reference_date`` was different, misdescribing the time values' origin to any tool that reads the label. (`#365 <https://github.com/CWorthy-ocean/ucla-roms/pull/365>`_)
 
 Improvements
 ~~~~~~~~~~~~
