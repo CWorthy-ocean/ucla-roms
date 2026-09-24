@@ -1,14 +1,18 @@
 module cdr_tracer_output
   ! Output module for CDR tracers (CDR_OAE_ALK/DIC, CDR_DOR_DIC).
   ! Analogous to cdr_output.F90, but focused on dedicated CDR tracers.
+  !
+  ! The CDR tracers exist whenever nt_cdr_oae/nt_cdr_dor (PARAM_SETTINGS) are
+  ! non-zero, with or without MARBL (see CDR_TRACER in cppdefs.opt), so this
+  ! module always compiles. Only the *_source fields depend on the cdr_frc
+  ! release profiles, which are available under MARBL && CDR_FORCING (cdr_frc's
+  ! own guard); without them wrt_sources has no effect.
 
 #include "cppdefs.opt"
 
-#if defined MARBL && defined CDR_FORCING
   use namelist_open_mod, only: open_namelist_file
-  use tracers, only: t_units, iTandS
-  use param, only: nt_passive, nt_cdr_oae, nt_cdr_dor
-  use bgc_shared_vars, only: t, mynode, lm, mm, t_lname
+  use tracers, only: t, t_units, t_lname, iTandS
+  use param, only: nt_passive, nt_cdr_oae, nt_cdr_dor, mynode, lm, mm
   use dimensions, only: i0, i1, j0, j1, nx, ny, nz, eta_rho, xi_rho
   use roms_read_write, only:&
  &     dn_tm, dn_xr, dn_yr, dn_zr,&
@@ -20,8 +24,10 @@ module cdr_tracer_output
   use scalars, only: iic, knew, nnew, tdays, time, dt
   use ocean_vars, only: hz
   use error_handling_mod, only: error_log
+#if defined MARBL && defined CDR_FORCING
   use cdr_frc, only: cdr_prf, cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,&
  &                   cdr_jloc, cdr_source, cdr_forcing_3d
+#endif
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_gtype
   use pio, only: PIO_openfile, PIO_closefile, PIO_write
@@ -31,6 +37,12 @@ module cdr_tracer_output
   implicit none
 
   private
+
+#if !(defined MARBL && defined CDR_FORCING)
+  ! No cdr_frc release profiles in this build: the *_source fields are never
+  ! defined, allocated or written.
+  logical, parameter :: cdr_source = .false.
+#endif
 
   real(kind=8), public    :: output_period_cdr_trc = 3600
   integer(kind=4), public :: nrpf_cdr_trc = 4
@@ -289,6 +301,13 @@ contains
     record = nrpf_cdr_trc
     if (done) return
     done = .true.
+
+    if (nt_cdr_oae + nt_cdr_dor == 0) then
+      call error_log%raise_global(&
+     &  context=module_name//'/'//sr_name,&
+     &  info='do_cdr_tracer_output is .true. but no CDR tracers are configured'//&
+     &       ' (nt_cdr_oae and nt_cdr_dor are both 0 in PARAM_SETTINGS).')
+    endif
 
     if (cdr_trc_monthly_averages .and. .not. wrt_cdr_trc_avg) then
       call error_log%raise_global(&
@@ -578,6 +597,7 @@ contains
 
   subroutine calc_cdr_trc_source
     implicit none
+#if defined MARBL && defined CDR_FORCING
     integer :: i,j,k,icdr,cidx,ioae,idor,itrc
     if (wrt_alk .and. nt_cdr_oae > 0) then
       CDR_OAE_ALK_source(:,:,:,:) = 0
@@ -608,6 +628,7 @@ contains
         endif
       enddo
     enddo
+#endif /* MARBL && CDR_FORCING */
   end subroutine calc_cdr_trc_source
 
   subroutine create_cdr_trc_output_variables(ncid)
@@ -1077,35 +1098,5 @@ contains
       write(*,'(9x,A)') repeat('-',62)
     end if
   end subroutine display_cdr_trc_output_settings
-
-#else /* MARBL && CDR_FORCING */
-  use error_handling_mod, only: error_log
-  implicit none
-  character(len=18) :: module_name = "cdr_tracer_output"
-  private
-  logical, public :: do_cdr_tracer_output = .false.
-  real(kind=8), public :: output_period_cdr_trc = 3600
-  integer(kind=4), public :: nrpf_cdr_trc = 4
-  public :: init_cdr_tracer_output, wrt_cdr_trc, read_cdr_tracer_output_nml
-contains
-  subroutine read_cdr_tracer_output_nml
-  end subroutine read_cdr_tracer_output_nml
-  subroutine init_cdr_tracer_output
-    implicit none
-    character(len=23) :: sr_name = "init_cdr_tracer_output"
-#ifndef MARBL
-    call error_log%raise_global(&
-   &  context=module_name//'/'//sr_name,&
-   &  info='cdr_tracer_output must have MARBL enabled.')
-#endif
-#ifndef CDR_FORCING
-    call error_log%raise_global(&
-   &  context=module_name//'/'//sr_name,&
-   &  info='cdr_tracer_output must have CDR_FORCING enabled.')
-#endif
-  end subroutine init_cdr_tracer_output
-  subroutine wrt_cdr_trc
-  end subroutine wrt_cdr_trc
-#endif /* MARBL && CDR_FORCING */
 
 end module cdr_tracer_output

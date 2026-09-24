@@ -10,7 +10,6 @@ add_git_hash_mod.o : add_git_hash_mod.F90 cppdefs.opt error_handling_mod.o param
 prsgrd_mod.o : prsgrd_mod.F90 cppdefs.opt param.o private_scratch.o grid.o tides.o ocean_vars.o eos_vars.o dimensions.o scalars.o diagnostics.o roms_mpi.o calc_pflx_mod.o
 private_scratch.o : private_scratch.F90 cppdefs.opt param.o scalars.o
 advection.o : advection.F90 cppdefs.opt dimensions.o ocean_vars.o tracers.o scalars.o param.o
-check_srcs.o : check_srcs.F cppdefs.opt strings.o
 strings.o : strings.F90
 setup_grid_mod.o : setup_grid_mod.F90 cppdefs.opt param.o compute_tile_bounds.h grid.o scalars.o dimensions.o roms_mpi.o compute_auxiliary_bounds.h private_scratch.o comm_vars.o
 cppdefs.o : cppdefs.opt set_global_definitions.h
@@ -69,7 +68,7 @@ u2dbc_mod.o : u2dbc_mod.F90 cppdefs.opt param.o dimensions.o boundary.o grid.o o
 bulk_frc.o : bulk_frc.F90 cppdefs.opt param.o roms_read_write.o dimensions.o error_handling_mod.o pio_roms.o instant_output.o flux_frc.o namelist_open_mod.o surf_flux.o tracers.o grid.o mixing.o ocean_vars.o scalars.o
 pre_step3d_mod.o : pre_step3d_mod.F90 cppdefs.opt param.o private_scratch.o diagnostics.o dimensions.o river_frc.o ocean_vars.o surf_flux.o tracers.o advection.o coupling.o roms_mpi.o grid.o mixing.o scalars.o ext_copy_prv2shr_mod.o t3dbc_mod.o u3dbc_mod.o v3dbc_mod.o strings.o error_handling_mod.o utils_mod.o
 pipe_frc.o : pipe_frc.F90 cppdefs.opt namelist_open_mod.o dimensions.o roms_read_write.o nc_read_write.o param.o error_handling_mod.o pio_roms.o ana_pipe_frc.h
-cdr_tracer_output.o : cdr_tracer_output.F90 cppdefs.opt namelist_open_mod.o tracers.o param.o bgc_shared_vars.o dimensions.o roms_read_write.o nc_read_write.o scalars.o ocean_vars.o error_handling_mod.o cdr_frc.o pio_roms.o
+cdr_tracer_output.o : cdr_tracer_output.F90 cppdefs.opt namelist_open_mod.o tracers.o param.o dimensions.o roms_read_write.o nc_read_write.o scalars.o ocean_vars.o error_handling_mod.o cdr_frc.o pio_roms.o
 bgc_shared_vars.o : bgc_shared_vars.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o param.o roms_read_write.o bgc_forces.o tracers.o bec2_vars.o marbl_driver.o BEC_2Ddiagnostics.h BEC_3Ddiagnostics.h
 set_scoord_mod.o : set_scoord_mod.F90 cppdefs.opt param.o comm_vars.o scoord.o scalars.o
 nc_read_write.o : nc_read_write.F90 cppdefs.opt error_handling_mod.o pio_roms.o param.o
