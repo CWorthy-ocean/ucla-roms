@@ -21,8 +21,8 @@ module river_frc
   use param, only: lm, mm, mynode, ocean_grid_comm
   use error_handling_mod, only: error_log
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_IoSystem, pio_type
-  use pio, only : PIO_openfile, PIO_closefile
+  use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
+  use pio, only : PIO_closefile
 #endif
 
   implicit none
@@ -197,7 +197,7 @@ contains
       if (ierr == nf90_noerr) then ! Found the variables in the forcing file
         pio_gtype = '2Drr'
 #ifdef PARALLEL_IO
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(nc_rvol%ifile))
+        call pio_open_or_abort(frcfiles(nc_rvol%ifile), module_name//"/"//sr_name)
 #endif
         call ncread(ncid,"river_index",ridx_real(x0:x1,y0:y1))
         call ncread(ncid,"river_fraction",rfrc(x0:x1,y0:y1))
@@ -253,7 +253,7 @@ contains
         else
           pio_gtype='2Drr'
 #ifdef PARALLEL_IO
-          ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, grdname)
+          call pio_open_or_abort(grdname, module_name//"/"//sr_name)
 #endif
           call ncread(ncid,riv_flx_name,rflx(x0:x1,y0:y1))
 #ifdef PARALLEL_IO

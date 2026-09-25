@@ -79,6 +79,7 @@ module error_handling_mod
   ! Public symbols
   !==============================
   public :: error_log_type, error_log
+  public :: gather_errors_on_main_rank
   public :: LOG_LEVEL_ERROR, LOG_LEVEL_WARNING
 
   !==============================

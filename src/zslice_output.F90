@@ -21,8 +21,8 @@ module zslice_output
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_z
-  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_z, pio_open_or_abort
+  use pio, only : PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
 
@@ -388,7 +388,7 @@ contains
     implicit none
     character(len=10) :: sr_name= "wrt_zslice"
     ! local
-    character(len=99),save :: fname
+    character(len=256),save :: fname
     integer(kind=4),dimension(3)   :: start
     integer(kind=4)                :: ncid,ierr
     integer(kind=4)                :: i,j,k,n
@@ -429,7 +429,7 @@ contains
           ierr = nf90_close(ncid)
         endif
         call error_log%abort_check()
-        call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+        call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
         call MPI_Barrier(ocean_grid_comm, ierr)
         record = 0
       endif
@@ -450,7 +450,7 @@ contains
       call error_log%abort_check()
       call MPI_Barrier(ocean_grid_comm, ierr)
 
-      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+      call pio_open_or_abort(trim(fname), module_name//"/"//sr_name, PIO_write)
 
       pio_gtype = '3Drz'
       if (wrt_T_zslice) then

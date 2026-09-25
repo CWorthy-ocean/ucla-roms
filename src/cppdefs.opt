@@ -178,8 +178,21 @@
 ! Usage notes: Overrides the default 3rd-order upstream advection
 #undef AKIMA
 
+! Drop the UPSTREAM_TS curvature (3rd-order) correction at tracer faces
+! whose 3-point difference stencil touches land.  Masked differences are
+! zero, which otherwise inflates curvature at the first wet point and
+! produces large overshoots.  Those faces fall back to 2nd-order centered
+! (the 1/6 curv term is omitted).  Same idea as open-boundary slope
+! extrapolation.  Only active with UPSTREAM_TS and MASKING.
+#undef UPSTREAM_TS_LAND_CURV
+
+! Use parabolic splines for vertical tracer advection
+! Usage notes: Default is thickness-aware U3 (C4 predictor, U3 corrector).
+! Define PARABOLIC_SPLINES to restore the old spline reconstruction.
+#undef PARABOLIC_SPLINES
+
 ! Use the fourth-order Akima scheme for vertical advection
-! Usage notes: Overrides the default piecewise parabolic reconstruction
+! Usage notes: Unused; vertical fluxes come from module advection.
 #undef AKIMA_V
 
 

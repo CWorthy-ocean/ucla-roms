@@ -125,7 +125,7 @@ contains
     character(len=10) :: sr_name = "wrt_instant"
     ! local
     integer(kind=4),dimension(2)   :: varsize
-    character(len=99),save :: fname
+    character(len=256),save :: fname
     integer(kind=4)                :: ncid,ierr
 
     varsize = shape(var)
@@ -159,7 +159,7 @@ contains
     character(len=10) :: sr_name = "wrt_instant"
     ! local
     integer(kind=4),dimension(3)   :: varsize
-    character(len=99),save :: fname
+    character(len=256),save :: fname
     integer(kind=4)                :: ncid,ierr
 
     varsize = shape(var)

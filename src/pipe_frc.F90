@@ -21,8 +21,8 @@ module pipe_frc
   use error_handling_mod, only: error_log
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_IoSystem,&
-  &pio_type, pio_gtype
-  use pio, only : PIO_openfile, PIO_closefile
+  &pio_type, pio_gtype, pio_open_or_abort
+  use pio, only : PIO_closefile
 #endif
 
   implicit none
@@ -153,7 +153,7 @@ contains
       if (ierr == nf90_noerr) then
 #ifdef PARALLEL_IO
         pio_gtype = '2Drr'
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, frcfiles(nc_pvol%ifile))
+        call pio_open_or_abort(frcfiles(nc_pvol%ifile), module_name//"/"//sr_name)
         call ncread(ncid, "pipe_index", pidx_real(x0:x1,y0:y1))
         call ncread(ncid, "pipe_fraction", pipe_fraction(x0:x1,y0:y1))
         call PIO_closefile(pio_FileDesc)
@@ -196,7 +196,7 @@ contains
         ! but value still pipe_idx + pipe_fraction
 #ifdef PARALLEL_IO
         pio_gtype = '2Drr'
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, grdname)
+        call pio_open_or_abort(grdname, module_name//"/"//sr_name)
         call ncread(ncid,pipe_flx_name, pipe_fraction(x0:x1,y0:y1))
         call PIO_closefile(pio_FileDesc)
 #else

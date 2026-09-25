@@ -159,6 +159,10 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only:  init_cdr_output, do_cdr_output
 #endif
+    use cdr_tracer_output, only: init_cdr_tracer_output, do_cdr_tracer_output
+#if defined MARBL && defined CDR_FORCING
+    use cdr_gas_exch_output, only: init_cdr_gas_exch_output, do_cdr_gas_exch_output
+#endif
     use frc_output, only: init_frc_output, wrt_frc
     use analytical, only: &
 #ifdef ANA_INITIAL
@@ -187,9 +191,6 @@ contains
     use precheck, only: do_precheck
     use error_handling_mod, only: error_log
     use calc_pflx_mod, only: init_pflx
-#ifdef LMD_KPP
-    use lmd_swr_frac_mod, only: swr_frac
-#endif
 #ifdef SOLVE3D
     use omega_mod, only: omega
     use rho_eos_mod, only: rho_eos
@@ -289,12 +290,9 @@ contains
 !R      write(*,*) ' -8' MYID
 
 #ifdef SOLVE3D
-    do tile=my_last,my_first,-1
+    do tile=my_last,my_first,-1      ! Create three-dimensional
       call set_depth(tile)           ! S-coordinate system, which
-# ifdef LMD_KPP
-      call swr_frac(tile)            ! may be needed by ana_init.
-# endif
-    enddo
+    enddo                            ! may be needed by ana_init.
 !$  OMP BARRIER                          ! Here it is assumed that free
     do tile=my_first,my_last,+1
       call grid_stiffness(tile)      ! zeta=0). Also find and report
@@ -387,6 +385,10 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     if (do_cdr_output)  call init_cdr_output
 #endif
+    if (do_cdr_tracer_output) call init_cdr_tracer_output
+#if defined MARBL && defined CDR_FORCING
+    if (do_cdr_gas_exch_output) call init_cdr_gas_exch_output
+#endif
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     if (do_upscale) then
       call init_upscale
@@ -426,6 +428,10 @@ contains
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only:  wrt_cdr, do_cdr_output
+#endif
+    use cdr_tracer_output, only: wrt_cdr_trc, do_cdr_tracer_output
+#if defined MARBL && defined CDR_FORCING
+    use cdr_gas_exch_output, only: wrt_cdr_gas, do_cdr_gas_exch_output
 #endif
     use frc_output, only:  wrt_frc_output, wrt_frc
     use zslice_output, only: wrt_zslice, do_zslice
@@ -622,6 +628,10 @@ contains
     if (do_random) call wrt_random
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     if (do_cdr_output)  call wrt_cdr
+#endif
+    if (do_cdr_tracer_output) call wrt_cdr_trc
+#if defined MARBL && defined CDR_FORCING
+    if (do_cdr_gas_exch_output) call wrt_cdr_gas
 #endif
     if (do_zslice) call wrt_zslice
     if (wrt_frc)    call wrt_frc_output

@@ -20,8 +20,8 @@ module surf_flux
   use scalars, only: dt, iic, nt, tdays, time, day2sec
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_file_is_open
-  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_file_is_open, pio_open_or_abort
+  use pio, only : PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, mpi_bcast
 
@@ -435,7 +435,7 @@ subroutine wrt_sflux  ![
 
   ! local
   integer(kind=4),dimension(4)   :: start
-  character(len=99),save :: fname
+  character(len=256),save :: fname
   integer(kind=4)                :: ierr, itrc
   character(len=20)      :: varname
 
@@ -462,8 +462,10 @@ subroutine wrt_sflux  ![
     call ncwrite(ncid,'ocean_time',(/time/),(/record/))
     ierr=nf90_close(ncid)
     endif
+    ! abort_check uses MPI collectives; must not run only on rank 0
+    call error_log%abort_check()
 
-    ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+    call pio_open_or_abort(trim(fname), module_name//"/wrt_sflux", PIO_write)
 
     start=1; start(3)=record
     if (sflx_avg) then
@@ -567,7 +569,7 @@ subroutine create_sflx_file(fname)  ![
   implicit none
 
   !input/output
-  character(len=99),intent(out) :: fname
+  character(len=256),intent(out) :: fname
 
   ! local
   integer(kind=4) :: ierr,varid
@@ -594,7 +596,7 @@ subroutine create_sflx_file(fname)  ![
 
   ierr = nf90_close(ncid)
   endif
-  call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+  call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
   call MPI_Barrier(ocean_grid_comm, ierr)
 #else
 

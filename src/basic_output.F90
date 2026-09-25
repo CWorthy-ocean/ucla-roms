@@ -30,8 +30,8 @@ module basic_output
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type
-  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
+  use pio, only : PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, mpi_bcast
 
@@ -463,7 +463,7 @@ contains                  !]
         call error_log%abort_check()
         call MPI_Barrier(ocean_grid_comm, ierr)
 
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_his), PIO_write)
+        call pio_open_or_abort(trim(fname_his), module_name//"/wrt_his_ocean_vars", PIO_write)
 
         start=1; start(3)=rec_his                                    ! back to 2D vars
         pio_gtype = '2Drw'
@@ -684,7 +684,7 @@ contains                  !]
 
         call MPI_Barrier(ocean_grid_comm, ierr)
 
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_avg), PIO_write)
+        call pio_open_or_abort(trim(fname_avg), module_name//"/wrt_avg_ocean_vars", PIO_write)
 
         start=1; start(3)=rec_avg                                    ! back to 2D vars
         pio_gtype = '2Drw'
@@ -862,7 +862,10 @@ contains                  !]
     ! ocean_vars variables are calculated for t=n in timestep t=n
     ! (unlike u/v/etc which are calculated for t=n+1 in timestep t=n)
 #if defined LMD_KPP
-    use mixing, only: hbls, hbbl
+    use mixing, only: hbls
+#endif
+#if defined LMD_BKPP
+    use mixing, only: hbbl
 #endif
     use dimensions, only: i0, i1, j0,j1
     use tracers, only: wrt_rst_trc
@@ -909,7 +912,7 @@ contains                  !]
     call error_log%abort_check()
     call MPI_Barrier(ocean_grid_comm, ierr)
 
-    ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_rst), PIO_write)
+    call pio_open_or_abort(trim(fname_rst), module_name//"/wrt_restart_file", PIO_write)
 
     start=1; start(3)=rec_rst                                    ! back to 2D vars
     pio_gtype = '2Drw'
@@ -1549,11 +1552,13 @@ contains                  !]
     use eos_vars, only: rho
 #endif
     use work_mod, only: work
-    use mixing, only: &
+    use mixing, only: akv, akt
 #ifdef LMD_KPP
-    & hbls, hbbl, &
+    use mixing, only: hbls
 #endif
-    & akv, akt
+#ifdef LMD_BKPP
+    use mixing, only: hbbl
+#endif
     use private_scratch, only: a2d
     use dimensions, only: i0, i1, j0, j1, nx, ny
     use tracers, only: set_avg_trc

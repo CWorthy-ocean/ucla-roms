@@ -64,8 +64,8 @@ module bgc_io
   use error_handling_mod, only: error_log
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_IoSystem,&
-  &pio_type, pio_gtype
-  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+  &pio_type, pio_gtype, pio_open_or_abort
+  use pio, only : PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, mpi_bcast
 
@@ -290,7 +290,7 @@ contains
           ierr=nf90_close(ncid)
         endif
 
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_avg), PIO_write)
+        call pio_open_or_abort(trim(fname_avg), module_name//"/"//sr_name, PIO_write)
 
         pio_gtype = '3Drw'
         do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1, nt
@@ -343,7 +343,7 @@ contains
           call ncwrite(ncid,'ocean_time',(/time/),(/record_his/))
           ierr=nf90_close(ncid)
         endif
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_his), PIO_write)
+        call pio_open_or_abort(trim(fname_his), module_name//"/"//sr_name, PIO_write)
         pio_gtype = '3Drw'
         do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1, nt
           if (wrt_t(itrc)) then
@@ -518,7 +518,7 @@ contains
           ierr=nf90_close(ncid)
         endif
 
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_avg), PIO_write)
+        call pio_open_or_abort(trim(fname_avg), module_name//"/"//sr_name, PIO_write)
 
         pio_gtype = '2Drw'
         do itrc=1,nr_bgc_diag_2d
@@ -612,7 +612,7 @@ contains
           ierr=nf90_close(ncid)
         endif
 
-        ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname_his), PIO_write)
+        call pio_open_or_abort(trim(fname_his), module_name//"/"//sr_name, PIO_write)
 
         pio_gtype = '2Drw'
         do itrc=1,nr_bgc_diag_2d

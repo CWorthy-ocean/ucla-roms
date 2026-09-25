@@ -37,12 +37,18 @@ module precheck
   use cdr_output, only:&
   &do_cdr_output, output_period_cdr, nrpf_cdr
 #endif
+  use cdr_tracer_output, only:&
+  &do_cdr_tracer_output, output_period_cdr_trc, nrpf_cdr_trc
+#if defined MARBL && defined CDR_FORCING
+  use cdr_gas_exch_output, only:&
+  &do_cdr_gas_exch_output, output_period_cdr_gas, nrpf_cdr_gas
+#endif
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
   use upscale_output, only:&
   &do_upscale, output_period_uscl, nrpf_uscl
 #endif
   use check_switches_mod, only: check_switches2, print_switches
-#ifdef LMD_KPP
+#if defined LMD_KPP || defined LMD_BKPP
   use lmd_kpp_mod, only: check_kpp_switches
 #endif
 #ifdef SOLVE3D
@@ -72,7 +78,7 @@ contains
     call check_step_uv2_switches()
     call check_step_t_switches()
     call check_set_HUV1_switches()
-# ifdef LMD_KPP
+# if defined LMD_KPP || defined LMD_BKPP
     call check_kpp_switches()
 # endif
     call check_switches2()
@@ -105,6 +111,12 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     call check_output_divides_rst(do_cdr_output,&
     &output_period_cdr, nrpf_cdr, 'cdr')
+#endif
+    call check_output_divides_rst(do_cdr_tracer_output,&
+    &output_period_cdr_trc, nrpf_cdr_trc, 'cdrtrc')
+#if defined MARBL && defined CDR_FORCING
+    call check_output_divides_rst(do_cdr_gas_exch_output,&
+    &output_period_cdr_gas, nrpf_cdr_gas, 'cdrgas')
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     call check_output_divides_rst(do_upscale,&

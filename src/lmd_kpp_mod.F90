@@ -6,7 +6,7 @@ module lmd_kpp_mod
   implicit none
   private
 
-#if defined SOLVE3D && defined LMD_KPP
+#if defined SOLVE3D && (defined LMD_KPP || defined LMD_BKPP)
 
   public :: lmd_kpp_tile
   public :: check_kpp_switches
@@ -22,7 +22,9 @@ contains
   &Gm1,dGm1dS,  Gt1,dGt1dS,  Gs1,dGs1dS,&
   &kbls, kmo,&
   &tind)
+#ifdef LMD_KPP
     use alphabeta_mod, only: alphabeta_tile
+#endif
     use surf_flux, only: stflx, srflx, svstr, sustr, svstr_r, sustr_r
 !     bulk_frc-> only: sustr_r, svstr_r, stflx, srflx, only:
     use grid, only: f, rmask, umask, vmask
@@ -33,20 +35,20 @@ contains
 #ifdef SALINITY
     &, isalt
 #endif
-    use mixing, only: akt, akv&
+    use mixing, only: akt, akv
 # if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
   || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
   || defined LMD_BKPP
-    &, bvf&
+    use mixing, only: bvf
 #endif
 #ifdef LMD_KPP
-    &, hbls, swr_frac&
+    use mixing, only: hbls, swr_frac
 #ifdef LMD_NONLOCAL
-    &, ghat&
+    use mixing, only: ghat
 #endif
 #endif
 #ifdef LMD_BKPP
-    &, hbbl
+    use mixing, only: hbbl
 #endif
     use ocean_vars, only: z_w, hz, v, u, z_r
     use scalars, only: nz, forw_start, g, iic, nstp, vonkar, zob
@@ -169,6 +171,7 @@ contains
 # endif
     do j=J_EXT_RANGE
     do i=I_EXT_RANGE
+# ifdef LMD_KPP
     Bo(i,j)=g*( alpha(i,j)*(stflx(i,j,itemp)-srflx(i,j))&
 #  ifdef SALINITY
     &-beta(i,j)*stflx(i,j,isalt)&
@@ -177,6 +180,7 @@ contains
     Bosol(i,j)=g*alpha(i,j)*srflx(i,j)
 #  undef beta
 #  undef alpha
+# endif
 
 ! DevinD & JM: better to use rho variables for sustr & svstr since we
 ! currently calculated both u/v and rho versions. If we converted u/v back to rho
@@ -191,8 +195,12 @@ contains
     &)))
 #   endif /* BULK_FRC */
 
+# ifdef LMD_KPP
     hbl(i,j)=hbls(i,j)     ! use old-time-step values
+# endif
+# ifdef LMD_BKPP
     bbl(i,j)=hbbl(i,j)     ! as the initial guess
+# endif
 
     kbls(i)=0
     Cr(i,nz)=0._8
@@ -212,10 +220,18 @@ contains
 
   do k=nz-1,1,-1
     do i=I_EXT_RANGE
+#  if defined LMD_KPP && defined LMD_BKPP
     cff_up=(z_w(i,j,nz)-z_w(i,j,k))**2
     cff_dn=(z_w(i,j,k)-z_w(i,j,0))**2
     Kern=cff_up*cff_dn/( (cff_up +(epssfc*hbl(i,j))**2)&
     &*(cff_dn +(epssfc*bbl(i,j))**2) )
+#  elif defined LMD_KPP
+    cff_up=(z_w(i,j,nz)-z_w(i,j,k))**2
+    Kern=cff_up/(cff_up +(epssfc*hbl(i,j))**2)
+#  else
+    cff_dn=(z_w(i,j,k)-z_w(i,j,0))**2
+    Kern=cff_dn/(cff_dn +(epssfc*bbl(i,j))**2)
+#  endif
     FC(i,k)=FC(i,k+1) + Kern*(&
     &0.5_8*( ( u(i,j,k+1,tind)+u(i+1,j,k+1,tind)&
     &-u(i,j,k  ,tind)-u(i+1,j,k  ,tind) )**2&
@@ -233,10 +249,18 @@ enddo
 
 do i=I_EXT_RANGE
 z_bl=z_w(i,j,0)+0.25_8*Hz(i,j,1)
+#  if defined LMD_KPP && defined LMD_BKPP
 cff_up=(z_w(i,j,nz)-z_bl)**2
 cff_dn=(z_bl-z_w(i,j,0))**2
 Kern=cff_up*cff_dn/( (cff_up +(epssfc*hbl(i,j))**2)&
 &*(cff_dn +(epssfc*bbl(i,j))**2) )
+#  elif defined LMD_KPP
+cff_up=(z_w(i,j,nz)-z_bl)**2
+Kern=cff_up/(cff_up +(epssfc*hbl(i,j))**2)
+#  else
+cff_dn=(z_bl-z_w(i,j,0))**2
+Kern=cff_dn/(cff_dn +(epssfc*bbl(i,j))**2)
+#  endif
 FC(i,0)=FC(i,1) + Kern*(&
 &0.5_8*( (u(i,j,1,tind)+u(i+1,j,1,tind))**2&
 &+(v(i,j,1,tind)+v(i,j+1,1,tind))**2&
@@ -246,6 +270,7 @@ FC(i,0)=FC(i,1) + Kern*(&
 &))
 enddo
 
+#  ifdef LMD_KPP
 #   define swdk_r wrk1
 do k=nz,1,-1
   do i=I_EXT_RANGE
@@ -284,6 +309,8 @@ hbl(i,j)=hbl(i,j)*rmask(i,j)
 #   endif
 enddo
 #   undef swdk_r
+#  endif   /* LMD_KPP */
+#  ifdef LMD_BKPP
 
 do i=I_EXT_RANGE
 kbbl(i)=0       ! reset Cr at bottom and kbls for BKPP
@@ -311,6 +338,7 @@ endif
 bbl(i,j)=bbl(i,j)*rmask(i,j)
 #   endif
 enddo     !--> discard FC, Cr and kbbl
+#  endif   /* LMD_BKPP */
 # else
   ERROR: Algorithm for Bulk Richardson number is not specified.
 # endif
@@ -460,6 +488,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
   enddo
 # endif   /* LMD_KPP */
 
+# ifdef LMD_BKPP
   do i=istr,iend
     kbbl(i)=nz          !<-- initialize search
   enddo
@@ -506,6 +535,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
       endif
     enddo      !<-- k
   enddo      !<-- i
+# endif   /* LMD_BKPP */
 
 
   do i=istr,iend
@@ -636,7 +666,7 @@ if (EASTERN_EDGE .and. NORTHERN_EDGE) then
 endif
 #   endif
 #  endif
-# endif   /* LMD_KPP */
+# endif   /* LMD_BKPP */
 
 # ifdef EXCHANGE
 #  ifdef LMD_KPP

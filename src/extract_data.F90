@@ -45,7 +45,7 @@ module extract_data
   use dimensions, only: nx, ny, nz
   use nc_read_write, only: nccreate, ncread, ncwrite
   use roms_read_write, only: findstr, create_file, output_root_name, append_date_node,&
-  &dn_tm
+  &dn_tm, refdatestr
   use netcdf, only:&
   &nf90_double, nf90_write, nf90_nowrite,&
   &nf90_put_att, nf90_inq_varid, nf90_open, nf90_close,&
@@ -73,8 +73,8 @@ module extract_data
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_extract
-  use pio, only : PIO_openfile, PIO_closefile, PIO_write
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_extract, pio_open_or_abort
+  use pio, only : PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
   ! TODO: add averaging
@@ -736,7 +736,7 @@ contains
     ! local
     integer(kind=4) :: i,j,itrc,ierr,ncid,k,record,indt
     character(len=30) :: obj_name
-    character(len=99),save :: fname
+    character(len=256),save :: fname
     character(len=20)              :: tname
     character(len=40) :: oname
     character(len=1) :: pio_bnd
@@ -782,8 +782,10 @@ contains
         ierr=nf90_close(ncid)
       endif
 
+      ! abort_check uses MPI collectives; must not run only on rank 0
+      call error_log%abort_check()
       call MPI_Barrier(ocean_grid_comm, ierr)
-      ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
+      call pio_open_or_abort(trim(fname), module_name//"/do_extract_data", PIO_write)
 #else
       ierr=nf90_open(fname,nf90_write,ncid)
 #endif
@@ -1260,7 +1262,7 @@ contains
     implicit none
 
     !input/output
-    character(len=99),intent(out) :: fname
+    character(len=256),intent(out) :: fname
 
     !local
     integer(kind=4) :: ncid,ierr,varid,indt
@@ -1288,7 +1290,7 @@ contains
       ierr=nf90_def_dim(ncid,'s_rho', N_chd, dimid5)
 
       varid = nccreate(ncid,'bry_time',(/dn_tm/),(/0/), nf90_double)
-      ierr = nf90_put_att(ncid,varid,'long_name',"Time since 2000")
+      ierr = nf90_put_att(ncid,varid,'long_name',refdatestr)
       ierr = nf90_put_att(ncid,varid,'units',"days")
 
       child_dimnums_t = (/dimid1, dimid1, dimid3, dimid3/)
@@ -1353,7 +1355,7 @@ contains
 
       ierr = nf90_close(ncid)
     endif ! mynode == 0
-    call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
 #else
     call create_file('_ext',fname)
@@ -1406,7 +1408,7 @@ contains
         if (ierr/=0) then   ! Only create if not already present
           varid = nccreate(ncid,tname,(/dname(2)/),(/0/),nf90_double)
           ierr = nf90_put_att(ncid,varid,'long_name',&
-          &'Time since 2000')
+          &refdatestr)
           ierr = nf90_put_att(ncid,varid,'units','second' )
         endif
 

@@ -43,7 +43,7 @@ subroutine set_forces
   use dimensions, only: jnode, inode
   use boundary, only: frctype
   use scalars, only: nt
-#if defined(CDR_FORCING)
+#if defined CDR_FORCING && defined MARBL
   use cdr_frc, only: set_cdr_frc, cdr_source
 #endif
 # ifdef BULK_FRC
@@ -146,7 +146,7 @@ subroutine set_forces
     call set_river_frc
   endif
   if (pipe_source) call set_pipe_frc
-#if defined(CDR_FORCING)
+#if defined CDR_FORCING && defined MARBL
   if (cdr_source) call set_cdr_frc
 #endif
 #endif  /* SOLVE3D */

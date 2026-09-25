@@ -48,6 +48,7 @@ contains
 #endif
     use surf_flux, only: sustr, svstr
     use tracers, only: iTandS, t
+    use advection, only: t_vadv_pre, t_vadv_cor
     use coupling, only: r_d
     use roms_mpi, only: exchange_xxx
     use grid, only:&

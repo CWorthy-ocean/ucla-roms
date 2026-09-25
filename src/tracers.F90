@@ -276,7 +276,10 @@ contains
 
       do j=jstr,jend
         do i=istr,iend+1
-          beta = max(ddic_dco2(i,j), 1.0e-5) ! avoid division by zero
+          ! Missing carbonate sensitivity (0, negative, or NaN) must not
+          ! fall back to a tiny beta: k/beta then explodes in thin layers.
+          beta = ddic_dco2(i,j)
+          if (.not. (beta > 0.0)) cycle
           eta = ddic_dalk(i,j)
           if (iALK > 0) then
              cALK = t(i,j,nz,nrhs,iALK)
@@ -284,15 +287,11 @@ contains
              cALK = 0.0
           endif
 
-          ! Implementation: Flux = Flux - (k / beta) * (C_dic - ddic_dalk * C_alk)
-          stflx(i,j,itrc) = stflx(i,j,itrc) -&
+          ! Linearized air-sea CO2 flux for DIC anomaly tracers.
+          ! Multiply by Hz so stflx matches t, which is stored as Hz*C
+          ! before the implicit vertical-mixing step divides by Hz.
+          stflx(i,j,itrc) = stflx(i,j,itrc) - Hz(i,j,nz)*&
      &      ( k_gas(i,j) / beta ) * ( t(i,j,nz,nrhs,itrc) - eta * cALK )
-
-          ! Here, stflx is stored as (stflx * Hz) to maintain consistency
-          ! with t, which is also in (t * Hz) form. This ensures the units match
-          ! when stflx is added to t in step3d_t_ISO.
-          ! After the implicit vertical mixing step in step3d_t_ISO, (t * Hz)
-          ! is divided by Hz to yield the updated tracer t.
         enddo
       enddo
 #endif
@@ -490,7 +489,8 @@ contains
       t_lname(itrc)='CDR OAE ALK tracer' // TRIM(passive_tracer_num)
       wrt_t(itrc) = .false.
       wrt_t_dia(itrc) = .false.
-      t_ana_frc(itrc)=2
+      ! ALK is not exchanged with the atmosphere; analytical (zero) flux.
+      t_ana_frc(itrc)=1
       itot = itot+1
 
       t_vname(itrc+1)='CDR_OAE_DIC' // TRIM(passive_tracer_num)

@@ -427,7 +427,7 @@ contains
 
     ! local
     integer(kind=4) :: ierr,diag, prev_fill_mode,ncid
-    character(len=99),save  :: fname
+    character(len=256),save  :: fname
     integer(kind=4),save            :: record=0
     logical,save :: first_step=.true.
     integer(kind=4),dimension(3) :: start
@@ -481,7 +481,7 @@ contains
 
     character(len=22) :: sr_name = "create_particles_file"
     !input/output
-    character(len=99),intent(out) :: fname
+    character(len=256),intent(out) :: fname
 
     ! local
     integer(kind=4) :: ncid,ierr,varid
