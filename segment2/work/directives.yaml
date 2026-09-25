@@ -1,0 +1,11 @@
+directives:
+  nest-from:
+    rst_path: /anvil/scratch/x-uheede/cstar/iceland1/tasks/segment1/joined_output
+    bry_path: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/
+  apply-overrides:
+    overrides:
+      runtime_params:
+        start_date: '2023-04-01 00:00:00'
+        end_date: '2023-07-01 00:00:00'
+      working_dir: /anvil/scratch/x-uheede/cstar/iceland1/tasks/segment2
+    application: roms_marbl

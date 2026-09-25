@@ -1,0 +1,270 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/CWorthy-ocean/C-Star/refs/heads/main/docs/schemas/bp/roms_marbl/roms_marbl_schema.3.0.0.json
+name: Iceland1_256procs
+description: Generated blueprint; overridden keys [runtime_params, initial_conditions,
+  forcing]; overridden keys [runtime_params, working_dir]
+working_dir: /anvil/scratch/x-uheede/cstar/iceland1/tasks/segment2
+valid_start_date: 2023-01-02 00:00:00
+valid_end_date: 2024-12-31 00:00:00
+code:
+  roms:
+    location: https://github.com/CWorthy-ocean/ucla-roms.git
+    commit: 0.6.2
+  run_time:
+    location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/builds/run-time
+    branch: na
+    filter:
+      files:
+      - marbl_in
+      - namelist.nml
+  compile_time:
+    location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/builds/compile-time
+    branch: na
+    filter:
+      files:
+      - cppdefs.opt
+  marbl:
+    location: https://github.com/marbl-ecosys/MARBL.git
+    commit: marbl0.45.0
+  pio:
+    location: https://github.com/CWorthy-ocean/ParallelIO.git
+    commit: 2.7.1-fork
+initial_conditions:
+  data:
+  - location: /anvil/scratch/x-uheede/cstar/iceland1/tasks/segment1/joined_output/output_rst.20230318000000.nc
+grid:
+  data:
+  - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_grid.nc
+forcing:
+  boundary:
+    data:
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230401003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230401123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230402003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230402123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230403003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230403123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230404003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230404123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230405003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230405123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230406003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230406123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230407003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230407123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230408003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230408123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230409003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230409123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230410003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230410123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230411003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230411123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230412003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230412123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230413003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230413123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230414003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230414123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230415003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230415123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230416003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230416123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230417003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230417123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230418003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230418123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230419003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230419123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230420003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230420123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230421003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230421123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230422003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230422123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230423003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230423123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230424003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230424123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230425003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230425123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230426003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230426123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230427003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230427123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230428003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230428123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230429003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230429123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230430003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230430123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230501003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230501123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230502003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230502123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230503003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230503123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230504003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230504123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230505003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230505123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230506003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230506123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230507003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230507123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230508003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230508123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230509003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230509123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230510003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230510123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230511003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230511123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230512003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230512123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230513003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230513123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230514003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230514123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230515003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230515123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230516003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230516123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230517003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230517123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230518003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230518123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230519003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230519123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230520003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230520123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230521003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230521123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230522003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230522123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230523003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230523123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230524003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230524123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230525003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230525123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230526003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230526123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230527003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230527123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230528003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230528123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230529003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230529123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230530003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230530123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230531003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230531123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230601003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230601123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230602003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230602123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230603003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230603123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230604003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230604123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230605003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230605123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230606003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230606123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230607003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230607123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230608003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230608123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230609003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230609123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230610003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230610123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230611003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230611123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230612003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230612123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230613003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230613123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230614003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230614123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230615003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230615123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230616003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230616123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230617003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230617123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230618003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230618123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230619003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230619123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230620003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230620123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230621003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230621123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230622003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230622123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230623003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230623123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230624003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230624123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230625003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230625123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230626003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230626123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230627003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230627123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230628003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230628123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230629003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230629123000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230630003000.nc
+    - location: /anvil/scratch/x-uheede/cstar/iceland0_timechuncked/tasks/segment2/joined_output/child_bry.20230630123000.nc
+  surface:
+    data:
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202301.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202302.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202303.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202304.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202305.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202306.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202307.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202308.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202309.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202310.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202311.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202312.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202401.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202402.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202403.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202404.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202405.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202406.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202407.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202408.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202409.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202410.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202411.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-physics_202412.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-bgc_clim.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-bgc-co2_2023.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-bgc-co2_2024.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-bgc-co2_2025.nc
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_surface-restoring_clim.nc
+  tidal:
+    data:
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_tidal.nc
+  river:
+    data:
+    - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_river.nc
+partitioning:
+  n_procs_x: 16
+  n_procs_y: 16
+  use_pio: true
+runtime_params:
+  start_date: 2023-04-01 00:00:00
+  end_date: 2023-07-01 00:00:00
+nesting_info:
+  data:
+  - location: /anvil/scratch/x-uheede/cstar/_forge_bp_runs/Iceland1_256procs/input_data/Iceland1_256procs_nesting.nc
+application: roms_marbl
+schema_version: 3.0.0
