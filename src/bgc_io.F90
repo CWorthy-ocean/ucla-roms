@@ -67,7 +67,7 @@ module bgc_io
   &pio_type, pio_gtype, pio_open_or_abort
   use pio, only : PIO_closefile, PIO_write
 #endif
-  use mpi_f08, only: MPI_CHARACTER, mpi_bcast
+  use mpi_f08, only: MPI_CHARACTER, mpi_bcast, MPI_Barrier
 
   implicit none
 
@@ -289,6 +289,9 @@ contains
           call ncwrite(ncid,'ocean_time',(/time/),(/record_avg/))
           ierr=nf90_close(ncid)
         endif
+        ! Match his: flush serial ocean_time before collective PIO open
+        call error_log%abort_check()
+        call MPI_Barrier(ocean_grid_comm, ierr)
 
         call pio_open_or_abort(trim(fname_avg), module_name//"/"//sr_name, PIO_write)
 
@@ -343,6 +346,9 @@ contains
           call ncwrite(ncid,'ocean_time',(/time/),(/record_his/))
           ierr=nf90_close(ncid)
         endif
+        ! Match his: flush serial ocean_time before collective PIO open
+        call error_log%abort_check()
+        call MPI_Barrier(ocean_grid_comm, ierr)
         call pio_open_or_abort(trim(fname_his), module_name//"/"//sr_name, PIO_write)
         pio_gtype = '3Drw'
         do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1, nt
@@ -517,6 +523,8 @@ contains
           call ncwrite(ncid,'ocean_time',(/time/),(/record_dia_avg/))
           ierr=nf90_close(ncid)
         endif
+        call error_log%abort_check()
+        call MPI_Barrier(ocean_grid_comm, ierr)
 
         call pio_open_or_abort(trim(fname_avg), module_name//"/"//sr_name, PIO_write)
 
@@ -611,6 +619,8 @@ contains
           call ncwrite(ncid,'ocean_time',(/time/),(/record_dia_his/))
           ierr=nf90_close(ncid)
         endif
+        call error_log%abort_check()
+        call MPI_Barrier(ocean_grid_comm, ierr)
 
         call pio_open_or_abort(trim(fname_his), module_name//"/"//sr_name, PIO_write)
 
@@ -715,11 +725,26 @@ contains
     endif
 #endif
     ierr=nf90_open(fname,nf90_write,ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_file",&
+    &info="unable to open file "//trim(fname))
     ierr=nf90_redef(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_file",&
+    &info="redef for file "//trim(fname))
 
     call def_vars_bgc( ncid,avg )
 
     ierr = nf90_enddef(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_file",&
+    &info="enddef for file "//trim(fname))
+    ! Must close before rank-0 ocean_time write / collective PIO open.
+    ! Leaving this handle open caused torn *_bgc* files (time=0, huge size).
+    ierr=nf90_close(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_file",&
+    &info="close for file "//trim(fname))
   end subroutine create_bgc_file !]
 !----------------------------------------------------------------------
 #if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
@@ -747,11 +772,24 @@ contains
     endif
 #endif
     ierr=nf90_open(fname,nf90_write,ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_dia_file",&
+    &info="unable to open file "//trim(fname))
     ierr=nf90_redef(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_dia_file",&
+    &info="redef for file "//trim(fname))
 
     call def_bgc_diag(ncid,avg)
 
     ierr = nf90_enddef(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_dia_file",&
+    &info="enddef for file "//trim(fname))
+    ierr=nf90_close(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_dia_file",&
+    &info="close for file "//trim(fname))
   end subroutine create_bgc_dia_file !]
 #endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
 ! ----------------------------------------------------------------------
