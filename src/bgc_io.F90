@@ -53,10 +53,12 @@ module bgc_io
   use nc_read_write, only: nccreate, ncwrite
   use roms_read_write, only:&
   &dn_tm, dn_xr, dn_yr, dn_zr,&
-  &create_file, set_frc_data, max_name_size
+  &create_file, set_frc_data, max_name_size,&
+  &output_root_name, append_date_node, put_global_atts, refdatestr
 
   use netcdf, only:&
   &nf90_write, nf90_open, nf90_close, nf90_redef, nf90_enddef,&
+  &nf90_create, nf90_clobber, nf90_64bit_data, nf90_netcdf4, nf90_noerr,&
   &nf90_double, nf90_put_att
   use scalars, only: nstp, nt, time, nz, dt, iic, nnew, tdays
   use dimensions, only: i0, i1, j0, j1, xi_rho, eta_rho&
@@ -702,6 +704,9 @@ contains
   end subroutine wrt_bgc_diags  !]
 !----------------------------------------------------------------------
   subroutine create_bgc_file(fname,avg)  ![
+    ! Create BGC tracer output file. Under PARALLEL_IO this mirrors
+    ! create_file_ocean_vars: one create/define/enddef/close cycle so
+    ! ocean_time is not lost between create_file (no enddef) and a later redef.
     implicit none
 
     !input/output
@@ -713,9 +718,30 @@ contains
 
 #ifdef PARALLEL_IO
     if (avg) then
-      call create_file('_bgc_avg',fname, nonode=.true.)
+      fname=trim(adjustl(output_root_name)) // '_bgc_avg'
     else
-      call create_file('_bgc',fname, nonode=.true.)
+      fname=trim(adjustl(output_root_name)) // '_bgc'
+    endif
+    call append_date_node(fname, nonode=.true.)
+    ierr = nf90_create(trim(fname), ior(nf90_clobber, nf90_64bit_data), ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_file",&
+    &info="unable to create file "//trim(fname))
+    call put_global_atts(ncid, ierr)
+    varid = nccreate(ncid,'ocean_time',(/dn_tm/),(/0/),nf90_double)
+    ierr = nf90_put_att(ncid,varid,'long_name', refdatestr)
+    ierr = nf90_put_att(ncid,varid,'units','second' )
+    call def_vars_bgc( ncid,avg )
+    ierr = nf90_enddef(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_file",&
+    &info="enddef for file "//trim(fname))
+    ierr=nf90_close(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_file",&
+    &info="close for file "//trim(fname))
+    if (mynode == 0) then
+      write(*,'(7x,2A)') 'created new netcdf file ', trim(fname)
     endif
 #else
     if (avg) then
@@ -723,7 +749,6 @@ contains
     else
       call create_file('_bgc',fname)
     endif
-#endif
     ierr=nf90_open(fname,nf90_write,ncid)
     call error_log%check_netcdf_status(netcdf_status=ierr,&
     &context=module_name//"/create_bgc_file",&
@@ -732,23 +757,21 @@ contains
     call error_log%check_netcdf_status(netcdf_status=ierr,&
     &context=module_name//"/create_bgc_file",&
     &info="redef for file "//trim(fname))
-
     call def_vars_bgc( ncid,avg )
-
     ierr = nf90_enddef(ncid)
     call error_log%check_netcdf_status(netcdf_status=ierr,&
     &context=module_name//"/create_bgc_file",&
     &info="enddef for file "//trim(fname))
-    ! Must close before rank-0 ocean_time write / collective PIO open.
-    ! Leaving this handle open caused torn *_bgc* files (time=0, huge size).
     ierr=nf90_close(ncid)
     call error_log%check_netcdf_status(netcdf_status=ierr,&
     &context=module_name//"/create_bgc_file",&
     &info="close for file "//trim(fname))
+#endif
   end subroutine create_bgc_file !]
 !----------------------------------------------------------------------
 #if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
   subroutine create_bgc_dia_file(fname,avg)  ![
+    ! Same single-define pattern as create_bgc_file / create_file_ocean_vars.
     implicit none
 
     !input/output
@@ -760,28 +783,20 @@ contains
 
 #ifdef PARALLEL_IO
     if (avg) then
-      call create_file('_bgc_dia_avg',fname,nonode=.true.)
+      fname=trim(adjustl(output_root_name)) // '_bgc_dia_avg'
     else
-      call create_file('_bgc_dia',fname,nonode=.true.)
+      fname=trim(adjustl(output_root_name)) // '_bgc_dia'
     endif
-#else
-    if (avg) then
-      call create_file('_bgc_dia_avg',fname)
-    else
-      call create_file('_bgc_dia',fname)
-    endif
-#endif
-    ierr=nf90_open(fname,nf90_write,ncid)
+    call append_date_node(fname, nonode=.true.)
+    ierr = nf90_create(trim(fname), ior(nf90_clobber, nf90_64bit_data), ncid)
     call error_log%check_netcdf_status(netcdf_status=ierr,&
     &context=module_name//"/create_bgc_dia_file",&
-    &info="unable to open file "//trim(fname))
-    ierr=nf90_redef(ncid)
-    call error_log%check_netcdf_status(netcdf_status=ierr,&
-    &context=module_name//"/create_bgc_dia_file",&
-    &info="redef for file "//trim(fname))
-
+    &info="unable to create file "//trim(fname))
+    call put_global_atts(ncid, ierr)
+    varid = nccreate(ncid,'ocean_time',(/dn_tm/),(/0/),nf90_double)
+    ierr = nf90_put_att(ncid,varid,'long_name', refdatestr)
+    ierr = nf90_put_att(ncid,varid,'units','second' )
     call def_bgc_diag(ncid,avg)
-
     ierr = nf90_enddef(ncid)
     call error_log%check_netcdf_status(netcdf_status=ierr,&
     &context=module_name//"/create_bgc_dia_file",&
@@ -790,6 +805,33 @@ contains
     call error_log%check_netcdf_status(netcdf_status=ierr,&
     &context=module_name//"/create_bgc_dia_file",&
     &info="close for file "//trim(fname))
+    if (mynode == 0) then
+      write(*,'(7x,2A)') 'created new netcdf file ', trim(fname)
+    endif
+#else
+    if (avg) then
+      call create_file('_bgc_dia_avg',fname)
+    else
+      call create_file('_bgc_dia',fname)
+    endif
+    ierr=nf90_open(fname,nf90_write,ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_dia_file",&
+    &info="unable to open file "//trim(fname))
+    ierr=nf90_redef(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_dia_file",&
+    &info="redef for file "//trim(fname))
+    call def_bgc_diag(ncid,avg)
+    ierr = nf90_enddef(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_dia_file",&
+    &info="enddef for file "//trim(fname))
+    ierr=nf90_close(ncid)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/create_bgc_dia_file",&
+    &info="close for file "//trim(fname))
+#endif
   end subroutine create_bgc_dia_file !]
 #endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
 ! ----------------------------------------------------------------------
