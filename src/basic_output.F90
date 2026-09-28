@@ -637,14 +637,14 @@ contains                  !]
 
     ! local
     integer(kind=4),dimension(4)   :: start
-    integer(kind=4)                :: rec_avg
+    integer(kind=4),save           :: rec_avg                     ! current file output record (must persist like rec_his)
     integer(kind=4),save           :: total_rec_avg=0                      ! total avg output records so far
     real(kind=8),save              :: output_time_avg=0                    ! time since last output
     character(len=max_name_size),save :: fname_avg
     character(len=99)      :: output_time_string
     character(len=99)      :: formatted_string
     integer(kind=4) :: tile, tn, ierr, k
-    logical, save          :: first_step
+    logical, save          :: first_step=.true.
 
     if (first_step) then
       rec_avg = nrpf_avg
@@ -735,7 +735,6 @@ contains                  !]
         navg_ovars=0
         output_time_avg=0
 
-        ierr=nf90_close(ncid)
         if (mynode == 0) then
           write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&  ! confirm work completed
           &'ocean_vars :: wrote averages, tdays =', tdays,&
