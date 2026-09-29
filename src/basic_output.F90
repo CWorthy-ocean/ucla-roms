@@ -30,7 +30,8 @@ module basic_output
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort,&
+  &pio_file_is_open
   use pio, only : PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, mpi_bcast
@@ -463,6 +464,11 @@ contains                  !]
         call error_log%abort_check()
         call MPI_Barrier(ocean_grid_comm, ierr)
 
+        ! Forcing readers may leave pio_FileDesc open; close before output open
+        if (pio_file_is_open == 1) then
+          call PIO_closefile(pio_FileDesc)
+          pio_file_is_open = 0
+        endif
         call pio_open_or_abort(trim(fname_his), module_name//"/wrt_his_ocean_vars", PIO_write)
 
         start=1; start(3)=rec_his                                    ! back to 2D vars
@@ -668,7 +674,6 @@ contains                  !]
 #ifdef PARALLEL_IO
           rec_avg = 0
           if (mynode == 0) then
-            pio_gtype = '3Drw' ! So it initializes the variables with the correct size
             call create_file_ocean_vars(fname_avg,.true.)
           endif
           call MPI_Bcast(fname_avg,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
@@ -681,9 +686,15 @@ contains                  !]
           call ncwrite(ncid,'ocean_time',(/t_avg_ovars/),(/rec_avg/))
           ierr=nf90_close (ncid)
         endif
-
+        ! Match his: flush serial ocean_time errors before collective PIO open
+        call error_log%abort_check()
         call MPI_Barrier(ocean_grid_comm, ierr)
 
+        ! Forcing readers may leave pio_FileDesc open; close before output open
+        if (pio_file_is_open == 1) then
+          call PIO_closefile(pio_FileDesc)
+          pio_file_is_open = 0
+        endif
         call pio_open_or_abort(trim(fname_avg), module_name//"/wrt_avg_ocean_vars", PIO_write)
 
         start=1; start(3)=rec_avg                                    ! back to 2D vars
@@ -711,7 +722,8 @@ contains                  !]
           pio_gtype = '3Dww'
           call ncwrite(ncid, vname(1,indxO),     w_avg(i0:i1,j0:j1,:), start,.true.)            ! here rather than calc_
         endif
-        pio_gtype = '3Dww'                                                                 ! for efficiency
+        ! W is on rho levels (nz), same as his — not w-levels
+        pio_gtype = '3Drw'
         if (wrt_avg_W)   call ncwrite(ncid, vname(1,indxW),   wvl_avg(i0:i1,j0:j1,1:nz), start,.true.)
         pio_gtype = '3Dww'
         if (wrt_avg_Akv) call ncwrite(ncid, vname(1,indxAkv), akv_avg(i0:i1,j0:j1,:), start,.true.)
@@ -911,6 +923,10 @@ contains                  !]
     call error_log%abort_check()
     call MPI_Barrier(ocean_grid_comm, ierr)
 
+    if (pio_file_is_open == 1) then
+      call PIO_closefile(pio_FileDesc)
+      pio_file_is_open = 0
+    endif
     call pio_open_or_abort(trim(fname_rst), module_name//"/wrt_restart_file", PIO_write)
 
     start=1; start(3)=rec_rst                                    ! back to 2D vars
