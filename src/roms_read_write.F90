@@ -198,6 +198,7 @@ module roms_read_write
   public :: set_frc_data
   public :: init_output_indices
   public :: find_new_record
+  public :: get_frc_dim_len
   public :: nc_check_units
   public :: put_global_atts
   public :: refdatestr
@@ -1440,6 +1441,46 @@ contains
       endif
     endif
   end subroutine mark_ncforce_missing !]
+! ----------------------------------------------------------------------
+  function get_frc_dim_len(vname, dimname) result(dimlen) ![
+    ! Return the length of dimension dimname in the first forcing file
+    ! (frcfiles) that contains variable vname. Used to size forcing buffers
+    ! before the first set_frc_data call, when nc%ifile is not yet known.
+    ! Returns -1 if vname is in no forcing file, -2 if the file holding
+    ! vname has no dimension dimname. Collective: rank 0 looks up and
+    ! broadcasts, so every rank must call it.
+
+    use param, only: ocean_grid_comm
+    use mpi_f08, only: mpi_integer, mpi_bcast
+    use netcdf, only: nf90_inq_dimid
+
+    implicit none
+    ! input
+    character(len=*), intent(in) :: vname, dimname
+    ! output
+    integer(kind=4) :: dimlen
+    ! local
+    integer(kind=4) :: ifile, ncid, varid, dimid, ierr
+
+    dimlen = -1
+    if (mynode == 0) then
+      do ifile = 1, max_frc
+        ierr = nf90_open(frcfiles(ifile), nf90_nowrite, ncid)
+        if (ierr /= nf90_noerr) cycle
+        if (nf90_inq_varid(ncid, vname, varid) == nf90_noerr) then
+          dimlen = -2
+          if (nf90_inq_dimid(ncid, dimname, dimid) == nf90_noerr) then
+            ierr = nf90_inquire_dimension(ncid, dimid, len=dimlen)
+          endif
+          ierr = nf90_close(ncid)
+          exit
+        endif
+        ierr = nf90_close(ncid)
+      enddo
+    endif
+    call MPI_Bcast(dimlen, 1, MPI_INTEGER, 0, ocean_grid_comm, ierr)
+
+  end function get_frc_dim_len !]
 ! ----------------------------------------------------------------------
   subroutine fill_frc_slice_aux3d(nc,modtime,it,bry) ![
     ! Fill a time slice of forcing data, not surface forcing

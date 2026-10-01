@@ -9,7 +9,7 @@ module river_frc
 
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
-  use roms_read_write, only: ncforce, frcfiles, set_frc_data
+  use roms_read_write, only: ncforce, frcfiles, set_frc_data, get_frc_dim_len
   use nc_read_write, only: nccreate, ncread, ncwrite
   use scalars, only: nt
   use grid, only:&
@@ -18,7 +18,9 @@ module river_frc
   use dimensions, only: i0, i1, j0, j1, nx, ny, xi_rho, eta_rho,&
   &x0,x1,y0,y1
   use pio_roms, only: use_pio, pio_gtype
-  use param, only: lm, mm, mynode, ocean_grid_comm
+  use param, only: lm, mm, mynode, ocean_grid_comm,&
+  &nt_passive, nt_cdr_oae, nt_cdr_dor
+  use tracers, only: iTandS
   use error_handling_mod, only: error_log
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
@@ -48,6 +50,13 @@ module river_frc
 
   real(kind=8), public, allocatable, dimension(:)   :: riv_vol
   real(kind=8), public, allocatable, dimension(:,:) :: riv_trc
+
+  ! river_tracer may hold all nt tracers, or all except the CDR tracers.
+  ! riv_trc_map(k) is the model tracer index of slot k in the file;
+  ! model tracers not in the file (CDR) keep a river concentration of 0.
+  integer(kind=4) :: nt_riv_file                                  ! length of ntracers in file
+  integer(kind=4), allocatable, dimension(:)   :: riv_trc_map
+  real(kind=8),    allocatable, dimension(:,:) :: riv_trc_file    ! river_tracer as read from file
 
   integer(kind=4),public :: iriver                                       ! river index for looping through rivers
   real(kind=8),   public :: riv_depth
@@ -86,7 +95,7 @@ contains
       allocate(riv_vol(nriv));    riv_vol = 0.0_8
       allocate(riv_trc(nriv,nt)); riv_trc = 0.0_8
       allocate(nc_rvol%vdata(nriv,1 ,2))
-      allocate(nc_rtrc%vdata(nriv,nt,2))
+      if (.not. river_analytical) call init_river_trc_map
     end if
     ! set river flux volumes and tracer data:
     if(river_analytical) then
@@ -99,7 +108,8 @@ contains
       pio_file_is_open = 0
 #endif
       call set_frc_data(nc_rvol,riv_vol) ! set river volume flux for all rivers at current time
-      call set_frc_data(nc_rtrc,var2d=riv_trc)           ! set river tracers flux for all rivers at current time
+      call set_frc_data(nc_rtrc,var2d=riv_trc_file)      ! set river tracers flux for all rivers at current time
+      riv_trc(:,riv_trc_map) = riv_trc_file              ! CDR tracers, if not in file, stay 0
 #ifdef PARALLEL_IO
       if (pio_file_is_open == 1) then
         call PIO_closefile(pio_FileDesc)
@@ -109,6 +119,61 @@ contains
     endif
     if(.not. init_riv_done) call init_river_frc ! initialize once river flux locations & arrays
   end subroutine set_river_frc  !]
+!     ----------------------------------------------------------------------
+  subroutine init_river_trc_map  ![
+    ! Size the river_tracer buffer from the ntracers dimension in the
+    ! forcing file and map file slots to model tracer indices. Accepted:
+    ! - ntracers == nt         : all tracers, in model order
+    ! - ntracers == nt - ncdr  : all tracers except the CDR block
+    !   (CDR_OAE_ALK/DIC pairs and CDR_DOR_DIC), others in model order
+    implicit none
+
+    character(len=18) :: sr_name = "init_river_trc_map"
+    ! local
+    integer(kind=4) :: k, ncdr, cdr0
+    character(len=1024) :: error_info
+
+    ncdr = 2*nt_cdr_oae + nt_cdr_dor
+    cdr0 = iTandS + nt_passive                     ! last tracer index before the CDR block
+
+    nt_riv_file = get_frc_dim_len(riv_trc_name, ntrc_dim_name)
+
+    if (nt_riv_file == -1) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="variable "//riv_trc_name//" not found in any forcing file")
+    elseif (nt_riv_file == -2) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="variable "//riv_trc_name//" found, but its file has no "//&
+      &ntrc_dim_name//" dimension")
+    elseif (nt_riv_file /= nt .and. nt_riv_file /= nt-ncdr) then
+      write(error_info,'(A,I0,A,I0,A,I0,A)')&
+      &ntrc_dim_name//' = ', nt_riv_file, ' in river forcing file, but must be ',&
+      &nt, ' (all tracers) or ', nt-ncdr, ' (all tracers except CDR)'
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+    endif
+    call error_log%abort_check()
+
+    allocate(riv_trc_map(nt_riv_file))
+    do k=1,nt_riv_file
+      if (nt_riv_file /= nt .and. k > cdr0) then
+        riv_trc_map(k) = k + ncdr                  ! skip over the CDR block
+      else
+        riv_trc_map(k) = k
+      endif
+    enddo
+
+    allocate(nc_rtrc%vdata(nriv,nt_riv_file,2))
+    allocate(riv_trc_file(nriv,nt_riv_file)); riv_trc_file = 0.0_8
+
+    if (mynode==0 .and. nt_riv_file /= nt) write(*,'(7x,A,I0,A)')&
+    &'river_frc: river_tracer has no CDR tracers; ', ncdr,&
+    &' CDR tracers get river concentration 0'
+
+  end subroutine init_river_trc_map  !]
 !     ----------------------------------------------------------------------
 
   subroutine read_nml_river
