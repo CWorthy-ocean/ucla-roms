@@ -13,6 +13,8 @@ Breaking Changes
 - ``ddic_dco2`` and ``ddic_dalk`` values change. With the new total-scale K1/K2 constants, beta is about 0.5% lower and eta about 0.03% higher almost everywhere. Results will not reproduce pre-PR output bit-for-bit. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Cells where the pH solve fails or is rejected, or that fall below the new salinity/ALK/DIC floors, are now written as 0. Previously the routine could return garbage values there without flagging them. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Results change for any configuration using ``LMD_KPP`` with shortwave forcing. The change scales with sea level divided by depth: it is largest in shallow, tidal regions and negligible in deep water. Regression-test reference hashes for KPP tests need to be updated. (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
+- A run now stops at startup if a river forcing file has more tracers than the model, or if the river forcing files differ in tracer count. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- With realistic river forcing on, a run now stops at startup if any listed forcing file can't be opened as netCDF. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
 
 New Features
 ~~~~~~~~~~~~
@@ -20,6 +22,8 @@ New Features
 
 - Compile-time switch ``k_carbonic_opt``: 10 (default) selects Lueker, Dickson & Keeling (2000) K1/K2 on the total pH scale, and 4 restores the original Mehrbach/Dickson & Millero (1987) SWS-scale constants for A/B regression checks. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - ``do_cdr_tracer_output`` works in runs without MARBL, including the ``CDR_TRACER`` passive-tracer mode; previously the stub aborted at init with "cdr_tracer_output must have MARBL enabled." (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
+- River forcing files may now omit the CDR tracers (OAE ALK/DIC pairs and DOR DIC). Those tracers then get a river concentration of 0. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- ROMS works out which layout a river file uses from its tracer count, so no namelist change is needed. The remaining tracers must stay in model order. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
 
 Bug Fixes
 ~~~~~~~~~
@@ -38,6 +42,8 @@ Bug Fixes
   - **No KPP:** the no-KPP branch of ``lmd_vmix_tile`` used ``Akv``, ``Akt`` and ``exchange_xxx`` without importing them.
   - **KPP without ``LMD_NONLOCAL``:** the solar-heating statement in ``step3d_t`` had a dangling continuation.
 
+- A river forcing file with fewer tracers than the model used to fail with an unclear netCDF error. It now gets a message giving the allowed tracer counts. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+
 
 Improvements
 ~~~~~~~~~~~~
@@ -46,6 +52,7 @@ Improvements
 - The salinity floor is raised from 1e-4 to MARBL's ``salt_min = 0.1`` PSU, and MARBL's ALK/DIC floors are added, so near-empty cells are skipped instead of being handed to extrapolated equilibrium-constant fits. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - ``isocapnic_quotient`` takes [H+] directly instead of pH, removing a lossy ``-log10`` / ``10**`` round trip. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Solver controls (bracket pH 4–10, relative tolerance 1e-10, up to 100 iterations, residual tolerance 1e-8 × TA) are named parameters. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- Errors for a bad river forcing file now name the file at fault, for example one missing its tracer dimension or with a tracer count that differs from the others. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
