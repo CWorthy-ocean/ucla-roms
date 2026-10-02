@@ -122,7 +122,8 @@ contains
 !     ----------------------------------------------------------------------
   subroutine init_river_trc_map  ![
     ! Size the river_tracer buffer from the ntracers dimension in the
-    ! forcing file and map file slots to model tracer indices. Accepted:
+    ! forcing files (which must all agree) and map file slots to model
+    ! tracer indices. Accepted:
     ! - ntracers == nt         : all tracers, in model order
     ! - ntracers == nt - ncdr  : all tracers except the CDR block
     !   (CDR_OAE_ALK/DIC pairs and CDR_DOR_DIC), others in model order
@@ -142,11 +143,9 @@ contains
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info="variable "//riv_trc_name//" not found in any forcing file")
-    elseif (nt_riv_file == -2) then
-      call error_log%raise_global(&
-      &context=module_name//"/"//sr_name,&
-      &info="variable "//riv_trc_name//" found, but its file has no "//&
-      &ntrc_dim_name//" dimension")
+    elseif (nt_riv_file < 0) then
+      ! -2 (a river file has no ntracers dimension) or -3 (river files
+      ! disagree on ntracers): get_frc_dim_len raised an error naming the files
     elseif (nt_riv_file /= nt .and. nt_riv_file /= nt-ncdr) then
       write(error_info,'(A,I0,A,I0,A,I0,A)')&
       &ntrc_dim_name//' = ', nt_riv_file, ' in river forcing file, but must be ',&
