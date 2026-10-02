@@ -590,10 +590,13 @@ contains
         &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:)/global_int(1)
 
 #ifdef CDR_TRACER
-        ! CDR_OAE_ALK/DIC and CDR_DOR_DIC share the same spatial profile as ALK/DIC
-        ! before normalization, but were previously left unscaled — so their
-        ! injection rate was global_int times too large. Normalize each the same way.
-        do itrc = iTandS+nt_passive+1,&
+        ! passive_tracer*, CDR_OAE_ALK/DIC and CDR_DOR_DIC share the same
+        ! spatial profile as ALK/DIC before normalization, but were previously
+        ! left unscaled — so their injection rate was global_int times too
+        ! large. Normalize each the same way (from iTandS+1 so the nt_passive
+        ! block is covered too: roms-tools can now emit passive-tracer rows in
+        ! CDR forcing files).
+        do itrc = iTandS+1,&
         &         iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
           local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itrc,:))
           call MPI_Reduce(local_int,global_int,1,&
