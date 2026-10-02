@@ -1443,37 +1443,72 @@ contains
   end subroutine mark_ncforce_missing !]
 ! ----------------------------------------------------------------------
   function get_frc_dim_len(vname, dimname) result(dimlen) ![
-    ! Return the length of dimension dimname in the first forcing file
-    ! (frcfiles) that contains variable vname. Used to size forcing buffers
+    ! Return the length of dimension dimname in the forcing files
+    ! (frcfiles) that contain variable vname. Used to size forcing buffers
     ! before the first set_frc_data call, when nc%ifile is not yet known.
-    ! Returns -1 if vname is in no forcing file, -2 if the file holding
-    ! vname has no dimension dimname. Collective: rank 0 looks up and
-    ! broadcasts, so every rank must call it.
+    ! Every file holding vname is checked, since set_frc_data steps through
+    ! them as time advances and reads each one into the same buffer.
+    ! Returns:
+    !   >= 0 : the length, the same in every file holding vname
+    !   -1   : vname is in no forcing file
+    !   -2   : a file holding vname has no dimension dimname
+    !   -3   : the files holding vname disagree on the length
+    ! For -2, -3 and for a forcing file that cannot be opened, an error
+    ! naming the file(s) is raised, so the caller must call abort_check.
+    ! Collective: rank 0 looks up and broadcasts, so every rank must call it.
 
     use param, only: ocean_grid_comm
     use mpi_f08, only: mpi_integer, mpi_bcast
     use netcdf, only: nf90_inq_dimid
 
     implicit none
+    character(len=15) :: sr_name = "get_frc_dim_len"
     ! input
     character(len=*), intent(in) :: vname, dimname
     ! output
     integer(kind=4) :: dimlen
     ! local
-    integer(kind=4) :: ifile, ncid, varid, dimid, ierr
+    integer(kind=4) :: ifile, ifile1, ncid, varid, dimid, ierr, file_len
+    character(len=1024) :: info
 
     dimlen = -1
+    ifile1 = 0
     if (mynode == 0) then
       do ifile = 1, max_frc
         ierr = nf90_open(frcfiles(ifile), nf90_nowrite, ncid)
-        if (ierr /= nf90_noerr) cycle
+        if (ierr /= nf90_noerr) then
+          call error_log%check_netcdf_status(&
+          &netcdf_status=ierr,&
+          &context=module_name//"/"//sr_name,&
+          &info="error opening "//trim(frcfiles(ifile)))
+          cycle
+        endif
         if (nf90_inq_varid(ncid, vname, varid) == nf90_noerr) then
-          dimlen = -2
-          if (nf90_inq_dimid(ncid, dimname, dimid) == nf90_noerr) then
-            ierr = nf90_inquire_dimension(ncid, dimid, len=dimlen)
+          if (nf90_inq_dimid(ncid, dimname, dimid) /= nf90_noerr) then
+            call error_log%raise_from_rank(&
+            &context=module_name//"/"//sr_name,&
+            &info=trim(frcfiles(ifile))//" has variable "//trim(vname)//&
+            &" but no "//trim(dimname)//" dimension")
+            dimlen = -2
+            ierr = nf90_close(ncid)
+            exit
           endif
-          ierr = nf90_close(ncid)
-          exit
+          ierr = nf90_inquire_dimension(ncid, dimid, len=file_len)
+          if (dimlen == -1) then                     ! first file holding vname
+            dimlen = file_len
+            ifile1 = ifile
+          elseif (file_len /= dimlen) then
+            write(info,'(4A,I0,3A,I0,2A)') trim(dimname),&
+            &' differs between files holding ', trim(vname), ': ',&
+            &dimlen, ' in ', trim(frcfiles(ifile1)), ', ',&
+            &file_len, ' in ', trim(frcfiles(ifile))
+            call error_log%raise_from_rank(&
+            &context=module_name//"/"//sr_name,&
+            &info=info)
+            dimlen = -3
+            ierr = nf90_close(ncid)
+            exit
+          endif
         endif
         ierr = nf90_close(ncid)
       enddo
