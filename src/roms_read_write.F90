@@ -127,7 +127,8 @@ module roms_read_write
   integer(kind=4),parameter :: max_options_string=20000
   ! forcing file list attribute: sized to hold every allowed forcing file
   ! path (max_frc_files) plus a separating ', ' each, so it can't overflow
-  integer(kind=4), parameter, public :: max_frc_files=360
+  ! Sized for long segments with 12-hourly bry files (~730/yr) plus other forcing.
+  integer(kind=4), parameter, public :: max_frc_files=1000
   integer(kind=4),parameter :: max_frc_string=&
   &max_frc_files*(max_name_size+2)
 
