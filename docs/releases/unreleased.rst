@@ -15,6 +15,7 @@ Breaking Changes
 - Results change for any configuration using ``LMD_KPP`` with shortwave forcing. The change scales with sea level divided by depth: it is largest in shallow, tidal regions and negligible in deep water. Regression-test reference hashes for KPP tests need to be updated. (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
 - A run now stops at startup if a river forcing file has more tracers than the model, or if the river forcing files differ in tracer count. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
 - With realistic river forcing on, a run now stops at startup if any listed forcing file can't be opened as netCDF. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- The CDR DIC tracer gas exchange no longer carries the spurious ``Hz`` factor (see Bug Fixes). Runs with ``CDR_TRACER`` enabled will produce different, and now correct, CDR DIC results; existing CDR tracer output is not directly comparable to output from this branch. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
 
 New Features
 ~~~~~~~~~~~~
@@ -24,6 +25,8 @@ New Features
 - ``do_cdr_tracer_output`` works in runs without MARBL, including the ``CDR_TRACER`` passive-tracer mode; previously the stub aborted at init with "cdr_tracer_output must have MARBL enabled." (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
 - River forcing files may now omit the CDR tracers (OAE ALK/DIC pairs and DOR DIC). Those tracers then get a river concentration of 0. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
 - ROMS works out which layout a river file uses from its tracer count, so no namelist change is needed. The remaining tracers must stay in model order. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- New optional namelist group ``CDR_TRACER_SETTINGS`` (``surf_flux.F90``) with the logical ``cdr_online_carbonate_sensitivity`` (default ``.false.``). When set, ``ddic_dco2`` and ``ddic_dalk`` are computed every step from the surface ``ALK_ALT_CO2``, ``DIC_ALT_CO2``, ``PO4``, ``SiO3``, temperature and salinity via ``carbonate_sensitivity%compute_surface_beta_eta``, and the forcing-file read is skipped. Requires MARBL with those tracers; the run aborts with a clear message otherwise. It assumes ALT_CO2 is forced with the same atmospheric CO2 as DIC/ALK (``xco2_air_alt`` equal to ``xco2_air`` under ``PCO2AIR_FORCING``). If the group is absent from the namelist the file-based default is kept. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- New logical ``wrt_gas_exchange`` (default ``.false.``) in ``CDR_TRACER_OUTPUT_SETTINGS``. When set with ``wrt_dic``, the CDR tracer output files gain the 2-D fields ``FG_CDR_OAE_DIC<n>`` and ``FG_CDR_DOR_DIC<n>`` (mmol/m^2/s, positive into the ocean), as instantaneous or time-averaged values on both the PIO and serial write paths. Requesting it in a build without ``CDR_TRACER`` aborts at initialization. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
 
 Bug Fixes
 ~~~~~~~~~
@@ -43,6 +46,9 @@ Bug Fixes
   - **KPP without ``LMD_NONLOCAL``:** the solar-heating statement in ``step3d_t`` had a dangling continuation.
 
 - A river forcing file with fewer tracers than the model used to fail with an unclear netCDF error. It now gets a message giving the allowed tracer counts. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- ``tracers%subtract_gas_exchange_from_tracer_flx`` multiplied the linearized CO2 flux by the top-layer thickness ``Hz`` before adding it to ``stflx``. ``step3d_t`` already adds ``dt*stflx`` to ``Hz*C``, so ``stflx`` must be a flux in mmol/m^2/s; the extra factor scaled the CDR gas exchange by the surface layer thickness. The factor is removed and the flux is masked with ``rmask``. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- ``set_surf_tracer_flx`` computed its loop bounds from an uninitialized ``tile``, so depending on leftover memory the gas transfer velocity and the CDR gas exchange could be skipped over the whole domain; ``tile`` is now initialized to 0. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- A ``#if define`` typo (for ``#if defined``) meant the ``TRACER_DIFF2`` namelist group was never read, so ``tnu2`` was 0 in every ``TS_DIF2`` build regardless of the namelist; the namelist values now take effect. In ``TS_DIF2`` builds the group is now required, and ``tnu2`` may list at most one value per tracer. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
 
 
 Improvements
@@ -53,6 +59,7 @@ Improvements
 - ``isocapnic_quotient`` takes [H+] directly instead of pH, removing a lossy ``-log10`` / ``10**`` round trip. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Solver controls (bracket pH 4–10, relative tolerance 1e-10, up to 100 iterations, residual tolerance 1e-8 × TA) are named parameters. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Errors for a bad river forcing file now name the file at fault, for example one missing its tracer dimension or with a tracer count that differs from the others. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- The gas-exchange flux is stored per tracer in the new public array ``tracers%cdr_gas_flx``, making it available to output and diagnostics rather than being folded into ``stflx`` only. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -73,4 +80,7 @@ Miscellaneous
   - The guard fixes leave default-configuration results bit-for-bit unchanged.
   - Bottom-only and no-KPP runs complete without errors or NaNs.
   - No measurable change in time per step.
+
+- ``namelist.nml`` documents the new ``CDR_TRACER_SETTINGS`` group and the ``wrt_gas_exchange`` output switch. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- CI now compiles ``CDR_TRACER`` (with ``PARALLEL_IO``) for gnu and ifx; no CI job built it before. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
 
