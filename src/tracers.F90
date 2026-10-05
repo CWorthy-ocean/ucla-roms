@@ -140,7 +140,7 @@ contains
     ! local
     integer(kind=4)           :: itrc       ! tracer number for loop index
     character(len=46) :: t_flx_name ! Tracer time name
-    integer(kind=4) :: tile
+    integer(kind=4), save :: tile = 0   ! must be set: compute_tile_bounds.h uses it
 
 #include "compute_tile_bounds.h"
 
