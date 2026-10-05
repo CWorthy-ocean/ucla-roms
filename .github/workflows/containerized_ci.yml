@@ -289,7 +289,9 @@ jobs:
     #   mirrors the production cson roms-marbl configuration (test_bgc's keys
     #   plus CDR_FORCING and UPSCALING) with PARALLEL_IO on top, so
     #   MARBL+CDR+PIO interactions are compiled too. Built once without
-    #   MPI_MASKING and once with it.
+    #   MPI_MASKING and once with it. The first build also adds CDR_TRACER
+    #   (dedicated CDR tracers + their gas exchange), which no test defines;
+    #   the MPI_MASKING build keeps the non-CDR_TRACER code paths covered.
     # - DIAGNOSTICS: term-by-term budget output, never enabled by any test.
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_gnu.result == 'success' || needs.build_gnu.result == 'skipped') }}
     runs-on: ubuntu-latest
@@ -325,7 +327,7 @@ jobs:
             BULK_FRC SPONGE SPONGE_TUNE PCO2AIR_FORCING \
             MARBL MARBL_DIAGS NOX_FORCING NHY_FORCING \
             TIDES SFLX_CORR CFLX_CORR \
-            CDR_FORCING UPSCALING \
+            CDR_FORCING UPSCALING CDR_TRACER \
             PARALLEL_IO
           '
 
@@ -367,8 +369,8 @@ jobs:
     needs: [prepare, build_ifx]
     # ifx counterpart of compile_gnu's PARALLEL_IO checks: the same production
     # key set compiled with COMPILER=intel against the ifx image's from-source
-    # PnetCDF + ParallelIO fork, once without MPI_MASKING and once with it.
-    # Same build_ifx gating as test_ifx.
+    # PnetCDF + ParallelIO fork, once without MPI_MASKING (plus CDR_TRACER, as
+    # in compile_gnu) and once with it. Same build_ifx gating as test_ifx.
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_ifx.result == 'success' || needs.build_ifx.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
@@ -403,7 +405,7 @@ jobs:
             BULK_FRC SPONGE SPONGE_TUNE PCO2AIR_FORCING \
             MARBL MARBL_DIAGS NOX_FORCING NHY_FORCING \
             TIDES SFLX_CORR CFLX_CORR \
-            CDR_FORCING UPSCALING \
+            CDR_FORCING UPSCALING CDR_TRACER \
             PARALLEL_IO
 
       - name: Compile PARALLEL_IO configuration with MPI_MASKING
