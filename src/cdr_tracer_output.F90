@@ -11,7 +11,7 @@ module cdr_tracer_output
 #include "cppdefs.opt"
 
   use namelist_open_mod, only: open_namelist_file
-  use tracers, only: t, t_units, t_lname, iTandS
+  use tracers, only: t, t_units, t_lname, iTandS, cdr_gas_flx
   use param, only: nt_passive, nt_cdr_oae, nt_cdr_dor, mynode, lm, mm
   use dimensions, only: i0, i1, j0, j1, nx, ny, nz, eta_rho, xi_rho
   use roms_read_write, only:&
@@ -50,10 +50,11 @@ module cdr_tracer_output
   logical, public :: wrt_tracers, wrt_vertical_integrals, wrt_thickness_weighted
   logical, public :: wrt_sources
   logical, public :: wrt_alk = .true., wrt_dic = .true.
+  logical, public :: wrt_gas_exchange = .false.   ! FG_CDR_*_DIC air-sea fluxes
   namelist /CDR_TRACER_OUTPUT_SETTINGS/ output_period_cdr_trc, nrpf_cdr_trc,&
   &wrt_cdr_trc_avg, cdr_trc_monthly_averages, do_cdr_tracer_output,&
   &wrt_tracers, wrt_vertical_integrals, wrt_thickness_weighted,&
-  &wrt_sources, wrt_alk, wrt_dic
+  &wrt_sources, wrt_alk, wrt_dic, wrt_gas_exchange
 
   character(len=18) :: module_name = "cdr_tracer_output"
   real(kind=8)    :: output_time = 0
@@ -86,6 +87,10 @@ module cdr_tracer_output
   real(kind=8), allocatable :: CDR_DOR_DIC_source_avg(:,:,:,:)
   real(kind=8), allocatable :: hCDR_DOR_DIC_tmp(:,:,:,:)
   real(kind=8), allocatable :: int_z_CDR_DOR_DIC_tmp(:,:,:)
+
+  ! averaged air-sea CO2 flux into the CDR DIC tracers (from tracers%cdr_gas_flx)
+  real(kind=8), allocatable :: FG_CDR_OAE_DIC_avg(:,:,:)
+  real(kind=8), allocatable :: FG_CDR_DOR_DIC_avg(:,:,:)
 
   type CdrTrcOutputVariable
     character(len=32)              :: name
@@ -290,6 +295,25 @@ contains
         enddo
       endif
     endif
+
+    if (wrt_gas_exchange .and. wrt_dic) then
+      do ioae=1,nt_cdr_oae
+        itrc = iCDR_OAE_DIC(ioae)
+        write(vname,'(A,I0)') 'FG_CDR_OAE_DIC', ioae
+        call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+        &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
+        &'air-sea CO2 flux into ' // trim(t_lname(itrc)) //&
+        &' (positive into ocean)','mmol/m^2/s')
+      enddo
+      do idor=1,nt_cdr_dor
+        itrc = iCDR_DOR_DIC(idor)
+        write(vname,'(A,I0)') 'FG_CDR_DOR_DIC', idor
+        call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+        &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
+        &'air-sea CO2 flux into ' // trim(t_lname(itrc)) //&
+        &' (positive into ocean)','mmol/m^2/s')
+      enddo
+    endif
   end subroutine define_cdr_trc_output_variables
 
   subroutine init_cdr_tracer_output
@@ -324,7 +348,8 @@ contains
 
     if ((wrt_alk .or. wrt_dic) .and.&
    &    (wrt_tracers .or. wrt_vertical_integrals .or.&
-   &     wrt_thickness_weighted .or. (cdr_source .and. wrt_sources))) then
+   &     wrt_thickness_weighted .or. (cdr_source .and. wrt_sources) .or.&
+   &     wrt_gas_exchange)) then
       if (wrt_alk .and. nt_cdr_oae > 0) then
         allocate(iCDR_OAE_ALK(nt_cdr_oae))
         do ioae=1,nt_cdr_oae
@@ -342,6 +367,25 @@ contains
         do idor=1,nt_cdr_dor
           iCDR_DOR_DIC(idor) = iTandS + nt_passive + 2*nt_cdr_oae + idor
         enddo
+      endif
+    endif
+
+    if (wrt_gas_exchange .and. .not. allocated(cdr_gas_flx)) then
+      call error_log%raise_global(&
+     &  context=module_name//'/'//sr_name,&
+     &  info='wrt_gas_exchange is .true. but the CDR tracer air-sea flux'//&
+     &       ' is not computed in this build (requires the CDR_TRACER cppkey).')
+    endif
+    call error_log%abort_check()
+
+    if (wrt_gas_exchange .and. wrt_dic .and. wrt_cdr_trc_avg) then
+      if (nt_cdr_oae > 0) then
+        allocate(FG_CDR_OAE_DIC_avg(GLOBAL_2D_ARRAY,nt_cdr_oae))
+        FG_CDR_OAE_DIC_avg(:,:,:)=0
+      endif
+      if (nt_cdr_dor > 0) then
+        allocate(FG_CDR_DOR_DIC_avg(GLOBAL_2D_ARRAY,nt_cdr_dor))
+        FG_CDR_DOR_DIC_avg(:,:,:)=0
       endif
     endif
 
@@ -540,6 +584,19 @@ contains
        &    + CDR_DOR_DIC_source(:,:,:,idor)*coef
         enddo
       endif
+    endif
+
+    if (wrt_gas_exchange .and. wrt_dic) then
+      do ioae=1,nt_cdr_oae
+        itrc = iCDR_OAE_DIC(ioae)
+        FG_CDR_OAE_DIC_avg(:,:,ioae) = FG_CDR_OAE_DIC_avg(:,:,ioae)*(1-coef)&
+     &    + cdr_gas_flx(:,:,itrc)*coef
+      enddo
+      do idor=1,nt_cdr_dor
+        itrc = iCDR_DOR_DIC(idor)
+        FG_CDR_DOR_DIC_avg(:,:,idor) = FG_CDR_DOR_DIC_avg(:,:,idor)*(1-coef)&
+     &    + cdr_gas_flx(:,:,itrc)*coef
+      enddo
     endif
   end subroutine calc_average
 
@@ -792,6 +849,19 @@ contains
           enddo
         endif
       endif
+      if (wrt_gas_exchange .and. wrt_dic) then
+        pio_gtype = '2Drw'
+        do ioae=1,nt_cdr_oae
+          write(vname,'(A,I0)') 'FG_CDR_OAE_DIC', ioae
+          call ncwrite(ncid,trim(vname),FG_CDR_OAE_DIC_avg(i0:i1,j0:j1,ioae),(/1,1,record/),.true.)
+          FG_CDR_OAE_DIC_avg(:,:,ioae)=0
+        enddo
+        do idor=1,nt_cdr_dor
+          write(vname,'(A,I0)') 'FG_CDR_DOR_DIC', idor
+          call ncwrite(ncid,trim(vname),FG_CDR_DOR_DIC_avg(i0:i1,j0:j1,idor),(/1,1,record/),.true.)
+          FG_CDR_DOR_DIC_avg(:,:,idor)=0
+        enddo
+      endif
     else
       if (wrt_tracers) then
         pio_gtype = '3Drw'
@@ -867,6 +937,19 @@ contains
             call ncwrite(ncid,trim(vname),CDR_DOR_DIC_source(i0:i1,j0:j1,:,idor),(/1,1,1,record/),.true.)
           enddo
         endif
+      endif
+      if (wrt_gas_exchange .and. wrt_dic) then
+        pio_gtype = '2Drw'
+        do ioae=1,nt_cdr_oae
+          itrc = iCDR_OAE_DIC(ioae)
+          write(vname,'(A,I0)') 'FG_CDR_OAE_DIC', ioae
+          call ncwrite(ncid,trim(vname),cdr_gas_flx(i0:i1,j0:j1,itrc),(/1,1,record/),.true.)
+        enddo
+        do idor=1,nt_cdr_dor
+          itrc = iCDR_DOR_DIC(idor)
+          write(vname,'(A,I0)') 'FG_CDR_DOR_DIC', idor
+          call ncwrite(ncid,trim(vname),cdr_gas_flx(i0:i1,j0:j1,itrc),(/1,1,record/),.true.)
+        enddo
       endif
     endif
     call PIO_closefile(pio_FileDesc)
@@ -985,6 +1068,18 @@ contains
           enddo
         endif
       endif
+      if (wrt_gas_exchange .and. wrt_dic) then
+        do ioae=1,nt_cdr_oae
+          write(vname,'(A,I0)') 'FG_CDR_OAE_DIC', ioae
+          call ncwrite(ncid,trim(vname),FG_CDR_OAE_DIC_avg(i0:i1,j0:j1,ioae),(/1,1,record/))
+          FG_CDR_OAE_DIC_avg(:,:,ioae)=0
+        enddo
+        do idor=1,nt_cdr_dor
+          write(vname,'(A,I0)') 'FG_CDR_DOR_DIC', idor
+          call ncwrite(ncid,trim(vname),FG_CDR_DOR_DIC_avg(i0:i1,j0:j1,idor),(/1,1,record/))
+          FG_CDR_DOR_DIC_avg(:,:,idor)=0
+        enddo
+      endif
     else
       if (wrt_tracers) then
         if (wrt_alk) then
@@ -1056,6 +1151,18 @@ contains
             call ncwrite(ncid,trim(vname),CDR_DOR_DIC_source(i0:i1,j0:j1,:,idor),(/1,1,1,record/))
           enddo
         endif
+      endif
+      if (wrt_gas_exchange .and. wrt_dic) then
+        do ioae=1,nt_cdr_oae
+          itrc = iCDR_OAE_DIC(ioae)
+          write(vname,'(A,I0)') 'FG_CDR_OAE_DIC', ioae
+          call ncwrite(ncid,trim(vname),cdr_gas_flx(i0:i1,j0:j1,itrc),(/1,1,record/))
+        enddo
+        do idor=1,nt_cdr_dor
+          itrc = iCDR_DOR_DIC(idor)
+          write(vname,'(A,I0)') 'FG_CDR_DOR_DIC', idor
+          call ncwrite(ncid,trim(vname),cdr_gas_flx(i0:i1,j0:j1,itrc),(/1,1,record/))
+        enddo
       endif
     endif
     ierr=nf90_close(ncid)

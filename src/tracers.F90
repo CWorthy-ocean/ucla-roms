@@ -24,8 +24,13 @@ module tracers
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rath
 #ifdef CDR_TRACER
-  use surf_flux, only: ddic_dco2, ddic_dalk, k_gas, uwnd, vwnd
-  use ocean_vars, only: Hz
+  use surf_flux, only: ddic_dco2, ddic_dalk, k_gas, uwnd, vwnd,&
+  &cdr_online_carbonate_sensitivity
+  use grid, only: rmask
+# ifdef MARBL
+  use marbl_driver, only: iALK_alt, iDIC_alt
+  use carbonate_sensitivity, only: compute_surface_beta_eta
+# endif
 #endif
   use scalars, only: nz, nstp, nrhs, nnew, forw_start, iic, nt
 ! for 'FIRST_TIME_STEP' and nstp, only:
@@ -61,6 +66,10 @@ module tracers
   integer(kind=4), dimension(:), allocatable              :: t_ana_frc               ! whether surface flux is read
 
   integer, dimension(:), public, allocatable :: itrc_alk_pair ! Pairing logic
+
+  ! Linearized air-sea CO2 flux applied to each CDR DIC tracer (mmol/m^2/s,
+  ! positive into the ocean), as added to stflx. Allocated under CDR_TRACER.
+  real(kind=8), public, allocatable, dimension(:,:,:) :: cdr_gas_flx
 
   !-- Tracer netcdf variables as arrays/matrices of 'NT' length:
   ! Final tracer concentrations live in 't' in ocean3d
@@ -131,13 +140,14 @@ contains
     ! local
     integer(kind=4)           :: itrc       ! tracer number for loop index
     character(len=46) :: t_flx_name ! Tracer time name
-    integer(kind=4) :: tile
+    integer(kind=4), save :: tile = 0   ! must be set: compute_tile_bounds.h uses it
 
 #include "compute_tile_bounds.h"
 
 #ifdef CDR_TRACER
       call exchange_xxx(t(:,:,nz,nrhs,itemp) )
       call set_gas_transfer_velocity(istr,iend,jstr,jend)
+      if (cdr_online_carbonate_sensitivity) call set_online_carbonate_sensitivity
 #endif
 
 #ifdef PARALLEL_IO
@@ -258,6 +268,58 @@ contains
 
       end subroutine set_gas_transfer_velocity  !]
 ! ----------------------------------------------------------------------
+      subroutine set_online_carbonate_sensitivity  ![
+      ! Carbonate sensitivities beta = dDIC/dCO2 and eta = dDIC/dALK for the
+      ! linearized CDR gas exchange, from the model's ALT_CO2 surface state
+      ! (the no-CDR counterfactual) at the time level the gas flux uses.
+      ! Replaces the ddic_dco2/ddic_dalk read from file.
+      ! ALT_CO2 is the no-CDR state only if it is forced with the same
+      ! atmospheric CO2 as DIC/ALK (CDR forcing never touches it): under
+      ! PCO2AIR_FORCING, xco2_air_alt must equal xco2_air.
+
+      use error_handling_mod, only: error_log
+      implicit none
+      character(len=32) :: sr_name = "set_online_carbonate_sensitivity"
+
+#if defined CDR_TRACER && defined MARBL
+      ! local
+      integer(kind=4), save :: iPO4 = 0, iSiO3 = 0
+      integer(kind=4) :: itrc
+
+      if (iPO4 == 0) then
+        do itrc=1,nt
+          if (t_vname(itrc) == 'PO4')  iPO4  = itrc
+          if (t_vname(itrc) == 'SiO3') iSiO3 = itrc
+        enddo
+        if (iPO4 <= 0 .or. iSiO3 <= 0 .or. iALK_alt <= 0 .or. iDIC_alt <= 0) then
+          call error_log%raise_global(&
+          &context=module_name//"/"//sr_name,&
+          &info="cdr_online_carbonate_sensitivity needs the MARBL tracers "//&
+          &"PO4, SiO3, ALK_ALT_CO2 and DIC_ALT_CO2")
+        endif
+        call error_log%abort_check()
+      endif
+
+      call compute_surface_beta_eta(&
+      &  t(i0:i1,j0:j1,nz,nrhs,itemp),&
+      &  t(i0:i1,j0:j1,nz,nrhs,isalt),&
+      &  t(i0:i1,j0:j1,nz,nrhs,iALK_alt),&
+      &  t(i0:i1,j0:j1,nz,nrhs,iDIC_alt),&
+      &  t(i0:i1,j0:j1,nz,nrhs,iPO4),&
+      &  t(i0:i1,j0:j1,nz,nrhs,iSiO3),&
+      &  rmask(i0:i1,j0:j1),&
+      &  ddic_dco2(i0:i1,j0:j1),&
+      &  ddic_dalk(i0:i1,j0:j1))
+      call exchange_xxx(ddic_dco2, ddic_dalk)
+#else
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="cdr_online_carbonate_sensitivity requires MARBL (it uses the "//&
+      &"ALT_CO2 carbon system as the no-CDR reference state)")
+      call error_log%abort_check()
+#endif
+      end subroutine set_online_carbonate_sensitivity  !]
+! ----------------------------------------------------------------------
       subroutine subtract_gas_exchange_from_tracer_flx(itrc,istr,iend,jstr,jend)  ![
       ! Modify surface tracer flux by subtracting the air-sea gas exchange term
 
@@ -274,6 +336,8 @@ contains
 
       iALK = itrc_alk_pair(itrc) ! Identify if this tracer has a pair
 
+      cdr_gas_flx(istr:iend+1,jstr:jend,itrc) = 0.0
+
       do j=jstr,jend
         do i=istr,iend+1
           ! Missing carbonate sensitivity (0, negative, or NaN) must not
@@ -288,10 +352,12 @@ contains
           endif
 
           ! Linearized air-sea CO2 flux for DIC anomaly tracers.
-          ! Multiply by Hz so stflx matches t, which is stored as Hz*C
-          ! before the implicit vertical-mixing step divides by Hz.
-          stflx(i,j,itrc) = stflx(i,j,itrc) - Hz(i,j,nz)*&
-     &      ( k_gas(i,j) / beta ) * ( t(i,j,nz,nrhs,itrc) - eta * cALK )
+          ! k_gas [m/s] * concentration gives a flux [mmol/m^2/s], the
+          ! units stflx needs: step3d_t adds dt*stflx to Hz*C, so no
+          ! extra Hz factor.
+          cdr_gas_flx(i,j,itrc) = -( k_gas(i,j) / beta )&
+     &      * ( t(i,j,nz,nrhs,itrc) - eta * cALK ) * rmask(i,j)
+          stflx(i,j,itrc) = stflx(i,j,itrc) + cdr_gas_flx(i,j,itrc)
         enddo
       enddo
 #endif
@@ -541,6 +607,10 @@ contains
 
     allocate( t(GLOBAL_2D_ARRAY,nz,3,NT) )
     t=0._8
+#ifdef CDR_TRACER
+    allocate( cdr_gas_flx(GLOBAL_2D_ARRAY,NT) )
+    cdr_gas_flx=0._8
+#endif
 
     ! remove averages flag above but do wrt_file_avg flag over this to avoid any allocation
     ! Allocate memory for only the tracer averages required for output
