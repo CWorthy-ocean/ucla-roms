@@ -124,6 +124,12 @@ module surf_flux
 
       type (ncforce) :: nc_ddic_dco2 = ncforce(vname='ddic_dco2',tname='ddic_dco2_time' )  ! carbonate sensitivity
       type (ncforce) :: nc_ddic_dalk = ncforce(vname='ddic_dalk',tname='ddic_dalk_time' )  ! carbonate sensitivity
+
+      ! If true, ddic_dco2/ddic_dalk are computed each step from the model's
+      ! ALT_CO2 (no-CDR) surface state in tracers.F90 instead of read from the
+      ! forcing files. Optional namelist group; defaults to reading from file.
+      logical, public :: cdr_online_carbonate_sensitivity = .false.
+      namelist /CDR_TRACER_SETTINGS/ cdr_online_carbonate_sensitivity
 #endif
 
   ! Sea-surface DIC (sDIC) and ALK (sALK) data for restoring
@@ -212,6 +218,20 @@ contains
       &)
     end if
     dCdt = dCdt / (100.*86400.)
+#endif
+
+#if defined CDR_TRACER
+    ! Optional group: if it is absent (ios < 0, end of file) keep the default.
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=CDR_TRACER_SETTINGS, iostat=ios, iomsg=msg)
+    if (ios > 0) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='could not read CDR_TRACER_SETTINGS'&
+      &//' section of namelist file: '&
+      &//trim(msg)&
+      &)
+    end if
 #endif
 
   close(namelist_unit)
@@ -335,8 +355,11 @@ subroutine set_carbonate_sensitivity ![
       implicit none
 
 #ifdef CDR_TRACER
-      call set_frc_data(nc_ddic_dco2, ddic_dco2, 'r')
-      call set_frc_data(nc_ddic_dalk, ddic_dalk, 'r')
+      ! Online values are set in tracers%set_surf_tracer_flx instead
+      if (.not. cdr_online_carbonate_sensitivity) then
+        call set_frc_data(nc_ddic_dco2, ddic_dco2, 'r')
+        call set_frc_data(nc_ddic_dalk, ddic_dalk, 'r')
+      endif
 #endif
 
 end subroutine set_carbonate_sensitivity  !]
