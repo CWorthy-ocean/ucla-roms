@@ -331,6 +331,8 @@ nrpf_cdr = 4                       ! Time records per output file
 ! the linearized air-sea CO2 flux of the CDR DIC tracers. If .true., they are
 ! computed each step from the model's ALT_CO2 (no-CDR) surface state (needs
 ! MARBL); if .false. (default), ddic_dco2/ddic_dalk are read from frcfiles.
+! The online option assumes ALT_CO2 sees the same atmosphere as DIC/ALK: with
+! PCO2AIR_FORCING, xco2_air_alt must equal xco2_air in the forcing files.
 !--------------------------
 cdr_online_carbonate_sensitivity = .false.
 /

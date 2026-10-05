@@ -140,7 +140,7 @@ contains
     ! local
     integer(kind=4)           :: itrc       ! tracer number for loop index
     character(len=46) :: t_flx_name ! Tracer time name
-    integer(kind=4) :: tile
+    integer(kind=4), save :: tile = 0   ! must be set: compute_tile_bounds.h uses it
 
 #include "compute_tile_bounds.h"
 
@@ -273,6 +273,9 @@ contains
       ! linearized CDR gas exchange, from the model's ALT_CO2 surface state
       ! (the no-CDR counterfactual) at the time level the gas flux uses.
       ! Replaces the ddic_dco2/ddic_dalk read from file.
+      ! ALT_CO2 is the no-CDR state only if it is forced with the same
+      ! atmospheric CO2 as DIC/ALK (CDR forcing never touches it): under
+      ! PCO2AIR_FORCING, xco2_air_alt must equal xco2_air.
 
       use error_handling_mod, only: error_log
       implicit none

@@ -38,7 +38,7 @@ diag_vars.o : diag_vars.F90 cppdefs.opt
 utils_mod.o : utils_mod.F90
 eos_vars.o : eos_vars.F90 cppdefs.opt param.o error_handling_mod.o namelist_open_mod.o scalars.o
 step3d_t_mod.o : step3d_t_mod.F90 cppdefs.opt param.o private_scratch.o pipe_frc.o dimensions.o cdr_frc.o river_frc.o surf_flux.o tracers.o advection.o marbl_driver.o grid.o roms_mpi.o mixing.o t3dbc_mod.o ocean_vars.o scalars.o upscale_output.o eos_vars.o diagnostics.o bulk_frc.o strings.o error_handling_mod.o utils_mod.o
-tracers.o : tracers.F90 cppdefs.opt param.o dimensions.o surf_flux.o ocean_vars.o scalars.o nc_read_write.o roms_read_write.o marbl_driver.o pio_roms.o roms_mpi.o error_handling_mod.o namelist_open_mod.o private_scratch.o compute_tile_bounds.h BEC_tracers.h
+tracers.o : tracers.F90 cppdefs.opt param.o dimensions.o surf_flux.o grid.o marbl_driver.o carbonate_sensitivity.o scalars.o nc_read_write.o roms_read_write.o pio_roms.o roms_mpi.o error_handling_mod.o namelist_open_mod.o private_scratch.o compute_tile_bounds.h BEC_tracers.h
 scalars.o : scalars.F90 cppdefs.opt param.o error_handling_mod.o namelist_open_mod.o
 bec2_driver.o : bec2_driver.F90 cppdefs.opt tracers.o surf_flux.o bulk_frc.o grid.o ocean_vars.o scalars.o param.o bgc_shared_vars.o bec2_vars.o bgc_forces.o bec2_params.o
 set_weights_mod.o : set_weights_mod.F90 cppdefs.opt coupling.o param.o scalars.o

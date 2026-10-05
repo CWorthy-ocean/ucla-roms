@@ -128,6 +128,7 @@ module surf_flux
       ! If true, ddic_dco2/ddic_dalk are computed each step from the model's
       ! ALT_CO2 (no-CDR) surface state in tracers.F90 instead of read from the
       ! forcing files. Optional namelist group; defaults to reading from file.
+      ! Online mode assumes xco2_air_alt == xco2_air (see namelist.nml).
       logical, public :: cdr_online_carbonate_sensitivity = .false.
       namelist /CDR_TRACER_SETTINGS/ cdr_online_carbonate_sensitivity
 #endif

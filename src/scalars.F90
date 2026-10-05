@@ -139,7 +139,7 @@ module scalars
 #if !defined EW_PERIODIC || !defined NS_PERIODIC
   namelist /GAMMA2_SETTINGS/ gamma2
 #endif
-#if define SOLVE3D && defined TS_DIF2
+#if defined SOLVE3D && defined TS_DIF2
   namelist /TRACER_DIFF2/ tnu2
 #endif
   namelist /BOTTOM_DRAG_SETTINGS/ &
@@ -203,7 +203,7 @@ contains
 !     set `tnu2`
     allocate(tnu2(NT))
     tnu2(:) = 0._8
-#if define SOLVE3D && defined TS_DIF2
+#if defined SOLVE3D && defined TS_DIF2
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=TRACER_DIFF2, iostat=ios, iomsg=msg)
     if (ios /= 0) then
