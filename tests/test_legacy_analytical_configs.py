@@ -96,6 +96,7 @@ def test_filament(tmp_path, input_dir, reference_results):
     nml["FORCING_FILES"] = {"frcfiles": ""}
     nml["PARAM_SETTINGS"].update({"NP_XI": 2, "NP_ETA": 2, "LLm": 64, "MMm": 64, "nz": 32})
     nml["VERTICAL_MIXING_SETTINGS"] = {"akv_bak": 0., "akt_bak": 0.}
+    nml["TRACER_DIFF2"] = {"tnu2": 0.}  # one tracer (no SALINITY), like akt_bak
     nml["LIN_RHO_EOS_SETTINGS"] = {"Tcoef": 0.2, "T0": 1.0}
     nml["RHO0_SETTINGS"]["rho0"] = 1000
     nml["S_COORD"]["theta_b"] = 2.0
