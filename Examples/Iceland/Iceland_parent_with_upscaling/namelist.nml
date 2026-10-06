@@ -51,7 +51,7 @@ LLm = 192                      ! Number of grid points in X
 MMm = 192                       ! Number of grid points in Y
 nz = 20                         ! Number of vertical levels
 nt_passive = 0                 ! Number of passive tracers
-nt_bgc = 0                   ! Number of BGC tracers
+nt_bgc = 32                  ! Number of BGC tracers
 /
 
 

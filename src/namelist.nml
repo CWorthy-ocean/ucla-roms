@@ -58,7 +58,7 @@ nz = 50             ! Number of vertical levels
 nt_passive = 0      ! Number of passive tracers; must be named passive_tracer1, etc.
 nt_cdr_oae = 0      ! Number of OAE (ALK-mimicking) passive CDR_LITE tracers
 nt_cdr_dor = 0      ! Number of DOR (DIC-mimicking) passive CDR_LITE tracers
-nt_bgc = 0          ! Number of BGC tracers
+nt_bgc = 32          ! Number of BGC tracers
 /
 
 &PIO_SETTINGS                                                          !pio_roms.F90

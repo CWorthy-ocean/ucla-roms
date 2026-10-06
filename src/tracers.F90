@@ -25,7 +25,7 @@ module tracers
 #error "CDR_TRACER was renamed to CDR_LITE: replace it in cppdefs.opt"
 #endif
   use param, only: isalt, itemp, lm, mm, mynode, nt_passive, nt_cdr_oae, nt_cdr_dor&
-  &,ieast, iwest, jnorth, jsouth
+  &,ieast, iwest, jnorth, jsouth, nt_bgc
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rath
@@ -503,11 +503,28 @@ contains
     ! save
     ! SHOULD DECLARE TRACER INDICES IN TRACERS_DEFS.H & USE THE SAVE COMMAND HERE???
 
+    use error_handling_mod, only: error_log
     implicit none
 
     ! local
     integer(kind=4) :: cnt=0, itrc, ioae
     character(len=8) :: passive_tracer_num
+    character(len=12) :: sr_name = "init_tracers"
+
+#if !defined(MARBL) && !defined(BIOLOGY_BEC2)
+    ! Only MARBL or BEC2 name the nt_bgc tracer slots; without either they
+    ! would stay uninitialized and forcing/output lookups would use garbage names.
+    if (nt_bgc /= 0) then
+      write(error_info,*) "nt_bgc = ", nt_bgc, " in PARAM_SETTINGS, but",&
+      &" neither MARBL nor BIOLOGY_BEC2 is defined in cppdefs.opt;",&
+      &" set nt_bgc = 0."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+      call error_log%abort_check()
+    end if
+#endif
+
     allocate(t_vname(nt))
     allocate(t_lname(nt))
     allocate(t_units(nt))
@@ -591,6 +608,20 @@ contains
 
     ! Additional passive tracers:
 #ifdef BIOLOGY_BEC2
+    ! BEC_tracers.h names a fixed set of tracers; check nt_bgc before writing them.
+# ifdef Ncycle_SY
+    if (nt_bgc /= 29) then
+# else
+    if (nt_bgc /= 26) then
+# endif
+      write(error_info,*) "nt_bgc = ", nt_bgc, " in PARAM_SETTINGS, but",&
+      &" BIOLOGY_BEC2 defines 26 tracers (29 with Ncycle_SY);",&
+      &" set nt_bgc accordingly."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+      call error_log%abort_check()
+    end if
 #include "BEC_tracers.h"
 #endif
 
@@ -598,6 +629,17 @@ contains
     call marbldrv_configure_tracers(&
     &itot,t_vname,t_lname,t_units,t_tname,wrt_t,wrt_t_avg,t_ana_frc)
 #endif
+
+    ! Every slot 1..nt must now be named; a mismatch means nt_bgc disagrees
+    ! with the BGC model's tracer count.
+    if (itot /= nt) then
+      write(error_info,*) "named ", itot, " tracers but nt = ", nt,&
+      &" (nt_bgc = ", nt_bgc, " in PARAM_SETTINGS)."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+      call error_log%abort_check()
+    end if
 
     if (mynode==0) then
       print *, 'metadata about ',NT, ' tracers:'

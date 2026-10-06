@@ -330,6 +330,8 @@ contains
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info=error_info)
+      ! Abort now: the loop below writes nt_marbl names into arrays sized by nt_bgc.
+      call error_log%abort_check()
     end if
 
     call print_marbl_log(marbl_instance%StatusLog)
@@ -634,6 +636,8 @@ contains
       &context=module_name//"/"//sr_name,&
       &info=error_info)
     end if
+    ! Abort now: the loops below write into vname_marbl_ss_2d/3d sized by nr_marbl_ss_2d/3d.
+    call error_log%abort_check()
 
 !     2. Populate saved state metadata arrays in ROMS using MARBL instance
 !     ----------------------------------------------------------------------
@@ -1012,6 +1016,8 @@ contains
       &info=error_info)
 
     end if
+    ! Abort now: the loops below write into vname_marbl_diag_2d/3d sized by nr_bec2_diag_2d/3d.
+    call error_log%abort_check()
 
 !     2. Fill BGC diagnostics metadata arrays in ROMS from MARBL instance
 !     ----------------------------------------------------------------------
