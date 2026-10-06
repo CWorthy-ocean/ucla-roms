@@ -51,9 +51,9 @@ module river_frc
   real(kind=8), public, allocatable, dimension(:)   :: riv_vol
   real(kind=8), public, allocatable, dimension(:,:) :: riv_trc
 
-  ! river_tracer may hold all nt tracers, or all except the CDR tracers.
+  ! river_tracer may hold all nt tracers, or all except the CDR_LITE tracers.
   ! riv_trc_map(k) is the model tracer index of slot k in the file;
-  ! model tracers not in the file (CDR) keep a river concentration of 0.
+  ! model tracers not in the file (CDR_LITE) keep a river concentration of 0.
   integer(kind=4) :: nt_riv_file                                  ! length of ntracers in file
   integer(kind=4), allocatable, dimension(:)   :: riv_trc_map
   real(kind=8),    allocatable, dimension(:,:) :: riv_trc_file    ! river_tracer as read from file
@@ -109,7 +109,7 @@ contains
 #endif
       call set_frc_data(nc_rvol,riv_vol) ! set river volume flux for all rivers at current time
       call set_frc_data(nc_rtrc,var2d=riv_trc_file)      ! set river tracers flux for all rivers at current time
-      riv_trc(:,riv_trc_map) = riv_trc_file              ! CDR tracers, if not in file, stay 0
+      riv_trc(:,riv_trc_map) = riv_trc_file              ! CDR_LITE tracers, if not in file, stay 0
 #ifdef PARALLEL_IO
       if (pio_file_is_open == 1) then
         call PIO_closefile(pio_FileDesc)
@@ -125,7 +125,7 @@ contains
     ! forcing files (which must all agree) and map file slots to model
     ! tracer indices. Accepted:
     ! - ntracers == nt         : all tracers, in model order
-    ! - ntracers == nt - ncdr  : all tracers except the CDR block
+    ! - ntracers == nt - ncdr  : all tracers except the CDR_LITE block
     !   (CDR_OAE_ALK/DIC pairs and CDR_DOR_DIC), others in model order
     implicit none
 
@@ -135,7 +135,7 @@ contains
     character(len=1024) :: error_info
 
     ncdr = 2*nt_cdr_oae + nt_cdr_dor
-    cdr0 = iTandS + nt_passive                     ! last tracer index before the CDR block
+    cdr0 = iTandS + nt_passive                     ! last tracer index before the CDR_LITE block
 
     nt_riv_file = get_frc_dim_len(riv_trc_name, ntrc_dim_name)
 
@@ -159,7 +159,7 @@ contains
     allocate(riv_trc_map(nt_riv_file))
     do k=1,nt_riv_file
       if (nt_riv_file /= nt .and. k > cdr0) then
-        riv_trc_map(k) = k + ncdr                  ! skip over the CDR block
+        riv_trc_map(k) = k + ncdr                  ! skip over the CDR_LITE block
       else
         riv_trc_map(k) = k
       endif
@@ -169,8 +169,8 @@ contains
     allocate(riv_trc_file(nriv,nt_riv_file)); riv_trc_file = 0.0_8
 
     if (mynode==0 .and. nt_riv_file /= nt) write(*,'(7x,A,I0,A)')&
-    &'river_frc: river_tracer has no CDR tracers; ', ncdr,&
-    &' CDR tracers get river concentration 0'
+    &'river_frc: river_tracer has no CDR_LITE tracers; ', ncdr,&
+    &' CDR_LITE tracers get river concentration 0'
 
   end subroutine init_river_trc_map  !]
 !     ----------------------------------------------------------------------
