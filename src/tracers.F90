@@ -18,6 +18,12 @@ module tracers
   !]
 
 #include "cppdefs.opt"
+#ifdef CDR_TRACER
+  ! CDR_TRACER was renamed to CDR_LITE. Without this check, an old cppdefs.opt
+  ! would compile without CDR_LITE: the CDR tracers would still run, but with
+  ! no air-sea CO2 exchange.
+#error "CDR_TRACER was renamed to CDR_LITE: replace it in cppdefs.opt"
+#endif
   use param, only: isalt, itemp, lm, mm, mynode, nt_passive, nt_cdr_oae, nt_cdr_dor&
   &,ieast, iwest, jnorth, jsouth
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
