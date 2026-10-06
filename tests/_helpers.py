@@ -59,6 +59,7 @@ def create_test_namelist_dict(input_dir: Path) -> dict:
     this_nml["PARAM_SETTINGS"]["LLm"] = 39
     this_nml["PARAM_SETTINGS"]["MMm"] = 19
     this_nml["PARAM_SETTINGS"]["nz"] = 10
+    this_nml["PARAM_SETTINGS"]["nt_bgc"] = 0  # BGC tests set 32 (MARBL) or 26 (BEC2) themselves
 
     this_nml["INITIAL_CONDITIONS"]["inifile"] = str(
         input_dir / "example_input_bgc_initial_conditions.nc"

@@ -58,7 +58,7 @@ nz = 50             ! Number of vertical levels
 nt_passive = 0      ! Number of passive tracers; must be named passive_tracer1, etc.
 nt_cdr_oae = 0      ! Number of OAE (ALK-mimicking) passive CDR tracers
 nt_cdr_dor = 0      ! Number of DOR (DIC-mimicking) passive CDR tracers
-nt_bgc = 0          ! Number of BGC tracers; must be 0 unless MARBL or BIOLOGY_BEC2 is defined
+nt_bgc = 32         ! Number of BGC tracers: 32 for default MARBL, 26 for BIOLOGY_BEC2 (29 with Ncycle_SY), 0 if neither is defined
 /
 
 &PIO_SETTINGS                                                          !pio_roms.F90
