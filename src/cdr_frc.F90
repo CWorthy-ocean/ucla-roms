@@ -17,13 +17,9 @@ module cdr_frc
   use grid, only: rmask, lonr,latr
   use dimensions, only: nx, ny, nz
   use ocean_vars, only: hz, z_r0, hz0
-#ifdef CDR_LITE
   use param, only: mynode, lm, mm, ocean_grid_comm,&
   &nt_passive, nt_cdr_oae, nt_cdr_dor
   use tracers, only: iTandS
-#else
-  use param, only: mynode, lm, mm, ocean_grid_comm
-#endif
   use nc_read_write, only: ncread
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
@@ -589,11 +585,14 @@ contains
         cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:) =&
         &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:)/global_int(1)
 
-#ifdef CDR_LITE
-        ! CDR_OAE_ALK/DIC and CDR_DOR_DIC share the same spatial profile as ALK/DIC
-        ! before normalization, but were previously left unscaled — so their
-        ! injection rate was global_int times too large. Normalize each the same way.
-        do itrc = iTandS+nt_passive+1,&
+        ! passive_tracer*, CDR_OAE_ALK/DIC and CDR_DOR_DIC share the same spatial
+        ! profile as ALK/DIC before normalization, but were previously left
+        ! unscaled - so their injection rate was global_int times too large.
+        ! Normalize each the same way. The loop starts at iTandS+1 to cover the
+        ! nt_passive block (roms-tools can emit passive-tracer rows in CDR
+        ! forcing files) and runs regardless of CDR_LITE, since neither passive
+        ! nor CDR_OAE/DOR tracers depend on that key.
+        do itrc = iTandS+1,&
         &         iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
           local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itrc,:))
           call MPI_Reduce(local_int,global_int,1,&
@@ -604,7 +603,6 @@ contains
             &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itrc,:)/global_int(1)
           endif
         enddo
-#endif
       endif
 
     enddo
