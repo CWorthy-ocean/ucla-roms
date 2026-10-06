@@ -64,6 +64,10 @@ Bug Fixes
 - ``tracers%subtract_gas_exchange_from_tracer_flx`` multiplied the linearized CO2 flux by the top-layer thickness ``Hz`` before adding it to ``stflx``. ``step3d_t`` already adds ``dt*stflx`` to ``Hz*C``, so ``stflx`` must be a flux in mmol/m^2/s; the extra factor scaled the CDR gas exchange by the surface layer thickness. The factor is removed and the flux is masked with ``rmask``. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
 - ``set_surf_tracer_flx`` computed its loop bounds from an uninitialized ``tile``, so depending on leftover memory the gas transfer velocity and the CDR gas exchange could be skipped over the whole domain; ``tile`` is now initialized to 0. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
 - A ``#if define`` typo (for ``#if defined``) meant the ``TRACER_DIFF2`` namelist group was never read, so ``tnu2`` was 0 in every ``TS_DIF2`` build regardless of the namelist; the namelist values now take effect. In ``TS_DIF2`` builds the group is now required, and ``tnu2`` may list at most one value per tracer. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- A build without ``MARBL`` or ``BIOLOGY_BEC2`` but ``nt_bgc > 0`` crashed while reading forcing under garbage tracer names; it now aborts at startup with a message to set ``nt_bgc = 0``. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
+- A MARBL tracer-count mismatch was reported but ROMS kept writing tracer metadata past the end of its arrays; it now aborts immediately. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
+- After an error abort in the default error-handling mode, each rank kept running and re-printed the error at every later check; ranks now stop after ``MPI_Abort``. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
+- The ``Iceland_parent_with_upscaling`` example set ``nt_bgc = 0`` while defining ``MARBL``; it now uses MARBL's 32 tracers. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
 
 
 Improvements
@@ -104,4 +108,5 @@ Miscellaneous
 - CI: the ``compile_gnu`` and ``compile_ifx`` jobs now define ``CDR_LITE`` instead of ``CDR_TRACER``, so the CDR_LITE code is still compiled in CI. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
 - ``Make.depend`` is updated for the renamed module. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
 - Tested locally on Derecho (ifx 2025.2.1): all three ``compile_ifx`` configurations build. The gfortran builds and the pytest suite have not been run locally. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- Documented in ``namelist.nml`` and the runtime settings docs that ``nt_bgc`` must be 0 unless ``MARBL`` or ``BIOLOGY_BEC2`` is defined. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
 
