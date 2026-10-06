@@ -1,9 +1,9 @@
-module cdr_tracer_output
-  ! Output module for CDR tracers (CDR_OAE_ALK/DIC, CDR_DOR_DIC).
-  ! Analogous to cdr_output.F90, but focused on dedicated CDR tracers.
+module cdr_lite_output
+  ! Output module for CDR_LITE tracers (CDR_OAE_ALK/DIC, CDR_DOR_DIC).
+  ! Analogous to cdr_output.F90, but focused on CDR_LITE tracers.
   !
-  ! The CDR tracers exist whenever nt_cdr_oae/nt_cdr_dor (PARAM_SETTINGS) are
-  ! non-zero, with or without MARBL (see CDR_TRACER in cppdefs.opt), so this
+  ! The CDR_LITE tracers exist whenever nt_cdr_oae/nt_cdr_dor (PARAM_SETTINGS) are
+  ! non-zero, with or without MARBL (see CDR_LITE in cppdefs.opt), so this
   ! module always compiles. Only the *_source fields depend on the cdr_frc
   ! release profiles, which are available under MARBL && CDR_FORCING (cdr_frc's
   ! own guard); without them wrt_sources has no effect.
@@ -44,19 +44,19 @@ module cdr_tracer_output
   logical, parameter :: cdr_source = .false.
 #endif
 
-  real(kind=8), public    :: output_period_cdr_trc = 3600
-  integer(kind=4), public :: nrpf_cdr_trc = 4
-  logical, public :: wrt_cdr_trc_avg, cdr_trc_monthly_averages, do_cdr_tracer_output
+  real(kind=8), public    :: output_period_cdr_lite = 3600
+  integer(kind=4), public :: nrpf_cdr_lite = 4
+  logical, public :: wrt_cdr_lite_avg, cdr_lite_monthly_averages, do_cdr_lite_output
   logical, public :: wrt_tracers, wrt_vertical_integrals, wrt_thickness_weighted
   logical, public :: wrt_sources
   logical, public :: wrt_alk = .true., wrt_dic = .true.
   logical, public :: wrt_gas_exchange = .false.   ! FG_CDR_*_DIC air-sea fluxes
-  namelist /CDR_TRACER_OUTPUT_SETTINGS/ output_period_cdr_trc, nrpf_cdr_trc,&
-  &wrt_cdr_trc_avg, cdr_trc_monthly_averages, do_cdr_tracer_output,&
+  namelist /CDR_LITE_OUTPUT_SETTINGS/ output_period_cdr_lite, nrpf_cdr_lite,&
+  &wrt_cdr_lite_avg, cdr_lite_monthly_averages, do_cdr_lite_output,&
   &wrt_tracers, wrt_vertical_integrals, wrt_thickness_weighted,&
   &wrt_sources, wrt_alk, wrt_dic, wrt_gas_exchange
 
-  character(len=18) :: module_name = "cdr_tracer_output"
+  character(len=15) :: module_name = "cdr_lite_output"
   real(kind=8)    :: output_time = 0
   integer(kind=4) :: record
   integer(kind=4),dimension(6) :: date
@@ -88,47 +88,47 @@ module cdr_tracer_output
   real(kind=8), allocatable :: hCDR_DOR_DIC_tmp(:,:,:,:)
   real(kind=8), allocatable :: int_z_CDR_DOR_DIC_tmp(:,:,:)
 
-  ! averaged air-sea CO2 flux into the CDR DIC tracers (from tracers%cdr_gas_flx)
+  ! averaged air-sea CO2 flux into the CDR_LITE DIC tracers (from tracers%cdr_gas_flx)
   real(kind=8), allocatable :: FG_CDR_OAE_DIC_avg(:,:,:)
   real(kind=8), allocatable :: FG_CDR_DOR_DIC_avg(:,:,:)
 
-  type CdrTrcOutputVariable
+  type CdrLiteOutputVariable
     character(len=32)              :: name
     character(len=32), dimension(4) :: dimnames = ''
     integer(kind=4), dimension(4)   :: dimsizes = 0
     character(len=128)             :: long_name
     character(len=32)              :: units
-  end type CdrTrcOutputVariable
+  end type CdrLiteOutputVariable
 
-  type(CdrTrcOutputVariable), allocatable, save :: cdr_trc_varlist(:)
+  type(CdrLiteOutputVariable), allocatable, save :: cdr_lite_varlist(:)
 
-  public :: wrt_cdr_trc, init_cdr_tracer_output
-  public :: read_cdr_tracer_output_nml
+  public :: wrt_cdr_lite, init_cdr_lite_output
+  public :: read_cdr_lite_output_nml
 
 contains
 
-  subroutine read_cdr_tracer_output_nml
+  subroutine read_cdr_lite_output_nml
     integer(kind=4) :: namelist_unit, ios
-    character(len=26) :: sr_name = "read_cdr_tracer_output_nml"
+    character(len=24) :: sr_name = "read_cdr_lite_output_nml"
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
-    read (unit=namelist_unit, nml=CDR_TRACER_OUTPUT_SETTINGS, iostat=ios)
+    read (unit=namelist_unit, nml=CDR_LITE_OUTPUT_SETTINGS, iostat=ios)
     if (ios /= 0) then
       call error_log%raise_global(&
       &context=module_name//'/'//sr_name, info=&
-      &'could not read CDR_TRACER_OUTPUT_SETTINGS section of namelist file')
+      &'could not read CDR_LITE_OUTPUT_SETTINGS section of namelist file')
     end if
     close(namelist_unit)
-    record = nrpf_cdr_trc
-  end subroutine read_cdr_tracer_output_nml
+    record = nrpf_cdr_lite
+  end subroutine read_cdr_lite_output_nml
 
-  subroutine add_cdr_trc_output_variable(list, name, dimnames, dims,&
+  subroutine add_cdr_lite_output_variable(list, name, dimnames, dims,&
   &long_name, units)
-    type(CdrTrcOutputVariable), allocatable, intent(inout) :: list(:)
+    type(CdrLiteOutputVariable), allocatable, intent(inout) :: list(:)
     character(len=*), intent(in) :: name, long_name, units
     character(len=*), dimension(:), intent(in) :: dimnames
     integer(kind=4), dimension(:), intent(in) :: dims
-    type(CdrTrcOutputVariable), allocatable :: tmp(:)
+    type(CdrLiteOutputVariable), allocatable :: tmp(:)
     integer(kind=4) :: n, nd
     n = size(list)
     allocate(tmp(n+1))
@@ -143,17 +143,17 @@ contains
     nd = size(dims)
     tmp(n+1)%dimsizes(1:nd) = dims
     call move_alloc(tmp, list)
-  end subroutine add_cdr_trc_output_variable
+  end subroutine add_cdr_lite_output_variable
 
-  subroutine define_cdr_trc_output_variables
+  subroutine define_cdr_lite_output_variables
     character(len=32) :: vname
     integer :: ioae, idor, itrc
-    if (.not. allocated(cdr_trc_varlist)) allocate(cdr_trc_varlist(0))
+    if (.not. allocated(cdr_lite_varlist)) allocate(cdr_lite_varlist(0))
 
-    call add_cdr_trc_output_variable(cdr_trc_varlist, 'avg_begin_time',&
+    call add_cdr_lite_output_variable(cdr_lite_varlist, 'avg_begin_time',&
     &(/dn_tm/), (/0/),&
     &'Time at beginning of averaging period','seconds')
-    call add_cdr_trc_output_variable(cdr_trc_varlist, 'avg_end_time',&
+    call add_cdr_lite_output_variable(cdr_lite_varlist, 'avg_end_time',&
     &(/dn_tm/), (/0/),&
     &'Time at end of averaging period','seconds')
 
@@ -162,7 +162,7 @@ contains
         do ioae=1,nt_cdr_oae
           itrc = iCDR_OAE_ALK(ioae)
           write(vname,'(A,I0)') 'CDR_OAE_ALK', ioae
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
           &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
           &t_lname(itrc), t_units(itrc))
         enddo
@@ -171,14 +171,14 @@ contains
         do ioae=1,nt_cdr_oae
           itrc = iCDR_OAE_DIC(ioae)
           write(vname,'(A,I0)') 'CDR_OAE_DIC', ioae
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
           &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
           &t_lname(itrc), t_units(itrc))
         enddo
         do idor=1,nt_cdr_dor
           itrc = iCDR_DOR_DIC(idor)
           write(vname,'(A,I0)') 'CDR_DOR_DIC', idor
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
           &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
           &t_lname(itrc), t_units(itrc))
         enddo
@@ -190,7 +190,7 @@ contains
         do ioae=1,nt_cdr_oae
           itrc = iCDR_OAE_ALK(ioae)
           write(vname,'(A,I0)') 'int_z_CDR_OAE_ALK', ioae
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
          &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
          &      'depth-integrated ' // trim(t_lname(itrc)),&
          &      'meters * ' // trim(t_units(itrc)))
@@ -200,7 +200,7 @@ contains
         do ioae=1,nt_cdr_oae
           itrc = iCDR_OAE_DIC(ioae)
           write(vname,'(A,I0)') 'int_z_CDR_OAE_DIC', ioae
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
          &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
          &      'instantaneous depth-integrated ' // trim(t_lname(itrc)),&
          &      'meters * ' // trim(t_units(itrc)))
@@ -208,7 +208,7 @@ contains
         do idor=1,nt_cdr_dor
           itrc = iCDR_DOR_DIC(idor)
           write(vname,'(A,I0)') 'int_z_CDR_DOR_DIC', idor
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
          &      (/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
          &      'instantaneous depth-integrated ' // trim(t_lname(itrc)),&
          &      'meters * ' // trim(t_units(itrc)))
@@ -221,7 +221,7 @@ contains
         do ioae=1,nt_cdr_oae
           itrc = iCDR_OAE_ALK(ioae)
           write(vname,'(A,I0)') 'hCDR_OAE_ALK', ioae
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
           &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
           &'instantaneous thickness-weighted ' // trim(t_lname(itrc)),&
           &'meters ' // trim(t_units(itrc)))
@@ -231,7 +231,7 @@ contains
         do ioae=1,nt_cdr_oae
           itrc = iCDR_OAE_DIC(ioae)
           write(vname,'(A,I0)') 'hCDR_OAE_DIC', ioae
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
           &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
           &'instantaneous thickness-weighted ' // trim(t_lname(itrc)),&
           &'meters ' // trim(t_units(itrc)))
@@ -239,18 +239,18 @@ contains
         do idor=1,nt_cdr_dor
           itrc = iCDR_DOR_DIC(idor)
           write(vname,'(A,I0)') 'hCDR_DOR_DIC', idor
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
           &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
           &'instantaneous thickness-weighted ' // trim(t_lname(itrc)),&
           &'meters ' // trim(t_units(itrc)))
         enddo
       endif
-      if (wrt_cdr_trc_avg) then
+      if (wrt_cdr_lite_avg) then
         if (wrt_alk) then
           do ioae=1,nt_cdr_oae
             itrc = iCDR_OAE_ALK(ioae)
             write(vname,'(A,I0,A)') 'hCDR_OAE_ALK', ioae, '_avg'
-            call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+            call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
             &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
             &'time-averaged thickness-weighted ' // trim(t_lname(itrc)),&
             &'meters ' // trim(t_units(itrc)))
@@ -260,7 +260,7 @@ contains
           do ioae=1,nt_cdr_oae
             itrc = iCDR_OAE_DIC(ioae)
             write(vname,'(A,I0,A)') 'hCDR_OAE_DIC', ioae, '_avg'
-            call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+            call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
             &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
             &'time-averaged thickness-weighted ' // trim(t_lname(itrc)),&
             &'meters ' // trim(t_units(itrc)))
@@ -268,7 +268,7 @@ contains
           do idor=1,nt_cdr_dor
             itrc = iCDR_DOR_DIC(idor)
             write(vname,'(A,I0,A)') 'hCDR_DOR_DIC', idor, '_avg'
-            call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+            call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
             &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
             &'time-averaged thickness-weighted ' // trim(t_lname(itrc)),&
             &'meters ' // trim(t_units(itrc)))
@@ -281,7 +281,7 @@ contains
       if (wrt_alk) then
         do ioae=1,nt_cdr_oae
           write(vname,'(A,I0,A)') 'CDR_OAE_ALK', ioae, '_source'
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
           &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
           &'CDR OAE ALK source from CDR module','meq/s')
         enddo
@@ -289,7 +289,7 @@ contains
       if (wrt_dic) then
         do idor=1,nt_cdr_dor
           write(vname,'(A,I0,A)') 'CDR_DOR_DIC', idor, '_source'
-          call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+          call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
           &(/dn_xr,dn_yr,dn_zr,dn_tm/), (/xi_rho,eta_rho,nz,0/),&
           &'CDR DOR DIC source from CDR module','mmol/s')
         enddo
@@ -300,7 +300,7 @@ contains
       do ioae=1,nt_cdr_oae
         itrc = iCDR_OAE_DIC(ioae)
         write(vname,'(A,I0)') 'FG_CDR_OAE_DIC', ioae
-        call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+        call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
         &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
         &'air-sea CO2 flux into ' // trim(t_lname(itrc)) //&
         &' (positive into ocean)','mmol/m^2/s')
@@ -308,43 +308,43 @@ contains
       do idor=1,nt_cdr_dor
         itrc = iCDR_DOR_DIC(idor)
         write(vname,'(A,I0)') 'FG_CDR_DOR_DIC', idor
-        call add_cdr_trc_output_variable(cdr_trc_varlist, trim(vname),&
+        call add_cdr_lite_output_variable(cdr_lite_varlist, trim(vname),&
         &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
         &'air-sea CO2 flux into ' // trim(t_lname(itrc)) //&
         &' (positive into ocean)','mmol/m^2/s')
       enddo
     endif
-  end subroutine define_cdr_trc_output_variables
+  end subroutine define_cdr_lite_output_variables
 
-  subroutine init_cdr_tracer_output
+  subroutine init_cdr_lite_output
     implicit none
-    character(len=23) :: sr_name = "init_cdr_tracer_output"
+    character(len=20) :: sr_name = "init_cdr_lite_output"
     logical, save :: done = .false.
     integer :: ioae, idor
 
-    record = nrpf_cdr_trc
+    record = nrpf_cdr_lite
     if (done) return
     done = .true.
 
     if (nt_cdr_oae + nt_cdr_dor == 0) then
       call error_log%raise_global(&
      &  context=module_name//'/'//sr_name,&
-     &  info='do_cdr_tracer_output is .true. but no CDR tracers are configured'//&
+     &  info='do_cdr_lite_output is .true. but no CDR_LITE tracers are configured'//&
      &       ' (nt_cdr_oae and nt_cdr_dor are both 0 in PARAM_SETTINGS).')
     endif
 
-    if (cdr_trc_monthly_averages .and. .not. wrt_cdr_trc_avg) then
+    if (cdr_lite_monthly_averages .and. .not. wrt_cdr_lite_avg) then
       call error_log%raise_global(&
      &  context=module_name//'/'//sr_name,&
-     &  info='`cdr_trc_monthly_averages` is .true., but `wrt_cdr_trc_avg` is .false.')
+     &  info='`cdr_lite_monthly_averages` is .true., but `wrt_cdr_lite_avg` is .false.')
     endif
 
-    if (cdr_trc_monthly_averages) then
+    if (cdr_lite_monthly_averages) then
       call sec2date(time+dt, date)
       month_at_prev_timestep = date(2)
     endif
 
-    if (mynode==0) print *,'init cdr tracer output'
+    if (mynode==0) print *,'init cdr_lite output'
 
     if ((wrt_alk .or. wrt_dic) .and.&
    &    (wrt_tracers .or. wrt_vertical_integrals .or.&
@@ -373,12 +373,12 @@ contains
     if (wrt_gas_exchange .and. .not. allocated(cdr_gas_flx)) then
       call error_log%raise_global(&
      &  context=module_name//'/'//sr_name,&
-     &  info='wrt_gas_exchange is .true. but the CDR tracer air-sea flux'//&
-     &       ' is not computed in this build (requires the CDR_TRACER cppkey).')
+     &  info='wrt_gas_exchange is .true. but the CDR_LITE tracer air-sea flux'//&
+     &       ' is not computed in this build (requires the CDR_LITE cppkey).')
     endif
     call error_log%abort_check()
 
-    if (wrt_gas_exchange .and. wrt_dic .and. wrt_cdr_trc_avg) then
+    if (wrt_gas_exchange .and. wrt_dic .and. wrt_cdr_lite_avg) then
       if (nt_cdr_oae > 0) then
         allocate(FG_CDR_OAE_DIC_avg(GLOBAL_2D_ARRAY,nt_cdr_oae))
         FG_CDR_OAE_DIC_avg(:,:,:)=0
@@ -400,7 +400,7 @@ contains
       endif
     endif
 
-    if (wrt_cdr_trc_avg) then
+    if (wrt_cdr_lite_avg) then
       if (nt_cdr_oae > 0) then
         if (wrt_tracers .and. wrt_alk) then
           allocate(CDR_OAE_ALK_avg(GLOBAL_2D_ARRAY,1:nz,nt_cdr_oae))
@@ -482,9 +482,9 @@ contains
       endif
     endif
 
-    call define_cdr_trc_output_variables
-    call display_cdr_trc_output_settings
-  end subroutine init_cdr_tracer_output
+    call define_cdr_lite_output_variables
+    call display_cdr_lite_output_settings
+  end subroutine init_cdr_lite_output
 
   subroutine calc_average
     implicit none
@@ -494,11 +494,11 @@ contains
     navg = navg+1
     coef = 1./navg
     if (coef==1 .and. mynode==0) then
-      if (cdr_trc_monthly_averages) then
-        print *, 'cdr_trc :: started monthly averaging.'
+      if (cdr_lite_monthly_averages) then
+        print *, 'cdr_lite :: started monthly averaging.'
       else
-        print *, 'cdr_trc :: started averaging. output_period (s) =',&
-     &    output_period_cdr_trc
+        print *, 'cdr_lite :: started averaging. output_period (s) =',&
+     &    output_period_cdr_lite
       endif
     endif
 
@@ -652,7 +652,7 @@ contains
     endif
   end subroutine multiply_by_thickness
 
-  subroutine calc_cdr_trc_source
+  subroutine calc_cdr_lite_source
     implicit none
 #if defined MARBL && defined CDR_FORCING
     integer :: i,j,k,icdr,cidx,ioae,idor,itrc
@@ -662,7 +662,7 @@ contains
     if (wrt_dic .and. nt_cdr_dor > 0) then
       CDR_DOR_DIC_source(:,:,:,:) = 0
     endif
-    ! 3D CDR forcing currently only provides ALK/DIC fluxes, not CDR tracers
+    ! 3D CDR forcing currently only provides ALK/DIC fluxes, not CDR_LITE tracers
     if (cdr_forcing_3d) return
     do cidx=1,cdr_nprf
       icdr = cdr_icdr(cidx)
@@ -686,57 +686,57 @@ contains
       enddo
     enddo
 #endif /* MARBL && CDR_FORCING */
-  end subroutine calc_cdr_trc_source
+  end subroutine calc_cdr_lite_source
 
-  subroutine create_cdr_trc_output_variables(ncid)
+  subroutine create_cdr_lite_output_variables(ncid)
     implicit none
     integer, intent(in) :: ncid
     integer :: varid, ierr, idx, nd
-    do idx=1,size(cdr_trc_varlist)
-      nd = count(cdr_trc_varlist(idx)%dimnames /= '')
+    do idx=1,size(cdr_lite_varlist)
+      nd = count(cdr_lite_varlist(idx)%dimnames /= '')
       varid = nccreate(ncid,&
-     &                 trim(cdr_trc_varlist(idx)%name),&
-     &                 cdr_trc_varlist(idx)%dimnames(1:nd),&
-     &                 cdr_trc_varlist(idx)%dimsizes(1:nd),&
+     &                 trim(cdr_lite_varlist(idx)%name),&
+     &                 cdr_lite_varlist(idx)%dimnames(1:nd),&
+     &                 cdr_lite_varlist(idx)%dimsizes(1:nd),&
      &                 nf90_double)
       ierr = nf90_put_att(ncid,varid,'long_name',&
-     &                    trim(cdr_trc_varlist(idx)%long_name))
+     &                    trim(cdr_lite_varlist(idx)%long_name))
       ierr = nf90_put_att(ncid,varid,'units',&
-     &                    trim(cdr_trc_varlist(idx)%units))
+     &                    trim(cdr_lite_varlist(idx)%units))
     end do
-  end subroutine create_cdr_trc_output_variables
+  end subroutine create_cdr_lite_output_variables
 
-  subroutine wrt_cdr_trc
+  subroutine wrt_cdr_lite
     implicit none
-    if (cdr_source .and. wrt_sources .and. (wrt_alk .or. wrt_dic)) call calc_cdr_trc_source
-    if (wrt_cdr_trc_avg) call calc_average
-    if (cdr_trc_monthly_averages) then
+    if (cdr_source .and. wrt_sources .and. (wrt_alk .or. wrt_dic)) call calc_cdr_lite_source
+    if (wrt_cdr_lite_avg) call calc_average
+    if (cdr_lite_monthly_averages) then
       call sec2date(time+dt, date)
-      if ((date(2) - month_at_prev_timestep) /= 0) call wrt_cdr_trc_output
+      if ((date(2) - month_at_prev_timestep) /= 0) call wrt_cdr_lite_output
       month_at_prev_timestep = date(2)
     else
       output_time = output_time + dt
-      if (output_time >= output_period_cdr_trc) then
-        call wrt_cdr_trc_output
+      if (output_time >= output_period_cdr_lite) then
+        call wrt_cdr_lite_output
         output_time = 0
       endif
     endif
-  end subroutine wrt_cdr_trc
+  end subroutine wrt_cdr_lite
 
-  subroutine wrt_cdr_trc_output
+  subroutine wrt_cdr_lite_output
     implicit none
-    character(len=18) :: sr_name = "wrt_cdr_trc_output"
+    character(len=19) :: sr_name = "wrt_cdr_lite_output"
     character(len=99), save :: fname
     character(len=32) :: vname
     integer(kind=4) :: ncid, ierr, ioae, idor, itrc
 
 #ifdef PARALLEL_IO
-    if (record==nrpf_cdr_trc) then
+    if (record==nrpf_cdr_lite) then
       if (mynode == 0) then
         call create_file('_cdrtrc',fname, nonode=.true.)
         ierr=nf90_open(fname,nf90_write,ncid)
         ierr=nf90_redef(ncid)
-        call create_cdr_trc_output_variables(ncid)
+        call create_cdr_lite_output_variables(ncid)
         ierr=nf90_enddef(ncid)
         ierr = nf90_close(ncid)
       endif
@@ -747,7 +747,7 @@ contains
     if (mynode == 0) then
       ierr=nf90_open(fname,nf90_write,ncid)
       call ncwrite(ncid,'ocean_time',(/time/),(/record/))
-      if (wrt_cdr_trc_avg) then
+      if (wrt_cdr_lite_avg) then
         call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
         call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
       endif
@@ -756,7 +756,7 @@ contains
     call MPI_Barrier(ocean_grid_comm, ierr)
     ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
     call multiply_by_thickness
-    if (wrt_cdr_trc_avg) then
+    if (wrt_cdr_lite_avg) then
       if (wrt_tracers) then
         pio_gtype = '3Drw'
         if (wrt_alk) then
@@ -955,16 +955,16 @@ contains
     call PIO_closefile(pio_FileDesc)
     if (mynode == 0) then
       write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4)')&
-     &'wrt_cdr_trc :: wrote cdr tracers, tdays =', tdays,&
+     &'wrt_cdr_lite :: wrote cdr_lite tracers, tdays =', tdays,&
      &'step =', iic-1, 'rec =', record
     endif
     navg = 0
 #else
-    if (record==nrpf_cdr_trc) then
+    if (record==nrpf_cdr_lite) then
       call create_file('_cdrtrc',fname)
       ierr=nf90_open(fname,nf90_write,ncid)
       ierr=nf90_redef(ncid)
-      call create_cdr_trc_output_variables(ncid)
+      call create_cdr_lite_output_variables(ncid)
       ierr=nf90_enddef(ncid)
       ierr = nf90_close(ncid)
       record = 0
@@ -977,7 +977,7 @@ contains
     call error_log%abort_check()
     call multiply_by_thickness
     call ncwrite(ncid,'ocean_time',(/time/),(/record/))
-    if (wrt_cdr_trc_avg) then
+    if (wrt_cdr_lite_avg) then
       call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
       call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
       if (wrt_tracers) then
@@ -1168,42 +1168,42 @@ contains
     ierr=nf90_close(ncid)
     if (mynode == 0) then
       write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4)')&
-     &'wrt_cdr_trc :: wrote cdr tracers, tdays =', tdays,&
+     &'wrt_cdr_lite :: wrote cdr_lite tracers, tdays =', tdays,&
      &'step =', iic-1, 'rec =', record
     endif
     navg = 0
 #endif
-  end subroutine wrt_cdr_trc_output
+  end subroutine wrt_cdr_lite_output
 
-  subroutine display_cdr_trc_output_settings
+  subroutine display_cdr_lite_output_settings
     character(len=120) :: stdout_str
     integer :: idx
     if (mynode==0) then
-      if (.not. wrt_cdr_trc_avg) then
-        write(stdout_str,'(7x,A)') 'cdr_tracer_output :: history file'
+      if (.not. wrt_cdr_lite_avg) then
+        write(stdout_str,'(7x,A)') 'cdr_lite_output :: history file'
       else
-        write(stdout_str,'(7x,A)') 'cdr_tracer_output :: average file'
+        write(stdout_str,'(7x,A)') 'cdr_lite_output :: average file'
       end if
       write(stdout_str,'(2(A,2x),I4)')&
-     &  trim(stdout_str), 'recs/file =', nrpf_cdr_trc
-      if (cdr_trc_monthly_averages) then
+     &  trim(stdout_str), 'recs/file =', nrpf_cdr_lite
+      if (cdr_lite_monthly_averages) then
         write(stdout_str,'(2(A,2x),1L)')&
-     &    trim(stdout_str), 'monthly_averages=', cdr_trc_monthly_averages
+     &    trim(stdout_str), 'monthly_averages=', cdr_lite_monthly_averages
       else
         write(stdout_str,'(2(A,2x),F6.1)')&
-     &    trim(stdout_str), 'output_period =', output_period_cdr_trc
+     &    trim(stdout_str), 'output_period =', output_period_cdr_lite
       end if
       write(*, '(7x,A)') trim(stdout_str)
       write(*,'(9x,A)') repeat('-',62)
       write(*, '(11x,A,T20,A,T36,A)') 'Name','Write (T/F)','Long name'
       write(*,'(9x,A)') repeat('-',62)
-      do idx=1,size(cdr_trc_varlist)
+      do idx=1,size(cdr_lite_varlist)
         write(*,'(11x,A,T30,L1,T36,A)')&
-     &    trim(cdr_trc_varlist(idx)%name), .true.,&
-     &    trim(cdr_trc_varlist(idx)%long_name)
+     &    trim(cdr_lite_varlist(idx)%name), .true.,&
+     &    trim(cdr_lite_varlist(idx)%long_name)
       end do
       write(*,'(9x,A)') repeat('-',62)
     end if
-  end subroutine display_cdr_trc_output_settings
+  end subroutine display_cdr_lite_output_settings
 
-end module cdr_tracer_output
+end module cdr_lite_output

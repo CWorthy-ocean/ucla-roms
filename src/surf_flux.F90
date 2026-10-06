@@ -117,7 +117,7 @@ module surf_flux
   real(kind=8),public,allocatable,dimension(:,:) :: sss
   ! real(kind=8),public :: dSSSdt = 0._8                           ! input units (cm/day)
 
-#if defined CDR_TRACER
+#if defined CDR_LITE
       real(kind=8),public,allocatable,dimension(:,:) :: ddic_dco2  ! time interpolated carbonate sensitivity
       real(kind=8),public,allocatable,dimension(:,:) :: ddic_dalk  ! time interpolated carbonate sensitivity
       real(kind=8),public,allocatable,dimension(:,:) :: k_gas      ! time interpolated gas transfer velocity
@@ -130,7 +130,7 @@ module surf_flux
       ! forcing files. Optional namelist group; defaults to reading from file.
       ! Online mode assumes xco2_air_alt == xco2_air (see namelist.nml).
       logical, public :: cdr_online_carbonate_sensitivity = .false.
-      namelist /CDR_TRACER_SETTINGS/ cdr_online_carbonate_sensitivity
+      namelist /CDR_LITE_SETTINGS/ cdr_online_carbonate_sensitivity
 #endif
 
   ! Sea-surface DIC (sDIC) and ALK (sALK) data for restoring
@@ -221,14 +221,14 @@ contains
     dCdt = dCdt / (100.*86400.)
 #endif
 
-#if defined CDR_TRACER
+#if defined CDR_LITE
     ! Optional group: if it is absent (ios < 0, end of file) keep the default.
     rewind(namelist_unit)
-    read (unit=namelist_unit, nml=CDR_TRACER_SETTINGS, iostat=ios, iomsg=msg)
+    read (unit=namelist_unit, nml=CDR_LITE_SETTINGS, iostat=ios, iomsg=msg)
     if (ios > 0) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
-      &info='could not read CDR_TRACER_SETTINGS'&
+      &info='could not read CDR_LITE_SETTINGS'&
       &//' section of namelist file: '&
       &//trim(msg)&
       &)
@@ -274,7 +274,7 @@ subroutine init_arrays_surf_flx ![
   call store_string_att(surf_forcing_strings,'cm/day')
 #endif
 
-#if defined CDR_TRACER
+#if defined CDR_LITE
       allocate( nc_ddic_dco2%vdata( GLOBAL_2D_ARRAY,2) )
       allocate( ddic_dco2(GLOBAL_2D_ARRAY)  )
       allocate( nc_ddic_dalk%vdata( GLOBAL_2D_ARRAY,2) )
@@ -355,7 +355,7 @@ subroutine set_carbonate_sensitivity ![
   use roms_read_write, only: set_frc_data
       implicit none
 
-#ifdef CDR_TRACER
+#ifdef CDR_LITE
       ! Online values are set in tracers%set_surf_tracer_flx instead
       if (.not. cdr_online_carbonate_sensitivity) then
         call set_frc_data(nc_ddic_dco2, ddic_dco2, 'r')

@@ -1,7 +1,7 @@
 module cdr_gas_exch_output
   ! Output module for surface carbonate sensitivities used in CDR gas exchange:
   !   ddic_dco2 (beta = dDIC/dCO2) and ddic_dalk (eta = dDIC/dALK).
-  ! Analogous to cdr_tracer_output.F90, but focused only on beta/eta.
+  ! Analogous to cdr_lite_output.F90, but focused only on beta/eta.
 
 #include "cppdefs.opt"
 

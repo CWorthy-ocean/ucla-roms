@@ -159,7 +159,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only:  init_cdr_output, do_cdr_output
 #endif
-    use cdr_tracer_output, only: init_cdr_tracer_output, do_cdr_tracer_output
+    use cdr_lite_output, only: init_cdr_lite_output, do_cdr_lite_output
 #if defined MARBL && defined CDR_FORCING
     use cdr_gas_exch_output, only: init_cdr_gas_exch_output, do_cdr_gas_exch_output
 #endif
@@ -385,7 +385,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     if (do_cdr_output)  call init_cdr_output
 #endif
-    if (do_cdr_tracer_output) call init_cdr_tracer_output
+    if (do_cdr_lite_output) call init_cdr_lite_output
 #if defined MARBL && defined CDR_FORCING
     if (do_cdr_gas_exch_output) call init_cdr_gas_exch_output
 #endif
@@ -429,7 +429,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only:  wrt_cdr, do_cdr_output
 #endif
-    use cdr_tracer_output, only: wrt_cdr_trc, do_cdr_tracer_output
+    use cdr_lite_output, only: wrt_cdr_lite, do_cdr_lite_output
 #if defined MARBL && defined CDR_FORCING
     use cdr_gas_exch_output, only: wrt_cdr_gas, do_cdr_gas_exch_output
 #endif
@@ -629,7 +629,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     if (do_cdr_output)  call wrt_cdr
 #endif
-    if (do_cdr_tracer_output) call wrt_cdr_trc
+    if (do_cdr_lite_output) call wrt_cdr_lite
 #if defined MARBL && defined CDR_FORCING
     if (do_cdr_gas_exch_output) call wrt_cdr_gas
 #endif

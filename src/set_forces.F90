@@ -103,7 +103,7 @@ subroutine set_forces
 #if defined QCORRECTION || defined SFLX_CORR || defined CFLX_CORR
   call set_surf_field_corr
 # endif
-# if defined CDR_TRACER
+# if defined CDR_LITE
       call set_carbonate_sensitivity
 # endif
 # ifdef BULK_FRC
