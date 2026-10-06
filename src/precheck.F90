@@ -37,8 +37,8 @@ module precheck
   use cdr_output, only:&
   &do_cdr_output, output_period_cdr, nrpf_cdr
 #endif
-  use cdr_tracer_output, only:&
-  &do_cdr_tracer_output, output_period_cdr_trc, nrpf_cdr_trc
+  use cdr_lite_output, only:&
+  &do_cdr_lite_output, output_period_cdr_lite, nrpf_cdr_lite
 #if defined MARBL && defined CDR_FORCING
   use cdr_gas_exch_output, only:&
   &do_cdr_gas_exch_output, output_period_cdr_gas, nrpf_cdr_gas
@@ -112,8 +112,8 @@ contains
     call check_output_divides_rst(do_cdr_output,&
     &output_period_cdr, nrpf_cdr, 'cdr')
 #endif
-    call check_output_divides_rst(do_cdr_tracer_output,&
-    &output_period_cdr_trc, nrpf_cdr_trc, 'cdrtrc')
+    call check_output_divides_rst(do_cdr_lite_output,&
+    &output_period_cdr_lite, nrpf_cdr_lite, 'cdrtrc')
 #if defined MARBL && defined CDR_FORCING
     call check_output_divides_rst(do_cdr_gas_exch_output,&
     &output_period_cdr_gas, nrpf_cdr_gas, 'cdrgas')

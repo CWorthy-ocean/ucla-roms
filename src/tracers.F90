@@ -18,12 +18,18 @@ module tracers
   !]
 
 #include "cppdefs.opt"
+#ifdef CDR_TRACER
+  ! CDR_TRACER was renamed to CDR_LITE. Without this check, an old cppdefs.opt
+  ! would compile without CDR_LITE: the CDR tracers would still run, but with
+  ! no air-sea CO2 exchange.
+#error "CDR_TRACER was renamed to CDR_LITE: replace it in cppdefs.opt"
+#endif
   use param, only: isalt, itemp, lm, mm, mynode, nt_passive, nt_cdr_oae, nt_cdr_dor&
   &,ieast, iwest, jnorth, jsouth
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rath
-#ifdef CDR_TRACER
+#ifdef CDR_LITE
   use surf_flux, only: ddic_dco2, ddic_dalk, k_gas, uwnd, vwnd,&
   &cdr_online_carbonate_sensitivity
   use grid, only: rmask
@@ -67,8 +73,8 @@ module tracers
 
   integer, dimension(:), public, allocatable :: itrc_alk_pair ! Pairing logic
 
-  ! Linearized air-sea CO2 flux applied to each CDR DIC tracer (mmol/m^2/s,
-  ! positive into the ocean), as added to stflx. Allocated under CDR_TRACER.
+  ! Linearized air-sea CO2 flux applied to each CDR_LITE DIC tracer (mmol/m^2/s,
+  ! positive into the ocean), as added to stflx. Allocated under CDR_LITE.
   real(kind=8), public, allocatable, dimension(:,:,:) :: cdr_gas_flx
 
   !-- Tracer netcdf variables as arrays/matrices of 'NT' length:
@@ -144,7 +150,7 @@ contains
 
 #include "compute_tile_bounds.h"
 
-#ifdef CDR_TRACER
+#ifdef CDR_LITE
       call exchange_xxx(t(:,:,nz,nrhs,itemp) )
       call set_gas_transfer_velocity(istr,iend,jstr,jend)
       if (cdr_online_carbonate_sensitivity) call set_online_carbonate_sensitivity
@@ -164,7 +170,7 @@ contains
 
         call set_ana_surf_tracer_flx(itrc)
 
-#ifdef CDR_TRACER
+#ifdef CDR_LITE
       elseif (t_ana_frc(itrc)==2) then
             call set_frc_data(nc_t(itrc), stflx(:,:,itrc), 'r' )
             call exchange_xxx(stflx(:,:,itrc))
@@ -239,7 +245,7 @@ contains
       implicit none
       integer istr, iend, jstr, jend
 
-#if defined CDR_TRACER
+#if defined CDR_LITE
       ! coefficients to compute Schmidt number
       real, parameter :: a = 2116.8
       real, parameter :: b = -136.25
@@ -264,7 +270,7 @@ contains
         enddo
       enddo
 
-#endif /* defined CDR_TRACER */
+#endif /* defined CDR_LITE */
 
       end subroutine set_gas_transfer_velocity  !]
 ! ----------------------------------------------------------------------
@@ -281,7 +287,7 @@ contains
       implicit none
       character(len=32) :: sr_name = "set_online_carbonate_sensitivity"
 
-#if defined CDR_TRACER && defined MARBL
+#if defined CDR_LITE && defined MARBL
       ! local
       integer(kind=4), save :: iPO4 = 0, iSiO3 = 0
       integer(kind=4) :: itrc
@@ -328,7 +334,7 @@ contains
       integer itrc ! Current tracer index number
       integer istr, iend, jstr, jend
 
-#ifdef CDR_TRACER
+#ifdef CDR_LITE
 
       ! local
       integer i, j, iALK
@@ -607,7 +613,7 @@ contains
 
     allocate( t(GLOBAL_2D_ARRAY,nz,3,NT) )
     t=0._8
-#ifdef CDR_TRACER
+#ifdef CDR_LITE
     allocate( cdr_gas_flx(GLOBAL_2D_ARRAY,NT) )
     cdr_gas_flx=0._8
 #endif

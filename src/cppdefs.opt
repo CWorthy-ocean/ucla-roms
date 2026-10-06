@@ -365,7 +365,7 @@
 #define PCO2AIR_FORCING
 
 ! Simulate CDR interventions using passive tracers w/o BGC
-#undef CDR_TRACER
+#undef CDR_LITE
 
 !----------------------------------------------------------
 
