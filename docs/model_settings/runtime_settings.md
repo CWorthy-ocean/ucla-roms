@@ -64,7 +64,7 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `MMm` | Number of grid points in ETA direction | `param.opt: MMm` |
 | `nz` | Number of vertical levels | `param.opt: N` |
 | `nt_passive` | Number of passive tracers | `param.opt: nt_passive` |
-| `nt_bgc` | Number of biogeochemical tracers | `param.opt: ntrc_bio` |
+| `nt_bgc` | Number of biogeochemical tracers; must be 0 unless `MARBL` or `BIOLOGY_BEC2` is defined | `param.opt: ntrc_bio` |
 
 ### `INITIAL_CONDITIONS`
 (read by module `roms_read_write.F`)

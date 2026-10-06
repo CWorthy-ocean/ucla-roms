@@ -19,7 +19,7 @@ module tracers
 
 #include "cppdefs.opt"
   use param, only: isalt, itemp, lm, mm, mynode, nt_passive, nt_cdr_oae, nt_cdr_dor&
-  &,ieast, iwest, jnorth, jsouth
+  &,ieast, iwest, jnorth, jsouth, nt_bgc
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rath
@@ -497,11 +497,28 @@ contains
     ! save
     ! SHOULD DECLARE TRACER INDICES IN TRACERS_DEFS.H & USE THE SAVE COMMAND HERE???
 
+    use error_handling_mod, only: error_log
     implicit none
 
     ! local
     integer(kind=4) :: cnt=0, itrc, ioae
     character(len=8) :: passive_tracer_num
+    character(len=12) :: sr_name = "init_tracers"
+
+#if !defined(MARBL) && !defined(BIOLOGY_BEC2)
+    ! Only MARBL or BEC2 name the nt_bgc tracer slots; without either they
+    ! would stay uninitialized and forcing/output lookups would use garbage names.
+    if (nt_bgc /= 0) then
+      write(error_info,*) "nt_bgc = ", nt_bgc, " in PARAM_SETTINGS, but",&
+      &" neither MARBL nor BIOLOGY_BEC2 is defined in cppdefs.opt;",&
+      &" set nt_bgc = 0."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+      call error_log%abort_check()
+    end if
+#endif
+
     allocate(t_vname(nt))
     allocate(t_lname(nt))
     allocate(t_units(nt))
