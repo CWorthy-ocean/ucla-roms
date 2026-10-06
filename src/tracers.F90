@@ -602,6 +602,20 @@ contains
 
     ! Additional passive tracers:
 #ifdef BIOLOGY_BEC2
+    ! BEC_tracers.h names a fixed set of tracers; check nt_bgc before writing them.
+# ifdef Ncycle_SY
+    if (nt_bgc /= 29) then
+# else
+    if (nt_bgc /= 26) then
+# endif
+      write(error_info,*) "nt_bgc = ", nt_bgc, " in PARAM_SETTINGS, but",&
+      &" BIOLOGY_BEC2 defines 26 tracers (29 with Ncycle_SY);",&
+      &" set nt_bgc accordingly."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+      call error_log%abort_check()
+    end if
 #include "BEC_tracers.h"
 #endif
 
@@ -609,6 +623,17 @@ contains
     call marbldrv_configure_tracers(&
     &itot,t_vname,t_lname,t_units,t_tname,wrt_t,wrt_t_avg,t_ana_frc)
 #endif
+
+    ! Every slot 1..nt must now be named; a mismatch means nt_bgc disagrees
+    ! with the BGC model's tracer count.
+    if (itot /= nt) then
+      write(error_info,*) "named ", itot, " tracers but nt = ", nt,&
+      &" (nt_bgc = ", nt_bgc, " in PARAM_SETTINGS)."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+      call error_log%abort_check()
+    end if
 
     if (mynode==0) then
       print *, 'metadata about ',NT, ' tracers:'
