@@ -16,6 +16,21 @@ Breaking Changes
 - A run now stops at startup if a river forcing file has more tracers than the model, or if the river forcing files differ in tracer count. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
 - With realistic river forcing on, a run now stops at startup if any listed forcing file can't be opened as netCDF. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
 - The CDR DIC tracer gas exchange no longer carries the spurious ``Hz`` factor (see Bug Fixes). Runs with ``CDR_TRACER`` enabled will produce different, and now correct, CDR DIC results; existing CDR tracer output is not directly comparable to output from this branch. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- CPP key ``CDR_TRACER`` is now ``CDR_LITE``. Existing ``cppdefs.opt`` files need ``#define CDR_LITE``. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- Namelist groups renamed: (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+
+  - ``&CDR_TRACER_SETTINGS`` → ``&CDR_LITE_SETTINGS``
+  - ``&CDR_TRACER_OUTPUT_SETTINGS`` → ``&CDR_LITE_OUTPUT_SETTINGS``
+
+- Namelist variables in the output group renamed: (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+
+  - ``do_cdr_tracer_output`` → ``do_cdr_lite_output``
+  - ``wrt_cdr_trc_avg`` → ``wrt_cdr_lite_avg``
+  - ``cdr_trc_monthly_averages`` → ``cdr_lite_monthly_averages``
+  - ``output_period_cdr_trc`` → ``output_period_cdr_lite``
+  - ``nrpf_cdr_trc`` → ``nrpf_cdr_lite``
+
+- Module ``cdr_tracer_output`` (``cdr_tracer_output.F90``) is now ``cdr_lite_output`` (``cdr_lite_output.F90``). Its public routines were renamed to match (``init_cdr_lite_output``, ``read_cdr_lite_output_nml``, ``wrt_cdr_lite``). (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
 
 New Features
 ~~~~~~~~~~~~
@@ -60,6 +75,9 @@ Improvements
 - Solver controls (bracket pH 4–10, relative tolerance 1e-10, up to 100 iterations, residual tolerance 1e-8 × TA) are named parameters. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
 - Errors for a bad river forcing file now name the file at fault, for example one missing its tracer dimension or with a tracer count that differs from the others. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
 - The gas-exchange flux is stored per tracer in the new public array ``tracers%cdr_gas_flx``, making it available to output and diagnostics rather than being folded into ``stflx`` only. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- Comments, log messages and error messages that refer to these tracers now say CDR_LITE (``tracers.F90``, ``cdr_lite_output.F90``, ``river_frc.F90``, ``namelist.nml``). (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- The fixed-length ``sr_name``/``module_name`` strings in ``cdr_lite_output.F90`` are now declared at their exact lengths. Without this, the longer name ``wrt_cdr_lite_output`` would have been cut off. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- Not renamed, because they belong to the CDR forcing module: ``cdr_trc`` and ``cdr_trcflx*`` in ``cdr_frc.F90`` and ``ana_cdr_frc.h``. The ``_cdrtrc`` output file suffix is also unchanged. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -83,4 +101,7 @@ Miscellaneous
 
 - ``namelist.nml`` documents the new ``CDR_TRACER_SETTINGS`` group and the ``wrt_gas_exchange`` output switch. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
 - CI now compiles ``CDR_TRACER`` (with ``PARALLEL_IO``) for gnu and ifx; no CI job built it before. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- CI: the ``compile_gnu`` and ``compile_ifx`` jobs now define ``CDR_LITE`` instead of ``CDR_TRACER``, so the CDR_LITE code is still compiled in CI. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- ``Make.depend`` is updated for the renamed module. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- Tested locally on Derecho (ifx 2025.2.1): all three ``compile_ifx`` configurations build. The gfortran builds and the pytest suite have not been run locally. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
 
