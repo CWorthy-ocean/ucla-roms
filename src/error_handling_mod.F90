@@ -356,6 +356,7 @@ contains
           !      "For a full error log, set to .true. and compile again ",&
           !      "(performance will be impacted)"
           call MPI_Abort(ocean_grid_comm,1)
+          call sleep(30) ! stop further output leaking through
        end if !
     end if !gather_errors_on_main_rank
 #else /* MPI*/

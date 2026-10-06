@@ -330,6 +330,8 @@ contains
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info=error_info)
+      ! Abort now: the loop below writes nt_marbl names into arrays sized by nt_bgc.
+      call error_log%abort_check()
     end if
 
     call print_marbl_log(marbl_instance%StatusLog)
