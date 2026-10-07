@@ -17,16 +17,10 @@ module cdr_frc
   use grid, only: rmask, lonr,latr
   use dimensions, only: nx, ny, nz
   use ocean_vars, only: hz, z_r0, hz0
-#ifdef CDR_LITE
-  use param, only: mynode, lm, mm, ocean_grid_comm,&
-  &nt_passive, nt_cdr_oae, nt_cdr_dor
+  use param, only: mynode, lm, mm, ocean_grid_comm, itemp
   use tracers, only: iTandS
-#else
-  use param, only: mynode, lm, mm, ocean_grid_comm
-#endif
   use nc_read_write, only: ncread
   use pio_roms, only: pio_gtype
-  use param, only: itemp, isalt
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_file_is_open, pio_FileDesc
   use pio, only: PIO_closefile
@@ -573,59 +567,27 @@ contains
       if (cdr_forcing_parameterized) then
         cdr_nloc(icdr) = cidx
 
-        ! Volume releases: step2d and omega take the added volume from the
-        ! temp row, and temp/salt enter as cdr_vol*T and cdr_vol*S with the
-        ! same weights, so each cell gets water at exactly the input T and S.
-        ! Normalize temp and salt by the same global sum so the total volume
-        ! released is cdr_vol rather than cdr_vol*global_int.
-        if (cdr_volume) then
-          local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itemp,:))
-          call MPI_Reduce(local_int,global_int,1,&
-          &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
-          call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
-          if (global_int(1) /= 0.0_8) then
-            cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itemp,:) =&
-            &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itemp,:)/global_int(1)
-#ifdef SALINITY
-            cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),isalt,:) =&
-            &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),isalt,:)/global_int(1)
-#endif
+        ! Every tracer row of cdr_prf was built above with the same weights
+        ! (the tracer index is always ':'), so one global sum per release
+        ! normalizes them all, making each release total exactly cdr_flx.
+        ! - Rows after temp/salt (passive, CDR_LITE and BGC tracers) are
+        !   always normalized.
+        ! - temp/salt rows are normalized only for volume releases. step2d and
+        !   omega take the added volume from the temp row, and temp/salt enter
+        !   as cdr_vol*T and cdr_vol*S with the same weights, so each cell gets
+        !   water at exactly the input T and S, and the total is cdr_vol.
+        local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itemp,:))
+        call MPI_Reduce(local_int,global_int,1,&
+        &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
+        call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
+        if (global_int(1) /= 0.0_8) then
+          cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iTandS+1:nt,:) =&
+          &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iTandS+1:nt,:)/global_int(1)
+          if (cdr_volume) then
+            cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),1:iTandS,:) =&
+            &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),1:iTandS,:)/global_int(1)
           endif
         endif
-
-        ! Do this once for ALK and again for DIC
-        local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:))
-        call MPI_Reduce(local_int,global_int,1,&
-        &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
-        call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
-
-        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:) =&
-        &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:)/global_int(1)
-
-        local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:))
-        call MPI_Reduce(local_int,global_int,1,&
-        &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
-        call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
-
-        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:) =&
-        &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:)/global_int(1)
-
-#ifdef CDR_LITE
-        ! CDR_OAE_ALK/DIC and CDR_DOR_DIC share the same spatial profile as ALK/DIC
-        ! before normalization, but were previously left unscaled — so their
-        ! injection rate was global_int times too large. Normalize each the same way.
-        do itrc = iTandS+nt_passive+1,&
-        &         iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
-          local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itrc,:))
-          call MPI_Reduce(local_int,global_int,1,&
-          &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
-          call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
-          if (global_int(1) /= 0.0_8) then
-            cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itrc,:) =&
-            &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itrc,:)/global_int(1)
-          endif
-        enddo
-#endif
       endif
 
     enddo
