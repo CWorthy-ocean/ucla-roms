@@ -26,6 +26,7 @@ module cdr_frc
 #endif
   use nc_read_write, only: ncread
   use pio_roms, only: pio_gtype
+  use param, only: itemp, isalt
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_file_is_open, pio_FileDesc
   use pio, only: PIO_closefile
@@ -571,6 +572,26 @@ contains
       ! Only do this step for analytical forcing
       if (cdr_forcing_parameterized) then
         cdr_nloc(icdr) = cidx
+
+        ! Volume releases: step2d and omega take the added volume from the
+        ! temp row, and temp/salt enter as cdr_vol*T and cdr_vol*S with the
+        ! same weights, so each cell gets water at exactly the input T and S.
+        ! Normalize temp and salt by the same global sum so the total volume
+        ! released is cdr_vol rather than cdr_vol*global_int.
+        if (cdr_volume) then
+          local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itemp,:))
+          call MPI_Reduce(local_int,global_int,1,&
+          &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
+          call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
+          if (global_int(1) /= 0.0_8) then
+            cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itemp,:) =&
+            &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itemp,:)/global_int(1)
+#ifdef SALINITY
+            cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),isalt,:) =&
+            &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),isalt,:)/global_int(1)
+#endif
+          endif
+        endif
 
         ! Do this once for ALK and again for DIC
         local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:))
