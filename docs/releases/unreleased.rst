@@ -31,6 +31,7 @@ Breaking Changes
   - ``nrpf_cdr_trc`` → ``nrpf_cdr_lite``
 
 - Module ``cdr_tracer_output`` (``cdr_tracer_output.F90``) is now ``cdr_lite_output`` (``cdr_lite_output.F90``). Its public routines were renamed to match (``init_cdr_lite_output``, ``read_cdr_lite_output_nml``, ``wrt_cdr_lite``). (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- CDR tracer-flux releases (``cdr_volume = .false.``) with a nonzero temp or salt flux now stop at startup; release heat and salt with water (``cdr_volume = .true.``) instead. (`#375 <https://github.com/CWorthy-ocean/ucla-roms/pull/375>`_)
 
 New Features
 ~~~~~~~~~~~~
@@ -68,6 +69,13 @@ Bug Fixes
 - A MARBL tracer-count mismatch was reported but ROMS kept writing tracer metadata past the end of its arrays; it now aborts immediately. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
 - After an error abort in the default error-handling mode, each rank kept running and re-printed the error at every later check; ranks now stop after ``MPI_Abort``. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
 - The ``Iceland_parent_with_upscaling`` example set ``nt_bgc = 0`` while defining ``MARBL``; it now uses MARBL's 32 tracers. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
+- Spread parameterized CDR releases (``cdr_hsc > 0`` or ``cdr_vsc > 0``) now deliver exactly the requested amount of every tracer, so results change for these releases. (`#375 <https://github.com/CWorthy-ocean/ucla-roms/pull/375>`_)
+
+  - Before, passive tracers and all MARBL tracers except ALK and DIC (including ALK_ALT_CO2 and DIC_ALT_CO2) were scaled by the sum of the release weights.
+  - CDR_LITE tracers were scaled the same way in builds without the ``CDR_LITE`` key.
+  - For volume releases, the water, heat and salt were also scaled, so normalized tracers such as ALK and DIC entered diluted; each release now adds exactly ``cdr_vol`` of water.
+
+- Volume releases now add their water at the release depth instead of spreading it evenly over the water column. (`#375 <https://github.com/CWorthy-ocean/ucla-roms/pull/375>`_)
 
 
 Improvements
@@ -82,6 +90,7 @@ Improvements
 - Comments, log messages and error messages that refer to these tracers now say CDR_LITE (``tracers.F90``, ``cdr_lite_output.F90``, ``river_frc.F90``, ``namelist.nml``). (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
 - The fixed-length ``sr_name``/``module_name`` strings in ``cdr_lite_output.F90`` are now declared at their exact lengths. Without this, the longer name ``wrt_cdr_lite_output`` would have been cut off. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
 - Not renamed, because they belong to the CDR forcing module: ``cdr_trc`` and ``cdr_trcflx*`` in ``cdr_frc.F90`` and ``ana_cdr_frc.h``. The ``_cdrtrc`` output file suffix is also unchanged. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- Setting ``cdr_volume = .true.`` without ``cdr_forcing_parameterized = .true.`` now stops at startup with a clear error instead of reading unallocated memory. (`#375 <https://github.com/CWorthy-ocean/ucla-roms/pull/375>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
