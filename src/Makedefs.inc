@@ -237,9 +237,8 @@ ifeq ($(ARCH),x86_64)
 else
     TARGET_FLAGS ?=
 endif
-ifneq ($(BUILD_MODE),$(filter debug test, $(BUILD_MODE)))
-    FFLAGS += $(TARGET_FLAGS)
-endif
+# TARGET_FLAGS is appended to FFLAGS below, after the per-compiler blocks,
+# because those blocks assign FFLAGS wholesale and would discard it.
 
 # Apply debug, strict, vtune, or grof settings for Intel compilers
 ifeq ($(COMPILER),$(filter ifort intel, $(COMPILER)))
@@ -265,6 +264,11 @@ ifeq ($(COMPILER),gnu)
     else ifeq ($(BUILD_MODE),test)
 	FFLAGS = -fallow-argument-mismatch -O0
     endif
+endif
+
+# CPU target (see TARGET_FLAGS above); skipped for debug/test builds.
+ifneq ($(BUILD_MODE),$(filter debug test, $(BUILD_MODE)))
+    FFLAGS += $(TARGET_FLAGS)
 endif
 
 # Options to link to libraries & modules (NetCDF, etc):
