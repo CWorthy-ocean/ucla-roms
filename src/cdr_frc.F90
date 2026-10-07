@@ -246,6 +246,15 @@ contains
       &"but no forcing type selected")
     endif
 
+    ! cdr_vol, which step2d and omega read whenever cdr_volume is set, only
+    ! exists for parameterized releases.
+    if (cdr_volume .and. .not. cdr_forcing_parameterized) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="cdr_volume = .true. requires "//&
+      &"cdr_forcing_parameterized = .true.")
+    endif
+
     if (cdr_forcing_3d) then
       call init_cdr_frc_3d
     else
