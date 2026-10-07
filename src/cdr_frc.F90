@@ -29,10 +29,11 @@ module cdr_frc
   use vertical_remapping, only: remap_src_to_grid
   use error_handling_mod, only: error_log
   use netcdf, only:&
-  &nf90_noerr, nf90_inq_dimid,&
-  &nf90_inquire_dimension, nf90_nowrite, nf90_open, nf90_close
+  &nf90_noerr, nf90_inq_dimid, nf90_inq_varid, nf90_inquire_variable,&
+  &nf90_inquire_dimension, nf90_get_var, nf90_max_var_dims,&
+  &nf90_nowrite, nf90_open, nf90_close
   use mpi_f08, only:&
-  &mpi_double_precision, mpi_sum,&
+  &mpi_double_precision, mpi_sum, mpi_integer,&
   &mpi_2double_precision, mpi_comm_world, mpi_in_place,&
   &mpi_logical, mpi_lor, mpi_minloc
 
@@ -381,12 +382,77 @@ contains
     call ncread(ncid,cdr_loc_dep,cdr_dep)
     call ncread(ncid,cdr_scl_hor,cdr_hsc)
     call ncread(ncid,cdr_scl_vrt,cdr_vsc)
+    if (.not. cdr_volume) call check_no_ts_flux(ncid)
     call init_arrays_cdr
     call find_release_locations
 
     call create_cdr_vertical_structure
 
   end subroutine init_cdr_frc_parm  !]
+! ----------------------------------------------------------------------
+  subroutine check_no_ts_flux(ncid)  ![
+
+    ! Tracer-flux releases (cdr_volume = .false.) may not carry temp or salt:
+    ! their cdr_prf rows are normalized only for volume releases, where they
+    ! also carry the water. Check every record of cdr_trcflx up front, so a
+    ! bad file fails at startup rather than when its record is reached.
+    ! Rank 0 reads; the result is broadcast so every rank raises alike.
+
+    implicit none
+    integer(kind=4), intent(in) :: ncid
+
+    ! local
+    character(len=16) :: sr_name = "check_no_ts_flux"
+    integer(kind=4) :: ierr, varid, ndims, nrec, icdr
+    integer(kind=4), dimension(nf90_max_var_dims) :: dimids
+    ! res(1): netcdf status; res(2): first release with a temp/salt flux,
+    ! 0 if none, -1 if cdr_trcflx is not (ncdr, ntracers, time)
+    integer(kind=4), dimension(2) :: res
+    real(kind=8), allocatable, dimension(:,:,:) :: ts_flx
+
+    res = [nf90_noerr, 0]
+    if (mynode == 0) then
+      res(1) = nf90_inq_varid(ncid, nc_cdrflx%vname, varid)
+      if (res(1) == nf90_noerr) res(1) =&
+      &nf90_inquire_variable(ncid, varid, ndims=ndims, dimids=dimids)
+      if (res(1) == nf90_noerr .and. ndims /= 3) res(2) = -1
+      if (res(1) == nf90_noerr .and. res(2) == 0) then
+        res(1) = nf90_inquire_dimension(ncid, dimids(3), len=nrec)
+        if (res(1) == nf90_noerr) then
+          allocate(ts_flx(ncdr,iTandS,nrec))
+          res(1) = nf90_get_var(ncid, varid, ts_flx,&
+          &start=[1,1,1], count=[ncdr,iTandS,nrec])
+        endif
+        if (res(1) == nf90_noerr) then
+          do icdr=1,ncdr
+            if (any(ts_flx(icdr,:,:) /= 0.0_8)) then
+              res(2) = icdr
+              exit
+            endif
+          enddo
+        endif
+      endif
+    endif
+    call MPI_Bcast(res,2,mpi_integer,0,ocean_grid_comm,ierr)
+
+    call error_log%check_netcdf_status(netcdf_status=res(1),&
+    &context=module_name//"/"//sr_name,&
+    &info="Cannot read "//trim(nc_cdrflx%vname)//" from CDR forcing file")
+    if (res(2) < 0) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=trim(nc_cdrflx%vname)//" must have dimensions (ncdr, ntracers, time)")
+    else if (res(2) > 0) then
+      write(error_info,'(A,I0,A)') "CDR release ", res(2),&
+      &" has a nonzero temp/salt flux in "//trim(nc_cdrflx%vname)//&
+      &". Temperature and salinity can only be released with water:"//&
+      &" set cdr_volume = .true. and use cdr_volume/cdr_tracer."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+    endif
+
+  end subroutine check_no_ts_flux  !]
 ! ----------------------------------------------------------------------
   subroutine find_release_locations  ![
 
@@ -576,6 +642,7 @@ contains
         !   omega take the added volume from the temp row, and temp/salt enter
         !   as cdr_vol*T and cdr_vol*S with the same weights, so each cell gets
         !   water at exactly the input T and S, and the total is cdr_vol.
+        !   Tracer-flux releases may not carry temp/salt (check_no_ts_flux).
         local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itemp,:))
         call MPI_Reduce(local_int,global_int,1,&
         &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
