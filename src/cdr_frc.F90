@@ -17,13 +17,8 @@ module cdr_frc
   use grid, only: rmask, lonr,latr
   use dimensions, only: nx, ny, nz
   use ocean_vars, only: hz, z_r0, hz0
-#ifdef CDR_LITE
-  use param, only: mynode, lm, mm, ocean_grid_comm,&
-  &nt_passive, nt_cdr_oae, nt_cdr_dor
+  use param, only: mynode, lm, mm, ocean_grid_comm, itemp
   use tracers, only: iTandS
-#else
-  use param, only: mynode, lm, mm, ocean_grid_comm
-#endif
   use nc_read_write, only: ncread
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
@@ -34,10 +29,11 @@ module cdr_frc
   use vertical_remapping, only: remap_src_to_grid
   use error_handling_mod, only: error_log
   use netcdf, only:&
-  &nf90_noerr, nf90_inq_dimid,&
-  &nf90_inquire_dimension, nf90_nowrite, nf90_open, nf90_close
+  &nf90_noerr, nf90_inq_dimid, nf90_inq_varid, nf90_inquire_variable,&
+  &nf90_inquire_dimension, nf90_get_var, nf90_max_var_dims,&
+  &nf90_nowrite, nf90_open, nf90_close
   use mpi_f08, only:&
-  &mpi_double_precision, mpi_sum,&
+  &mpi_double_precision, mpi_sum, mpi_integer,&
   &mpi_2double_precision, mpi_comm_world, mpi_in_place,&
   &mpi_logical, mpi_lor, mpi_minloc
 
@@ -250,6 +246,15 @@ contains
       &"but no forcing type selected")
     endif
 
+    ! cdr_vol, which step2d and omega read whenever cdr_volume is set, only
+    ! exists for parameterized releases.
+    if (cdr_volume .and. .not. cdr_forcing_parameterized) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="cdr_volume = .true. requires "//&
+      &"cdr_forcing_parameterized = .true.")
+    endif
+
     if (cdr_forcing_3d) then
       call init_cdr_frc_3d
     else
@@ -386,12 +391,77 @@ contains
     call ncread(ncid,cdr_loc_dep,cdr_dep)
     call ncread(ncid,cdr_scl_hor,cdr_hsc)
     call ncread(ncid,cdr_scl_vrt,cdr_vsc)
+    if (.not. cdr_volume) call check_no_ts_flux(ncid)
     call init_arrays_cdr
     call find_release_locations
 
     call create_cdr_vertical_structure
 
   end subroutine init_cdr_frc_parm  !]
+! ----------------------------------------------------------------------
+  subroutine check_no_ts_flux(ncid)  ![
+
+    ! Tracer-flux releases (cdr_volume = .false.) may not carry temp or salt:
+    ! their cdr_prf rows are normalized only for volume releases, where they
+    ! also carry the water. Check every record of cdr_trcflx up front, so a
+    ! bad file fails at startup rather than when its record is reached.
+    ! Rank 0 reads; the result is broadcast so every rank raises alike.
+
+    implicit none
+    integer(kind=4), intent(in) :: ncid
+
+    ! local
+    character(len=16) :: sr_name = "check_no_ts_flux"
+    integer(kind=4) :: ierr, varid, ndims, nrec, icdr
+    integer(kind=4), dimension(nf90_max_var_dims) :: dimids
+    ! res(1): netcdf status; res(2): first release with a temp/salt flux,
+    ! 0 if none, -1 if cdr_trcflx is not (ncdr, ntracers, time)
+    integer(kind=4), dimension(2) :: res
+    real(kind=8), allocatable, dimension(:,:,:) :: ts_flx
+
+    res = [nf90_noerr, 0]
+    if (mynode == 0) then
+      res(1) = nf90_inq_varid(ncid, nc_cdrflx%vname, varid)
+      if (res(1) == nf90_noerr) res(1) =&
+      &nf90_inquire_variable(ncid, varid, ndims=ndims, dimids=dimids)
+      if (res(1) == nf90_noerr .and. ndims /= 3) res(2) = -1
+      if (res(1) == nf90_noerr .and. res(2) == 0) then
+        res(1) = nf90_inquire_dimension(ncid, dimids(3), len=nrec)
+        if (res(1) == nf90_noerr) then
+          allocate(ts_flx(ncdr,iTandS,nrec))
+          res(1) = nf90_get_var(ncid, varid, ts_flx,&
+          &start=[1,1,1], count=[ncdr,iTandS,nrec])
+        endif
+        if (res(1) == nf90_noerr) then
+          do icdr=1,ncdr
+            if (any(ts_flx(icdr,:,:) /= 0.0_8)) then
+              res(2) = icdr
+              exit
+            endif
+          enddo
+        endif
+      endif
+    endif
+    call MPI_Bcast(res,2,mpi_integer,0,ocean_grid_comm,ierr)
+
+    call error_log%check_netcdf_status(netcdf_status=res(1),&
+    &context=module_name//"/"//sr_name,&
+    &info="Cannot read "//trim(nc_cdrflx%vname)//" from CDR forcing file")
+    if (res(2) < 0) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=trim(nc_cdrflx%vname)//" must have dimensions (ncdr, ntracers, time)")
+    else if (res(2) > 0) then
+      write(error_info,'(A,I0,A)') "CDR release ", res(2),&
+      &" has a nonzero temp/salt flux in "//trim(nc_cdrflx%vname)//&
+      &". Temperature and salinity can only be released with water:"//&
+      &" set cdr_volume = .true. and use cdr_volume/cdr_tracer."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+    endif
+
+  end subroutine check_no_ts_flux  !]
 ! ----------------------------------------------------------------------
   subroutine find_release_locations  ![
 
@@ -572,39 +642,28 @@ contains
       if (cdr_forcing_parameterized) then
         cdr_nloc(icdr) = cidx
 
-        ! Do this once for ALK and again for DIC
-        local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:))
+        ! Every tracer row of cdr_prf was built above with the same weights
+        ! (the tracer index is always ':'), so one global sum per release
+        ! normalizes them all, making each release total exactly cdr_flx.
+        ! - Rows after temp/salt (passive, CDR_LITE and BGC tracers) are
+        !   always normalized.
+        ! - temp/salt rows are normalized only for volume releases. step2d and
+        !   omega take the added volume from the temp row, and temp/salt enter
+        !   as cdr_vol*T and cdr_vol*S with the same weights, so each cell gets
+        !   water at exactly the input T and S, and the total is cdr_vol.
+        !   Tracer-flux releases may not carry temp/salt (check_no_ts_flux).
+        local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itemp,:))
         call MPI_Reduce(local_int,global_int,1,&
         &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
         call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
-
-        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:) =&
-        &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iALK,:)/global_int(1)
-
-        local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:))
-        call MPI_Reduce(local_int,global_int,1,&
-        &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
-        call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
-
-        cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:) =&
-        &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iDIC,:)/global_int(1)
-
-#ifdef CDR_LITE
-        ! CDR_OAE_ALK/DIC and CDR_DOR_DIC share the same spatial profile as ALK/DIC
-        ! before normalization, but were previously left unscaled — so their
-        ! injection rate was global_int times too large. Normalize each the same way.
-        do itrc = iTandS+nt_passive+1,&
-        &         iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
-          local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itrc,:))
-          call MPI_Reduce(local_int,global_int,1,&
-          &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
-          call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
-          if (global_int(1) /= 0.0_8) then
-            cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itrc,:) =&
-            &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itrc,:)/global_int(1)
+        if (global_int(1) /= 0.0_8) then
+          cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iTandS+1:nt,:) =&
+          &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iTandS+1:nt,:)/global_int(1)
+          if (cdr_volume) then
+            cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),1:iTandS,:) =&
+            &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),1:iTandS,:)/global_int(1)
           endif
-        enddo
-#endif
+        endif
       endif
 
     enddo

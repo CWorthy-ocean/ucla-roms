@@ -43,7 +43,7 @@ contains
     &rhos, rhoa, weight, du_avg_bak, du_avg2,&
     &du_avg1, dv_avg_bak, dv_avg2, dv_avg1, zt_avg1, rufrc, rvfrc
     use grid, only: h, dn_u, dm_v, pn, pm, rmask, umask, vmask
-    use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
+    use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi, itemp
     use ocean_vars, only: zeta, ubar, vbar
     use scalars, only: dtfast, g, iif, knew, kstp, nfast
     use roms_mpi, only: exchange_xxx
@@ -152,7 +152,7 @@ contains
         j = cdr_jloc(cidx)
 
         zeta(i,j,kstp)=zeta(i,j,kstp) + dtfast*pm(i,j)*pn(i,j)&
-        &*cdr_vol(icdr)*sum(cdr_prf(cidx,1,:))
+        &*cdr_vol(icdr)*sum(cdr_prf(cidx,itemp,:))
       enddo
     endif
 #endif

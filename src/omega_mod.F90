@@ -42,7 +42,7 @@ contains
 ! below which vertical advection is fully explicit; "cu_max" is the
 !     maximum CN which the explicit component "We" is allowed to reach.
 
-    use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
+    use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi, itemp
     use dimensions, only: nx, ny, nz, inode, jnode
     use grid, only: pn, pm, dn_r, dm_r, rmask
     use pipe_frc, only:&
@@ -51,7 +51,7 @@ contains
 #if defined CDR_FORCING && defined MARBL
     use cdr_frc, only:&
     &cdr_nprf, cdr_icdr,&
-    &cdr_iloc, cdr_prf, cdr_vol,&
+    &cdr_iloc, cdr_jloc, cdr_prf, cdr_vol,&
     &cdr_source, cdr_volume
 #endif
     use roms_mpi, only: exchange_xxx
@@ -81,22 +81,6 @@ contains
 
     Wi(1:nx,1:ny,0)=0._8
 
-#if defined CDR_FORCING && defined MARBL
-    if (cdr_source.and.cdr_volume) then
-      do cidx=1,cdr_nprf
-        icdr = cdr_icdr(cidx)
-        i = cdr_iloc(cidx)
-        j = cdr_iloc(cidx)
-        do k=1,nz
-          Wi(i,j,k)=Wi(i,j,k-1)&
-          ! Here we will assume that the vertical distribution of the CDR volume flux
-          ! is the same as the vertical distribution of the heat flux.
-          &+ cdr_vol(icdr)*cdr_prf(cidx,1,k)
-        enddo
-      enddo
-    endif
-#endif
-
     do j=jstr,jend
 
       !!! For NHMG pipes, the flux needs to be out of the bottom.
@@ -118,6 +102,27 @@ contains
           &+max(FlxV(i,j+1,k),0._8)-min(FlxV(i,j,k),0._8)
         enddo
       enddo
+#if defined CDR_FORCING && defined MARBL
+      ! CDR volume source: add the volume flux of each release in this row,
+      ! accumulated bottom-up like the horizontal divergence above, so Wi
+      ! sees the water that step2d adds to zeta. The vertical distribution
+      ! is assumed to follow the temperature profile, cdr_prf(:,itemp,:), as in
+      ! step2d. This must come after the loop above, which assigns Wi from
+      ! scratch, and before the rain-water and grid-motion steps below.
+      if (cdr_source.and.cdr_volume) then
+        do cidx=1,cdr_nprf
+          if (cdr_jloc(cidx)==j) then
+            icdr = cdr_icdr(cidx)
+            i = cdr_iloc(cidx)
+            cff = 0._8
+            do k=1,nz
+              cff = cff + cdr_vol(icdr)*cdr_prf(cidx,itemp,k)
+              Wi(i,j,k) = Wi(i,j,k) + cff
+            enddo
+          endif
+        enddo
+      endif
+#endif
       ! rain water
       do i=1,nx
         Wi(i,j,nz) = Wi(i,j,nz) + swflx(i,j)*dm_r(i,j)*dn_r(i,j)
