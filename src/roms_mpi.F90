@@ -1180,6 +1180,7 @@ contains
   end subroutine unpack_buffers !]
 !--------------------------------------------------------
   subroutine mpi_buffer_exchange ![
+    use timers, only: reg_tic, reg_toc, rg_exchange
     implicit none
 
     ! local
@@ -1188,6 +1189,8 @@ contains
     integer(kind=4) ipass
     integer(kind=4) i,ierr
     logical flag
+
+    call reg_tic(rg_exchange)
 
 ! Permutation array comm(1:16) keeps track which messages are actually
 ! being received -- hence comm(indx)=0  means that no messages are
@@ -1306,6 +1309,7 @@ contains
         endif
       enddo
     enddo
+    call reg_toc(rg_exchange)
 
   end subroutine mpi_buffer_exchange !]
 ! ----------------------------------------------------------------------

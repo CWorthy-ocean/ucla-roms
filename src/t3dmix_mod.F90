@@ -9,6 +9,8 @@ contains
 
   subroutine t3dmix_s
     use param, only: ieast, iwest, jnorth, jsouth, nt, nsub_e, nsub_x
+    use tracers, only: exchange_tracers
+    use scalars, only: nnew
     use private_scratch, only: a2d
     implicit none
     integer(kind=4),save:: tile=0
@@ -19,6 +21,7 @@ contains
       call t3dmix_s_tile (istr,iend,jstr,jend, itrc, A2d(1,1),&
       &A2d(1,2), A2d(1,3))
     enddo
+    call exchange_tracers(nnew)   ! four tracers per MPI exchange
   end subroutine t3dmix_s
 
   subroutine t3dmix_s_tile (istr,iend,jstr,jend, itrc, FX,FE,LapT)
@@ -255,14 +258,12 @@ contains
       enddo
 #endif /* TS_DIF4 */
     enddo
-
-# ifdef EXCHANGE
-    call exchange_xxx(t(:,:,:,nnew,itrc) )
-# endif
   end subroutine t3dmix_s_tile
 
   subroutine t3dmix_gp
     use param, only: ieast, iwest, jnorth, jsouth, nt, nsub_e, nsub_x
+    use tracers, only: exchange_tracers
+    use scalars, only: nnew
     use dimensions, only: inode, jnode
     use private_scratch, only: a2d, a3d
     implicit none
@@ -275,6 +276,7 @@ contains
       &A2d(1,2), A2d(1,3),A2d(1,5),&
       &A2d(1,7), A2d(1,9), A2d(1,11), A2d(1,13))
     enddo
+    call exchange_tracers(nnew)   ! four tracers per MPI exchange
   end subroutine t3dmix_gp
 
   subroutine t3dmix_gp_tile (istr,iend,jstr,jend, itrc, LapT,FX,FE,&
@@ -746,10 +748,6 @@ contains
       endif  ! <-- k>0
     enddo   ! --> k
 # endif /* TS_DIF4 */
-
-# ifdef EXCHANGE
-    call exchange_xxx(t(:,:,:,nnew,itrc) )
-# endif
   end subroutine t3dmix_gp_tile
 
 #else

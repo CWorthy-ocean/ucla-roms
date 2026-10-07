@@ -102,6 +102,7 @@ module tracers
 
   public set_surf_tracer_flx
   public init_tracers
+  public exchange_tracers
   public def_his_trc
   public wrt_his_trc
   public wrt_rst_trc
@@ -700,6 +701,29 @@ contains
     enddo
 
   end subroutine init_tracers  !]
+
+  subroutine exchange_tracers(tidx)  ![
+    ! Halo-exchange all tracers at time index tidx, four per MPI exchange
+    ! instead of one, to cut the number of messages per step.
+    implicit none
+    integer(kind=4), intent(in) :: tidx
+    integer(kind=4) :: itrc, nrem
+# ifdef EXCHANGE
+    do itrc=1,nt-3,4
+      call exchange_xxx(t(:,:,:,tidx,itrc),   t(:,:,:,tidx,itrc+1),&
+      &                 t(:,:,:,tidx,itrc+2), t(:,:,:,tidx,itrc+3))
+    enddo
+    nrem = mod(nt,4)
+    if (nrem == 3) then
+      call exchange_xxx(t(:,:,:,tidx,nt-2), t(:,:,:,tidx,nt-1),&
+      &                 t(:,:,:,tidx,nt))
+    elseif (nrem == 2) then
+      call exchange_xxx(t(:,:,:,tidx,nt-1), t(:,:,:,tidx,nt))
+    elseif (nrem == 1) then
+      call exchange_xxx(t(:,:,:,tidx,nt))
+    endif
+# endif
+  end subroutine exchange_tracers  !]
 ! ----------------------------------------------------------------------
 end module tracers
 

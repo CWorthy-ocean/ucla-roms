@@ -9,7 +9,7 @@ program main              ! Open MP version of ROMS driver
 #endif
   use tracers, only: init_tracers
   use mpi_f08, only: mpi_wtime, mpi_comm_world
-  use timers, only: tstart, tend
+  use timers, only: tstart, tend, print_region_timers
   use roms_mpi, only: mpi_setup
   use init_scalars_mod, only: init_scalars
   use namelist_read_mod, only: read_namelists
@@ -98,6 +98,7 @@ program main              ! Open MP version of ROMS driver
   call MPI_Barrier(ocean_grid_comm, ierr)
   tend=MPI_Wtime()
   mpi_master_only write(*,*) 'MPI_run_time =', tend-tstart
+  call print_region_timers(tend-tstart)
   call MPI_Finalize (ierr)
 # endif
 
@@ -467,6 +468,10 @@ contains
 #  ifdef UV_VIS2
     use visc3d_mod, only: visc3d => visc3d_s
 #endif
+    use timers, only: reg_tic, reg_toc,&
+    &  rg_set_forces, rg_set_bry, rg_rho_eos, rg_huv_omega, rg_lmd_vmix,&
+    &  rg_prsgrd, rg_pre_step3d, rg_huv1_omega, rg_uv1_visc, rg_step2d,&
+    &  rg_uv2_omega, rg_step3d_t, rg_t3dmix, rg_avg_diag, rg_output
     implicit none
 
 
@@ -493,39 +498,56 @@ contains
     ! use time at n for surface forcing values
 
     frc_time='current'
+    call reg_tic(rg_set_forces)
     call set_forces
+    call reg_toc(rg_set_forces)
 
     ! use time at n+1/2 for boundary values
     ! we use these values at the end of pre_step, and during step2d
 
     frc_time = '1/2 fwd'
     tdays = time*sec2day
+    call reg_tic(rg_set_bry)
     call set_bry_all
 
     if (bry_tides.or.pot_tides) call set_tides(0)
+    call reg_toc(rg_set_bry)
 
 #ifdef SOLVE3D
-    ! currrently, rho_eos works with t(nrhs), nrhs==nstp => time n
-    call rho_eos(nrhs)
+    ! currently, rho_eos works with t(nrhs), nrhs==nstp => time n.
+    ! On every step but the first, this is the same state the previous
+    ! step's closing rho_eos(nnew) evaluated (same t index, and z_r/Hz are
+    ! unchanged since set_depth ran inside step2d), so skip the recompute.
+    call reg_tic(rg_rho_eos)
+    if (iic == ntstart) call rho_eos(nrhs)
+    call reg_toc(rg_rho_eos)
 
     ! Computes horizontal fluxes, using nrhs => time n
     ! Hz is computed by set_depth
+    call reg_tic(rg_huv_omega)
     call set_HUV
 
     ! Computes vertical flux omega, using Flxu,Flxv computed in set_HUV
     ! Here, omega corresponds to time n
     ! Should be already available from previous time-step
     call omega
+    call reg_toc(rg_huv_omega)
 #endif
 
 # if defined LMD_MIXING
+    call reg_tic(rg_lmd_vmix)
     call lmd_vmix(nstp)
+    call reg_toc(rg_lmd_vmix)
 # endif
 
     ! nrhs points to u/v at time level n
+    call reg_tic(rg_prsgrd)
     call prsgrd
+    call reg_toc(rg_prsgrd)
 
+    call reg_tic(rg_pre_step3d)
     call pre_step3d(0)  ! u is m/s here
+    call reg_toc(rg_pre_step3d)
 
     !! nnew ==n+1/2
 
@@ -534,6 +556,7 @@ contains
     !! set_HUV1 works with nnew, which here is time n+1/2
     ! It's using the Hz from time n though
     ! Look into this to understand what it does
+    call reg_tic(rg_huv1_omega)
     call set_HUV1(0)
 
     nrhs=3 ; nnew=3-nstp   !!! WARNING
@@ -541,22 +564,34 @@ contains
     !! nnew = n+1
     !! nrhs = n+1/2
     call omega
+    call reg_toc(rg_huv1_omega)
 
+    call reg_tic(rg_rho_eos)
     call rho_eos(nrhs)  !!! use the right time index
+    call reg_toc(rg_rho_eos)
 #endif
+    call reg_tic(rg_set_forces)
     call set_forces   ! get for time n+1/2
+    call reg_toc(rg_set_forces)
 # if defined LMD_MIXING
+    call reg_tic(rg_lmd_vmix)
     call lmd_vmix(nrhs)
+    call reg_toc(rg_lmd_vmix)
 # endif
 
     tdays = (time+0.5_8*dt)*sec2day
     frc_time = 'forward'
+    call reg_tic(rg_set_bry)
     call set_bry_all  ! get for time n+1
     if (bry_tides.or.pot_tides) call set_tides(0)
+    call reg_toc(rg_set_bry)
 
     ! All of this seems to happen with Hz's from time n
     ! Corrector step
+    call reg_tic(rg_prsgrd)
     call prsgrd
+    call reg_toc(rg_prsgrd)
+    call reg_tic(rg_uv1_visc)
 #ifdef SOLVE3D
     call step3d_uv1(0)  ! update u/v(nnew) with dt*ru/rv
 #endif
@@ -564,11 +599,13 @@ contains
 #  ifdef UV_VIS2
     call visc3d
 #  endif
+    call reg_toc(rg_uv1_visc)
 
 
 
 ! Solve the 2D equations for the barotropic mode.
 !------ --- -- --------- --- --- ---------- -----
+    call reg_tic(rg_step2d)
     do iif=1,nfast
 
       kstp=knew
@@ -578,36 +615,48 @@ contains
       call step2d
 
     enddo
+    call reg_toc(rg_step2d)
 #ifdef SOLVE3D
     ! step3d_uv2 re-computes FlxU,FlV but still for n+1/2
+    call reg_tic(rg_uv2_omega)
     call step3d_uv2(0)
 
     call omega
+    call reg_toc(rg_uv2_omega)
 
+    call reg_tic(rg_step3d_t)
     call step3d_t(0, tstep=iic)
+    call reg_toc(rg_step3d_t)
 #endif
 !GOOD
 # if defined TS_DIF2 || defined TS_DIF4
+    call reg_tic(rg_t3dmix)
     call t3dmix
+    call reg_toc(rg_t3dmix)
 # endif
 
 
     ! at this point, u,v,w and tracers are up to n+1
     ! rho, omega, and fluxes are at n+1/2
 
+    call reg_tic(rg_rho_eos)
     call rho_eos(nnew)
+    call reg_toc(rg_rho_eos)
 !     call lmd_vmix(nnew)
 
 
     time=start_time+dt*float(iic-ntstart) + dt !n+1
     tdays=time*sec2day
 
+    call reg_tic(rg_avg_diag)
     call calc_avg_ocean_vars
 
 !     Done with stepping, time for outputs
 
     call diag  ! log file output of global norms
+    call reg_toc(rg_avg_diag)
 
+    call reg_tic(rg_output)
     call wrt_his_ocean_vars
     call wrt_rst_ocean_vars
     call wrt_avg_ocean_vars
@@ -639,6 +688,7 @@ contains
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
     call wrt_bgc
 #endif
+    call reg_toc(rg_output)
 
   end subroutine roms_step
 

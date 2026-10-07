@@ -20,13 +20,20 @@ contains
 # ifdef LMD_KPP
     use lmd_swr_frac_mod, only: swr_frac
 # endif
+    use scalars, only: iic
     implicit none
     integer(kind=4),save :: tile=0
+    integer(kind=4),save :: swr_frac_step=-1
     integer(kind=4)      :: tind
 
 # include "compute_tile_bounds.h"
 # ifdef LMD_KPP
-    call swr_frac(tile)   ! Hz changes with zeta every step
+    ! Hz changes with zeta once per step (set_depth, inside step2d), but
+    ! lmd_vmix is called twice per step; compute swr_frac on the first call.
+    if (iic /= swr_frac_step) then
+      call swr_frac(tile)
+      swr_frac_step = iic
+    endif
 # endif
     call lmd_vmix_tile (istr,iend,jstr,jend,  A3d(1,1), A3d(1,2),&
     &A3d(1,3), A3d(1,4),&

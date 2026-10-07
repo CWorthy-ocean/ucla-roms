@@ -71,7 +71,7 @@ contains
   use river_frc, only: iriver, riv_depth, riv_uvel, riv_vvel, river_source,&
   &riv_uflx, riv_vol, riv_trc, riv_vflx
   use surf_flux, only: stflx, srflx
-  use tracers, only: t, itands, wrt_t_dia
+  use tracers, only: t, itands, wrt_t_dia, exchange_tracers
   use advection, only: t_vadv_pre, t_vadv_cor
 #ifdef MARBL
   use marbl_driver, only: marbldrv_column_physics, iALK, iDIC,&
@@ -80,6 +80,7 @@ contains
   use grid, only: umask, vmask, pn, pm, rmask, nx, ny, nz, dn_u, dm_v
   use param, only: mynode, np_eta, np_xi
   use roms_mpi, only: exchange_xxx
+  use timers, only: reg_tic, reg_toc, rg_marbl
   use mixing, only: &
 #if defined LMD_KPP && defined LMD_NONLOCAL
        &ghat,&
@@ -111,6 +112,12 @@ contains
   implicit none
   integer(kind=4) icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k!, td
   real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: WC,FC,CF,DC
+  ! Factors of the implicit vertical solve for the current row, saved on the
+  ! salinity pass (or temperature without SALINITY) and reused for every
+  ! later tracer: they all use Akt(:,:,:,iTandS), Hz and Wi, so only the
+  ! right-hand side differs.
+  real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: td_piv,td_cf,td_a
+  real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY)      :: td_top
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY)     :: FX,FE, wrk1
 # ifdef ADV_ISONEUTRAL
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,2) :: FSC,  dTdz,&
@@ -915,7 +922,14 @@ contains
   endif ! cdr_source
 #endif
 
+enddo     !<-- itrc (horizontal advection and sources)
+
+! Vertical advection, surface fluxes and implicit vertical mixing. The tracer
+! loop sits inside the row loop so the row's Hz, Akt, Wi and We stay in cache
+! across tracers, and the per-row vertical-advection coefficients and
+! implicit-solve factors are computed once and reused by later tracers.
   do j=jstr,jend
+  do itrc=1,nt
 
 # include "compute_vert_tracer_fluxes.h"
 
@@ -1058,6 +1072,9 @@ contains
 
     iAkt=min(itrc,iTandS)
 
+    if (itrc <= iTandS) then
+    ! Factor the tridiagonal system (depends on Akt, Hz, Wi only) and solve.
+    ! On the iTandS pass, save this row's factors for the tracers that follow.
     do i=istr,iend
       DC(i,0)=dt*pm(i,j)*pn(i,j) !<--horizontal metric
 
@@ -1072,6 +1089,11 @@ contains
       cff=1._8/(Hz(i,j,1) +FC(i,1)+max(WC(i,1),0._8))
       CF(i,1)=cff*(      FC(i,1)-min(WC(i,1),0._8))
       DC(i,1)=cff*t(i,j,1,nnew,itrc)
+      if (itrc == iTandS) then
+        td_piv(i,1)=cff
+        td_cf (i,1)=CF(i,1)
+        td_a  (i,1)=FC(i,1)+max(WC(i,1),0._8)
+      endif
     enddo
     do k=2,nz-1,+1
       do i=istr,iend
@@ -1093,17 +1115,23 @@ contains
 
         DC(i,k)=cff*( t(i,j,k,nnew,itrc) +DC(i,k-1)*(&
         &FC(i,k-1)+max(WC(i,k-1),0._8) ))
+        if (itrc == iTandS) then
+          td_piv(i,k)=cff
+          td_cf (i,k)=CF(i,k)
+          td_a  (i,k)=FC(i,k)+max(WC(i,k),0._8)
+        endif
       enddo
     enddo          !--> discard DC(:,0)
     do i=istr,iend
+      cff=Hz(i,j,nz) +FC(i,nz-1)-min(WC(i,nz-1),0._8)&
+      &-CF(i,nz-1)*(FC(i,nz-1)+max(WC(i,nz-1),0._8))
       t(i,j,nz,nnew,itrc)=( t(i,j,nz,nnew,itrc) +DC(i,nz-1)*(&
       &FC(i,nz-1)+max(WC(i,nz-1),0._8) )&
-      &)/( Hz(i,j,nz) +FC(i,nz-1)-min(WC(i,nz-1),0._8)&
-      &-CF(i,nz-1)*(FC(i,nz-1)+max(WC(i,nz-1),0._8))&
-      &)&
+      &)/cff&
 # ifdef MASKING
       &*rmask(i,j)
 # endif
+      if (itrc == iTandS) td_top(i)=cff
     enddo
     do k=nz-1,1,-1
       do i=istr,iend
@@ -1113,6 +1141,32 @@ contains
 # endif
       enddo
     enddo           !--> discard FC,WC,CF,DC
+
+    else   ! itrc > iTandS: same matrix as this row's iTandS pass, reuse its factors
+    do i=istr,iend
+      DC(i,1)=td_piv(i,1)*t(i,j,1,nnew,itrc)
+    enddo
+    do k=2,nz-1,+1
+      do i=istr,iend
+        DC(i,k)=td_piv(i,k)*( t(i,j,k,nnew,itrc) +DC(i,k-1)*td_a(i,k-1) )
+      enddo
+    enddo
+    do i=istr,iend
+      t(i,j,nz,nnew,itrc)=( t(i,j,nz,nnew,itrc) +DC(i,nz-1)*td_a(i,nz-1)&
+      &)/td_top(i)&
+# ifdef MASKING
+      &*rmask(i,j)
+# endif
+    enddo
+    do k=nz-1,1,-1
+      do i=istr,iend
+        t(i,j,k,nnew,itrc)=(DC(i,k)+td_cf(i,k)*t(i,j,k+1,nnew,itrc))&
+# ifdef MASKING
+        &*rmask(i,j)
+# endif
+      enddo
+    enddo
+    endif  ! itrc <= iTandS
 
 # ifdef DIAGNOSTICS
     if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
@@ -1159,9 +1213,8 @@ contains
       enddo
     enddo
 #endif
+  enddo     !<-- itrc
   enddo      !<-- j
-
-enddo     !<-- itrc
 
 ! Need to calculate/save additionality before the perturbation at the boundaries
 ! is zeroed out in t3db_tile
@@ -1175,22 +1228,19 @@ enddo     !<-- itrc
 
 # if defined(MARBL)
 if (MODULO(tstep, marbl_timestep_ratio) == 0) then
+  call reg_tic(rg_marbl)
   call marbldrv_column_physics(istr,iend,jstr,jend,t)
+  call reg_toc(rg_marbl)
 end if
 # elif defined(BIOLOGY_BEC2)
 call ecosys_bec2_tile(istr,iend,jstr,jend) ! BEC, 2014
 # endif
 
-# if defined EW_PERIODIC || defined NS_PERIODIC || defined MPI
- ! for BGC, we should be able to pack more tracer arrays
- ! in a single mpi_exchange
-do itrc=1,nt-1,2
-  call exchange_xxx( t(:,:,:,nnew,itrc),&
-  &t(:,:,:,nnew,itrc+1) )
-enddo
-if (mod(nt,2) == 1) then
-  call exchange_xxx( t(:,:,:,nnew,nt) )
-endif
+# if !defined TS_DIF2 && !defined TS_DIF4
+  ! With TS_DIF2/TS_DIF4, t3dmix runs next: it reads only the t(nrhs) halo,
+  ! updates the t(nnew) interior and exchanges t(nnew) itself, so an
+  ! exchange here would be overwritten unused.
+  call exchange_tracers(nnew)
 # endif
 end subroutine step3d_t_iso_tile
 

@@ -51,6 +51,14 @@ module advection
 
   private
 
+  ! Thickness-only coefficients of the thickness-aware faces for the current
+  ! row j: rH = 1/(Hz(k)+Hz(k+1)), cP = Hz(k)Hz(k+1)/(Hz(k-1)+Hz(k)+Hz(k+1)),
+  ! cM = Hz(k)Hz(k+1)/(Hz(k)+Hz(k+1)+Hz(k+2)). Both callers (pre_step3d and
+  ! step3d_t) loop tracers inside rows starting at itrc=1, so the
+  ! coefficients are refilled on the itrc=1 call and reused by later tracers.
+  ! Not thread-safe: assumes one tile per MPI rank (no OpenMP tiling).
+  real(kind=8), allocatable, dimension(:,:) :: rH, cP, cM
+
   public :: init_advection
   public :: t_vadv_pre
   public :: t_vadv_cor
@@ -147,10 +155,37 @@ contains
     real(kind=8) :: dlt(istr:iend,0:nz)
     real(kind=8) :: tlin, hk, hkp, hkm, hkp2
 
+    if (.not. allocated(rH)) then
+      allocate(rH(lbound(Hz,1):ubound(Hz,1), nz))
+      allocate(cP(lbound(Hz,1):ubound(Hz,1), nz))
+      allocate(cM(lbound(Hz,1):ubound(Hz,1), nz))
+    endif
+
+    if (itrc == 1) then                   ! new row: refresh Hz-only factors
+      do k=1,nz-1
+        do i=istr,iend
+          hk  = Hz(i,j,k)
+          hkp = Hz(i,j,k+1)
+          if (k >= 2) then
+            hkm = Hz(i,j,k-1)
+          else
+            hkm = hk                      ! mirrored Hz(0)=Hz(1)
+          endif
+          if (k <= nz-2) then
+            hkp2 = Hz(i,j,k+2)
+          else
+            hkp2 = hkp                    ! mirrored Hz(nz+1)=Hz(nz)
+          endif
+          rH(i,k) = 1._8/max(hk+hkp, 1.d-30)
+          cP(i,k) = hk*hkp/max(hkm+hk+hkp, 1.d-30)
+          cM(i,k) = hk*hkp/max(hk+hkp+hkp2, 1.d-30)
+        enddo
+      enddo
+    endif
+
     do k=1,nz-1
       do i=istr,iend
-        dlt(i,k) = (t(i,j,k+1,nrhs,itrc)-t(i,j,k,nrhs,itrc)) &
-                   / max(Hz(i,j,k)+Hz(i,j,k+1), 1.d-30)
+        dlt(i,k) = (t(i,j,k+1,nrhs,itrc)-t(i,j,k,nrhs,itrc))*rH(i,k)
       enddo
     enddo
     do i=istr,iend
@@ -160,26 +195,10 @@ contains
 
     do k=1,nz-1
       do i=istr,iend
-        hk  = Hz(i,j,k)
-        hkp = Hz(i,j,k+1)
-        tlin = (hkp*t(i,j,k,nrhs,itrc) + hk*t(i,j,k+1,nrhs,itrc)) &
-               / max(hk+hkp, 1.d-30)
-
-        if (k >= 2) then
-          hkm = Hz(i,j,k-1)
-        else
-          hkm = hk                        ! mirrored Hz(0)=Hz(1)
-        endif
-        tplus(i,k) = tlin - hk*hkp*(dlt(i,k)-dlt(i,k-1)) &
-                             / max(hkm+hk+hkp, 1.d-30)
-
-        if (k <= nz-2) then
-          hkp2 = Hz(i,j,k+2)
-        else
-          hkp2 = hkp                      ! mirrored Hz(nz+1)=Hz(nz)
-        endif
-        tminus(i,k) = tlin - hk*hkp*(dlt(i,k+1)-dlt(i,k)) &
-                              / max(hk+hkp+hkp2, 1.d-30)
+        tlin = (Hz(i,j,k+1)*t(i,j,k,nrhs,itrc) + Hz(i,j,k)*t(i,j,k+1,nrhs,itrc))&
+               *rH(i,k)
+        tplus(i,k)  = tlin - cP(i,k)*(dlt(i,k)-dlt(i,k-1))
+        tminus(i,k) = tlin - cM(i,k)*(dlt(i,k+1)-dlt(i,k))
       enddo
     enddo
 
