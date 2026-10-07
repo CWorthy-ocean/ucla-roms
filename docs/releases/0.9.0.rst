@@ -1,0 +1,119 @@
+.. _0.9.0:
+
+0.9.0
+----------
+
+
+Breaking Changes
+~~~~~~~~~~~~~~~~
+
+
+- ``ddic_dco2`` and ``ddic_dalk`` values change. With the new total-scale K1/K2 constants, beta is about 0.5% lower and eta about 0.03% higher almost everywhere. Results will not reproduce pre-PR output bit-for-bit. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- Cells where the pH solve fails or is rejected, or that fall below the new salinity/ALK/DIC floors, are now written as 0. Previously the routine could return garbage values there without flagging them. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- Results change for any configuration using ``LMD_KPP`` with shortwave forcing. The change scales with sea level divided by depth: it is largest in shallow, tidal regions and negligible in deep water. Regression-test reference hashes for KPP tests need to be updated. (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
+- A run now stops at startup if a river forcing file has more tracers than the model, or if the river forcing files differ in tracer count. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- With realistic river forcing on, a run now stops at startup if any listed forcing file can't be opened as netCDF. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- The CDR DIC tracer gas exchange no longer carries the spurious ``Hz`` factor (see Bug Fixes). Runs with ``CDR_TRACER`` enabled will produce different, and now correct, CDR DIC results; existing CDR tracer output is not directly comparable to output from this branch. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- CPP key ``CDR_TRACER`` is now ``CDR_LITE``. Existing ``cppdefs.opt`` files need ``#define CDR_LITE``. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- Namelist groups renamed: (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+
+  - ``&CDR_TRACER_SETTINGS`` → ``&CDR_LITE_SETTINGS``
+  - ``&CDR_TRACER_OUTPUT_SETTINGS`` → ``&CDR_LITE_OUTPUT_SETTINGS``
+
+- Namelist variables in the output group renamed: (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+
+  - ``do_cdr_tracer_output`` → ``do_cdr_lite_output``
+  - ``wrt_cdr_trc_avg`` → ``wrt_cdr_lite_avg``
+  - ``cdr_trc_monthly_averages`` → ``cdr_lite_monthly_averages``
+  - ``output_period_cdr_trc`` → ``output_period_cdr_lite``
+  - ``nrpf_cdr_trc`` → ``nrpf_cdr_lite``
+
+- Module ``cdr_tracer_output`` (``cdr_tracer_output.F90``) is now ``cdr_lite_output`` (``cdr_lite_output.F90``). Its public routines were renamed to match (``init_cdr_lite_output``, ``read_cdr_lite_output_nml``, ``wrt_cdr_lite``). (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- CDR tracer-flux releases (``cdr_volume = .false.``) with a nonzero temp or salt flux now stop at startup; release heat and salt with water (``cdr_volume = .true.``) instead. (`#375 <https://github.com/CWorthy-ocean/ucla-roms/pull/375>`_)
+
+New Features
+~~~~~~~~~~~~
+
+
+- Compile-time switch ``k_carbonic_opt``: 10 (default) selects Lueker, Dickson & Keeling (2000) K1/K2 on the total pH scale, and 4 restores the original Mehrbach/Dickson & Millero (1987) SWS-scale constants for A/B regression checks. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- ``do_cdr_tracer_output`` works in runs without MARBL, including the ``CDR_TRACER`` passive-tracer mode; previously the stub aborted at init with "cdr_tracer_output must have MARBL enabled." (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
+- River forcing files may now omit the CDR tracers (OAE ALK/DIC pairs and DOR DIC). Those tracers then get a river concentration of 0. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- ROMS works out which layout a river file uses from its tracer count, so no namelist change is needed. The remaining tracers must stay in model order. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- New optional namelist group ``CDR_TRACER_SETTINGS`` (``surf_flux.F90``) with the logical ``cdr_online_carbonate_sensitivity`` (default ``.false.``). When set, ``ddic_dco2`` and ``ddic_dalk`` are computed every step from the surface ``ALK_ALT_CO2``, ``DIC_ALT_CO2``, ``PO4``, ``SiO3``, temperature and salinity via ``carbonate_sensitivity%compute_surface_beta_eta``, and the forcing-file read is skipped. Requires MARBL with those tracers; the run aborts with a clear message otherwise. It assumes ALT_CO2 is forced with the same atmospheric CO2 as DIC/ALK (``xco2_air_alt`` equal to ``xco2_air`` under ``PCO2AIR_FORCING``). If the group is absent from the namelist the file-based default is kept. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- New logical ``wrt_gas_exchange`` (default ``.false.``) in ``CDR_TRACER_OUTPUT_SETTINGS``. When set with ``wrt_dic``, the CDR tracer output files gain the 2-D fields ``FG_CDR_OAE_DIC<n>`` and ``FG_CDR_DOR_DIC<n>`` (mmol/m^2/s, positive into the ocean), as instantaneous or time-averaged values on both the PIO and serial write paths. Requesting it in a build without ``CDR_TRACER`` aborts at initialization. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+
+Bug Fixes
+~~~~~~~~~
+
+
+- **Silent pH-solver failures.** The unsafeguarded Newton solver used an absolute convergence test (``abs(dx) < 1e-12``) and clamped ``x <= 0`` to ``1e-14``, so any excursion into the clamp "converged" at pH ~13.7 with ``ok = .true.``. Over 15,795 T/S/ALK/DIC combinations this gave wrong beta/eta in 41% of cases at pH 8.0–8.5 and 100% above pH 8.5, which is the high-alkalinity regime OAE produces. None were flagged. It is replaced by a bracketed Newton–Raphson with bisection fallback (Numerical Recipes ``rtsafe``, as in MARBL), with a relative convergence test and a final alkalinity-residual check. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- **Mixed pH scales.** K1/K2 were on the seawater scale while KB, KW and KF were on the total scale, which shifted pH by ~0.011 and pCO2 by ~0.6%. All constants are now on the total scale. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- **Bisulfate term.** In the alkalinity residual it is corrected from ``ST/(1 + KS/(h*c))`` to ``ST/(1 + KS*c/h)``, with the matching derivative. This is small (~1e-3 µmol/kg in TA) but was wrong. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- Extracted child boundary files (``bry_time``, and ``<set>_time`` in non-PIO builds) were labelled ``"Time since 2000"`` even when the namelist ``reference_date`` was different, misdescribing the time values' origin to any tool that reads the label. (`#365 <https://github.com/CWorthy-ocean/ucla-roms/pull/365>`_)
+- Enabling ``do_cdr_tracer_output`` with ``nt_cdr_oae = 0`` and ``nt_cdr_dor = 0`` now aborts at init with a clear message instead of creating an output file with no tracer variables. (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
+- ``swr_frac`` (the fraction of surface shortwave reaching each w-level) was computed only once, in ``main.F90`` at startup. That was before the initial conditions were read, so it used resting-depth layer thicknesses, and it was never updated. KPP's surface buoyancy flux and the solar heating in ``step3d_t`` therefore ignored the free surface, and a restart likewise ignored the restart sea level. ``lmd_vmix`` now calls ``swr_frac`` from the current layer thicknesses on every call, as Rutgers ROMS (``lmd_skpp.F``, ``pre_step3d.F``) and CROCO (``lmd_skpp2005.F``, ``step3d_t.F``) do. The startup call is kept for ``ana_init``. In MiniPac after one hour, surface temperature changes by 3.9e-3 °C RMS where h < 20 m, versus 3.8e-5 °C where h > 1000 m. (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
+- Fixed compile failures in configurations without both surface and bottom KPP: (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
+
+  - **Bottom KPP only:** ``lmd_kpp_mod`` only compiled its contents when ``LMD_KPP`` was on. Surface-layer code (``alphabeta``, ``Bo``/``Bosol``, ``hbls``, ``swr_frac``, the surface-layer search) was unguarded. The 2017 code's guards and its surface-only and bottom-only Richardson kernels are restored. ``basic_output`` and ``precheck`` now handle ``LMD_BKPP`` on its own. ``step3d_t`` only imports ``ghat`` when ``LMD_KPP`` and ``LMD_NONLOCAL`` are both on.
+  - **Surface KPP only:** the ``use mixing`` continuation list in ``lmd_kpp_mod`` broke when ``LMD_BKPP`` was off. It is now split into separate ``use`` statements.
+  - **No KPP:** the no-KPP branch of ``lmd_vmix_tile`` used ``Akv``, ``Akt`` and ``exchange_xxx`` without importing them.
+  - **KPP without ``LMD_NONLOCAL``:** the solar-heating statement in ``step3d_t`` had a dangling continuation.
+
+- A river forcing file with fewer tracers than the model used to fail with an unclear netCDF error. It now gets a message giving the allowed tracer counts. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- ``tracers%subtract_gas_exchange_from_tracer_flx`` multiplied the linearized CO2 flux by the top-layer thickness ``Hz`` before adding it to ``stflx``. ``step3d_t`` already adds ``dt*stflx`` to ``Hz*C``, so ``stflx`` must be a flux in mmol/m^2/s; the extra factor scaled the CDR gas exchange by the surface layer thickness. The factor is removed and the flux is masked with ``rmask``. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- ``set_surf_tracer_flx`` computed its loop bounds from an uninitialized ``tile``, so depending on leftover memory the gas transfer velocity and the CDR gas exchange could be skipped over the whole domain; ``tile`` is now initialized to 0. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- A ``#if define`` typo (for ``#if defined``) meant the ``TRACER_DIFF2`` namelist group was never read, so ``tnu2`` was 0 in every ``TS_DIF2`` build regardless of the namelist; the namelist values now take effect. In ``TS_DIF2`` builds the group is now required, and ``tnu2`` may list at most one value per tracer. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- A build without ``MARBL`` or ``BIOLOGY_BEC2`` but ``nt_bgc > 0`` crashed while reading forcing under garbage tracer names; it now aborts at startup with a message to set ``nt_bgc = 0``. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
+- A MARBL tracer-count mismatch was reported but ROMS kept writing tracer metadata past the end of its arrays; it now aborts immediately. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
+- After an error abort in the default error-handling mode, each rank kept running and re-printed the error at every later check; ranks now stop after ``MPI_Abort``. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
+- The ``Iceland_parent_with_upscaling`` example set ``nt_bgc = 0`` while defining ``MARBL``; it now uses MARBL's 32 tracers. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
+- Spread parameterized CDR releases (``cdr_hsc > 0`` or ``cdr_vsc > 0``) now deliver exactly the requested amount of every tracer, so results change for these releases. (`#375 <https://github.com/CWorthy-ocean/ucla-roms/pull/375>`_)
+
+  - Before, passive tracers and all MARBL tracers except ALK and DIC (including ALK_ALT_CO2 and DIC_ALT_CO2) were scaled by the sum of the release weights.
+  - CDR_LITE tracers were scaled the same way in builds without the ``CDR_LITE`` key.
+  - For volume releases, the water, heat and salt were also scaled, so normalized tracers such as ALK and DIC entered diluted; each release now adds exactly ``cdr_vol`` of water.
+
+- Volume releases now add their water at the release depth instead of spreading it evenly over the water column. (`#375 <https://github.com/CWorthy-ocean/ucla-roms/pull/375>`_)
+
+
+Improvements
+~~~~~~~~~~~~
+
+
+- The salinity floor is raised from 1e-4 to MARBL's ``salt_min = 0.1`` PSU, and MARBL's ALK/DIC floors are added, so near-empty cells are skipped instead of being handed to extrapolated equilibrium-constant fits. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- ``isocapnic_quotient`` takes [H+] directly instead of pH, removing a lossy ``-log10`` / ``10**`` round trip. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- Solver controls (bracket pH 4–10, relative tolerance 1e-10, up to 100 iterations, residual tolerance 1e-8 × TA) are named parameters. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- Errors for a bad river forcing file now name the file at fault, for example one missing its tracer dimension or with a tracer count that differs from the others. (`#369 <https://github.com/CWorthy-ocean/ucla-roms/pull/369>`_)
+- The gas-exchange flux is stored per tracer in the new public array ``tracers%cdr_gas_flx``, making it available to output and diagnostics rather than being folded into ``stflx`` only. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- Comments, log messages and error messages that refer to these tracers now say CDR_LITE (``tracers.F90``, ``cdr_lite_output.F90``, ``river_frc.F90``, ``namelist.nml``). (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- The fixed-length ``sr_name``/``module_name`` strings in ``cdr_lite_output.F90`` are now declared at their exact lengths. Without this, the longer name ``wrt_cdr_lite_output`` would have been cut off. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- Not renamed, because they belong to the CDR forcing module: ``cdr_trc`` and ``cdr_trcflx*`` in ``cdr_frc.F90`` and ``ana_cdr_frc.h``. The ``_cdrtrc`` output file suffix is also unchanged. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- Setting ``cdr_volume = .true.`` without ``cdr_forcing_parameterized = .true.`` now stops at startup with a clear error instead of reading unallocated memory. (`#375 <https://github.com/CWorthy-ocean/ucla-roms/pull/375>`_)
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+- Header revision notes, plus source and pH-scale comments for each equilibrium constant. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- Verified against PyCO2SYS 1.8.3 (``opt_k_carbonic=10``, ``opt_pH_scale=1``, ``pressure=0``): worst case over 8 test cases is |ΔpH| < 1.3e-4, eta within 0.0013%, beta within 0.019%. (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- Tested in the Iceland1 case over 10 output records. 99.98% of surface points shift by −0.53% in beta and +0.03% in eta. The other 0.02%, all within 28 cells of the open boundaries, previously had beta ~10¹² and eta ~0; they now give beta 39–430 and eta 0.10–0.99, or zero where the solve is rejected (6 points). (`#364 <https://github.com/CWorthy-ocean/ucla-roms/pull/364>`_)
+- ``namelist.nml``'s ``&CDR_TRACER_OUTPUT_SETTINGS`` comment states the real requirement (CDR tracers configured; ``*_source`` fields need MARBL and CDR_FORCING). (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
+- ``Make.depend`` regenerated (``cdr_tracer_output.o`` drops ``bgc_shared_vars.o``; the stale ``check_srcs.o`` entry for a file that no longer exists goes with it). (`#366 <https://github.com/CWorthy-ocean/ucla-roms/pull/366>`_)
+- Release notes no longer truncate PR-description bullets that are wrapped across several lines, and no longer include ``N/A (reason)``-style placeholders. (`#368 <https://github.com/CWorthy-ocean/ucla-roms/pull/368>`_)
+- The release-notes branch is now deleted by the publish workflow when a release is published, and is always recreated from ``main``. (`#368 <https://github.com/CWorthy-ocean/ucla-roms/pull/368>`_)
+- The release-notes workflows run ``main``'s copy of their scripts, so a fix to them applies immediately rather than on the next release cycle. (`#368 <https://github.com/CWorthy-ocean/ucla-roms/pull/368>`_)
+- ``Make.depend``: ``lmd_vmix_mod.o`` now depends on ``lmd_swr_frac_mod.o`` and ``roms_mpi.o``. (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
+- Testing on Derecho with the MiniPac domain (512x432x100, 256 ranks): (`#367 <https://github.com/CWorthy-ocean/ucla-roms/pull/367>`_)
+
+  - Builds cleanly with ifx and gfortran in all six combinations of surface KPP, bottom KPP and ``LMD_NONLOCAL``.
+  - Exact restart: 4 steps straight and 2 steps + restart + 2 steps are bit-for-bit identical in all history and restart fields.
+  - The guard fixes leave default-configuration results bit-for-bit unchanged.
+  - Bottom-only and no-KPP runs complete without errors or NaNs.
+  - No measurable change in time per step.
+
+- ``namelist.nml`` documents the new ``CDR_TRACER_SETTINGS`` group and the ``wrt_gas_exchange`` output switch. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- CI now compiles ``CDR_TRACER`` (with ``PARALLEL_IO``) for gnu and ifx; no CI job built it before. (`#370 <https://github.com/CWorthy-ocean/ucla-roms/pull/370>`_)
+- CI: the ``compile_gnu`` and ``compile_ifx`` jobs now define ``CDR_LITE`` instead of ``CDR_TRACER``, so the CDR_LITE code is still compiled in CI. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- ``Make.depend`` is updated for the renamed module. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- Tested locally on Derecho (ifx 2025.2.1): all three ``compile_ifx`` configurations build. The gfortran builds and the pytest suite have not been run locally. (`#372 <https://github.com/CWorthy-ocean/ucla-roms/pull/372>`_)
+- Documented in ``namelist.nml`` and the runtime settings docs that ``nt_bgc`` must be 0 unless ``MARBL`` or ``BIOLOGY_BEC2`` is defined. (`#371 <https://github.com/CWorthy-ocean/ucla-roms/pull/371>`_)
+
