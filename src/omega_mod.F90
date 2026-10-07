@@ -42,7 +42,7 @@ contains
 ! below which vertical advection is fully explicit; "cu_max" is the
 !     maximum CN which the explicit component "We" is allowed to reach.
 
-    use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
+    use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi, itemp
     use dimensions, only: nx, ny, nz, inode, jnode
     use grid, only: pn, pm, dn_r, dm_r, rmask
     use pipe_frc, only:&
@@ -106,7 +106,7 @@ contains
       ! CDR volume source: add the volume flux of each release in this row,
       ! accumulated bottom-up like the horizontal divergence above, so Wi
       ! sees the water that step2d adds to zeta. The vertical distribution
-      ! is assumed to follow the temperature profile, cdr_prf(:,1,:), as in
+      ! is assumed to follow the temperature profile, cdr_prf(:,itemp,:), as in
       ! step2d. This must come after the loop above, which assigns Wi from
       ! scratch, and before the rain-water and grid-motion steps below.
       if (cdr_source.and.cdr_volume) then
@@ -116,7 +116,7 @@ contains
             i = cdr_iloc(cidx)
             cff = 0._8
             do k=1,nz
-              cff = cff + cdr_vol(icdr)*cdr_prf(cidx,1,k)
+              cff = cff + cdr_vol(icdr)*cdr_prf(cidx,itemp,k)
               Wi(i,j,k) = Wi(i,j,k) + cff
             enddo
           endif
