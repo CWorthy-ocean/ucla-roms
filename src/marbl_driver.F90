@@ -161,7 +161,16 @@ module marbl_driver
   public :: marbldrv_column_physics
 
   public :: read_nml_marbl
+  public :: is_marbl_step
 contains
+
+  logical function is_marbl_step(istep)
+    ! True if MARBL updates tracers, saved state and diagnostics during time
+    ! step `istep` (the iic value of that step). Between such steps those
+    ! fields are constant, which output averaging relies on.
+    integer(kind=4), intent(in) :: istep
+    is_marbl_step = (modulo(istep, marbl_timestep_ratio) == 0)
+  end function is_marbl_step
 
   subroutine read_nml_marbl
     use error_handling_mod, only: error_log

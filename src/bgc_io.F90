@@ -14,7 +14,7 @@ module bgc_io
   use param, only: ieast, itemp, iwest, jnorth, jsouth, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor
   use tracers, only: t_avg, wrt_t_avg, nt_2_t_avg, t_units
 #ifdef MARBL_DIAGS
-  use marbl_driver, only: marbldrv_compute_init_diagnostics
+  use marbl_driver, only: marbldrv_compute_init_diagnostics, is_marbl_step
 #endif
 
 ! imports from bgc_shared_vars
@@ -82,6 +82,12 @@ module bgc_io
   real(kind=8)    :: t_avg_dia_bgc=0
   integer(kind=4),save :: navg_bgc = 0               ! number of samples in average
   integer(kind=4),save :: navg_dia_bgc = 0           ! number of samples in average
+  ! With MARBL the diagnostics change only on MARBL steps, so they are added
+  ! to the averaging sums lazily: nheld_dia counts the steps the current
+  ! values have been held since last added; dia_first marks the window's
+  ! first addition.
+  integer(kind=4),save :: nheld_dia = 0
+  logical,save         :: dia_first = .true.
   integer(kind=4) :: record_avg = 0           ! Triggers making of initial file
   integer(kind=4) :: record_his = 0
   integer(kind=4) :: record_dia_avg = 0   ! Triggers making of initial file
@@ -499,8 +505,14 @@ contains
       output_time_dia_avg = output_time_dia_avg + dt     ! only start count after first timestep
 !         endif
 !         first_step_dia_avg=.false.
+#ifdef MARBL_DIAGS
+      if (is_marbl_step(iic+1)) call accumulate_dia_bgc  ! before MARBL changes them
+#endif
 
       if (output_time_dia_avg>=output_period_bgc_avg_dia) then  ! time for an output
+#ifdef MARBL_DIAGS
+        call finalize_dia_bgc                            ! sums -> averages
+#endif
         if (mod(record_dia_avg,nrpf_bgc_avg_dia)==0) then
           if (mynode == 0) then
             call create_bgc_dia_file(fname_avg,.true.)
@@ -551,8 +563,14 @@ contains
       output_time_dia_avg = output_time_dia_avg + dt     ! only start count after first timestep
 !         endif
 !         first_step_dia_avg=.false.
+#ifdef MARBL_DIAGS
+      if (is_marbl_step(iic+1)) call accumulate_dia_bgc  ! before MARBL changes them
+#endif
 
       if (output_time_dia_avg>=output_period_bgc_avg_dia) then  ! time for an output
+#ifdef MARBL_DIAGS
+        call finalize_dia_bgc                            ! sums -> averages
+#endif
         if (mod(record_dia_avg,nrpf_bgc_avg_dia)==0) then
           call create_bgc_dia_file(fname_avg,.true.)
           record_dia_avg = 0
@@ -840,6 +858,14 @@ contains
 
     t_avg_dia_bgc = t_avg_dia_bgc*(1-coef) + time*coef
 
+# ifdef MARBL_DIAGS
+    ! MARBL diagnostics are added in accumulate_dia_bgc; just count the step.
+    if (navg_dia_bgc == 1) then
+      nheld_dia = 0
+      dia_first = .true.
+    endif
+    nheld_dia = nheld_dia + 1
+# else
     do itrc=1,nr_bgc_wrdiag_2d
       bgc_diag_2d_avg(i0:i1,j0:j1,itrc) = bgc_diag_2d_avg(i0:i1,j0:j1,itrc) *(1-coef)&
       &+ bgc_diag_2d(i0:i1,j0:j1,itrc)     *coef
@@ -850,8 +876,75 @@ contains
         &+ bgc_diag_3d(i0:i1,j0:j1,k,itrc)     *coef
       end do
     end do
+# endif
 
   end subroutine calc_avg_dia_bgc  !]
+# ifdef MARBL_DIAGS
+! ----------------------------------------------------------------------
+  subroutine accumulate_dia_bgc  ![
+    ! Add the held MARBL diagnostics to the averaging sums, weighted by the
+    ! number of steps they were held. Called before the next MARBL step and
+    ! before each write, this equals adding them at every step.
+    implicit none
+    integer(kind=4) :: itrc, i, j, k
+    real(kind=8)    :: c0, w
+
+    if (nheld_dia == 0) return
+    w = dble(nheld_dia)
+    if (dia_first) then
+      c0 = 0._8
+    else
+      c0 = 1._8
+    endif
+    do itrc=1,nr_bgc_wrdiag_2d
+      do j=j0,j1
+        do i=i0,i1
+          bgc_diag_2d_avg(i,j,itrc) = c0*bgc_diag_2d_avg(i,j,itrc)&
+          &+ w*bgc_diag_2d(i,j,itrc)
+        enddo
+      enddo
+    enddo
+    do itrc=1,nr_bgc_wrdiag_3d
+      do k=1,nz
+        do j=j0,j1
+          do i=i0,i1
+            bgc_diag_3d_avg(i,j,k,itrc) = c0*bgc_diag_3d_avg(i,j,k,itrc)&
+            &+ w*bgc_diag_3d(i,j,k,itrc)
+          enddo
+        enddo
+      enddo
+    enddo
+    nheld_dia = 0
+    dia_first = .false.
+  end subroutine accumulate_dia_bgc  !]
+! ----------------------------------------------------------------------
+  subroutine finalize_dia_bgc  ![
+    ! Turn the diagnostic sums into averages over the window's steps, just
+    ! before they are written.
+    implicit none
+    integer(kind=4) :: itrc, i, j, k
+    real(kind=8)    :: r
+
+    call accumulate_dia_bgc
+    r = 1._8/dble(navg_dia_bgc)
+    do itrc=1,nr_bgc_wrdiag_2d
+      do j=j0,j1
+        do i=i0,i1
+          bgc_diag_2d_avg(i,j,itrc) = r*bgc_diag_2d_avg(i,j,itrc)
+        enddo
+      enddo
+    enddo
+    do itrc=1,nr_bgc_wrdiag_3d
+      do k=1,nz
+        do j=j0,j1
+          do i=i0,i1
+            bgc_diag_3d_avg(i,j,k,itrc) = r*bgc_diag_3d_avg(i,j,k,itrc)
+          enddo
+        enddo
+      enddo
+    enddo
+  end subroutine finalize_dia_bgc  !]
+# endif
 #endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
 ! ----------------------------------------------------------------------
 #if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
