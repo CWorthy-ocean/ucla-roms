@@ -32,6 +32,7 @@ module tides
   real(kind=8), dimension(:,:,:),allocatable :: vtide_r,vtide_i
   real(kind=8), dimension(:,:,:),allocatable :: ptide_r,ptide_i
   real(kind=8), public,dimension(:,:),  allocatable :: ptide
+  real(kind=8) :: ptide_time = -1.0d99   ! model time ptide was last computed for
 
   public set_tides, read_nml_tides
 
@@ -149,12 +150,19 @@ contains
     ! local
     integer(kind=4) :: tile, itide, i, j
     real(kind=8) :: omT
+    logical :: do_pot
 
 #include "compute_auxiliary_bounds.h"
 
     if (.not.allocated(ftide)) then
       call init_tides
     endif
+
+    ! set_tides is called twice per step with the same `time`. The boundary
+    ! part must rerun (set_bry_all refreshes those arrays in between), but
+    ! the potential depends only on time, so compute it once per step.
+    do_pot = pot_tides .and. (time /= ptide_time)
+    if (do_pot) ptide_time = time
 
     do itide=1,ntides
 
@@ -258,7 +266,7 @@ contains
 #  endif
       endif  ! bry_tides
 
-      if (pot_tides) then
+      if (do_pot) then
 !-----------------------------------------------------------------------
 !  Compute tidal potential (m)
 !  -- > to be applied as a pressure-gradient force

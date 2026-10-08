@@ -221,6 +221,25 @@ else ifeq ($(COMPILER),intel)
     FFLAGS = -O3      # Do NOT use -ip for ifx
 endif
 
+# CPU target. Without one, Intel and GNU compilers emit generic SSE2 code
+# with no AVX2 or FMA. AVX2+FMA is a safe baseline for any x86 cluster since
+# ~2013 (Intel Haswell+, all AMD Zen). Intel's -x flags add a "genuine Intel"
+# check and can refuse to run on AMD, so -march is used. Override with
+# TARGET_FLAGS=-march=native (or =znver3, =skylake-avx512, ...) when building
+# and running on one known node type; set TARGET_FLAGS= to disable.
+ARCH := $(shell uname -m)
+ifeq ($(ARCH),x86_64)
+    ifeq ($(COMPILER),gnu)
+        TARGET_FLAGS ?= -march=x86-64-v3
+    else
+        TARGET_FLAGS ?= -march=core-avx2
+    endif
+else
+    TARGET_FLAGS ?=
+endif
+# TARGET_FLAGS is appended to FFLAGS below, after the per-compiler blocks,
+# because those blocks assign FFLAGS wholesale and would discard it.
+
 # Apply debug, strict, vtune, or grof settings for Intel compilers
 ifeq ($(COMPILER),$(filter ifort intel, $(COMPILER)))
     ifeq ($(BUILD_MODE),debug)
@@ -245,6 +264,11 @@ ifeq ($(COMPILER),gnu)
     else ifeq ($(BUILD_MODE),test)
 	FFLAGS = -fallow-argument-mismatch -O0
     endif
+endif
+
+# CPU target (see TARGET_FLAGS above); skipped for debug/test builds.
+ifneq ($(BUILD_MODE),$(filter debug test, $(BUILD_MODE)))
+    FFLAGS += $(TARGET_FLAGS)
 endif
 
 # Options to link to libraries & modules (NetCDF, etc):

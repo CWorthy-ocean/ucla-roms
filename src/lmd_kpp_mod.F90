@@ -669,24 +669,18 @@ endif
 # endif   /* LMD_BKPP */
 
 # ifdef EXCHANGE
-#  ifdef LMD_KPP
-#   ifdef LMD_BKPP
-call exchange_xxx(Akv)
-call exchange_xxx(hbls(:,:))
-call exchange_xxx(hbbl(:,:))
-#   else
-call exchange_xxx(Akv)
-call exchange_xxx(hbls(:,:))
-#   endif
-#  else
-call exchange_xxx(Akv)
-call exchange_xxx(hbbl(:,:))
-#  endif
+! Pack the mixing coefficients into as few exchanges as possible.
 #  ifdef SALINITY
-call exchange_xxx(Akt(:,:,:,itemp))
-call exchange_xxx(Akt(:,:,:,isalt))
+call exchange_xxx(Akv, Akt(:,:,:,itemp), Akt(:,:,:,isalt))
 #  else
-call exchange_xxx(Akt(:,:,:,itemp))
+call exchange_xxx(Akv, Akt(:,:,:,itemp))
+#  endif
+#  if defined LMD_KPP && defined LMD_BKPP
+call exchange_xxx(hbls(:,:), hbbl(:,:))
+#  elif defined LMD_KPP
+call exchange_xxx(hbls(:,:))
+#  else
+call exchange_xxx(hbbl(:,:))
 #  endif
 # endif
 end subroutine lmd_kpp_tile

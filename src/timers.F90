@@ -11,6 +11,26 @@ module timers
 ! Make them globally visible
   real(kind=8) :: tstart = 0._8
   real(kind=8) :: tend   = 0._8
+
+  ! Per-region wall-clock timers (MPI_Wtime), accumulated over the run and
+  ! summarized at the end (max and mean over ranks). Regions 1-15 partition
+  ! roms_step; 16-17 are nested inside them and reported separately.
+  integer(kind=4), parameter :: nreg = 17
+  integer(kind=4), parameter, public ::&
+  &  rg_set_forces=1,  rg_set_bry=2,     rg_rho_eos=3,    rg_huv_omega=4,&
+  &  rg_lmd_vmix=5,    rg_prsgrd=6,      rg_pre_step3d=7, rg_huv1_omega=8,&
+  &  rg_uv1_visc=9,    rg_step2d=10,     rg_uv2_omega=11, rg_step3d_t=12,&
+  &  rg_t3dmix=13,     rg_avg_diag=14,   rg_output=15,&
+  &  rg_exchange=16,   rg_marbl=17
+  character(len=22), parameter :: reg_name(nreg) = [character(len=22) ::&
+  &  'set_forces (x2)',       'set_bry_all+tides (x2)','rho_eos (x2-3)',&
+  &  'set_HUV+omega',         'lmd_vmix (x2)',         'prsgrd (x2)',&
+  &  'pre_step3d',            'set_HUV1+omega',        'step3d_uv1+visc3d',&
+  &  'step2d loop',           'step3d_uv2+omega',      'step3d_t',&
+  &  't3dmix',                'calc_avg+diag',         'output (wrt_*)',&
+  &  '  halo exch comm (nested)','  MARBL (in step3d_t)']
+  real(kind=8) :: reg_t(nreg) = 0._8, reg_t0(nreg) = 0._8
+  public :: reg_tic, reg_toc, print_region_timers
 #include "cppdefs.opt"
 #ifndef NO_COMPILER_SUPPORT_FOR_TIMING
 ! Most modern compilers recognize "cpu_time" and OpenMP "omp_get_wtime"
@@ -38,6 +58,42 @@ module timers
 # endif
 
 contains
+
+  subroutine reg_tic(ir)
+    use mpi_f08, only: mpi_wtime
+    integer(kind=4), intent(in) :: ir
+    reg_t0(ir) = mpi_wtime()
+  end subroutine reg_tic
+
+  subroutine reg_toc(ir)
+    use mpi_f08, only: mpi_wtime
+    integer(kind=4), intent(in) :: ir
+    reg_t(ir) = reg_t(ir) + (mpi_wtime() - reg_t0(ir))
+  end subroutine reg_toc
+
+  subroutine print_region_timers(total)
+    ! Summarize the region timers over ranks: max and mean per region,
+    ! and the share of the per-rank total that the max represents.
+    use mpi_f08, only: mpi_reduce, mpi_double_precision, mpi_max, mpi_sum
+    use param, only: ocean_grid_comm
+    real(kind=8), intent(in) :: total     ! end-to-end wall time (rank 0)
+    real(kind=8) :: tmax(nreg), tsum(nreg), stepsum
+    integer(kind=4) :: ir, ierr
+    call mpi_reduce(reg_t, tmax, nreg, mpi_double_precision, mpi_max, 0, ocean_grid_comm, ierr)
+    call mpi_reduce(reg_t, tsum, nreg, mpi_double_precision, mpi_sum, 0, ocean_grid_comm, ierr)
+    if (mynode == 0) then
+      stepsum = sum(tmax(1:15))
+      write(*,'(/1x,A)') 'Region timers (wall seconds over the run):'
+      write(*,'(1x,A22,2x,A10,2x,A10,2x,A7)') 'region', 'max rank', 'mean rank', '% step'
+      do ir = 1, nreg
+        write(*,'(1x,A22,2x,F10.2,2x,F10.2,2x,F6.1,A)') reg_name(ir), tmax(ir),&
+        &  tsum(ir)/dble(nnodes), 100._8*tmax(ir)/max(stepsum,1.d-30), '%'
+      enddo
+      write(*,'(1x,A22,2x,F10.2)') 'sum of regions 1-15', stepsum
+      write(*,'(1x,A22,2x,F10.2,2x,A/)') 'MPI_run_time', total, '(includes init)'
+    endif
+  end subroutine print_region_timers
+
   subroutine start_timers
 
     implicit none

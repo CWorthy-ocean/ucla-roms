@@ -47,7 +47,7 @@ contains
     use mg_grids, only: mggrid => grid
 #endif
     use surf_flux, only: sustr, svstr
-    use tracers, only: iTandS, t
+    use tracers, only: iTandS, t, exchange_tracers
     use advection, only: t_vadv_pre, t_vadv_cor
     use coupling, only: r_d
     use roms_mpi, only: exchange_xxx
@@ -84,6 +84,11 @@ contains
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,nz) :: ru,rv,Hz_bak,&
     &Hz_fwd
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) ::  WC,FC,CF,DC
+    ! Factors of the implicit vertical solve for the current row, saved on
+    ! the iTandS pass and reused for every later tracer (same Akt, Hz_fwd,
+    ! Wi; only the right-hand side differs).
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: pd_piv,pd_cf,pd_a
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY)      :: pd_top
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: UFx,UFe,VFx,VFe,&
     &wrk1,wrk2
 #ifdef NHMG
@@ -243,6 +248,9 @@ contains
         !! b(1) = Hz(1) + dt*2*Ak(1)/(Hz(2)+Hz(1))
         !! c(1) =       - dt*2*Ak(1)/(Hz(2)+Hz(1))
         !! U(k) --> DC(k)
+        if (itrc <= iTandS) then
+        ! Factor and solve; on the iTandS pass save the factors for the
+        ! tracers that follow, which use the same Akt.
         do i=istr,iend
           FC(i,1)=2._8*dtau*Akt(i,j,1,iAkt)/( Hz_fwd(i,j,2)& !!  dt*2*Ak(1)/(Hz(2)+Hz(1))
           &+Hz_fwd(i,j,1))
@@ -252,6 +260,11 @@ contains
           cff=1._8/(Hz_fwd(i,j,1) +FC(i,1)+max(WC(i,1),0._8))  !! 1._8/bet
           CF(i,1)=cff*(          FC(i,1)-min(WC(i,1),0._8))  !! c(1)/bet
           DC(i,1)=cff*t(i,j,1,nnew,itrc)                 !! u(1) = r(1)/bet
+          if (itrc == iTandS) then
+            pd_piv(i,1)=cff
+            pd_cf (i,1)=CF(i,1)
+            pd_a  (i,1)=FC(i,1)+max(WC(i,1),0._8)
+          endif
         enddo
 
         do k=2,nz-1,+1
@@ -268,15 +281,21 @@ contains
 
             DC(i,k)=cff*( t(i,j,k,nnew,itrc) +DC(i,k-1)*(&     !!  u(k)=(r(k)-u(j-1)*a(j))/bet
             &FC(i,k-1)+max(WC(i,k-1),0._8) ))
+            if (itrc == iTandS) then
+              pd_piv(i,k)=cff
+              pd_cf (i,k)=CF(i,k)
+              pd_a  (i,k)=FC(i,k)+max(WC(i,k),0._8)
+            endif
           enddo
         enddo  !--> discard DC(:,0)
 
         do i=istr,iend
+          cff=Hz_fwd(i,j,nz) +FC(i,nz-1)-min(WC(i,nz-1),0._8)&
+          &-CF(i,nz-1)*(FC(i,nz-1)+max(WC(i,nz-1),0._8))
           t(i,j,nz,nnew,itrc)=( t(i,j,nz,nnew,itrc) +DC(i,nz-1)*(&
           &FC(i,nz-1)+max(WC(i,nz-1),0._8) )&
-          &)/( Hz_fwd(i,j,nz) +FC(i,nz-1)-min(WC(i,nz-1),0._8)&
-          &-CF(i,nz-1)*(FC(i,nz-1)+max(WC(i,nz-1),0._8))&
-          &)
+          &)/cff
+          if (itrc == iTandS) pd_top(i)=cff
         enddo
 
         do k=nz-1,1,-1
@@ -284,6 +303,26 @@ contains
             t(i,j,k,nnew,itrc)=DC(i,k)+CF(i,k)*t(i,j,k+1,nnew,itrc)
           enddo
         enddo
+
+        else   ! itrc > iTandS: reuse the salinity pass's factors
+        do i=istr,iend
+          DC(i,1)=pd_piv(i,1)*t(i,j,1,nnew,itrc)
+        enddo
+        do k=2,nz-1,+1
+          do i=istr,iend
+            DC(i,k)=pd_piv(i,k)*( t(i,j,k,nnew,itrc) +DC(i,k-1)*pd_a(i,k-1) )
+          enddo
+        enddo
+        do i=istr,iend
+          t(i,j,nz,nnew,itrc)=( t(i,j,nz,nnew,itrc) +DC(i,nz-1)*pd_a(i,nz-1)&
+          &)/pd_top(i)
+        enddo
+        do k=nz-1,1,-1
+          do i=istr,iend
+            t(i,j,k,nnew,itrc)=DC(i,k)+pd_cf(i,k)*t(i,j,k+1,nnew,itrc)
+          enddo
+        enddo
+        endif  ! itrc <= iTandS
       enddo   !<-- itrc  !--> discard DC,CF,FC
 
 
@@ -557,11 +596,8 @@ contains
 
     do itrc=1,NT
       call t3dbc_tile (istr,iend,jstr,jend, itrc, wrk1)
-# ifdef EXCHANGE
-      ! Another opportunity to pack more mpi_exchanges
-      call exchange_xxx(t(:,:,:,nnew,itrc))
-# endif
     enddo
+    call exchange_tracers(nnew)   ! four tracers per MPI exchange
 
 # ifdef NHMG
 !======================================================================
