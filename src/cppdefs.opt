@@ -75,7 +75,9 @@
 #undef PRINT_TILE_RANGES
 
 ! Enable special forcing for marine CO2 removal
-! Usage notes: Required inputs and fields are specified in cdr_frc.opt.
+! Usage notes: Settings in CDR_FRC_SETTINGS (namelist). Parameterized releases
+! work with or without MARBL (e.g. for CDR_LITE tracers); depth-profile and
+! 3D forcing need MARBL.
 #undef CDR_FORCING
 
 ! Save advective tendencies at lateral boundaries for use in upscaling applications.

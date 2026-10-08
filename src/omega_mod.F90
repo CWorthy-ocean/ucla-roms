@@ -48,7 +48,7 @@ contains
     use pipe_frc, only:&
     &pidx, pipe_idx, pipe_prf,&
     &pipe_flx, pipe_source
-#if defined CDR_FORCING && defined MARBL
+#ifdef CDR_FORCING
     use cdr_frc, only:&
     &cdr_nprf, cdr_icdr,&
     &cdr_iloc, cdr_jloc, cdr_prf, cdr_vol,&
@@ -102,7 +102,7 @@ contains
           &+max(FlxV(i,j+1,k),0._8)-min(FlxV(i,j,k),0._8)
         enddo
       enddo
-#if defined CDR_FORCING && defined MARBL
+#ifdef CDR_FORCING
       ! CDR volume source: add the volume flux of each release in this row,
       ! accumulated bottom-up like the horizontal divergence above, so Wi
       ! sees the water that step2d adds to zeta. The vertical distribution

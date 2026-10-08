@@ -300,7 +300,9 @@ marbl_timestep = 3600.0           ! Desired MARBL timestep (s); rounded to a who
 &CDR_FRC_SETTINGS                                                      !cdr_frc.F
 !----------------
 ! Previously set in `cdr_frc.opt`
-! Requires CDR_FORCING cppkey
+! Requires CDR_FORCING cppkey. Parameterized releases can target any tracer
+! (passive, CDR_LITE or BGC) and work with or without MARBL; depth-profile
+! and 3D forcing supply ALK/DIC and need MARBL.
 !----------------
 cdr_source = .false.             ! Apply CDR perturbation (T) or not (F)
 cdr_file = "cdr_release.nc"      ! File path to CDR perturbation
@@ -341,7 +343,7 @@ cdr_online_carbonate_sensitivity = .false.
 !--------------------------
 ! Output for CDR_OAE_ALK/DIC and CDR_DOR_DIC
 ! Requires nt_cdr_oae or nt_cdr_dor > 0 (PARAM_SETTINGS); works with or
-! without MARBL. The *_source fields need MARBL and CDR_FORCING (cdr_frc).
+! without MARBL. The *_source fields need CDR_FORCING (cdr_frc).
 !--------------------------
 do_cdr_lite_output = .false.         ! Output CDR_LITE tracers
 wrt_cdr_lite_avg = .true.            ! Write averaged (T) or instantaneous (F)
