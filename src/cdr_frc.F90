@@ -175,8 +175,18 @@ contains
 
     else if (cdr_forcing_3d) then
 
+      ! Gridded 3D fields on rho points. Set the PIO grid type explicitly:
+      ! otherwise the read uses whatever the previous forcing call left (a 2D
+      ! type reads nothing, '----' reads the global origin on every rank).
+      pio_gtype='3Drr'
       call set_frc_data(nc_cdrflx_3d_ALK,var3d=cdr_flx_3d_ALK)
       call set_frc_data(nc_cdrflx_3d_DIC,var3d=cdr_flx_3d_DIC)
+#ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
+      pio_file_is_open = 0
+#endif
     else if (cdr_forcing_parameterized) then
 
       ! per-release point data is read serially by each rank (as in river_frc)
@@ -718,6 +728,8 @@ contains
     else if (cdr_forcing_3d) then
       allocate(nc_cdrflx_3d_ALK%vdata(GLOBAL_2D_ARRAY,nz,2))
       allocate(nc_cdrflx_3d_DIC%vdata(GLOBAL_2D_ARRAY,nz,2))
+      nc_cdrflx_3d_ALK%vdata = 0._8   ! never apply uninitialized memory as a source
+      nc_cdrflx_3d_DIC%vdata = 0._8
       nc_cdrflx_3d_ALK%ungridded = .false.
       nc_cdrflx_3d_DIC%ungridded = .false.
 

@@ -1610,7 +1610,9 @@ contains
 #else
       ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #endif
-      call ncread(ncid,vname,nc%vdata(i0:i1,j0:j1,:,it),(/1,1,1,irec/))
+      ! x0:x1,y0:y1 is the range the PIO decompositions read (as for the 2D
+      ! gridded reads below); without PARALLEL_IO it equals i0:i1,j0:j1.
+      call ncread(ncid,vname,nc%vdata(x0:x1,y0:y1,:,it),(/1,1,1,irec/))
 #ifdef PARALLEL_IO
       ! The serial (pio_gtype=='----') branch above opened its own ncid; close it.
       if (pio_gtype == '----') then

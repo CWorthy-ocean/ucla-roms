@@ -132,7 +132,7 @@ contains
           &-max(cy,0._8)*grad(iend+1,j  )&
           &-min(cy,0._8)*grad(iend+1,j+1)&
           &)&
-          &+cx*(  t(iend,j,k,nnew,itrc)&
+          &+cx*(  t(iend,j,k,nstp,itrc)&
           &-max(cy,0._8)*grad(iend,j  )&
           &-min(cy,0._8)*grad(iend,j+1)&
           &)
@@ -275,7 +275,7 @@ contains
           &-max(cy,0._8)*grad(i  ,jend+1)&
           &-min(cy,0._8)*grad(i+1,jend+1)&
           &)&
-          &+cx*(  t(i,jend,k,nnew,itrc)&
+          &+cx*(  t(i,jend,k,nstp,itrc)&
           &-max(cy,0._8)*grad(i  ,jend)&
           &-min(cy,0._8)*grad(i+1,jend)&
           &)
