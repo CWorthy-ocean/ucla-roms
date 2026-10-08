@@ -5,8 +5,8 @@ module cdr_lite_output
   ! The CDR_LITE tracers exist whenever nt_cdr_oae/nt_cdr_dor (PARAM_SETTINGS) are
   ! non-zero, with or without MARBL (see CDR_LITE in cppdefs.opt), so this
   ! module always compiles. Only the *_source fields depend on the cdr_frc
-  ! release profiles, which are available under MARBL && CDR_FORCING (cdr_frc's
-  ! own guard); without them wrt_sources has no effect.
+  ! release profiles, which are available under CDR_FORCING (cdr_frc's own
+  ! guard); without them wrt_sources has no effect.
 
 #include "cppdefs.opt"
 
@@ -24,7 +24,7 @@ module cdr_lite_output
   use scalars, only: iic, knew, nnew, tdays, time, dt
   use ocean_vars, only: hz
   use error_handling_mod, only: error_log
-#if defined MARBL && defined CDR_FORCING
+#ifdef CDR_FORCING
   use cdr_frc, only: cdr_prf, cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,&
  &                   cdr_jloc, cdr_source, cdr_forcing_3d
 #endif
@@ -38,7 +38,7 @@ module cdr_lite_output
 
   private
 
-#if !(defined MARBL && defined CDR_FORCING)
+#ifndef CDR_FORCING
   ! No cdr_frc release profiles in this build: the *_source fields are never
   ! defined, allocated or written.
   logical, parameter :: cdr_source = .false.
@@ -609,7 +609,7 @@ contains
         itrc = iCDR_OAE_ALK(ioae)
         if (wrt_thickness_weighted) then
           hCDR_OAE_ALK_tmp(i0:i1,j0:j1,:,ioae) =&
-         &  t(i0:i1,j0:j1,:,knew,itrc)*Hz(i0:i1,j0:j1,:)
+         &  t(i0:i1,j0:j1,:,nnew,itrc)*Hz(i0:i1,j0:j1,:)
         endif
         if (wrt_vertical_integrals) then
           int_z_CDR_OAE_ALK_tmp(:,:,ioae) = 0
@@ -625,7 +625,7 @@ contains
         itrc = iCDR_OAE_DIC(ioae)
         if (wrt_thickness_weighted) then
           hCDR_OAE_DIC_tmp(i0:i1,j0:j1,:,ioae) =&
-         &  t(i0:i1,j0:j1,:,knew,itrc)*Hz(i0:i1,j0:j1,:)
+         &  t(i0:i1,j0:j1,:,nnew,itrc)*Hz(i0:i1,j0:j1,:)
         endif
         if (wrt_vertical_integrals) then
           int_z_CDR_OAE_DIC_tmp(:,:,ioae) = 0
@@ -639,7 +639,7 @@ contains
         itrc = iCDR_DOR_DIC(idor)
         if (wrt_thickness_weighted) then
           hCDR_DOR_DIC_tmp(i0:i1,j0:j1,:,idor) =&
-         &  t(i0:i1,j0:j1,:,knew,itrc)*Hz(i0:i1,j0:j1,:)
+         &  t(i0:i1,j0:j1,:,nnew,itrc)*Hz(i0:i1,j0:j1,:)
         endif
         if (wrt_vertical_integrals) then
           int_z_CDR_DOR_DIC_tmp(:,:,idor) = 0
@@ -654,7 +654,7 @@ contains
 
   subroutine calc_cdr_lite_source
     implicit none
-#if defined MARBL && defined CDR_FORCING
+#ifdef CDR_FORCING
     integer :: i,j,k,icdr,cidx,ioae,idor,itrc
     if (wrt_alk .and. nt_cdr_oae > 0) then
       CDR_OAE_ALK_source(:,:,:,:) = 0
@@ -685,7 +685,7 @@ contains
         endif
       enddo
     enddo
-#endif /* MARBL && CDR_FORCING */
+#endif /* CDR_FORCING */
   end subroutine calc_cdr_lite_source
 
   subroutine create_cdr_lite_output_variables(ncid)

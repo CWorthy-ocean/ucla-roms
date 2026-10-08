@@ -63,7 +63,7 @@ contains
   use pipe_frc, only: pidx, pipe_idx, pipe_trc,&
   &pipe_prf, pipe_flx, pipe_source
   use dimensions, only: inode, jnode, npx, npy
-#if defined CDR_FORCING && defined MARBL
+#ifdef CDR_FORCING
   use cdr_frc, only: cdr_nprf, cdr_icdr, cdr_iloc,&
   &cdr_jloc, cdr_flx, cdr_prf, cdr_flx_3d_ALK, cdr_flx_3d_DIC,&
   &ncdr, cdr_source, cdr_forcing_3d
@@ -869,10 +869,11 @@ contains
   endif
 # endif
 
-#if defined CDR_FORCING && defined MARBL
+#ifdef CDR_FORCING
   if (cdr_source) then
 
-    if (cdr_forcing_3d) then
+# ifdef MARBL
+    if (cdr_forcing_3d) then          ! ALK/DIC fields: MARBL only (see cdr_frc)
       if (itrc == iALK) then
         do k=1,nz
           do j=1,ny
@@ -894,6 +895,7 @@ contains
       endif
 
     else ! cdr_forcing_3d
+# endif
       ! Loop over cdr release locations in this subdomain
       ! The global sum over all cdr_prf for each tracer should be 1.
       ! cdr_flux unit is [C/s]
@@ -910,7 +912,9 @@ contains
           &cdr_prf(cidx,itrc,k)*cdr_flx(icdr,itrc)
         enddo
       enddo
+# ifdef MARBL
     endif ! cdr_forcing_3d
+# endif
 
   endif ! cdr_source
 #endif

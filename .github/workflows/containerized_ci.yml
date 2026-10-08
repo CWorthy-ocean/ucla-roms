@@ -293,6 +293,9 @@ jobs:
     #   (dedicated CDR tracers + their gas exchange), which no test defines;
     #   the MPI_MASKING build keeps the non-CDR_LITE code paths covered.
     # - DIAGNOSTICS: term-by-term budget output, never enabled by any test.
+    # - CDR_FORCING + CDR_LITE without MARBL: cdr_frc releases of CDR_LITE
+    #   tracers in a physics-only build, without PARALLEL_IO (compile_ifx
+    #   covers the PARALLEL_IO variant).
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_gnu.result == 'success' || needs.build_gnu.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
@@ -365,12 +368,29 @@ jobs:
             DIAGNOSTICS
           '
 
+      - name: Compile CDR_FORCING + CDR_LITE configuration without MARBL
+        shell: bash
+        run: |
+          micromamba run -n roms-ci bash -c '
+          ci/compile_only.sh /tmp/cdr_nomarbl_build \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SALINITY NONLIN_EOS SPLIT_EOS \
+            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
+            CURVGRID SPHERICAL \
+            OBC_WEST OBC_EAST OBC_NORTH OBC_SOUTH \
+            OBC_M2FLATHER OBC_M3ORLANSKI OBC_TORLANSKI \
+            Z_FRC_BRY M2_FRC_BRY M3_FRC_BRY T_FRC_BRY \
+            BULK_FRC SPONGE SPONGE_TUNE TIDES \
+            CDR_FORCING CDR_LITE
+          '
+
   compile_ifx:
     needs: [prepare, build_ifx]
     # ifx counterpart of compile_gnu's PARALLEL_IO checks: the same production
     # key set compiled with COMPILER=intel against the ifx image's from-source
     # PnetCDF + ParallelIO fork, once without MPI_MASKING (plus CDR_LITE, as
-    # in compile_gnu) and once with it. Same build_ifx gating as test_ifx.
+    # in compile_gnu) and once with it. Also CDR_FORCING + CDR_LITE without
+    # MARBL, with PARALLEL_IO. Same build_ifx gating as test_ifx.
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_ifx.result == 'success' || needs.build_ifx.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
@@ -425,6 +445,22 @@ jobs:
             TIDES SFLX_CORR CFLX_CORR \
             CDR_FORCING UPSCALING \
             PARALLEL_IO MPI_MASKING
+
+      - name: Compile CDR_FORCING + CDR_LITE configuration without MARBL
+        shell: bash
+        run: |
+          export COMPILER=intel
+          ci/compile_only.sh /tmp/cdr_nomarbl_build \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SALINITY NONLIN_EOS SPLIT_EOS \
+            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
+            CURVGRID SPHERICAL \
+            OBC_WEST OBC_EAST OBC_NORTH OBC_SOUTH \
+            OBC_M2FLATHER OBC_M3ORLANSKI OBC_TORLANSKI \
+            Z_FRC_BRY M2_FRC_BRY M3_FRC_BRY T_FRC_BRY \
+            BULK_FRC SPONGE SPONGE_TUNE TIDES \
+            CDR_FORCING CDR_LITE \
+            PARALLEL_IO
 
   test_ifx:
     needs: [prepare, build_ifx]

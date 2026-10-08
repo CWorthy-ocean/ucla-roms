@@ -34,7 +34,7 @@ contains
     &iriver, river_flux, riv_uflx,&
     &riv_vol, riv_vflx, river_source
     use pipe_frc, only: pipe_idx, pipe_flx, pipe_source
-#if defined CDR_FORCING && defined MARBL
+#ifdef CDR_FORCING
     use cdr_frc, only: cdr_source, cdr_volume,&
     &cdr_prf, cdr_nprf,&
     &cdr_icdr, cdr_iloc, cdr_jloc, cdr_vol
@@ -144,7 +144,7 @@ contains
 #define rzeta  UFe
 #define rzeta2  VFe
 #define rzetaSA VFx
-#if defined CDR_FORCING && defined MARBL
+#ifdef CDR_FORCING
     if (cdr_source.and.cdr_volume) then
       do cidx=1,cdr_nprf
         icdr = cdr_icdr(cidx)

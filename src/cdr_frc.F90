@@ -8,7 +8,11 @@ module cdr_frc
 
 #include "cppdefs.opt"
 
-#if defined MARBL && defined CDR_FORCING
+#ifdef CDR_FORCING
+  ! Parameterized releases (cdr_trcflx, or cdr_volume + cdr_tracer) can
+  ! target any tracer -- passive, CDR_LITE or BGC -- and work with or without
+  ! MARBL. Depth-profile and 3D forcing supply ALK and DIC fluxes for MARBL's
+  ! tracers and therefore need MARBL.
   use namelist_open_mod, only: open_namelist_file
   use roms_read_write, only:&
   &ncforce, ncforce3d, cdr_frc_opt,&
@@ -25,7 +29,9 @@ module cdr_frc
   use pio_roms, only: pio_file_is_open, pio_FileDesc
   use pio, only: PIO_closefile
 #endif
+#ifdef MARBL
   use marbl_driver, only: iALK, iDIC
+#endif
   use vertical_remapping, only: remap_src_to_grid
   use error_handling_mod, only: error_log
   use netcdf, only:&
@@ -255,6 +261,17 @@ contains
       &"cdr_forcing_parameterized = .true.")
     endif
 
+#ifndef MARBL
+    if (cdr_forcing_depth_profiles .or. cdr_forcing_3d) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="cdr_forcing_depth_profiles and cdr_forcing_3d force MARBL's "//&
+      &"ALK and DIC and need MARBL; without MARBL use "//&
+      &"cdr_forcing_parameterized")
+    endif
+    call error_log%abort_check()
+#endif
+
     if (cdr_forcing_3d) then
       call init_cdr_frc_3d
     else
@@ -337,12 +354,15 @@ contains
     call init_arrays_cdr
     call find_release_locations
 
-    ! Get tracer indices for ALK and DIC
+#ifdef MARBL
+    ! Get tracer indices for ALK and DIC (depth profiles need MARBL; see
+    ! init_cdr_frc)
     cdr_inds(1) = iALK
     cdr_inds(2) = iDIC
 
     cdr_flx(:,iALK) = 1.0_8
     cdr_flx(:,iDIC) = 1.0_8
+#endif
 
   end subroutine init_cdr_frc_dp  !]
 ! ----------------------------------------------------------------------
@@ -794,7 +814,7 @@ contains
   end subroutine ll2dist  !]
 ! ----------------------------------------------------------------------
 ! ----------------------------------------------------------------------
-#else /* defined MARBL && defined CDR_FORCING */
+#else /* CDR_FORCING */
 
 !----------------------------------------------------------------------
   use roms_read_write, only: ncforce, ncforce3d
@@ -816,20 +836,13 @@ contains
     implicit none
     character(len=11) :: sr_name = "set_cdr_frc"
 
-#if (!defined MARBL)
-    call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="CDR module must have MARBL enabled.")
-#endif
-
-#if (!defined CDR_FORCING)
     call error_log%raise_global(context=module_name//"/"//sr_name,&
     &info="CDR module must have CDR_FORCING enabled.")
-#endif
 
   end subroutine set_cdr_frc !]
 !----------------------------------------------------------------------
 
-#endif /* defined MARBL && defined CDR_FORCING */
+#endif /* CDR_FORCING */
 
 
 end module cdr_frc

@@ -28,7 +28,7 @@ contains
 #if defined(MARBL) || defined(BIOLOGY_BEC2)
     use bgc_shared_vars, only: read_nml_bgc       !BGC_SETTINGS
 #endif
-#if defined MARBL && defined CDR_FORCING
+#ifdef CDR_FORCING
     use cdr_frc, only: read_nml_cdr_frc           !CDR_FRC_SETTINGS
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
@@ -85,7 +85,7 @@ contains
 #if defined(MARBL) || defined(BIOLOGY_BEC2)
     call read_nml_bgc
 #endif
-#if defined MARBL && defined CDR_FORCING
+#ifdef CDR_FORCING
     call read_nml_cdr_frc
 #endif
 #ifdef DIAGNOSTICS
