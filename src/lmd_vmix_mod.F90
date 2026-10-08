@@ -432,7 +432,9 @@ enddo
 # if defined LMD_KPP || defined LMD_BKPP
  ! Vertical 1-2-1 smoothing of interior mixing, in place. Kv_km1 etc. hold
  ! the unsmoothed value at k-1, so every level is filtered from unsmoothed
- ! neighbours and the background is added exactly once.
+ ! neighbours and the background is added exactly once. Upstream UCLA ROMS
+ ! (lmd_vmix.F) instead smooths in place with k ascending, so each level
+ ! uses its already-smoothed lower neighbour; it has no background term.
 do j=jstr,jend
   do i=istr,iend
     Kv_km1(i)=Kv(i,j,0)
@@ -465,7 +467,9 @@ do j=jstr,jend
 enddo
 # else /* no kpp at all */
 
-! Finalize: Copy everything into shared arrays:
+! Finalize: Copy everything into shared arrays. The pads at k=0 and nz
+! exclude the background, so it is added once at every level, k=1 and
+! nz-1 included.
 
 do k=1,nz-1
   do j=jstr,jend

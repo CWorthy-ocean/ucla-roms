@@ -8,6 +8,15 @@ contains
   subroutine t3dbc_tile (istr,iend,jstr,jend, itrc, grad)
 
 ! Set lateral boundary conditions for tracer field t(:,:,:,itrc)
+!
+! The Orlanski radiation update below is the explicit upwind form
+!   t_bry(nnew) = (1-cx)*[t_bry - tangential terms] + cx*[t_int - tangential terms]
+! with every right-hand-side term, including the interior tracer t_int,
+! at nstp, on all four sides. This departs from upstream UCLA ROMS
+! (t3dbc_im.F), which uses nnew for t_int on the east and north sides
+! only. nnew belongs to the implicit form (t_bry + cx*t_int)/(1+cx) used
+! for the normal velocity in u3dbc/v3dbc; the explicit form here matches
+! the tangential velocity conditions there, which use nstp throughout.
     use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
     use tracers, only: t
     use boundary, only: t_west, t_east, t_south, t_north
