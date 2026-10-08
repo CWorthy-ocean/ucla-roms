@@ -1,0 +1,67 @@
+.. _unreleased:
+
+Unreleased
+----------
+
+.. note::
+    This release is currently in development
+
+Breaking Changes
+~~~~~~~~~~~~~~~~
+
+
+- Builds that define ``CDR_FORCING`` without MARBL now read the ``CDR_FRC_SETTINGS`` namelist group, and a missing group is an error. Such namelists need the group added (``cdr_source = .false.`` keeps the old behavior). (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+- In those builds, a namelist that already sets ``cdr_source = .true.`` now applies the release. Previously it was silently ignored. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+- Builds with MARBL are unaffected. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+
+New Features
+~~~~~~~~~~~~
+
+
+- Parameterized CDR releases work with or without MARBL and can target any tracer: CDR_LITE, passive, or temperature and salinity for volume releases. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+- Without MARBL, ``cdr_forcing_depth_profiles`` and ``cdr_forcing_3d`` stop at initialization with a message pointing to ``cdr_forcing_parameterized``, instead of the old "CDR module must have MARBL enabled". (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+
+Bug Fixes
+~~~~~~~~~
+
+
+- ``cdr_lite_output.F90``: the thickness-weighted fields (``hCDR_*``) read ``t(…,knew,…)``. ``knew`` is the barotropic time index and reaches 4, while ``t`` has 3 time levels, so this could read out of bounds. It now uses ``nnew``. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+
+Improvements
+~~~~~~~~~~~~
+
+
+- ``cdr_frc.F90`` compiles under ``CDR_FORCING`` alone. It imports ``iALK``/``iDIC`` from ``marbl_driver`` only when MARBL is defined. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+- These call sites are now guarded by ``CDR_FORCING`` only: (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+
+  - ``set_forces``: calls ``set_cdr_frc``;
+  - ``step2d`` and ``omega``: the volume source;
+  - ``namelist_read_mod``: reads ``CDR_FRC_SETTINGS``;
+  - ``cdr_lite_output``: the ``*_source`` fields.
+
+- ``step3d_t``: parameterized sources are applied under ``CDR_FORCING``. The 3D ALK/DIC branch stays MARBL-only. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+- ``cdr_output`` and ``cdr_gas_exch_output`` still require MARBL, since they write MARBL fields, and keep their guards. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+- CI: ``compile_gnu`` and ``compile_ifx`` each gain a compile-only step for ``CDR_FORCING`` + ``CDR_LITE`` without MARBL. gfortran builds without ``PARALLEL_IO`` and ifx with it. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+- ``namelist.nml`` and ``cppdefs.opt`` comments now say what works with and without MARBL. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+- Compiled locally with ifx for: (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+
+  - no MARBL with ``CDR_FORCING``, with and without ``CDR_LITE`` and ``PARALLEL_IO``;
+  - MARBL with and without ``CDR_FORCING``;
+  - BEC2 with ``CDR_FORCING``.
+
+- Runtime test: MiniPac physics without MARBL, ``nt_cdr_oae = 1``, 256 ranks, 16 steps. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+
+  - A parameterized release of 10⁶ mmol/s into ``CDR_OAE_ALK1`` gives a domain total equal to release rate × elapsed time, within 2e-16 relative at every hourly record.
+  - The ``CDR_OAE_ALK1_source`` field sums to the release rate.
+  - ``CDR_OAE_DIC1`` takes up CO₂ through the no-MARBL gas-exchange path.
+
+- Setup notes for no-MARBL runs: (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
+
+  - The release file's ``nt`` dimension must match the build's tracer count (2 + ``nt_passive`` + 2×``nt_cdr_oae`` + ``nt_cdr_dor``).
+  - The forcing files must provide ``CDR_OAE_DIC<n>_flx`` / ``CDR_DOR_DIC<n>_flx`` and ``ddic_dco2``/``ddic_dalk``. Surface forcing variables can't be missing, and computing the carbonate sensitivities online needs MARBL.
+
+- Older setups whose ``cppdefs.opt`` predates the CDR_LITE rename still say ``#undef CDR_TRACER`` and need ``#define CDR_LITE``. (`#379 <https://github.com/CWorthy-ocean/ucla-roms/pull/379>`_)
