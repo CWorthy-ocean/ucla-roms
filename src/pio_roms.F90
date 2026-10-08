@@ -7,7 +7,7 @@ module pio_roms
   use pio, only : PIO_finalize, PIO_noerr, PIO_iotype_netcdf, PIO_createfile
   use pio, only : PIO_int, PIO_real, PIO_double, var_desc_t, PIO_redef, PIO_def_dim, PIO_def_var, PIO_enddef
   use pio, only : PIO_closefile, io_desc_t, PIO_initdecomp, PIO_write_darray
-  use pio, only : PIO_freedecomp, PIO_clobber, PIO_read_darray, PIO_syncfile, PIO_OFFSET_KIND
+  use pio, only : PIO_freedecomp, PIO_clobber, PIO_read_darray, PIO_OFFSET_KIND
   use pio, only : PIO_nowrite, PIO_openfile, PIO_setframe, PIO_inq_varndims
   use pio, only : PIO_iotype_netcdf4p
   use pio, only : PIO_iotype_pnetcdf
@@ -2074,8 +2074,10 @@ contains
     elseif (pio_gtype == 'w1vc') then
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdwv_w, arr, ierr)
     endif
-
-        call PIO_syncfile(pio_FileDesc)
+    ! No PIO_syncfile here: PIO copies arr into its write buffer, and the
+    ! caller's PIO_closefile at the end of the record flushes everything
+    ! in one go (a sync per variable forced a separate collective write
+    ! and file-system flush for each one).
 
   end subroutine pio_ncwrite1
 ! ----------------------------------------------------------------------
@@ -2158,8 +2160,7 @@ contains
     elseif (pio_gtype == 'w2vc') then
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdwv_w, arr, ierr)
     endif
-
-        call PIO_syncfile(pio_FileDesc)
+    ! No PIO_syncfile: see pio_ncwrite1.
 
   end subroutine pio_ncwrite2
 ! ----------------------------------------------------------------------
@@ -2196,8 +2197,7 @@ contains
     elseif (pio_gtype == '3Dvz') then
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_3Dv_z, arr, ierr)
     endif
-
-        call PIO_syncfile(pio_FileDesc)
+    ! No PIO_syncfile: see pio_ncwrite1.
 
   end subroutine pio_ncwrite3
 ! ----------------------------------------------------------------------

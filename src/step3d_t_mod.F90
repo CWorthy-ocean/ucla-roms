@@ -69,7 +69,8 @@ contains
   &ncdr, cdr_source, cdr_forcing_3d
 #endif
   use river_frc, only: iriver, riv_depth, riv_uvel, riv_vvel, river_source,&
-  &riv_uflx, riv_vol, riv_trc, riv_vflx
+  &riv_uflx, riv_vol, riv_trc, riv_vflx,&
+  &nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
   use surf_flux, only: stflx, srflx
   use tracers, only: t, itands, wrt_t_dia, exchange_tracers
   use advection, only: t_vadv_pre, t_vadv_cor
@@ -110,7 +111,7 @@ contains
   use bulk_frc, only: tair
   use surf_flux, only: swflx
   implicit none
-  integer(kind=4) icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k!, td
+  integer(kind=4) icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k, iface!, td
   real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: WC,FC,CF,DC
   ! Factors of the implicit vertical solve for the current row, saved on the
   ! salinity pass (or temperature without SALINITY) and reused for every

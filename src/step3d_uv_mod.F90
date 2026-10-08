@@ -589,7 +589,8 @@ contains
   subroutine step3d_uv2_tile(istr,iend,jstr,jend, WC,FC,CF,DC)
     use river_frc, only:&
     &iriver, riv_depth, riv_uvel, riv_vvel,&
-    &riv_uflx, riv_vol, riv_vflx, river_source
+    &riv_uflx, riv_vol, riv_vflx, river_source,&
+    &nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
     use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
     use dimensions, only: inode, jnode
 
@@ -638,7 +639,7 @@ contains
 #endif
 
     implicit none
-    integer(kind=4) istr,iend,jstr,jend, i,j,k
+    integer(kind=4) istr,iend,jstr,jend, i,j,k, iface
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: WC,FC,CF,DC
     real(kind=8) cff !,dmax,div
     real(kind=8) ub,ut
@@ -1278,31 +1279,28 @@ endif    !<-- j >= jstr
 enddo    ! <-- j
 
 if (river_source) then
-  do j=jstr,jend
-    do i=istr,iend
-
-      if (abs(riv_uflx(i,j)).gt.1e-3) then
-        riv_depth = 0.5_8*( z_w(i-1,j,nz)-z_w(i-1,j,0)&
-        &+z_w(i  ,j,nz)-z_w(i  ,j,0) )
-        iriver = nint(riv_uflx(i,j)/10)
-        riv_uvel = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)/&
-        &( dn_u(i,j)*riv_depth)
-        do k= 1,nz
-          u(i,j,k,nnew) = riv_uvel
-        enddo
-      endif
-
-      if (abs(riv_vflx(i,j)).gt.1e-3) then
-        riv_depth = 0.5_8*( z_w(i,j-1,nz)-z_w(i,j-1,0)&
-        &+z_w(i,j  ,nz)-z_w(i,j  ,0) )
-        iriver = nint(riv_vflx(i,j)/10)
-        riv_vvel = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)/&
-        &( dm_v(i,j)*riv_depth)
-        do k= 1,nz
-          v(i,j,k,nnew) = riv_vvel
-        enddo
-      endif
-
+  do iface=1,nriv_u
+    i = riv_u_i(iface); j = riv_u_j(iface)
+    if (i < istr .or. i > iend .or. j < jstr .or. j > jend) cycle
+    riv_depth = 0.5_8*( z_w(i-1,j,nz)-z_w(i-1,j,0)&
+    &+z_w(i  ,j,nz)-z_w(i  ,j,0) )
+    iriver = nint(riv_uflx(i,j)/10)
+    riv_uvel = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)/&
+    &( dn_u(i,j)*riv_depth)
+    do k= 1,nz
+      u(i,j,k,nnew) = riv_uvel
+    enddo
+  enddo
+  do iface=1,nriv_v
+    i = riv_v_i(iface); j = riv_v_j(iface)
+    if (i < istr .or. i > iend .or. j < jstr .or. j > jend) cycle
+    riv_depth = 0.5_8*( z_w(i,j-1,nz)-z_w(i,j-1,0)&
+    &+z_w(i,j  ,nz)-z_w(i,j  ,0) )
+    iriver = nint(riv_vflx(i,j)/10)
+    riv_vvel = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)/&
+    &( dm_v(i,j)*riv_depth)
+    do k= 1,nz
+      v(i,j,k,nnew) = riv_vvel
     enddo
   enddo
 endif ! <-- river_source

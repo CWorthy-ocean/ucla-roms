@@ -224,32 +224,25 @@ endif  !<-- itrc>isalt, bio-components only.
 #endif
 
 if (river_source) then
-  !! inefficient because this is inside a k-loop
-  !! we could try to compute riv_uvel(i,j) somewhere else
-  do j=jstr,jend
-    do i=istr,iend+1
-      if (abs(riv_uflx(i,j)).gt.1e-3) then
-        riv_depth = 0.5_8*( z_w(i-1,j,nz)-z_w(i-1,j,0)&
-        &+ z_w(i  ,j,nz)-z_w(i  ,j,0) )
-        iriver = nint(riv_uflx(i,j)/10)
-        riv_uvel = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)/riv_depth
-        FX(i,j)= riv_trc(iriver,itrc)*&
-        &0.5_8*(Hz(i-1,j,k)+Hz(i,j,k))*riv_uvel
-
-      endif
-    enddo
+  ! Loop over the river faces only (lists built in calc_river_flux)
+  do iface=1,nriv_u
+    i = riv_u_i(iface); j = riv_u_j(iface)
+    if (i < istr .or. i > iend+1 .or. j < jstr .or. j > jend) cycle
+    riv_depth = 0.5_8*( z_w(i-1,j,nz)-z_w(i-1,j,0)&
+    &+ z_w(i  ,j,nz)-z_w(i  ,j,0) )
+    iriver = nint(riv_uflx(i,j)/10)
+    riv_uvel = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)/riv_depth
+    FX(i,j)= riv_trc(iriver,itrc)*&
+    &0.5_8*(Hz(i-1,j,k)+Hz(i,j,k))*riv_uvel
   enddo
-  do j=jstr,jend+1
-    do i=istr,iend
-      if (abs(riv_vflx(i,j)).gt.1e-3) then
-        riv_depth = 0.5_8*( z_w(i,j-1,nz)-z_w(i,j-1,0)&
-        &+ z_w(i  ,j,nz)-z_w(i  ,j,0) )
-        iriver = nint(riv_vflx(i,j)/10)
-        riv_vvel = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)/riv_depth
-        FE(i,j)= riv_trc(iriver,itrc)*&
-        &0.5_8*(Hz(i,j-1,k)+Hz(i,j,k))*riv_vvel
-
-      endif
-    enddo
+  do iface=1,nriv_v
+    i = riv_v_i(iface); j = riv_v_j(iface)
+    if (i < istr .or. i > iend .or. j < jstr .or. j > jend+1) cycle
+    riv_depth = 0.5_8*( z_w(i,j-1,nz)-z_w(i,j-1,0)&
+    &+ z_w(i  ,j,nz)-z_w(i  ,j,0) )
+    iriver = nint(riv_vflx(i,j)/10)
+    riv_vvel = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)/riv_depth
+    FE(i,j)= riv_trc(iriver,itrc)*&
+    &0.5_8*(Hz(i,j-1,k)+Hz(i,j,k))*riv_vvel
   enddo
 endif  !<-- river_source

@@ -270,16 +270,28 @@ contains                  !]
         allocate( rho_avg(GLOBAL_2D_ARRAY,nz) )
         rho_avg=0._8
       endif
-      if (wrt_avg_Akv)  allocate( akv_avg(GLOBAL_2D_ARRAY,0:nz) )
-      if (wrt_avg_Akt)  allocate( akt_avg(GLOBAL_2D_ARRAY,0:nz) )
+      ! zeroed like the averages above: the first running-mean update
+      ! multiplies the old contents by 0, and NaN x 0 = NaN
+      if (wrt_avg_Akv) then
+        allocate( akv_avg(GLOBAL_2D_ARRAY,0:nz) ); akv_avg=0._8
+      endif
+      if (wrt_avg_Akt) then
+        allocate( akt_avg(GLOBAL_2D_ARRAY,0:nz) ); akt_avg=0._8
+      endif
 # ifdef SALINITY
-      if (wrt_avg_Aks)  allocate( aks_avg(GLOBAL_2D_ARRAY,0:nz) )
+      if (wrt_avg_Aks) then
+        allocate( aks_avg(GLOBAL_2D_ARRAY,0:nz) ); aks_avg=0._8
+      endif
 # endif
 # ifdef LMD_KPP
-      if (wrt_avg_Hbls) allocate( hbl_avg(GLOBAL_2D_ARRAY) )
+      if (wrt_avg_Hbls) then
+        allocate( hbl_avg(GLOBAL_2D_ARRAY) ); hbl_avg=0._8
+      endif
 # endif
 # ifdef LMD_BKPP
-      if (wrt_avg_Hbbl) allocate( hbbl_avg(GLOBAL_2D_ARRAY) )
+      if (wrt_avg_Hbbl) then
+        allocate( hbbl_avg(GLOBAL_2D_ARRAY) ); hbbl_avg=0._8
+      endif
 # endif
 
     endif  ! <-- wrt_file_avg

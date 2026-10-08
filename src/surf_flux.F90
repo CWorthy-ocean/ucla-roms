@@ -297,10 +297,12 @@ subroutine init_arrays_surf_flx ![
 #endif
 
   if (sflx_avg) then
-    allocate(sustr_avg(1:i1,j0:j1))
-    allocate(svstr_avg(i0:i1,1:j1))
-    allocate(stflx_avg(i0:i1,j0:j1,nt))
-    allocate(swflx_avg(i0:i1,j0:j1))
+    ! zeroed because the first running-mean update multiplies the old
+    ! contents by 0, and NaN x 0 = NaN
+    allocate(sustr_avg(1:i1,j0:j1)); sustr_avg=0._8
+    allocate(svstr_avg(i0:i1,1:j1)); svstr_avg=0._8
+    allocate(stflx_avg(i0:i1,j0:j1,nt)); stflx_avg=0._8
+    allocate(swflx_avg(i0:i1,j0:j1)); swflx_avg=0._8
   endif
 
   if (wrt_rstflx) then
@@ -494,13 +496,17 @@ subroutine wrt_sflux  ![
 
     call pio_open_or_abort(trim(fname), module_name//"/wrt_sflux", PIO_write)
 
+    ! each write needs the PIO decomposition of its grid (u, v or rho points)
     start=1; start(3)=record
     if (sflx_avg) then
       if (wrt_smflx) then
+        pio_gtype = '2Duw'
         call ncwrite(ncid,'sustr',sustr_avg(1:i1,j0:j1),start,.true.)
+        pio_gtype = '2Dvw'
         call ncwrite(ncid,'svstr',svstr_avg(i0:i1,1:j1),start,.true.)
       endif
       if (wrt_stflx) then
+        pio_gtype = '2Drw'
         call ncwrite(ncid,'shflx',stflx_avg(i0:i1,j0:j1,1),start,.true.)
         if (salinity) then
           call ncwrite(ncid,'ssflx',stflx_avg(i0:i1,j0:j1,2),start,.true.)
@@ -515,14 +521,18 @@ subroutine wrt_sflux  ![
 !        enddo
 !      endif
       if (wrt_swflx) then
+        pio_gtype = '2Drw'
         call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),start,.true.)
       endif
     else  ! snapshots
       if (wrt_smflx) then
+        pio_gtype = '2Duw'
         call ncwrite(ncid,'sustr',sustr(1:i1,j0:j1),start,.true.)
+        pio_gtype = '2Dvw'
         call ncwrite(ncid,'svstr',svstr(i0:i1,1:j1),start,.true.)
       endif
       if (wrt_stflx) then
+        pio_gtype = '2Drw'
         call ncwrite(ncid,'shflx',stflx(i0:i1,j0:j1,1),start,.true.)
         if (salinity) then
           call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,2),start,.true.)
@@ -537,6 +547,7 @@ subroutine wrt_sflux  ![
 !        enddo
 !      endif
       if (wrt_swflx) then
+        pio_gtype = '2Drw'
         call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),start,.true.)
       endif
     endif
