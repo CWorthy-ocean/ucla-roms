@@ -118,9 +118,14 @@ contains
 
   end subroutine init_tides  !]
 !-----------------------------------------------------------------------
-  subroutine set_tides(tile)  ![
+  subroutine set_tides(tile, bry_phase)  ![
     ! computes current forcing for boundaries and surface tidal
     ! potential
+    ! bry_phase (optional, units of dt): time of the boundary tidal
+    ! harmonics, time + bry_phase*dt. Default 0.5 (n+1/2). The potential is
+    ! always at n+1/2, where prsgrd uses it. roms_step passes 1.0 on the
+    ! second call, so the harmonics match the boundary data read for n+1;
+    ! upstream UCLA ROMS evaluates both calls at n+1/2.
     ! DevinD created seperate step as can't have compute_tile_bounds
     ! and compute_auxilliary_bounds in the same subroutine as they both
     ! declare and compute. Fortan doesn't allow.
@@ -129,14 +134,18 @@ contains
     implicit none
 
     integer(kind=4) :: tile
+    real(kind=8), intent(in), optional :: bry_phase
+    real(kind=8) :: bphase
 
 #include "compute_tile_bounds.h"
 
-    call set_tides_tile(istr,iend,jstr,jend)
+    bphase = 0.5_8
+    if (present(bry_phase)) bphase = bry_phase
+    call set_tides_tile(istr,iend,jstr,jend,bphase)
 
   end subroutine set_tides  !]
 !-----------------------------------------------------------------------
-  subroutine set_tides_tile(istr,iend,jstr,jend)  ![
+  subroutine set_tides_tile(istr,iend,jstr,jend,bphase)  ![
 
     use boundary, only:&
     &zeta_west, ubar_west, vbar_west, zeta_east,&
@@ -147,9 +156,10 @@ contains
 
     ! input/outputs
     integer(kind=4),intent(in) :: istr,iend,jstr,jend
+    real(kind=8),intent(in) :: bphase   ! boundary harmonics at time+bphase*dt
     ! local
     integer(kind=4) :: tile, itide, i, j
-    real(kind=8) :: omT
+    real(kind=8) :: omT, omTp
     logical :: do_pot
 
 #include "compute_auxiliary_bounds.h"
@@ -166,7 +176,8 @@ contains
 
     do itide=1,ntides
 
-      omT = ftide(itide)*(time+0.5_8*dt)
+      omT  = ftide(itide)*(time+bphase*dt)   ! boundary harmonics
+      omTp = ftide(itide)*(time+0.5_8*dt)    ! tidal potential (n+1/2)
 
       if (bry_tides) then
 
@@ -276,14 +287,14 @@ contains
           do j=jstrR-1,jendR
             do i=istrR-1,iendR
               ptide(i,j)=&
-              &+ ptide_r(i,j,itide)*cos(omT)- ptide_i(i,j,itide)*sin(omT)
+              &+ ptide_r(i,j,itide)*cos(omTp)- ptide_i(i,j,itide)*sin(omTp)
             enddo
           enddo
         else
           do j=jstrR-1,jendR ! DevinD does jstrR-1 not go beyond computational margin?
             do i=istrR-1,iendR
               ptide(i,j)= ptide(i,j)&
-              &+ ptide_r(i,j,itide)*cos(omT)-ptide_i(i,j,itide)*sin(omT)
+              &+ ptide_r(i,j,itide)*cos(omTp)-ptide_i(i,j,itide)*sin(omTp)
             enddo
           enddo
         endif

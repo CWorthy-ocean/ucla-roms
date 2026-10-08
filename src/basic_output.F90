@@ -637,14 +637,14 @@ contains                  !]
 
     ! local
     integer(kind=4),dimension(4)   :: start
-    integer(kind=4)                :: rec_avg
+    integer(kind=4),save           :: rec_avg                     ! current file output record
     integer(kind=4),save           :: total_rec_avg=0                      ! total avg output records so far
     real(kind=8),save              :: output_time_avg=0                    ! time since last output
     character(len=max_name_size),save :: fname_avg
     character(len=99)      :: output_time_string
     character(len=99)      :: formatted_string
     integer(kind=4) :: tile, tn, ierr, k
-    logical, save          :: first_step
+    logical, save          :: first_step=.true.
 
     if (first_step) then
       rec_avg = nrpf_avg
@@ -711,7 +711,7 @@ contains                  !]
           pio_gtype = '3Dww'
           call ncwrite(ncid, vname(1,indxO),     w_avg(i0:i1,j0:j1,:), start,.true.)            ! here rather than calc_
         endif
-        pio_gtype = '3Dww'                                                                 ! for efficiency
+        pio_gtype = '3Drw'                 ! W has nz levels at rho points, as in the his file
         if (wrt_avg_W)   call ncwrite(ncid, vname(1,indxW),   wvl_avg(i0:i1,j0:j1,1:nz), start,.true.)
         pio_gtype = '3Dww'
         if (wrt_avg_Akv) call ncwrite(ncid, vname(1,indxAkv), akv_avg(i0:i1,j0:j1,:), start,.true.)

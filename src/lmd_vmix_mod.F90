@@ -91,6 +91,9 @@ contains
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: FX,FE,FE1
 
     real(kind=8) nu_sx, cff,cff1, dudz,dvdz
+    ! unsmoothed values at level k-1, for the in-place vertical smoothing
+    real(kind=8), dimension(istr:iend) :: Kv_km1, Kt_km1, Ks_km1
+    real(kind=8) tmp_v, tmp_t, tmp_s
     real(kind=8), parameter ::&     ! Critical gradient Richardson number
     &Ri0=0.7_8,&         ! below which shear instabilty occurs.
 
@@ -410,35 +413,63 @@ enddo
 ! Pad out surface and bottom values: the vertical smoothing below
 ! reads k=0 and k=nz, and so do the lmd_kpp_tile boundary layers.
 ! The interior values used here may not be the best values to
-! use for the padding.
+! use for the padding. The pads are unsmoothed values without the
+! background; the background is added once, after smoothing.
 
 do j=jstr,jend
   do i=istr,iend
-    Kv(i,j,nz)=Kv(i,j,nz-1) + Akv_bak
-    Kt(i,j,nz)=Kt(i,j,nz-1) + Akt_bak(itemp)
-    Kv(i,j,0)=Kv(i,j,  1) + Akv_bak
-    Kt(i,j,0)=Kt(i,j,  1) + Akt_bak(itemp)
+    Kv(i,j,nz)=Kv(i,j,nz-1)
+    Kt(i,j,nz)=Kt(i,j,nz-1)
+    Kv(i,j,0)=Kv(i,j,  1)
+    Kt(i,j,0)=Kt(i,j,  1)
 # ifdef SALINITY
-    Ks(i,j,nz)=Ks(i,j,nz-1) + Akt_bak(isalt)
-    Ks(i,j,0)=Ks(i,j,  1) + Akt_bak(isalt)
+    Ks(i,j,nz)=Ks(i,j,nz-1)
+    Ks(i,j,0)=Ks(i,j,  1)
 # endif
   enddo
 enddo
 
 # if defined LMD_KPP || defined LMD_BKPP
- ! vertical smoothing of interior mixing
-do k=1,nz-1
-  do j=jstr,jend
+ ! Vertical 1-2-1 smoothing of interior mixing, in place. Kv_km1 etc. hold
+ ! the unsmoothed value at k-1, so every level is filtered from unsmoothed
+ ! neighbours and the background is added exactly once. Upstream UCLA ROMS
+ ! (lmd_vmix.F) instead smooths in place with k ascending, so each level
+ ! uses its already-smoothed lower neighbour; it has no background term.
+do j=jstr,jend
+  do i=istr,iend
+    Kv_km1(i)=Kv(i,j,0)
+    Kt_km1(i)=Kt(i,j,0)
+    Ks_km1(i)=Ks(i,j,0)
+  enddo
+  do k=1,nz-1
     do i=istr,iend
-      Kv(i,j,k)=0.5_8*Kv(i,j,k)+0.25_8*Kv(i,j,k-1)+0.25_8*Kv(i,j,k+1) + Akv_bak
-      Kt(i,j,k)=0.5_8*Kt(i,j,k)+0.25_8*Kt(i,j,k-1)+0.25_8*Kt(i,j,k+1) + Akt_bak(itemp)
-      Ks(i,j,k)=0.5_8*Ks(i,j,k)+0.25_8*Ks(i,j,k-1)+0.25_8*Ks(i,j,k+1) + Akt_bak(isalt)
+      tmp_v=Kv(i,j,k)
+      tmp_t=Kt(i,j,k)
+      tmp_s=Ks(i,j,k)
+      Kv(i,j,k)=0.5_8*tmp_v+0.25_8*Kv_km1(i)+0.25_8*Kv(i,j,k+1) + Akv_bak
+      Kt(i,j,k)=0.5_8*tmp_t+0.25_8*Kt_km1(i)+0.25_8*Kt(i,j,k+1) + Akt_bak(itemp)
+      Ks(i,j,k)=0.5_8*tmp_s+0.25_8*Ks_km1(i)+0.25_8*Ks(i,j,k+1) + Akt_bak(isalt)
+      Kv_km1(i)=tmp_v
+      Kt_km1(i)=tmp_t
+      Ks_km1(i)=tmp_s
     enddo
+  enddo
+  do i=istr,iend                     ! padded values: add the background now
+    Kv(i,j,nz)=Kv(i,j,nz) + Akv_bak
+    Kt(i,j,nz)=Kt(i,j,nz) + Akt_bak(itemp)
+    Kv(i,j,0)=Kv(i,j,0) + Akv_bak
+    Kt(i,j,0)=Kt(i,j,0) + Akt_bak(itemp)
+#  ifdef SALINITY
+    Ks(i,j,nz)=Ks(i,j,nz) + Akt_bak(isalt)
+    Ks(i,j,0)=Ks(i,j,0) + Akt_bak(isalt)
+#  endif
   enddo
 enddo
 # else /* no kpp at all */
 
-! Finalize: Copy everything into shared arrays:
+! Finalize: Copy everything into shared arrays. The pads at k=0 and nz
+! exclude the background, so it is added once at every level, k=1 and
+! nz-1 included.
 
 do k=1,nz-1
   do j=jstr,jend
