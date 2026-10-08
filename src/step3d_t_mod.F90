@@ -75,7 +75,7 @@ contains
   use advection, only: t_vadv_pre, t_vadv_cor
 #ifdef MARBL
   use marbl_driver, only: marbldrv_column_physics, iALK, iDIC,&
-  &marbl_timestep_ratio
+  &is_marbl_step
 #endif
   use grid, only: umask, vmask, pn, pm, rmask, nx, ny, nz, dn_u, dm_v
   use param, only: mynode, np_eta, np_xi
@@ -1231,7 +1231,7 @@ do itrc=1,nt
 enddo     !<-- itrc
 
 # if defined(MARBL)
-if (MODULO(tstep, marbl_timestep_ratio) == 0) then
+if (is_marbl_step(tstep)) then
   call reg_tic(rg_marbl)
   call marbldrv_column_physics(istr,iend,jstr,jend,t)
   call reg_toc(rg_marbl)

@@ -16,7 +16,7 @@ module surf_flux
   use nc_read_write, only: nccreate, ncwrite
   use netcdf, only:&
   &nf90_global, nf90_write, nf90_nofill,&
-  &nf90_open, nf90_put_att, nf90_close, nf90_set_fill
+  &nf90_open, nf90_put_att, nf90_close, nf90_set_fill, nf90_redef
   use scalars, only: dt, iic, nt, tdays, time, day2sec
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
@@ -378,15 +378,18 @@ subroutine calc_sflx_avg  ![
     sustr_avg = sustr_avg*(1-coef)+sustr( 1:i1,j0:j1)*coef
     svstr_avg = svstr_avg*(1-coef)+svstr(i0:i1, 1:j1)*coef
   endif
-  if (wrt_stflx) then  ! surface tracer fluxes
-    stflx_avg = stflx_avg*(1-coef)+stflx(i0:i1,j0:j1,:)*coef
+  if (wrt_stflx) then  ! surface tracer fluxes: only heat and salt are written
+# ifdef SALINITY
+    stflx_avg(:,:,1:2) = stflx_avg(:,:,1:2)*(1-coef)+stflx(i0:i1,j0:j1,1:2)*coef
+# else
+    stflx_avg(:,:,1:1) = stflx_avg(:,:,1:1)*(1-coef)+stflx(i0:i1,j0:j1,1:1)*coef
+# endif
   endif
   if (wrt_swflx) then  ! surface water flux
     swflx_avg = swflx_avg*(1-coef)+swflx(i0:i1,j0:j1)*coef
   end if
-  if (wrt_rstflx) then  ! surface tracer fluxes
-    rstflx_avg = rstflx_avg*(1-coef)+rstflx(i0:i1,j0:j1,:)*coef
-  endif
+  ! rstflx_avg is not averaged: its write is disabled (see wrt_sflux), so the
+  ! per-step update over all nt tracers did nothing.
 
 end subroutine calc_sflx_avg !]
 !----------------------------------------------------------------------
@@ -609,6 +612,7 @@ subroutine create_sflx_file(fname)  ![
   endif
 
   ierr=nf90_open(fname,nf90_write,ncid)
+  ierr=nf90_redef(ncid)               ! define mode: create_sflx_vars adds variables
 
   call create_sflx_vars(ncid)
 
@@ -631,6 +635,7 @@ subroutine create_sflx_file(fname)  ![
   endif
 
   ierr=nf90_open(fname,nf90_write,ncid)
+  ierr=nf90_redef(ncid)               ! define mode: create_sflx_vars adds variables
 
   call create_sflx_vars(ncid)
 

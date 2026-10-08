@@ -9,7 +9,7 @@ module cdr_output
       use tracers, only: t_units, t_vname
       use param, only: itemp, isalt, nt
       use marbl_driver, only:&
-     &     marbl_saved_state_3d, ialk,&
+     &     marbl_saved_state_3d, ialk, is_marbl_step,&
      &     ialk_alt, idic, idic_alt, nr_marbl_ss_2d, nr_marbl_ss_3d,&
      &     vname_marbl_ss_3d, vname_marbl_ss_2d
       use bgc_shared_vars, only:&
@@ -57,6 +57,12 @@ module cdr_output
       real(kind=8) :: avg_begin_time, avg_end_time
 
       integer(kind=4) :: navg = 0
+      ! Fields that MARBL updates only on MARBL steps (pH, carbonate, air-sea
+      ! CO2) are added to their sums lazily: nheld counts the steps the
+      ! current values have been held since they were last added, and
+      ! marbl_first marks the first such addition in an averaging window.
+      integer(kind=4) :: nheld = 0
+      logical :: marbl_first = .true.
       integer(kind=4) :: iPH, iPH_alt, iFG, iFG_alt, iFG_idiag, iFG_alt_idiag
       integer(kind=4) :: ipCO2SURF, ipCO2SURF_ALT_CO2, iCO3, iCO3_ALT_CO2
       integer(kind=4) :: ipCO2SURF_idiag, ipCO2SURF_ALT_CO2_idiag, iCO3_idiag, iCO3_ALT_CO2_idiag
@@ -72,7 +78,6 @@ module cdr_output
       real(kind=8),allocatable,dimension(:,:) :: int_z_DIC_alt_tmp
       real(kind=8),allocatable,dimension(:,:) :: Chl_TOT_surf_tmp
       real(kind=8),allocatable,dimension(:,:) :: C_TOT_100m_tmp
-      real(kind=8),allocatable,dimension(:,:,:) :: C_TOT_tmp
 
       real(kind=8),allocatable,dimension(:,:,:) :: ALK_source
       real(kind=8),allocatable,dimension(:,:,:) :: ALK_alt_source
@@ -648,8 +653,6 @@ contains
       Chl_TOT_surf_tmp(:,:)=0
       allocate(C_TOT_100m_tmp(GLOBAL_2D_ARRAY) )
       C_TOT_100m_tmp(:,:)=0
-      allocate(C_TOT_tmp(GLOBAL_2D_ARRAY,1:nz) )
-      C_TOT_tmp(:,:,:)=0
 
 
     call define_cdr_output_variables
@@ -658,14 +661,16 @@ contains
   end subroutine init_cdr_output  !]
 !----------------------------------------------------------------------
       subroutine calc_average ![
-      ! Update averages
-      ! The average is always scaled properly throughout
-      ! reset navg_rnd=0 after an output of the average
+      ! Accumulate the averaged fields as sums over the written range
+      ! (i0:i1,j0:j1); finalize_average divides by navg at write time.
+      ! Fields that change every step are added here in one pass; fields that
+      ! only change on MARBL steps are added by accumulate_marbl_fields, and
+      ! CDR sources only where the release is nonzero (add_cdr_source_sums).
       implicit none
 
       ! local
-      real :: coef
-      integer :: k
+      integer :: i,j,k
+      real(kind=8) :: c0, alk, dic, alka, dica
 
       if (navg == 0) then
         ! By the time the code enters here, it will have advanced one timestep,
@@ -675,9 +680,16 @@ contains
 
       navg = navg+1
 
-      coef = 1./navg
-
-      if (coef==1) then                                    ! this refreshes average (1-coef)=0
+      if (navg == 1) then              ! first step of a window: overwrite sums
+        c0 = 0._8
+        nheld = 0
+        marbl_first = .true.
+        if (cdr_source) then
+          ALK_source_avg(:,:,:) = 0
+          ALK_alt_source_avg(:,:,:) = 0
+          DIC_source_avg(:,:,:) = 0
+          DIC_alt_source_avg(:,:,:) = 0
+        endif
         if (mynode==0) then
           if (cdr_monthly_averages) then
             print *, 'cdr :: started monthly averaging.'
@@ -686,113 +698,244 @@ contains
      &      'output_period (s) =', output_period_cdr
           endif
         endif
+      else
+        c0 = 1._8
       endif
 
-      zeta__avg(:,:) = zeta__avg(:,:)*(1-coef) + zeta(:,:,knew)*coef
-
-      temp_avg(:,:,:) = temp_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,itemp)*coef
-
-      salt_avg(:,:,:) = salt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,isalt)*coef
-
-      ALK_avg(:,:,:) = ALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*coef
-
-      hALK_avg(:,:,:) = hALK_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK)*Hz(:,:,:)*coef
-
-      int_z_ALK_tmp(:,:) = 0
-      do k=1,nz
-        int_z_ALK_tmp(:,:) = int_z_ALK_tmp(:,:) + t(:,:,k,nnew,iALK)*Hz(:,:,k)
+      do j=j0,j1
+        do i=i0,i1
+          zeta__avg(i,j) = c0*zeta__avg(i,j) + zeta(i,j,knew)
+          Chl_TOT_surf_avg(i,j) = c0*Chl_TOT_surf_avg(i,j)&
+     &      + t(i,j,nz,nnew,ispChl) + t(i,j,nz,nnew,idiatChl)&
+     &      + t(i,j,nz,nnew,idiazChl)
+          int_z_ALK_tmp(i,j) = 0
+          int_z_DIC_tmp(i,j) = 0
+          int_z_ALK_alt_tmp(i,j) = 0
+          int_z_DIC_alt_tmp(i,j) = 0
+        enddo
       enddo
-      int_z_ALK_avg(:,:) = int_z_ALK_avg(:,:)*(1-coef) + int_z_ALK_tmp(:,:)*coef
-
-      DIC_avg(:,:,:) = DIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*coef
-
-      hDIC_avg(:,:,:) = hDIC_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC)*Hz(:,:,:)*coef
-
-      int_z_DIC_tmp(:,:) = 0
-      do k=1,nz
-        int_z_DIC_tmp(:,:) = int_z_DIC_tmp(:,:) + t(:,:,k,nnew,iDIC)*Hz(:,:,k)
+      do j=1,ny                      ! C_TOT_100m is defined on interior points
+        do i=1,nx
+          C_TOT_100m_avg(i,j) = c0*C_TOT_100m_avg(i,j) + c_tot_100m(i,j)
+        enddo
       enddo
-      int_z_DIC_avg(:,:) = int_z_DIC_avg(:,:)*(1-coef) + int_z_DIC_tmp(:,:)*coef
 
-      ALK_alt_avg(:,:,:) = ALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*coef
-
-      hALK_alt_avg(:,:,:) = hALK_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iALK_alt)*Hz(:,:,:)*coef
-
-      int_z_ALK_alt_tmp(:,:) = 0
       do k=1,nz
-        int_z_ALK_alt_tmp(:,:) = int_z_ALK_alt_tmp(:,:) + t(:,:,k,nnew,iALK_alt)*Hz(:,:,k)
+        do j=j0,j1
+          do i=i0,i1
+            alk  = t(i,j,k,nnew,iALK)
+            dic  = t(i,j,k,nnew,iDIC)
+            alka = t(i,j,k,nnew,iALK_alt)
+            dica = t(i,j,k,nnew,iDIC_alt)
+            temp_avg(i,j,k) = c0*temp_avg(i,j,k) + t(i,j,k,nnew,itemp)
+            salt_avg(i,j,k) = c0*salt_avg(i,j,k) + t(i,j,k,nnew,isalt)
+            PO4_avg(i,j,k)  = c0*PO4_avg(i,j,k)  + t(i,j,k,nnew,iPO4)
+            SiO3_avg(i,j,k) = c0*SiO3_avg(i,j,k) + t(i,j,k,nnew,iSiO3)
+            ALK_avg(i,j,k)     = c0*ALK_avg(i,j,k)     + alk
+            DIC_avg(i,j,k)     = c0*DIC_avg(i,j,k)     + dic
+            ALK_alt_avg(i,j,k) = c0*ALK_alt_avg(i,j,k) + alka
+            DIC_alt_avg(i,j,k) = c0*DIC_alt_avg(i,j,k) + dica
+            hALK_avg(i,j,k)     = c0*hALK_avg(i,j,k)     + alk *Hz(i,j,k)
+            hDIC_avg(i,j,k)     = c0*hDIC_avg(i,j,k)     + dic *Hz(i,j,k)
+            hALK_alt_avg(i,j,k) = c0*hALK_alt_avg(i,j,k) + alka*Hz(i,j,k)
+            hDIC_alt_avg(i,j,k) = c0*hDIC_alt_avg(i,j,k) + dica*Hz(i,j,k)
+            int_z_ALK_tmp(i,j)     = int_z_ALK_tmp(i,j)     + alk *Hz(i,j,k)
+            int_z_DIC_tmp(i,j)     = int_z_DIC_tmp(i,j)     + dic *Hz(i,j,k)
+            int_z_ALK_alt_tmp(i,j) = int_z_ALK_alt_tmp(i,j) + alka*Hz(i,j,k)
+            int_z_DIC_alt_tmp(i,j) = int_z_DIC_alt_tmp(i,j) + dica*Hz(i,j,k)
+          enddo
+        enddo
       enddo
-      int_z_ALK_alt_avg(:,:) = int_z_ALK_alt_avg(:,:)*(1-coef) + int_z_ALK_alt_tmp(:,:)*coef
 
-      DIC_alt_avg(:,:,:) = DIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*coef
-
-      hDIC_alt_avg(:,:,:) = hDIC_alt_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iDIC_alt)*Hz(:,:,:)*coef
-
-      int_z_DIC_alt_tmp(:,:) = 0
-      do k=1,nz
-        int_z_DIC_alt_tmp(:,:) = int_z_DIC_alt_tmp(:,:) + t(:,:,k,nnew,iDIC_alt)*Hz(:,:,k)
+      do j=j0,j1
+        do i=i0,i1
+          int_z_ALK_avg(i,j)     = c0*int_z_ALK_avg(i,j)     + int_z_ALK_tmp(i,j)
+          int_z_DIC_avg(i,j)     = c0*int_z_DIC_avg(i,j)     + int_z_DIC_tmp(i,j)
+          int_z_ALK_alt_avg(i,j) = c0*int_z_ALK_alt_avg(i,j) + int_z_ALK_alt_tmp(i,j)
+          int_z_DIC_alt_avg(i,j) = c0*int_z_DIC_alt_avg(i,j) + int_z_DIC_alt_tmp(i,j)
+        enddo
       enddo
-      int_z_DIC_alt_avg(:,:) = int_z_DIC_alt_avg(:,:)*(1-coef) + int_z_DIC_alt_tmp(:,:)*coef
 
-      PO4_avg(:,:,:) = PO4_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iPO4)*coef
+      if (cdr_source) call add_cdr_source_sums
 
-      SiO3_avg(:,:,:) = SiO3_avg(:,:,:)*(1-coef) + t(:,:,:,nnew,iSiO3)*coef
-
-      pH_avg(:,:,:) = pH_avg(:,:,:)*(1-coef) + marbl_saved_state_3d(:,:,:,iPH)*coef
-
-      pH_alt_avg(:,:,:) = pH_alt_avg(:,:,:)*(1-coef) + marbl_saved_state_3d(:,:,:,iPH_alt)*coef
-
-      FG_CO2_avg(:,:) = FG_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,iFG_idiag)*coef
-
-      FG_ALT_CO2_avg(:,:) = FG_ALT_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,iFG_alt_idiag)*coef
-
-      pCO2SURF_avg(:,:) = pCO2SURF_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,ipCO2SURF_idiag)*coef
-
-      pCO2SURF_ALT_CO2_avg(:,:) = pCO2SURF_ALT_CO2_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,ipCO2SURF_ALT_CO2_idiag)*coef
-
-      zsatarag_avg(:,:) = zsatarag_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,izsatarag_idiag)*coef
-
-      zsatcalc_avg(:,:) = zsatcalc_avg(:,:)*(1-coef) + bgc_diag_2d(:,:,izsatcalc_idiag)*coef
-
-      CO3_avg(:,:,:) = CO3_avg(:,:,:)*(1-coef) + bgc_diag_3d(:,:,:,iCO3_idiag)*coef
-
-      CO3_ALT_CO2_avg(:,:,:) = CO3_ALT_CO2_avg(:,:,:)*(1-coef) + bgc_diag_3d(:,:,:,iCO3_ALT_CO2_idiag)*coef
-
-      co3_sat_arag_avg(:,:,:) = co3_sat_arag_avg(:,:,:)*(1-coef) + bgc_diag_3d(:,:,:,ico3_sat_arag_idiag)*coef
-
-      co3_sat_calc_avg(:,:,:) = co3_sat_calc_avg(:,:,:)*(1-coef) + bgc_diag_3d(:,:,:,ico3_sat_calc_idiag)*coef
-
-      Chl_TOT_surf_avg(:,:) = Chl_TOT_surf_avg(:,:)*(1-coef) + Chl_TOT_surf_tmp(:,:)*coef
-
-      C_TOT_100m_avg(:,:) = C_TOT_100m_avg(:,:)*(1-coef) + C_TOT_100m_tmp(:,:)*coef
-
-      if (cdr_source) then
-        ALK_source_avg(:,:,:) = ALK_source_avg(:,:,:)*(1-coef) + ALK_source(:,:,:)*coef
-
-        ALK_alt_source_avg(:,:,:) = ALK_alt_source_avg(:,:,:)*(1-coef) + ALK_alt_source(:,:,:)*coef
-
-        DIC_source_avg(:,:,:) = DIC_source_avg(:,:,:)*(1-coef) + DIC_source(:,:,:)*coef
-
-        DIC_alt_source_avg(:,:,:) = DIC_alt_source_avg(:,:,:)*(1-coef) + DIC_alt_source(:,:,:)*coef
-      endif
+      nheld = nheld + 1                ! one more step of the MARBL-held values
 
       end subroutine calc_average !]
 ! ----------------------------------------------------------------------
+      subroutine accumulate_marbl_fields ![
+      ! pH, carbonate and air-sea CO2 fields come from MARBL and change only
+      ! on MARBL steps. Add their current values once, weighted by the number
+      ! of steps they have been held (nheld). Called before the next MARBL
+      ! step and before each write, this gives the same sums as adding the
+      ! held values at every step.
+      implicit none
+      integer :: i,j,k
+      real(kind=8) :: c0, w
+
+      if (nheld == 0) return
+      w = dble(nheld)
+      if (marbl_first) then
+        c0 = 0._8
+      else
+        c0 = 1._8
+      endif
+
+      do k=1,nz
+        do j=j0,j1
+          do i=i0,i1
+            pH_avg(i,j,k) = c0*pH_avg(i,j,k)&
+     &        + w*marbl_saved_state_3d(i,j,k,iPH)
+            pH_alt_avg(i,j,k) = c0*pH_alt_avg(i,j,k)&
+     &        + w*marbl_saved_state_3d(i,j,k,iPH_alt)
+            CO3_avg(i,j,k) = c0*CO3_avg(i,j,k)&
+     &        + w*bgc_diag_3d(i,j,k,iCO3_idiag)
+            CO3_ALT_CO2_avg(i,j,k) = c0*CO3_ALT_CO2_avg(i,j,k)&
+     &        + w*bgc_diag_3d(i,j,k,iCO3_ALT_CO2_idiag)
+            co3_sat_arag_avg(i,j,k) = c0*co3_sat_arag_avg(i,j,k)&
+     &        + w*bgc_diag_3d(i,j,k,ico3_sat_arag_idiag)
+            co3_sat_calc_avg(i,j,k) = c0*co3_sat_calc_avg(i,j,k)&
+     &        + w*bgc_diag_3d(i,j,k,ico3_sat_calc_idiag)
+          enddo
+        enddo
+      enddo
+      do j=j0,j1
+        do i=i0,i1
+          FG_CO2_avg(i,j) = c0*FG_CO2_avg(i,j)&
+     &      + w*bgc_diag_2d(i,j,iFG_idiag)
+          FG_ALT_CO2_avg(i,j) = c0*FG_ALT_CO2_avg(i,j)&
+     &      + w*bgc_diag_2d(i,j,iFG_alt_idiag)
+          pCO2SURF_avg(i,j) = c0*pCO2SURF_avg(i,j)&
+     &      + w*bgc_diag_2d(i,j,ipCO2SURF_idiag)
+          pCO2SURF_ALT_CO2_avg(i,j) = c0*pCO2SURF_ALT_CO2_avg(i,j)&
+     &      + w*bgc_diag_2d(i,j,ipCO2SURF_ALT_CO2_idiag)
+          zsatarag_avg(i,j) = c0*zsatarag_avg(i,j)&
+     &      + w*bgc_diag_2d(i,j,izsatarag_idiag)
+          zsatcalc_avg(i,j) = c0*zsatcalc_avg(i,j)&
+     &      + w*bgc_diag_2d(i,j,izsatcalc_idiag)
+        enddo
+      enddo
+
+      nheld = 0
+      marbl_first = .false.
+
+      end subroutine accumulate_marbl_fields !]
+! ----------------------------------------------------------------------
+      subroutine add_cdr_source_sums ![
+      ! Add this step's CDR source terms to their sums. Parameterized and
+      ! depth-profile releases touch only the release columns.
+      implicit none
+      integer :: i,j,k,icdr,cidx
+
+      if (cdr_forcing_3d) then
+        do k=1,nz
+          do j=1,ny
+            do i=1,nx
+              ALK_source_avg(i,j,k) = ALK_source_avg(i,j,k) + cdr_flx_3d_ALK(i,j,k)
+              DIC_source_avg(i,j,k) = DIC_source_avg(i,j,k) + cdr_flx_3d_DIC(i,j,k)
+            enddo
+          enddo
+        enddo
+      else
+        do cidx=1,cdr_nprf
+          icdr = cdr_icdr(cidx)
+          i = cdr_iloc(cidx)
+          j = cdr_jloc(cidx)
+          do k=1,nz
+            ALK_source_avg(i,j,k) = ALK_source_avg(i,j,k)&
+     &        + cdr_prf(cidx,iALK,k)*cdr_flx(icdr,iALK)
+            ALK_alt_source_avg(i,j,k) = ALK_alt_source_avg(i,j,k)&
+     &        + cdr_prf(cidx,iALK_alt,k)*cdr_flx(icdr,iALK_alt)
+            DIC_source_avg(i,j,k) = DIC_source_avg(i,j,k)&
+     &        + cdr_prf(cidx,iDIC,k)*cdr_flx(icdr,iDIC)
+            DIC_alt_source_avg(i,j,k) = DIC_alt_source_avg(i,j,k)&
+     &        + cdr_prf(cidx,iDIC_alt,k)*cdr_flx(icdr,iDIC_alt)
+          enddo
+        enddo
+      endif
+
+      end subroutine add_cdr_source_sums !]
+! ----------------------------------------------------------------------
+      subroutine finalize_average ![
+      ! Turn the accumulated sums into averages over the navg steps of the
+      ! window, just before they are written (and then zeroed) by
+      ! wrt_cdr_output.
+      implicit none
+      integer :: i,j,k
+      real(kind=8) :: r
+
+      call accumulate_marbl_fields
+      r = 1._8/dble(navg)
+
+      do k=1,nz
+        do j=j0,j1
+          do i=i0,i1
+            temp_avg(i,j,k) = r*temp_avg(i,j,k)
+            salt_avg(i,j,k) = r*salt_avg(i,j,k)
+            PO4_avg(i,j,k)  = r*PO4_avg(i,j,k)
+            SiO3_avg(i,j,k) = r*SiO3_avg(i,j,k)
+            ALK_avg(i,j,k)     = r*ALK_avg(i,j,k)
+            DIC_avg(i,j,k)     = r*DIC_avg(i,j,k)
+            ALK_alt_avg(i,j,k) = r*ALK_alt_avg(i,j,k)
+            DIC_alt_avg(i,j,k) = r*DIC_alt_avg(i,j,k)
+            hALK_avg(i,j,k)     = r*hALK_avg(i,j,k)
+            hDIC_avg(i,j,k)     = r*hDIC_avg(i,j,k)
+            hALK_alt_avg(i,j,k) = r*hALK_alt_avg(i,j,k)
+            hDIC_alt_avg(i,j,k) = r*hDIC_alt_avg(i,j,k)
+            pH_avg(i,j,k)           = r*pH_avg(i,j,k)
+            pH_alt_avg(i,j,k)       = r*pH_alt_avg(i,j,k)
+            CO3_avg(i,j,k)          = r*CO3_avg(i,j,k)
+            CO3_ALT_CO2_avg(i,j,k)  = r*CO3_ALT_CO2_avg(i,j,k)
+            co3_sat_arag_avg(i,j,k) = r*co3_sat_arag_avg(i,j,k)
+            co3_sat_calc_avg(i,j,k) = r*co3_sat_calc_avg(i,j,k)
+          enddo
+        enddo
+      enddo
+      if (cdr_source) then
+        do k=1,nz
+          do j=j0,j1
+            do i=i0,i1
+              ALK_source_avg(i,j,k)     = r*ALK_source_avg(i,j,k)
+              ALK_alt_source_avg(i,j,k) = r*ALK_alt_source_avg(i,j,k)
+              DIC_source_avg(i,j,k)     = r*DIC_source_avg(i,j,k)
+              DIC_alt_source_avg(i,j,k) = r*DIC_alt_source_avg(i,j,k)
+            enddo
+          enddo
+        enddo
+      endif
+      do j=j0,j1
+        do i=i0,i1
+          zeta__avg(i,j)            = r*zeta__avg(i,j)
+          Chl_TOT_surf_avg(i,j)     = r*Chl_TOT_surf_avg(i,j)
+          C_TOT_100m_avg(i,j)       = r*C_TOT_100m_avg(i,j)
+          int_z_ALK_avg(i,j)        = r*int_z_ALK_avg(i,j)
+          int_z_DIC_avg(i,j)        = r*int_z_DIC_avg(i,j)
+          int_z_ALK_alt_avg(i,j)    = r*int_z_ALK_alt_avg(i,j)
+          int_z_DIC_alt_avg(i,j)    = r*int_z_DIC_alt_avg(i,j)
+          FG_CO2_avg(i,j)           = r*FG_CO2_avg(i,j)
+          FG_ALT_CO2_avg(i,j)       = r*FG_ALT_CO2_avg(i,j)
+          pCO2SURF_avg(i,j)         = r*pCO2SURF_avg(i,j)
+          pCO2SURF_ALT_CO2_avg(i,j) = r*pCO2SURF_ALT_CO2_avg(i,j)
+          zsatarag_avg(i,j)         = r*zsatarag_avg(i,j)
+          zsatcalc_avg(i,j)         = r*zsatcalc_avg(i,j)
+        enddo
+      enddo
+
+      end subroutine finalize_average !]
+! ----------------------------------------------------------------------
       subroutine multiply_by_thickness ![
-      ! Update averages
-      ! The average is always scaled properly throughout
-      ! reset navg_rnd=0 after an output of the average
+      ! Instantaneous thickness-weighted fields and column integrals, computed
+      ! when a record is written.
       implicit none
 
       integer :: k
 
-      hALK_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK)*Hz(i0:i1,j0:j1,:)
+      hALK_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,nnew,iALK)*Hz(i0:i1,j0:j1,:)
 
-      hDIC_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC)*Hz(i0:i1,j0:j1,:)
+      hDIC_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,nnew,iDIC)*Hz(i0:i1,j0:j1,:)
 
-      hALK_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iALK_alt)*Hz(i0:i1,j0:j1,:)
+      hALK_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,nnew,iALK_alt)*Hz(i0:i1,j0:j1,:)
 
-      hDIC_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,knew,iDIC_alt)*Hz(i0:i1,j0:j1,:)
+      hDIC_alt_tmp(i0:i1,j0:j1,:) = t(i0:i1,j0:j1,:,nnew,iDIC_alt)*Hz(i0:i1,j0:j1,:)
 
       int_z_ALK_tmp(:,:) = 0
       int_z_ALK_alt_tmp(:,:) = 0
@@ -808,7 +951,8 @@ contains
       end subroutine multiply_by_thickness !]
 !----------------------------------------------------------------------
       subroutine calc_cdr_source ![
-      ! Update source terms from the CDR module
+      ! Instantaneous CDR source terms, computed when a record is written
+      ! without averaging (averaged sources are summed in add_cdr_source_sums).
       implicit none
 
       integer :: i,j,k,icdr,cidx
@@ -851,36 +995,48 @@ contains
       end subroutine calc_cdr_source !]
 
 ! ----------------------------------------------------------------------
+      real(kind=8) function c_tot_100m(i,j)
+      ! Total phytoplankton carbon (sp + diat + diaz) integrated over the
+      ! top 100 m of column (i,j).
+      implicit none
+      integer, intent(in) :: i,j
+      integer :: k
+      real(kind=8) :: tot_depth, C_tmp, frac
+
+      tot_depth = 0
+      C_tmp = 0
+      k=nz
+      do while ((tot_depth < 100) .and. (k>=1))
+        C_tmp = C_tmp + (t(i,j,k,nnew,ispC) + t(i,j,k,nnew,idiatC)&
+     &                 + t(i,j,k,nnew,idiazC))*Hz(i,j,k)
+        tot_depth = tot_depth + Hz(i,j,k)
+        k = k-1
+      enddo
+      ! If we went past 100m, subtract off the excess
+      if (tot_depth >= 100) then
+        k = k+1
+        frac = (tot_depth - 100.0) / Hz(i,j,k)
+        C_tmp = C_tmp - frac*(t(i,j,k,nnew,ispC) + t(i,j,k,nnew,idiatC)&
+     &                      + t(i,j,k,nnew,idiazC))*Hz(i,j,k)
+      endif
+      c_tot_100m = C_tmp
+
+      end function c_tot_100m
+! ----------------------------------------------------------------------
       subroutine calc_biomass_and_chl ![
+      ! Instantaneous surface chlorophyll and top-100 m carbon, computed when
+      ! a record is written without averaging.
       implicit none
 
-      integer :: i,j,k
-      real :: tot_depth, C_tmp, frac
+      integer :: i,j
 
       ! Calcualte surface chlorophyll
       Chl_TOT_surf_tmp(:,:) = t(:,:,nz,nnew,ispChl) + t(:,:,nz,nnew,idiatChl) + t(:,:,nz,nnew,idiazChl)
 
       ! Calculate total biomass over top 100m
-      C_TOT_tmp(:,:,:) = t(:,:,:,nnew,ispC) + t(:,:,:,nnew,idiatC) + t(:,:,:,nnew,idiazC)
-
       do j=1,ny
         do i=1,nx
-          tot_depth = 0
-          C_tmp = 0
-          k=nz
-          do while ((tot_depth < 100) .and. (k>=1))
-            C_tmp = C_tmp + C_TOT_tmp(i,j,k)*Hz(i,j,k)
-            tot_depth = tot_depth + Hz(i,j,k)
-            k = k-1
-          enddo
-          ! If we went past 100m, subtract off the excess
-          if (tot_depth >= 100) then
-            k = k+1
-            frac = (tot_depth - 100.0) / Hz(i,j,k)
-            C_tmp = C_tmp - frac *C_TOT_tmp(i,j,k)*Hz(i,j,k)
-          endif
-
-          C_TOT_100m_tmp(i,j) =  C_tmp
+          C_TOT_100m_tmp(i,j) = c_tot_100m(i,j)
         enddo
       enddo
 
@@ -906,31 +1062,34 @@ contains
         end subroutine create_cdr_output_variables
 !----------------------------------------------------------------------
       subroutine wrt_cdr  ![
-      ! Check whether it is time to write to file
+      ! Accumulate averages (or prepare instantaneous fields) and write a
+      ! record when one is due.
       implicit none
+      logical :: writing
 
-      if (cdr_source) call calc_cdr_source
-
-      call calc_biomass_and_chl
-
-      if (wrt_cdr_avg) call calc_average
-
-    if (cdr_monthly_averages) then
-      call sec2date(time+dt,date)
-
-      if ((date(2) - month_at_prev_timestep) /= 0) call wrt_cdr_output
-
-      month_at_prev_timestep = date(2)
-    else
-
-      output_time = output_time + dt
-
-      if (output_time>=output_period_cdr) then
-        call wrt_cdr_output
-        output_time = 0
+      if (cdr_monthly_averages) then
+        call sec2date(time+dt,date)
+        writing = ((date(2) - month_at_prev_timestep) /= 0)
+      else
+        output_time = output_time + dt
+        writing = (output_time>=output_period_cdr)
       endif
 
-    endif
+      if (wrt_cdr_avg) then
+        call calc_average
+        ! add the MARBL-held fields before the next MARBL step changes them
+        if (is_marbl_step(iic+1)) call accumulate_marbl_fields
+        if (writing) call finalize_average
+      elseif (writing) then           ! instantaneous fields are only needed now
+        if (cdr_source) call calc_cdr_source
+        call calc_biomass_and_chl
+      endif
+
+      if (writing) then
+        call wrt_cdr_output
+        if (.not. cdr_monthly_averages) output_time = 0
+      endif
+      if (cdr_monthly_averages) month_at_prev_timestep = date(2)
 
   end subroutine wrt_cdr  !]
 !----------------------------------------------------------------------

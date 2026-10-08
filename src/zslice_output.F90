@@ -163,8 +163,7 @@ contains
 
     ! local
     integer(kind=4) i, j, k, m, trcz
-    real(kind=8) zlev, dpth
-    integer(kind=4) km(1:nx)
+    integer(kind=4) kml(1:nx,1:ndep)
 
     if (wrt_T_zslice) then
       do j=1,ny
@@ -177,10 +176,13 @@ contains
           zz(i,nz+1)=z_w(i,j,nz)-z_w(i,j,nz)
           zz(i,  0)=z_w(i,j,0)-z_w(i,j,nz)
         enddo
+        ! The bracketing levels depend only on zz: find them once per row
+        ! and reuse them for every tracer.
+        call zslice_levels(kml,zz,j)
         do trcz=1,nt_zslice
 !         if (mynode==0 .and. j==10) print *, j, zz(10,0), zz(10,N), zz(10,N+1)
 !         if (mynode==0 .and. j==10) print *, t(10,j,nz,nnew,trc2zsc(trcz))
-          call sigma_to_z(var_zlv,t(1:nx,j,1:nz,nnew,trc2zsc(trcz)),zz,j)
+          call zslice_interp(var_zlv,t(1:nx,j,1:nz,nnew,trc2zsc(trcz)),zz,kml)
           do i=1,nx
             do m=1,ndep
               Tz(i,j,m,trcz)=var_zlv(i,m)
@@ -236,7 +238,7 @@ contains
   end subroutine calc_zslice  !]
 !----------------------------------------------------------------------
   subroutine sigma_to_z(var_zlv,var,zz,j) ![
-
+    ! Interpolate var from sigma levels zz to the slice depths vecdep.
     implicit none
 
     !import/export
@@ -246,13 +248,27 @@ contains
     real(kind=8), dimension(:,:), intent(out) :: var_zlv
 
     ! local
+    integer(kind=4) kml(1:nx,1:ndep)
+
+    call zslice_levels(kml,zz,j)
+    call zslice_interp(var_zlv,var,zz,kml)
+
+  end subroutine sigma_to_z  !]
+!----------------------------------------------------------------------
+  subroutine zslice_levels(kml,zz,j) ![
+    ! For each point of row j and each slice depth vecdep(m), find the
+    ! sigma level k with zz(k) <= depth <= zz(k+1), or a flag: -3 masked,
+    ! -2 below bottom, nz+2 above surface, nz above z_r(N), 0 below z_r(1).
+    implicit none
+
+    !import/export
+    integer(kind=4), intent(in) :: j
+    real(kind=8), dimension(1:nx,0:nz+1), intent(in) :: zz
+    integer(kind=4), dimension(1:nx,1:ndep), intent(out) :: kml
+
+    ! local
     integer(kind=4) i, k, m
     real(kind=8) zlev, dpth
-    integer(kind=4) km(1:nx)
-
-!         if (mynode==0 .and. j==10) print *, j, zz(10,0), zz(10,N), zz(10,N+1)
-!         if (mynode==0 .and. j==10) print *, var(10,nz)
-    var_zlv=0
 
     do m=1,ndep
 
@@ -261,47 +277,71 @@ contains
       do i=1,nx
         dpth=zz(i,nz+1)-zz(i,0)
         if (rmask(i,j) < 0.5_8) then
-          km(i)=-3          !--> masked out
+          kml(i,m)=-3          !--> masked out
         elseif (dpth*(zlev-zz(i,nz+1)) > 0._8) then
-          km(i)=nz+2         !<-- above surface
+          kml(i,m)=nz+2         !<-- above surface
         elseif (dpth*(zlev-zz(i,nz)) > 0._8) then
-          km(i)=nz           !<-- below surface, but above z_r(N)
+          kml(i,m)=nz           !<-- below surface, but above z_r(N)
         elseif (dpth*(zz(i,0)-zlev) > 0._8) then
-          km(i)=-2          !<-- below bottom
+          kml(i,m)=-2          !<-- below bottom
         elseif (dpth*(zz(i,1)-zlev) > 0._8) then
-          km(i)=0           !<-- above bottom, but below z_r(1)
+          kml(i,m)=0           !<-- above bottom, but below z_r(1)
         else
-          km(i)=-1          !--> to search
+          kml(i,m)=-1          !--> to search
         endif
       enddo
 
       do k=nz-1,1,-1
         do i=1,nx
-          if (km(i) == -1) then
+          if (kml(i,m) == -1) then
             if ((zz(i,k+1)-zlev)*(zlev-zz(i,k)) >= 0._8) then
-              km(i)=k
+              kml(i,m)=k
             endif
           endif
         enddo
       enddo
 
+    enddo
+
+  end subroutine zslice_levels  !]
+!----------------------------------------------------------------------
+  subroutine zslice_interp(var_zlv,var,zz,kml) ![
+    ! Interpolate var to the slice depths using levels from zslice_levels.
+    implicit none
+
+    !import/export
+    real(kind=8), dimension(1:nx,0:nz+1), intent(in) :: zz
+    real(kind=8), dimension(:,:), intent(in) :: var
+    integer(kind=4), dimension(1:nx,1:ndep), intent(in) :: kml
+    real(kind=8), dimension(:,:), intent(out) :: var_zlv
+
+    ! local
+    integer(kind=4) i, k, m
+    real(kind=8) zlev
+
+    var_zlv=0
+
+    do m=1,ndep
+
+      zlev=vecdep(m)
+
       do i=1,nx
-        if (km(i) == -3) then
+        if (kml(i,m) == -3) then
           var_zlv(i,m)=0._8             !<-- masked out
-        elseif (km(i) == -2) then
+        elseif (kml(i,m) == -2) then
           var_zlv(i,m)=0._8             !<-- below bottom
-        elseif (km(i) == nz+2) then
+        elseif (kml(i,m) == nz+2) then
           var_zlv(i,m)=0._8             !<-- above surface
-        elseif (km(i) == nz) then
+        elseif (kml(i,m) == nz) then
           var_zlv(i,m)=var(i,nz)&       !-> R-point, above z_r(N)
           &+(zlev-zz(i,nz))*(var(i,nz)-var(i,nz-1))&
           &/(zz(i,nz)-zz(i,nz-1))
-        elseif (km(i) == 0) then   !-> R-point below z_r(1),
+        elseif (kml(i,m) == 0) then   !-> R-point below z_r(1),
           var_zlv(i,m)=var(i,1)&  !     but above bottom
           &-(zz(i,1)-zlev)*(var(i,2)-var(i,1))&
           &/(zz(i,2)-zz(i,1))
         else
-          k=km(i)
+          k=kml(i,m)
           var_zlv(i,m)=( var(i,k)*(zz(i,k+1)-zlev)&
           &+var(i,k+1)*(zlev-zz(i,k))&
           &)/(zz(i,k+1)-zz(i,k))
@@ -310,7 +350,7 @@ contains
 
     enddo
 
-  end subroutine sigma_to_z  !]
+  end subroutine zslice_interp  !]
 !----------------------------------------------------------------------
   subroutine calc_average ![
     ! Update averages
