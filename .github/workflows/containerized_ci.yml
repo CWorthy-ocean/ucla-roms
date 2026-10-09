@@ -291,7 +291,7 @@ jobs:
       run: |
         micromamba run -n roms-ci bash -c '
         cd ${ROMS_ROOT}/tests/
-        pytest -svvv -rfEx . --environ=github_gnu
+        pytest -svvv -rfEx . --environ=github_gnu --inputs-out results/inputs_github_gnu
         '
     - name: Upload computed results
       if: always()
@@ -302,6 +302,17 @@ jobs:
         path: |
           tests/results/computed_*.json
           tests/results/input_hashes_*.json
+        if-no-files-found: warn
+        retention-days: 30
+    - name: Upload generated input files
+      # The roms-tools inputs the sentinel hashed (about 2 MB), so a sentinel
+      # change can be traced to the variables that moved.
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: inputs-github_gnu
+        overwrite: true
+        path: tests/results/inputs_github_gnu/
         if-no-files-found: warn
         retention-days: 30
 
@@ -531,7 +542,7 @@ jobs:
           cd $ROMS_ROOT/tests/
           sed -i -e "s/make BUILD_MODE=test/make COMPILER=intel BUILD_MODE=test/g" _helpers.py
           sed -i -e "s/mpirun/mpirun --oversubscribe/g" _helpers.py
-          pytest -svvv -rfEx . --environ=github_ifx
+          pytest -svvv -rfEx . --environ=github_ifx --inputs-out results/inputs_github_ifx
 
       - name: Upload computed results
         if: always()
@@ -542,6 +553,17 @@ jobs:
           path: |
             tests/results/computed_*.json
             tests/results/input_hashes_*.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload generated input files
+        # The roms-tools inputs the sentinel hashed (about 2 MB), so a sentinel
+        # change can be traced to the variables that moved.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inputs-github_ifx
+          overwrite: true
+          path: tests/results/inputs_github_ifx/
           if-no-files-found: warn
           retention-days: 30
 

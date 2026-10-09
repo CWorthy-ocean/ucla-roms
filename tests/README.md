@@ -8,7 +8,7 @@ Each test compiles ROMS for one configuration, runs a few tens of time steps und
 
 ROMS built at `-O0` is bitwise stable across GitHub runners. The inputs are not shipped: roms-tools generates them on the runner, and numpy, OpenBLAS and numba pick AVX-512 kernels when the VM exposes them (about one run in three), which changes the inputs at the last bit. The top-level `env:` block in `.github/workflows/containerized_ci.yml` pins all three to AVX2-generic paths.
 
-The `== input file hashes and environment ==` block printed at the end of every session is the sentinel: one SHA-256 over the stored variable values of each generated file (not the file bytes, which embed netCDF library versions). If the input hashes change without a Python-environment change (container rebuild, roms-tools or numpy bump), that is a bug in the pinning: investigate it before touching any reference.
+The `== input file hashes and environment ==` block printed at the end of every session is the sentinel: one SHA-256 over the stored variable values of each generated file (not the file bytes, which embed netCDF library versions). If the input hashes change without a Python-environment change (container rebuild, roms-tools or numpy bump), that is a bug in the pinning: investigate it before touching any reference. Each CI job also uploads the generated files themselves as the `inputs-<environ>` artifact (about 2 MB), so a sentinel change can be traced to the variables that moved: download two runs' artifacts and compare them with xarray. The block's `numpy_dispatch_enabled` list shows which SIMD targets numpy enabled; with the CI pinning, no `AVX512*` entry should appear on any runner.
 
 ## When a test fails on a hash mismatch
 

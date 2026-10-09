@@ -3,6 +3,7 @@ import hashlib
 import importlib.metadata
 import json
 import re
+import shutil
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,16 @@ def pytest_addoption(parser):
              "do not fail the run. Every other failure mode -- compile errors, ROMS "
              "crashes, missing output -- still fails. For local runs against references "
              "generated on another machine; CI does not set it.",
+    )
+    parser.addoption(
+        "--inputs-out",
+        action="store",
+        default=None,
+        metavar="DIR",
+        help="Copy the roms-tools-generated input files (the unpartitioned ones the "
+             "sentinel hashes) to DIR after generation. CI uploads that directory as "
+             "the inputs-<environ> artifact, so a change in the input sentinel can be "
+             "traced to the variables that moved.",
     )
     parser.addoption(
         "--results-out",
@@ -85,15 +96,11 @@ def _collect_input_sentinel(target: Path) -> dict:
         except importlib.metadata.PackageNotFoundError:
             return None
 
-    # partit writes the per-rank copies as <stem>.<k>.nc with an integer rank k;
-    # only the files roms-tools generated are of interest. Hash the stored
-    # variable values, not the file bytes: netCDF-4 files embed the writing
-    # library versions (_NCProperties), so byte hashes differ between images
-    # that wrote identical numbers.
+    # Hash the stored variable values, not the file bytes: netCDF-4 files
+    # embed the writing library versions (_NCProperties), so byte hashes differ
+    # between images that wrote identical numbers.
     files = {}
-    for path in sorted(target.glob("*.nc")):
-        if re.fullmatch(r".*\.\d+\.nc", path.name):
-            continue
+    for path in _generated_input_files(target):
         digest = hashlib.sha256()
         with xr.open_dataset(path, decode_cf=False) as ds:
             for name in sorted(ds.variables):
@@ -113,11 +120,36 @@ def _collect_input_sentinel(target: Path) -> dict:
         for package in ("roms-tools", "numpy", "scipy", "numba", "xarray")
     }
     environment["avx512f"] = avx512f
+    environment["numpy_dispatch_enabled"] = _numpy_dispatch_enabled()
     return {"files": files, "environment": environment}
 
 
+def _generated_input_files(target: Path) -> list[Path]:
+    """The input files roms-tools wrote, without partit's per-rank copies.
+
+    partit writes those as ``<stem>.<k>.nc`` with an integer rank ``k``.
+    """
+    return [
+        path for path in sorted(target.glob("*.nc"))
+        if not re.fullmatch(r".*\.\d+\.nc", path.name)
+    ]
+
+
+def _numpy_dispatch_enabled():
+    """The numpy SIMD dispatch targets this CPU enables (None if unavailable).
+
+    Records whether the NPY_DISABLE_CPU_FEATURES pinning in CI took effect:
+    with it, no AVX512* target should appear here on any runner.
+    """
+    try:
+        from numpy._core._multiarray_umath import __cpu_dispatch__, __cpu_features__
+    except ImportError:
+        return None
+    return [target for target in __cpu_dispatch__ if __cpu_features__.get(target)]
+
+
 @pytest.fixture(scope="session")
-def input_dir(tmp_path_factory) -> Path:
+def input_dir(request, tmp_path_factory) -> Path:
     """One-time generation of every ROMS input file the suite needs.
 
     Built once per pytest session into a temporary directory and shared
@@ -126,6 +158,12 @@ def input_dir(tmp_path_factory) -> Path:
     target = tmp_path_factory.mktemp("roms_inputs")
     create_roms_inputs(target)
     _assertions.input_file_hashes.update(_collect_input_sentinel(target))
+    inputs_out = request.config.getoption("--inputs-out")
+    if inputs_out:
+        out = Path(inputs_out)
+        out.mkdir(parents=True, exist_ok=True)
+        for path in _generated_input_files(target):
+            shutil.copy2(path, out / path.name)
     return target
 
 
