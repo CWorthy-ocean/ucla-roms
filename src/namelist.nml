@@ -366,6 +366,10 @@ wrt_gas_exchange = .false.           ! Write FG_CDR_*_DIC: air-sea CO2 flux into
 !----------------------------
 ! Output for ddic_dco2 (beta) and ddic_dalk (eta)
 ! Requires MARBL and CDR_FORCING cppkeys
+! The files carry ddic_dco2_time / ddic_dalk_time (days since the reference
+! date; averaged records are stamped at the window midpoint) and start with an
+! instantaneous record at the start time, so they can be listed in `frcfiles`
+! of a CDR_LITE run with cdr_online_carbonate_sensitivity = .false.
 !----------------------------
 do_cdr_gas_exch_output = .false.     ! Output CDR gas-exchange sensitivities
 wrt_cdr_gas_avg = .true.             ! Write averaged (T) or instantaneous (F)
