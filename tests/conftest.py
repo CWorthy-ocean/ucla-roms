@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
+import xarray as xr
 
 from . import _assertions
 from ._assertions import computed_results, tolerated_mismatches
@@ -85,12 +86,21 @@ def _collect_input_sentinel(target: Path) -> dict:
             return None
 
     # partit writes the per-rank copies as <stem>.<k>.nc with an integer rank k;
-    # only the files roms-tools generated are of interest.
-    files = {
-        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in sorted(target.glob("*.nc"))
-        if not re.fullmatch(r".*\.\d+\.nc", path.name)
-    }
+    # only the files roms-tools generated are of interest. Hash the stored
+    # variable values, not the file bytes: netCDF-4 files embed the writing
+    # library versions (_NCProperties), so byte hashes differ between images
+    # that wrote identical numbers.
+    files = {}
+    for path in sorted(target.glob("*.nc")):
+        if re.fullmatch(r".*\.\d+\.nc", path.name):
+            continue
+        digest = hashlib.sha256()
+        with xr.open_dataset(path, decode_cf=False) as ds:
+            for name in sorted(ds.variables):
+                values = ds[name].values
+                digest.update(name.encode())
+                digest.update(values.tobytes() if values.dtype != object else repr(values.tolist()).encode())
+        files[path.name] = digest.hexdigest()
 
     cpuinfo = Path("/proc/cpuinfo")  # absent on macOS
     avx512f = None

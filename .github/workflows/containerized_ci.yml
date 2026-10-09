@@ -298,6 +298,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: results-github_gnu
+        overwrite: true  # a rerun of the job must be able to replace the artifact
         path: |
           tests/results/computed_*.json
           tests/results/input_hashes_*.json
@@ -537,6 +538,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: results-github_ifx
+          overwrite: true  # a rerun of the job must be able to replace the artifact
           path: |
             tests/results/computed_*.json
             tests/results/input_hashes_*.json
