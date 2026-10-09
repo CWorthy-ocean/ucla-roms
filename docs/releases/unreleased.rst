@@ -17,6 +17,13 @@ Breaking Changes
 - Model state is unchanged, so the pytest history and BGC references are not affected. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
 - **Model results change.** On MiniPac, compared with the previous code after 5 hours, the RMS difference relative to each field's spread is 3.6% for sea level, 1.3% for velocity and about 3e-4 for temperature and salinity. The largest local differences are 0.2 m, 0.14 m/s, 0.9 °C and 0.35 PSU. This combines the three result-changing fixes under Bug Fixes, plus start-up adjustment from a restart produced with the old boundary timing. The pytest reference values will need regenerating. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
 - ``set_tides`` gains an optional ``bry_phase`` argument (the time of the boundary tidal harmonics, in units of ``dt`` from ``time``; default 0.5). Existing calls are unchanged. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- **Results change only where a bug is fixed:** (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+
+  - rivers that discharge across an MPI tile edge;
+  - the averaged ``Akv``/``Akt``/``AKs``/``hbls``/``hbbl`` fields and the surface-flux averages, which previously held NaNs. Everything else is bitwise identical on MiniPac. The exception is a run with rivers, where three BGC fields differ by at most 3e-17 relative (roundoff from the restructured river loops). pytest hashes for the river configurations may therefore change.
+
+- New optional arguments, with existing calls unchanged: ``set_depth_tile(..., zeta_exchanged)`` and ``set_frc_data(..., interp)``. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``exchange_xxx(..., do_corn=.false.)`` now skips sending and receiving the corner messages, not just unpacking them. No current caller passes it. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
 
 New Features
 ~~~~~~~~~~~~
@@ -42,6 +49,13 @@ Bug Fixes
 - ``t3dbc_mod.F90``: the radiation (Orlanski) update for open-boundary tracers used the interior tracer at ``nstp`` (time n) on the west and south boundaries but ``nnew`` (time n+1) on east and north, an asymmetry inherited from the 2017 code. All four sides now use ``nstp``, consistent with the tangential-gradient terms. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
 - ``main.F90``, ``tides.F90``: the second boundary update in ``roms_step`` read its data at time + 1.5·dt, although it is meant for n+1 (it feeds ``step2d`` and the 3D corrector). It now reads at n+1, using ``frc_time = '1/2 fwd'`` with ``tdays`` left at n+½, so nothing else that uses ``tdays`` changes. The boundary tidal harmonics on that call also move to n+1. The tidal potential stays at n+½, where ``prsgrd`` uses it. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
 - ``lmd_vmix_mod.F90``: the 1-2-1 vertical smoothing of ``Kv``/``Kt``/``Ks`` ran in place with ``k`` ascending, so each level was filtered from an already-smoothed neighbour. The background diffusivity was also counted more than once, through the neighbours and the padded top and bottom values (about 1.33×). Smoothing now uses unsmoothed neighbours, the padding excludes the background, and the background is added once. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``river_frc.F90``: ``river_index``/``river_fraction`` (and the grid-file ``river_flux``) were set only on each rank's own points, but ``calc_river_flux`` also reads the halo cells. A river cell on a neighbouring rank, next to this rank's ocean, therefore got index 0: (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+
+  - with ``PARALLEL_IO``, that read ``riv_vol(0)`` and ``riv_trc(0,:)`` out of bounds;
+  - without it, the river flux through that face was lost. The halos are now exchanged before the index is converted. On MiniPac, 40 rivers across tile edges were off by 0.28 °C and 0.26 PSU after 5 hours.
+
+- ``basic_output.F90``, ``surf_flux.F90``: the ``Akv``/``Akt``/``AKs``/``hbls``/``hbbl`` averages and the surface-flux averages were allocated without zeroing. The first running-mean update multiplies the old contents by 0, so any leftover NaN stayed NaN for the whole run. On MiniPac about 2,700 points of averaged ``hbls`` and 3,400 of ``hbbl`` were NaN, and which points varied from run to run. These arrays are now zeroed at allocation, like the other averages. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``surf_flux.F90``: the ``PARALLEL_IO`` writes never set ``pio_gtype``, so each used the previous output's decomposition and surface-flux output aborted. Each write now sets its grid's decomposition (u, v or rho points), as ``frc_output.F90`` does. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
 
 Improvements
 ~~~~~~~~~~~~
@@ -82,6 +96,13 @@ Improvements
 - **``zslice_output.F90``:** the search for the sigma levels bracketing each slice depth runs once per row and is shared by all z-slice tracers (``zslice_levels`` / ``zslice_interp``). Output is bitwise identical. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
 - **``surf_flux.F90``:** only the heat and salt fluxes that are written are averaged. ``rstflx_avg``, whose write is disabled, is no longer updated. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
 - **``marbl_driver.F90``:** a new ``is_marbl_step(istep)`` is used by ``step3d_t`` and the output averaging, so both agree on which steps MARBL updates its fields. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- ``roms_mpi.F90``: halo exchanges wait with ``MPI_Waitall`` instead of spinning on ``MPI_Test``. ``do_corn=.false.`` now skips the corner messages entirely. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``step2d_mod.F90``, ``set_depth_mod.F90``: on the last barotropic substep, ``zeta``/``ubar``/``vbar`` are exchanged before ``set_depth_tile``. With ``PARALLEL_IO``, ``set_depth`` then fills ``z_w``, ``z_r`` and ``Hz`` in the halos itself, which removes a 3-array, ``nz``-level exchange each step. Start-up calls, and builds without ``PARALLEL_IO``, keep the exchange. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``pio_roms.F90``: no ``PIO_syncfile`` after every variable write; the ``PIO_closefile`` at the end of each record flushes. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``boundary.F90``, ``roms_read_write.F90``: under ``PARALLEL_IO``, ranks not on a boundary still join the collective boundary read but skip the time interpolation. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``cdr_frc.F90``: removed the ``MPI_Barrier`` at every ``set_cdr_frc`` call. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``bulk_frc.F90``: the current-feedback stress loops reuse ``wspd_used`` instead of recomputing the wind speed. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``river_frc.F90``, ``step2d_mod.F90``, ``pre_step3d_mod.F90``, ``step3d_uv_mod.F90``, ``compute_horiz_tracer_fluxes.h``: river faces are listed once when the river locations are set up. The river loops, including the one inside the tracer and level loops, now visit only those faces instead of testing every point of the tile. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -118,3 +139,24 @@ Miscellaneous
 - **Builds:** compiled with ifx in seven configurations: the CI key sets, builds without ``PARALLEL_IO``, no-MARBL CDR, and the no-KPP mixing branch. gfortran and the pytest suite were not run locally. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
 - **Not separated:** the three result-changing fixes were not run individually, so their separate contributions to the differences above are unknown. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
 - **Base branch:** this branch is built on ``perf-tier2``. Until that merges, a PR against ``main`` will also show the Tier 2 commits. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- **Benchmark** (MiniPac, MARBL plus CDR forcing, ``PARALLEL_IO``, 256 ranks, 384 steps): about 1% faster overall, 268.6 s → 267.1 s for runs done side by side. Slowest-rank time: (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- **Not done:** (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+
+  - two-phase halo exchange: it makes the latency-bound ``step2d`` exchanges wait twice as long;
+  - keeping output files open between records, writing ``ocean_time`` through PIO, and caching varids: output is bandwidth-bound, so these wouldn't help;
+  - skipping land points in the bulk-flux loop: the all-ocean ranks set the step time;
+  - warm-starting the bulk-flux iteration: it would change results to save at most about 0.1%;
+  - precomputing ``step2d`` substep factors: implemented, measured no gain, reverted.
+
+- **Tests** on MiniPac (20 steps): (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+
+  - the model state is bitwise identical to the base;
+  - two runs of the same build give bitwise identical output in every file, averages included;
+  - with 60 rivers away from tile edges, output is identical apart from the roundoff noted above;
+  - 40 rivers discharging across 16×16 tile edges match an 8×8 run, where those edges fall inside a tile, to roundoff;
+  - a build that zeroes the river halos before the new exchange (as a read without ``PARALLEL_IO`` leaves them) gives identical results;
+  - the grid-file ``river_flux`` path matches the forcing-file path;
+  - surface-flux averages are now written, with no NaNs.
+
+- **Builds:** compiled with ifx in eight configurations: the CI key sets, builds without ``PARALLEL_IO``, the river and BGC test keys, an analytical river case and a periodic analytical case. gfortran and the pytest suite were not run locally. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- **Base branch:** built on ``review-bugfixes`` (#382). Until that merges, this PR's diff also shows its two commits. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
