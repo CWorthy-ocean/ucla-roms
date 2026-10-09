@@ -7,7 +7,7 @@ module pio_roms
   use pio, only : PIO_finalize, PIO_noerr, PIO_iotype_netcdf, PIO_createfile
   use pio, only : PIO_int, PIO_real, PIO_double, var_desc_t, PIO_redef, PIO_def_dim, PIO_def_var, PIO_enddef
   use pio, only : PIO_closefile, io_desc_t, PIO_initdecomp, PIO_write_darray
-  use pio, only : PIO_freedecomp, PIO_clobber, PIO_read_darray, PIO_OFFSET_KIND
+  use pio, only : PIO_freedecomp, PIO_clobber, PIO_read_darray, PIO_syncfile, PIO_OFFSET_KIND
   use pio, only : PIO_nowrite, PIO_openfile, PIO_setframe, PIO_inq_varndims
   use pio, only : PIO_iotype_netcdf4p
   use pio, only : PIO_iotype_pnetcdf
@@ -2074,16 +2074,17 @@ contains
     elseif (pio_gtype == 'w1vc') then
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdwv_w, arr, ierr)
     else
-      ! A stale pio_gtype used to drop the variable silently (the
-      ! per-variable PIO_syncfile kept the collectives balanced). Without
-      ! the sync it would leave this rank one collective short and hang
-      ! the next one, so abort here with the offending value instead.
+      ! A stale pio_gtype used to drop the variable silently; abort here
+      ! with the offending value instead.
       call pio_bad_gtype('pio_ncwrite1', varName)
     endif
-    ! No PIO_syncfile here: PIO copies arr into its write buffer, and the
-    ! caller's PIO_closefile at the end of the record flushes everything
-    ! in one go (a sync per variable forced a separate collective write
-    ! and file-system flush for each one).
+    ! Flush each variable as it is written. Without this sync PIO buffers
+    ! the whole record until PIO_closefile; on multi-node runs the restart
+    ! write then stalled past a 20-minute job limit (Pac 1856x960x100 with
+    ! MARBL, 59 GB record, 256 and 512 ranks), while one-node runs gained
+    ! no speed from the buffering. With the sync, the same restart record
+    ! takes about 144 s on 256 ranks.
+    call PIO_syncfile(pio_FileDesc)
 
   end subroutine pio_ncwrite1
 ! ----------------------------------------------------------------------
@@ -2180,7 +2181,7 @@ contains
     else
       call pio_bad_gtype('pio_ncwrite2', varName)   ! see pio_ncwrite1
     endif
-    ! No PIO_syncfile: see pio_ncwrite1.
+    call PIO_syncfile(pio_FileDesc)   ! per variable, see pio_ncwrite1
 
   end subroutine pio_ncwrite2
 ! ----------------------------------------------------------------------
@@ -2219,7 +2220,7 @@ contains
     else
       call pio_bad_gtype('pio_ncwrite3', varName)   ! see pio_ncwrite1
     endif
-    ! No PIO_syncfile: see pio_ncwrite1.
+    call PIO_syncfile(pio_FileDesc)   ! per variable, see pio_ncwrite1
 
   end subroutine pio_ncwrite3
 ! ----------------------------------------------------------------------
