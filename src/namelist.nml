@@ -335,6 +335,9 @@ nrpf_cdr = 4                       ! Time records per output file
 ! MARBL); if .false. (default), ddic_dco2/ddic_dalk are read from frcfiles.
 ! The online option assumes ALT_CO2 sees the same atmosphere as DIC/ALK: with
 ! PCO2AIR_FORCING, xco2_air_alt must equal xco2_air in the forcing files.
+! The surface-flux variables CDR_OAE_DIC<n>_flx and CDR_DOR_DIC<n>_flx in the
+! forcing files are optional: if absent, the tracer's surface flux is zero and
+! only the gas exchange (from ddic_dco2/ddic_dalk) acts.
 !--------------------------
 cdr_online_carbonate_sensitivity = .false.
 /
