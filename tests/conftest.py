@@ -2,6 +2,7 @@
 import hashlib
 import importlib.metadata
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -51,12 +52,13 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    """Hand the --tolerate-hash-mismatch and --environ settings to the assertion helper.
+    """Check the CPU-dispatch pin, then hand the CLI settings to the assertion helper.
 
     `assert_output_matches_reference` is called directly from test bodies with
     no access to the pytest config, so the settings are stashed on the module
     rather than threaded through all ten call sites.
     """
+    _check_numpy_dispatch_pin()
     _assertions.tolerate_hash_mismatch = config.getoption("--tolerate-hash-mismatch")
     _assertions.environ = config.getoption("--environ")
 
@@ -136,16 +138,33 @@ def _generated_input_files(target: Path) -> list[Path]:
 
 
 def _numpy_dispatch_enabled():
-    """The numpy SIMD dispatch targets this CPU enables (None if unavailable).
-
-    Records whether the NPY_DISABLE_CPU_FEATURES pinning in CI took effect:
-    with it, no AVX512* target should appear here on any runner.
-    """
+    """The numpy SIMD dispatch targets this CPU enables (None if unavailable)."""
     try:
         from numpy._core._multiarray_umath import __cpu_dispatch__, __cpu_features__
     except ImportError:
         return None
     return [target for target in __cpu_dispatch__ if __cpu_features__.get(target)]
+
+
+def _check_numpy_dispatch_pin():
+    """Fail the session if NPY_ENABLE_CPU_FEATURES is set but did not take effect.
+
+    numpy reports a misspelled or unknown feature name in that variable with an
+    ImportWarning, which Python hides by default, and then dispatches as if the
+    variable were unset. CI relies on the pin for reproducible inputs, so an
+    ineffective one must be loud (it cost a day of chasing AVX-512 splits once).
+    """
+    allowed = os.environ.get("NPY_ENABLE_CPU_FEATURES")
+    if allowed is None:
+        return
+    enabled = _numpy_dispatch_enabled() or []
+    extra = sorted(set(enabled) - set(allowed.split()))
+    if extra:
+        raise pytest.UsageError(
+            f"NPY_ENABLE_CPU_FEATURES={allowed!r} did not take effect: numpy still "
+            f"enables the dispatch targets {extra}. Check the names against "
+            "numpy._core._multiarray_umath.__cpu_dispatch__ for the installed numpy."
+        )
 
 
 @pytest.fixture(scope="session")
