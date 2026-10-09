@@ -149,11 +149,9 @@ contains
     implicit none
 
     ! local
-    integer(kind=4) :: i,j, ierr, itrc, icdr
+    integer(kind=4) :: i,j, itrc, icdr
 
     if (.not. init_cdr_done) call init_cdr_frc
-
-    call MPI_Barrier(ocean_grid_comm, ierr)
 
     if (cdr_forcing_depth_profiles) then
 

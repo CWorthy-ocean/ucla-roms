@@ -22,6 +22,7 @@ module river_frc
   &nt_passive, nt_cdr_oae, nt_cdr_dor
   use tracers, only: iTandS
   use error_handling_mod, only: error_log
+  use roms_mpi, only: exchange_xxx
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
   use pio, only : PIO_closefile
@@ -57,6 +58,14 @@ module river_frc
   integer(kind=4) :: nt_riv_file                                  ! length of ntracers in file
   integer(kind=4), allocatable, dimension(:)   :: riv_trc_map
   real(kind=8),    allocatable, dimension(:,:) :: riv_trc_file    ! river_tracer as read from file
+
+  ! u- and v-faces that carry river flux (abs(riv_uflx) or abs(riv_vflx)
+  ! > 1e-3), listed once by calc_river_flux. The river locations never
+  ! change, so the time-stepping loops visit only these faces instead of
+  ! testing every point of the tile.
+  integer(kind=4),public :: nriv_u = 0, nriv_v = 0
+  integer(kind=4),public,allocatable,dimension(:) :: riv_u_i, riv_u_j
+  integer(kind=4),public,allocatable,dimension(:) :: riv_v_i, riv_v_j
 
   integer(kind=4),public :: iriver                                       ! river index for looping through rivers
   real(kind=8),   public :: riv_depth
@@ -269,6 +278,12 @@ contains
         call PIO_closefile(pio_FileDesc)
 #endif
         ierr = nf90_close(ncid)
+#ifdef EXCHANGE
+        ! calc_river_flux also looks at the halo cells, because a river cell
+        ! on a neighbouring rank can discharge into this rank's edge cells.
+        ! Fill them from the neighbours (without PARALLEL_IO they are not read).
+        call exchange_xxx(ridx_real, rfrc)
+#endif
 
         ! Check if any river indices are greater than the chosen
         ! value for nriv, in which case we could get a segfault
@@ -289,7 +304,7 @@ contains
           endif
         endif
 !     Check for non-integer values
-        ridx(i0:i1, j0:j1) = int(ridx_real(i0:i1, j0:j1))
+        ridx = int(ridx_real)          ! halo cells included, see above
         if (any(abs(ridx_real(i0:i1,j0:j1) - ridx(i0:i1,j0:j1))&
         &> 1.0D-6)) then
           call error_log%raise_global(&
@@ -324,12 +339,15 @@ contains
           call PIO_closefile(pio_FileDesc)
 #endif
           ierr = nf90_close(ncid)
-          where (rflx(i0:i1, j0:j1) > 0)
-            ridx(i0:i1, j0:j1) = floor(rflx(i0:i1, j0:j1) - 1e-5)
-            rfrc(i0:i1,j0:j1) = rflx(i0:i1,j0:j1) - ridx(i0:i1,j0:j1)
+#ifdef EXCHANGE
+          call exchange_xxx(rflx)      ! halo cells too, as for river_index above
+#endif
+          where (rflx > 0)
+            ridx = floor(rflx - 1e-5)
+            rfrc = rflx - ridx
           elsewhere
-            ridx(i0:i1, j0:j1) = 0
-            rfrc(i0:i1, j0:j1) = 0
+            ridx = 0
+            rfrc = 0
           end where
         end if ! found in grid file
       end if                 ! Separate variables found in forcing file
@@ -368,7 +386,11 @@ contains
           !iriver = ridx(i,j)
 #ifdef MASKING
           faces =  rmask(i-1,j)+rmask(i+1,j)+rmask(i,j-1)+rmask(i,j+1) !! amount of unmasked cells around
-          if ( faces == 0 .or. rmask(i,j)>0  ) then
+          ! Halo cells (outside i0:i1, j0:j1) are validated by the rank
+          ! that owns them; reporting them here too would count one bad
+          ! cell once per neighbouring rank.
+          if ( (faces == 0 .or. rmask(i,j)>0) .and.&
+          &    i>=i0 .and. i<=i1 .and. j>=j0 .and. j<=j1 ) then
             call error_log%raise_from_point(&
             &context=module_name//"/"//sr_name,&
             &info='river grid position error',&
@@ -397,6 +419,25 @@ contains
       enddo
     enddo
     call error_log%abort_check()
+
+    ! List the river faces (same test as the loops that use them)
+    nriv_u = count(abs(riv_uflx) > 1e-3)
+    nriv_v = count(abs(riv_vflx) > 1e-3)
+    allocate( riv_u_i(nriv_u), riv_u_j(nriv_u) )
+    allocate( riv_v_i(nriv_v), riv_v_j(nriv_v) )
+    nriv_u = 0; nriv_v = 0
+    do j = lbound(riv_uflx,2), ubound(riv_uflx,2)
+      do i = lbound(riv_uflx,1), ubound(riv_uflx,1)
+        if (abs(riv_uflx(i,j)) > 1e-3) then
+          nriv_u = nriv_u+1
+          riv_u_i(nriv_u) = i; riv_u_j(nriv_u) = j
+        endif
+        if (abs(riv_vflx(i,j)) > 1e-3) then
+          nriv_v = nriv_v+1
+          riv_v_i(nriv_v) = i; riv_v_j(nriv_v) = j
+        endif
+      enddo
+    enddo
   end subroutine calc_river_flux  !]
 ! ----------------------------------------------------------------------
   subroutine set_ana_river_frc  ![

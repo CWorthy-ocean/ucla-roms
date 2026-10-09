@@ -23,11 +23,17 @@ contains
     call set_depth_tile(istr,iend,jstr,jend)
   end subroutine set_depth
 
-  subroutine set_depth_tile(istr,iend,jstr,jend)
+  subroutine set_depth_tile(istr,iend,jstr,jend, zeta_exchanged)
 
 ! Compute evolving z-coordinates "z_r" and "z_w" and the heights
 ! of vertical grid boxes "Hz" from fast-time-averaged free surface,
 ! topography h(i,j), and vertical coordinate transformation formula.
+!
+! zeta_exchanged (optional, default .false.): the caller has already
+! exchanged zeta(:,:,knew), so its MPI halos are current. With
+! PARALLEL_IO the loops below run over the extended bounds, which cover
+! the halos, so z_w, z_r and Hz come out exact there and their 3D
+! exchange is skipped.
 
     use coupling, only: du_avg1, dv_avg1
     use grid, only: h, hinv, dn_u, dm_v, pn, pm
@@ -46,6 +52,7 @@ contains
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k
+    logical, intent(in), optional :: zeta_exchanged
     real(kind=8) cff_r,cff1_r, cff_w,cff1_w, ds
 
 ! If we are using Parallel IO we are going to read in both the computational
@@ -152,7 +159,15 @@ contains
       call exchange_xxx(hinv)
       call exchange_xxx(z_w0,z_r0,Hz0)
     endif
+#  ifdef PARALLEL_IO
+    if (present(zeta_exchanged)) then
+      if (.not. zeta_exchanged) call exchange_xxx(z_w,z_r,Hz)
+    else
+      call exchange_xxx(z_w,z_r,Hz)
+    endif
+#  else
     call exchange_xxx(z_w,z_r,Hz)
+#  endif
 # endif
 
 #if defined NHMG || defined NONTRAD_COR

@@ -1053,25 +1053,25 @@ contains
       szN = szN+szNS
     endif
 
-    if (p_sw>=0) then
+    if (p_sw>=0.and.do_corners) then
       call grow_buffers(sendSW,recvSW,szSW+szCr)
       sendSW(szSW+1:szSW+szCr) = reshape(A(1:hl,1:hl,:),(/szCr/))
       szSW = szSW+szCr
     endif
 
-    if (p_se>=0) then
+    if (p_se>=0.and.do_corners) then
       call grow_buffers(sendSE,recvSE,szSE+szCr)
       sendSE(szSE+1:szSE+szCr) = reshape(A(nxl+1-hl:nxl,1:hl,:),(/szCr/))
       szSE = szSE+szCr
     endif
 
-    if (p_ne>=0) then
+    if (p_ne>=0.and.do_corners) then
       call grow_buffers(sendNE,recvNE,szNE+szCr)
       sendNE(szNE+1:szNE+szCr) = reshape(A(nxl+1-hl:nxl,nyl+1-hl:nyl,:),(/szCr/))
       szNE = szNE+szCr
     endif
 
-    if (p_nw>=0) then
+    if (p_nw>=0.and.do_corners) then
       call grow_buffers(sendNW,recvNW,szNW+szCr)
       sendNW(szNW+1:szNW+szCr) = reshape(A(1:hl,nyl+1-hl:nyl,:),(/szCr/))
       szNW = szNW+szCr
@@ -1184,131 +1184,115 @@ contains
     implicit none
 
     ! local
-    integer(kind=4) mess_count, comm(16), req(16),&
-    &status(MPI_STATUS_SIZE)
-    integer(kind=4) ipass
-    integer(kind=4) i,ierr
-    logical flag
+    integer(kind=4) nreq, req(16), statuses(MPI_STATUS_SIZE,16)
+    integer(kind=4) ierr
 
     call reg_tic(rg_exchange)
 
-! Permutation array comm(1:16) keeps track which messages are actually
-! being received -- hence comm(indx)=0  means that no messages are
-! expected from the direction labelled "indx", while for active messages
-! "comm" keeps index of the corresponding request handle "req".
-! This is needed because later in this code array "req" is subject to
-! rearrangement in order to ignore directions from which no message is
-! expected, as well as to ignore requests from which messages are
-
+! Post a receive and a send for every neighbour that exists, keeping the
+! active request handles packed in req(1:nreq), then wait for all of
+! them. Corner messages are skipped when the caller passed
+! do_corn=.false.; every rank makes the same exchange call, so both
+! sides of a corner agree on whether it is sent.
+!
     ! tags for receive      for send        ! each sub-domain can receive up to 8 exchanges.
-    do i=1,16      !         3  5  1        4  6  2        ! the 'tag' value indicates which side/corner
-      comm(i)=0    !         8     7        7     8        ! the message came from.
-    enddo          !         2  6  4        1  5  3
+    !         3  5  1        4  6  2        ! the 'tag' value indicates which side/corner
+    !         8     7        7     8        ! the message came from.
+    !         2  6  4        1  5  3
+    nreq=0
 
 ! Prepare to receive:
     if (p_w>=0) then
+      nreq=nreq+1
       call MPI_Irecv (recvW, szW, MPI_DOUBLE_PRECISION,&
-      &p_W, 8, ocean_grid_comm, req(1), ierr)
-      comm(1)=1
+      &p_W, 8, ocean_grid_comm, req(nreq), ierr)
     endif
     if (p_e>=0) then
+      nreq=nreq+1
       call MPI_Irecv (recvE, szE, MPI_DOUBLE_PRECISION,&
-      &p_E, 7, ocean_grid_comm, req(2), ierr)
-      comm(2)=2
+      &p_E, 7, ocean_grid_comm, req(nreq), ierr)
     endif
     if (p_s>=0) then
+      nreq=nreq+1
       call MPI_Irecv (recvS, szS, MPI_DOUBLE_PRECISION,&
-      &p_S, 6, ocean_grid_comm, req(3), ierr)
-      comm(3)=3
+      &p_S, 6, ocean_grid_comm, req(nreq), ierr)
     endif
     if (p_n>=0) then
+      nreq=nreq+1
       call MPI_Irecv (recvN, szN, MPI_DOUBLE_PRECISION,&
-      &p_N, 5, ocean_grid_comm, req(4), ierr)
-      comm(4)=4
+      &p_N, 5, ocean_grid_comm, req(nreq), ierr)
     endif
-    if (p_sw>=0) then
-      call MPI_Irecv (recvSW, szSW, MPI_DOUBLE_PRECISION,&
-      &p_SW, 2, ocean_grid_comm, req(5), ierr)
-      comm(5)=5
-    endif
-    if (p_ne>=0) then
-      call MPI_Irecv (recvNE, szNE, MPI_DOUBLE_PRECISION,&
-      &p_NE, 1, ocean_grid_comm, req(6), ierr)
-      comm(6)=6
-    endif
-    if (p_se>=0) then
-      call MPI_Irecv (recvSE, szSE, MPI_DOUBLE_PRECISION,&
-      &p_SE, 4, ocean_grid_comm, req(7), ierr)
-      comm(7)=7
-    endif
-    if (p_nw>=0) then
-      call MPI_Irecv (recvNW, szNW, MPI_DOUBLE_PRECISION,&
-      &p_NW, 3, ocean_grid_comm, req(8), ierr)
-      comm(8)=8
+    if (do_corners) then
+      if (p_sw>=0) then
+        nreq=nreq+1
+        call MPI_Irecv (recvSW, szSW, MPI_DOUBLE_PRECISION,&
+        &p_SW, 2, ocean_grid_comm, req(nreq), ierr)
+      endif
+      if (p_ne>=0) then
+        nreq=nreq+1
+        call MPI_Irecv (recvNE, szNE, MPI_DOUBLE_PRECISION,&
+        &p_NE, 1, ocean_grid_comm, req(nreq), ierr)
+      endif
+      if (p_se>=0) then
+        nreq=nreq+1
+        call MPI_Irecv (recvSE, szSE, MPI_DOUBLE_PRECISION,&
+        &p_SE, 4, ocean_grid_comm, req(nreq), ierr)
+      endif
+      if (p_nw>=0) then
+        nreq=nreq+1
+        call MPI_Irecv (recvNW, szNW, MPI_DOUBLE_PRECISION,&
+        &p_NW, 3, ocean_grid_comm, req(nreq), ierr)
+      endif
     endif
 
 ! Send everything
 !----------------------------------------------
     if (p_w>=0) then
+      nreq=nreq+1
       call MPI_Isend (sendW, szW, MPI_DOUBLE_PRECISION,&
-      &p_W,7,ocean_grid_comm, req(9), ierr)
-      comm(9)=9
+      &p_W,7,ocean_grid_comm, req(nreq), ierr)
     endif
     if (p_e>=0) then
+      nreq=nreq+1
       call MPI_Isend (sendE, szE, MPI_DOUBLE_PRECISION,&
-      &p_E,8,ocean_grid_comm, req(10), ierr)
-      comm(10)=10
+      &p_E,8,ocean_grid_comm, req(nreq), ierr)
     endif
     if (p_s>=0) then
+      nreq=nreq+1
       call MPI_Isend (sendS, szS, MPI_DOUBLE_PRECISION,&
-      &p_S, 5, ocean_grid_comm, req(11), ierr)
-      comm(11)=11
+      &p_S, 5, ocean_grid_comm, req(nreq), ierr)
     endif
     if (p_n>=0) then
+      nreq=nreq+1
       call MPI_Isend (sendN, szN, MPI_DOUBLE_PRECISION,&
-      &p_N, 6, ocean_grid_comm, req(12), ierr)
-      comm(12)=12
+      &p_N, 6, ocean_grid_comm, req(nreq), ierr)
     endif
-    if (p_sw>=0) then
-      call MPI_Isend (sendSW, szSW, MPI_DOUBLE_PRECISION,&
-      &p_SW, 1, ocean_grid_comm, req(13), ierr)
-      comm(13)=13
-    endif
-    if (p_ne>=0) then
-      call MPI_Isend (sendNE, szNE, MPI_DOUBLE_PRECISION,&
-      &p_NE, 2, ocean_grid_comm, req(14), ierr)
-      comm(14)=14
-    endif
-    if (p_se>=0) then
-      call MPI_Isend (sendSE, szSE, MPI_DOUBLE_PRECISION,&
-      &p_SE, 3, ocean_grid_comm, req(15), ierr)
-      comm(15)=15
-    endif
-    if (p_nw>=0) then
-      call MPI_Isend (sendNW, szNW, MPI_DOUBLE_PRECISION,&
-      &p_NW, 4, ocean_grid_comm, req(16), ierr)
-      comm(16)=16
+    if (do_corners) then
+      if (p_sw>=0) then
+        nreq=nreq+1
+        call MPI_Isend (sendSW, szSW, MPI_DOUBLE_PRECISION,&
+        &p_SW, 1, ocean_grid_comm, req(nreq), ierr)
+      endif
+      if (p_ne>=0) then
+        nreq=nreq+1
+        call MPI_Isend (sendNE, szNE, MPI_DOUBLE_PRECISION,&
+        &p_NE, 2, ocean_grid_comm, req(nreq), ierr)
+      endif
+      if (p_se>=0) then
+        nreq=nreq+1
+        call MPI_Isend (sendSE, szSE, MPI_DOUBLE_PRECISION,&
+        &p_SE, 3, ocean_grid_comm, req(nreq), ierr)
+      endif
+      if (p_nw>=0) then
+        nreq=nreq+1
+        call MPI_Isend (sendNW, szNW, MPI_DOUBLE_PRECISION,&
+        &p_NW, 4, ocean_grid_comm, req(nreq), ierr)
+      endif
     endif
 
-! Verify that everything has been succesfully transferred
+! Wait until every message has been sent and received
 !----------------------------------------------
-    ! 1 each for send and receive
-    mess_count=0
-    do i=1,16
-      if (comm(i) > 0) mess_count=mess_count+1
-    enddo
-
-!  Stay in this loop untill every message has been received
-    do while (mess_count>0)
-      do i=1,16
-        if (comm(i) > 0) then
-          call MPI_Test (req(i), flag, status, ierr)
-          if (flag) then
-            mess_count=mess_count-1 ; comm(i)=0
-          endif
-        endif
-      enddo
-    enddo
+    if (nreq > 0) call MPI_Waitall (nreq, req, statuses, ierr)
     call reg_toc(rg_exchange)
 
   end subroutine mpi_buffer_exchange !]

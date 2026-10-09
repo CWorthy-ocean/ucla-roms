@@ -262,10 +262,16 @@ contains
     implicit none
 
     integer(kind=4) :: itrc
+    logical :: on_bry   ! this rank holds part of the boundary being set
 
 #ifdef PARALLEL_IO
     pio_file_is_open = 0
 #endif
+
+! Under PARALLEL_IO the boundary reads are collective, so every rank
+! calls set_frc_data for every open boundary; only the ranks on that
+! boundary use the result, so the rest pass interp=.false. to skip the
+! time interpolation.
 
 #  ifdef ANA_BRY
     return
@@ -274,23 +280,24 @@ contains
 #ifndef PARALLEL_IO
       if (inode==0) then
 #endif
+        on_bry = (inode==0)
 #  ifdef Z_FRC_BRY
         pio_gtype='w1rr'
-        call set_frc_data( nc_z_w, zeta_west(j0:j1), obry=2 )
+        call set_frc_data( nc_z_w, zeta_west(j0:j1), obry=2, interp=on_bry )
 !       call exch_bry_EW_tile(1, ny, zeta_west, 1)      ! DevinD - exchange did not make a difference
 #  endif
 #  ifdef M2_FRC_BRY
         pio_gtype='w1ur'
-        call set_frc_data( nc_ub_w, ubar_west(j0:j1), obry=1 )
+        call set_frc_data( nc_ub_w, ubar_west(j0:j1), obry=1, interp=on_bry )
         pio_gtype='w1vr'
-        call set_frc_data( nc_vb_w, vbar_west( 1:j1), obry=1 )
+        call set_frc_data( nc_vb_w, vbar_west( 1:j1), obry=1, interp=on_bry )
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
         pio_gtype='w2ur'
-        call set_frc_data( nc_u_w, var2d=u_west(j0:j1,:), obry=1 )
+        call set_frc_data( nc_u_w, var2d=u_west(j0:j1,:), obry=1, interp=on_bry )
         pio_gtype='w2vr'
-        call set_frc_data( nc_v_w, var2d=v_west( 1:j1,:), obry=1 )
+        call set_frc_data( nc_v_w, var2d=v_west( 1:j1,:), obry=1, interp=on_bry )
 #     ifdef NHMG
 !       call set_frc_data( nc_w_w, var2d=w_west(j0:j1,:), obry=1 )
         w_west = 0
@@ -299,7 +306,7 @@ contains
 #   ifdef T_FRC_BRY
         pio_gtype='w2rr'
         do itrc=1,nt
-          call set_frc_data( nc_t_w(itrc), var2d=t_west(j0:j1,:,itrc), obry=1 )
+          call set_frc_data( nc_t_w(itrc), var2d=t_west(j0:j1,:,itrc), obry=1, interp=on_bry )
         enddo
 #   endif
 #  endif
@@ -312,22 +319,23 @@ contains
 #ifndef PARALLEL_IO
       if (inode==npx-1) then
 #endif
+        on_bry = (inode==npx-1)
 #  ifdef Z_FRC_BRY
         pio_gtype='e1rr'
-        call set_frc_data( nc_z_e, zeta_east(j0:j1), obry=2 )
+        call set_frc_data( nc_z_e, zeta_east(j0:j1), obry=2, interp=on_bry )
 #  endif
 #  ifdef M2_FRC_BRY
         pio_gtype='e1ur'
-        call set_frc_data( nc_ub_e, ubar_east(j0:j1), obry=1 )
+        call set_frc_data( nc_ub_e, ubar_east(j0:j1), obry=1, interp=on_bry )
         pio_gtype='e1vr'
-        call set_frc_data( nc_vb_e, vbar_east( 1:j1), obry=1 )
+        call set_frc_data( nc_vb_e, vbar_east( 1:j1), obry=1, interp=on_bry )
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
         pio_gtype='e2ur'
-        call set_frc_data( nc_u_e, var2d=u_east(j0:j1,:), obry=1 )
+        call set_frc_data( nc_u_e, var2d=u_east(j0:j1,:), obry=1, interp=on_bry )
         pio_gtype='e2vr'
-        call set_frc_data( nc_v_e, var2d=v_east( 1:j1,:), obry=1 )
+        call set_frc_data( nc_v_e, var2d=v_east( 1:j1,:), obry=1, interp=on_bry )
 #     ifdef NHMG
 !       call set_frc_data( nc_w_e, var2d=w_east(j0:j1,:), obry=1 )
         w_east = 0
@@ -336,7 +344,7 @@ contains
 #   ifdef T_FRC_BRY
         pio_gtype='e2rr'
         do itrc=1,NT
-          call set_frc_data( nc_t_e(itrc), var2d=t_east(j0:j1,:,itrc), obry=1 )
+          call set_frc_data( nc_t_e(itrc), var2d=t_east(j0:j1,:,itrc), obry=1, interp=on_bry )
         enddo
 #   endif
 #  endif
@@ -349,22 +357,23 @@ contains
 #ifndef PARALLEL_IO
       if (jnode==0) then
 #endif
+        on_bry = (jnode==0)
 #  ifdef Z_FRC_BRY
         pio_gtype='s1rr'
-        call set_frc_data( nc_z_s, zeta_south(i0:i1), obry=2 )
+        call set_frc_data( nc_z_s, zeta_south(i0:i1), obry=2, interp=on_bry )
 #  endif
 #  ifdef M2_FRC_BRY
         pio_gtype='s1ur'
-        call set_frc_data( nc_ub_s, ubar_south( 1:i1), obry=1 )
+        call set_frc_data( nc_ub_s, ubar_south( 1:i1), obry=1, interp=on_bry )
         pio_gtype='s1vr'
-        call set_frc_data( nc_vb_s, vbar_south(i0:i1), obry=1 )
+        call set_frc_data( nc_vb_s, vbar_south(i0:i1), obry=1, interp=on_bry )
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
         pio_gtype='s2ur'
-        call set_frc_data( nc_u_s, var2d=u_south( 1:i1,:), obry=1 )
+        call set_frc_data( nc_u_s, var2d=u_south( 1:i1,:), obry=1, interp=on_bry )
         pio_gtype='s2vr'
-        call set_frc_data( nc_v_s, var2d=v_south(i0:i1,:), obry=1 )
+        call set_frc_data( nc_v_s, var2d=v_south(i0:i1,:), obry=1, interp=on_bry )
 #     ifdef NHMG
 !       call set_frc_data( nc_w_s, var2d=w_south(i0:i1,:), obry=1 )
         w_south = 0
@@ -373,7 +382,7 @@ contains
 #   ifdef T_FRC_BRY
         pio_gtype='s2rr'
         do itrc=1,nt
-          call set_frc_data( nc_t_s(itrc), var2d=t_south(i0:i1,:,itrc), obry=1 )
+          call set_frc_data( nc_t_s(itrc), var2d=t_south(i0:i1,:,itrc), obry=1, interp=on_bry )
         enddo
 #   endif
 #  endif
@@ -386,22 +395,23 @@ contains
 #ifndef PARALLEL_IO
       if (jnode==npy-1) then
 #endif
+        on_bry = (jnode==npy-1)
 #  ifdef Z_FRC_BRY
         pio_gtype='n1rr'
-        call set_frc_data( nc_z_n, zeta_north(i0:i1), obry=2 )
+        call set_frc_data( nc_z_n, zeta_north(i0:i1), obry=2, interp=on_bry )
 #  endif
 #  ifdef M2_FRC_BRY
         pio_gtype='n1ur'
-        call set_frc_data( nc_ub_n, ubar_north( 1:i1), obry=1 )
+        call set_frc_data( nc_ub_n, ubar_north( 1:i1), obry=1, interp=on_bry )
         pio_gtype='n1vr'
-        call set_frc_data( nc_vb_n, vbar_north(i0:i1), obry=1 )
+        call set_frc_data( nc_vb_n, vbar_north(i0:i1), obry=1, interp=on_bry )
 #  endif
 #  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
         pio_gtype='n2ur'
-        call set_frc_data( nc_u_n, var2d=u_north( 1:i1,:), obry=1 )
+        call set_frc_data( nc_u_n, var2d=u_north( 1:i1,:), obry=1, interp=on_bry )
         pio_gtype='n2vr'
-        call set_frc_data( nc_v_n, var2d=v_north(i0:i1,:), obry=1 )
+        call set_frc_data( nc_v_n, var2d=v_north(i0:i1,:), obry=1, interp=on_bry )
 #     ifdef NHMG
 !       call set_frc_data( nc_w_n, var2d=w_north(i0:i1,:), obry=1 )
         w_north = 0
@@ -410,7 +420,7 @@ contains
 #   ifdef T_FRC_BRY
         pio_gtype='n2rr'
         do itrc=1,NT
-          call set_frc_data( nc_t_n(itrc), var2d=t_north(i0:i1,:,itrc), obry=1 )
+          call set_frc_data( nc_t_n(itrc), var2d=t_north(i0:i1,:,itrc), obry=1, interp=on_bry )
         enddo
 #   endif
 #  endif

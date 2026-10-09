@@ -565,14 +565,17 @@ contains
 
   end subroutine init_coarse !]
 ! ----------------------------------------------------------------------
-  subroutine set_frc_data_1d(nc,var1d,obry)  ![
+  subroutine set_frc_data_1d(nc,var1d,obry,interp)  ![
     implicit none
 
     character(len=15) :: sr_name = "set_frc_data_1d"
     ! input/outputs
     type(ncforce),    intent(inout) :: nc    ! derived type containing all neccesary supporting data
-    real(kind=8),dimension(:),intent(out)   :: var1d ! time interpolated forcing data
+    real(kind=8),dimension(:),intent(inout) :: var1d ! time interpolated forcing data (left as is when interp=.false.)
     integer(kind=4),optional, intent(in)    :: obry  ! bry=1, suppress terminal info, bry=2 display boundary
+    logical,optional,intent(in) :: interp        ! .false.: refresh the data slots only
+                                                 ! (a collective read under PARALLEL_IO),
+                                                 ! leaving var1d unset
 
     ! local
     real(kind=8)    :: cff1,cff2  ! for time interpolations
@@ -580,6 +583,7 @@ contains
     real(kind=8)    :: dummy_modtime=0  ! a dummy variable that does nothing
     logical :: d1
     integer(kind=4) :: bry
+    logical :: do_interp
 
     integer(kind=4)           :: it1,it2
     real(kind=8),dimension(2) :: vtimes
@@ -640,13 +644,15 @@ contains
     nc%it2 = it2
 
     ! Temporal interpolation
+    do_interp = .true.
+    if (present(interp)) do_interp = interp
 
     if (nc%time_interpolation) then
       vtimes  = nc%times
       cff1=( vtimes(it2)-modtime )/( vtimes(it2)-vtimes(it1) )
       cff2=( modtime-vtimes(it1) )/( vtimes(it2)-vtimes(it1) )
 
-      var1d = cff1*nc%vdata(:,1,it1) + cff2*nc%vdata(:,1,it2)
+      if (do_interp) var1d = cff1*nc%vdata(:,1,it1) + cff2*nc%vdata(:,1,it2)
 
       if (vtimes(it1)>modtime+dt.or.vtimes(it2)<modtime-dt) then
         write(error_info,*) 'set_frc_data :: ', nc%vname,frcfiles(nc%ifile),&
@@ -657,17 +663,20 @@ contains
         &info=error_info)
       endif
     else
-      var1d = nc%vdata(:,1,it1)
+      if (do_interp) var1d = nc%vdata(:,1,it1)
     endif
   end subroutine set_frc_data_1d  !]
 ! ----------------------------------------------------------------------
-  subroutine set_frc_data_2d(nc,var2d,obry)  ![
+  subroutine set_frc_data_2d(nc,var2d,obry,interp)  ![
     implicit none
     character(len=15) :: sr_name="set_frc_data_2d"
     ! input/outputs
     type(ncforce),      intent(inout) :: nc    ! derived type containing all neccesary supporting data
-    real(kind=8),dimension(:,:),intent(out)   :: var2d ! time interpolated forcing data
+    real(kind=8),dimension(:,:),intent(inout) :: var2d ! time interpolated forcing data (left as is when interp=.false.)
     integer(kind=4),optional,   intent(in)    :: obry  ! bry=1, suppress terminal info, bry=2 display boundary
+    logical,optional,intent(in) :: interp        ! .false.: refresh the data slots only
+                                                 ! (a collective read under PARALLEL_IO),
+                                                 ! leaving var2d unset
 
     ! local
     real(kind=8)    :: cff1,cff2  ! for time interpolations
@@ -675,6 +684,7 @@ contains
     real(kind=8)    :: dummy_modtime=0  ! a dummy variable that does nothing
     logical :: d1
     integer(kind=4) :: bry
+    logical :: do_interp
 
     integer(kind=4)           :: it1,it2
     real(kind=8),dimension(2) :: vtimes
@@ -734,12 +744,14 @@ contains
     nc%it2 = it2
 
     ! Temporal interpolation
+    do_interp = .true.
+    if (present(interp)) do_interp = interp
     if (nc%time_interpolation) then
       vtimes  = nc%times
       cff1=( vtimes(it2)-modtime )/( vtimes(it2)-vtimes(it1) )
       cff2=( modtime-vtimes(it1) )/( vtimes(it2)-vtimes(it1) )
 
-      var2d = cff1*nc%vdata(:,:,it1) + cff2*nc%vdata(:,:,it2)
+      if (do_interp) var2d = cff1*nc%vdata(:,:,it1) + cff2*nc%vdata(:,:,it2)
 
       if (vtimes(it1)>modtime+dt.or.vtimes(it2)<modtime-dt) then
         write(error_info,*) 'set_frc_data :: ', nc%vname,frcfiles(nc%ifile),&
@@ -750,7 +762,7 @@ contains
         &info=error_info)
       endif
     else
-      var2d = nc%vdata(:,:,it1)
+      if (do_interp) var2d = nc%vdata(:,:,it1)
     endif
   end subroutine set_frc_data_2d  !]
 ! ----------------------------------------------------------------------

@@ -32,7 +32,8 @@ contains
     use dimensions, only: inode, jnode
     use river_frc, only:&
     &iriver, river_flux, riv_uflx,&
-    &riv_vol, riv_vflx, river_source
+    &riv_vol, riv_vflx, river_source,&
+    &nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
     use pipe_frc, only: pipe_idx, pipe_flx, pipe_source
 #ifdef CDR_FORCING
     use cdr_frc, only: cdr_source, cdr_volume,&
@@ -56,7 +57,7 @@ contains
     use zetabc_mod, only: zetabc_tile
 
     implicit none
-    integer(kind=4) istr,iend,jstr,jend, i,j, kbak, kold, icdr, cidx
+    integer(kind=4) istr,iend,jstr,jend, i,j, kbak, kold, icdr, cidx, iface
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: zeta_new, Dnew,&
     &rubar,rvbar,  urhs,vrhs,  DUon,DVom,&
     &Drhs, UFx,UFe,VFx,VFe
@@ -538,27 +539,23 @@ contains
 #endif
 
     if (river_source) then
-      do j=jstr,jend
-        do i=istrU,iend
-          if (abs(riv_uflx(i,j)).gt.1e-3) then
-            iriver = nint(riv_uflx(i,j)/10)
-            river_flux = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)
-            ubar(i,j,knew) = river_flux*&
-            &2/( dn_u(i,j)*(Dnew(i-1,j)+Dnew(i,j)) )
-            DU_avg1(i,j) = river_flux
-          endif
-        enddo
+      do iface=1,nriv_u
+        i = riv_u_i(iface); j = riv_u_j(iface)
+        if (i < istrU .or. i > iend .or. j < jstr .or. j > jend) cycle
+        iriver = nint(riv_uflx(i,j)/10)
+        river_flux = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)
+        ubar(i,j,knew) = river_flux*&
+        &2/( dn_u(i,j)*(Dnew(i-1,j)+Dnew(i,j)) )
+        DU_avg1(i,j) = river_flux
       enddo
-      do j=jstrV,jend
-        do i=istr,iend
-          if (abs(riv_vflx(i,j)).gt.1e-3) then
-            iriver = nint(riv_vflx(i,j)/10)
-            river_flux = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)
-            vbar(i,j,knew) = river_flux*&
-            &2/( dm_v(i,j)*(Dnew(i,j-1)+Dnew(i,j)) )
-            DV_avg1(i,j) = river_flux
-          endif
-        enddo
+      do iface=1,nriv_v
+        i = riv_v_i(iface); j = riv_v_j(iface)
+        if (i < istr .or. i > iend .or. j < jstrV .or. j > jend) cycle
+        iriver = nint(riv_vflx(i,j)/10)
+        river_flux = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)
+        vbar(i,j,knew) = river_flux*&
+        &2/( dm_v(i,j)*(Dnew(i,j-1)+Dnew(i,j)) )
+        DV_avg1(i,j) = river_flux
       enddo
     endif ! <-- river_source
 
@@ -575,12 +572,15 @@ contains
           zeta(i,j,knew)=Zt_avg1(i,j)
         enddo
       enddo
-      call set_depth_tile(istr,iend,jstr,jend)
     endif
 
 #ifdef EXCHANGE
     call exchange_xxx(zeta(:,:,knew),ubar(:,:,knew),vbar(:,:,knew))
 #endif
+
+! Exchange zeta first: set_depth then fills z_w, z_r, Hz in the halos
+! itself (PARALLEL_IO) instead of exchanging all three 3D arrays.
+    if (iif == nfast) call set_depth_tile(istr,iend,jstr,jend, zeta_exchanged=.true.)
 
   end subroutine step2d_FB_tile
 end module step2d_mod

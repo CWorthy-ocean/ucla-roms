@@ -1014,7 +1014,7 @@ contains
     do j=jstrR,jendR
       do i=istrR,iend+1
 
-        wspd=sqrt( uwnd(i,j)*uwnd(i,j) + vwnd(i,j)*vwnd(i,j) )
+        wspd=wspd_used(i,j)   ! set in the bulk flux loop above
 
         if (wspd .gt. Wspd_min) then
           cff = cfb_slope*wspd + cfb_offset ! both cfb's are parameters
@@ -1056,7 +1056,7 @@ contains
     do j=jstrR,jend+1
       do i=istrR,iendR
 
-        wspd=sqrt( uwnd(i,j)*uwnd(i,j) + vwnd(i,j)*vwnd(i,j) )
+        wspd=wspd_used(i,j)   ! set in the bulk flux loop above
 
         if (wspd .gt. Wspd_min) then
           cff = cfb_slope*wspd + cfb_offset
