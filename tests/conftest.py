@@ -1,8 +1,14 @@
 """Pytest configuration and shared fixtures for the ROMS test suite."""
+import hashlib
+import importlib.metadata
 import json
+import os
+import re
+import shutil
 from pathlib import Path
 
 import pytest
+import xarray as xr
 
 from . import _assertions
 from ._assertions import computed_results, tolerated_mismatches
@@ -23,19 +29,38 @@ def pytest_addoption(parser):
         default=False,
         help="Report reference-hash mismatches as XFAIL instead of failures, so they "
              "do not fail the run. Every other failure mode -- compile errors, ROMS "
-             "crashes, missing output -- still fails. Used by CI, where the hashes are "
-             "not reproducible across platforms; leave it off locally.",
+             "crashes, missing output -- still fails. For local runs against references "
+             "generated on another machine; CI does not set it.",
+    )
+    parser.addoption(
+        "--inputs-out",
+        action="store",
+        default=None,
+        metavar="DIR",
+        help="Copy the roms-tools-generated input files (the unpartitioned ones the "
+             "sentinel hashes) to DIR after generation. CI uploads that directory as "
+             "the inputs-<environ> artifact, so a change in the input sentinel can be "
+             "traced to the variables that moved.",
+    )
+    parser.addoption(
+        "--results-out",
+        action="store",
+        default=None,
+        help="Path where the computed results JSON is written at session end. "
+             "Defaults to tests/results/computed_<environ>.json.",
     )
 
 
 def pytest_configure(config):
-    """Hand the --tolerate-hash-mismatch setting to the assertion helper.
+    """Check the CPU-dispatch pin, then hand the CLI settings to the assertion helper.
 
     `assert_output_matches_reference` is called directly from test bodies with
-    no access to the pytest config, so the flag is stashed on the module rather
-    than threaded through all ten call sites.
+    no access to the pytest config, so the settings are stashed on the module
+    rather than threaded through all ten call sites.
     """
+    _check_numpy_dispatch_pin()
     _assertions.tolerate_hash_mismatch = config.getoption("--tolerate-hash-mismatch")
+    _assertions.environ = config.getoption("--environ")
 
 
 @pytest.fixture(scope="session")
@@ -58,8 +83,92 @@ def reference_results(environ) -> dict:
         return json.load(f)
 
 
+def _collect_input_sentinel(target: Path) -> dict:
+    """Hash the generated input files and record the environment that made them.
+
+    The inputs are generated on the runner by roms-tools and have differed at
+    the bit level depending on CPU features. A change in these hashes without a
+    change in the Python environment is therefore a bug to investigate, not
+    noise, and tells an input change apart from a ROMS change when output
+    hashes move.
+    """
+    def version(package: str):
+        try:
+            return importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+
+    # Hash the stored variable values, not the file bytes: netCDF-4 files
+    # embed the writing library versions (_NCProperties), so byte hashes differ
+    # between images that wrote identical numbers.
+    files = {}
+    for path in _generated_input_files(target):
+        digest = hashlib.sha256()
+        with xr.open_dataset(path, decode_cf=False) as ds:
+            for name in sorted(ds.variables):
+                values = ds[name].values
+                digest.update(name.encode())
+                digest.update(values.tobytes() if values.dtype != object else repr(values.tolist()).encode())
+        files[path.name] = digest.hexdigest()
+
+    cpuinfo = Path("/proc/cpuinfo")  # absent on macOS
+    avx512f = None
+    if cpuinfo.exists():
+        flags_lines = [ln for ln in cpuinfo.read_text().splitlines() if ln.startswith("flags")]
+        avx512f = any("avx512f" in ln.split() for ln in flags_lines)
+
+    environment = {
+        package: version(package)
+        for package in ("roms-tools", "numpy", "scipy", "numba", "xarray")
+    }
+    environment["avx512f"] = avx512f
+    environment["numpy_dispatch_enabled"] = _numpy_dispatch_enabled()
+    return {"files": files, "environment": environment}
+
+
+def _generated_input_files(target: Path) -> list[Path]:
+    """The input files roms-tools wrote, without partit's per-rank copies.
+
+    partit writes those as ``<stem>.<k>.nc`` with an integer rank ``k``.
+    """
+    return [
+        path for path in sorted(target.glob("*.nc"))
+        if not re.fullmatch(r".*\.\d+\.nc", path.name)
+    ]
+
+
+def _numpy_dispatch_enabled():
+    """The numpy SIMD dispatch targets this CPU enables (None if unavailable)."""
+    try:
+        from numpy._core._multiarray_umath import __cpu_dispatch__, __cpu_features__
+    except ImportError:
+        return None
+    return [target for target in __cpu_dispatch__ if __cpu_features__.get(target)]
+
+
+def _check_numpy_dispatch_pin():
+    """Fail the session if NPY_ENABLE_CPU_FEATURES is set but did not take effect.
+
+    numpy reports a misspelled or unknown feature name in that variable with an
+    ImportWarning, which Python hides by default, and then dispatches as if the
+    variable were unset. CI relies on the pin for reproducible inputs, so an
+    ineffective one must be loud (it cost a day of chasing AVX-512 splits once).
+    """
+    allowed = os.environ.get("NPY_ENABLE_CPU_FEATURES")
+    if allowed is None:
+        return
+    enabled = _numpy_dispatch_enabled() or []
+    extra = sorted(set(enabled) - set(allowed.split()))
+    if extra:
+        raise pytest.UsageError(
+            f"NPY_ENABLE_CPU_FEATURES={allowed!r} did not take effect: numpy still "
+            f"enables the dispatch targets {extra}. Check the names against "
+            "numpy._core._multiarray_umath.__cpu_dispatch__ for the installed numpy."
+        )
+
+
 @pytest.fixture(scope="session")
-def input_dir(tmp_path_factory) -> Path:
+def input_dir(request, tmp_path_factory) -> Path:
     """One-time generation of every ROMS input file the suite needs.
 
     Built once per pytest session into a temporary directory and shared
@@ -67,16 +176,24 @@ def input_dir(tmp_path_factory) -> Path:
     """
     target = tmp_path_factory.mktemp("roms_inputs")
     create_roms_inputs(target)
+    _assertions.input_file_hashes.update(_collect_input_sentinel(target))
+    inputs_out = request.config.getoption("--inputs-out")
+    if inputs_out:
+        out = Path(inputs_out)
+        out.mkdir(parents=True, exist_ok=True)
+        for path in _generated_input_files(target):
+            shutil.copy2(path, out / path.name)
     return target
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """At the end of the session, dump the collected hashes as JSON.
+    """At the end of the session, report and save the collected hashes.
 
-    Only tests that actually ran appear in the dump, so a subset run
+    Only tests that actually ran appear in the results, so a subset run
     produces a partial dict rather than entries with missing values.
-    The dump goes to the terminal reporter so it isn't swallowed by
-    pytest's output capture.
+    The report goes to the terminal reporter so it isn't swallowed by
+    pytest's output capture. The same values are written to files, which is
+    how CI hands them to ``tests/update_references.py``.
     """
     if not computed_results:
         return
@@ -94,5 +211,24 @@ def pytest_sessionfinish(session, exitstatus):
             reporter.write_line(f"  {test_name}")
 
     current_environ = session.config.getoption("--environ")
-    reporter.write_sep("=", f"computed results (paste into $ROMS_ROOT/results/results_{current_environ}.json to update if you understand the reason for - and expect - this discrepancy.)")
+    results_out = session.config.getoption("--results-out")
+    if results_out is None:
+        results_out = Path(__file__).parent / "results" / f"computed_{current_environ}.json"
+    results_out = Path(results_out)
+    # The sentinel sits next to the results so the two travel together.
+    inputs_out = results_out.parent / f"input_hashes_{current_environ}.json"
+
+    results_out.parent.mkdir(parents=True, exist_ok=True)
+    results_out.write_text(json.dumps(computed_results, indent=2) + "\n")
+
+    # Write, report and announce the sentinel together so the three cannot
+    # disagree about whether it exists.
+    if _assertions.input_file_hashes:
+        inputs_out.write_text(json.dumps(_assertions.input_file_hashes, indent=2) + "\n")
+        reporter.write_sep("=", "input file hashes and environment")
+        reporter.write_line(json.dumps(_assertions.input_file_hashes, indent=2))
+        reporter.write_line(f"wrote {inputs_out}")
+
+    reporter.write_sep("=", "computed results (to update the references if you understand the reason for - and expect - this discrepancy, run tests/update_references.py; see tests/README.md)")
     reporter.write_line(json.dumps(computed_results, indent=2))
+    reporter.write_line(f"wrote {results_out}")

@@ -156,8 +156,11 @@ class ROMSConfiguration:
 # --------------------------------------------------------------------------
 # Output verification
 # --------------------------------------------------------------------------
-def get_summary_value(test_dir: Path, prefix: str, vars_to_exclude: list = []) -> str:
-    """Join the per-tile output and return a SHA-256 of all data variables."""
+def get_summary_value(test_dir: Path, prefix: str, vars_to_exclude: list = []) -> dict[str, str]:
+    """Join the per-tile output and return ``{variable: SHA-256}`` for its data variables.
+
+    One digest per variable, so a hash mismatch names the variable that changed.
+    """
     test_dir = test_dir.absolute()
     subprocess.run(
         f"ncjoin {prefix}.?.nc",
@@ -165,8 +168,8 @@ def get_summary_value(test_dir: Path, prefix: str, vars_to_exclude: list = []) -
     )
     ds = xr.open_dataset(f"{test_dir}/{prefix}.nc")
 
-    h = hashlib.sha256()
-    for name in sorted(ds.data_vars):  # sort for determinism
-        if name not in vars_to_exclude:
-            h.update(ds[name].values.tobytes())
-    return h.hexdigest()
+    return {
+        name: hashlib.sha256(ds[name].values.tobytes()).hexdigest()
+        for name in sorted(ds.data_vars)  # sort for determinism
+        if name not in vars_to_exclude
+    }
