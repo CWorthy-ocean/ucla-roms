@@ -2073,6 +2073,12 @@ contains
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdwu_w, arr, ierr)
     elseif (pio_gtype == 'w1vc') then
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdwv_w, arr, ierr)
+    else
+      ! A stale pio_gtype used to drop the variable silently (the
+      ! per-variable PIO_syncfile kept the collectives balanced). Without
+      ! the sync it would leave this rank one collective short and hang
+      ! the next one, so abort here with the offending value instead.
+      call pio_bad_gtype('pio_ncwrite1', varName)
     endif
     ! No PIO_syncfile here: PIO copies arr into its write buffer, and the
     ! caller's PIO_closefile at the end of the record flushes everything
@@ -2080,6 +2086,18 @@ contains
     ! and file-system flush for each one).
 
   end subroutine pio_ncwrite1
+! ----------------------------------------------------------------------
+  subroutine pio_bad_gtype(sr_name, varName)
+    ! Abort because pio_gtype matches no decomposition in the calling
+    ! pio_ncwrite*: the caller forgot to set pio_gtype for this variable.
+    implicit none
+    character(len=*), intent(in) :: sr_name, varName
+    call error_log%raise_global(&
+    &context=module_name//'/'//sr_name,&
+    &info="no PIO decomposition for pio_gtype='"//trim(pio_gtype)//&
+    &"' while writing '"//trim(varName)//"'; set pio_gtype before ncwrite")
+    call error_log%abort_check()
+  end subroutine pio_bad_gtype
 ! ----------------------------------------------------------------------
   subroutine pio_ncwrite2(varName, arr, irec)
 
@@ -2159,6 +2177,8 @@ contains
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdwu_w, arr, ierr)
     elseif (pio_gtype == 'w2vc') then
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdwv_w, arr, ierr)
+    else
+      call pio_bad_gtype('pio_ncwrite2', varName)   ! see pio_ncwrite1
     endif
     ! No PIO_syncfile: see pio_ncwrite1.
 
@@ -2196,6 +2216,8 @@ contains
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_3Du_z, arr, ierr)
     elseif (pio_gtype == '3Dvz') then
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_3Dv_z, arr, ierr)
+    else
+      call pio_bad_gtype('pio_ncwrite3', varName)   ! see pio_ncwrite1
     endif
     ! No PIO_syncfile: see pio_ncwrite1.
 

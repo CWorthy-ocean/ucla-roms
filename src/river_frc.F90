@@ -386,7 +386,11 @@ contains
           !iriver = ridx(i,j)
 #ifdef MASKING
           faces =  rmask(i-1,j)+rmask(i+1,j)+rmask(i,j-1)+rmask(i,j+1) !! amount of unmasked cells around
-          if ( faces == 0 .or. rmask(i,j)>0  ) then
+          ! Halo cells (outside i0:i1, j0:j1) are validated by the rank
+          ! that owns them; reporting them here too would count one bad
+          ! cell once per neighbouring rank.
+          if ( (faces == 0 .or. rmask(i,j)>0) .and.&
+          &    i>=i0 .and. i<=i1 .and. j>=j0 .and. j<=j1 ) then
             call error_log%raise_from_point(&
             &context=module_name//"/"//sr_name,&
             &info='river grid position error',&
