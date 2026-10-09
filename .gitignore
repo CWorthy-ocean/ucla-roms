@@ -81,3 +81,7 @@ benchmark.result_laptop
 .cproject
 .pydevproject
 __pycache__
+
+# roms-tools downloads the NOAA MBL CO2 reference into the current directory when the
+# test inputs are generated (pytest runs from tests/)
+tests/gml.noaa.gov/

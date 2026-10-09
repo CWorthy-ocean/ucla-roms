@@ -115,20 +115,23 @@ def create_roms_physical_boundary_forcing(grid, target_dir: Path):
         start_time=dt.datetime(2010, 1, 1),
         end_time=dt.datetime(2010, 1, 2),
         source={"name": "GLORYS", "path": target_dir / "fake_phys_3d_data.nc"},
-        apply_2d_horizontal_fill=True,
+        prefill="2d_lateral_fill",  # roms-tools 5 name for apply_2d_horizontal_fill=True
     )
     rpf.save(target_dir / "example_input_boundary_forcing.nc", group=False)
 
 
 def create_roms_bgc_boundary_forcing(grid, target_dir: Path):
-    rbf = rt.BoundaryForcing(
+    # roms-tools 5 turned BoundaryForcing into a physics+BGC wrapper that writes
+    # BGC to separate files; the single-source class keeps the old behaviour,
+    # which this generator relies on to edit and save one BGC dataset.
+    rbf = rt.BoundaryForcingSource(
         grid=grid,
         type="bgc",
         start_time=dt.datetime(2010, 1, 1),
         end_time=dt.datetime(2010, 1, 2),
         source={"name": "CESM_REGRIDDED",
                 "path": target_dir / "fake_bgc_3d_data.nc"},
-        apply_2d_horizontal_fill=True,
+        prefill="2d_lateral_fill",  # roms-tools 5 name for apply_2d_horizontal_fill=True
     )
     # Add DOFE for BEC:
     for bry in ["west", "north", "south", "east"]:
@@ -217,6 +220,7 @@ def create_roms_initial_conditions(grid, target_dir: Path):
         ini_time=dt.datetime(2010, 1, 1),
         source={"name": "GLORYS", "path": target_dir / "fake_phys_3d_data.nc"},
         bgc_source={"name": "CESM_REGRIDDED", "path": target_dir / "fake_bgc_3d_data.nc"},
+        bgc_model=rt.BGCMarbl,  # required by roms-tools 5 whenever a BGC source is given
     )
     # Add DOFE for BEC
     ic.ds["DOFE"] = ic.ds["DOP"]
@@ -240,7 +244,11 @@ def create_roms_tides(grid, target_dir: Path):
         source={"name": "TPXO", "path": tpxo_dict},
         ntides=2,
         model_reference_date=dt.datetime(2000, 1, 1),
-        use_dask=True,
+        # No dask: two constituents on a 39x19 grid gain nothing from it, and a
+        # CI job once hung for 70 minutes inside the dask progress bar here.
+        # (The all-ocean TPXO stand-ins make the non-dask path pass; with a land
+        # point it tripped roms-tools 5's NaN check.)
+        use_dask=False,
     )
     tidal_forcing.save(target_dir / "example_input_tides.nc")
 

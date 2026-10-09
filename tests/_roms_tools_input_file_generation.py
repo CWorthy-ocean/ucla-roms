@@ -10,6 +10,32 @@ import pandas as pd
 import xarray as xr
 
 
+def _write_land_free(ds: xr.Dataset, path: Path) -> None:
+    """Write a synthetic source dataset with every NaN replaced by a finite value.
+
+    The real datasets these stand in for carry NaN over land, which roms-tools
+    fills laterally before regridding. On these 2x2 stand-ins roms-tools 5's
+    initial-conditions path is not deterministic with NaN sources (identical
+    inputs gave different u/v/tracer values, and a NaN-coverage error about one
+    run in four; observed 2026-10-09). The suite tests ROMS, not the fill, so
+    the sources are made land-free: each NaN takes the mean of the finite
+    values on its own 2-D level, or zero if the level has none.
+    """
+    ds = ds.copy(deep=True)
+    for name, var in ds.data_vars.items():
+        values = var.values
+        if values.dtype.kind != "f" or not np.isnan(values).any():
+            continue
+        flat = values.reshape(-1, values.shape[-2] * values.shape[-1]) if values.ndim >= 2 else values.reshape(1, -1)
+        for level in flat:
+            missing = np.isnan(level)
+            if missing.any():
+                finite = level[~missing]
+                level[missing] = finite.mean() if finite.size else 0.0
+        ds[name].values = flat.reshape(values.shape)
+    ds.to_netcdf(path)
+
+
 def create_roms_tools_inputs(target_dir: Path):
     """Create all synthetic upstream datasets in ``target_dir``."""
     create_rti_bgc_3d(target_dir)
@@ -125,7 +151,7 @@ def create_rti_bgc_3d(target_dir: Path):
     ds["zooC"].values[:, :, 0, :]     = [[[1.8614, 1.9732], [0.02186, 0.02520]],
                                          [[1.9863, 2.0369], [0.02571, 0.02775]]]
 
-    ds.to_netcdf(target_dir / "fake_bgc_3d_data.nc")
+    _write_land_free(ds, target_dir / "fake_bgc_3d_data.nc")
 
 
 def create_rti_phys_3d(target_dir: Path):
@@ -176,7 +202,7 @@ def create_rti_phys_3d(target_dir: Path):
     ds["vo"].values[1, 0, :, :] = [[ 0.08057, -0.01648], [-0.01099, np.nan]]
     ds["vo"].values[1, 1, :, :] = [[ 0.08911,  0.00183], [np.nan,   np.nan]]
 
-    ds.to_netcdf(target_dir / "fake_phys_3d_data.nc")
+    _write_land_free(ds, target_dir / "fake_phys_3d_data.nc")
 
 
 def create_rti_bgc_surf(target_dir: Path):
@@ -217,13 +243,17 @@ def create_rti_bgc_surf(target_dir: Path):
                                           [3.6120e-08, 7.6050e-08]]
     ds["dust_FLUX_IN"].values[:, 0, :] = [[3.1484e-12, 6.6325e-12],
                                            [3.6227e-12, 6.6772e-12]]
-    ds.to_netcdf(target_dir / "fake_bgc_surf_data.nc")
+    _write_land_free(ds, target_dir / "fake_bgc_surf_data.nc")
 
 
 def create_rti_phys_surf(target_dir: Path):
     times     = np.array(["2010-01-01", "2010-01-31T23:00:00"], dtype="datetime64[ns]")
-    latitude  = np.array([34.75, 34.0], dtype=np.float64)
-    longitude = np.array([239.0, 240.25], dtype=np.float64)
+    # ERA5's 0.25-degree grid, spanning well beyond the ROMS grid: roms-tools 5
+    # requires the grid plus a one-point interpolation margin to lie inside the
+    # data, and its radiation correction selects the bundled ERA5 climatology
+    # by exact coordinate labels, so off-grid values raise a KeyError.
+    latitude  = np.arange(35.0, 33.9, -0.25)    # descending, like ERA5
+    longitude = np.arange(238.75, 240.1, 0.25)
 
     coords = {
         "time":      times,
@@ -232,32 +262,42 @@ def create_rti_phys_surf(target_dir: Path):
         "expver":    xr.DataArray(["0001", "0001"], dims="time"),
     }
 
-    dims   = ("time", "latitude", "longitude")
-    shape  = (2, 2, 2)
+    dims = ("time", "latitude", "longitude")
 
-    data_vars = {}
-    for v in ["tp", "ssr", "strd", "u10", "v10", "d2m", "t2m", "sst"]:
-        data_vars[v] = xr.DataArray(np.full(shape, np.nan, dtype=np.float32), dims=dims)
+    # The original 2x2 ERA5 samples, each spread over one quadrant of the box
+    # (nearest-neighbour expansion). sst's land quadrant is NaN here and is
+    # filled by _write_land_free like every other synthetic source.
+    def expand(field):
+        field = np.asarray(field, dtype=np.float32)
+        rows = (np.arange(len(latitude)) * 2) // len(latitude)
+        cols = (np.arange(len(longitude)) * 2) // len(longitude)
+        return field[np.ix_(rows, cols)]
 
+    samples = {
+        "tp":   [[[0., 0.], [0., 0.]],
+                 [[0., 0.], [0., 0.]]],
+        "ssr":  [[[537152.,  603008.], [633856.,  656128.]],
+                 [[1533824., 1359232.], [1258048., 1232128.]]],
+        "strd": [[[1100785.8, 1008657.8], [1088241.8, 1042641.8]],
+                 [[1036525.6,  994477.6], [1085229.5, 1144141.5]]],
+        "u10":  [[[2.47137,  0.58368], [1.56903, 4.37567]],
+                 [[3.69145,  0.68071], [3.37212, 1.64946]]],
+        "v10":  [[[-2.93275, -0.56654], [-3.55678, -1.50014]],
+                 [[-4.06624,  0.50896], [-5.14827, -0.22542]]],
+        "d2m":  [[[281.318, 276.676], [282.010, 284.021]],
+                 [[281.344, 272.317], [282.022, 283.844]]],
+        "t2m":  [[[285.755, 285.039], [286.417, 286.828]],
+                 [[286.199, 285.072], [286.273, 286.846]]],
+        "sst":  [[[286.698, np.nan], [287.327, 287.159]],
+                 [[287.048, np.nan], [287.251, 287.491]]],
+    }
+    data_vars = {
+        v: xr.DataArray(np.stack([expand(f) for f in field]), dims=dims)
+        for v, field in samples.items()
+    }
     ds = xr.Dataset(data_vars, coords=coords)
-    ds["tp"].values   = np.array([[[0., 0.], [0., 0.]],
-                                   [[0., 0.], [0., 0.]]], dtype=np.float32)
-    ds["ssr"].values  = np.array([[[537152.,  603008.], [633856.,  656128.]],
-                                   [[1533824., 1359232.], [1258048., 1232128.]]], dtype=np.float32)
-    ds["strd"].values = np.array([[[1100785.8, 1008657.8], [1088241.8, 1042641.8]],
-                                   [[1036525.6,  994477.6], [1085229.5, 1144141.5]]], dtype=np.float32)
-    ds["u10"].values  = np.array([[[2.47137,  0.58368], [1.56903, 4.37567]],
-                                   [[3.69145,  0.68071], [3.37212, 1.64946]]], dtype=np.float32)
-    ds["v10"].values  = np.array([[[-2.93275, -0.56654], [-3.55678, -1.50014]],
-                                   [[-4.06624,  0.50896], [-5.14827, -0.22542]]], dtype=np.float32)
-    ds["d2m"].values  = np.array([[[281.318, 276.676], [282.010, 284.021]],
-                                   [[281.344, 272.317], [282.022, 283.844]]], dtype=np.float32)
-    ds["t2m"].values  = np.array([[[285.755, 285.039], [286.417, 286.828]],
-                                   [[286.199, 285.072], [286.273, 286.846]]], dtype=np.float32)
-    ds["sst"].values  = np.array([[[286.698, np.nan], [287.327, 287.159]],
-                                   [[287.048, np.nan], [287.251, 287.491]]], dtype=np.float32)
 
-    ds.to_netcdf(target_dir / "fake_phys_surf_data.nc")
+    _write_land_free(ds, target_dir / "fake_phys_surf_data.nc")
 
 
 def create_rti_restore_surf_sss(target_dir: Path):
@@ -282,7 +322,7 @@ def create_rti_restore_surf_sss(target_dir: Path):
         (12, 1, 1, 1)
     )
 
-    ds.to_netcdf(target_dir / "fake_restore_sss_surf_data.nc")
+    _write_land_free(ds, target_dir / "fake_restore_sss_surf_data.nc")
 
 
 def create_rti_restore_surf_dic_alk(target_dir: Path):
@@ -321,7 +361,7 @@ def create_rti_restore_surf_dic_alk(target_dir: Path):
         (258, 1, 1)
     )
 
-    ds.to_netcdf(target_dir / "fake_restore_dic_alk_surf_data.nc")
+    _write_land_free(ds, target_dir / "fake_restore_dic_alk_surf_data.nc")
 
 
 def create_rti_tides(target_dir: Path):
@@ -334,10 +374,13 @@ def create_rti_tides(target_dir: Path):
     lat_v = np.array([[34.25000097,  34.91666765],  [34.25000097,  34.91666765]])
     con   = np.array([b'm2  ', b's2  '], dtype="S4")
 
+    # roms-tools reads TPXO's mz/mu/mv as "NaN = ocean"; all four points are
+    # ocean so no lateral fill runs (see _write_land_free for why).
+    ocean = np.full((2, 2), np.nan)
     tpxo_g = xr.Dataset({
-        "mz":    xr.DataArray(np.array([[np.nan, np.nan], [np.nan, 0.0]]), dims=("nx", "ny")),
-        "mu":    xr.DataArray(np.array([[np.nan, np.nan], [np.nan, 0.0]]), dims=("nx", "ny")),
-        "mv":    xr.DataArray(np.array([[np.nan, np.nan], [np.nan, 0.0]]), dims=("nx", "ny")),
+        "mz":    xr.DataArray(ocean.copy(), dims=("nx", "ny")),
+        "mu":    xr.DataArray(ocean.copy(), dims=("nx", "ny")),
+        "mv":    xr.DataArray(ocean.copy(), dims=("nx", "ny")),
         "lon_z": xr.DataArray(lon_z, dims=("nx", "ny")),
         "lat_z": xr.DataArray(lat_z, dims=("nx", "ny")),
         "lon_u": xr.DataArray(lon_u, dims=("nx", "ny")),
@@ -371,6 +414,13 @@ def create_rti_tides(target_dir: Path):
         "VIm":   xr.DataArray(np.array([[[-14.589685,  -4.605853],  [-0.27541187, 0.0]],
                                          [[ -2.1566737, -0.793107],  [-0.2983798,  0.0]]]), dims=("nc", "nx", "ny")),
     })
+
+    # The [1, 1] corner was land in the original sample and holds 0.0
+    # placeholders; now that the masks make it ocean, give it the values of
+    # its northern neighbour so the tide is not biased toward zero there.
+    for ds, names in ((tpxo_h, ("hRe", "hIm")), (tpxo_u, ("URe", "UIm", "VRe", "VIm"))):
+        for name in names:
+            ds[name].values[:, 1, 1] = ds[name].values[:, 0, 1]
 
     tpxo_h.to_netcdf(target_dir / "fake_tides_data_h.nc")
     tpxo_u.to_netcdf(target_dir / "fake_tides_data_u.nc")

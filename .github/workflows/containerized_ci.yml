@@ -242,6 +242,7 @@ jobs:
     # build_ifx) to branch protection's required checks. A skipped build_gnu
     # (no change) counts as passing, so unrelated PRs are not blocked.
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_gnu.result == 'success' || needs.build_gnu.result == 'skipped') }}
+    timeout-minutes: 30  # normal run is ~4 min; a hang in input generation once ran for hours
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -467,6 +468,7 @@ jobs:
     # See test_gnu: a failed build_ifx skips this job; gate merges via build_ifx
     # being a required check, not via this test job.
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_ifx.result == 'success' || needs.build_ifx.result == 'skipped') }}
+    timeout-minutes: 30  # normal run is ~4 min; a hang in input generation once ran for hours
     runs-on: ubuntu-latest
     permissions:
       contents: read
