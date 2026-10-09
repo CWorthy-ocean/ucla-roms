@@ -571,7 +571,7 @@ contains
     character(len=15) :: sr_name = "set_frc_data_1d"
     ! input/outputs
     type(ncforce),    intent(inout) :: nc    ! derived type containing all neccesary supporting data
-    real(kind=8),dimension(:),intent(out)   :: var1d ! time interpolated forcing data
+    real(kind=8),dimension(:),intent(inout) :: var1d ! time interpolated forcing data (left as is when interp=.false.)
     integer(kind=4),optional, intent(in)    :: obry  ! bry=1, suppress terminal info, bry=2 display boundary
     logical,optional,intent(in) :: interp        ! .false.: refresh the data slots only
                                                  ! (a collective read under PARALLEL_IO),
@@ -672,7 +672,7 @@ contains
     character(len=15) :: sr_name="set_frc_data_2d"
     ! input/outputs
     type(ncforce),      intent(inout) :: nc    ! derived type containing all neccesary supporting data
-    real(kind=8),dimension(:,:),intent(out)   :: var2d ! time interpolated forcing data
+    real(kind=8),dimension(:,:),intent(inout) :: var2d ! time interpolated forcing data (left as is when interp=.false.)
     integer(kind=4),optional,   intent(in)    :: obry  ! bry=1, suppress terminal info, bry=2 display boundary
     logical,optional,intent(in) :: interp        ! .false.: refresh the data slots only
                                                  ! (a collective read under PARALLEL_IO),
