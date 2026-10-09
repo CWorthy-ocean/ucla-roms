@@ -1,0 +1,172 @@
+.. _0.10.0:
+
+0.10.0
+----------
+
+
+Breaking Changes
+~~~~~~~~~~~~~~~~
+
+
+- Results are not bit-for-bit identical to ``main``. The differences are at round-off (RMS difference about 1e-7 of each field's spread; under 0.01% of points differ by more than 1e-6 relative). They come from reordered arithmetic in the tracer kernels. The pytest reference values will need regenerating. (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+- Each run's log now ends with a region-timer table (see New Features). (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+- Averaged CDR output (``cdr_output.F90``) changes slightly, because of the precision fix under Bug Fixes. Most fields differ by about 1e-8 relative and ``C_TOT_100m`` by about 1e-7. The new values are the correct averages. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- Averaged BGC diagnostics differ from before only at round-off (within 6e-16 relative). (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- Model state is unchanged, so the pytest history and BGC references are not affected. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- **Model results change.** On MiniPac, compared with the previous code after 5 hours, the RMS difference relative to each field's spread is 3.6% for sea level, 1.3% for velocity and about 3e-4 for temperature and salinity. The largest local differences are 0.2 m, 0.14 m/s, 0.9 °C and 0.35 PSU. This combines the three result-changing fixes under Bug Fixes, plus start-up adjustment from a restart produced with the old boundary timing. The pytest reference values will need regenerating. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``set_tides`` gains an optional ``bry_phase`` argument (the time of the boundary tidal harmonics, in units of ``dt`` from ``time``; default 0.5). Existing calls are unchanged. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- **Results change only where a bug is fixed:** (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+
+  - rivers that discharge across an MPI tile edge;
+  - the averaged ``Akv``/``Akt``/``AKs``/``hbls``/``hbbl`` fields and the surface-flux averages, which previously held NaNs. Everything else is bitwise identical on MiniPac. The exception is a run with rivers, where three BGC fields differ by at most 3e-17 relative (roundoff from the restructured river loops). pytest hashes for the river configurations may therefore change.
+
+- New optional arguments, with existing calls unchanged: ``set_depth_tile(..., zeta_exchanged)`` and ``set_frc_data(..., interp)``. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``exchange_xxx(..., do_corn=.false.)`` now skips sending and receiving the corner messages, not just unpacking them. No current caller passes it. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``_cdrgas`` files gain an instantaneous record at the start and at the end of every run (not counted toward ``nrpf_cdr_gas``), so the first file is now labelled with the start time and analyses that average over all records must skip the first and last. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
+
+New Features
+~~~~~~~~~~~~
+
+
+- **Region timers** (``timers.F90``): wall-clock timers around each call in ``roms_step``, plus nested timers for halo-exchange communication and for MARBL. At the end of the run, a table prints the max and mean over ranks for each region. (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+- **``TARGET_FLAGS``** (``Makedefs.inc``): a CPU-target flag that can be overridden. It defaults to ``-march=core-avx2`` for Intel and ``-march=x86-64-v3`` for GNU, is empty on non-x86 machines, and is skipped for ``debug``/``test`` builds. Set ``TARGET_FLAGS=`` to disable it, or ``TARGET_FLAGS=-march=native`` to build for one known node type. It has no effect on Derecho, where NCAR's compiler wrapper already adds ``-march=core-avx2``. It helps on clusters whose wrappers don't. (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+- ``_cdrgas`` files carry ``ddic_dco2_time``/``ddic_dalk_time`` (days since the reference date) and can be listed in ``frcfiles`` of a ``CDR_LITE`` run with ``cdr_online_carbonate_sensitivity = .false.``. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
+
+  - Averaged records are stamped at the midpoint of their averaging window; instantaneous and bracket records at their own time.
+  - The start and end bracket records let a consumer run cover exactly the producer's window, chunk by chunk in a restart chain, provided both runs share ``reference_date``.
+
+- A missing ``CDR_OAE_DIC<n>_flx`` / ``CDR_DOR_DIC<n>_flx`` surface-flux variable now means zero surface flux (one warning at the first read) instead of aborting; passive-tracer fluxes remain mandatory. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
+
+Bug Fixes
+~~~~~~~~~
+
+
+- ``cdr_output.F90``: the averaging weight was single precision (``real :: coef``), so every CDR average was biased by about 1e-8 relative (1.6e-8 for a 10-step window). The top-100 m carbon sum (``C_TOT_100m``) was also accumulated in single precision. Both now use double precision. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- ``cdr_output.F90``: ``multiply_by_thickness`` read ``t(…,knew,…)``. ``knew`` is the barotropic time index and reaches 4, while ``t`` has only 3 time levels, so this could read out of bounds. It now uses ``nnew``. (The same fix for ``cdr_lite_output.F90`` went in with #379.) (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- ``surf_flux.F90``: the reopened output file was missing an ``nf90_redef`` before its variables were defined (NetCDF error -38). Surface-flux output with ``PARALLEL_IO`` still fails afterwards, in the PIO write in ``wrt_sflux``. That is a separate problem that also exists on ``main``. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- ``cdr_frc.F90``: the read of ``cdr_trcflx_3d_ALK``/``DIC`` never set ``pio_gtype``, so it inherited the previous call's grid type. With a 2D type the read is skipped entirely. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``cdr_frc.F90``: the 3D forcing buffers were never initialized. With the read skipped, uninitialized memory was applied as the ALK/DIC source; on MiniPac, MARBL's carbonate solver failed within 3 steps. The buffers are now zeroed when allocated. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``roms_read_write.F90``: gridded 3D forcing was read into ``vdata(i0:i1, j0:j1, …)``, which is smaller than the range the PIO decompositions cover (``x0:x1, y0:y1``), so PIO overran the array and segfaulted. It now uses ``x0:x1, y0:y1``, as the 2D gridded reads do. The two ranges are identical without ``PARALLEL_IO``. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``basic_output.F90``: ``rec_avg`` had no ``SAVE`` and ``first_step`` had no initial value, so whether a new averages file was created, and which record was written, depended on stack contents. Both are now saved and initialized as in the history writer. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``basic_output.F90``: averaged ``W`` was written with the ``'3Dww'`` decomposition (w points, ``nz+1`` levels). ``W`` has ``nz`` levels at rho points, so PIO aborted. It now uses ``'3Drw'``, as the history writer does. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``random_output.F90``: the whole write sat inside the "start a new file" branch, so nothing was written after the first file and ``output_time`` never reset. Every record is now written, with a new file every ``nrpf_random`` records. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``random_output.F90``: variables were defined in the reopened file without ``nf90_redef`` (NetCDF error -38). This is the same bug already fixed in ``surf_flux.F90``. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``t3dbc_mod.F90``: the radiation (Orlanski) update for open-boundary tracers used the interior tracer at ``nstp`` (time n) on the west and south boundaries but ``nnew`` (time n+1) on east and north, an asymmetry inherited from the 2017 code. All four sides now use ``nstp``, consistent with the tangential-gradient terms. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``main.F90``, ``tides.F90``: the second boundary update in ``roms_step`` read its data at time + 1.5·dt, although it is meant for n+1 (it feeds ``step2d`` and the 3D corrector). It now reads at n+1, using ``frc_time = '1/2 fwd'`` with ``tdays`` left at n+½, so nothing else that uses ``tdays`` changes. The boundary tidal harmonics on that call also move to n+1. The tidal potential stays at n+½, where ``prsgrd`` uses it. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``lmd_vmix_mod.F90``: the 1-2-1 vertical smoothing of ``Kv``/``Kt``/``Ks`` ran in place with ``k`` ascending, so each level was filtered from an already-smoothed neighbour. The background diffusivity was also counted more than once, through the neighbours and the padded top and bottom values (about 1.33×). Smoothing now uses unsmoothed neighbours, the padding excludes the background, and the background is added once. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- ``river_frc.F90``: ``river_index``/``river_fraction`` (and the grid-file ``river_flux``) were set only on each rank's own points, but ``calc_river_flux`` also reads the halo cells. A river cell on a neighbouring rank, next to this rank's ocean, therefore got index 0: (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+
+  - with ``PARALLEL_IO``, that read ``riv_vol(0)`` and ``riv_trc(0,:)`` out of bounds;
+  - without it, the river flux through that face was lost. The halos are now exchanged before the index is converted. On MiniPac, 40 rivers across tile edges were off by 0.28 °C and 0.26 PSU after 5 hours.
+
+- ``basic_output.F90``, ``surf_flux.F90``: the ``Akv``/``Akt``/``AKs``/``hbls``/``hbbl`` averages and the surface-flux averages were allocated without zeroing. The first running-mean update multiplies the old contents by 0, so any leftover NaN stayed NaN for the whole run. On MiniPac about 2,700 points of averaged ``hbls`` and 3,400 of ``hbbl`` were NaN, and which points varied from run to run. These arrays are now zeroed at allocation, like the other averages. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``surf_flux.F90``: the ``PARALLEL_IO`` writes never set ``pio_gtype``, so each used the previous output's decomposition and surface-flux output aborted. Each write now sets its grid's decomposition (u, v or rho points), as ``frc_output.F90`` does. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- Under ``PARALLEL_IO``, reading ``ddic_dco2``/``ddic_dalk`` from forcing files leaked one PIO file handle per record refresh. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
+- With ``PARALLEL_IO``, a ``cdr_gas_exch_output`` run whose MARBL tracer set lacks PO4, SiO3, ALK_ALT_CO2 or DIC_ALT_CO2 could read out of bounds before reporting the misconfiguration; it now aborts with the message first. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
+
+Improvements
+~~~~~~~~~~~~
+
+
+- **``step3d_t``: tracer loop split** (``step3d_t`` ~74 → ~53 s, MARBL included; this is most of the gain). (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+
+  - Horizontal advection and sources still loop tracers outside rows.
+  - The vertical part (advection, surface fluxes, implicit mixing) now loops tracers inside rows, so ``Hz``, ``Akt``, ``Wi`` and ``We`` for a row stay in cache across tracers.
+
+- **Implicit vertical solve factored once per row** (``step3d_t``, ``pre_step3d``). (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+
+  - All tracers after salinity use the same ``Akt(:,:,:,iTandS)``, so the factorization from the ``iTandS`` pass is reused and later tracers only do the forward and back substitution.
+  - Factors are kept per row. Caching them in full 3D arrays was tried and was slower, because these kernels are limited by memory bandwidth.
+
+- **Thickness-aware advection coefficients cached per row** (``advection.F90``). They are refilled on the ``itrc = 1`` call, which is the first tracer of each row in both callers. The cache assumes one tile per MPI rank (no OpenMP tiling). (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+- **Tracer halo exchanges batched**, from about 85 calls per step to 18 with ``nt = 34``. (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+
+  - A new ``exchange_tracers(tidx)`` in ``tracers.F90`` exchanges four tracers per call. It replaces one-tracer-per-call exchanges in ``pre_step3d`` and ``t3dmix``.
+  - The ``step3d_t`` tracer exchange is skipped when ``TS_DIF2``/``TS_DIF4`` is defined: ``t3dmix`` runs next, reads only the ``nrhs`` halo, and exchanges ``t(nnew)`` itself.
+  - Halo-exchange communication time fell from ~29 to ~23 s. Part of the time ranks spend waiting for slower ranks now shows up in ``t3dmix`` (~18 → ~26 s) instead of ``step3d_t``.
+
+- **KPP exchanges merged**: five calls become two, which is four fewer per step. (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+- **Redundant work removed** (about 1 s or less each): (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+
+  - ``rho_eos``: the call that opens each step is skipped after the first step, because it recomputed the state the previous step's closing call had already evaluated.
+  - ``swr_frac`` is computed once per step instead of on both ``lmd_vmix`` calls.
+  - The tidal potential is computed once per model time instead of on both ``set_tides`` calls.
+
+- **``cdr_output.F90``: averaging rewritten** (CDR output time 20.4 → 14.8 s per rank). (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+
+  - Averages are kept as double-precision sums, updated in one pass over the cells that are written, and divided by the step count when a record is written. Previously, about 24 separate running-mean passes ran over whole arrays, halos included, every step.
+  - pH, carbonate and air-sea CO2 fields only change on MARBL steps. They are now added once per MARBL interval, weighted by the number of steps held, which gives the same sums.
+  - CDR sources are added only at release points for parameterized and depth-profile forcing, instead of zeroing four full 3D arrays every step.
+  - Instantaneous fields are computed only on steps that write a record. The per-step 3D total-carbon temporary has been removed.
+
+- **``bgc_io.F90``:** with MARBL, the averaged diagnostics are added once per MARBL interval (``accumulate_dia_bgc``) and scaled at write time (``finalize_dia_bgc``), instead of a full pass every step. BEC2 keeps the per-step path. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- **``zslice_output.F90``:** the search for the sigma levels bracketing each slice depth runs once per row and is shared by all z-slice tracers (``zslice_levels`` / ``zslice_interp``). Output is bitwise identical. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- **``surf_flux.F90``:** only the heat and salt fluxes that are written are averaged. ``rstflx_avg``, whose write is disabled, is no longer updated. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- **``marbl_driver.F90``:** a new ``is_marbl_step(istep)`` is used by ``step3d_t`` and the output averaging, so both agree on which steps MARBL updates its fields. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- ``roms_mpi.F90``: halo exchanges wait with ``MPI_Waitall`` instead of spinning on ``MPI_Test``. ``do_corn=.false.`` now skips the corner messages entirely. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``step2d_mod.F90``, ``set_depth_mod.F90``: on the last barotropic substep, ``zeta``/``ubar``/``vbar`` are exchanged before ``set_depth_tile``. With ``PARALLEL_IO``, ``set_depth`` then fills ``z_w``, ``z_r`` and ``Hz`` in the halos itself, which removes a 3-array, ``nz``-level exchange each step. Start-up calls, and builds without ``PARALLEL_IO``, keep the exchange. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``pio_roms.F90``: no ``PIO_syncfile`` after every variable write; the ``PIO_closefile`` at the end of each record flushes. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``boundary.F90``, ``roms_read_write.F90``: under ``PARALLEL_IO``, ranks not on a boundary still join the collective boundary read but skip the time interpolation. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``cdr_frc.F90``: removed the ``MPI_Barrier`` at every ``set_cdr_frc`` call. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``bulk_frc.F90``: the current-feedback stress loops reuse ``wspd_used`` instead of recomputing the wind speed. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``river_frc.F90``, ``step2d_mod.F90``, ``pre_step3d_mod.F90``, ``step3d_uv_mod.F90``, ``compute_horiz_tracer_fluxes.h``: river faces are listed once when the river locations are set up. The river loops, including the one inside the tracer and level loops, now visit only those faces instead of testing every point of the tile. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- The surface forcing reader honours ``allow_missing`` like the 1-D/2-D readers, with the absent-variable warning printed once per field. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+- Tested only with ifx 2025.2.1 on Derecho. The gfortran builds and the pytest suite were not run. (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+- Benchmark and verification setup: MiniPac restart, 384-step timing runs and 16-step output comparisons, kept outside the repo in the author's scratch space. (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+- Known remaining cost: MARBL work per rank is uneven, because it scales with the number of wet columns in each tile (busiest rank ~24 s vs mean ~16 s). Balancing it would be a ROMS-side change in the MARBL driver and is left for follow-up work. (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+- **Verification:** a 20-step run wrote CDR, BGC-diagnostic and z-slice averages every 10 steps, so each averaging window straddles the 4-step MARBL updates. Compared with the Tier 1 code: (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+
+  - history, BGC and z-slice output are bitwise identical;
+  - BGC-diagnostic averages are within 6e-16 relative;
+  - CDR averages differ by 1.7e-7 at most (the precision fix).
+
+- **After merging ``main``:** the same verification run with the merged branch gives output bitwise identical to the pre-merge Tier 2 run, in every file. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- **Surface-flux averaging (``surf_flux.F90``)** could not be run, because of the failure noted under Bug Fixes. It was checked by reading the code only. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- **Builds:** after the merge, compiled with ifx in seven configurations: (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+
+  - the MiniPac CDR benchmark keys;
+  - the four CI compile-only key sets (MARBL ``PARALLEL_IO`` with ``CDR_LITE``, with ``MPI_MASKING``, ``DIAGNOSTICS``, and the two no-MARBL ``CDR_FORCING`` sets);
+  - BEC2 with ``CDR_FORCING``.
+
+- **Benchmark:** timings come from a MiniPac CDR case (a 1000 mol/s ALK release), kept outside the repo in the author's scratch space. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- **Not changed:** (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+
+  - Gathering each row's MARBL tracers into contiguous scratch was tried and made MARBL ~2.3 s slower per rank, so it was dropped.
+  - The ``diag`` reduction was left as is: ``diag`` costs under 1% of the run, and the practical lever is setting ``ninfo`` above 1 in production namelists.
+
+- **Known build issue:** incremental rebuilds fail when old ``.mod`` files are present, because make applies a built-in Modula-2 rule (``m2c``). Adding ``.SUFFIXES:`` to ``src/Makefile`` would fix this. (`#381 <https://github.com/CWorthy-ocean/ucla-roms/pull/381>`_)
+- **Runtime test** on MiniPac (MARBL, ``PARALLEL_IO``, 256 ranks, 20 steps), with a 1000 mol/s ALK source in a 41×41-cell box crossing tile boundaries, and averaged and random output every 4 steps (``nrpf = 2``): (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+
+  - the ``ALK_source`` written by ``cdr_output`` matches the 3D input field cell by cell (maximum difference 0, total 10⁶ mmol/s), where the previous build applied garbage;
+  - averaged and random output each produce 3 files with 2, 2 and 1 records, at hours 1 to 5.
+
+- **Builds:** compiled with ifx in seven configurations: the CI key sets, builds without ``PARALLEL_IO``, no-MARBL CDR, and the no-KPP mixing branch. gfortran and the pytest suite were not run locally. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- **Not separated:** the three result-changing fixes were not run individually, so their separate contributions to the differences above are unknown. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- **Base branch:** this branch is built on ``perf-tier2``. Until that merges, a PR against ``main`` will also show the Tier 2 commits. (`#382 <https://github.com/CWorthy-ocean/ucla-roms/pull/382>`_)
+- **Benchmark** (MiniPac, MARBL plus CDR forcing, ``PARALLEL_IO``, 256 ranks, 384 steps): about 1% faster overall, 268.6 s → 267.1 s for runs done side by side. Slowest-rank time: (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- **Not done:** (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+
+  - two-phase halo exchange: it makes the latency-bound ``step2d`` exchanges wait twice as long;
+  - keeping output files open between records, writing ``ocean_time`` through PIO, and caching varids: output is bandwidth-bound, so these wouldn't help;
+  - skipping land points in the bulk-flux loop: the all-ocean ranks set the step time;
+  - warm-starting the bulk-flux iteration: it would change results to save at most about 0.1%;
+  - precomputing ``step2d`` substep factors: implemented, measured no gain, reverted.
+
+- **Tests** on MiniPac (20 steps): (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+
+  - the model state is bitwise identical to the base;
+  - two runs of the same build give bitwise identical output in every file, averages included;
+  - with 60 rivers away from tile edges, output is identical apart from the roundoff noted above;
+  - 40 rivers discharging across 16×16 tile edges match an 8×8 run, where those edges fall inside a tile, to roundoff;
+  - a build that zeroes the river halos before the new exchange (as a read without ``PARALLEL_IO`` leaves them) gives identical results;
+  - the grid-file ``river_flux`` path matches the forcing-file path;
+  - surface-flux averages are now written, with no NaNs.
+
+- **Builds:** compiled with ifx in eight configurations: the CI key sets, builds without ``PARALLEL_IO``, the river and BGC test keys, an analytical river case and a periodic analytical case. gfortran and the pytest suite were not run locally. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- **Base branch:** built on ``review-bugfixes`` (#382). Until that merges, this PR's diff also shows its two commits. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``tests/test_cdr.py`` checks the ``_cdrgas`` record layout and adds a no-MARBL ``CDR_FORCING + CDR_LITE`` run that reads a MARBL run's ``_cdrgas`` output back as forcing with no ``_flx`` variable; a 4-tracer parameterized CDR file joins the generated inputs and ``ROMSConfiguration.run`` can capture stdout. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
+- Namelist comments (``src/namelist.nml`` and the Iceland examples) document the file layout and the optional ``_flx`` variables. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
