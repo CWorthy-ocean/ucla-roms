@@ -24,6 +24,7 @@ Breaking Changes
 
 - New optional arguments, with existing calls unchanged: ``set_depth_tile(..., zeta_exchanged)`` and ``set_frc_data(..., interp)``. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
 - ``exchange_xxx(..., do_corn=.false.)`` now skips sending and receiving the corner messages, not just unpacking them. No current caller passes it. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``_cdrgas`` files gain an instantaneous record at the start and at the end of every run (not counted toward ``nrpf_cdr_gas``), so the first file is now labelled with the start time and analyses that average over all records must skip the first and last. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
 
 New Features
 ~~~~~~~~~~~~
@@ -31,6 +32,12 @@ New Features
 
 - **Region timers** (``timers.F90``): wall-clock timers around each call in ``roms_step``, plus nested timers for halo-exchange communication and for MARBL. At the end of the run, a table prints the max and mean over ranks for each region. (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
 - **``TARGET_FLAGS``** (``Makedefs.inc``): a CPU-target flag that can be overridden. It defaults to ``-march=core-avx2`` for Intel and ``-march=x86-64-v3`` for GNU, is empty on non-x86 machines, and is skipped for ``debug``/``test`` builds. Set ``TARGET_FLAGS=`` to disable it, or ``TARGET_FLAGS=-march=native`` to build for one known node type. It has no effect on Derecho, where NCAR's compiler wrapper already adds ``-march=core-avx2``. It helps on clusters whose wrappers don't. (`#377 <https://github.com/CWorthy-ocean/ucla-roms/pull/377>`_)
+- ``_cdrgas`` files carry ``ddic_dco2_time``/``ddic_dalk_time`` (days since the reference date) and can be listed in ``frcfiles`` of a ``CDR_LITE`` run with ``cdr_online_carbonate_sensitivity = .false.``. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
+
+  - Averaged records are stamped at the midpoint of their averaging window; instantaneous and bracket records at their own time.
+  - The start and end bracket records let a consumer run cover exactly the producer's window, chunk by chunk in a restart chain, provided both runs share ``reference_date``.
+
+- A missing ``CDR_OAE_DIC<n>_flx`` / ``CDR_DOR_DIC<n>_flx`` surface-flux variable now means zero surface flux (one warning at the first read) instead of aborting; passive-tracer fluxes remain mandatory. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
 
 Bug Fixes
 ~~~~~~~~~
@@ -56,6 +63,8 @@ Bug Fixes
 
 - ``basic_output.F90``, ``surf_flux.F90``: the ``Akv``/``Akt``/``AKs``/``hbls``/``hbbl`` averages and the surface-flux averages were allocated without zeroing. The first running-mean update multiplies the old contents by 0, so any leftover NaN stayed NaN for the whole run. On MiniPac about 2,700 points of averaged ``hbls`` and 3,400 of ``hbbl`` were NaN, and which points varied from run to run. These arrays are now zeroed at allocation, like the other averages. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
 - ``surf_flux.F90``: the ``PARALLEL_IO`` writes never set ``pio_gtype``, so each used the previous output's decomposition and surface-flux output aborted. Each write now sets its grid's decomposition (u, v or rho points), as ``frc_output.F90`` does. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- Under ``PARALLEL_IO``, reading ``ddic_dco2``/``ddic_dalk`` from forcing files leaked one PIO file handle per record refresh. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
+- With ``PARALLEL_IO``, a ``cdr_gas_exch_output`` run whose MARBL tracer set lacks PO4, SiO3, ALK_ALT_CO2 or DIC_ALT_CO2 could read out of bounds before reporting the misconfiguration; it now aborts with the message first. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
 
 Improvements
 ~~~~~~~~~~~~
@@ -103,6 +112,7 @@ Improvements
 - ``cdr_frc.F90``: removed the ``MPI_Barrier`` at every ``set_cdr_frc`` call. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
 - ``bulk_frc.F90``: the current-feedback stress loops reuse ``wspd_used`` instead of recomputing the wind speed. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
 - ``river_frc.F90``, ``step2d_mod.F90``, ``pre_step3d_mod.F90``, ``step3d_uv_mod.F90``, ``compute_horiz_tracer_fluxes.h``: river faces are listed once when the river locations are set up. The river loops, including the one inside the tracer and level loops, now visit only those faces instead of testing every point of the tile. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- The surface forcing reader honours ``allow_missing`` like the 1-D/2-D readers, with the absent-variable warning printed once per field. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -160,3 +170,5 @@ Miscellaneous
 
 - **Builds:** compiled with ifx in eight configurations: the CI key sets, builds without ``PARALLEL_IO``, the river and BGC test keys, an analytical river case and a periodic analytical case. gfortran and the pytest suite were not run locally. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
 - **Base branch:** built on ``review-bugfixes`` (#382). Until that merges, this PR's diff also shows its two commits. (`#383 <https://github.com/CWorthy-ocean/ucla-roms/pull/383>`_)
+- ``tests/test_cdr.py`` checks the ``_cdrgas`` record layout and adds a no-MARBL ``CDR_FORCING + CDR_LITE`` run that reads a MARBL run's ``_cdrgas`` output back as forcing with no ``_flx`` variable; a 4-tracer parameterized CDR file joins the generated inputs and ``ROMSConfiguration.run`` can capture stdout. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
+- Namelist comments (``src/namelist.nml`` and the Iceland examples) document the file layout and the optional ``_flx`` variables. (`#385 <https://github.com/CWorthy-ocean/ucla-roms/pull/385>`_)
