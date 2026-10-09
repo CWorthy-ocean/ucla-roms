@@ -358,8 +358,17 @@ subroutine set_carbonate_sensitivity ![
 #ifdef CDR_LITE
       ! Online values are set in tracers%set_surf_tracer_flx instead
       if (.not. cdr_online_carbonate_sensitivity) then
+#ifdef PARALLEL_IO
+        pio_file_is_open = 0
+#endif
         call set_frc_data(nc_ddic_dco2, ddic_dco2, 'r')
         call set_frc_data(nc_ddic_dalk, ddic_dalk, 'r')
+#ifdef PARALLEL_IO
+        if (pio_file_is_open == 1) then
+          call PIO_closefile(pio_FileDesc)
+        endif
+        pio_file_is_open = 0
+#endif
       endif
 #endif
 

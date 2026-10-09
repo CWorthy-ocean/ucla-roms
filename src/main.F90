@@ -114,6 +114,9 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: wrt_upscale, do_upscale
 #endif
+#if defined MARBL && defined CDR_FORCING
+    use cdr_gas_exch_output, only: wrt_cdr_gas_final, do_cdr_gas_exch_output
+#endif
     implicit none
 
 
@@ -133,6 +136,9 @@ contains
     if (do_upscale) then
       call wrt_upscale
     endif
+#endif
+#if defined MARBL && defined CDR_FORCING
+    if (do_cdr_gas_exch_output) call wrt_cdr_gas_final
 #endif
 
     call stop_timers()
