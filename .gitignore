@@ -81,3 +81,7 @@ benchmark.result_laptop
 .cproject
 .pydevproject
 __pycache__
+
+# pytest suite: per-run computed results and input sentinel (uploaded as CI artifacts)
+tests/results/computed_*.json
+tests/results/input_hashes_*.json

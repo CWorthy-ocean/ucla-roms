@@ -23,12 +23,13 @@ name: Containerized CI
 #   - pull_request from a fork: the token is read-only, so the image is built to
 #     verify it compiles but not pushed, and the tests fall back to :latest.
 #
-# Test-failure policy: the pytest jobs run with --tolerate-hash-mismatch, so a
-# reference-hash mismatch is reported XFAIL and does not fail the job. The
-# reference hashes are not reproducible across platforms, so they are chronic
-# noise here. Everything else -- compile errors, ROMS crashes, missing output --
-# still fails. The short test summary (-rfEx) lists real failures and errors
-# alongside the tolerated mismatches.
+# Test-failure policy: a reference-hash mismatch fails the pytest jobs, like any
+# other test failure. Each job uploads the computed results as the artifact
+# results-github_gnu / results-github_ifx (retained 30 days, also on failure).
+# To accept an intentional change, run
+#   python tests/update_references.py --run <run-id>
+# locally and commit the updated tests/results/*.json in the same PR. Details in
+# tests/README.md.
 
 on:
   workflow_dispatch:
@@ -46,6 +47,20 @@ on:
       - main
   pull_request:
     branches: ['*']
+
+# The roms-tools input generation must produce identical bytes on every runner,
+# or the output hashes cannot be compared. numpy, OpenBLAS and numba select
+# AVX-512 kernels when the VM exposes them, which changed results at the last
+# bit. These variables pin all three to AVX2-generic paths. See tests/README.md.
+# Set at the top level so both test jobs share one definition; the other jobs
+# are unaffected.
+env:
+  NPY_DISABLE_CPU_FEATURES: X86_V4
+  OPENBLAS_CORETYPE: Haswell
+  OPENBLAS_NUM_THREADS: "1"
+  NUMBA_CPU_NAME: generic
+  NUMBA_DISABLE_INTEL_SVML: "1"
+  NUMBA_NUM_THREADS: "1"
 
 # Cancel superseded runs for the same PR so rapid pushes don't stack up the
 # expensive from-source ifx builds. Main pushes are never cancelled (each commit
@@ -276,8 +291,18 @@ jobs:
       run: |
         micromamba run -n roms-ci bash -c '
         cd ${ROMS_ROOT}/tests/
-        pytest -svvv -rfEx . --environ=github_gnu --tolerate-hash-mismatch
+        pytest -svvv -rfEx . --environ=github_gnu
         '
+    - name: Upload computed results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: results-github_gnu
+        path: |
+          tests/results/computed_*.json
+          tests/results/input_hashes_*.json
+        if-no-files-found: warn
+        retention-days: 30
 
   compile_gnu:
     needs: [prepare, build_gnu]
@@ -505,7 +530,18 @@ jobs:
           cd $ROMS_ROOT/tests/
           sed -i -e "s/make BUILD_MODE=test/make COMPILER=intel BUILD_MODE=test/g" _helpers.py
           sed -i -e "s/mpirun/mpirun --oversubscribe/g" _helpers.py
-          pytest -svvv -rfEx . --environ=github_ifx --tolerate-hash-mismatch
+          pytest -svvv -rfEx . --environ=github_ifx
+
+      - name: Upload computed results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-github_ifx
+          path: |
+            tests/results/computed_*.json
+            tests/results/input_hashes_*.json
+          if-no-files-found: warn
+          retention-days: 30
 
   cleanup:
     # Delete the throwaway :ci-<run_id> tags pushed for a PR. Best-effort: a

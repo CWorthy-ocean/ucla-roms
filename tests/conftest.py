@@ -1,5 +1,8 @@
 """Pytest configuration and shared fixtures for the ROMS test suite."""
+import hashlib
+import importlib.metadata
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -23,19 +26,27 @@ def pytest_addoption(parser):
         default=False,
         help="Report reference-hash mismatches as XFAIL instead of failures, so they "
              "do not fail the run. Every other failure mode -- compile errors, ROMS "
-             "crashes, missing output -- still fails. Used by CI, where the hashes are "
-             "not reproducible across platforms; leave it off locally.",
+             "crashes, missing output -- still fails. For local runs against references "
+             "generated on another machine; CI does not set it.",
+    )
+    parser.addoption(
+        "--results-out",
+        action="store",
+        default=None,
+        help="Path where the computed results JSON is written at session end. "
+             "Defaults to tests/results/computed_<environ>.json.",
     )
 
 
 def pytest_configure(config):
-    """Hand the --tolerate-hash-mismatch setting to the assertion helper.
+    """Hand the --tolerate-hash-mismatch and --environ settings to the assertion helper.
 
     `assert_output_matches_reference` is called directly from test bodies with
-    no access to the pytest config, so the flag is stashed on the module rather
-    than threaded through all ten call sites.
+    no access to the pytest config, so the settings are stashed on the module
+    rather than threaded through all ten call sites.
     """
     _assertions.tolerate_hash_mismatch = config.getoption("--tolerate-hash-mismatch")
+    _assertions.environ = config.getoption("--environ")
 
 
 @pytest.fixture(scope="session")
@@ -58,6 +69,43 @@ def reference_results(environ) -> dict:
         return json.load(f)
 
 
+def _collect_input_sentinel(target: Path) -> dict:
+    """Hash the generated input files and record the environment that made them.
+
+    The inputs are generated on the runner by roms-tools and have differed at
+    the bit level depending on CPU features. A change in these hashes without a
+    change in the Python environment is therefore a bug to investigate, not
+    noise, and tells an input change apart from a ROMS change when output
+    hashes move.
+    """
+    def version(package: str):
+        try:
+            return importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+
+    # partit writes the per-rank copies as <stem>.<k>.nc with an integer rank k;
+    # only the files roms-tools generated are of interest.
+    files = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(target.glob("*.nc"))
+        if not re.fullmatch(r".*\.\d+\.nc", path.name)
+    }
+
+    cpuinfo = Path("/proc/cpuinfo")  # absent on macOS
+    avx512f = None
+    if cpuinfo.exists():
+        flags_lines = [ln for ln in cpuinfo.read_text().splitlines() if ln.startswith("flags")]
+        avx512f = any("avx512f" in ln.split() for ln in flags_lines)
+
+    environment = {
+        package: version(package)
+        for package in ("roms-tools", "numpy", "scipy", "numba", "xarray")
+    }
+    environment["avx512f"] = avx512f
+    return {"files": files, "environment": environment}
+
+
 @pytest.fixture(scope="session")
 def input_dir(tmp_path_factory) -> Path:
     """One-time generation of every ROMS input file the suite needs.
@@ -67,16 +115,18 @@ def input_dir(tmp_path_factory) -> Path:
     """
     target = tmp_path_factory.mktemp("roms_inputs")
     create_roms_inputs(target)
+    _assertions.input_file_hashes.update(_collect_input_sentinel(target))
     return target
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """At the end of the session, dump the collected hashes as JSON.
+    """At the end of the session, report and save the collected hashes.
 
-    Only tests that actually ran appear in the dump, so a subset run
+    Only tests that actually ran appear in the results, so a subset run
     produces a partial dict rather than entries with missing values.
-    The dump goes to the terminal reporter so it isn't swallowed by
-    pytest's output capture.
+    The report goes to the terminal reporter so it isn't swallowed by
+    pytest's output capture. The same values are written to files, which is
+    how CI hands them to ``tests/update_references.py``.
     """
     if not computed_results:
         return
@@ -94,5 +144,24 @@ def pytest_sessionfinish(session, exitstatus):
             reporter.write_line(f"  {test_name}")
 
     current_environ = session.config.getoption("--environ")
-    reporter.write_sep("=", f"computed results (paste into $ROMS_ROOT/results/results_{current_environ}.json to update if you understand the reason for - and expect - this discrepancy.)")
+    results_out = session.config.getoption("--results-out")
+    if results_out is None:
+        results_out = Path(__file__).parent / "results" / f"computed_{current_environ}.json"
+    results_out = Path(results_out)
+    # The sentinel sits next to the results so the two travel together.
+    inputs_out = results_out.parent / f"input_hashes_{current_environ}.json"
+
+    results_out.parent.mkdir(parents=True, exist_ok=True)
+    results_out.write_text(json.dumps(computed_results, indent=2) + "\n")
+
+    # Write, report and announce the sentinel together so the three cannot
+    # disagree about whether it exists.
+    if _assertions.input_file_hashes:
+        inputs_out.write_text(json.dumps(_assertions.input_file_hashes, indent=2) + "\n")
+        reporter.write_sep("=", "input file hashes and environment")
+        reporter.write_line(json.dumps(_assertions.input_file_hashes, indent=2))
+        reporter.write_line(f"wrote {inputs_out}")
+
+    reporter.write_sep("=", "computed results (to update the references if you understand the reason for - and expect - this discrepancy, run tests/update_references.py; see tests/README.md)")
     reporter.write_line(json.dumps(computed_results, indent=2))
+    reporter.write_line(f"wrote {results_out}")
