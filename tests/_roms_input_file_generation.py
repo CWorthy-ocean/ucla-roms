@@ -124,20 +124,23 @@ def create_roms_physical_boundary_forcing(grid, target_dir: Path):
         start_time=dt.datetime(2010, 1, 1),
         end_time=dt.datetime(2010, 1, 2),
         source={"name": "GLORYS", "path": target_dir / "fake_phys_3d_data.nc"},
-        apply_2d_horizontal_fill=True,
+        prefill="2d_lateral_fill",  # roms-tools 5 name for apply_2d_horizontal_fill=True
     )
     rpf.save(target_dir / "example_input_boundary_forcing.nc", group=False)
 
 
 def create_roms_bgc_boundary_forcing(grid, target_dir: Path):
-    rbf = rt.BoundaryForcing(
+    # roms-tools 5 turned BoundaryForcing into a physics+BGC wrapper that writes
+    # BGC to separate files; the single-source class keeps the old behaviour,
+    # which this generator relies on to edit and save one BGC dataset.
+    rbf = rt.BoundaryForcingSource(
         grid=grid,
         type="bgc",
         start_time=dt.datetime(2010, 1, 1),
         end_time=dt.datetime(2010, 1, 2),
         source={"name": "CESM_REGRIDDED",
                 "path": target_dir / "fake_bgc_3d_data.nc"},
-        apply_2d_horizontal_fill=True,
+        prefill="2d_lateral_fill",  # roms-tools 5 name for apply_2d_horizontal_fill=True
     )
     # Add DOFE for BEC:
     for bry in ["west", "north", "south", "east"]:
@@ -154,6 +157,7 @@ def create_roms_bgc_boundary_forcing(grid, target_dir: Path):
 def create_roms_physical_surface_forcing(grid, target_dir: Path):
     sf = rt.SurfaceForcing(
         grid=grid,
+        prefill="2d_lateral_fill",  # roms-tools 5: explicit fill; its no-prefill path is not deterministic here
         start_time=dt.datetime(2010, 1, 1),
         end_time=dt.datetime(2010, 1, 2),
         source={"name": "ERA5", "path": target_dir / "fake_phys_surf_data.nc"},
@@ -164,6 +168,7 @@ def create_roms_physical_surface_forcing(grid, target_dir: Path):
 def create_roms_bgc_surface_forcing(grid, target_dir: Path):
     rsf = rt.SurfaceForcing(
         grid=grid,
+        prefill="2d_lateral_fill",  # roms-tools 5: explicit fill; its no-prefill path is not deterministic here
         type="bgc",
         start_time=dt.datetime(2010, 1, 1),
         end_time=dt.datetime(2010, 1, 2),
@@ -176,6 +181,7 @@ def create_roms_bgc_surface_forcing(grid, target_dir: Path):
 def create_roms_surface_forcing_restoring_sss(grid, target_dir: Path):
     rsf = rt.SurfaceForcing(
         grid=grid,
+        prefill="2d_lateral_fill",  # roms-tools 5: explicit fill; its no-prefill path is not deterministic here
         type="restoring",
         restoring_forces=['sss'],
         # roms-tools' default coarse_grid_mode="auto" coarsens by a factor of 2
@@ -196,6 +202,7 @@ def create_roms_surface_forcing_restoring_sss(grid, target_dir: Path):
 def create_roms_surface_forcing_restoring_dic_alk(grid, target_dir: Path):
     rsf = rt.SurfaceForcing(
         grid=grid,
+        prefill="2d_lateral_fill",  # roms-tools 5: explicit fill; its no-prefill path is not deterministic here
         type="restoring",
         restoring_forces=['sDIC', 'sALK'],
         # See create_roms_surface_forcing_restoring_sss: ROMS reads sDIC/sALK at
@@ -215,7 +222,8 @@ def create_roms_co2_surface_forcing(grid, target_dir: Path):
         type="bgc",
         start_time=dt.datetime(2010, 1, 1),
         end_time=dt.datetime(2010, 1, 2),
-        source={"name": "MBL_co2"}
+        # Synthetic NOAA MBL table (see create_rti_mbl_co2): no network access.
+        source={"name": "MBL_co2", "path": target_dir / "fake_mbl_co2_surface.txt"},
     )
     rsf.save(target_dir / "example_input_co2_surface_forcing.nc", group=False)
 
@@ -223,9 +231,11 @@ def create_roms_co2_surface_forcing(grid, target_dir: Path):
 def create_roms_initial_conditions(grid, target_dir: Path):
     ic = rt.InitialConditions(
         grid=grid,
+        prefill="2d_lateral_fill",  # roms-tools 5: explicit fill; its no-prefill path is not deterministic here
         ini_time=dt.datetime(2010, 1, 1),
         source={"name": "GLORYS", "path": target_dir / "fake_phys_3d_data.nc"},
         bgc_source={"name": "CESM_REGRIDDED", "path": target_dir / "fake_bgc_3d_data.nc"},
+        bgc_model=rt.BGCMarbl,  # required by roms-tools 5 whenever a BGC source is given
     )
     # Add DOFE for BEC
     ic.ds["DOFE"] = ic.ds["DOP"]
@@ -246,10 +256,13 @@ def create_roms_tides(grid, target_dir: Path):
     }
     tidal_forcing = rt.TidalForcing(
         grid=grid,
+        prefill="2d_lateral_fill",  # roms-tools 5: explicit fill; its no-prefill path is not deterministic here
         source={"name": "TPXO", "path": tpxo_dict},
         ntides=2,
         model_reference_date=dt.datetime(2000, 1, 1),
-        use_dask=True,
+        # No dask: two constituents on a 39x19 grid gain nothing from it, and a
+        # CI job once hung for 70 minutes inside the dask progress bar here.
+        use_dask=False,
     )
     tidal_forcing.save(target_dir / "example_input_tides.nc")
 

@@ -19,6 +19,7 @@ def create_roms_tools_inputs(target_dir: Path):
     create_rti_restore_surf_dic_alk(target_dir)
     create_rti_phys_surf(target_dir)
     create_rti_tides(target_dir)
+    create_rti_mbl_co2(target_dir)
 
 
 def create_rti_bgc_3d(target_dir: Path):
@@ -222,8 +223,12 @@ def create_rti_bgc_surf(target_dir: Path):
 
 def create_rti_phys_surf(target_dir: Path):
     times     = np.array(["2010-01-01", "2010-01-31T23:00:00"], dtype="datetime64[ns]")
-    latitude  = np.array([34.75, 34.0], dtype=np.float64)
-    longitude = np.array([239.0, 240.25], dtype=np.float64)
+    # ERA5's 0.25-degree grid, spanning well beyond the ROMS grid: roms-tools 5
+    # requires the grid plus a one-point interpolation margin to lie inside the
+    # data, and its radiation correction selects the bundled ERA5 climatology
+    # by exact coordinate labels, so off-grid values raise a KeyError.
+    latitude  = np.arange(35.0, 33.9, -0.25)    # descending, like ERA5
+    longitude = np.arange(238.75, 240.1, 0.25)
 
     coords = {
         "time":      times,
@@ -232,30 +237,39 @@ def create_rti_phys_surf(target_dir: Path):
         "expver":    xr.DataArray(["0001", "0001"], dims="time"),
     }
 
-    dims   = ("time", "latitude", "longitude")
-    shape  = (2, 2, 2)
+    dims = ("time", "latitude", "longitude")
 
-    data_vars = {}
-    for v in ["tp", "ssr", "strd", "u10", "v10", "d2m", "t2m", "sst"]:
-        data_vars[v] = xr.DataArray(np.full(shape, np.nan, dtype=np.float32), dims=dims)
+    # The original 2x2 ERA5 samples, each spread over one quadrant of the box
+    # (nearest-neighbour expansion); sst keeps its one land (NaN) quadrant.
+    def expand(field):
+        field = np.asarray(field, dtype=np.float32)
+        rows = (np.arange(len(latitude)) * 2) // len(latitude)
+        cols = (np.arange(len(longitude)) * 2) // len(longitude)
+        return field[np.ix_(rows, cols)]
 
+    samples = {
+        "tp":   [[[0., 0.], [0., 0.]],
+                 [[0., 0.], [0., 0.]]],
+        "ssr":  [[[537152.,  603008.], [633856.,  656128.]],
+                 [[1533824., 1359232.], [1258048., 1232128.]]],
+        "strd": [[[1100785.8, 1008657.8], [1088241.8, 1042641.8]],
+                 [[1036525.6,  994477.6], [1085229.5, 1144141.5]]],
+        "u10":  [[[2.47137,  0.58368], [1.56903, 4.37567]],
+                 [[3.69145,  0.68071], [3.37212, 1.64946]]],
+        "v10":  [[[-2.93275, -0.56654], [-3.55678, -1.50014]],
+                 [[-4.06624,  0.50896], [-5.14827, -0.22542]]],
+        "d2m":  [[[281.318, 276.676], [282.010, 284.021]],
+                 [[281.344, 272.317], [282.022, 283.844]]],
+        "t2m":  [[[285.755, 285.039], [286.417, 286.828]],
+                 [[286.199, 285.072], [286.273, 286.846]]],
+        "sst":  [[[286.698, np.nan], [287.327, 287.159]],
+                 [[287.048, np.nan], [287.251, 287.491]]],
+    }
+    data_vars = {
+        v: xr.DataArray(np.stack([expand(f) for f in field]), dims=dims)
+        for v, field in samples.items()
+    }
     ds = xr.Dataset(data_vars, coords=coords)
-    ds["tp"].values   = np.array([[[0., 0.], [0., 0.]],
-                                   [[0., 0.], [0., 0.]]], dtype=np.float32)
-    ds["ssr"].values  = np.array([[[537152.,  603008.], [633856.,  656128.]],
-                                   [[1533824., 1359232.], [1258048., 1232128.]]], dtype=np.float32)
-    ds["strd"].values = np.array([[[1100785.8, 1008657.8], [1088241.8, 1042641.8]],
-                                   [[1036525.6,  994477.6], [1085229.5, 1144141.5]]], dtype=np.float32)
-    ds["u10"].values  = np.array([[[2.47137,  0.58368], [1.56903, 4.37567]],
-                                   [[3.69145,  0.68071], [3.37212, 1.64946]]], dtype=np.float32)
-    ds["v10"].values  = np.array([[[-2.93275, -0.56654], [-3.55678, -1.50014]],
-                                   [[-4.06624,  0.50896], [-5.14827, -0.22542]]], dtype=np.float32)
-    ds["d2m"].values  = np.array([[[281.318, 276.676], [282.010, 284.021]],
-                                   [[281.344, 272.317], [282.022, 283.844]]], dtype=np.float32)
-    ds["t2m"].values  = np.array([[[285.755, 285.039], [286.417, 286.828]],
-                                   [[286.199, 285.072], [286.273, 286.846]]], dtype=np.float32)
-    ds["sst"].values  = np.array([[[286.698, np.nan], [287.327, 287.159]],
-                                   [[287.048, np.nan], [287.251, 287.491]]], dtype=np.float32)
 
     ds.to_netcdf(target_dir / "fake_phys_surf_data.nc")
 
@@ -334,6 +348,7 @@ def create_rti_tides(target_dir: Path):
     lat_v = np.array([[34.25000097,  34.91666765],  [34.25000097,  34.91666765]])
     con   = np.array([b'm2  ', b's2  '], dtype="S4")
 
+    # roms-tools reads TPXO's mz/mu/mv as "NaN = ocean"; the [1, 1] point is land.
     tpxo_g = xr.Dataset({
         "mz":    xr.DataArray(np.array([[np.nan, np.nan], [np.nan, 0.0]]), dims=("nx", "ny")),
         "mu":    xr.DataArray(np.array([[np.nan, np.nan], [np.nan, 0.0]]), dims=("nx", "ny")),
@@ -375,3 +390,42 @@ def create_rti_tides(target_dir: Path):
     tpxo_h.to_netcdf(target_dir / "fake_tides_data_h.nc")
     tpxo_u.to_netcdf(target_dir / "fake_tides_data_u.nc")
     tpxo_g.to_netcdf(target_dir / "fake_tides_data_g.nc")
+
+
+def create_rti_mbl_co2(target_dir: Path):
+    """Write a synthetic NOAA MBL surface CO2 table in the format roms-tools parses.
+
+    The real file (``co2_GHGreference.<id>_surface.txt``) has 2209 rows from
+    1979.0 to 2025.0 in 1/48-year steps and 83 columns: decimal year, then
+    (value, uncertainty) for 41 bins of sin(latitude) from -1 to 1. roms-tools
+    insists on exactly 2209 rows. Fetching the real file from NOAA on every
+    run is a network dependency on a temporary URL, so the suite writes its
+    own: a quadratic global trend through the observed end points (334.7 ppm
+    in 1979, 421.6 ppm in 2025), a northern-hemisphere seasonal cycle growing
+    with latitude (about 7 ppm amplitude at the pole, spring maximum), a
+    weak southern cycle, and a 3 ppm interhemispheric gradient.
+    """
+    years = 1979.0 + np.arange(2209) / 48.0
+    sin_lat = np.round(np.arange(-1.0, 1.0001, 0.05), 2)
+    elapsed = years - 1979.0
+    trend = 334.65 + 1.20 * elapsed + 0.0150 * elapsed**2
+    phase = years - np.floor(years)
+    s = sin_lat[np.newaxis, :]
+    northern = 0.4 + 7.0 * np.clip(s, 0, None) ** 1.5
+    southern = 0.4 + 0.6 * np.clip(-s, 0, None)
+    seasonal = np.where(
+        s >= 0,
+        northern * np.cos(2 * np.pi * (phase[:, np.newaxis] - 0.33)),
+        southern * np.cos(2 * np.pi * (phase[:, np.newaxis] - 0.75)),
+    )
+    co2 = trend[:, np.newaxis] + seasonal + 1.5 * s
+    uncertainty = 0.11 + 0.03 * np.abs(s) + 0.0 * co2
+    table = np.empty((2209, 1 + 2 * len(sin_lat)))
+    table[:, 0] = years
+    table[:, 1::2] = co2
+    table[:, 2::2] = uncertainty
+    np.savetxt(
+        target_dir / "fake_mbl_co2_surface.txt",
+        table,
+        fmt=["%12.6f"] + ["%13.4f", "%12.4f"] * len(sin_lat),
+    )

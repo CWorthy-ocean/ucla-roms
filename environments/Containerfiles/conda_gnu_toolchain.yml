@@ -14,13 +14,21 @@ dependencies:
   # *link_command: and drops crtendS.o/crtn.o from libtool's shared-object
   # links, so Score-P's bundled cubelib fails to link its plugins with
   # undefined `__TMC_END__'. conda-forge documents conda-gcc-specs as
-  # unsuitable for build environments. 14.3 is the series that last built
-  # this image successfully (2026-07-09).
-  - gcc=14.3
-  - gxx=14.3
-  - gfortran=14.3
-  - gcc-no-conda-specs=14.3
-  - binutils=2.45.1
+  # unsuitable for build environments.
+  #
+  # The compiler pin must match the gfortran that built conda-forge's Fortran
+  # libraries: their .mod files are only readable by the same major version.
+  # conda-forge moved netcdf-fortran and mpich to gfortran 15.3 builds in
+  # September 2026, so a rebuild of this image with gfortran 14.3 failed with
+  # "Cannot read module file netcdf.mod/mpi_f08.mod ... created by a
+  # different version of GNU Fortran" (2026-10-09). When a rebuild breaks this
+  # way again, check `libgfortran5 >=` on the current netcdf-fortran build and
+  # move all five pins together (gcc 15.3 requires binutils_impl 2.46.1).
+  - gcc=15.3
+  - gxx=15.3
+  - gfortran=15.3
+  - gcc-no-conda-specs=15.3
+  - binutils=2.46.1
   - netcdf-fortran
   - mpich
   # PnetCDF: required to build ParallelIO in Containerfile_gnu and to link ROMS

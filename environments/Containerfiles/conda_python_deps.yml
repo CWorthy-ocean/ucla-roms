@@ -9,7 +9,7 @@ dependencies:
   - python=3.12
   - numpy
   - xarray
-  - roms-tools>=4.0.0
+  - roms-tools=5.1.1
   - pytest
   - f90nml
   - h5netcdf
