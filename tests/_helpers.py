@@ -115,12 +115,20 @@ class ROMSConfiguration:
             shell=True, text=True, check=True,
         )
 
-    def run(self, namelist_dict: dict, cwd: Path | None = None):
+    def run(
+        self, namelist_dict: dict, cwd: Path | None = None,
+        capture_output: bool = False,
+    ) -> str:
         """Run the compiled binary against ``namelist_dict``.
 
         ``cwd`` is the directory where the namelist is written and the
         binary is invoked; output NetCDFs land here. Defaults to
         ``self.location`` (i.e. alongside the binary).
+
+        With ``capture_output`` the combined stdout/stderr is returned (and
+        printed, so it still reaches ``pytest -s`` and a failure report)
+        instead of streaming to the terminal; otherwise the return value is
+        an empty string.
         """
         if cwd is None:
             cwd = self.location
@@ -132,10 +140,17 @@ class ROMSConfiguration:
 
         # Resolve the binary against self.location so it works from any cwd.
         binary = (self.location / "roms").resolve()
-        subprocess.run(
+        proc = subprocess.run(
             f"mpirun -n {ncpu} {binary} namelist.nml",
-            cwd=cwd, shell=True, text=True, check=True,
+            cwd=cwd, shell=True, text=True,
+            stdout=subprocess.PIPE if capture_output else None,
+            stderr=subprocess.STDOUT if capture_output else None,
         )
+        output = proc.stdout or ""
+        if capture_output:
+            print(output)  # printed before any raise, so a failed run still shows its log
+        proc.check_returncode()
+        return output
 
 
 # --------------------------------------------------------------------------

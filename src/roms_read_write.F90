@@ -81,8 +81,7 @@ module roms_read_write
     logical                           :: time_interpolation = .true.
     ! If true and the variable is absent from all forcing files, leave
     ! the field at zero instead of aborting (used for optional tracers).
-    ! Only honoured by set_frc_data_1d/2d; set_frc_data_surf rejects it and
-    ! ncforce3d has no equivalent.
+    ! Honoured by set_frc_data_1d/2d/surf; ncforce3d has no equivalent.
     logical                           :: allow_missing = .false.
     logical                           :: missing = .false.  ! set once var is confirmed absent
   end type ncforce
@@ -872,12 +871,9 @@ contains
     integer(kind=4)           :: it1,it2
     real(kind=8),dimension(2) :: vtimes
 
-    if (nc%allow_missing) then
-      write(error_info, *)&
-      &'allow_missing is not supported for surface forcing: ', nc%vname
-      call error_log%raise_global(&
-      &context=module_name//"/"//sr_name,&
-      &info=error_info)
+    if (nc%missing) then
+      var2d = 0._8
+      return
     endif
 
     d1 = .false.
@@ -923,6 +919,11 @@ contains
 
     nc%it1 = it1
     nc%it2 = it2
+
+    if (nc%missing) then   ! found absent by the fill above (first call)
+      var2d = 0._8
+      return
+    endif
 
     ! Temporal interpolation
     if (nc%time_interpolation) then
@@ -1442,7 +1443,8 @@ contains
 #ifdef PARALLEL_IO
     if (mynode==0) then                          ! every rank gets here, warn once
 #else
-    if (mynode==0 .or. mynode==nnodes-1) then    ! 2 nodes catch e/w/s/n boundaries
+    ! 2 nodes catch e/w/s/n boundaries; a surface field (bry==0) warns once
+    if (mynode==0 .or. (bry/=0 .and. mynode==nnodes-1)) then
 #endif
       if (bry==0) then
         write(*,*) ' --- WARNING: ', trim(nc%vname),&
@@ -1673,7 +1675,8 @@ contains
   subroutine fill_frc_slice_surf(nc,modtime,it,gtype) ![
     ! Fill a time slice of forcing data
     use param, only: ocean_grid_comm
-    use mpi_f08, only: mpi_double_precision, mpi_integer, mpi_bcast, mpi_barrier
+    use mpi_f08, only: mpi_double_precision, mpi_integer, mpi_bcast, mpi_barrier,&
+    &mpi_logical
 
     implicit none
     character(len=19) :: sr_name = "fill_frc_slice_surf"
@@ -1692,16 +1695,26 @@ contains
     character(len=100) :: forcing_version ! version of forcing input data
     character(len=300) :: frcstr
     integer(kind=4)            :: irec,ifile
+    logical :: var_absent
+
+    if (nc%missing) return
 
     irec  = nc%irec
     ifile = nc%ifile
     vname = nc%vname
     tname = nc%tname
+    var_absent = .false.
 
 #ifdef PARALLEL_IO
     if (mynode == 0) then
       call find_new_record(vname,tname,modtime,ifile,irec,&
-      &nc%times(it) )
+      &nc%times(it),&
+      &allow_missing=nc%allow_missing, var_absent=var_absent)
+    endif
+    call MPI_Bcast(var_absent,1,MPI_LOGICAL,0,ocean_grid_comm,ierr)
+    if (var_absent) then
+      call mark_ncforce_missing(nc, 0)
+      return
     endif
     call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
@@ -1711,7 +1724,12 @@ contains
     call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
     call find_new_record(vname,tname,modtime,ifile,irec,&
-    &nc%times(it) )
+    &nc%times(it),&
+    &allow_missing=nc%allow_missing, var_absent=var_absent)
+    if (var_absent) then
+      call mark_ncforce_missing(nc, 0)
+      return
+    endif
 #endif
 
     call abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file=.true.)

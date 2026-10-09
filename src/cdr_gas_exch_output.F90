@@ -19,7 +19,7 @@ module cdr_gas_exch_output
   use netcdf, only:&
  &     nf90_noerr, nf90_write, nf90_double, nf90_open,&
  &     nf90_put_att, nf90_close, nf90_redef, nf90_enddef
-  use scalars, only: iic, nnew, tdays, time, dt
+  use scalars, only: iic, nnew, tdays, time, dt, sec2day
   use grid, only: rmask
   use error_handling_mod, only: error_log
   use carbonate_sensitivity, only: compute_surface_beta_eta
@@ -41,7 +41,9 @@ module cdr_gas_exch_output
 
   character(len=20) :: module_name = "cdr_gas_exch_output"
   real(kind=8)    :: output_time = 0
-  integer(kind=4) :: record
+  integer(kind=4) :: record = 0           ! netCDF record in the current file (0: no file yet)
+  integer(kind=4) :: periodic_in_file = 0  ! periodic (non-bracket) records in the current file
+  real(kind=8) :: last_record_days = -huge(1._8)  ! forcing time of the last record written
   integer(kind=4),dimension(6) :: date
   integer(kind=4) :: month_at_prev_timestep
   real(kind=8) :: avg_begin_time
@@ -68,7 +70,7 @@ module cdr_gas_exch_output
 
   type(CdrGasOutputVariable), allocatable, save :: cdr_gas_varlist(:)
 
-  public :: wrt_cdr_gas, init_cdr_gas_exch_output
+  public :: wrt_cdr_gas, wrt_cdr_gas_final, init_cdr_gas_exch_output
   public :: read_cdr_gas_exch_output_nml
 
 contains
@@ -85,7 +87,6 @@ contains
       &'could not read CDR_GAS_EXCH_OUTPUT_SETTINGS section of namelist file')
     end if
     close(namelist_unit)
-    record = nrpf_cdr_gas
   end subroutine read_cdr_gas_exch_output_nml
 
   subroutine add_cdr_gas_output_variable(list, name, dimnames, dims,&
@@ -129,7 +130,30 @@ contains
     &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
     &'surface carbonate sensitivity eta = dDIC/dALK (ALT_CO2)',&
     &'nondimensional')
+
+    ! Record times read by CDR_LITE forcing (see surf_flux.F90).
+    call add_cdr_gas_output_variable(cdr_gas_varlist, 'ddic_dco2_time',&
+    &(/dn_tm/), (/0/),&
+    &'time of ddic_dco2 record, days since reference date','days')
+    call add_cdr_gas_output_variable(cdr_gas_varlist, 'ddic_dalk_time',&
+    &(/dn_tm/), (/0/),&
+    &'time of ddic_dalk record, days since reference date','days')
   end subroutine define_cdr_gas_output_variables
+
+  function record_forcing_time(bracket) result(days)
+    ! Time of the record being written, in days since the reference date.
+    ! An averaged record is stamped at the midpoint of its averaging window,
+    ! the time the average is representative of, since ROMS interpolates
+    ! forcing linearly in time. Instantaneous and bracket records sit at `tdays`.
+    implicit none
+    logical, intent(in) :: bracket
+    real(kind=8) :: days
+    if (bracket .or. .not. wrt_cdr_gas_avg) then
+      days = tdays
+    else
+      days = 0.5_8*(avg_begin_time + time)*sec2day
+    endif
+  end function record_forcing_time
 
   subroutine init_cdr_gas_exch_output
     implicit none
@@ -137,7 +161,6 @@ contains
     logical, save :: done = .false.
     integer :: idx
 
-    record = nrpf_cdr_gas
     if (done) return
     done = .true.
 
@@ -166,6 +189,7 @@ contains
      &  info='cdr_gas_exch_output requires tracers PO4, SiO3, '//&
      &  'ALK_ALT_CO2, and DIC_ALT_CO2 for ddic_dco2/ddic_dalk')
     endif
+    call error_log%abort_check()
 
     allocate(ddic_dco2_tmp(GLOBAL_2D_ARRAY))
     ddic_dco2_tmp(:,:)=0
@@ -189,6 +213,14 @@ contains
 
     call define_cdr_gas_output_variables
     call display_cdr_gas_output_settings
+
+    ! An instantaneous record at the start time, so the files can force a run
+    ! over the same window (ROMS needs a first record at or before the start).
+    ! Written by every run, restarted ones included, so each chunk of a
+    ! time-chunked chain is self-contained; a consumer listing consecutive
+    ! chunks sees one repeated stamp at each boundary (identical values from
+    ! the same state), which the forcing reader tolerates.
+    call wrt_cdr_gas_output(bracket=.true.)
   end subroutine init_cdr_gas_exch_output
 
   subroutine calc_average
@@ -274,25 +306,57 @@ contains
     if (wrt_cdr_gas_avg) call calc_average
     if (cdr_gas_monthly_averages) then
       call sec2date(time+dt, date)
-      if ((date(2) - month_at_prev_timestep) /= 0) call wrt_cdr_gas_output
+      if ((date(2) - month_at_prev_timestep) /= 0) call wrt_cdr_gas_output(bracket=.false.)
       month_at_prev_timestep = date(2)
     else
       output_time = output_time + dt
       if (output_time >= output_period_cdr_gas) then
-        call wrt_cdr_gas_output
+        call wrt_cdr_gas_output(bracket=.false.)
         output_time = 0
       endif
     endif
   end subroutine wrt_cdr_gas
 
-  subroutine wrt_cdr_gas_output
+  subroutine wrt_cdr_gas_final
+    ! Bracketing record at the end time, so the files can force a run over the
+    ! same window (an averaged record sits half a window before the end).
+    ! Skipped if the last record already sits at the end time (the tolerance is
+    ! below half a step: a one-step averaging window ends half a step earlier).
     implicit none
+    if (abs(tdays - last_record_days) < 0.25_8*dt*sec2day) return
+    call wrt_cdr_gas_output(bracket=.true.)
+  end subroutine wrt_cdr_gas_final
+
+  subroutine wrt_cdr_gas_output(bracket)
+    ! If bracket, write an instantaneous record at the current time (start or
+    ! end of the run): a zero-length averaging window, the averaging state left
+    ! untouched, and no count toward the nrpf_cdr_gas rotation. A file rotates
+    ! once it holds nrpf_cdr_gas periodic records; bracket records are appended
+    ! to the current file, which they open only if there is none yet.
+    implicit none
+    logical, intent(in) :: bracket
     character(len=18) :: sr_name = "wrt_cdr_gas_output"
     character(len=99), save :: fname
+    character(len=56) :: wrote_msg
     integer(kind=4) :: ncid, ierr
+    real(kind=8) :: forcing_time, begin_time
+    logical :: use_avg, start_new_file
+
+    use_avg = wrt_cdr_gas_avg .and. .not. bracket
+    forcing_time = record_forcing_time(bracket)
+    begin_time = time
+    if (use_avg) begin_time = avg_begin_time
+    if (bracket) then
+      wrote_msg = 'wrt_cdr_gas :: wrote bracketing gas exch, tdays ='
+    else
+      wrote_msg = 'wrt_cdr_gas :: wrote gas exch, tdays ='
+    endif
+    start_new_file = record == 0
+    if (.not. bracket) start_new_file = start_new_file .or.&
+   &  periodic_in_file >= nrpf_cdr_gas
 
 #ifdef PARALLEL_IO
-    if (record==nrpf_cdr_gas) then
+    if (start_new_file) then
       if (mynode == 0) then
         call create_file('_cdrgas',fname, nonode=.true.)
         ierr=nf90_open(fname,nf90_write,ncid)
@@ -303,28 +367,28 @@ contains
       endif
       call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
       record = 0
+      periodic_in_file = 0
     endif
     record = record+1
+    if (.not. bracket) periodic_in_file = periodic_in_file+1
     if (mynode == 0) then
       ierr=nf90_open(fname,nf90_write,ncid)
       call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+      call ncwrite(ncid,'ddic_dco2_time',(/forcing_time/),(/record/))
+      call ncwrite(ncid,'ddic_dalk_time',(/forcing_time/),(/record/))
       if (wrt_cdr_gas_avg) then
-        call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
+        call ncwrite(ncid,'avg_begin_time',(/begin_time/),(/record/))
         call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
       endif
       ierr=nf90_close(ncid)
     endif
     call MPI_Barrier(ocean_grid_comm, ierr)
     ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
-    if (wrt_cdr_gas_avg) then
-      call calc_carbonate_sensitivity(.true.)
-    else
-      call calc_carbonate_sensitivity(.false.)
-    endif
+    call calc_carbonate_sensitivity(use_avg)
     pio_gtype = '2Drw'
     call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
     call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
-    if (wrt_cdr_gas_avg) then
+    if (use_avg) then
       temp_sfc_avg(:,:)=0
       salt_sfc_avg(:,:)=0
       ALK_alt_sfc_avg(:,:)=0
@@ -335,12 +399,11 @@ contains
     call PIO_closefile(pio_FileDesc)
     if (mynode == 0) then
       write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4)')&
-     &'wrt_cdr_gas :: wrote gas exch, tdays =', tdays,&
+     &trim(wrote_msg), tdays,&
      &'step =', iic-1, 'rec =', record
     endif
-    navg = 0
 #else
-    if (record==nrpf_cdr_gas) then
+    if (start_new_file) then
       call create_file('_cdrgas',fname)
       ierr=nf90_open(fname,nf90_write,ncid)
       ierr=nf90_redef(ncid)
@@ -348,26 +411,32 @@ contains
       ierr=nf90_enddef(ncid)
       ierr = nf90_close(ncid)
       record = 0
+      periodic_in_file = 0
     endif
     record = record+1
+    if (.not. bracket) periodic_in_file = periodic_in_file+1
     ierr=nf90_open(fname,nf90_write,ncid)
     call error_log%check_netcdf_status(netcdf_status=ierr,&
     &info='error opening '//fname,&
     &context=module_name//'/'//sr_name)
     call error_log%abort_check()
     call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+    call ncwrite(ncid,'ddic_dco2_time',(/forcing_time/),(/record/))
+    call ncwrite(ncid,'ddic_dalk_time',(/forcing_time/),(/record/))
     if (wrt_cdr_gas_avg) then
-      call calc_carbonate_sensitivity(.true.)
-      call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
+      call calc_carbonate_sensitivity(use_avg)
+      call ncwrite(ncid,'avg_begin_time',(/begin_time/),(/record/))
       call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
       call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/))
-      temp_sfc_avg(:,:)=0
-      salt_sfc_avg(:,:)=0
-      ALK_alt_sfc_avg(:,:)=0
-      DIC_alt_sfc_avg(:,:)=0
-      PO4_sfc_avg(:,:)=0
-      SiO3_sfc_avg(:,:)=0
+      if (use_avg) then
+        temp_sfc_avg(:,:)=0
+        salt_sfc_avg(:,:)=0
+        ALK_alt_sfc_avg(:,:)=0
+        DIC_alt_sfc_avg(:,:)=0
+        PO4_sfc_avg(:,:)=0
+        SiO3_sfc_avg(:,:)=0
+      endif
     else
       call calc_carbonate_sensitivity(.false.)
       call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/))
@@ -376,11 +445,12 @@ contains
     ierr=nf90_close(ncid)
     if (mynode == 0) then
       write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4)')&
-     &'wrt_cdr_gas :: wrote gas exch, tdays =', tdays,&
+     &trim(wrote_msg), tdays,&
      &'step =', iic-1, 'rec =', record
     endif
-    navg = 0
 #endif
+    if (.not. bracket) navg = 0
+    last_record_days = forcing_time
   end subroutine wrt_cdr_gas_output
 
   subroutine display_cdr_gas_output_settings

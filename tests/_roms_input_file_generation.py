@@ -65,6 +65,15 @@ def create_roms_inputs(target_dir: Path):
         target_dir=target_dir,
     )
 
+    create_roms_cdr_forcing_parm_cdr_lite(
+        grid,
+        release_lon=-120.64,
+        release_lat=34.5349,
+        release_dep=10,
+        alk_pert=1e-3,
+        target_dir=target_dir,
+    )
+
     river_forcing_ds = create_river_or_pipe_data(
         input_type="river",
         forcing_i=[10, 11, 12, 13, 14],
@@ -351,9 +360,15 @@ def create_roms_cdr_forcing_dp(grid, release_lon, release_lat, alk_pert, target_
     ds_dp.to_netcdf(target_dir / "cdr_forcing_dp.nc")
 
 
-def create_roms_cdr_forcing_parm(grid, release_lon, release_lat, release_dep, alk_pert, target_dir: Path):
+def create_roms_cdr_forcing_parm(
+    grid, release_lon, release_lat, release_dep, alk_pert, target_dir: Path,
+    nt=34, alk_row=11, filename="cdr_forcing_parm.nc",
+):
+    """Parameterized CDR forcing: an ALK flux on tracer row ``alk_row`` of ``nt``.
+
+    The defaults are the MARBL (34-tracer) layout.
+    """
     ncdr = 1
-    nt = 34
     cdr_time = xr.DataArray(
         np.array([3653.0, 3655.0]),
         dims=("cdr_time",),
@@ -371,7 +386,7 @@ def create_roms_cdr_forcing_parm(grid, release_lon, release_lat, release_dep, al
         dims=("cdr_time", "nt", "ncdr_parm"),
         attrs={"long_name": "tracer flux [mmol/s]", "units": "mmol/s"},
     )
-    trcflx_parm[:, 11, :] = alk_pert
+    trcflx_parm[:, alk_row, :] = alk_pert
 
     cdr_lon = xr.DataArray(
         np.full((ncdr,), release_lon, dtype="f8"),
@@ -411,7 +426,23 @@ def create_roms_cdr_forcing_parm(grid, release_lon, release_lat, release_dep, al
         coords=coords,
     )
 
-    ds_parm.to_netcdf(target_dir / "cdr_forcing_parm.nc")
+    ds_parm.to_netcdf(target_dir / filename)
+
+
+def create_roms_cdr_forcing_parm_cdr_lite(
+    grid, release_lon, release_lat, release_dep, alk_pert, target_dir: Path,
+):
+    """Parameterized CDR forcing for the no-MARBL CDR_LITE build.
+
+    Tracer order there is temp, salt, CDR_OAE_ALK1, CDR_OAE_DIC1
+    (``nt_passive=0, nt_cdr_oae=1, nt_cdr_dor=0, nt_bgc=0``), so the ALK flux
+    is row 2. Rows 0 and 1 (temp, salt) must stay zero: a tracer-flux release
+    may not carry them.
+    """
+    create_roms_cdr_forcing_parm(
+        grid, release_lon, release_lat, release_dep, alk_pert, target_dir,
+        nt=4, alk_row=2, filename="cdr_forcing_parm_cdr_lite.nc",
+    )
 
 
 def create_river_or_pipe_data(input_type, forcing_i, forcing_j, grid):

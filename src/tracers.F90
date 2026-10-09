@@ -10,6 +10,9 @@ module tracers
   ! must have same name as trace variable. ptrace1 -> ptrace1
   ! However, in the surface flux forcing file, the name of the
   ! variable must be appended with _flx. E.g. ptrace1 -> ptrace1_flx
+  ! This is mandatory for passive tracers. For CDR_LITE DIC tracers
+  ! (CDR_OAE_DIC<n>, CDR_DOR_DIC<n>) it is optional: if absent, the surface
+  ! flux is zero and only the computed air-sea gas exchange acts.
   !
   ! 3) Make sure tracer surface flux units are correct!
   !
@@ -690,6 +693,10 @@ contains
       if ((t_ana_frc(itrc)==0) .or. (t_ana_frc(itrc)==2)) then
 
         allocate( nc_t(itrc)%vdata( GLOBAL_2D_ARRAY,2) )
+
+        ! CDR_LITE DIC tracers: the model computes their only surface flux
+        ! (gas exchange), so an absent _flx is zero. Passive tracers keep a mandatory _flx.
+        nc_t(itrc)%allow_missing = (t_ana_frc(itrc)==2)
 
         ! set nc_v%vname and nc_t%tname only once: currently set in t_vname & t_tname,
         ! left it like this so people don't need to change their tracers.opt files.
