@@ -11,8 +11,10 @@ module cdr_frc
 #ifdef CDR_FORCING
   ! Parameterized releases (cdr_trcflx, or cdr_volume + cdr_tracer) can
   ! target any tracer -- passive, CDR_LITE or BGC -- and work with or without
-  ! MARBL. Depth-profile and 3D forcing supply ALK and DIC fluxes for MARBL's
-  ! tracers and therefore need MARBL.
+  ! MARBL. Depth-profile forcing (upscaling) targets the tracers named in
+  ! cdr_trc_name, or MARBL's ALK and DIC for older two-column files without
+  ! it. 3D forcing supplies ALK and DIC fluxes for MARBL's tracers and
+  ! therefore needs MARBL.
   use namelist_open_mod, only: open_namelist_file
   use roms_read_write, only:&
   &ncforce, ncforce3d, cdr_frc_opt,&
@@ -22,7 +24,7 @@ module cdr_frc
   use dimensions, only: nx, ny, nz
   use ocean_vars, only: hz, z_r0, hz0
   use param, only: mynode, lm, mm, ocean_grid_comm, itemp
-  use tracers, only: iTandS
+  use tracers, only: iTandS, t_vname
   use nc_read_write, only: ncread
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
@@ -37,7 +39,7 @@ module cdr_frc
   use netcdf, only:&
   &nf90_noerr, nf90_inq_dimid, nf90_inq_varid, nf90_inquire_variable,&
   &nf90_inquire_dimension, nf90_get_var, nf90_max_var_dims,&
-  &nf90_nowrite, nf90_open, nf90_close
+  &nf90_nowrite, nf90_open, nf90_close, nf90_char
   use mpi_f08, only:&
   &mpi_double_precision, mpi_sum, mpi_integer,&
   &mpi_2double_precision, mpi_comm_world, mpi_in_place,&
@@ -72,6 +74,8 @@ module cdr_frc
   ! Layerwise additionality
   type (ncforce3d) :: nc_cdrflx_dp = ncforce3d(&
   &vname='cdr_trcflx_profile', tname='cdr_time')
+  ! Names of the tracers along the tracer axis of cdr_trcflx_profile
+  character(len=12) :: cdr_trc_name = 'cdr_trc_name'
 
   ! 3D FORCING FROM FILE *************************************
   type (ncforce3d) :: nc_cdrflx_3d_ALK = ncforce3d(&
@@ -127,8 +131,9 @@ module cdr_frc
   real(kind=8), allocatable, dimension(:,:,:)        :: cdr_flx_dp    ! cdr tracer flux (depth profile)
   real(kind=8), allocatable, dimension(:,:)          :: cdr_hz        ! layer thicknesses of CDR release
   integer(kind=4)                                    :: ncdr_prof     ! number of release locations
-  integer(kind=4)                                    :: N_src         ! number of layers from source file
-  integer(kind=4), dimension(2) :: cdr_inds                           ! Array to hold those indices
+  integer(kind=4)                                    :: N_src = 0     ! number of layers from source file
+  integer(kind=4)                                    :: ntrc_dp = 0   ! number of tracer columns in the file
+  integer(kind=4), allocatable, dimension(:)         :: cdr_inds      ! model tracer index of each column (0: skipped)
 
   !!! Variables used only for (3)
   real(kind=8),public,allocatable,dimension(:,:,:)   :: cdr_flx_3d_ALK    ! 3d cdr tracer flux for ALK
@@ -270,12 +275,12 @@ contains
     endif
 
 #ifndef MARBL
-    if (cdr_forcing_depth_profiles .or. cdr_forcing_3d) then
+    if (cdr_forcing_3d) then
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
-      &info="cdr_forcing_depth_profiles and cdr_forcing_3d force MARBL's "//&
-      &"ALK and DIC and need MARBL; without MARBL use "//&
-      &"cdr_forcing_parameterized")
+      &info="cdr_forcing_3d forces MARBL's ALK and DIC and needs MARBL; "//&
+      &"without MARBL use cdr_forcing_parameterized or "//&
+      &"cdr_forcing_depth_profiles")
     endif
     call error_log%abort_check()
 #endif
@@ -326,6 +331,7 @@ contains
     character(len=15) :: sr_name = "init_cdr_frc_dp"
     integer(kind=4) :: ierr
     integer(kind=4) :: dimid
+    integer(kind=4) :: itrc
 
     ! Check how many vertical profiles (i.e. tracer releases) we will use
     ierr = nf90_inq_dimid(ncid, 'ncdr_prof', dimid)
@@ -346,9 +352,23 @@ contains
     call error_log%abort_check()
     ierr = nf90_inquire_dimension(ncid, dimid, len=N_src)
 
+    ! cdr_nz_chd is no longer needed (the file's s_rho is used), but a value
+    ! that disagrees with the file would have meant a corrupted remap before.
+    if (cdr_nz_chd > 0 .and. cdr_nz_chd /= N_src) then
+      write(error_info,'(A,I0,A,I0,A)') "cdr_nz_chd = ", cdr_nz_chd,&
+      &" does not match the ", N_src, " layers (s_rho) of the CDR forcing "//&
+      &"file. Set cdr_nz_chd to the file's s_rho, or to 0."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+    endif
+
     ncdr = ncdr_prof
 
-    allocate(cdr_flx_dp(ncdr,2,N_src));  cdr_flx_dp(:,:,:) = 0
+    call map_cdr_dp_tracers(ncid)
+    call error_log%abort_check()
+
+    allocate(cdr_flx_dp(ncdr,ntrc_dp,N_src));  cdr_flx_dp(:,:,:) = 0
     allocate(cdr_hz(ncdr,N_src));        cdr_hz(:,:) = 0
     allocate(cdr_hsc(ncdr));             cdr_hsc(:) = 0
     allocate(cdr_lon(ncdr));             cdr_lon(:) = 0
@@ -362,17 +382,142 @@ contains
     call init_arrays_cdr
     call find_release_locations
 
-#ifdef MARBL
-    ! Get tracer indices for ALK and DIC (depth profiles need MARBL; see
-    ! init_cdr_frc)
-    cdr_inds(1) = iALK
-    cdr_inds(2) = iDIC
-
-    cdr_flx(:,iALK) = 1.0_8
-    cdr_flx(:,iDIC) = 1.0_8
-#endif
+    ! cdr_prf carries the fluxes themselves (see create_cdr_vertical_structure)
+    do itrc=1,ntrc_dp
+      if (cdr_inds(itrc) > 0) cdr_flx(:,cdr_inds(itrc)) = 1.0_8
+    enddo
 
   end subroutine init_cdr_frc_dp  !]
+! ----------------------------------------------------------------------
+  subroutine map_cdr_dp_tracers(ncid)  ![
+
+    ! Map the tracer axis of cdr_trcflx_profile (ncdr_prof, tracer, s_rho,
+    ! cdr_time) onto model tracers: sets ntrc_dp and cdr_inds.
+    ! - With cdr_trc_name (fixed-length character, dims (tracer, nchar)):
+    !   by name. Columns naming a tracer this run does not have (e.g. ALK and
+    !   DIC without MARBL) are skipped and reported.
+    ! - Without it (files from older tools): exactly two columns, which are
+    !   MARBL's ALK and DIC.
+
+    implicit none
+    integer(kind=4), intent(in) :: ncid
+
+    ! local
+    character(len=18) :: sr_name = "map_cdr_dp_tracers"
+    integer(kind=4) :: ierr, varid, xtype, ndims, nchar, nnames, i, itrc, nmapped
+    integer(kind=4), dimension(nf90_max_var_dims) :: dimids
+    character(len=:), allocatable :: names
+    character(len=64) :: padded, tname
+
+    ! Tracer axis length: the second (Fortran-order) dimension of the profiles
+    ierr = nf90_inq_varid(ncid, nc_cdrflx_dp%vname, varid)
+    if (ierr == nf90_noerr) ierr =&
+    &nf90_inquire_variable(ncid, varid, ndims=ndims, dimids=dimids)
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/"//sr_name,&
+    &info="Cannot read "//trim(nc_cdrflx_dp%vname)//" from CDR forcing file")
+    call error_log%abort_check()
+    if (ndims /= 4) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=trim(nc_cdrflx_dp%vname)//" must have dimensions "//&
+      &"(cdr_time, s_rho, tracer, ncdr_prof)")
+      return
+    endif
+    ierr = nf90_inquire_dimension(ncid, dimids(2), len=ntrc_dp)
+
+    allocate(cdr_inds(ntrc_dp)); cdr_inds(:) = 0
+
+    ierr = nf90_inq_varid(ncid, cdr_trc_name, varid)
+    if (ierr /= nf90_noerr) then
+      if (ntrc_dp /= 2) then
+        write(error_info,'(A,I0,A)') trim(nc_cdrflx_dp%vname)//" has ",&
+        &ntrc_dp, " tracer columns but the file has no "//trim(cdr_trc_name)//&
+        &" to say which tracers they are."
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info=error_info)
+        return
+      endif
+#ifdef MARBL
+      cdr_inds(1) = iALK
+      cdr_inds(2) = iDIC
+      if (mynode == 0) write(*,'(7x,A)') 'cdr_frc: no '//trim(cdr_trc_name)//&
+      &' in the depth-profile file; its two columns are applied to ALK and DIC'
+#else
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="CDR forcing file has no "//trim(cdr_trc_name)//", so its two "//&
+      &"tracer columns are taken as MARBL's ALK and DIC, which need MARBL.")
+#endif
+      return
+    endif
+
+    ierr = nf90_inquire_variable(ncid, varid, xtype=xtype, ndims=ndims, dimids=dimids)
+    if (ierr /= nf90_noerr .or. xtype /= nf90_char .or. ndims /= 2) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=trim(cdr_trc_name)//" must be a fixed-length character variable "//&
+      &"with dimensions (tracer, nchar) (NC_CHAR, not NC_STRING)")
+      return
+    endif
+    ierr = nf90_inquire_dimension(ncid, dimids(1), len=nchar)
+    ierr = nf90_inquire_dimension(ncid, dimids(2), len=nnames)
+    if (nnames /= ntrc_dp) then
+      write(error_info,'(A,I0,A,I0,A)') trim(cdr_trc_name)//" has ", nnames,&
+      &" names but "//trim(nc_cdrflx_dp%vname)//" has ", ntrc_dp, " tracer columns."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+      return
+    endif
+
+    allocate(character(len=nchar*ntrc_dp) :: names)
+    ierr = nf90_get_var(ncid, varid, names, start=[1,1], count=[nchar,ntrc_dp])
+    call error_log%check_netcdf_status(netcdf_status=ierr,&
+    &context=module_name//"/"//sr_name,&
+    &info="Cannot read "//trim(cdr_trc_name)//" from CDR forcing file")
+    call error_log%abort_check()
+
+    nmapped = 0
+    do i=1,ntrc_dp
+      ! Names are NUL- or blank-padded to nchar
+      padded = names((i-1)*nchar+1:i*nchar)
+      tname = padded(1:scan(padded//achar(0),achar(0))-1)
+      do itrc=1,nt
+        if (trim(t_vname(itrc)) == trim(tname)) then
+          cdr_inds(i) = itrc
+          exit
+        endif
+      enddo
+
+      if (cdr_inds(i) == 0) then
+        if (mynode == 0) write(*,'(7x,3A)') 'cdr_frc: skipping ',&
+        &trim(tname), ' fluxes (no such tracer in this run)'
+      else if (cdr_inds(i) <= iTandS) then
+        ! Same reason as check_no_ts_flux: temp/salt need water with them
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info=trim(cdr_trc_name)//" names "//trim(tname)//", but temperature "//&
+        &"and salinity can only be released with water (cdr_volume).")
+      else if (count(cdr_inds(1:i-1) == cdr_inds(i)) > 0) then
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info=trim(cdr_trc_name)//" names "//trim(tname)//" more than once.")
+      else
+        nmapped = nmapped+1
+        if (mynode == 0) write(*,'(7x,3A)') 'cdr_frc: depth-profile fluxes for ',&
+        &trim(tname), ' are applied'
+      endif
+    enddo
+
+    if (nmapped == 0) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="None of the tracers in "//trim(cdr_trc_name)//" exist in this run.")
+    endif
+
+  end subroutine map_cdr_dp_tracers  !]
 ! ----------------------------------------------------------------------
   subroutine init_cdr_frc_3d  ![
 
@@ -615,6 +760,7 @@ contains
     real(kind=8), dimension(nz) :: cdr_flx_dp_remap
     real(kind=8), dimension(nz) :: arg_nz
     real(kind=8) :: local_min_val
+    real(kind=8), dimension(N_src) :: flx_per_m   ! flux per unit layer thickness [C m2/s]
 
     ! Populate the profiles with fractional releases
     cidx = 0
@@ -632,10 +778,27 @@ contains
             ! PARAMETERIZED VERTICAL STRUCTURE
             if (cdr_forcing_depth_profiles) then
               ! VERTICAL STRUCTURE FROM DATA
-              ! Conservatively remap the fluxes from the source grid to the current grid
-              do itrc=1,2
-                call remap_src_to_grid(cdr_nz_chd, cdr_hz(icdr,:), cdr_flx_dp(icdr,itrc,:), nz, Hz(i,j,:), cdr_flx_dp_remap)
-                cdr_prf(cidx,cdr_inds(itrc),:) = cdr_flx_dp_remap(:)
+              ! cdr_trcflx_profile holds the flux through each source layer
+              ! [C/s], but remap_src_to_grid conserves sum(t*H) of what it is
+              ! given. So remap the flux per unit thickness and multiply back
+              ! by the target thickness: each profile then injects exactly
+              ! sum(cdr_trcflx_profile), whatever the two columns' depths.
+              do itrc=1,ntrc_dp
+                if (cdr_inds(itrc) == 0) cycle
+                if (sum(cdr_hz(icdr,:)) > 0.0_8) then
+                  do k=1,N_src
+                    if (cdr_hz(icdr,k) > 0.0_8) then
+                      flx_per_m(k) = cdr_flx_dp(icdr,itrc,k)/cdr_hz(icdr,k)
+                    else
+                      flx_per_m(k) = 0.0_8
+                    endif
+                  enddo
+                  call remap_src_to_grid(N_src, cdr_hz(icdr,:), flx_per_m,&
+                  &nz, Hz(i,j,:), cdr_flx_dp_remap)
+                  cdr_prf(cidx,cdr_inds(itrc),:) = cdr_flx_dp_remap(:)*Hz(i,j,:)
+                else
+                  cdr_prf(cidx,cdr_inds(itrc),:) = 0.0_8   ! no source column
+                endif
               enddo
             else
               ! figure vertical profile, depths are relative to surface
@@ -711,7 +874,7 @@ contains
       nc_cdrhz%ungridded = .true.
       nc_cdrhz%ungridded_forcing_file = cdr_file
 
-      allocate(nc_cdrflx_dp%vdata(ncdr,2,N_src,2))
+      allocate(nc_cdrflx_dp%vdata(ncdr,ntrc_dp,N_src,2))
       nc_cdrflx_dp%ungridded = .true.
       nc_cdrflx_dp%ungridded_forcing_file = cdr_file
 
