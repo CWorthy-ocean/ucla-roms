@@ -169,6 +169,7 @@ module marbl_driver
   public :: marbldrv_read_ss_vars_from_rst
   public :: marbldrv_column_physics
   public :: marbldrv_impose_constant_fe
+  public :: marbldrv_impose_constant_fe_all
 
   public :: read_nml_marbl
   public :: is_marbl_step
@@ -1404,11 +1405,9 @@ contains
 !     otherwise.
 !
 !     NOTES:
-!     - Called after the initial conditions are read and at the end of
-!       every step's tracer update (after t3dmix in roms_step), for all
-!       time levels and halo points, discarding that step's changes to Fe
-!       (transport, boundary and river inputs, MARBL, lateral mixing); and
-!       in step3d_t just before MARBL, so MARBL computes with the constant.
+!     - Called in step3d_t just before MARBL, so MARBL computes with the
+!       constant; the whole-array resets go through
+!       marbldrv_impose_constant_fe_all.
 !-----------------------------------------------------------------------
     integer(kind=4), intent(in) :: istr,iend,jstr,jend,itime
     real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,&
@@ -1422,6 +1421,34 @@ contains
       end do
     end do
   end subroutine marbldrv_impose_constant_fe
+!-----------------------------------------------------------------------
+
+  subroutine marbldrv_impose_constant_fe_all(tracer_array)
+!-----------------------------------------------------------------------
+!     SUBROUTINE: marbldrv_impose_constant_fe_all
+!     DESCRIPTION:
+!     marbldrv_impose_constant_fe over every time level and the whole
+!     array, halo points included. Does nothing unless use_constant_Fe.
+!
+!     NOTES:
+!     - Called after the initial conditions are read and at the end of
+!       every step's tracer update (after t3dmix in roms_step), discarding
+!       that step's changes to Fe (transport, boundary and river inputs,
+!       MARBL, lateral mixing). It must follow the step's last update to
+!       the tracers: t3dmix computes its fluxes from the n+1/2 tracers,
+!       which transport moves slightly off the constant.
+!-----------------------------------------------------------------------
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,&
+    &intent(inout)     :: tracer_array
+    integer(kind=4) :: itime
+
+    if (.not. use_constant_Fe) return
+    do itime=1,3
+      call marbldrv_impose_constant_fe(lbound(tracer_array,1),&
+      &ubound(tracer_array,1),lbound(tracer_array,2),&
+      &ubound(tracer_array,2),tracer_array,itime)
+    end do
+  end subroutine marbldrv_impose_constant_fe_all
 
   subroutine marbldrv_set_marbl_surface_flux_forcing_values(&
   &i,j,tracer_array)
