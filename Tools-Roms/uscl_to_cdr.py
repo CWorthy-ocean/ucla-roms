@@ -5,13 +5,54 @@ Call with `-h` or `--help` for help.
 """
 
 import argparse
+import re
 import numpy as np
 import xarray as xr
 from pathlib import Path
 
+# Tracers always written to cdr_trcflx_profile (MARBL additionality vs ALT_CO2)
+BASE_TRACER_NAMES = ("ALK", "DIC")
+
+# `_uscl` variables holding the boundary fluxes of dedicated CDR_LITE tracers
+CDR_ADD_VAR_RE = re.compile(
+    r"^(?P<tracer>CDR_OAE_ALK\d+|CDR_OAE_DIC\d+|CDR_DOR_DIC\d+)"
+    r"_add_(?P<bry>north|south|east|west)$"
+)
+
+
+def cdr_tracer_sort_key(name: str) -> tuple:
+    """Sort key matching ROMS tracer order: OAE ALK/DIC pairs, then DOR DICs."""
+    for group, pattern, slot in [(0, r"CDR_OAE_ALK(\d+)", 0),
+                                 (0, r"CDR_OAE_DIC(\d+)", 1),
+                                 (1, r"CDR_DOR_DIC(\d+)", 0)]:
+        m = re.fullmatch(pattern, name)
+        if m:
+            return (group, int(m.group(1)), slot)
+    return (2, 0, 0)
+
+
+def discover_cdr_tracer_names(dataset: xr.Dataset, child_boundaries: dict) -> list:
+    """CDR_LITE tracers whose fluxes are present on every active boundary."""
+    active = {bry for bry, is_active in child_boundaries.items() if is_active}
+    present = {}
+    for varname in dataset.variables:
+        m = CDR_ADD_VAR_RE.fullmatch(str(varname))
+        if m:
+            present.setdefault(m.group("tracer"), set()).add(m.group("bry"))
+    return sorted((n for n, brys in present.items() if active and active <= brys),
+                  key=cdr_tracer_sort_key)
+
+
 class CDRUpscaler:
     """
     Class for transforming CDR-relevant boundary tracers to CDR forcing profiles.
+
+    ALK and DIC additionality are always written to `cdr_trcflx_profile`. If the
+    `_uscl` files also hold dedicated CDR_LITE tracers (`CDR_OAE_ALK*`,
+    `CDR_OAE_DIC*`, `CDR_DOR_DIC*`), their fluxes follow along the tracer axis,
+    and `cdr_trc_name` records which tracer each column is. ROMS uses the names
+    to apply each column to the tracer of that name, skipping tracers the parent
+    run does not have (e.g. ALK and DIC without MARBL).
 
     Use
     ---
@@ -65,6 +106,11 @@ class CDRUpscaler:
                 self.n_profiles = self.n_profiles + self.uscl_dataset.sizes.get(rho_var)
         print(f"Found {self.n_profiles} boundary tracer profiles to convert to CDR forcing profiles")
 
+        cdr_tracer_names = discover_cdr_tracer_names(self.uscl_dataset, self.child_boundaries)
+        self.tracer_names: list = list(BASE_TRACER_NAMES) + cdr_tracer_names
+        if cdr_tracer_names:
+            print("Found CDR tracers in `_uscl` files: " + ", ".join(cdr_tracer_names))
+
         # Initialize CDR dataset
         self.cdr_dataset: xr.Dataset | None = None
 
@@ -115,21 +161,31 @@ class CDRUpscaler:
         Updates the CDRUpscaler.cdr_dataset attribute.
 
         Creates the following variables:
-        - cdr_trcflx_profile: Series of time-evolving tracer flux profiles flux(time,depth,profile no.)
+        - cdr_trcflx_profile: Series of time-evolving tracer flux profiles flux(time,depth,tracer,profile no.)
+          ALK and DIC are the first two tracers; CDR_LITE tracers, if any, follow.
+        - cdr_trc_name: Tracer names along the tracer axis (only with CDR_LITE tracers)
         - cdr_lon, cdr_lat: 1D arrays specifying where each tracer flux profile is located
         - cdr_layer_thickness: Series of time-evolving layer heights used to remap the profiles onto the parent grid
         """
 
         ds = xr.Dataset()
+        n_trc = len(self.tracer_names)
+        trc_dim = "two" if n_trc == 2 else "ntrc"
 
         ds["cdr_trcflx_profile"] = xr.DataArray(
-            np.zeros((len(self.time), len(self.s_rho), 2, self.n_profiles)),
-            dims=("cdr_time", "s_rho", "two", "ncdr_prof"),
+            np.zeros((len(self.time), len(self.s_rho), n_trc, self.n_profiles)),
+            dims=("cdr_time", "s_rho", trc_dim, "ncdr_prof"),
             attrs={
                 "long_name": "tracer flux [mmol/s]",
                 "units": "mmol/s",
             },
         )
+        if n_trc > 2:
+            ds["cdr_trc_name"] = xr.DataArray(
+                np.array(self.tracer_names),
+                dims=(trc_dim,),
+                attrs={"long_name": "names of tracers stored in cdr_trcflx_profile"},
+            )
 
         ds["cdr_time"] = xr.DataArray(
             self.uscl_dataset.ocean_time.values/86400.,
@@ -215,10 +271,9 @@ class CDRUpscaler:
         self.cdr_dataset["cdr_lat"][:] = boundaries_to_profiles("lat")
         print("Populating `cdr_lon`...")
         self.cdr_dataset["cdr_lon"][:] = boundaries_to_profiles("lon")
-        print("Populating `cdr_trcflx_profile` for tracer ALK...")
-        self.cdr_dataset["cdr_trcflx_profile"][:,:,0,:] = boundaries_to_profiles("ALK_add")
-        print("Populating `cdr_trcflx_profile` for tracer DIC...")
-        self.cdr_dataset["cdr_trcflx_profile"][:,:,1,:] = boundaries_to_profiles("DIC_add")
+        for i_trc, name in enumerate(self.tracer_names):
+            print(f"Populating `cdr_trcflx_profile` for tracer {name}...")
+            self.cdr_dataset["cdr_trcflx_profile"][:,:,i_trc,:] = boundaries_to_profiles(f"{name}_add")
         print("Populating `cdr_layer_thickness`...")
         self.cdr_dataset["cdr_layer_thickness"][:] = boundaries_to_profiles("h")
 
@@ -248,7 +303,12 @@ class CDRUpscaler:
             filepath=Path(filename)
 
         print(f"Saving output to {filepath}")
-        self.cdr_dataset.to_netcdf(filepath)
+        # ROMS (Fortran) reads tracer names as fixed-length characters
+        # (NC_CHAR); xarray would otherwise write variable-length NC_STRING.
+        encoding = {}
+        if "cdr_trc_name" in self.cdr_dataset:
+            encoding["cdr_trc_name"] = {"dtype": "S1", "char_dim_name": "trc_name_len"}
+        self.cdr_dataset.to_netcdf(filepath, encoding=encoding)
         print("Done.")
 
 

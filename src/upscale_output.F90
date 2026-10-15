@@ -2,7 +2,10 @@ module upscale_output
 
 ! Upscaling module. This module will write out transects along any open boundaries, which
 ! are meant to be used to create input files for the CDR forcing module in the parent domain.
-! This module assumes that the CDR perturbation is done by adding to the ALK field (not ALK_alt).
+! ALK/DIC additionality is the difference versus ALT_CO2 analogues. CDR_LITE tracers
+! (CDR_OAE_ALK<n>, CDR_OAE_DIC<n>, CDR_DOR_DIC<n>) have no ALT_CO2 analogue, so their
+! boundary fluxes are saved and time-averaged directly, one slot per tracer, and written
+! as <t_vname>_add_<side>: the name the parent's cdr_frc looks up in cdr_trc_name.
 
 #include "cppdefs.opt"
 
@@ -10,10 +13,10 @@ module upscale_output
 
   use dimensions, only: i0, i1, j0, j1, inode, jnode, npx, npy, ds_xr, ds_yr, ds_zr
   use param, only: jnorth, jsouth, ieast, iwest, nsub_e, nsub_x, np_xi, np_eta&
-  &,mynode, ocean_grid_comm
+  &,mynode, ocean_grid_comm, nt_passive, nt_cdr_oae, nt_cdr_dor, lm, mm
   use namelist_open_mod, only: open_namelist_file
   use error_handling_mod, only: error_log
-  use tracers, only: t_units
+  use tracers, only: t_units, t_vname, iTandS
   use grid, only: latr, lonr
   use nc_read_write, only: nccreate, ncwrite
   use roms_read_write, only: create_file, dn_tm, dn_xr, dn_yr, dn_zr
@@ -47,6 +50,13 @@ module upscale_output
   ! is desired)
   integer(kind=4) :: navg = 0
 
+  ! CDR_LITE tracers occupy one contiguous index range right after the passive
+  ! tracers (tracers.F90): icdr0+1 .. icdr0+ncdr_lite. Slot n of the cdr_*
+  ! arrays below is tracer icdr0+n. With no CDR_LITE tracers the arrays are
+  ! allocated with a zero-length third dimension and every loop below is empty.
+  integer(kind=4) :: icdr0 = 0        ! last tracer index before the CDR_LITE range
+  integer(kind=4) :: ncdr_lite = 0    ! number of CDR_LITE tracers
+
 #ifdef OBC_NORTH
   real(kind=8),allocatable,dimension(:,:) :: ALK_add_north_avg
   real(kind=8),allocatable,dimension(:,:) :: DIC_add_north_avg
@@ -55,6 +65,9 @@ module upscale_output
   real(kind=8),allocatable,dimension(:,:) :: DIC_rate_north
   real(kind=8),allocatable,dimension(:,:) :: ALK_alt_rate_north
   real(kind=8),allocatable,dimension(:,:) :: DIC_alt_rate_north
+
+  real(kind=8),allocatable,dimension(:,:,:) :: cdr_add_north_avg   ! (along-boundary, z, CDR_LITE slot)
+  real(kind=8),allocatable,dimension(:,:,:) :: cdr_rate_north
 
   real(kind=8),allocatable,dimension(:,:) :: h_north_avg
 
@@ -72,6 +85,9 @@ module upscale_output
   real(kind=8),allocatable,dimension(:,:) :: ALK_alt_rate_south
   real(kind=8),allocatable,dimension(:,:) :: DIC_alt_rate_south
 
+  real(kind=8),allocatable,dimension(:,:,:) :: cdr_add_south_avg   ! (along-boundary, z, CDR_LITE slot)
+  real(kind=8),allocatable,dimension(:,:,:) :: cdr_rate_south
+
   real(kind=8),allocatable,dimension(:,:) :: h_south_avg
 
   real(kind=8),allocatable,dimension(:)   :: lat_south
@@ -88,6 +104,9 @@ module upscale_output
   real(kind=8),allocatable,dimension(:,:) :: ALK_alt_rate_east
   real(kind=8),allocatable,dimension(:,:) :: DIC_alt_rate_east
 
+  real(kind=8),allocatable,dimension(:,:,:) :: cdr_add_east_avg   ! (along-boundary, z, CDR_LITE slot)
+  real(kind=8),allocatable,dimension(:,:,:) :: cdr_rate_east
+
   real(kind=8),allocatable,dimension(:,:) :: h_east_avg
 
   real(kind=8),allocatable,dimension(:)   :: lat_east
@@ -103,6 +122,9 @@ module upscale_output
   real(kind=8),allocatable,dimension(:,:) :: DIC_rate_west
   real(kind=8),allocatable,dimension(:,:) :: ALK_alt_rate_west
   real(kind=8),allocatable,dimension(:,:) :: DIC_alt_rate_west
+
+  real(kind=8),allocatable,dimension(:,:,:) :: cdr_add_west_avg   ! (along-boundary, z, CDR_LITE slot)
+  real(kind=8),allocatable,dimension(:,:,:) :: cdr_rate_west
 
   real(kind=8),allocatable,dimension(:,:) :: h_west_avg
 
@@ -167,6 +189,9 @@ contains
 
     if (mynode==0) print *,'init upscale'
 
+    icdr0 = iTandS + nt_passive
+    ncdr_lite = 2*nt_cdr_oae + nt_cdr_dor
+
 #ifdef OBC_NORTH
 #ifdef PARALLEL_IO
     allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
@@ -187,6 +212,8 @@ contains
     h_north_avg(:,:) = 0
     lat_north(:) = 0
     lon_north(:) = 0
+    allocate(cdr_add_north_avg(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite)); cdr_add_north_avg(:,:,:) = 0
+    allocate(cdr_rate_north(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite));    cdr_rate_north(:,:,:) = 0
 #else
     if (jnode==npy-1) then ! .not. north_exchng
       allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
@@ -207,6 +234,8 @@ contains
       h_north_avg(:,:) = 0
       lat_north(:) = 0
       lon_north(:) = 0
+      allocate(cdr_add_north_avg(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite)); cdr_add_north_avg(:,:,:) = 0
+      allocate(cdr_rate_north(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite));    cdr_rate_north(:,:,:) = 0
     endif
 #endif
 #endif
@@ -231,6 +260,8 @@ contains
     h_south_avg(:,:) = 0
     lat_south(:) = 0
     lon_south(:) = 0
+    allocate(cdr_add_south_avg(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite)); cdr_add_south_avg(:,:,:) = 0
+    allocate(cdr_rate_south(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite));    cdr_rate_south(:,:,:) = 0
 #else
     if (jnode==0) then ! .not. south_exchange
       allocate(ALK_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
@@ -251,6 +282,8 @@ contains
       h_south_avg(:,:) = 0
       lat_south(:) = 0
       lon_south(:) = 0
+      allocate(cdr_add_south_avg(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite)); cdr_add_south_avg(:,:,:) = 0
+      allocate(cdr_rate_south(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite));    cdr_rate_south(:,:,:) = 0
     endif
 #endif
 #endif
@@ -275,6 +308,8 @@ contains
     h_east_avg(:,:) = 0
     lat_east(:) = 0
     lon_east(:) = 0
+    allocate(cdr_add_east_avg(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite)); cdr_add_east_avg(:,:,:) = 0
+    allocate(cdr_rate_east(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite));    cdr_rate_east(:,:,:) = 0
 #else
     if (inode==npx-1) then ! .not. east_exchng
       allocate(ALK_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
@@ -295,6 +330,8 @@ contains
       h_east_avg(:,:) = 0
       lat_east(:) = 0
       lon_east(:) = 0
+      allocate(cdr_add_east_avg(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite)); cdr_add_east_avg(:,:,:) = 0
+      allocate(cdr_rate_east(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite));    cdr_rate_east(:,:,:) = 0
     endif
 #endif
 #endif
@@ -319,6 +356,8 @@ contains
     h_west_avg(:,:) = 0
     lat_west(:) = 0
     lon_west(:) = 0
+    allocate(cdr_add_west_avg(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite)); cdr_add_west_avg(:,:,:) = 0
+    allocate(cdr_rate_west(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite));    cdr_rate_west(:,:,:) = 0
 #else
     if (inode==0) then ! .not. west_exchng
       allocate(ALK_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
@@ -339,6 +378,8 @@ contains
       h_west_avg(:,:) = 0
       lat_west(:) = 0
       lon_west(:) = 0
+      allocate(cdr_add_west_avg(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite)); cdr_add_west_avg(:,:,:) = 0
+      allocate(cdr_rate_west(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite));    cdr_rate_west(:,:,:) = 0
     endif
 #endif
 #endif
@@ -357,6 +398,7 @@ contains
 
     ! local
     integer(kind=4) :: i,j
+    integer(kind=4) :: islot
 
     if ((itrc == iALK) .or. (itrc == iALK_alt) .or. (itrc == iDIC) .or. (itrc == iDIC_alt)) then
 
@@ -424,7 +466,45 @@ contains
       endif
 #endif
 
-    endif ! itrc number
+    endif ! ALK/DIC itrc number
+
+    ! CDR_LITE tracers have no ALT_CO2 analogue; store the boundary flux directly.
+    islot = cdr_uscl_slot(itrc)
+    if (islot > 0) then
+
+#ifdef OBC_NORTH
+      if (NORTHERN_EDGE) then
+        do i=istr,iend
+          cdr_rate_north(i,k,islot) = FE(i,jend+1)
+        enddo
+      endif
+#endif
+
+#ifdef OBC_SOUTH
+      if (SOUTHERN_EDGE) then
+        do i=istr,iend
+          cdr_rate_south(i,k,islot) = -FE(i,jstr)
+        enddo
+      endif
+#endif
+
+#ifdef OBC_EAST
+      if (EASTERN_EDGE) then
+        do j=jstr,jend
+          cdr_rate_east(j,k,islot) = FX(iend+1,j)
+        enddo
+      endif
+#endif
+
+#ifdef OBC_WEST
+      if (WESTERN_EDGE) then
+        do j=jstr,jend
+          cdr_rate_west(j,k,islot) = -FX(istr,j)
+        enddo
+      endif
+#endif
+
+    endif ! CDR_LITE itrc
 
   end subroutine calc_forcing_rates
 !----------------------------------------------------------------------
@@ -454,6 +534,8 @@ contains
       &(ALK_rate_north(:,:) - ALK_alt_rate_north(:,:))*coef
       DIC_add_north_avg(:,:) = DIC_add_north_avg(:,:)*(1-coef) +&
       &(DIC_rate_north(:,:) - DIC_alt_rate_north(:,:))*coef
+      cdr_add_north_avg(:,:,:) = cdr_add_north_avg(:,:,:)*(1-coef) +&
+      &cdr_rate_north(:,:,:)*coef
       h_north_avg(:,:) = h_north_avg(:,:)*(1-coef) + Hz(:,j1,:)*coef
     endif
 #endif
@@ -464,6 +546,8 @@ contains
       &(ALK_rate_south(:,:) - ALK_alt_rate_south(:,:))*coef
       DIC_add_south_avg(:,:) = DIC_add_south_avg(:,:)*(1-coef) +&
       &(DIC_rate_south(:,:) - DIC_alt_rate_south(:,:))*coef
+      cdr_add_south_avg(:,:,:) = cdr_add_south_avg(:,:,:)*(1-coef) +&
+      &cdr_rate_south(:,:,:)*coef
       h_south_avg(:,:) = h_south_avg(:,:)*(1-coef) + Hz(:,j0,:)*coef
     endif
 #endif
@@ -474,6 +558,8 @@ contains
       &(ALK_rate_east(:,:) - ALK_alt_rate_east(:,:))*coef
       DIC_add_east_avg(:,:) = DIC_add_east_avg(:,:)*(1-coef) +&
       &(DIC_rate_east(:,:) - DIC_alt_rate_east(:,:))*coef
+      cdr_add_east_avg(:,:,:) = cdr_add_east_avg(:,:,:)*(1-coef) +&
+      &cdr_rate_east(:,:,:)*coef
       h_east_avg(:,:) = h_east_avg(:,:)*(1-coef) + Hz(i1,:,:)*coef
     endif
 #endif
@@ -484,6 +570,8 @@ contains
       &(ALK_rate_west(:,:) - ALK_alt_rate_west(:,:))*coef
       DIC_add_west_avg(:,:) = DIC_add_west_avg(:,:)*(1-coef) +&
       &(DIC_rate_west(:,:) - DIC_alt_rate_west(:,:))*coef
+      cdr_add_west_avg(:,:,:) = cdr_add_west_avg(:,:,:)*(1-coef) +&
+      &cdr_rate_west(:,:,:)*coef
       h_west_avg(:,:) = h_west_avg(:,:)*(1-coef) + Hz(i0,:,:)*coef
     endif
 #endif
@@ -542,10 +630,12 @@ contains
       pio_gtype = 'n2rw'
       call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
       call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+      call wrt_cdr_uscl(ncid,'north',cdr_add_north_avg(i0:i1,:,:),.true.)
       call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
       if (jnode==npy-1) then
         ALK_add_north_avg(:,:) = 0
         DIC_add_north_avg(:,:) = 0
+        cdr_add_north_avg(:,:,:) = 0
         h_north_avg(:,:) = 0
       endif
 #endif
@@ -554,10 +644,12 @@ contains
       pio_gtype = 's2rw'
       call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
       call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+      call wrt_cdr_uscl(ncid,'south',cdr_add_south_avg(i0:i1,:,:),.true.)
       call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
       if (jnode==0) then
         ALK_add_south_avg(:,:) = 0
         DIC_add_south_avg(:,:) = 0
+        cdr_add_south_avg(:,:,:) = 0
         h_south_avg(:,:) = 0
       endif
 #endif
@@ -566,10 +658,12 @@ contains
       pio_gtype = 'e2rw'
       call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
       call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+      call wrt_cdr_uscl(ncid,'east',cdr_add_east_avg(j0:j1,:,:),.true.)
       call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
       if (inode==npx-1) then
         ALK_add_east_avg(:,:) = 0
         DIC_add_east_avg(:,:) = 0
+        cdr_add_east_avg(:,:,:) = 0
         h_east_avg(:,:) = 0
       endif
 #endif
@@ -578,10 +672,12 @@ contains
       pio_gtype = 'w2rw'
       call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
       call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+      call wrt_cdr_uscl(ncid,'west',cdr_add_west_avg(j0:j1,:,:),.true.)
       call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
       if (inode==0) then
         ALK_add_west_avg(:,:) = 0
         DIC_add_west_avg(:,:) = 0
+        cdr_add_west_avg(:,:,:) = 0
         h_west_avg(:,:) = 0
       endif
 #endif
@@ -607,9 +703,11 @@ contains
       if (jnode==npy-1) then
         call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/))
         call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/))
+        call wrt_cdr_uscl(ncid,'north',cdr_add_north_avg(i0:i1,:,:),.false.)
         call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/))
         ALK_add_north_avg(:,:) = 0
         DIC_add_north_avg(:,:) = 0
+        cdr_add_north_avg(:,:,:) = 0
         h_north_avg(:,:) = 0
       endif
 #endif
@@ -618,9 +716,11 @@ contains
       if (jnode==0) then
         call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/))
         call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/))
+        call wrt_cdr_uscl(ncid,'south',cdr_add_south_avg(i0:i1,:,:),.false.)
         call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/))
         ALK_add_south_avg(:,:) = 0
         DIC_add_south_avg(:,:) = 0
+        cdr_add_south_avg(:,:,:) = 0
         h_south_avg(:,:) = 0
       endif
 #endif
@@ -629,9 +729,11 @@ contains
       if (inode==npx-1) then
         call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/))
         call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/))
+        call wrt_cdr_uscl(ncid,'east',cdr_add_east_avg(j0:j1,:,:),.false.)
         call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/))
         ALK_add_east_avg(:,:) = 0
         DIC_add_east_avg(:,:) = 0
+        cdr_add_east_avg(:,:,:) = 0
         h_east_avg(:,:) = 0
       endif
 #endif
@@ -640,9 +742,11 @@ contains
       if (inode==0) then
         call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/))
         call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/))
+        call wrt_cdr_uscl(ncid,'west',cdr_add_west_avg(j0:j1,:,:),.false.)
         call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/))
         ALK_add_west_avg(:,:) = 0
         DIC_add_west_avg(:,:) = 0
+        cdr_add_west_avg(:,:,:) = 0
         h_west_avg(:,:) = 0
       endif
 #endif
@@ -731,6 +835,8 @@ contains
     &'DIC additionality on northern boundary')
     ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
 
+    call def_cdr_uscl_vars(ncid,'north','northern',dn_xr,ds_xr)
+
     varid = nccreate(ncid,'h_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'Layer thickness on northern boundary')
@@ -759,6 +865,8 @@ contains
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'DIC additionality on southern boundary')
     ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
+
+    call def_cdr_uscl_vars(ncid,'south','southern',dn_xr,ds_xr)
 
     varid = nccreate(ncid,'h_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
@@ -789,6 +897,8 @@ contains
     &'DIC additionality on eastern boundary')
     ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
 
+    call def_cdr_uscl_vars(ncid,'east','eastern',dn_yr,ds_yr)
+
     varid = nccreate(ncid,'h_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'Layer thickness on eastern boundary')
@@ -817,6 +927,8 @@ contains
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'DIC additionality on western boundary')
     ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
+
+    call def_cdr_uscl_vars(ncid,'west','western',dn_yr,ds_yr)
 
     varid = nccreate(ncid,'h_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
@@ -890,6 +1002,55 @@ contains
 #endif
 
   end subroutine wrt_upscale_coords  !]
+! ----------------------------------------------------------------------
+  integer(kind=4) function cdr_uscl_slot(itrc) ![
+    ! Slot of tracer itrc in the cdr_* arrays, or 0 if it is not a CDR_LITE tracer.
+    implicit none
+    integer(kind=4), intent(in) :: itrc
+    if (itrc > icdr0 .and. itrc <= icdr0 + ncdr_lite) then
+      cdr_uscl_slot = itrc - icdr0
+    else
+      cdr_uscl_slot = 0
+    endif
+  end function cdr_uscl_slot  !]
+! ----------------------------------------------------------------------
+  subroutine wrt_cdr_uscl(ncid, side, add, use_pio) ![
+    ! Write the time-averaged boundary flux of every CDR_LITE tracer on one side.
+    implicit none
+    integer(kind=4), intent(in) :: ncid
+    character(len=*), intent(in) :: side
+    real(kind=8), intent(in) :: add(:,:,:)   ! (along-boundary, z, slot), already sliced to the tile
+    logical, intent(in) :: use_pio
+    integer(kind=4) :: islot
+
+    do islot=1,ncdr_lite
+      if (use_pio) then
+        call ncwrite(ncid,trim(t_vname(icdr0+islot))//'_add_'//trim(side),&
+        &add(:,:,islot),(/1,1,record_uscl/),.true.)
+      else
+        call ncwrite(ncid,trim(t_vname(icdr0+islot))//'_add_'//trim(side),&
+        &add(:,:,islot),(/1,1,record_uscl/))
+      endif
+    enddo
+  end subroutine wrt_cdr_uscl  !]
+! ----------------------------------------------------------------------
+  subroutine def_cdr_uscl_vars(ncid, side, side_adj, dimn1, dims1) ![
+    ! Define <t_vname>_add_<side> for every CDR_LITE tracer.
+    implicit none
+    integer(kind=4), intent(in) :: ncid, dims1
+    character(len=*), intent(in) :: side, side_adj
+    character(len=7), intent(in) :: dimn1
+    integer(kind=4) :: ierr, varid, islot, itrc
+
+    do islot=1,ncdr_lite
+      itrc = icdr0 + islot
+      varid = nccreate(ncid,trim(t_vname(itrc))//'_add_'//trim(side),&
+      &(/dimn1,dn_zr,dn_tm/),(/dims1,ds_zr,0/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &trim(t_vname(itrc))//' additionality on '//trim(side_adj)//' boundary')
+      ierr = nf90_put_att(ncid,varid,'units',trim(t_units(itrc))//'s-1')
+    enddo
+  end subroutine def_cdr_uscl_vars  !]
 ! ----------------------------------------------------------------------
 #else /* MARBL && MARBL_DIAGS && UPSCALING */
 

@@ -301,13 +301,18 @@ marbl_timestep = 3600.0           ! Desired MARBL timestep (s); rounded to a who
 !----------------
 ! Previously set in `cdr_frc.opt`
 ! Requires CDR_FORCING cppkey. Parameterized releases can target any tracer
-! (passive, CDR_LITE or BGC) and work with or without MARBL; depth-profile
-! and 3D forcing supply ALK/DIC and need MARBL.
+! (passive, CDR_LITE or BGC) and work with or without MARBL. Depth-profile
+! releases (upscaling) apply each column of cdr_trcflx_profile to the tracer
+! named in cdr_trc_name (columns for tracers the run lacks are skipped); files
+! without cdr_trc_name have two columns, ALK and DIC, which need MARBL. Use
+! cdr_relocate_to_wet_pts = .true. with depth profiles: child-boundary
+! profiles over land then go to the nearest wet parent point. 3D forcing
+! supplies ALK/DIC and needs MARBL.
 !----------------
 cdr_source = .false.             ! Apply CDR perturbation (T) or not (F)
 cdr_file = "cdr_release.nc"      ! File path to CDR perturbation
 cdr_ncdr_parm = 1                    ! number of CDR releases if `3D`/`parameterized`
-cdr_nz_chd = 50                      ! Number of vertical levels in CDR forcing
+cdr_nz_chd = 0                       ! Depth profiles: levels in the forcing file (0: take from its s_rho)
 cdr_forcing_depth_profiles = .false. ! Apply CDR forcing from a depth profile
 cdr_forcing_3d = .false.             ! Apply CDR forcing from a fully 3D distribution
 cdr_forcing_parameterized = .false.  ! Apply CDR forcing from Gaussian parameters

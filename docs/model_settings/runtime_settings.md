@@ -278,8 +278,8 @@ Settings controlling Carbon Dioxide Removal (CDR) experiments using Ocean Alkali
 | `cdr_source` | Apply CDR perturbation if `.true.` | `cdr_frc.opt: cdr_source` |
 | `cdr_file` | Path to netCDF file containing CDR perturbation | `cdr_frc.opt: cdr_file` |
 | `cdr_ncdr_parm` | Number of CDR releases (if `3D`/`parameterized`) | `cdr_frc.opt: ncdr_parm` |
-| `cdr_nz_chd` | Number of vertical levels in CDR forcing file | `cdr_frc.opt: nz_chd` |
-| `cdr_forcing_depth_profiles` | Apply CDR forcing from a depth profile if `.true.`| `cdr_frc.opt: forcing_depth_profiles` |
+| `cdr_nz_chd` | Number of vertical levels in a depth-profile CDR forcing file; `0` takes it from the file's `s_rho` (a nonzero value must match it) | `cdr_frc.opt: nz_chd` |
+| `cdr_forcing_depth_profiles` | Apply CDR forcing from a depth profile if `.true.`. Each column of `cdr_trcflx_profile` goes to the tracer named in `cdr_trc_name` (columns for tracers the run lacks are skipped); files without `cdr_trc_name` have two columns, ALK and DIC, which need MARBL. The flux of each profile is conserved when it is remapped onto the local layers. | `cdr_frc.opt: forcing_depth_profiles` |
 | `cdr_forcing_3d` | Apply CDR forcing from a fully 3D distribution if `.true.`| `cdr_frc.opt: forcing_3d` |
 | `cdr_forcing_parameterized` | Apply CDR forcing from Guassian parameters if `.true.`| `cdr_frc.opt: forcing_parameterized` |
 | `cdr_time_interpolation` | Interpolate linearly between CDR forcing records if `.true.` | `cdr_frc.opt: time_interpolation` |

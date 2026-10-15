@@ -306,3 +306,81 @@ class TestCdrLite:
         assert_output_matches_reference(
             reference_results, "cdr_lite_parm", {"physics": pv, "cdrtrc": tv}
         )
+
+    def test_dp_by_name_conserves_flux(
+        self, tmp_path, cdr_lite_conf, input_dir, cdrgas_run
+    ):
+        """Upscaled depth profiles: columns go to tracers by name, flux is conserved.
+
+        The forcing file carries four named columns, as the upscalers write
+        them: ALK, DIC, CDR_OAE_ALK1, CDR_OAE_DIC1. Without MARBL, the ALK and
+        DIC columns must be skipped and the CDR_OAE ones applied. The source
+        layers (1 m each) are much thinner than the model's, so the per-layer
+        fluxes only add up to the file's total if the remap conserves flux,
+        not flux * thickness. Checked directly, so the test needs no reference.
+        """
+        cdrgas_name = "roms_cdrgas.20100101000000.nc"
+        for piece in sorted(cdrgas_run.glob("roms_cdrgas.20100101000000.?.nc")):
+            shutil.copy(piece, tmp_path / piece.name)
+
+        # Four named columns from the suite's two-column depth-profile file
+        with xr.open_dataset(input_dir / "cdr_forcing_dp.nc") as two_col:
+            profile = two_col["cdr_trcflx_profile"].load()
+            ds = two_col[["cdr_lon", "cdr_lat", "cdr_layer_thickness"]].load()
+        alk = profile.isel(two=0)
+        ds["cdr_trcflx_profile"] = xr.concat(
+            [alk, 0 * alk, 2 * alk, 0.5 * alk], dim="ntrc"
+        ).transpose("cdr_time", "s_rho", "ntrc", "ncdr_prof")
+        ds["cdr_trc_name"] = (
+            "ntrc", np.array(["ALK", "DIC", "CDR_OAE_ALK1", "CDR_OAE_DIC1"])
+        )
+        cdr_file = tmp_path / "cdr_forcing_dp_named.nc"
+        ds.to_netcdf(cdr_file, encoding={
+            "cdr_trc_name": {"dtype": "S1", "char_dim_name": "trc_name_len"}
+        })
+        expected = float(ds["cdr_trcflx_profile"].isel(cdr_time=0, ntrc=2).sum())
+        assert expected > 0
+
+        nml = create_test_namelist_dict(input_dir)
+        nml["TIME_STEPPING"]["dt"] = 40
+        nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
+        nml["PARAM_SETTINGS"]["nt_bgc"] = 0
+        nml["PARAM_SETTINGS"]["nt_cdr_oae"] = 1
+        nml["FORCING_FILES"] = {
+            "frcfiles": [
+                str(input_dir / "example_input_boundary_forcing.nc"),
+                str(input_dir / "example_input_surface_forcing.nc"),
+                cdrgas_name,
+            ]
+        }
+        nml["CDR_FRC_SETTINGS"].update({
+            "cdr_source": True,
+            "cdr_forcing_depth_profiles": True,
+            "cdr_relocate_to_wet_pts": True,
+            "cdr_nz_chd": 0,
+            "cdr_file": str(cdr_file),
+        })
+        nml["CDR_LITE_SETTINGS"]["cdr_online_carbonate_sensitivity"] = False
+        nml["CDR_LITE_OUTPUT_SETTINGS"].update({
+            "do_cdr_lite_output": True,
+            "wrt_cdr_lite_avg": False,
+            "output_period_cdr_lite": 400,
+            "nrpf_cdr_lite": 10,
+            "wrt_sources": True,
+        })
+        stdout = cdr_lite_conf.run(nml, cwd=tmp_path, capture_output=True)
+
+        assert "skipping ALK fluxes" in stdout
+        assert "skipping DIC fluxes" in stdout
+        assert "depth-profile fluxes for CDR_OAE_ALK1 are applied" in stdout
+        assert "depth-profile fluxes for CDR_OAE_DIC1 are applied" in stdout
+
+        # Join the per-rank output (the hashes themselves are not used)
+        get_summary_value(
+            tmp_path, prefix="roms_cdrtrc.20100101000640",
+            vars_to_exclude=["avg_begin_time", "avg_end_time"],
+        )
+        with xr.open_dataset(tmp_path / "roms_cdrtrc.20100101000640.nc") as out:
+            source = out["CDR_OAE_ALK1_source"]
+            injected = source.sum([d for d in source.dims if d != "time"]).values
+        np.testing.assert_allclose(injected, expected, rtol=1e-6)
