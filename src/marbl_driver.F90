@@ -211,10 +211,11 @@ contains
         &'non-negative, got ', constant_Fe_value
         call error_log%raise_global(&
         &context=module_name//'/'//sr_name, info=error_info)
+      else
+        mpi_master_only write(*,'(1x,A,ES12.5,A)')&
+        &'MARBL Fe held constant at ', constant_Fe_value,&
+        &' (use_constant_Fe)'
       end if
-      mpi_master_only write(*,'(1x,A,ES12.5,A)')&
-      &'MARBL Fe held constant at ', constant_Fe_value,&
-      &' (use_constant_Fe)'
     end if
 
     close(namelist_unit)
