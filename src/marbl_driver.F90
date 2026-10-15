@@ -1435,8 +1435,7 @@ contains
 !       every step's tracer update (after t3dmix in roms_step), discarding
 !       that step's changes to Fe (transport, boundary and river inputs,
 !       MARBL, lateral mixing). It must follow the step's last update to
-!       the tracers: t3dmix computes its fluxes from the n+1/2 tracers,
-!       which transport moves slightly off the constant.
+!       the tracers, so that output and the next step see the constant.
 !-----------------------------------------------------------------------
     real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,&
     &intent(inout)     :: tracer_array
