@@ -187,6 +187,10 @@ contains
 # if defined(BIOLOGY_BEC2)
     use bec2_params, only: ecosys2_init
 #endif
+#ifdef MARBL
+    use marbl_driver, only: marbldrv_impose_constant_fe
+    use tracers, only: t
+#endif
     use grid, only: get_grid, dm_r, dn_r
     use roms_read_write, only: nrrec, frc_time, inifile
     use param, only:&
@@ -212,6 +216,9 @@ contains
     implicit none
 
     integer(kind=4) trd, tile, my_first, my_last, range
+#ifdef MARBL
+    integer(kind=4) itime
+#endif
     character(len=1024) :: error_info = ""
     character(len=9) :: sr_name ="roms_init"
 !$  integer omp_get_thread_num, omp_get_num_threads
@@ -333,6 +340,15 @@ contains
     endif    !<-- len_trim(inifile)>0
 #endif
 
+#ifdef MARBL
+    ! use_constant_Fe (no-op otherwise): Fe at its constant value from the
+    ! start, in every time level and halo point of this rank's arrays
+    do itime=1,3
+      call marbldrv_impose_constant_fe(lbound(t,1),ubound(t,1),&
+      &lbound(t,2),ubound(t,2),t,itime)
+    enddo
+#endif
+
 #ifdef ANA_VMIX
     call ana_vmix
 #endif
@@ -431,7 +447,8 @@ contains
     use surf_flux, only: wrt_sflux, wrt_smflx, wrt_stflx
     use random_output, only: wrt_random, do_random
 #ifdef MARBL
-    use marbl_driver, only: marbl_timestep_ratio
+    use marbl_driver, only: marbl_timestep_ratio, marbldrv_impose_constant_fe
+    use tracers, only: t
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only:  wrt_cdr, do_cdr_output
@@ -479,6 +496,9 @@ contains
     &  rg_prsgrd, rg_pre_step3d, rg_huv1_omega, rg_uv1_visc, rg_step2d,&
     &  rg_uv2_omega, rg_step3d_t, rg_t3dmix, rg_avg_diag, rg_output
     implicit none
+#ifdef MARBL
+    integer(kind=4) :: itime
+#endif
 
 
 ! Increment time-step index and set model clock. Note that "time" set
@@ -644,6 +664,17 @@ contains
     call t3dmix
     call reg_toc(rg_t3dmix)
 # endif
+
+#ifdef MARBL
+    ! use_constant_Fe (no-op otherwise): reset Fe after its last update of
+    ! the step (t3dmix's fluxes come from the n+1/2 tracers, which transport
+    ! moves slightly off the constant), in every time level and halo point,
+    ! so the next step and this step's output see exactly constant_Fe_value
+    do itime=1,3
+      call marbldrv_impose_constant_fe(lbound(t,1),ubound(t,1),&
+      &lbound(t,2),ubound(t,2),t,itime)
+    enddo
+#endif
 
 
     ! at this point, u,v,w and tracers are up to n+1

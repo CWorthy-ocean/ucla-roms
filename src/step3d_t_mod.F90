@@ -76,7 +76,7 @@ contains
   use advection, only: t_vadv_pre, t_vadv_cor
 #ifdef MARBL
   use marbl_driver, only: marbldrv_column_physics, iALK, iDIC,&
-  &is_marbl_step
+  &is_marbl_step, marbldrv_impose_constant_fe
 #endif
   use grid, only: umask, vmask, pn, pm, rmask, nx, ny, nz, dn_u, dm_v
   use param, only: mynode, np_eta, np_xi
@@ -1233,6 +1233,10 @@ enddo     !<-- itrc
 
 # if defined(MARBL)
 if (is_marbl_step(tstep)) then
+  ! use_constant_Fe (no-op otherwise): MARBL computes with the constant iron;
+  ! the step's changes to Fe (transport, boundaries, rivers, MARBL, lateral
+  ! mixing) are undone after t3dmix in roms_step
+  call marbldrv_impose_constant_fe(istrR,iendR,jstrR,jendR,t,nnew)
   call reg_tic(rg_marbl)
   call marbldrv_column_physics(istr,iend,jstr,jend,t)
   call reg_toc(rg_marbl)
