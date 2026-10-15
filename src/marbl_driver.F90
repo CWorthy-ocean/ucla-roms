@@ -79,9 +79,16 @@ module marbl_driver
   character(len=400), public ::&
   &marbl_diagnostics_to_write(64) = ""
 #endif
+!     Constant iron: with use_constant_Fe, MARBL's Fe tracer is held at
+!     constant_Fe_value (in Fe's units, mmol/m3) at every wet point, instead
+!     of evolving with transport, boundary and river inputs and MARBL's
+!     sources and sinks (see marbldrv_impose_constant_fe)
+  logical, public :: use_constant_Fe = .false.
+  real(kind=8), public :: constant_Fe_value = 3.0e-3_8
 
   namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
-  &marbl_timestep, marbl_tracers_to_write&
+  &marbl_timestep, marbl_tracers_to_write,&
+  &use_constant_Fe, constant_Fe_value&
 #ifdef MARBL_DIAGS
   &, marbl_diagnostics_to_write
 #endif
@@ -146,6 +153,8 @@ module marbl_driver
 
 !     Indices of carbonate system tracers
   integer(kind=4), public :: iALK, iDIC, iALK_alt, iDIC_alt
+!     Index of MARBL's dissolved iron (Fe) in the ROMS tracer array
+  integer(kind=4) :: iFe = 0
   character(len=1024) :: error_info
 ! ----------------------------------------------------------------------
 
@@ -159,6 +168,8 @@ module marbl_driver
   public :: marbldrv_create_ss_vars_in_rst
   public :: marbldrv_read_ss_vars_from_rst
   public :: marbldrv_column_physics
+  public :: marbldrv_impose_constant_fe
+  public :: marbldrv_impose_constant_fe_all
 
   public :: read_nml_marbl
   public :: is_marbl_step
@@ -195,6 +206,18 @@ contains
     end if
     mpi_master_only write(*,'(1x,A,15x,A)')&
     &'MARBL config file',trim(marbl_config_file)
+    if (use_constant_Fe) then
+      if (constant_Fe_value < 0._8) then
+        write(error_info,*) 'use_constant_Fe: constant_Fe_value must be ',&
+        &'non-negative, got ', constant_Fe_value
+        call error_log%raise_global(&
+        &context=module_name//'/'//sr_name, info=error_info)
+      else
+        mpi_master_only write(*,'(1x,A,ES12.5,A)')&
+        &'MARBL Fe held constant at ', constant_Fe_value,&
+        &' (use_constant_Fe)'
+      end if
+    end if
 
     close(namelist_unit)
 
@@ -454,6 +477,17 @@ contains
 !     5. Save carbonate system indices
 !     ---------------------------------------------------------
     call get_tracer_indices(t_vname)
+!     ... and dissolved iron's, for use_constant_Fe
+    do idx=1,nt_marbl
+      if (trim(MARBL_instance%tracer_metadata(idx)%short_name)=='Fe') then
+        iFe = idx+(NT-nt_marbl)
+      end if
+    end do
+    if (use_constant_Fe .and. iFe==0) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info='use_constant_Fe: MARBL has no tracer named Fe')
+    end if
 
 !     6. Set MARBL update frequency
 !     ---------------------------------------------------------
@@ -1359,6 +1393,61 @@ contains
     end do                    ! i=istr,iend
     call error_log%abort_check()
   end subroutine marbldrv_column_physics
+!-----------------------------------------------------------------------
+
+  subroutine marbldrv_impose_constant_fe(istr,iend,jstr,jend,tracer_array,itime)
+!-----------------------------------------------------------------------
+!     SUBROUTINE: marbldrv_impose_constant_fe
+!     DESCRIPTION:
+!     With use_constant_Fe, set MARBL's Fe tracer to constant_Fe_value at
+!     every wet point (land: 0, as the masked tracer update leaves it) of
+!     time level itime over i=istr:iend, j=jstr:jend. Does nothing
+!     otherwise.
+!
+!     NOTES:
+!     - Called in step3d_t just before MARBL, so MARBL computes with the
+!       constant; the whole-array resets go through
+!       marbldrv_impose_constant_fe_all.
+!-----------------------------------------------------------------------
+    integer(kind=4), intent(in) :: istr,iend,jstr,jend,itime
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,&
+    &intent(inout)     :: tracer_array
+    integer(kind=4) :: i,j
+
+    if (.not. use_constant_Fe) return
+    do j=jstr,jend
+      do i=istr,iend
+        tracer_array(i,j,:,itime,iFe) = constant_Fe_value*rmask(i,j)
+      end do
+    end do
+  end subroutine marbldrv_impose_constant_fe
+!-----------------------------------------------------------------------
+
+  subroutine marbldrv_impose_constant_fe_all(tracer_array)
+!-----------------------------------------------------------------------
+!     SUBROUTINE: marbldrv_impose_constant_fe_all
+!     DESCRIPTION:
+!     marbldrv_impose_constant_fe over every time level and the whole
+!     array, halo points included. Does nothing unless use_constant_Fe.
+!
+!     NOTES:
+!     - Called after the initial conditions are read and at the end of
+!       every step's tracer update (after t3dmix in roms_step), discarding
+!       that step's changes to Fe (transport, boundary and river inputs,
+!       MARBL, lateral mixing). It must follow the step's last update to
+!       the tracers, so that output and the next step see the constant.
+!-----------------------------------------------------------------------
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,&
+    &intent(inout)     :: tracer_array
+    integer(kind=4) :: itime
+
+    if (.not. use_constant_Fe) return
+    do itime=1,3
+      call marbldrv_impose_constant_fe(lbound(tracer_array,1),&
+      &ubound(tracer_array,1),lbound(tracer_array,2),&
+      &ubound(tracer_array,2),tracer_array,itime)
+    end do
+  end subroutine marbldrv_impose_constant_fe_all
 
   subroutine marbldrv_set_marbl_surface_flux_forcing_values(&
   &i,j,tracer_array)

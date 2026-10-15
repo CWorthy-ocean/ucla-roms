@@ -187,6 +187,10 @@ contains
 # if defined(BIOLOGY_BEC2)
     use bec2_params, only: ecosys2_init
 #endif
+#ifdef MARBL
+    use marbl_driver, only: marbldrv_impose_constant_fe_all
+    use tracers, only: t
+#endif
     use grid, only: get_grid, dm_r, dn_r
     use roms_read_write, only: nrrec, frc_time, inifile
     use param, only:&
@@ -333,6 +337,12 @@ contains
     endif    !<-- len_trim(inifile)>0
 #endif
 
+#ifdef MARBL
+    ! use_constant_Fe (no-op otherwise): Fe at its constant value from the
+    ! start, in every time level and halo point of this rank's arrays
+    call marbldrv_impose_constant_fe_all(t)
+#endif
+
 #ifdef ANA_VMIX
     call ana_vmix
 #endif
@@ -431,7 +441,8 @@ contains
     use surf_flux, only: wrt_sflux, wrt_smflx, wrt_stflx
     use random_output, only: wrt_random, do_random
 #ifdef MARBL
-    use marbl_driver, only: marbl_timestep_ratio
+    use marbl_driver, only: marbl_timestep_ratio, marbldrv_impose_constant_fe_all
+    use tracers, only: t
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only:  wrt_cdr, do_cdr_output
@@ -644,6 +655,14 @@ contains
     call t3dmix
     call reg_toc(rg_t3dmix)
 # endif
+
+#ifdef MARBL
+    ! use_constant_Fe (no-op otherwise): reset Fe after its last update of
+    ! the step (t3dmix's fluxes come from the n+1/2 tracers, which transport
+    ! moves slightly off the constant), in every time level and halo point,
+    ! so the next step and this step's output see exactly constant_Fe_value
+    call marbldrv_impose_constant_fe_all(t)
+#endif
 
 
     ! at this point, u,v,w and tracers are up to n+1
