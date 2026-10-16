@@ -672,9 +672,10 @@ jobs:
       - name: Report differences from the base commit
         if: failure() && steps.mismatches.outputs.found == 'true'
         shell: bash
+        # micromamba run, as in the gnu job: the image puts the roms-ci env last on
+        # PATH, so a bare python is the system one, without xarray.
         run: |
-          source $GITHUB_ENV
-          python tests/compare_outputs.py --mismatches tests/results/mismatches_github_ifx.json --head-root /tmp/pytest_head --base-root /tmp/pytest_base --markdown "$GITHUB_STEP_SUMMARY"
+          micromamba run -n roms-ci python tests/compare_outputs.py --mismatches tests/results/mismatches_github_ifx.json --head-root /tmp/pytest_head --base-root /tmp/pytest_base --markdown "$GITHUB_STEP_SUMMARY"
 
   cleanup:
     # Delete the throwaway :ci-<run_id> tags pushed for a PR. Best-effort: a
