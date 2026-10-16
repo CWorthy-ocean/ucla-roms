@@ -10,8 +10,10 @@ prints what changed, so the diff can be reviewed and committed with the PR.
     python tests/update_references.py --run <run-id>
     python tests/update_references.py --from-file computed_github_gnu.json --environ github_gnu
 
-Merge rule: keys present in the computed dump replace the reference entry, all
-other reference keys are kept (``--prune`` deletes them). Standard library only.
+Each variable's entry holds its SHA-256 and some statistics of its values, and
+the reference file keeps one line per variable. Merge rule: keys present in the
+computed dump replace the reference entry, all other reference keys are kept
+(``--prune`` deletes them). Standard library only.
 """
 
 from __future__ import annotations
@@ -65,6 +67,15 @@ def find_computed(root: Path) -> dict[str, Path]:
     return found
 
 
+def predates_statistics(component: dict) -> bool:
+    """Whether a component is in the old format, a bare hash string per variable.
+
+    Also used by ``_assertions.py``, so the two agree on which references must be
+    regenerated.
+    """
+    return any(not isinstance(entry, dict) for entry in component.values())
+
+
 def describe_changes(old: dict | str, new: dict | str) -> list[str]:
     """One line per component of a test whose reference differs from the computed value."""
     # A reference or computed test entry that is not a {component: ...} dict has no
@@ -79,23 +90,53 @@ def describe_changes(old: dict | str, new: dict | str) -> list[str]:
             lines.append(f"{comp}: component added")
         elif old[comp] == new[comp]:
             continue
-        elif isinstance(old[comp], str) or isinstance(new[comp], str):
-            # Legacy references hold one digest per component, not per variable.
-            lines.append(f"{comp}: format changed")
+        elif predates_statistics(old[comp]):
+            lines.append(f"{comp}: format changed (reference predates per-variable statistics)")
         else:
             o, n = old[comp], new[comp]
             parts = []
-            changed = sorted(v for v in o.keys() & n.keys() if o[v] != n[v])
+            common = o.keys() & n.keys()
+            hash_changed = sorted(v for v in common if o[v]["sha256"] != n[v]["sha256"])
+            # Same hash, different entry: e.g. the statistics moved with a numpy bump.
+            statistics_only = sorted(
+                v for v in common if o[v]["sha256"] == n[v]["sha256"] and o[v] != n[v]
+            )
             only_new = sorted(n.keys() - o.keys())
             only_old = sorted(o.keys() - n.keys())
-            if changed:
-                parts.append(f"changed: {', '.join(changed)}")
+            if hash_changed:
+                parts.append(f"hash changed: {', '.join(hash_changed)}")
+            if statistics_only:
+                parts.append(f"statistics only: {', '.join(statistics_only)}")
             if only_new:
                 parts.append(f"only in new: {', '.join(only_new)}")
             if only_old:
                 parts.append(f"only in old: {', '.join(only_old)}")
             lines.append(f"{comp}: " + "; ".join(parts))
     return lines
+
+
+def dump_references(refs: dict) -> str:
+    """JSON text of ``{test: {component: {variable: entry}}}`` with one line per variable.
+
+    Plain ``indent=2`` would spread each variable's entry over several lines; one
+    line per variable means a diff of the reference file shows each changed
+    variable on its own line.
+    """
+
+    def block(entries: list[str], depth: int) -> str:
+        if not entries:
+            return "{}"
+        pad = "  " * (depth + 1)
+        return "{\n" + ",\n".join(pad + e for e in entries) + "\n" + "  " * depth + "}"
+
+    tests = []
+    for test, components in refs.items():
+        comps = []
+        for comp, variables in components.items():
+            entries = [f"{json.dumps(v)}: {json.dumps(entry)}" for v, entry in variables.items()]
+            comps.append(f"{json.dumps(comp)}: {block(entries, 2)}")
+        tests.append(f"{json.dumps(test)}: {block(comps, 1)}")
+    return block(tests, 0) + "\n"
 
 
 def merge(environ: str, computed: dict, prune: bool, dry_run: bool) -> None:
@@ -132,7 +173,7 @@ def merge(environ: str, computed: dict, prune: bool, dry_run: bool) -> None:
     if dry_run:
         print(f"{environ}: dry run, nothing written")
     elif merged != old or not ref_path.exists():
-        ref_path.write_text(json.dumps(merged, indent=2) + "\n")
+        ref_path.write_text(dump_references(merged))
         print(f"{environ}: wrote {ref_path.relative_to(REPO_ROOT)}")
     else:
         print(f"{environ}: reference file already up to date")

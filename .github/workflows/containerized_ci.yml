@@ -24,7 +24,10 @@ name: Containerized CI
 #     verify it compiles but not pushed, and the tests fall back to :latest.
 #
 # Test-failure policy: a reference-hash mismatch fails the pytest jobs, like any
-# other test failure. Each job uploads the computed results as the artifact
+# other test failure. When tests fail on hash mismatches, each pytest job also
+# reruns the suite on the base commit and writes to the run's summary page a
+# per-variable report of how far the outputs moved (tests/compare_outputs.py).
+# Each job uploads the computed results as the artifact
 # results-github_gnu / results-github_ifx (retained 30 days, also on failure).
 # To accept an intentional change, run
 #   python tests/update_references.py --run <run-id>
@@ -297,7 +300,7 @@ jobs:
       run: |
         micromamba run -n roms-ci bash -c '
         cd ${ROMS_ROOT}/tests/
-        pytest -svvv -rfEx . --environ=github_gnu --inputs-out results/inputs_github_gnu
+        pytest -svvv -rfEx . --environ=github_gnu --inputs-out results/inputs_github_gnu --basetemp /tmp/pytest_head
         '
     - name: Upload computed results
       if: always()
@@ -321,6 +324,53 @@ jobs:
         path: tests/results/inputs_github_gnu/
         if-no-files-found: warn
         retention-days: 30
+    # The next steps rerun the suite on the base commit (the PR base, or the
+    # previous main commit on a push; there is none on workflow_dispatch) and
+    # report, per variable, how far the mismatched tests' outputs moved. See
+    # tests/README.md.
+    - name: Look for hash mismatches to report
+      id: mismatches
+      if: failure()
+      shell: bash
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      run: |
+        if [ -z "$BASE_SHA" ]; then
+          echo "No base commit for this event; not comparing against one."
+        elif [ ! -f tests/results/mismatches_github_gnu.json ]; then
+          echo "No hash mismatches were recorded; nothing to compare."
+        else
+          echo "found=true" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Check out the base commit
+      if: failure() && steps.mismatches.outputs.found == 'true'
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.base.sha || github.event.before }}
+        path: base
+    # The base run uses its own test code and input generation, so the report
+    # shows what the PR changed end to end. It runs the full suite because a
+    # physics change usually fails every test anyway.
+    - name: Run the suite on the base commit
+      if: failure() && steps.mismatches.outputs.found == 'true'
+      timeout-minutes: 15
+      continue-on-error: true
+      shell: bash
+      run: |
+        micromamba run -n roms-ci bash -c '
+        export ROMS_ROOT=$GITHUB_WORKSPACE/base
+        export PATH=$ROMS_ROOT/Tools-Roms:$PATH
+        cd $ROMS_ROOT/Tools-Roms/
+        make partit COMPILER=gnu
+        make ncjoin COMPILER=gnu
+        cd $ROMS_ROOT/tests/
+        pytest -svv -rfEx . --environ=github_gnu --basetemp /tmp/pytest_base
+        '
+    - name: Report differences from the base commit
+      if: failure() && steps.mismatches.outputs.found == 'true'
+      shell: bash
+      run: |
+        micromamba run -n roms-ci python tests/compare_outputs.py --mismatches tests/results/mismatches_github_gnu.json --head-root /tmp/pytest_head --base-root /tmp/pytest_base --markdown "$GITHUB_STEP_SUMMARY"
 
   compile_gnu:
     needs: [prepare, build_gnu]
@@ -548,7 +598,7 @@ jobs:
           cd $ROMS_ROOT/tests/
           sed -i -e "s/make BUILD_MODE=test/make COMPILER=intel BUILD_MODE=test/g" _helpers.py
           sed -i -e "s/mpirun/mpirun --oversubscribe/g" _helpers.py
-          pytest -svvv -rfEx . --environ=github_ifx --inputs-out results/inputs_github_ifx
+          pytest -svvv -rfEx . --environ=github_ifx --inputs-out results/inputs_github_ifx --basetemp /tmp/pytest_head
 
       - name: Upload computed results
         if: always()
@@ -572,6 +622,60 @@ jobs:
           path: tests/results/inputs_github_ifx/
           if-no-files-found: warn
           retention-days: 30
+
+      # The next steps rerun the suite on the base commit (the PR base, or the
+      # previous main commit on a push; there is none on workflow_dispatch) and
+      # report, per variable, how far the mismatched tests' outputs moved. See
+      # tests/README.md.
+      - name: Look for hash mismatches to report
+        id: mismatches
+        if: failure()
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ]; then
+            echo "No base commit for this event; not comparing against one."
+          elif [ ! -f tests/results/mismatches_github_ifx.json ]; then
+            echo "No hash mismatches were recorded; nothing to compare."
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the base commit
+        if: failure() && steps.mismatches.outputs.found == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.before }}
+          path: base
+
+      # The base run uses its own test code and input generation, so the report
+      # shows what the PR changed end to end. It runs the full suite because a
+      # physics change usually fails every test anyway.
+      - name: Run the suite on the base commit
+        if: failure() && steps.mismatches.outputs.found == 'true'
+        timeout-minutes: 15
+        continue-on-error: true
+        shell: bash
+        run: |
+          source $GITHUB_ENV
+          export ROMS_ROOT=$GITHUB_WORKSPACE/base
+          export PATH=$ROMS_ROOT/Tools-Roms:$PATH
+          cd $ROMS_ROOT/Tools-Roms/
+          make partit COMPILER=intel
+          make ncjoin COMPILER=intel
+          cd $ROMS_ROOT/tests/
+          sed -i -e "s/make BUILD_MODE=test/make COMPILER=intel BUILD_MODE=test/g" _helpers.py
+          sed -i -e "s/mpirun/mpirun --oversubscribe/g" _helpers.py
+          pytest -svv -rfEx . --environ=github_ifx --basetemp /tmp/pytest_base
+
+      - name: Report differences from the base commit
+        if: failure() && steps.mismatches.outputs.found == 'true'
+        shell: bash
+        # micromamba run, as in the gnu job: the image puts the roms-ci env last on
+        # PATH, so a bare python is the system one, without xarray.
+        run: |
+          micromamba run -n roms-ci python tests/compare_outputs.py --mismatches tests/results/mismatches_github_ifx.json --head-root /tmp/pytest_head --base-root /tmp/pytest_base --markdown "$GITHUB_STEP_SUMMARY"
 
   cleanup:
     # Delete the throwaway :ci-<run_id> tags pushed for a PR. Best-effort: a
