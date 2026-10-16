@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from .update_references import predates_statistics
+
 # _helpers reads ROMS_ROOT from the environment when it is imported, so it is
 # imported for the type checker only.
 if TYPE_CHECKING:
@@ -63,6 +65,11 @@ tolerated_mismatches: list[str] = []
 # reference entry has nothing to compare against and is not listed.
 mismatched_outputs: dict[str, dict[str, str]] = {}
 
+# Equal statistics with a changed hash mean either a change below about 1e-10
+# relative or values that moved without changing min, max, mean or rms (a
+# shifted or reordered field); only the per-point base comparison tells which.
+STATISTICS_EQUAL = "statistics equal to 10 significant digits (see the base-commit report)"
+
 UPDATE_HINT = (
     "To accept these results, run: python tests/update_references.py --run <RUN_ID>  "
     "(RUN_ID of the CI run whose artifacts hold the new values; see tests/README.md)"
@@ -75,15 +82,6 @@ def _sha256s(test_entry: dict) -> dict[str, dict[str, str]]:
         component: {name: entry["sha256"] for name, entry in variables.items()}
         for component, variables in test_entry.items()
     }
-
-
-def _predates_statistics(test_entry: dict) -> bool:
-    """Whether a reference test entry is in the old format, a bare hash per variable."""
-    return any(
-        not isinstance(entry, dict)
-        for variables in test_entry.values()
-        for entry in variables.values()
-    )
 
 
 def _describe_component_diff(name: str, expected: dict, computed: dict) -> list[str]:
@@ -105,7 +103,7 @@ def _describe_component_diff(name: str, expected: dict, computed: dict) -> list[
             if stat not in old or stat not in new or old[stat] != new[stat]
         ]
         lines.append(
-            f"    {var}: " + (", ".join(moved) or "statistics equal to 10 significant digits")
+            f"    {var}: " + (", ".join(moved) or STATISTICS_EQUAL)
         )
     only_computed = [v for v in computed if v not in expected]
     only_reference = [v for v in expected if v not in computed]
@@ -144,7 +142,7 @@ def assert_output_matches_reference(
         )
     else:
         expected = reference_results[test_name]
-        if _predates_statistics(expected):
+        if any(predates_statistics(variables) for variables in expected.values()):
             # The hashes cannot be read per variable, so every output is suspect.
             differing = list(summaries)
             lines = [
@@ -161,9 +159,10 @@ def assert_output_matches_reference(
                 for c in differing
                 for line in _describe_component_diff(c, expected.get(c, {}), computed.get(c, {}))
             ]
-        mismatched_outputs[test_name] = {
-            c: str(summaries[c].path) for c in differing if c in summaries
-        }
+        # A component present only in the reference has no head file to compare.
+        paths = {c: str(summaries[c].path) for c in differing if c in summaries}
+        if paths:
+            mismatched_outputs[test_name] = paths
         message = (
             f"Hash mismatch for {test_name!r} (reference: results_{environ}.json).\n"
             + "\n".join(lines)

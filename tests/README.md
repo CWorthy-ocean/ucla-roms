@@ -14,7 +14,7 @@ The `== input file hashes and environment ==` block printed at the end of every 
 
 ## When a test fails on a hash mismatch
 
-1. Read the failure message: it lists, per component (`physics`, `bgc`), each variable whose hash changed and the statistics that moved (`max 25.12345678 -> 25.12345679`). `statistics equal to 10 significant digits` means the change is below about 1e-10 relative, which is roundoff.
+1. Read the failure message: it lists, per component (`physics`, `bgc`), each variable whose hash changed and the statistics that moved (`max 25.12345678 -> 25.12345679`). `statistics equal to 10 significant digits` means the change is either below about 1e-10 relative (roundoff) or moved values without changing min, max, mean or rms (a shifted or reordered field); the report of step 2 tells which.
 2. Read the report on how far the outputs moved. The job reruns the suite on the base commit (the PR base, or the previous `main` commit on a push) and reports, for each changed variable, the number of points differing, the largest absolute difference and where it is, and that difference relative to the variable's largest base value. Read it on the run's summary page, or in the job log under "Report differences from the base commit". It runs only when the failure includes hash mismatches, and it takes a few extra minutes. The base run uses the base commit's own test code and input generation, so the report shows what the PR changed end to end.
 3. Decide whether the change is intended by your PR. If not, it is a regression; fix the code.
 4. If intended, take the run id from the failing CI run URL (`.../actions/runs/<run-id>`) and run, from anywhere in the checkout:

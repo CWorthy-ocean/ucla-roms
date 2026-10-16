@@ -237,8 +237,11 @@ def pytest_sessionfinish(session, exitstatus):
     reporter.write_line(f"wrote {results_out}")
 
     # CI reruns the suite on the base commit and compares these files with
-    # the base run's (tests/compare_outputs.py).
+    # the base run's (tests/compare_outputs.py). The file describes this
+    # session only, so one left by an earlier session is removed.
+    mismatches_out = results_out.parent / f"mismatches_{current_environ}.json"
     if _assertions.mismatched_outputs:
-        mismatches_out = results_out.parent / f"mismatches_{current_environ}.json"
         mismatches_out.write_text(json.dumps(_assertions.mismatched_outputs, indent=2) + "\n")
         reporter.write_line(f"wrote {mismatches_out}")
+    else:
+        mismatches_out.unlink(missing_ok=True)

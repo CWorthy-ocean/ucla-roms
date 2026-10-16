@@ -16,7 +16,9 @@ The mismatches file (written by the test session when hashes disagree) maps
 test -> component -> absolute path of the head output file. The head run and
 the base run use different ``--basetemp`` directories and pytest names a test's
 tmp directory after the test, so the base file is the head path with
-``--head-root`` replaced by ``--base-root``. ``--markdown`` appends a Markdown
+``--head-root`` replaced by ``--base-root``. That relies on test names (and
+fixture ``mktemp`` names) being unique in their first 30 characters: pytest
+numbers repeated names in run order, which could pair different tests. ``--markdown`` appends a Markdown
 version of the report to OUT, which CI points at ``$GITHUB_STEP_SUMMARY``.
 
 Needs numpy and xarray only.
@@ -41,7 +43,7 @@ NOT_AVAILABLE = "n/a"
 # A variable that is not numeric has no magnitude, so it sorts with them.
 GROUP_ONLY_ONE_FILE = 0
 GROUP_SHAPE_OR_DTYPE = 1
-GROUP_NAN_PATTERN = 2
+GROUP_NONFINITE = 2
 GROUP_NON_NUMERIC = 3
 GROUP_NUMERIC = 4
 
@@ -97,20 +99,21 @@ def compare_numeric(name: str, dims: tuple, base: np.ndarray, head: np.ndarray) 
     if n_differ == 0:
         return None
 
-    points = f"{n_differ}/{base.size}"
-    one_nan = int((base_nan != head_nan).sum())
-    if one_nan:
-        points += f" ({one_nan} NaN on one side)"
-
-    # The magnitude is judged only where both values are finite; a position
-    # that went NaN (or inf) is a change of pattern, counted above, not a size.
+    # The magnitude is judged only where both values are finite. A differing
+    # position where either side is NaN or inf (a blow-up, or a fill value that
+    # appeared or vanished) has no size; it is counted and sorts first.
     both_finite = np.isfinite(base) & np.isfinite(head)
+    nonfinite = int((differs & ~both_finite).sum())
+    points = f"{n_differ}/{base.size}"
+    if nonfinite:
+        points += f" ({nonfinite} NaN or inf)"
+
     with np.errstate(invalid="ignore"):
         delta = np.where(differs & both_finite, np.abs(head - base), -1.0)
     flat = int(delta.argmax())
     max_abs = float(delta.flat[flat])
     if max_abs < 0:
-        return VarDiff(name, GROUP_NAN_PATTERN, points)
+        return VarDiff(name, GROUP_NONFINITE, points)
 
     location = format_location(dims, np.unravel_index(flat, delta.shape))
     finite_base = np.isfinite(base)
@@ -118,7 +121,7 @@ def compare_numeric(name: str, dims: tuple, base: np.ndarray, head: np.ndarray) 
     # A base that is zero everywhere (a CDR tracer before its release) has no
     # scale to be relative to: infinite here sorts it first, and it prints n/a.
     rel = max_abs / max_base if max_base > 0 else float("inf")
-    group = GROUP_NAN_PATTERN if one_nan else GROUP_NUMERIC
+    group = GROUP_NONFINITE if nonfinite else GROUP_NUMERIC
     return VarDiff(name, group, points, max_abs, rel, location)
 
 

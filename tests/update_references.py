@@ -67,8 +67,12 @@ def find_computed(root: Path) -> dict[str, Path]:
     return found
 
 
-def _predates_statistics(component: dict) -> bool:
-    """Whether a component is in the old format, a bare hash string per variable."""
+def predates_statistics(component: dict) -> bool:
+    """Whether a component is in the old format, a bare hash string per variable.
+
+    Also used by ``_assertions.py``, so the two agree on which references must be
+    regenerated.
+    """
     return any(not isinstance(entry, dict) for entry in component.values())
 
 
@@ -86,7 +90,7 @@ def describe_changes(old: dict | str, new: dict | str) -> list[str]:
             lines.append(f"{comp}: component added")
         elif old[comp] == new[comp]:
             continue
-        elif _predates_statistics(old[comp]):
+        elif predates_statistics(old[comp]):
             lines.append(f"{comp}: format changed (reference predates per-variable statistics)")
         else:
             o, n = old[comp], new[comp]
