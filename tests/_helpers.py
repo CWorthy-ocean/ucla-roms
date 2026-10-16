@@ -3,9 +3,11 @@ import copy
 import hashlib
 import os
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 import f90nml as nl
+import numpy as np
 import xarray as xr
 
 ROMS_ROOT = Path(os.environ["ROMS_ROOT"])
@@ -166,15 +168,56 @@ def join_output(test_dir: Path, prefix: str) -> Path:
     return test_dir / f"{prefix}.nc"
 
 
-def get_summary_value(test_dir: Path, prefix: str, vars_to_exclude: list = []) -> dict[str, str]:
-    """Join the per-tile output and return ``{variable: SHA-256}`` for its data variables.
+@dataclass(frozen=True)
+class OutputSummary:
+    """A joined output file with the hash and statistics of each of its data variables."""
 
-    One digest per variable, so a hash mismatch names the variable that changed.
+    path: Path
+    variables: dict[str, dict]  # {name: {"sha256": hex, <statistic>: float, ...}}
+
+
+def _statistics(values: np.ndarray) -> dict[str, float]:
+    """Min, max, mean and RMS of the finite values of ``values``, to 10 significant digits.
+
+    Empty for anything that is not an integer or floating-point array (booleans,
+    times, strings) and for an array with no finite value, so no NaN is ever
+    returned. The rounding keeps last-bit differences in the float64 reductions
+    (summation order varies between numpy builds) from showing up as a change.
     """
-    ds = xr.open_dataset(join_output(test_dir, prefix))
-
-    return {
-        name: hashlib.sha256(ds[name].values.tobytes()).hexdigest()
-        for name in sorted(ds.data_vars)  # sort for determinism
-        if name not in vars_to_exclude
+    # Not np.issubdtype(..., np.integer): numpy counts timedelta64 as an integer.
+    if values.dtype.kind not in "iuf":
+        return {}
+    finite = np.asarray(values, dtype=np.float64)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return {}
+    statistics = {
+        "min": finite.min(),
+        "max": finite.max(),
+        "mean": finite.mean(),
+        "rms": np.sqrt(np.mean(finite**2)),
     }
+    return {name: float(f"{value:.10g}") for name, value in statistics.items()}
+
+
+def get_summary_value(test_dir: Path, prefix: str, vars_to_exclude: list = []) -> OutputSummary:
+    """Join the per-tile output and summarize its data variables.
+
+    Each variable gets its SHA-256, so a hash mismatch names the variable that
+    changed, and the statistics of :func:`_statistics` where it has any. The
+    statistics are documentation, so a mismatch says by how much a variable
+    moved; the comparison with a reference stays on the hash.
+    """
+    path = join_output(test_dir, prefix)
+    ds = xr.open_dataset(path)
+
+    variables = {}
+    for name in sorted(ds.data_vars):  # sort for determinism
+        if name in vars_to_exclude:
+            continue
+        values = ds[name].values
+        variables[name] = {
+            "sha256": hashlib.sha256(values.tobytes()).hexdigest(),
+            **_statistics(values),
+        }
+    return OutputSummary(path=path, variables=variables)

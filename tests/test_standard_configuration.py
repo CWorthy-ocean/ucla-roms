@@ -101,5 +101,5 @@ def test_exact_restart(standard_configuration,input_dir,tmp_path):
     run2_val = get_summary_value(test_dir=run2_path,
                                  prefix="roms_rst.20100101001320",
                                  vars_to_exclude=["time_step",])
-    assert (run1_val == run2_val)
+    assert (run1_val.variables == run2_val.variables)
 
