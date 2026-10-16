@@ -380,7 +380,10 @@ wrt_gas_exchange = .false.           ! Write FG_CDR_*_DIC: air-sea CO2 flux into
 ! instantaneous record at its start time and ends them with one at its end
 ! time, so each chunk of a time-chunked chain is self-contained; these bracket
 ! records do not count toward nrpf_cdr_gas. The consumer run must use the same
-! reference_date and start at or after the first record.
+! reference_date and start at or after the first record. Averaged records
+! are built from beta/eta diagnosed from the surface tracers at every step,
+! averaged as the gas exchange flux uses them (1/beta and eta/beta), so a
+! CDR_LITE run forced by them sees the window-mean flux coefficients.
 !----------------------------
 do_cdr_gas_exch_output = .false.     ! Output CDR gas-exchange sensitivities
 wrt_cdr_gas_avg = .true.             ! Write averaged (T) or instantaneous (F)
