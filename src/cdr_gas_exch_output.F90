@@ -51,14 +51,10 @@ module cdr_gas_exch_output
 
   integer(kind=4) :: iPO4, iSiO3
 
-  real(kind=8), allocatable :: ddic_dco2_tmp(:,:)
-  real(kind=8), allocatable :: ddic_dalk_tmp(:,:)
-  real(kind=8), allocatable :: temp_sfc_avg(:,:)
-  real(kind=8), allocatable :: salt_sfc_avg(:,:)
-  real(kind=8), allocatable :: ALK_alt_sfc_avg(:,:)
-  real(kind=8), allocatable :: DIC_alt_sfc_avg(:,:)
-  real(kind=8), allocatable :: PO4_sfc_avg(:,:)
-  real(kind=8), allocatable :: SiO3_sfc_avg(:,:)
+  real(kind=8), allocatable :: ddic_dco2_tmp(:,:)   ! instantaneous beta
+  real(kind=8), allocatable :: ddic_dalk_tmp(:,:)   ! instantaneous eta
+  real(kind=8), allocatable :: ddic_dco2_avg(:,:)   ! running mean of beta
+  real(kind=8), allocatable :: ddic_dalk_avg(:,:)   ! running mean of eta
 
   type CdrGasOutputVariable
     character(len=32)              :: name
@@ -197,18 +193,10 @@ contains
     ddic_dalk_tmp(:,:)=0
 
     if (wrt_cdr_gas_avg) then
-      allocate(temp_sfc_avg(GLOBAL_2D_ARRAY))
-      temp_sfc_avg(:,:)=0
-      allocate(salt_sfc_avg(GLOBAL_2D_ARRAY))
-      salt_sfc_avg(:,:)=0
-      allocate(ALK_alt_sfc_avg(GLOBAL_2D_ARRAY))
-      ALK_alt_sfc_avg(:,:)=0
-      allocate(DIC_alt_sfc_avg(GLOBAL_2D_ARRAY))
-      DIC_alt_sfc_avg(:,:)=0
-      allocate(PO4_sfc_avg(GLOBAL_2D_ARRAY))
-      PO4_sfc_avg(:,:)=0
-      allocate(SiO3_sfc_avg(GLOBAL_2D_ARRAY))
-      SiO3_sfc_avg(:,:)=0
+      allocate(ddic_dco2_avg(GLOBAL_2D_ARRAY))
+      ddic_dco2_avg(:,:)=0
+      allocate(ddic_dalk_avg(GLOBAL_2D_ARRAY))
+      ddic_dalk_avg(:,:)=0
     endif
 
     call define_cdr_gas_output_variables
@@ -224,6 +212,9 @@ contains
   end subroutine init_cdr_gas_exch_output
 
   subroutine calc_average
+    ! Averages beta/eta themselves: they are diagnosed from the instantaneous
+    ! surface tracers every step, so the average is the mean sensitivity over
+    ! the window (not the sensitivity of the mean surface state).
     implicit none
     real :: coef
     if (navg == 0) avg_begin_time = time - dt
@@ -238,49 +229,27 @@ contains
       endif
     endif
 
-    temp_sfc_avg(:,:) = temp_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,itemp)*coef
-    salt_sfc_avg(:,:) = salt_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,isalt)*coef
-    ALK_alt_sfc_avg(:,:) = ALK_alt_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,iALK_alt)*coef
-    DIC_alt_sfc_avg(:,:) = DIC_alt_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,iDIC_alt)*coef
-    PO4_sfc_avg(:,:) = PO4_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,iPO4)*coef
-    SiO3_sfc_avg(:,:) = SiO3_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,iSiO3)*coef
+    call calc_carbonate_sensitivity
+    ddic_dco2_avg(i0:i1,j0:j1) = ddic_dco2_avg(i0:i1,j0:j1)*(1-coef)&
+   &  + ddic_dco2_tmp(i0:i1,j0:j1)*coef
+    ddic_dalk_avg(i0:i1,j0:j1) = ddic_dalk_avg(i0:i1,j0:j1)*(1-coef)&
+   &  + ddic_dalk_tmp(i0:i1,j0:j1)*coef
   end subroutine calc_average
 
-  subroutine calc_carbonate_sensitivity(use_avg)
-    ! Surface beta/eta once per write (not every timestep).
-    ! If use_avg, diagnose from time-averaged surface tracers; else instantaneous.
+  subroutine calc_carbonate_sensitivity
+    ! Instantaneous surface beta/eta into ddic_dco2_tmp/ddic_dalk_tmp. Called
+    ! every step when averaging (calc_average), else once per write.
     implicit none
-    logical, intent(in) :: use_avg
-
-    if (use_avg) then
-      call compute_surface_beta_eta(&
-     &  temp_sfc_avg(i0:i1,j0:j1),&
-     &  salt_sfc_avg(i0:i1,j0:j1),&
-     &  ALK_alt_sfc_avg(i0:i1,j0:j1),&
-     &  DIC_alt_sfc_avg(i0:i1,j0:j1),&
-     &  PO4_sfc_avg(i0:i1,j0:j1),&
-     &  SiO3_sfc_avg(i0:i1,j0:j1),&
-     &  rmask(i0:i1,j0:j1),&
-     &  ddic_dco2_tmp(i0:i1,j0:j1),&
-     &  ddic_dalk_tmp(i0:i1,j0:j1))
-    else
-      call compute_surface_beta_eta(&
-     &  t(i0:i1,j0:j1,nz,nnew,itemp),&
-     &  t(i0:i1,j0:j1,nz,nnew,isalt),&
-     &  t(i0:i1,j0:j1,nz,nnew,iALK_alt),&
-     &  t(i0:i1,j0:j1,nz,nnew,iDIC_alt),&
-     &  t(i0:i1,j0:j1,nz,nnew,iPO4),&
-     &  t(i0:i1,j0:j1,nz,nnew,iSiO3),&
-     &  rmask(i0:i1,j0:j1),&
-     &  ddic_dco2_tmp(i0:i1,j0:j1),&
-     &  ddic_dalk_tmp(i0:i1,j0:j1))
-    endif
+    call compute_surface_beta_eta(&
+   &  t(i0:i1,j0:j1,nz,nnew,itemp),&
+   &  t(i0:i1,j0:j1,nz,nnew,isalt),&
+   &  t(i0:i1,j0:j1,nz,nnew,iALK_alt),&
+   &  t(i0:i1,j0:j1,nz,nnew,iDIC_alt),&
+   &  t(i0:i1,j0:j1,nz,nnew,iPO4),&
+   &  t(i0:i1,j0:j1,nz,nnew,iSiO3),&
+   &  rmask(i0:i1,j0:j1),&
+   &  ddic_dco2_tmp(i0:i1,j0:j1),&
+   &  ddic_dalk_tmp(i0:i1,j0:j1))
   end subroutine calc_carbonate_sensitivity
 
   subroutine create_cdr_gas_output_variables(ncid)
@@ -384,17 +353,16 @@ contains
     endif
     call MPI_Barrier(ocean_grid_comm, ierr)
     ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
-    call calc_carbonate_sensitivity(use_avg)
     pio_gtype = '2Drw'
-    call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
-    call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
     if (use_avg) then
-      temp_sfc_avg(:,:)=0
-      salt_sfc_avg(:,:)=0
-      ALK_alt_sfc_avg(:,:)=0
-      DIC_alt_sfc_avg(:,:)=0
-      PO4_sfc_avg(:,:)=0
-      SiO3_sfc_avg(:,:)=0
+      call ncwrite(ncid,'ddic_dco2',ddic_dco2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      call ncwrite(ncid,'ddic_dalk',ddic_dalk_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+      ddic_dco2_avg(:,:)=0
+      ddic_dalk_avg(:,:)=0
+    else
+      call calc_carbonate_sensitivity
+      call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
+      call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
     endif
     call PIO_closefile(pio_FileDesc)
     if (mynode == 0) then
@@ -424,21 +392,16 @@ contains
     call ncwrite(ncid,'ddic_dco2_time',(/forcing_time/),(/record/))
     call ncwrite(ncid,'ddic_dalk_time',(/forcing_time/),(/record/))
     if (wrt_cdr_gas_avg) then
-      call calc_carbonate_sensitivity(use_avg)
       call ncwrite(ncid,'avg_begin_time',(/begin_time/),(/record/))
       call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
-      call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/))
-      call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/))
-      if (use_avg) then
-        temp_sfc_avg(:,:)=0
-        salt_sfc_avg(:,:)=0
-        ALK_alt_sfc_avg(:,:)=0
-        DIC_alt_sfc_avg(:,:)=0
-        PO4_sfc_avg(:,:)=0
-        SiO3_sfc_avg(:,:)=0
-      endif
+    endif
+    if (use_avg) then
+      call ncwrite(ncid,'ddic_dco2',ddic_dco2_avg(i0:i1,j0:j1),(/1,1,record/))
+      call ncwrite(ncid,'ddic_dalk',ddic_dalk_avg(i0:i1,j0:j1),(/1,1,record/))
+      ddic_dco2_avg(:,:)=0
+      ddic_dalk_avg(:,:)=0
     else
-      call calc_carbonate_sensitivity(.false.)
+      call calc_carbonate_sensitivity
       call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/))
       call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/))
     endif

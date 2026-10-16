@@ -73,8 +73,8 @@ module carbonate_sensitivity
   real(kind=8), parameter :: xacc = 1.0e-10_8
   integer(kind=4), parameter :: maxit = 100
   ! The bracket is wide enough for OAE injection cells, where ALK can exceed
-  ! 2*DIC and pH rises above 10.  Cost is irrelevant: this runs once per
-  ! output write on surface cells only.
+  ! 2*DIC and pH rises above 10.  It runs on surface cells only, every step
+  ! when cdr_gas_exch_output averages or cdr_online_carbonate_sensitivity is set.
   real(kind=8), parameter :: ph_lo = 2.0_8    ! bracket, low-pH end
   real(kind=8), parameter :: ph_hi = 13.0_8   ! bracket, high-pH end
 
