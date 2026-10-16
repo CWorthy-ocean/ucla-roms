@@ -14,6 +14,8 @@ Breaking Changes
 - Depth-profile CDR forcing (``cdr_forcing_depth_profiles``) now injects exactly the flux in the file (see Bug Fixes). Existing depth-profile runs will inject different amounts, and the ``test_dp`` reference hashes change. I'll update them with ``tests/update_references.py`` from this PR's CI run. (`#390 <https://github.com/CWorthy-ocean/ucla-roms/pull/390>`_)
 - A nonzero ``cdr_nz_chd`` that does not match the forcing file's ``s_rho`` now aborts at startup. ``cdr_nz_chd = 0`` takes the level count from the file, and the reference ``namelist.nml`` now defaults to 0. (`#390 <https://github.com/CWorthy-ocean/ucla-roms/pull/390>`_)
 - A depth-profile file whose tracer axis has more than two columns must provide ``cdr_trc_name`` as fixed-length characters (NC_CHAR, dims ``(tracer, nchar)``); otherwise the run aborts at startup. Two-column files without names are read as before. (`#390 <https://github.com/CWorthy-ocean/ucla-roms/pull/390>`_)
+- Averaged ``ddic_dco2``/``ddic_dalk`` values change; ``_cdrgas`` files and CDR_LITE runs forced by them do not reproduce earlier output bit for bit. On the CCS parent (200×300×50, daily windows, 5 days) the domain-mean uptake coefficient ⟨1/beta⟩ moves by less than 0.02%; cellwise, beta differs from the previous method by up to 38% and eta by up to 4.7% (rms 0.27% and 0.03%), confined to river-mouth cells where the surface state swings strongly within a day. Physics, BGC and all other output are bit-identical. (`#393 <https://github.com/CWorthy-ocean/ucla-roms/pull/393>`_)
+- ``tests/test_cdr.py`` reference hashes change for ``cdr_gas_exch/cdrgas/ddic_dco2``, ``ddic_dalk`` and for the DIC-side ``cdr_lite_parm/cdrtrc/*DIC1*`` keys (the CDR_LITE run forced by those files). All physics, BGC and ALK-tracer hashes are unchanged. Updated with ``tests/update_references.py --run <run-id>`` after the first CI run. (`#393 <https://github.com/CWorthy-ocean/ucla-roms/pull/393>`_)
 
 New Features
 ~~~~~~~~~~~~
@@ -59,6 +61,11 @@ Improvements
 - ``--results-out`` writes the computed results JSON at session end (default ``tests/results/computed_<environ>.json``), replacing copy-from-log reference updates. (`#384 <https://github.com/CWorthy-ocean/ucla-roms/pull/384>`_)
 - At startup, rank 0 reports which depth-profile columns are applied and which are skipped. (`#390 <https://github.com/CWorthy-ocean/ucla-roms/pull/390>`_)
 - Malformed depth-profile files fail at startup with specific messages: missing names, NC_STRING names, a name/column count mismatch, duplicate names, or names targeting temperature/salinity. (`#390 <https://github.com/CWorthy-ocean/ucla-roms/pull/390>`_)
+- Averaged records are defined as the window mean of the CDR_LITE flux coefficients: ``ddic_dco2 = 1/<1/beta>`` and ``ddic_dalk = <eta/beta>/<1/beta>``, matching the flux ``-(k/beta)*(DIC' - eta*ALK')`` in ``tracers.F90``. An arithmetic mean of beta would bias the uptake coefficient low (0.013–0.032% in the domain mean on the CCS parent; largest where beta varies most). (`#393 <https://github.com/CWorthy-ocean/ucla-roms/pull/393>`_)
+- Steps where the solve fails at a cell (land, below the salinity/ALK/DIC floors, no convergence) are left out of that cell's average, counted per cell. A cell with no valid step in a window is written as 0 (missing, which CDR_LITE skips) rather than a mean pulled toward zero by failed steps. (`#393 <https://github.com/CWorthy-ocean/ucla-roms/pull/393>`_)
+- The running-mean weight was single precision; the averages are now double-precision sums. (`#393 <https://github.com/CWorthy-ocean/ucla-roms/pull/393>`_)
+- The six per-field averaging arrays are replaced by two sums and a count, allocated over the interior only. (`#393 <https://github.com/CWorthy-ocean/ucla-roms/pull/393>`_)
+- Cost: the per-step solve covers surface cells only. On the CCS parent (100 ranks, dt = 600 s) it adds ~1 ms per step on the slowest rank, ~0.5% of a step and below run-to-run noise in total walltime; ~1.7 µs per surface cell. (`#393 <https://github.com/CWorthy-ocean/ucla-roms/pull/393>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -78,3 +85,4 @@ Miscellaneous
 - Companion change in C-Star: its ``upscaler`` app writes the same format, with ``cdr_trc_name`` as NC_CHAR. (`#390 <https://github.com/CWorthy-ocean/ucla-roms/pull/390>`_)
 - ``docs/model_settings/runtime_settings.md``: documents both settings in the ``MARBL_BIOGEOCHEMISTRY_SETTINGS`` table. (`#391 <https://github.com/CWorthy-ocean/ucla-roms/pull/391>`_)
 - ``src/namelist.nml``: adds both settings, with defaults and comments, to the reference namelist. (`#391 <https://github.com/CWorthy-ocean/ucla-roms/pull/391>`_)
+- ``long_name`` attributes of averaged ``ddic_dco2``/``ddic_dalk`` state the definition; the ``CDR_GAS_EXCH_OUTPUT_SETTINGS`` comment in ``namelist.nml`` describes the averaging; the ``carbonate_sensitivity.F90`` comment no longer claims the solver runs only at output time. (`#393 <https://github.com/CWorthy-ocean/ucla-roms/pull/393>`_)
