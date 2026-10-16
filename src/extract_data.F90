@@ -977,7 +977,9 @@ contains
 
 !     rho variables --------------------------------------------------------
 
-          if (remap) then
+          ! np > 0: with PARALLEL_IO every rank comes here, and the arrays
+          ! below are only allocated where the object has points
+          if (remap .and. obj(i)%np > 0) then
 ! Get thickness and depth at interpolated location
             call interpolate(Hz(:,:,:),obj(i)%Hz_par,coef,ip,jp)
             obj(i)%h_par(:) = 0
