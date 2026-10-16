@@ -418,9 +418,9 @@
     "cdrgas": {
       "avg_begin_time": "4f994c47183646af5978c79f234898993b5aba71f14afe1294ea654f0feaa7c5",
       "avg_end_time": "f5f061e186ba0b83c8c19c767a448f1c043402755dc010897016d3fac793b53c",
-      "ddic_dalk": "7dab27d556e7571c3c024c55afb75122a06c9b8141014b98444587dbcf2cbc0e",
+      "ddic_dalk": "90720c1b0f4fab4b811dff048518e55ae395075fe643db514b5cee01c980908b",
       "ddic_dalk_time": "3d8885b438cd396ef93025148d1840da75c8e33bf0886bbbc291f81690c276eb",
-      "ddic_dco2": "46ec7a2f508765ca510188a45c44345191b81f2d765df38e714d4bd8fef06bf5",
+      "ddic_dco2": "7cb07ac6cb33812d9958e2f2b46863dda37c36dbcda052285cecd187ed8d0250",
       "ddic_dco2_time": "3d8885b438cd396ef93025148d1840da75c8e33bf0886bbbc291f81690c276eb",
       "ocean_time": "f5f061e186ba0b83c8c19c767a448f1c043402755dc010897016d3fac793b53c"
     }
@@ -446,12 +446,12 @@
     "cdrtrc": {
       "CDR_OAE_ALK1": "c19e96a3c6f9652832b630a27821ed3124a6058d2c351a3203215e94e10fa9e3",
       "CDR_OAE_ALK1_source": "94c11cb1463895da1498d520bf7d1d35ae288df0316e6f5bba43d9db26097885",
-      "CDR_OAE_DIC1": "33a303c3d9640df9628d8907754d4c4d1470e54c4eebf24270f65ba0ac0665dc",
-      "FG_CDR_OAE_DIC1": "f6ea83d6d7e0ca2a810855535c3cf056b3cd589eeaf0abf6902ebedf29380b9e",
+      "CDR_OAE_DIC1": "0f661f0fbfe265ad21f552a15c4e1350ed629d54b9a6db94f85bbf0f98c7e46f",
+      "FG_CDR_OAE_DIC1": "d9acc946f42cc5272038dc690c7d672233fb2517b66b6bb9bf183acfbfdaf9e0",
       "hCDR_OAE_ALK1": "d4af75498f7c7b17d043a781749392260ceca1a348937c8b1dad388ee0a00f09",
-      "hCDR_OAE_DIC1": "17810d05281e7193e377dc439effaba5f5a5151503178a1d551442de733dcb6c",
+      "hCDR_OAE_DIC1": "81c785bbb41f073689e87d4c8d32a2b425cb7bc1d111e713c3fcfd24c0e2bfa5",
       "int_z_CDR_OAE_ALK1": "ce6486ca7ffddefbab3895d9a0902c328c4f25eb373489117848a8226b9ffa10",
-      "int_z_CDR_OAE_DIC1": "65068985607e8caca736a02ded8890b9f9105b14c7d14c80d5ea5e4ec99933b5",
+      "int_z_CDR_OAE_DIC1": "dd35ae32836df86c80d6d9a37660fef07ac9b673abd9d8711b7f777bb66cac19",
       "ocean_time": "1626f8c8508e980142df0c657fc28d62d140fb2fb83b29f993fb83fdeec141bb"
     }
   }
