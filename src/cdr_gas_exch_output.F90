@@ -51,14 +51,13 @@ module cdr_gas_exch_output
 
   integer(kind=4) :: iPO4, iSiO3
 
-  real(kind=8), allocatable :: ddic_dco2_tmp(:,:)
-  real(kind=8), allocatable :: ddic_dalk_tmp(:,:)
-  real(kind=8), allocatable :: temp_sfc_avg(:,:)
-  real(kind=8), allocatable :: salt_sfc_avg(:,:)
-  real(kind=8), allocatable :: ALK_alt_sfc_avg(:,:)
-  real(kind=8), allocatable :: DIC_alt_sfc_avg(:,:)
-  real(kind=8), allocatable :: PO4_sfc_avg(:,:)
-  real(kind=8), allocatable :: SiO3_sfc_avg(:,:)
+  ! Interior (i0:i1,j0:j1) only: these are never exchanged.
+  real(kind=8), allocatable :: ddic_dco2_tmp(:,:)   ! beta to write
+  real(kind=8), allocatable :: ddic_dalk_tmp(:,:)   ! eta to write
+  ! Averaging state, accumulated over the steps where the solve succeeded:
+  real(kind=8), allocatable :: sum_inv_beta(:,:)    ! sum of 1/beta
+  real(kind=8), allocatable :: sum_eta_inv_beta(:,:)! sum of eta/beta
+  integer(kind=4), allocatable :: navg_ok(:,:)      ! number of valid steps
 
   type CdrGasOutputVariable
     character(len=32)              :: name
@@ -122,14 +121,30 @@ contains
     &(/dn_tm/), (/0/),&
     &'Time at end of averaging period','seconds')
 
-    call add_cdr_gas_output_variable(cdr_gas_varlist, 'ddic_dco2',&
-    &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
-    &'surface carbonate sensitivity beta = dDIC/dCO2 (ALT_CO2)',&
-    &'nondimensional')
-    call add_cdr_gas_output_variable(cdr_gas_varlist, 'ddic_dalk',&
-    &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
-    &'surface carbonate sensitivity eta = dDIC/dALK (ALT_CO2)',&
-    &'nondimensional')
+    if (wrt_cdr_gas_avg) then
+      ! Averaged records reproduce the window-mean gas exchange coefficients
+      ! 1/beta and eta/beta (see calc_average); bracket records are
+      ! instantaneous.
+      call add_cdr_gas_output_variable(cdr_gas_varlist, 'ddic_dco2',&
+      &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
+      &'surface carbonate sensitivity beta = dDIC/dCO2 (ALT_CO2); '//&
+      &'averaged records: 1/<1/beta> over the window',&
+      &'nondimensional')
+      call add_cdr_gas_output_variable(cdr_gas_varlist, 'ddic_dalk',&
+      &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
+      &'surface carbonate sensitivity eta = dDIC/dALK (ALT_CO2); '//&
+      &'averaged records: <eta/beta>/<1/beta> over the window',&
+      &'nondimensional')
+    else
+      call add_cdr_gas_output_variable(cdr_gas_varlist, 'ddic_dco2',&
+      &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
+      &'surface carbonate sensitivity beta = dDIC/dCO2 (ALT_CO2)',&
+      &'nondimensional')
+      call add_cdr_gas_output_variable(cdr_gas_varlist, 'ddic_dalk',&
+      &(/dn_xr,dn_yr,dn_tm/), (/xi_rho,eta_rho,0/),&
+      &'surface carbonate sensitivity eta = dDIC/dALK (ALT_CO2)',&
+      &'nondimensional')
+    endif
 
     ! Record times read by CDR_LITE forcing (see surf_flux.F90).
     call add_cdr_gas_output_variable(cdr_gas_varlist, 'ddic_dco2_time',&
@@ -191,24 +206,18 @@ contains
     endif
     call error_log%abort_check()
 
-    allocate(ddic_dco2_tmp(GLOBAL_2D_ARRAY))
+    allocate(ddic_dco2_tmp(i0:i1,j0:j1))
     ddic_dco2_tmp(:,:)=0
-    allocate(ddic_dalk_tmp(GLOBAL_2D_ARRAY))
+    allocate(ddic_dalk_tmp(i0:i1,j0:j1))
     ddic_dalk_tmp(:,:)=0
 
     if (wrt_cdr_gas_avg) then
-      allocate(temp_sfc_avg(GLOBAL_2D_ARRAY))
-      temp_sfc_avg(:,:)=0
-      allocate(salt_sfc_avg(GLOBAL_2D_ARRAY))
-      salt_sfc_avg(:,:)=0
-      allocate(ALK_alt_sfc_avg(GLOBAL_2D_ARRAY))
-      ALK_alt_sfc_avg(:,:)=0
-      allocate(DIC_alt_sfc_avg(GLOBAL_2D_ARRAY))
-      DIC_alt_sfc_avg(:,:)=0
-      allocate(PO4_sfc_avg(GLOBAL_2D_ARRAY))
-      PO4_sfc_avg(:,:)=0
-      allocate(SiO3_sfc_avg(GLOBAL_2D_ARRAY))
-      SiO3_sfc_avg(:,:)=0
+      allocate(sum_inv_beta(i0:i1,j0:j1))
+      sum_inv_beta(:,:)=0
+      allocate(sum_eta_inv_beta(i0:i1,j0:j1))
+      sum_eta_inv_beta(:,:)=0
+      allocate(navg_ok(i0:i1,j0:j1))
+      navg_ok(:,:)=0
     endif
 
     call define_cdr_gas_output_variables
@@ -224,12 +233,19 @@ contains
   end subroutine init_cdr_gas_exch_output
 
   subroutine calc_average
+    ! Diagnoses beta/eta from the instantaneous surface tracers every step and
+    ! accumulates 1/beta and eta/beta, the coefficients of the CDR_LITE gas
+    ! exchange flux -(k/beta)*(DIC' - eta*ALK') (tracers.F90). The written
+    ! record (finish_average) then reproduces the window-mean flux
+    ! coefficients exactly: beta = 1/<1/beta>, eta = <eta/beta>/<1/beta>.
+    ! Steps where the solve fails at a cell (land, below the salinity/ALK/DIC
+    ! floors, no convergence: beta = 0) are left out of that cell's average
+    ! rather than pulling it toward zero.
     implicit none
-    real :: coef
+    integer(kind=4) :: i, j
     if (navg == 0) avg_begin_time = time - dt
     navg = navg+1
-    coef = 1./navg
-    if (coef==1 .and. mynode==0) then
+    if (navg==1 .and. mynode==0) then
       if (cdr_gas_monthly_averages) then
         print *, 'cdr_gas :: started monthly averaging.'
       else
@@ -238,49 +254,54 @@ contains
       endif
     endif
 
-    temp_sfc_avg(:,:) = temp_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,itemp)*coef
-    salt_sfc_avg(:,:) = salt_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,isalt)*coef
-    ALK_alt_sfc_avg(:,:) = ALK_alt_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,iALK_alt)*coef
-    DIC_alt_sfc_avg(:,:) = DIC_alt_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,iDIC_alt)*coef
-    PO4_sfc_avg(:,:) = PO4_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,iPO4)*coef
-    SiO3_sfc_avg(:,:) = SiO3_sfc_avg(:,:)*(1-coef)&
-   &  + t(:,:,nz,nnew,iSiO3)*coef
+    call calc_carbonate_sensitivity
+    do j=j0,j1
+      do i=i0,i1
+        if (ddic_dco2_tmp(i,j) > 0) then
+          sum_inv_beta(i,j) = sum_inv_beta(i,j) + 1/ddic_dco2_tmp(i,j)
+          sum_eta_inv_beta(i,j) = sum_eta_inv_beta(i,j)&
+     &      + ddic_dalk_tmp(i,j)/ddic_dco2_tmp(i,j)
+          navg_ok(i,j) = navg_ok(i,j) + 1
+        endif
+      enddo
+    enddo
   end subroutine calc_average
 
-  subroutine calc_carbonate_sensitivity(use_avg)
-    ! Surface beta/eta once per write (not every timestep).
-    ! If use_avg, diagnose from time-averaged surface tracers; else instantaneous.
+  subroutine finish_average
+    ! Window-mean beta/eta into ddic_dco2_tmp/ddic_dalk_tmp (see calc_average;
+    ! 0 where no step of the window had a valid solve), then the averaging
+    ! state is reset for the next window.
     implicit none
-    logical, intent(in) :: use_avg
+    integer(kind=4) :: i, j
+    do j=j0,j1
+      do i=i0,i1
+        if (navg_ok(i,j) > 0) then
+          ddic_dco2_tmp(i,j) = navg_ok(i,j)/sum_inv_beta(i,j)
+          ddic_dalk_tmp(i,j) = sum_eta_inv_beta(i,j)/sum_inv_beta(i,j)
+        else
+          ddic_dco2_tmp(i,j) = 0
+          ddic_dalk_tmp(i,j) = 0
+        endif
+      enddo
+    enddo
+    sum_inv_beta(:,:) = 0
+    sum_eta_inv_beta(:,:) = 0
+    navg_ok(:,:) = 0
+  end subroutine finish_average
 
-    if (use_avg) then
-      call compute_surface_beta_eta(&
-     &  temp_sfc_avg(i0:i1,j0:j1),&
-     &  salt_sfc_avg(i0:i1,j0:j1),&
-     &  ALK_alt_sfc_avg(i0:i1,j0:j1),&
-     &  DIC_alt_sfc_avg(i0:i1,j0:j1),&
-     &  PO4_sfc_avg(i0:i1,j0:j1),&
-     &  SiO3_sfc_avg(i0:i1,j0:j1),&
-     &  rmask(i0:i1,j0:j1),&
-     &  ddic_dco2_tmp(i0:i1,j0:j1),&
-     &  ddic_dalk_tmp(i0:i1,j0:j1))
-    else
-      call compute_surface_beta_eta(&
-     &  t(i0:i1,j0:j1,nz,nnew,itemp),&
-     &  t(i0:i1,j0:j1,nz,nnew,isalt),&
-     &  t(i0:i1,j0:j1,nz,nnew,iALK_alt),&
-     &  t(i0:i1,j0:j1,nz,nnew,iDIC_alt),&
-     &  t(i0:i1,j0:j1,nz,nnew,iPO4),&
-     &  t(i0:i1,j0:j1,nz,nnew,iSiO3),&
-     &  rmask(i0:i1,j0:j1),&
-     &  ddic_dco2_tmp(i0:i1,j0:j1),&
-     &  ddic_dalk_tmp(i0:i1,j0:j1))
-    endif
+  subroutine calc_carbonate_sensitivity
+    ! Instantaneous surface beta/eta into ddic_dco2_tmp/ddic_dalk_tmp. Called
+    ! every step when averaging (calc_average), else once per write.
+    implicit none
+    call compute_surface_beta_eta(&
+   &  t(i0:i1,j0:j1,nz,nnew,itemp),&
+   &  t(i0:i1,j0:j1,nz,nnew,isalt),&
+   &  t(i0:i1,j0:j1,nz,nnew,iALK_alt),&
+   &  t(i0:i1,j0:j1,nz,nnew,iDIC_alt),&
+   &  t(i0:i1,j0:j1,nz,nnew,iPO4),&
+   &  t(i0:i1,j0:j1,nz,nnew,iSiO3),&
+   &  rmask(i0:i1,j0:j1),&
+   &  ddic_dco2_tmp, ddic_dalk_tmp)
   end subroutine calc_carbonate_sensitivity
 
   subroutine create_cdr_gas_output_variables(ncid)
@@ -384,18 +405,14 @@ contains
     endif
     call MPI_Barrier(ocean_grid_comm, ierr)
     ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), PIO_write)
-    call calc_carbonate_sensitivity(use_avg)
     pio_gtype = '2Drw'
-    call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
-    call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/),.true.)
     if (use_avg) then
-      temp_sfc_avg(:,:)=0
-      salt_sfc_avg(:,:)=0
-      ALK_alt_sfc_avg(:,:)=0
-      DIC_alt_sfc_avg(:,:)=0
-      PO4_sfc_avg(:,:)=0
-      SiO3_sfc_avg(:,:)=0
+      call finish_average
+    else
+      call calc_carbonate_sensitivity
     endif
+    call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp,(/1,1,record/),.true.)
+    call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp,(/1,1,record/),.true.)
     call PIO_closefile(pio_FileDesc)
     if (mynode == 0) then
       write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4)')&
@@ -424,24 +441,16 @@ contains
     call ncwrite(ncid,'ddic_dco2_time',(/forcing_time/),(/record/))
     call ncwrite(ncid,'ddic_dalk_time',(/forcing_time/),(/record/))
     if (wrt_cdr_gas_avg) then
-      call calc_carbonate_sensitivity(use_avg)
       call ncwrite(ncid,'avg_begin_time',(/begin_time/),(/record/))
       call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
-      call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/))
-      call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/))
-      if (use_avg) then
-        temp_sfc_avg(:,:)=0
-        salt_sfc_avg(:,:)=0
-        ALK_alt_sfc_avg(:,:)=0
-        DIC_alt_sfc_avg(:,:)=0
-        PO4_sfc_avg(:,:)=0
-        SiO3_sfc_avg(:,:)=0
-      endif
-    else
-      call calc_carbonate_sensitivity(.false.)
-      call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp(i0:i1,j0:j1),(/1,1,record/))
-      call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp(i0:i1,j0:j1),(/1,1,record/))
     endif
+    if (use_avg) then
+      call finish_average
+    else
+      call calc_carbonate_sensitivity
+    endif
+    call ncwrite(ncid,'ddic_dco2',ddic_dco2_tmp,(/1,1,record/))
+    call ncwrite(ncid,'ddic_dalk',ddic_dalk_tmp,(/1,1,record/))
     ierr=nf90_close(ncid)
     if (mynode == 0) then
       write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4)')&
