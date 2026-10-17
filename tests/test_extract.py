@@ -56,6 +56,13 @@ CHILDREN = {
 
 OUTPUT_PERIOD = 200  # s: 4 records over the 800 s run, all in one file
 
+# By default each rank prints its own errors and calls MPI_Abort (error_handling_mod,
+# gather_errors_on_main_rank = .false.), so one rank's abort can take another's
+# message with it: once, on gnu/MPICH, a rejected PARALLEL_IO run stopped with no
+# message at all. A rejected setting must stop ROMS on every attempt and name
+# itself on at least one.
+ABORT_ATTEMPTS = 5
+
 
 @pytest.fixture(scope="module")
 def nesting_files(tmp_path_factory) -> dict[str, Path]:
@@ -207,6 +214,10 @@ def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nes
         run_dir = tmp_path / case
         run_dir.mkdir()
         nml = _nml(conf, input_dir, pio_input_dir, children)
-        with pytest.raises(subprocess.CalledProcessError) as excinfo:
-            conf.run(nml, cwd=run_dir, capture_output=True)
-        assert _squeezed(message) in _squeezed(excinfo.value.output), case
+        for _ in range(ABORT_ATTEMPTS):
+            with pytest.raises(subprocess.CalledProcessError) as excinfo:
+                conf.run(nml, cwd=run_dir, capture_output=True)
+            if _squeezed(message) in _squeezed(excinfo.value.output):
+                break
+        else:
+            pytest.fail(f"{case}: no run of {ABORT_ATTEMPTS} printed {message!r}")
