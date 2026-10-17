@@ -13,6 +13,7 @@ import xarray as xr
 from . import _assertions
 from ._assertions import computed_results, tolerated_mismatches
 from ._roms_input_file_generation import create_roms_inputs
+from .update_references import dump_references
 
 
 def pytest_addoption(parser):
@@ -219,7 +220,9 @@ def pytest_sessionfinish(session, exitstatus):
     inputs_out = results_out.parent / f"input_hashes_{current_environ}.json"
 
     results_out.parent.mkdir(parents=True, exist_ok=True)
-    results_out.write_text(json.dumps(computed_results, indent=2) + "\n")
+    # One line per variable, as in the reference files; with the statistics,
+    # indent=2 would spread each variable over seven lines here and in the log.
+    results_out.write_text(dump_references(computed_results))
 
     # Write, report and announce the sentinel together so the three cannot
     # disagree about whether it exists.
@@ -230,5 +233,15 @@ def pytest_sessionfinish(session, exitstatus):
         reporter.write_line(f"wrote {inputs_out}")
 
     reporter.write_sep("=", "computed results (to update the references if you understand the reason for - and expect - this discrepancy, run tests/update_references.py; see tests/README.md)")
-    reporter.write_line(json.dumps(computed_results, indent=2))
+    reporter.write_line(dump_references(computed_results).rstrip())
     reporter.write_line(f"wrote {results_out}")
+
+    # CI reruns the suite on the base commit and compares these files with
+    # the base run's (tests/compare_outputs.py). The file describes this
+    # session only, so one left by an earlier session is removed.
+    mismatches_out = results_out.parent / f"mismatches_{current_environ}.json"
+    if _assertions.mismatched_outputs:
+        mismatches_out.write_text(json.dumps(_assertions.mismatched_outputs, indent=2) + "\n")
+        reporter.write_line(f"wrote {mismatches_out}")
+    else:
+        mismatches_out.unlink(missing_ok=True)
