@@ -201,14 +201,19 @@ def _statistics(values: np.ndarray) -> dict[str, float]:
 
 
 def get_summary_value(test_dir: Path, prefix: str, vars_to_exclude: list = []) -> OutputSummary:
-    """Join the per-tile output and summarize its data variables.
+    """Join the per-tile output and summarize its data variables (see :func:`summarize_output`)."""
+    return summarize_output(join_output(test_dir, prefix), vars_to_exclude)
 
-    Each variable gets its SHA-256, so a hash mismatch names the variable that
-    changed, and the statistics of :func:`_statistics` where it has any. The
-    statistics are documentation, so a mismatch says by how much a variable
-    moved; the comparison with a reference stays on the hash.
+
+def summarize_output(path: Path, vars_to_exclude: list = []) -> OutputSummary:
+    """Summarize the data variables of a joined output file.
+
+    For files that need no joining, such as PARALLEL_IO output. Each variable
+    gets its SHA-256, so a hash mismatch names the variable that changed, and
+    the statistics of :func:`_statistics` where it has any. The statistics are
+    documentation, so a mismatch says by how much a variable moved; the
+    comparison with a reference stays on the hash.
     """
-    path = join_output(test_dir, prefix)
     ds = xr.open_dataset(path)
 
     variables = {}

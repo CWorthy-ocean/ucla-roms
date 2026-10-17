@@ -17,7 +17,7 @@ module pio_roms
   use pio_nf, only : PIO_inq_varid, PIO_inq_dimid, PIO_strerror
   use pionfatt_mod, only : put_att_desc_text
   use mpi_f08, only: mpi_character, mpi_wtime
-  use param, only: LLm, MMm, nz, ocean_grid_comm, nt, mynode
+  use param, only: LLm, MMm, nz, ocean_grid_comm, nt, mynode, max_extract_chd
   use timers, only: tstart
   use namelist_open_mod, only: open_namelist_file
   use error_handling_mod, only: error_log
@@ -549,33 +549,36 @@ module pio_roms
   type(io_desc_t),public     :: pio_desc_2Cu_w
   type(io_desc_t),public     :: pio_desc_2Cv_w
 
-  type(io_desc_t),public     :: pio_desc_1Chdnr_w
-  type(io_desc_t),public     :: pio_desc_1Chdnu_w
-  type(io_desc_t),public     :: pio_desc_1Chdnv_w
-  type(io_desc_t),public     :: pio_desc_2Chdnr_w
-  type(io_desc_t),public     :: pio_desc_2Chdnu_w
-  type(io_desc_t),public     :: pio_desc_2Chdnv_w
+  ! extract_data: one set of decompositions per child domain. pio_ncwrite1/2
+  ! write the '[nsew][12][ruv]c' gtypes with child pio_extract_child's.
+  integer(kind=4),public     :: pio_extract_child = 1
+  type(io_desc_t),public     :: pio_desc_1Chdnr_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_1Chdnu_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_1Chdnv_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdnr_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdnu_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdnv_w(max_extract_chd)
 
-  type(io_desc_t),public     :: pio_desc_1Chdsr_w
-  type(io_desc_t),public     :: pio_desc_1Chdsu_w
-  type(io_desc_t),public     :: pio_desc_1Chdsv_w
-  type(io_desc_t),public     :: pio_desc_2Chdsr_w
-  type(io_desc_t),public     :: pio_desc_2Chdsu_w
-  type(io_desc_t),public     :: pio_desc_2Chdsv_w
+  type(io_desc_t),public     :: pio_desc_1Chdsr_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_1Chdsu_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_1Chdsv_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdsr_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdsu_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdsv_w(max_extract_chd)
 
-  type(io_desc_t),public     :: pio_desc_1Chder_w
-  type(io_desc_t),public     :: pio_desc_1Chdeu_w
-  type(io_desc_t),public     :: pio_desc_1Chdev_w
-  type(io_desc_t),public     :: pio_desc_2Chder_w
-  type(io_desc_t),public     :: pio_desc_2Chdeu_w
-  type(io_desc_t),public     :: pio_desc_2Chdev_w
+  type(io_desc_t),public     :: pio_desc_1Chder_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_1Chdeu_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_1Chdev_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chder_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdeu_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdev_w(max_extract_chd)
 
-  type(io_desc_t),public     :: pio_desc_1Chdwr_w
-  type(io_desc_t),public     :: pio_desc_1Chdwu_w
-  type(io_desc_t),public     :: pio_desc_1Chdwv_w
-  type(io_desc_t),public     :: pio_desc_2Chdwr_w
-  type(io_desc_t),public     :: pio_desc_2Chdwu_w
-  type(io_desc_t),public     :: pio_desc_2Chdwv_w
+  type(io_desc_t),public     :: pio_desc_1Chdwr_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_1Chdwu_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_1Chdwv_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdwr_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdwu_w(max_extract_chd)
+  type(io_desc_t),public     :: pio_desc_2Chdwv_w(max_extract_chd)
 
   integer(kind=4), public :: pio_xi_rho, pio_eta_rho
   integer(kind=4), public :: pio_xi_u, pio_eta_v
@@ -1363,7 +1366,7 @@ contains
 
   end subroutine pio_initialize_z
 ! ----------------------------------------------------------------------
-  subroutine pio_initialize_extract(start, np, dsize, LLm_chd, MMm_chd, N_chd, bnd, stag)
+  subroutine pio_initialize_extract(start, np, dsize, LLm_chd, MMm_chd, N_chd, bnd, stag, ichd)
 
   implicit none
 
@@ -1376,6 +1379,7 @@ contains
   integer(kind=4), intent(in) :: N_chd
   character(len=20), intent(in) :: bnd
   character(len=1), intent(in) :: stag
+  integer(kind=4), intent(in) :: ichd   ! child domain these decompositions are for
   integer(kind=4) :: ierr
 
   pio_dimLen_1Chdnr_w(1) = LLm_chd
@@ -1441,9 +1445,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnr_w, pio_start_1Chdnr_w, pio_count_1Chdnr_w,&
-      &pio_desc_1Chdnr_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdnr_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnr_w, pio_start_2Chdnr_w, pio_count_2Chdnr_w,&
-      &pio_desc_2Chdnr_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdnr_w(ichd), force_nofill=pio_force_nofill)
 
     else if (stag == 'u') then
       pio_start_1Chdnu_w(1) = start
@@ -1458,9 +1462,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnu_w, pio_start_1Chdnu_w, pio_count_1Chdnu_w,&
-      &pio_desc_1Chdnu_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdnu_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnu_w, pio_start_2Chdnu_w, pio_count_2Chdnu_w,&
-      &pio_desc_2Chdnu_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdnu_w(ichd), force_nofill=pio_force_nofill)
 
     else if (stag == 'v') then
       pio_start_1Chdnv_w(1) = start
@@ -1475,9 +1479,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdnv_w, pio_start_1Chdnv_w, pio_count_1Chdnv_w,&
-      &pio_desc_1Chdnv_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdnv_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdnv_w, pio_start_2Chdnv_w, pio_count_2Chdnv_w,&
-      &pio_desc_2Chdnv_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdnv_w(ichd), force_nofill=pio_force_nofill)
     endif
 
   endif ! north
@@ -1496,9 +1500,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsr_w, pio_start_1Chdsr_w, pio_count_1Chdsr_w,&
-      &pio_desc_1Chdsr_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdsr_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsr_w, pio_start_2Chdsr_w, pio_count_2Chdsr_w,&
-      &pio_desc_2Chdsr_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdsr_w(ichd), force_nofill=pio_force_nofill)
     else if (stag == 'u') then
       pio_start_1Chdsu_w(1) = start
       pio_start_2Chdsu_w(1) = start
@@ -1512,9 +1516,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsu_w, pio_start_1Chdsu_w, pio_count_1Chdsu_w,&
-      &pio_desc_1Chdsu_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdsu_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsu_w, pio_start_2Chdsu_w, pio_count_2Chdsu_w,&
-      &pio_desc_2Chdsu_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdsu_w(ichd), force_nofill=pio_force_nofill)
     else if (stag == 'v') then
       pio_start_1Chdsv_w(1) = start
       pio_start_2Chdsv_w(1) = start
@@ -1528,9 +1532,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdsv_w, pio_start_1Chdsv_w, pio_count_1Chdsv_w,&
-      &pio_desc_1Chdsv_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdsv_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdsv_w, pio_start_2Chdsv_w, pio_count_2Chdsv_w,&
-      &pio_desc_2Chdsv_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdsv_w(ichd), force_nofill=pio_force_nofill)
     endif
 
   endif ! south
@@ -1549,9 +1553,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chder_w, pio_start_1Chder_w, pio_count_1Chder_w,&
-      &pio_desc_1Chder_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chder_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chder_w, pio_start_2Chder_w, pio_count_2Chder_w,&
-      &pio_desc_2Chder_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chder_w(ichd), force_nofill=pio_force_nofill)
 
     else if (stag == 'u') then
       pio_start_1Chdeu_w(1) = start
@@ -1566,9 +1570,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdeu_w, pio_start_1Chdeu_w, pio_count_1Chdeu_w,&
-      &pio_desc_1Chdeu_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdeu_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdeu_w, pio_start_2Chdeu_w, pio_count_2Chdeu_w,&
-      &pio_desc_2Chdeu_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdeu_w(ichd), force_nofill=pio_force_nofill)
 
     else if (stag == 'v') then
       pio_start_1Chdev_w(1) = start
@@ -1583,9 +1587,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdev_w, pio_start_1Chdev_w, pio_count_1Chdev_w,&
-      &pio_desc_1Chdev_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdev_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdev_w, pio_start_2Chdev_w, pio_count_2Chdev_w,&
-      &pio_desc_2Chdev_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdev_w(ichd), force_nofill=pio_force_nofill)
     endif
 
   endif ! east
@@ -1604,9 +1608,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwr_w, pio_start_1Chdwr_w, pio_count_1Chdwr_w,&
-      &pio_desc_1Chdwr_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdwr_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwr_w, pio_start_2Chdwr_w, pio_count_2Chdwr_w,&
-      &pio_desc_2Chdwr_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdwr_w(ichd), force_nofill=pio_force_nofill)
 
     else if (stag == 'u') then
       pio_start_1Chdwu_w(1) = start
@@ -1621,9 +1625,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwu_w, pio_start_1Chdwu_w, pio_count_1Chdwu_w,&
-      &pio_desc_1Chdwu_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdwu_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwu_w, pio_start_2Chdwu_w, pio_count_2Chdwu_w,&
-      &pio_desc_2Chdwu_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdwu_w(ichd), force_nofill=pio_force_nofill)
 
     else if (stag == 'v') then
       pio_start_1Chdwv_w(1) = start
@@ -1638,9 +1642,9 @@ contains
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_1Chdwv_w, pio_start_1Chdwv_w, pio_count_1Chdwv_w,&
-      &pio_desc_1Chdwv_w, force_nofill=pio_force_nofill)
+      &pio_desc_1Chdwv_w(ichd), force_nofill=pio_force_nofill)
       call PIO_initdecomp(pio_IoSystem, PIO_double, pio_dimLen_2Chdwv_w, pio_start_2Chdwv_w, pio_count_2Chdwv_w,&
-      &pio_desc_2Chdwv_w, force_nofill=pio_force_nofill)
+      &pio_desc_2Chdwv_w(ichd), force_nofill=pio_force_nofill)
     endif
 
   endif ! west
@@ -2050,29 +2054,29 @@ contains
     elseif (pio_gtype == 'w1vw') then
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_w1v_w, arr, ierr)
     elseif (pio_gtype == 'n1rc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdnr_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdnr_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'n1uc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdnu_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdnu_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'n1vc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdnv_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdnv_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 's1rc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdsr_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdsr_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 's1uc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdsu_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdsu_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 's1vc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdsv_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdsv_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'e1rc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chder_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chder_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'e1uc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdeu_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdeu_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'e1vc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdev_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdev_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'w1rc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdwr_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdwr_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'w1uc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdwu_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdwu_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'w1vc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdwv_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_1Chdwv_w(pio_extract_child), arr, ierr)
     else
       ! A stale pio_gtype used to drop the variable silently; abort here
       ! with the offending value instead.
@@ -2155,29 +2159,29 @@ contains
     elseif (pio_gtype == '2Cvw') then
       call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Cv_w, arr, ierr)
     elseif (pio_gtype == 'n2rc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdnr_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdnr_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'n2uc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdnu_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdnu_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'n2vc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdnv_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdnv_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 's2rc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdsr_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdsr_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 's2uc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdsu_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdsu_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 's2vc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdsv_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdsv_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'e2rc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chder_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chder_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'e2uc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdeu_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdeu_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'e2vc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdev_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdev_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'w2rc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdwr_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdwr_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'w2uc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdwu_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdwu_w(pio_extract_child), arr, ierr)
     elseif (pio_gtype == 'w2vc') then
-      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdwv_w, arr, ierr)
+      call PIO_write_darray(pio_FileDesc, varId, pio_desc_2Chdwv_w(pio_extract_child), arr, ierr)
     else
       call pio_bad_gtype('pio_ncwrite2', varName)   ! see pio_ncwrite1
     endif

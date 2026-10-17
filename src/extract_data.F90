@@ -29,6 +29,7 @@ module extract_data
 
   ! 2) Create a single file per subdomain containing all the objects
   !    for which ispresent(iobj) is true
+  !    (PARALLEL_IO: one joined file per child domain instead)
   !
   ! 3) Loop through all objects and all vars, and write when needed
   !    Add averaging capability at some point
@@ -36,6 +37,19 @@ module extract_data
   !    Vel points always need to interpolate both u, and v in order
   !    to rotate the vector to a desired angle
   !
+  !
+  ! MULTIPLE CHILD DOMAINS
+  !
+  !    Each child has its own nesting file (extract_file(i)) and its own
+  !    vertical grid (N_chd(i), theta_s_chd(i), theta_b_chd(i), hc_chd(i));
+  !    all children share output_period_extract and nrpf_extract. The child
+  !    grid size is read from the file's <prefix>_xi_rho/<prefix>_eta_rho
+  !    dimensions, <prefix> being the objects' set name (roms-tools'
+  !    make_nesting_info prefix). With PARALLEL_IO each child is written to
+  !    its own joined file, extract_root_name(i)//'_bry'. Without it all
+  !    children share the per-rank _ext files and extract_data_join splits
+  !    them by prefix, so each child needs its own prefix and all children
+  !    the same N_chd (the files have one s_rho dimension).
   !]
 
 #include "cppdefs.opt"
@@ -51,12 +65,13 @@ module extract_data
   &nf90_put_att, nf90_inq_varid, nf90_open, nf90_close,&
   &nf90_inquire, nf90_inquire_variable, nf90_inquire_dimension,&
   &nf90_get_att, nf90_clobber, nf90_64bit_data, nf90_create, nf90_def_dim,&
-  &nf90_def_var, nf90_inq_dimid
+  &nf90_def_var, nf90_inq_dimid, nf90_noerr
   use tracers, only: t, t_vname, t_lname, t_units, iTandS  ! need to get names of tracers
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u
   use scalars, only: dt, knew, nstp, time, tdays
   use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
-  &nt_passive, mynode, lm, mm, nz, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor
+  &nt_passive, mynode, lm, mm, nz, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
+  &max_extract_chd
   use scoord, only: theta_s, theta_b, hc
   use calc_pflx_mod, only:  up, vp
   use basic_output, only: &
@@ -73,7 +88,8 @@ module extract_data
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_extract, pio_open_or_abort
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_extract, pio_open_or_abort,&
+  &pio_extract_child
   use pio, only : PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
@@ -84,18 +100,22 @@ module extract_data
   private
 
   real(kind=8),public              :: output_period_extract = 0._8   ! output period (seconds)
-  character(len=256)        :: extract_file = 'sample_edata.nc'
   integer(kind=4),public :: nrpf_extract = 0    ! number of records per output file
-  character(len=256)        :: extract_root_name
+
+  ! Per child domain, in the same order in every array. A namelist entry
+  ! without an index (extract_file = '...') sets child 1, as before.
+  character(len=256) :: extract_file(max_extract_chd) = ' '      ! nesting file
+  character(len=256) :: extract_root_name(max_extract_chd) = ' ' ! PARALLEL_IO output root
 
   ! S-coordinate parameters for child grid
-  integer(kind=4)  :: LLm_chd     = 0
-  integer(kind=4)  :: MMm_chd     = 0
-  integer(kind=4)  :: N_chd       = 0
-  real(kind=8)     :: theta_s_chd = 5.0_8
-  real(kind=8)     :: theta_b_chd = 2.0_8
-  real(kind=8)     :: hc_chd      = 250.0_8
+  integer(kind=4)  :: LLm_chd(max_extract_chd)     = 0
+  integer(kind=4)  :: MMm_chd(max_extract_chd)     = 0
+  integer(kind=4)  :: N_chd(max_extract_chd)       = 0
+  real(kind=8)     :: theta_s_chd(max_extract_chd) = 5.0_8
+  real(kind=8)     :: theta_b_chd(max_extract_chd) = 2.0_8
+  real(kind=8)     :: hc_chd(max_extract_chd)      = 250.0_8
   logical, public  :: do_extract
+  integer(kind=4)  :: nchd = 0   ! number of child domains (leading non-blank extract_file entries)
 
   namelist /EXTRACT_DATA_SETTINGS/ output_period_extract, extract_file,&
   &nrpf_extract, N_chd, theta_s_chd, theta_b_chd, hc_chd, do_extract, extract_root_name
@@ -113,22 +133,27 @@ module extract_data
   ! For vertical velocity
   real(kind=8),dimension(:,:,:),allocatable :: Wvl   ! Vertical velocity
 
-  ! Array for child vertical grid
-  real(kind=8), dimension(:),allocatable :: Cs_w_chd
+  ! Array for child vertical grid, (0:N_chd, child)
+  real(kind=8), dimension(:,:),allocatable :: Cs_w_chd
 
   ! Different parent and child grid parameters?
-  logical :: parent_child_grid_mismatch = .true.
+  logical, dimension(max_extract_chd) :: parent_child_grid_mismatch = .true.
+
+  ! Output file: one per child with PARALLEL_IO, else fname(1) for all
+  character(len=256), dimension(max_extract_chd) :: fname = ' '
 
   real(kind=8)    :: otime=0   ! time since last output
 
-  logical, dimension(4) :: child_bnds = .false.
-  logical, dimension(4) :: child_w    = .false.
-  logical, dimension(4) :: child_up   = .false.
-  logical, dimension(4) :: child_vp   = .false.
-  integer, dimension(4) :: child_dimsize_t
-  integer, dimension(4) :: child_dimsize_u
-  integer, dimension(4) :: child_dimsize_v
-  character(len=5), dimension(4) :: child_bnd_name
+  ! Per (boundary, child); boundaries ordered north, south, east, west
+  logical, dimension(4,max_extract_chd) :: child_bnds = .false.
+  logical, dimension(4,max_extract_chd) :: child_w    = .false.
+  logical, dimension(4,max_extract_chd) :: child_up   = .false.
+  logical, dimension(4,max_extract_chd) :: child_vp   = .false.
+  integer, dimension(4,max_extract_chd) :: child_dimsize_t
+  integer, dimension(4,max_extract_chd) :: child_dimsize_u
+  integer, dimension(4,max_extract_chd) :: child_dimsize_v
+  character(len=5), dimension(4), parameter :: child_bnd_name =&
+  &(/'north','south','east ','west '/)
 
   type extract_object  ! contains all information for a data_extraction object
 
@@ -136,6 +161,7 @@ module extract_data
     character(len=60) :: obj_name                   ! name of object
     character(len=20) :: set                        ! name of set that the object belongs to
     character(len=20) :: bnd                        ! name of boundary (for bry type data)
+    integer(kind=4)   :: ichd = 1                   ! child domain (index of its extract_file)
     character(:),allocatable :: pre                 ! preamble for vars and dims
     character(:),allocatable :: dname               ! dimension name for object
     integer(kind=4)                  :: dsize               ! dimension of object
@@ -207,8 +233,9 @@ contains
   subroutine read_nml_extract
 !     Read the "EXTRACT_DATA_SETTINGS" section of the namelist file
 
-    integer(kind=4) ::  namelist_unit, ios
+    integer(kind=4) ::  namelist_unit, ios, ic, jc
     character(len=17) :: sr_name = "read_nml_extract"
+    character(len=8) :: num
     ! Read namelist
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
@@ -221,6 +248,50 @@ contains
     end if
     close(namelist_unit)
 
+    ! The child domains are the leading non-blank extract_file entries
+    if (all(extract_file == ' ')) extract_file(1) = 'sample_edata.nc'
+    nchd = 0
+    do while (nchd < max_extract_chd)
+      if (extract_file(nchd+1) == ' ') exit
+      nchd = nchd+1
+    enddo
+    if (.not. do_extract) return
+
+    if (any(extract_file(nchd+1:) /= ' ')) then
+      call error_log%raise_global(context=module_name//'/'//sr_name,&
+      &info='extract_file entries must be consecutive from extract_file(1)')
+    endif
+    do ic = 1,nchd
+      write(num,'(I0)') ic
+      if (N_chd(ic) <= 0) then
+        call error_log%raise_global(context=module_name//'/'//sr_name,&
+        &info='N_chd('//trim(num)//') is not set for '//trim(extract_file(ic)))
+      endif
+#ifdef PARALLEL_IO
+      ! Each child is written to its own file, named from extract_root_name
+      if (nchd > 1) then
+        if (extract_root_name(ic) == ' ') then
+          call error_log%raise_global(context=module_name//'/'//sr_name,&
+          &info='extract_root_name('//trim(num)//') must be set when '//&
+          &'boundary data are extracted for more than one child domain')
+        endif
+        do jc = 1,ic-1
+          if (extract_root_name(jc) == extract_root_name(ic)) then
+            call error_log%raise_global(context=module_name//'/'//sr_name,&
+            &info='child domains share extract_root_name '//&
+            &trim(extract_root_name(ic))//'; each needs its own')
+          endif
+        enddo
+      endif
+#else
+      ! All children share the per-rank _ext files, which have one s_rho
+      if (N_chd(ic) /= N_chd(1)) then
+        call error_log%raise_global(context=module_name//'/'//sr_name,&
+        &info='without PARALLEL_IO all child domains must have the same N_chd')
+      endif
+#endif
+    enddo
+
   end subroutine read_nml_extract
 
   subroutine init_extract_data  ![
@@ -231,7 +302,7 @@ contains
 
     !local
     character(len=30) :: preamb
-    integer(kind=4) :: i,np,ierr,lpre
+    integer(kind=4) :: i,np,ierr,lpre,ic
     real(kind=8),dimension(:),allocatable :: angp ! grid angle
     character(len=1) :: pio_stag
     character(len=17) :: sr_name = "init_extract_data"
@@ -239,26 +310,31 @@ contains
     call read_extraction_objects
     call error_log%abort_check()
 
-    if ((nz == N_chd) .and. (theta_s == theta_s_chd) .and. (theta_b == theta_b_chd) .and. (hc == hc_chd)) then
-      parent_child_grid_mismatch = .false.
-      if (mynode == 0) then
-        mpi_nonexit_warn write(*,*) 'init_extract_data :: Parent ',&
-        &'and child grids have identical parameters. ',&
-        &'Vertical remapping will not be used.'
-        call flush()
+    do ic = 1,nchd
+      if ((nz == N_chd(ic)) .and. (theta_s == theta_s_chd(ic)) .and.&
+      &(theta_b == theta_b_chd(ic)) .and. (hc == hc_chd(ic))) then
+        parent_child_grid_mismatch(ic) = .false.
+        if (mynode == 0) then
+          mpi_nonexit_warn write(*,*) 'init_extract_data :: Parent ',&
+          &'and child grids have identical parameters. ',&
+          &'Vertical remapping will not be used. ', trim(extract_file(ic))
+          call flush()
+        endif
+      else
+        if (mynode == 0) then
+          mpi_nonexit_warn write(*,*) 'init_extract_data :: Parent ',&
+          &'and child grids have different parameters. ',&
+          &'Using vertical remapping. ', trim(extract_file(ic))
+          call flush()
+        endif
       endif
-    else
-      if (mynode == 0) then
-        mpi_nonexit_warn write(*,*) 'init_extract_data :: Parent ',&
-        &'and child grids have different parameters. ',&
-        &'Using vertical remapping.'
-        call flush()
-      endif
-    endif
+    enddo
 
-    if (parent_child_grid_mismatch) then
-      allocate(Cs_w_chd(0:N_chd))
-      call set_chd_scoord
+    if (any(parent_child_grid_mismatch(1:nchd))) then
+      allocate(Cs_w_chd(0:maxval(N_chd(1:nchd)),nchd)); Cs_w_chd = 0
+      do ic = 1,nchd
+        if (parent_child_grid_mismatch(ic)) call set_chd_scoord(ic)
+      enddo
     endif
 
     ! For vertical velocity
@@ -284,12 +360,13 @@ contains
         allocate(obj(i)%h_par(np));       obj(i)%h_par = 0
         allocate(obj(i)%h_par_u(np));     obj(i)%h_par_u = 0
         allocate(obj(i)%h_par_v(np));     obj(i)%h_par_v = 0
-        allocate(obj(i)%Hz_chd(np,N_chd));   obj(i)%Hz_chd = 0
-        allocate(obj(i)%Hz_chd_u(np,N_chd)); obj(i)%Hz_chd_u = 0
-        allocate(obj(i)%Hz_chd_v(np,N_chd)); obj(i)%Hz_chd_v = 0
+        ic = obj(i)%ichd
+        allocate(obj(i)%Hz_chd(np,N_chd(ic)));   obj(i)%Hz_chd = 0
+        allocate(obj(i)%Hz_chd_u(np,N_chd(ic))); obj(i)%Hz_chd_u = 0
+        allocate(obj(i)%Hz_chd_v(np,N_chd(ic))); obj(i)%Hz_chd_v = 0
 
         allocate(obj(i)%vari(np,nz));       obj(i)%vari = 0
-        allocate(obj(i)%vari_chd(np,N_chd)); obj(i)%vari_chd = 0
+        allocate(obj(i)%vari_chd(np,N_chd(ic))); obj(i)%vari_chd = 0
         allocate(obj(i)%coef(np,4))
         allocate(obj(i)%ip(np))                          ! DON'T NEED THESE FOR U or V objects
         allocate(obj(i)%jp(np))
@@ -357,8 +434,9 @@ contains
 #ifdef PARALLEL_IO
     do i = 1,nobj
       if (obj(i)%bnd /= ' ') then
+        ic = obj(i)%ichd
         if (obj(i)%bnd == '_south' .or. obj(i)%bnd == '_north') then
-          if (obj(i)%dsize == LLm_chd-1) then
+          if (obj(i)%dsize == LLm_chd(ic)-1) then
             pio_stag = 'u'
           else if (obj(i)%scalar) then
             pio_stag = 'r'
@@ -366,7 +444,7 @@ contains
             pio_stag = 'v'
           endif
         else if (obj(i)%bnd == '_east' .or. obj(i)%bnd == '_west') then
-          if (obj(i)%dsize == MMm_chd-1) then
+          if (obj(i)%dsize == MMm_chd(ic)-1) then
             pio_stag = 'v'
           else if (obj(i)%scalar) then
             pio_stag = 'r'
@@ -375,7 +453,7 @@ contains
           endif
         endif
         call pio_initialize_extract(obj(i)%start_idx,obj(i)%np,obj(i)%dsize,&
-        &LLm_chd,MMm_chd,N_chd,obj(i)%bnd,pio_stag)
+        &LLm_chd(ic),MMm_chd(ic),N_chd(ic),obj(i)%bnd,pio_stag,ic)
       endif
     enddo
 #endif
@@ -383,59 +461,86 @@ contains
   end subroutine init_extract_data !]
 ! ----------------------------------------------------------------------
   subroutine read_extraction_objects  ![
-    ! Read all objects from file and determine local ranges
+    ! Read the objects of every child domain's file, in child order, and
+    ! determine local ranges
     implicit none
     character(len=24) :: sr_name = "read_extraction_objects"
     ! local
-    integer(kind=4)               :: iobj,ncid
+    integer(kind=4)               :: iobj,ncid,ic,iv,nv,jobj
     integer(kind=4),dimension(2)  :: dimids
     character(len=20) :: dname
-    character(len=30) :: objname
+    character(len=30) :: objname, prefix
     character(len=150) :: variables
     real(kind=8),dimension(:,:),allocatable :: object
     integer(kind=4)               :: n1,n2,i0,i1,lstr
     integer(kind=4) ierr,sidx,sidx2
     integer(kind=4) :: cxr, cer
+    logical :: shared_prefix
 
     ! This should be very quick to read even serially, so for simplicity
     ! just have each rank open the file and read what it needs.
     pio_gtype='----'
 
-    if (mynode==0) then
-      write(*,'(7x,2A)')&
-      &'extract_data :: read objects: ',extract_file
-    endif
+    ! Count the objects of all child domains
+    nobj = 0
+    do ic = 1,nchd
+      if (mynode==0) then
+        write(*,'(7x,2A)')&
+        &'extract_data :: read objects: ',trim(extract_file(ic))
+      endif
 
-    ierr = nf90_open(extract_file,nf90_nowrite,ncid)
-    call error_log%check_netcdf_status(netcdf_status=ierr,&
-    &info="error reading objects file "//extract_file,&
-    &context=module_name//"/"//sr_name)
+      ierr = nf90_open(extract_file(ic),nf90_nowrite,ncid)
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &info="error reading objects file "//extract_file(ic),&
+      &context=module_name//"/"//sr_name)
+      call error_log%abort_check()
 
-    ierr = nf90_inquire(ncid,nVariables=nobj)
-    call error_log%check_netcdf_status(netcdf_status=ierr,&
-    &context=module_name//"/"//sr_name,&
-    &info="read extr")
-
-    ierr = nf90_inq_dimid(ncid, "child_xi_rho", cxr)
-    call error_log%check_netcdf_status(netcdf_status=ierr,&
-    &context=module_name//"/"//sr_name,&
-    &info="error reading child_xi_rho")
-
-    ierr = nf90_inq_dimid(ncid, "child_eta_rho", cer)
-    call error_log%check_netcdf_status(netcdf_status=ierr,&
-    &context=module_name//"/"//sr_name,&
-    &info="error reading child_eta_rho")
-
-    ierr = nf90_inquire_dimension(ncid,cxr,len=LLm_chd)
-    ierr = nf90_inquire_dimension(ncid,cer,len=MMm_chd)
-
+      ierr = nf90_inquire(ncid,nVariables=nv)
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name,&
+      &info="read extr")
+      ierr = nf90_close(ncid)
+      nobj = nobj+nv
+    enddo
     call error_log%abort_check()
 
     allocate(obj(nobj))
 
-    ! Read all objects from file.
-    do iobj = 1,nobj
-      ierr = nf90_inquire_variable(ncid,iobj,name=objname,dimids=dimids)
+    iobj = 0
+    do ic = 1,nchd
+      ierr = nf90_open(extract_file(ic),nf90_nowrite,ncid)
+      ierr = nf90_inquire(ncid,nVariables=nv)
+
+      ! Child grid size from <prefix>_xi_rho and <prefix>_eta_rho, <prefix>
+      ! being the set name of the file's first object (roms-tools'
+      ! make_nesting_info prefix); child_xi_rho/child_eta_rho otherwise.
+      ierr = nf90_inquire_variable(ncid,1,name=objname)
+      prefix = objname
+      if (findstr(objname,'_',sidx)) prefix = objname(1:sidx-1)
+
+      ierr = nf90_inq_dimid(ncid, trim(prefix)//"_xi_rho", cxr)
+      if (ierr /= nf90_noerr) ierr = nf90_inq_dimid(ncid, "child_xi_rho", cxr)
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name,&
+      &info="error reading "//trim(prefix)//"_xi_rho (or child_xi_rho) in "//&
+      &trim(extract_file(ic)))
+
+      ierr = nf90_inq_dimid(ncid, trim(prefix)//"_eta_rho", cer)
+      if (ierr /= nf90_noerr) ierr = nf90_inq_dimid(ncid, "child_eta_rho", cer)
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name,&
+      &info="error reading "//trim(prefix)//"_eta_rho (or child_eta_rho) in "//&
+      &trim(extract_file(ic)))
+
+      ierr = nf90_inquire_dimension(ncid,cxr,len=LLm_chd(ic))
+      ierr = nf90_inquire_dimension(ncid,cer,len=MMm_chd(ic))
+
+      call error_log%abort_check()
+
+      do iv = 1,nv
+      iobj = iobj+1
+      obj(iobj)%ichd = ic
+      ierr = nf90_inquire_variable(ncid,iv,name=objname,dimids=dimids)
       call error_log%check_netcdf_status(netcdf_status=ierr,&
       &context=module_name//"/"//sr_name,&
       &info="error during inquire,  variable:"//objname)
@@ -483,29 +588,25 @@ contains
 
       ! Determine which child boundaries we are saving
       if (obj(iobj)%bnd == '_north') then
-        child_bnds(1) = .true.
-        child_dimsize_t(1) = LLm_chd
-        child_dimsize_u(1) = LLm_chd-1
-        child_dimsize_v(1) = LLm_chd
-        child_bnd_name(1) = 'north'
+        child_bnds(1,ic) = .true.
+        child_dimsize_t(1,ic) = LLm_chd(ic)
+        child_dimsize_u(1,ic) = LLm_chd(ic)-1
+        child_dimsize_v(1,ic) = LLm_chd(ic)
       else if (obj(iobj)%bnd == '_south') then
-        child_bnds(2) = .true.
-        child_dimsize_t(2) = LLm_chd
-        child_dimsize_u(2) = LLm_chd-1
-        child_dimsize_v(2) = LLm_chd
-        child_bnd_name(2) = 'south'
+        child_bnds(2,ic) = .true.
+        child_dimsize_t(2,ic) = LLm_chd(ic)
+        child_dimsize_u(2,ic) = LLm_chd(ic)-1
+        child_dimsize_v(2,ic) = LLm_chd(ic)
       else if (obj(iobj)%bnd == '_east') then
-        child_bnds(3) = .true.
-        child_dimsize_t(3) = MMm_chd
-        child_dimsize_u(3) = MMm_chd
-        child_dimsize_v(3) = MMm_chd-1
-        child_bnd_name(3) = 'east'
+        child_bnds(3,ic) = .true.
+        child_dimsize_t(3,ic) = MMm_chd(ic)
+        child_dimsize_u(3,ic) = MMm_chd(ic)
+        child_dimsize_v(3,ic) = MMm_chd(ic)-1
       else if (obj(iobj)%bnd == '_west') then
-        child_bnds(4) = .true.
-        child_dimsize_t(4) = MMm_chd
-        child_dimsize_u(4) = MMm_chd
-        child_dimsize_v(4) = MMm_chd-1
-        child_bnd_name(4) = 'west'
+        child_bnds(4,ic) = .true.
+        child_dimsize_t(4,ic) = MMm_chd(ic)
+        child_dimsize_u(4,ic) = MMm_chd(ic)
+        child_dimsize_v(4,ic) = MMm_chd(ic)-1
       endif
 
 !      if (obj(iobj)%np>0) then
@@ -519,7 +620,7 @@ contains
         endif
 
 ! Figure out which variables to output for this object
-        ierr = nf90_get_att(ncid,iobj,'output_vars',variables)
+        ierr = nf90_get_att(ncid,iv,'output_vars',variables)
         call error_log%check_netcdf_status(netcdf_status=ierr,&
         &info="error getting `output_vars` attribute",&
         &context=module_name//"/"//sr_name)
@@ -542,21 +643,21 @@ contains
         ! Record which boundaries request w/up/vp, so the PIO define
         ! (create_edata_file) defines exactly what do_extract_data writes.
         if (obj(iobj)%bnd == '_north') then
-          if (obj(iobj)%w)  child_w(1)  = .true.
-          if (obj(iobj)%up) child_up(1) = .true.
-          if (obj(iobj)%vp) child_vp(1) = .true.
+          if (obj(iobj)%w)  child_w(1,ic)  = .true.
+          if (obj(iobj)%up) child_up(1,ic) = .true.
+          if (obj(iobj)%vp) child_vp(1,ic) = .true.
         else if (obj(iobj)%bnd == '_south') then
-          if (obj(iobj)%w)  child_w(2)  = .true.
-          if (obj(iobj)%up) child_up(2) = .true.
-          if (obj(iobj)%vp) child_vp(2) = .true.
+          if (obj(iobj)%w)  child_w(2,ic)  = .true.
+          if (obj(iobj)%up) child_up(2,ic) = .true.
+          if (obj(iobj)%vp) child_vp(2,ic) = .true.
         else if (obj(iobj)%bnd == '_east') then
-          if (obj(iobj)%w)  child_w(3)  = .true.
-          if (obj(iobj)%up) child_up(3) = .true.
-          if (obj(iobj)%vp) child_vp(3) = .true.
+          if (obj(iobj)%w)  child_w(3,ic)  = .true.
+          if (obj(iobj)%up) child_up(3,ic) = .true.
+          if (obj(iobj)%vp) child_vp(3,ic) = .true.
         else if (obj(iobj)%bnd == '_west') then
-          if (obj(iobj)%w)  child_w(4)  = .true.
-          if (obj(iobj)%up) child_up(4) = .true.
-          if (obj(iobj)%vp) child_vp(4) = .true.
+          if (obj(iobj)%w)  child_w(4,ic)  = .true.
+          if (obj(iobj)%up) child_up(4,ic) = .true.
+          if (obj(iobj)%vp) child_vp(4,ic) = .true.
         endif
 
         if (obj(iobj)%up.and. .not.calc_pflx) then
@@ -583,11 +684,32 @@ contains
       deallocate(object)
     enddo
 
+
+      ierr = nf90_close(ncid)
+    enddo ! ic
+
+#ifndef PARALLEL_IO
+    ! Without PARALLEL_IO all children share the per-rank _ext files and
+    ! extract_data_join splits them by set name, so each needs its own
+    shared_prefix = .false.
+    do iobj = 1,nobj
+      do jobj = 1,iobj-1
+        if (obj(jobj)%ichd /= obj(iobj)%ichd .and.&
+        &obj(jobj)%set == obj(iobj)%set .and. .not. shared_prefix) then
+          shared_prefix = .true.
+          call error_log%raise_global(context=module_name//"/"//sr_name,&
+          &info=trim(extract_file(obj(jobj)%ichd))//' and '//&
+          &trim(extract_file(obj(iobj)%ichd))//' share the prefix '//&
+          &trim(obj(iobj)%set)//'; without PARALLEL_IO each child domain '//&
+          &'needs its own (roms-tools make_nesting_info prefix=...)')
+        endif
+      enddo
+    enddo
+#endif
+
 #ifdef PARALLEL_IO
     call MPI_Barrier(ocean_grid_comm, ierr)
 #endif
-
-    ierr = nf90_close(ncid)
 
   end subroutine read_extraction_objects !]
 ! ----------------------------------------------------------------------
@@ -735,8 +857,9 @@ contains
 
     ! local
     integer(kind=4) :: i,j,itrc,ierr,ncid,k,record,indt
+    integer(kind=4) :: ic,kc,nzc,rec_next
+    logical :: remap
     character(len=30) :: obj_name
-    character(len=256),save :: fname
     character(len=20)              :: tname
     character(len=40) :: oname
     character(len=1) :: pio_bnd
@@ -748,7 +871,6 @@ contains
     real(kind=8),dimension(:),allocatable :: dummy
     integer(kind=4),dimension(3) :: start2D
     integer(kind=4),dimension(2) :: start1D
-    real(kind=8), dimension(1:N_chd) :: tmpp
     real(kind=8), dimension(1) :: dummy1d
     real(kind=8), dimension(1,1) :: dummy2d
     real(kind=8), dimension(1,1,1) :: dummy3d
@@ -763,7 +885,7 @@ contains
     if (otime>=output_period_extract) then
 
       if (obj(1)%record==nrpf_extract) then
-        call create_edata_file(fname)
+        call create_edata_file
         obj(:)%record = 0
       endif
 
@@ -776,24 +898,36 @@ contains
       endif
 
 #ifdef PARALLEL_IO
+      ! One joined file per child domain, written in turn: its objects only,
+      ! with its own extract decompositions (pio_extract_child)
+      rec_next = obj(1)%record+1
+      do ic = 1,nchd
       if (mynode == 0) then
-        ierr=nf90_open(fname,nf90_write,ncid)
-        call ncwrite(ncid,'bry_time',(/tdays/),(/(obj(1)%record+1)/))
+        ierr=nf90_open(fname(ic),nf90_write,ncid)
+        call ncwrite(ncid,'bry_time',(/tdays/),(/rec_next/))
         ierr=nf90_close(ncid)
       endif
 
       ! abort_check uses MPI collectives; must not run only on rank 0
       call error_log%abort_check()
       call MPI_Barrier(ocean_grid_comm, ierr)
-      call pio_open_or_abort(trim(fname), module_name//"/do_extract_data", PIO_write)
+      call pio_open_or_abort(trim(fname(ic)), module_name//"/do_extract_data", PIO_write)
+      pio_extract_child = ic
 #else
-      ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_open(fname(1),nf90_write,ncid)
 #endif
 
 !! We have to update the object records regardless of whether
 !! there are points in the sub-domain to ensure correct file
 !! names for all
       do i = 1,nobj
+
+#ifdef PARALLEL_IO
+        if (obj(i)%ichd /= ic) cycle
+#endif
+        kc = obj(i)%ichd                        ! this object's child domain
+        nzc = N_chd(kc)
+        remap = parent_child_grid_mismatch(kc)
 
 #ifdef PARALLEL_IO
         if (obj(i)%bnd == '_north') then
@@ -843,7 +977,9 @@ contains
 
 !     rho variables --------------------------------------------------------
 
-          if (parent_child_grid_mismatch) then
+          ! np > 0: with PARALLEL_IO every rank comes here, and the arrays
+          ! below are only allocated where the object has points
+          if (remap .and. obj(i)%np > 0) then
 ! Get thickness and depth at interpolated location
             call interpolate(Hz(:,:,:),obj(i)%Hz_par,coef,ip,jp)
             obj(i)%h_par(:) = 0
@@ -854,7 +990,7 @@ contains
             enddo
 
             do j=1,obj(i)%np
-              call get_child_thickness(obj(i)%h_par(j), obj(i)%Hz_chd(j,:))
+              call get_child_thickness(obj(i)%h_par(j), obj(i)%Hz_chd(j,:), kc)
             enddo
           endif
 
@@ -882,10 +1018,10 @@ contains
 #endif
           if (obj(i)%np > 0) then
             call interpolate(t(:,:,:,nstp,itemp),obj(i)%vari,coef,ip,jp)
-            if (parent_child_grid_mismatch) then
+            if (remap) then
               do j=1,obj(i)%np
                 call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                &obj(i)%vari(j,:), N_chd,&
+                &obj(i)%vari(j,:), nzc,&
                 &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
               enddo
               call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
@@ -907,10 +1043,10 @@ contains
 #endif
           if (obj(i)%np > 0) then
             call interpolate(t(:,:,:,nstp,isalt),obj(i)%vari,coef,ip,jp)
-            if (parent_child_grid_mismatch) then
+            if (remap) then
               do j=1,obj(i)%np
                 call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                &obj(i)%vari(j,:), N_chd,&
+                &obj(i)%vari(j,:), nzc,&
                 &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
               enddo
               call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
@@ -933,10 +1069,10 @@ contains
 #endif
           if (obj(i)%np > 0) then
               call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (parent_child_grid_mismatch) then
+              if (remap) then
                 do j=1,obj(i)%np
                   call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), N_chd,&
+                  &obj(i)%vari(j,:), nzc,&
                   &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
@@ -959,10 +1095,10 @@ contains
 #endif
           if (obj(i)%np > 0) then
               call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (parent_child_grid_mismatch) then
+              if (remap) then
                 do j=1,obj(i)%np
                   call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), N_chd,&
+                  &obj(i)%vari(j,:), nzc,&
                   &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
@@ -981,10 +1117,10 @@ contains
 #endif
           if (obj(i)%np > 0) then
               call interpolate(t(:,:,:,nstp,indt+1),obj(i)%vari,coef,ip,jp)
-              if (parent_child_grid_mismatch) then
+              if (remap) then
                 do j=1,obj(i)%np
                   call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), N_chd,&
+                  &obj(i)%vari(j,:), nzc,&
                   &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
@@ -1007,10 +1143,10 @@ contains
 #endif
           if (obj(i)%np > 0) then
               call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (parent_child_grid_mismatch) then
+              if (remap) then
                 do j=1,obj(i)%np
                   call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), N_chd,&
+                  &obj(i)%vari(j,:), nzc,&
                   &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
@@ -1033,10 +1169,10 @@ contains
 #endif
           if (obj(i)%np > 0) then
               call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (parent_child_grid_mismatch) then
+              if (remap) then
                 do j=1,obj(i)%np
                   call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), N_chd,&
+                  &obj(i)%vari(j,:), nzc,&
                   &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
                 enddo
                 call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
@@ -1056,10 +1192,10 @@ contains
             call wvlcty (0,Wvl)
             oname = trim(obj(i)%set)//'_w'//trim(obj(i)%bnd)
             call interpolate(Wvl(-1:nx+2,-1:ny+2,1:nz),obj(i)%vari,coef,ip,jp)
-            if (parent_child_grid_mismatch) then
+            if (remap) then
               do j=1,obj(i)%np
                 call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                &obj(i)%vari(j,:), N_chd, obj(i)%Hz_chd(j,:),&
+                &obj(i)%vari(j,:), nzc, obj(i)%Hz_chd(j,:),&
                 &obj(i)%vari_chd(j,:))
               enddo
               call ncwrite(ncid,oname,obj(i)%vari_chd,start2D)
@@ -1070,7 +1206,7 @@ contains
 
 !     u variables --------------------------------------------------------
           if (obj(i)%np > 0) then
-          if (parent_child_grid_mismatch) then
+          if (remap) then
             if ((obj(i)%u) .or. (obj(i)%up)) then
               ! u-staggered thickness from rho-grid Hz (matches set_depth_mod)
               call interpolate(Hz(:,:,:),obj(i)%Hz_par_u,&
@@ -1085,7 +1221,7 @@ contains
               enddo
 
               do j=1,obj(i)%np
-                call get_child_thickness(obj(i)%h_par_u(j), obj(i)%Hz_chd_u(j,:))
+                call get_child_thickness(obj(i)%h_par_u(j), obj(i)%Hz_chd_u(j,:), kc)
               enddo
             endif
           endif
@@ -1122,10 +1258,10 @@ contains
             do k=1,nz
               obj(i)%vari(:,k) = obj(i)%cosa*ui(:,k) - obj(i)%sina*vi(:,k)
             enddo
-            if (parent_child_grid_mismatch) then
+            if (remap) then
               do j=1,obj(i)%np
                 call remap_src_to_grid(nz, obj(i)%Hz_par_u(j,:),&
-                &obj(i)%vari(j,:), N_chd,&
+                &obj(i)%vari(j,:), nzc,&
                 &obj(i)%Hz_chd_u(j,:), obj(i)%vari_chd(j,:))
               enddo
               call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
@@ -1156,7 +1292,7 @@ contains
 
 !     v variables --------------------------------------------------------
           if (obj(i)%np > 0) then
-          if (parent_child_grid_mismatch) then
+          if (remap) then
             if ((obj(i)%v) .or. (obj(i)%vp)) then
 ! Get thickness and depth at interpolated location
               ! v-staggered thickness from rho-grid Hz (matches set_depth_mod)
@@ -1172,7 +1308,7 @@ contains
               enddo
 
               do j=1,obj(i)%np
-                call get_child_thickness(obj(i)%h_par_v(j), obj(i)%Hz_chd_v(j,:))
+                call get_child_thickness(obj(i)%h_par_v(j), obj(i)%Hz_chd_v(j,:), kc)
               enddo
             endif
           endif
@@ -1208,10 +1344,10 @@ contains
             do k=1,nz
               obj(i)%vari(:,k) = obj(i)%sina*ui(:,k) + obj(i)%cosa*vi(:,k)
             enddo
-            if (parent_child_grid_mismatch) then
+            if (remap) then
               do j=1,obj(i)%np
                 call remap_src_to_grid(nz, obj(i)%Hz_par_v(j,:),&
-                &obj(i)%vari(j,:), N_chd,&
+                &obj(i)%vari(j,:), nzc,&
                 &obj(i)%Hz_chd_v(j,:), obj(i)%vari_chd(j,:))
               enddo
               call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
@@ -1249,6 +1385,7 @@ contains
 
 #ifdef PARALLEL_IO
       call PIO_closefile(pio_FileDesc)
+      enddo ! ic
 #else
       ierr=nf90_close(ncid)
 #endif
@@ -1258,14 +1395,14 @@ contains
 
   end subroutine do_extract_data  !]
 ! ----------------------------------------------------------------------
-  subroutine create_edata_file(fname) ![
+  subroutine create_edata_file ![
+    ! Create the output file(s) for the next nrpf_extract records, into
+    ! fname: one joined file per child domain with PARALLEL_IO, else one
+    ! per-rank _ext file (fname(1)) holding every child's objects
     implicit none
 
-    !input/output
-    character(len=256),intent(out) :: fname
-
     !local
-    integer(kind=4) :: ncid,ierr,varid,indt
+    integer(kind=4) :: ncid,ierr,varid,indt,ic
     integer(kind=4) :: bnd
     integer(kind=4) :: dimid0, dimid1, dimid2, dimid3, dimid4, dimid5
     integer(kind=4),dimension(2) :: dimid2d
@@ -1274,20 +1411,21 @@ contains
     integer(kind=4),dimension(4) :: child_dimnums_u
     integer(kind=4),dimension(4) :: child_dimnums_v
 #ifdef PARALLEL_IO
+    do ic = 1,nchd
     if (mynode == 0) then
 
-      fname=trim(adjustl(extract_root_name)) // '_bry'
+      fname(ic)=trim(adjustl(extract_root_name(ic))) // '_bry'
 
-      call append_date_node(fname,nonode=.true.)
+      call append_date_node(fname(ic),nonode=.true.)
 
-      ierr = nf90_create(trim(fname), ior(nf90_clobber, nf90_64bit_data), ncid)
+      ierr = nf90_create(trim(fname(ic)), ior(nf90_clobber, nf90_64bit_data), ncid)
 
       ierr=nf90_def_dim(ncid, 'time', 0, dimid0)
-      ierr=nf90_def_dim(ncid,'xi_rho', LLm_chd, dimid1)
-      ierr=nf90_def_dim(ncid,'xi_u',   (LLm_chd-1),   dimid2)
-      ierr=nf90_def_dim(ncid,'eta_rho',MMm_chd,dimid3)
-      ierr=nf90_def_dim(ncid,'eta_v',  (MMm_chd-1),  dimid4)
-      ierr=nf90_def_dim(ncid,'s_rho', N_chd, dimid5)
+      ierr=nf90_def_dim(ncid,'xi_rho', LLm_chd(ic), dimid1)
+      ierr=nf90_def_dim(ncid,'xi_u',   (LLm_chd(ic)-1),   dimid2)
+      ierr=nf90_def_dim(ncid,'eta_rho',MMm_chd(ic),dimid3)
+      ierr=nf90_def_dim(ncid,'eta_v',  (MMm_chd(ic)-1),  dimid4)
+      ierr=nf90_def_dim(ncid,'s_rho', N_chd(ic), dimid5)
 
       varid = nccreate(ncid,'bry_time',(/dn_tm/),(/0/), nf90_double)
       ierr = nf90_put_att(ncid,varid,'long_name',refdatestr)
@@ -1298,7 +1436,7 @@ contains
       child_dimnums_v = (/dimid1, dimid1, dimid4, dimid4/)
 
       do bnd=1,4
-        if (child_bnds(bnd)) then
+        if (child_bnds(bnd,ic)) then
         dimid2d = (/child_dimnums_t(bnd), dimid0/)
         ierr=nf90_def_var(ncid,'zeta_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
         ierr = nf90_put_att(ncid,varid,'long_name',"free-surface elevation")
@@ -1332,19 +1470,19 @@ contains
         ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
 
 
-        if (child_w(bnd)) then
+        if (child_w(bnd,ic)) then
           dimid3d = (/child_dimnums_t(bnd), dimid5, dimid0/)
           ierr=nf90_def_var(ncid,'w_' // trim(child_bnd_name(bnd)),nf90_double,dimid3d,varid)
           ierr = nf90_put_att(ncid,varid,'long_name',"vertical velocity")
           ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
         endif
-        if (child_up(bnd)) then
+        if (child_up(bnd,ic)) then
           dimid2d = (/child_dimnums_u(bnd), dimid0/)
           ierr=nf90_def_var(ncid,'up_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
           ierr = nf90_put_att(ncid,varid,'long_name',"u-momentum pressure flux")
           ierr = nf90_put_att(ncid,varid,'units',"meter3 second-2")
         endif
-        if (child_vp(bnd)) then
+        if (child_vp(bnd,ic)) then
           dimid2d = (/child_dimnums_v(bnd), dimid0/)
           ierr=nf90_def_var(ncid,'vp_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
           ierr = nf90_put_att(ncid,varid,'long_name',"v-momentum pressure flux")
@@ -1355,12 +1493,13 @@ contains
 
       ierr = nf90_close(ncid)
     endif ! mynode == 0
-    call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(fname(ic),256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
+    enddo ! ic
 #else
-    call create_file('_ext',fname)
+    call create_file('_ext',fname(1))
 
-    ierr=nf90_open(fname,nf90_write,ncid)
+    ierr=nf90_open(fname(1),nf90_write,ncid)
 
     call create_edata_vars(ncid)
     call error_log%abort_check()
@@ -1401,7 +1540,7 @@ contains
         dname3(1) = 'np'//label
         dname3(2) = 's_rho'
         dname3(3) = 'time_'//trim(obj(i)%set)
-        dsize3 = (/ obj(i)%np , N_chd, 0/)
+        dsize3 = (/ obj(i)%np , N_chd(obj(i)%ichd), 0/)
 
         tname = trim(obj(i)%set)//'_time'
         ierr=nf90_inq_varid(ncid,tname,varid)
@@ -1498,67 +1637,70 @@ contains
   end subroutine create_var  !]
 
 ! ----------------------------------------------------------------------
-  subroutine set_chd_scoord
+  subroutine set_chd_scoord(ic)
 
     implicit none                         ! output: Cs_w(0:N
 
+    integer(kind=4), intent(in) :: ic             ! child domain
     integer(kind=4) :: k                          ! Compute vertical stretching
     real(kind=8) :: ds,sc                         ! curves at W-points
 
-    ds=1.D0/dble(N_chd)                   ! -1 < Cs_w < 0
-    Cs_w_chd(N_chd)=0.D0
-    do k=N_chd-1,1,-1
-      sc=ds*dble(k-N_chd)
-      call calc_cs(sc, Cs_w_chd(k))
+    ds=1.D0/dble(N_chd(ic))               ! -1 < Cs_w < 0
+    Cs_w_chd(N_chd(ic),ic)=0.D0
+    do k=N_chd(ic)-1,1,-1
+      sc=ds*dble(k-N_chd(ic))
+      call calc_cs(sc, Cs_w_chd(k,ic), ic)
     enddo
-    Cs_w_chd(0)=-1.D0
+    Cs_w_chd(0,ic)=-1.D0
 
   end subroutine set_chd_scoord
 
-  subroutine calc_cs(sc, Cs)
+  subroutine calc_cs(sc, Cs, ic)
 
     implicit none
 
     real(kind=8), intent(in) :: sc
     real(kind=8), intent(out) :: Cs
+    integer(kind=4), intent(in) :: ic       ! child domain
 
     real(kind=8) :: csrf
 
-    if (theta_s_chd > 0.D0) then
-      csrf=(1.D0-cosh(theta_s_chd*sc))/(cosh(theta_s_chd)-1.D0)
+    if (theta_s_chd(ic) > 0.D0) then
+      csrf=(1.D0-cosh(theta_s_chd(ic)*sc))/(cosh(theta_s_chd(ic))-1.D0)
     else
       csrf=-sc**2                           ! Reference: This form of
     endif                                   ! CSF corresponds exactly
-    if (theta_b_chd > 0.D0) then
-      Cs=(exp(theta_b_chd*csrf)-1.D0)/(1.D0-exp(-theta_b_chd))
+    if (theta_b_chd(ic) > 0.D0) then
+      Cs=(exp(theta_b_chd(ic)*csrf)-1.D0)/(1.D0-exp(-theta_b_chd(ic)))
     else
       Cs=csrf                               ! to Eq.(2.4_8) from SM2009
     endif                                   ! article published in
   end subroutine calc_cs                  ! J. Comput. Phys.
 
 ! ----------------------------------------------------------------------
-  subroutine get_child_thickness(h_par, Hz_chd)
+  subroutine get_child_thickness(h_par, Hz_chd, ic)
 
     implicit none                      ! output: Cs_w(0:N), Cs_r(1:N)
 
     real(kind=8), intent(in)                    :: h_par
     real(kind=8), dimension(:), intent(out)     :: Hz_chd
+    integer(kind=4), intent(in)                 :: ic     ! child domain
 
     integer(kind=4) :: k
     real(kind=8) :: ds,hinv
-    real(kind=8) :: z_w_chd(0:N_chd)
+    real(kind=8) :: z_w_chd(0:N_chd(ic))
     real(kind=8) :: cff_w, cff1_w
 
     ! Note that this calculation does not need the SSH, as it is already
     ! implicitly included from when we calculated h_par
-    ds=1.D0/dble(N_chd)
-    hinv=1._8/(h_par+hc_chd)
+    ds=1.D0/dble(N_chd(ic))
+    hinv=1._8/(h_par+hc_chd(ic))
     z_w_chd(0)=-h_par
 
-    do k=1,N_chd,+1   !--> irreversible because of recursion in Hz
-      cff_w=hc_chd*ds*dble(k-N_chd)
+    do k=1,N_chd(ic),+1   !--> irreversible because of recursion in Hz
+      cff_w=hc_chd(ic)*ds*dble(k-N_chd(ic))
 
-      cff1_w=Cs_w_chd(k)
+      cff1_w=Cs_w_chd(k,ic)
 
       z_w_chd(k)= h_par*(cff_w+cff1_w*h_par)*hinv
 
