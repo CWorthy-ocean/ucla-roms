@@ -32,6 +32,7 @@ from ._helpers import (
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
     create_test_namelist_dict,
+    summarize_output,
 )
 from ._roms_input_file_generation import create_roms_grid
 
@@ -173,12 +174,12 @@ def test_two_children(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_
         assert [k for k in both if both[k] != alone[k]] == []
         return
 
-    hashes = {}
+    summaries = {}
     for name in ("A", "B"):
         (both,) = (tmp_path / "AB").glob(f"child{name}_bry.*.nc")
         (alone,) = (tmp_path / name).glob(f"child{name}_bry.*.nc")
-        hashes[name] = _var_hashes(both)
-        assert hashes[name] == _var_hashes(alone), f"child {name}"
+        assert _var_hashes(both) == _var_hashes(alone), f"child {name}"
+        summaries[f"child{name}"] = summarize_output(both)
 
         # The child's own grid and vertical levels, all four records
         nx, ny, n = CHILDREN[name]["nx"] + 2, CHILDREN[name]["ny"] + 2, CHILDREN[name]["N"]
@@ -186,10 +187,7 @@ def test_two_children(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_
             assert (ds.sizes["xi_rho"], ds.sizes["eta_rho"], ds.sizes["s_rho"]) == (nx, ny, n)
             assert ds["temp_south"].shape == (800 // OUTPUT_PERIOD, n, nx)
 
-    assert_output_matches_reference(
-        reference_results, "extract_two_children_pio",
-        {"childA": hashes["A"], "childB": hashes["B"]},
-    )
+    assert_output_matches_reference(reference_results, "extract_two_children_pio", summaries)
 
 
 def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files):
