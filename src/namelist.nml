@@ -205,12 +205,15 @@ nrpf_frc = 4                    ! Number of time records in forcing files
 ! Up to 8 child domains: give extract_file, N_chd, theta_s_chd,
 ! theta_b_chd, hc_chd and extract_root_name one entry per child, in the
 ! same order (e.g. extract_file = "a.nc", "b.nc"; N_chd = 90, 50). A
-! single value sets child 1, as before. All children share
-! output_period_extract and nrpf_extract. With PARALLEL_IO each child is
-! written to <extract_root_name>_bry.<date>.nc, so with several children
-! each needs its own extract_root_name. Without PARALLEL_IO the children
-! share the per-rank _ext files, so each nesting file needs its own
-! variable prefix and all children the same N_chd.
+! single value sets child 1 only, as before; only child 1 has defaults for
+! theta_s_chd, theta_b_chd and hc_chd, so every other child needs its own
+! entry. All children share output_period_extract and nrpf_extract. With
+! PARALLEL_IO each child is written to <extract_root_name>_bry.<date>.nc,
+! so with several children each needs its own extract_root_name. Without
+! PARALLEL_IO the children share the per-rank _ext files, so each nesting
+! file needs its own variable prefix and all children the same N_chd.
+! A nesting file's variable prefix (roms-tools make_nesting_info prefix)
+! must not contain "_".
 !---------------------
 do_extract = .false.              ! Generate boundary files for nested domains
 output_period_extract = 1800.0           ! How often to output these files

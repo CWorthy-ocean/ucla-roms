@@ -42,14 +42,17 @@ module extract_data
   !
   !    Each child has its own nesting file (extract_file(i)) and its own
   !    vertical grid (N_chd(i), theta_s_chd(i), theta_b_chd(i), hc_chd(i));
-  !    all children share output_period_extract and nrpf_extract. The child
+  !    only child 1 has defaults for theta_s_chd, theta_b_chd and hc_chd.
+  !    All children share output_period_extract and nrpf_extract. The child
   !    grid size is read from the file's <prefix>_xi_rho/<prefix>_eta_rho
   !    dimensions, <prefix> being the objects' set name (roms-tools'
   !    make_nesting_info prefix). With PARALLEL_IO each child is written to
   !    its own joined file, extract_root_name(i)//'_bry'. Without it all
   !    children share the per-rank _ext files and extract_data_join splits
   !    them by prefix, so each child needs its own prefix and all children
-  !    the same N_chd (the files have one s_rho dimension).
+  !    the same N_chd (the files have one s_rho dimension). The set name is
+  !    the variable names up to their first '_', so a prefix cannot contain
+  !    '_' itself.
   !]
 
 #include "cppdefs.opt"
@@ -107,13 +110,16 @@ module extract_data
   character(len=256) :: extract_file(max_extract_chd) = ' '      ! nesting file
   character(len=256) :: extract_root_name(max_extract_chd) = ' ' ! PARALLEL_IO output root
 
-  ! S-coordinate parameters for child grid
+  ! S-coordinate parameters for child grid. Only child 1 has defaults for
+  ! theta_s_chd/theta_b_chd/hc_chd (set in read_nml_extract); every other
+  ! child must be given its own, as a scalar entry only sets child 1.
+  real(kind=8), parameter :: unset_chd = -huge(1._8)   ! not in the namelist
   integer(kind=4)  :: LLm_chd(max_extract_chd)     = 0
   integer(kind=4)  :: MMm_chd(max_extract_chd)     = 0
   integer(kind=4)  :: N_chd(max_extract_chd)       = 0
-  real(kind=8)     :: theta_s_chd(max_extract_chd) = 5.0_8
-  real(kind=8)     :: theta_b_chd(max_extract_chd) = 2.0_8
-  real(kind=8)     :: hc_chd(max_extract_chd)      = 250.0_8
+  real(kind=8)     :: theta_s_chd(max_extract_chd) = unset_chd
+  real(kind=8)     :: theta_b_chd(max_extract_chd) = unset_chd
+  real(kind=8)     :: hc_chd(max_extract_chd)      = unset_chd
   logical, public  :: do_extract
   integer(kind=4)  :: nchd = 0   ! number of child domains (leading non-blank extract_file entries)
 
@@ -248,6 +254,11 @@ contains
     end if
     close(namelist_unit)
 
+    ! Child 1 keeps the defaults it always had
+    if (theta_s_chd(1) == unset_chd) theta_s_chd(1) = 5.0_8
+    if (theta_b_chd(1) == unset_chd) theta_b_chd(1) = 2.0_8
+    if (hc_chd(1)      == unset_chd) hc_chd(1)      = 250.0_8
+
     ! The child domains are the leading non-blank extract_file entries
     if (all(extract_file == ' ')) extract_file(1) = 'sample_edata.nc'
     nchd = 0
@@ -266,6 +277,19 @@ contains
       if (N_chd(ic) <= 0) then
         call error_log%raise_global(context=module_name//'/'//sr_name,&
         &info='N_chd('//trim(num)//') is not set for '//trim(extract_file(ic)))
+      endif
+      ! A default here would silently remap this child onto the wrong levels
+      if (theta_s_chd(ic) == unset_chd) then
+        call error_log%raise_global(context=module_name//'/'//sr_name,&
+        &info='theta_s_chd('//trim(num)//') is not set for '//trim(extract_file(ic)))
+      endif
+      if (theta_b_chd(ic) == unset_chd) then
+        call error_log%raise_global(context=module_name//'/'//sr_name,&
+        &info='theta_b_chd('//trim(num)//') is not set for '//trim(extract_file(ic)))
+      endif
+      if (hc_chd(ic) == unset_chd) then
+        call error_log%raise_global(context=module_name//'/'//sr_name,&
+        &info='hc_chd('//trim(num)//') is not set for '//trim(extract_file(ic)))
       endif
 #ifdef PARALLEL_IO
       ! Each child is written to its own file, named from extract_root_name
@@ -470,6 +494,7 @@ contains
     integer(kind=4),dimension(2)  :: dimids
     character(len=20) :: dname
     character(len=30) :: objname, prefix
+    character(len=:), allocatable :: prefix_hint
     character(len=150) :: variables
     real(kind=8),dimension(:,:),allocatable :: object
     integer(kind=4)               :: n1,n2,i0,i1,lstr
@@ -517,20 +542,24 @@ contains
       ierr = nf90_inquire_variable(ncid,1,name=objname)
       prefix = objname
       if (findstr(objname,'_',sidx)) prefix = objname(1:sidx-1)
+      ! The likeliest cause of a missing dimension is a prefix with an '_'
+      prefix_hint = ". The prefix is the text before the first '_' of the "//&
+      &"variable names ("//trim(objname)//"), so a make_nesting_info "//&
+      &"prefix containing '_' is not supported"
 
       ierr = nf90_inq_dimid(ncid, trim(prefix)//"_xi_rho", cxr)
       if (ierr /= nf90_noerr) ierr = nf90_inq_dimid(ncid, "child_xi_rho", cxr)
       call error_log%check_netcdf_status(netcdf_status=ierr,&
       &context=module_name//"/"//sr_name,&
       &info="error reading "//trim(prefix)//"_xi_rho (or child_xi_rho) in "//&
-      &trim(extract_file(ic)))
+      &trim(extract_file(ic))//prefix_hint)
 
       ierr = nf90_inq_dimid(ncid, trim(prefix)//"_eta_rho", cer)
       if (ierr /= nf90_noerr) ierr = nf90_inq_dimid(ncid, "child_eta_rho", cer)
       call error_log%check_netcdf_status(netcdf_status=ierr,&
       &context=module_name//"/"//sr_name,&
       &info="error reading "//trim(prefix)//"_eta_rho (or child_eta_rho) in "//&
-      &trim(extract_file(ic)))
+      &trim(extract_file(ic))//prefix_hint)
 
       ierr = nf90_inquire_dimension(ncid,cxr,len=LLm_chd(ic))
       ierr = nf90_inquire_dimension(ncid,cer,len=MMm_chd(ic))
@@ -1276,7 +1305,7 @@ contains
           if (obj(i)%up) then
 #ifdef PARALLEL_IO
             oname = 'up' // trim(obj(i)%bnd)
-            pio_gtype = pio_bnd // '2uc'
+            pio_gtype = pio_bnd // '1uc'   ! up is (boundary, time), like ubar
 #else
             oname = trim(obj(i)%set)//'_up'//trim(obj(i)%bnd)
 #endif
