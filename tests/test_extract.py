@@ -13,7 +13,8 @@ its run alone bit for bit: with PARALLEL_IO each child's joined
 ``<extract_root_name>_bry`` file, without it every variable of the per-rank
 ``_ext`` files (which extract_data_join would split by prefix). The
 PARALLEL_IO two-child output is also checked against the reference hashes;
-the interpolation and remapping are the same code in both builds. The
+the interpolation and remapping are the same code in both builds. Child A
+is also run with the pressure fluxes up and vp, which must be written. The
 settings extract_data rejects for several children stop ROMS at startup
 with a message.
 """
@@ -21,6 +22,7 @@ import hashlib
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pytest
 import roms_tools as rt
 import xarray as xr
@@ -66,23 +68,25 @@ ABORT_ATTEMPTS = 5
 
 @pytest.fixture(scope="module")
 def nesting_files(tmp_path_factory) -> dict[str, Path]:
-    """Nesting files of the two children, made against the test parent grid."""
+    """Nesting files of the two children, made against the test parent grid,
+    plus child A's with the pressure fluxes up and vp ("A_pflx")."""
     out = tmp_path_factory.mktemp("nesting")
     parent = create_roms_grid()
     lon, lat = parent.ds.lon_rho.values, parent.ds.lat_rho.values
     files = {}
-    for name, c in CHILDREN.items():
+    for key, name, pflx in (("A", "A", False), ("B", "B", False), ("A_pflx", "A", True)):
+        c = CHILDREN[name]
         i, j = c["at"]
         child = rt.Grid(
             center_lon=float(lon[j, i]) - 360, center_lat=float(lat[j, i]),
             nx=c["nx"], ny=c["ny"], size_x=c["size_x"], size_y=c["size_y"], rot=c["rot"],
             N=c["N"], theta_s=c["theta_s"], theta_b=c["theta_b"], hc=c["hc"],
         )
-        files[name] = out / f"nesting_{name}.nc"
+        files[key] = out / f"nesting_{key}.nc"
         rt.make_nesting_info(
-            parent_grid=parent, child_grid=child, filepath=str(files[name]),
+            parent_grid=parent, child_grid=child, filepath=str(files[key]),
             prefix=c["prefix"], period=float(OUTPUT_PERIOD), include_bgc=False,
-            include_pressure_fluxes=False, verbose=False, format="NETCDF3_64BIT_OFFSET",
+            include_pressure_fluxes=pflx, verbose=False, format="NETCDF3_64BIT_OFFSET",
         )
     return files
 
@@ -197,6 +201,40 @@ def test_two_children(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_
             assert ds["temp_south"].shape == (800 // OUTPUT_PERIOD, n, nx)
 
     assert_output_matches_reference(reference_results, "extract_two_children_pio", summaries)
+
+
+def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files):
+    """The pressure fluxes up and vp (roms-tools include_pressure_fluxes) are
+    written for every boundary, in both builds (PARALLEL_IO used to abort on
+    up). They are zero here: calc_pressure_flux only runs in DIAGNOSTICS
+    builds."""
+    conf = extract_conf
+    child = dict(_child(conf, nesting_files, "A"), file=nesting_files["A_pflx"])
+    nml = _nml(conf, input_dir, pio_input_dir, [child])
+    nml["CALC_PFLX_SETTINGS"].update(calc_pflx=True, pflx_timescale=3600)
+    conf.run(nml, cwd=tmp_path)
+
+    names = [f"{v}_{bnd}" for v in ("up", "vp") for bnd in ("south", "north", "east", "west")]
+    if conf.pio:
+        (path,) = tmp_path.glob("childA_bry.*.nc")
+        with xr.open_dataset(path, decode_cf=False) as ds:
+            nx, ny = CHILDREN["A"]["nx"] + 2, CHILDREN["A"]["ny"] + 2
+            nrec = 800 // OUTPUT_PERIOD
+            for bnd, n_u, n_v in (("south", nx - 1, nx), ("east", ny, ny - 1)):
+                assert ds[f"up_{bnd}"].shape == (nrec, n_u)
+                assert ds[f"vp_{bnd}"].shape == (nrec, n_v)
+            values = {n: ds[n].values for n in names}
+    else:
+        # per-rank files hold <prefix>_<var>_<bnd> where the rank has points
+        values = {}
+        for path in sorted(tmp_path.glob("roms_ext.*.nc")):
+            with xr.open_dataset(path, decode_cf=False) as ds:
+                for n in names:
+                    if f"child_{n}" in ds:
+                        values.setdefault(n, []).append(ds[f"child_{n}"].values.ravel())
+        values = {n: np.concatenate(v) for n, v in values.items()}
+    assert sorted(values) == sorted(names)
+    assert all(np.isfinite(v).all() for v in values.values())
 
 
 def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files):

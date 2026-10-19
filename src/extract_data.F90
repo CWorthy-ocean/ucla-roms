@@ -1298,7 +1298,7 @@ contains
           if (obj(i)%up) then
 #ifdef PARALLEL_IO
             oname = 'up' // trim(obj(i)%bnd)
-            pio_gtype = pio_bnd // '2uc'
+            pio_gtype = pio_bnd // '1uc'   ! up is (boundary, time), like ubar
 #else
             oname = trim(obj(i)%set)//'_up'//trim(obj(i)%bnd)
 #endif
