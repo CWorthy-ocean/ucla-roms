@@ -50,7 +50,9 @@ module extract_data
   !    its own joined file, extract_root_name(i)//'_bry'. Without it all
   !    children share the per-rank _ext files and extract_data_join splits
   !    them by prefix, so each child needs its own prefix and all children
-  !    the same N_chd (the files have one s_rho dimension).
+  !    the same N_chd (the files have one s_rho dimension). The set name is
+  !    the variable names up to their first '_', so a prefix cannot contain
+  !    '_' itself.
   !]
 
 #include "cppdefs.opt"
@@ -492,6 +494,7 @@ contains
     integer(kind=4),dimension(2)  :: dimids
     character(len=20) :: dname
     character(len=30) :: objname, prefix
+    character(len=:), allocatable :: prefix_hint
     character(len=150) :: variables
     real(kind=8),dimension(:,:),allocatable :: object
     integer(kind=4)               :: n1,n2,i0,i1,lstr
@@ -539,20 +542,24 @@ contains
       ierr = nf90_inquire_variable(ncid,1,name=objname)
       prefix = objname
       if (findstr(objname,'_',sidx)) prefix = objname(1:sidx-1)
+      ! The likeliest cause of a missing dimension is a prefix with an '_'
+      prefix_hint = ". The prefix is the text before the first '_' of the "//&
+      &"variable names ("//trim(objname)//"), so a make_nesting_info "//&
+      &"prefix containing '_' is not supported"
 
       ierr = nf90_inq_dimid(ncid, trim(prefix)//"_xi_rho", cxr)
       if (ierr /= nf90_noerr) ierr = nf90_inq_dimid(ncid, "child_xi_rho", cxr)
       call error_log%check_netcdf_status(netcdf_status=ierr,&
       &context=module_name//"/"//sr_name,&
       &info="error reading "//trim(prefix)//"_xi_rho (or child_xi_rho) in "//&
-      &trim(extract_file(ic)))
+      &trim(extract_file(ic))//prefix_hint)
 
       ierr = nf90_inq_dimid(ncid, trim(prefix)//"_eta_rho", cer)
       if (ierr /= nf90_noerr) ierr = nf90_inq_dimid(ncid, "child_eta_rho", cer)
       call error_log%check_netcdf_status(netcdf_status=ierr,&
       &context=module_name//"/"//sr_name,&
       &info="error reading "//trim(prefix)//"_eta_rho (or child_eta_rho) in "//&
-      &trim(extract_file(ic)))
+      &trim(extract_file(ic))//prefix_hint)
 
       ierr = nf90_inquire_dimension(ncid,cxr,len=LLm_chd(ic))
       ierr = nf90_inquire_dimension(ncid,cer,len=MMm_chd(ic))

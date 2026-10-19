@@ -212,6 +212,8 @@ nrpf_frc = 4                    ! Number of time records in forcing files
 ! so with several children each needs its own extract_root_name. Without
 ! PARALLEL_IO the children share the per-rank _ext files, so each nesting
 ! file needs its own variable prefix and all children the same N_chd.
+! A nesting file's variable prefix (roms-tools make_nesting_info prefix)
+! must not contain "_".
 !---------------------
 do_extract = .false.              ! Generate boundary files for nested domains
 output_period_extract = 1800.0           ! How often to output these files

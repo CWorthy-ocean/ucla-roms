@@ -69,12 +69,15 @@ ABORT_ATTEMPTS = 5
 @pytest.fixture(scope="module")
 def nesting_files(tmp_path_factory) -> dict[str, Path]:
     """Nesting files of the two children, made against the test parent grid,
-    plus child A's with the pressure fluxes up and vp ("A_pflx")."""
+    plus child A's with the pressure fluxes up and vp ("A_pflx") and with a
+    prefix ROMS cannot read ("A_underscore")."""
     out = tmp_path_factory.mktemp("nesting")
     parent = create_roms_grid()
     lon, lat = parent.ds.lon_rho.values, parent.ds.lat_rho.values
     files = {}
-    for key, name, pflx in (("A", "A", False), ("B", "B", False), ("A_pflx", "A", True)):
+    variants = [("A", "A", False, None), ("B", "B", False, None),
+                ("A_pflx", "A", True, None), ("A_underscore", "A", False, "child_a")]
+    for key, name, pflx, prefix in variants:
         c = CHILDREN[name]
         i, j = c["at"]
         child = rt.Grid(
@@ -85,7 +88,7 @@ def nesting_files(tmp_path_factory) -> dict[str, Path]:
         files[key] = out / f"nesting_{key}.nc"
         rt.make_nesting_info(
             parent_grid=parent, child_grid=child, filepath=str(files[key]),
-            prefix=c["prefix"], period=float(OUTPUT_PERIOD), include_bgc=False,
+            prefix=prefix or c["prefix"], period=float(OUTPUT_PERIOD), include_bgc=False,
             include_pressure_fluxes=pflx, verbose=False, format="NETCDF3_64BIT_OFFSET",
         )
     return files
@@ -243,7 +246,14 @@ def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nes
     a, b = _child(conf, nesting_files, "A"), _child(conf, nesting_files, "B")
     # a scalar sets child 1 only, and child 2 has no stretching defaults
     stretching = ("theta_s_chd", "theta_b_chd", "hc_chd")
-    cases = {"scalar_stretching": ([a, b], stretching, "theta_s_chd(2) is not set")}
+    cases = {
+        "scalar_stretching": ([a, b], stretching, "theta_s_chd(2) is not set"),
+        # ROMS takes the prefix as the variable names up to their first '_'
+        "underscore_prefix": (
+            [dict(a, file=nesting_files["A_underscore"])], (),
+            "prefix containing '_' is not supported",
+        ),
+    }
     if conf.pio:
         # each child's file is named from its extract_root_name
         cases["shared_root"] = ([a, dict(b, root=a["root"])], (), "share extract_root_name")
