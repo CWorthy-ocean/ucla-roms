@@ -111,9 +111,10 @@ def extract_conf(request, tmp_path_factory) -> ROMSConfiguration:
     return conf
 
 
-def _nml(conf, input_dir, pio_input_dir, children: list[dict]) -> dict:
+def _nml(conf, input_dir, pio_input_dir, children: list[dict], scalars=()) -> dict:
     """Namelist extracting boundary data for ``children`` (dicts as in CHILDREN,
-    plus ``file`` and ``root``). One child is written as scalars, as before."""
+    plus ``file`` and ``root``). One child is written as scalars, as before;
+    so are the settings named in ``scalars`` (child 1's value only)."""
     nml = create_test_namelist_dict(pio_input_dir if conf.pio else input_dir)
     settings = {
         "extract_file": [str(c["file"]) for c in children],
@@ -124,7 +125,8 @@ def _nml(conf, input_dir, pio_input_dir, children: list[dict]) -> dict:
         "hc_chd": [c["hc"] for c in children],
     }
     if len(children) == 1:
-        settings = {k: v[0] for k, v in settings.items()}
+        scalars = settings.keys()
+    settings = {k: v[0] if k in scalars else v for k, v in settings.items()}
     nml["EXTRACT_DATA_SETTINGS"].update(
         do_extract=True, output_period_extract=OUTPUT_PERIOD, nrpf_extract=10, **settings
     )
@@ -201,19 +203,22 @@ def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nes
     """Settings that cannot work for several children stop ROMS at startup."""
     conf = extract_conf
     a, b = _child(conf, nesting_files, "A"), _child(conf, nesting_files, "B")
+    # a scalar sets child 1 only, and child 2 has no stretching defaults
+    stretching = ("theta_s_chd", "theta_b_chd", "hc_chd")
+    cases = {"scalar_stretching": ([a, b], stretching, "theta_s_chd(2) is not set")}
     if conf.pio:
         # each child's file is named from its extract_root_name
-        cases = {"shared_root": ([a, dict(b, root=a["root"])], "share extract_root_name")}
+        cases["shared_root"] = ([a, dict(b, root=a["root"])], (), "share extract_root_name")
     else:
         # all children share the per-rank files: one prefix and one N_chd each
-        cases = {
-            "shared_prefix": ([a, dict(a, root="childA2")], "share the prefix child"),
-            "different_N": ([a, dict(b, N=CHILDREN["B"]["N"])], "must have the same N_chd"),
-        }
-    for case, (children, message) in cases.items():
+        cases["shared_prefix"] = ([a, dict(a, root="childA2")], (), "share the prefix child")
+        cases["different_N"] = (
+            [a, dict(b, N=CHILDREN["B"]["N"])], (), "must have the same N_chd"
+        )
+    for case, (children, scalars, message) in cases.items():
         run_dir = tmp_path / case
         run_dir.mkdir()
-        nml = _nml(conf, input_dir, pio_input_dir, children)
+        nml = _nml(conf, input_dir, pio_input_dir, children, scalars)
         for _ in range(ABORT_ATTEMPTS):
             with pytest.raises(subprocess.CalledProcessError) as excinfo:
                 conf.run(nml, cwd=run_dir, capture_output=True)
