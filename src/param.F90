@@ -24,6 +24,9 @@ module param
   integer(kind=4), public :: nt_passive = 0, nt_bgc = 0
   namelist /PARAM_SETTINGS/ NP_XI, NP_ETA, LLm, MMm,&
   &nz, nt_passive, nt_cdr_oae, nt_cdr_dor, nt_bgc
+  ! Maximum number of child domains extract_data writes boundary data for
+  ! (the length of its per-child EXTRACT_DATA_SETTINGS arrays).
+  integer(kind=4), parameter, public :: max_extract_chd = 8
 ! Array dimensions and bounds of the used portions of sub-arrays:
 
 #ifdef MPI

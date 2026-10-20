@@ -469,7 +469,9 @@ contains
     logical,optional :: skip
 
 #ifdef PARALLEL_IO
-    if ((present(skip)) .and. skip) return
+    if (present(skip)) then   ! not .and.: an absent skip must not be referenced
+      if (skip) return
+    endif
 #endif
 
     if (.not.init_buffer_done) call init_mpi_buffers
@@ -511,7 +513,9 @@ contains
     logical,optional :: skip
 
 #ifdef PARALLEL_IO
-    if ((present(skip)) .and. skip) return
+    if (present(skip)) then   ! not .and.: an absent skip must not be referenced
+      if (skip) return
+    endif
 #endif
 
     if (.not.init_buffer_done) call init_mpi_buffers
@@ -549,7 +553,9 @@ contains
     logical,optional :: skip
 
 #ifdef PARALLEL_IO
-    if ((present(skip)) .and. skip) return
+    if (present(skip)) then   ! not .and.: an absent skip must not be referenced
+      if (skip) return
+    endif
 #endif
 
     if (.not.init_buffer_done) call init_mpi_buffers
@@ -590,7 +596,9 @@ contains
     logical,optional :: skip
 
 #ifdef PARALLEL_IO
-    if ((present(skip)) .and. skip) return
+    if (present(skip)) then   ! not .and.: an absent skip must not be referenced
+      if (skip) return
+    endif
 #endif
 
     if (.not.init_buffer_done) call init_mpi_buffers
@@ -630,7 +638,9 @@ contains
     logical,optional :: skip
 
 #ifdef PARALLEL_IO
-    if ((present(skip)) .and. skip) return
+    if (present(skip)) then   ! not .and.: an absent skip must not be referenced
+      if (skip) return
+    endif
 #endif
 
     if (.not.init_buffer_done) call init_mpi_buffers
@@ -665,7 +675,9 @@ contains
     logical,optional :: skip
 
 #ifdef PARALLEL_IO
-    if ((present(skip)) .and. skip) return
+    if (present(skip)) then   ! not .and.: an absent skip must not be referenced
+      if (skip) return
+    endif
 #endif
 
     if (.not.init_buffer_done) call init_mpi_buffers
@@ -703,7 +715,9 @@ contains
     logical,optional :: skip
 
 #ifdef PARALLEL_IO
-    if ((present(skip)) .and. skip) return
+    if (present(skip)) then   ! not .and.: an absent skip must not be referenced
+      if (skip) return
+    endif
 #endif
 
     if (.not.init_buffer_done) call init_mpi_buffers
@@ -744,7 +758,9 @@ contains
     logical,optional :: skip
 
 #ifdef PARALLEL_IO
-    if ((present(skip)) .and. skip) return
+    if (present(skip)) then   ! not .and.: an absent skip must not be referenced
+      if (skip) return
+    endif
 #endif
 
     if (.not.init_buffer_done) call init_mpi_buffers
@@ -785,7 +801,9 @@ contains
     logical,optional :: skip
 
 #ifdef PARALLEL_IO
-    if ((present(skip)) .and. skip) return
+    if (present(skip)) then   ! not .and.: an absent skip must not be referenced
+      if (skip) return
+    endif
 #endif
 
     if (.not.init_buffer_done) call init_mpi_buffers
@@ -823,7 +841,9 @@ contains
     logical,optional :: skip
 
 #ifdef PARALLEL_IO
-    if ((present(skip)) .and. skip) return
+    if (present(skip)) then   ! not .and.: an absent skip must not be referenced
+      if (skip) return
+    endif
 #endif
 
     if (.not.init_buffer_done) call init_mpi_buffers
