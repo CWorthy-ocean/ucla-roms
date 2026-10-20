@@ -11,6 +11,8 @@ Breaking Changes
 
 
 - ``tests/results/results_<environ>.json`` changes shape again: each variable's entry holds its hash plus min, max, mean and rms; a branch that regenerated references before this lands must rerun ``tests/update_references.py`` after merging main. (`#392 <https://github.com/CWorthy-ocean/ucla-roms/pull/392>`_)
+- None for existing namelists or outputs: single-child output is bit-for-bit identical to main, with and without ``PARALLEL_IO``. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- New reference key ``extract_two_children_pio`` in ``tests/results/results_github_{gnu,ifx}.json`` (new test; added with ``tests/update_references.py`` from this PR's CI run). (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
 
 New Features
 ~~~~~~~~~~~~
@@ -27,17 +29,52 @@ New Features
   - Reference files hold one line per variable, so a reference update's diff shows each changed variable with its numbers.
   - ``update_references.py`` separates hash changes from statistics-only changes.
 
+- Boundary data for up to 8 child domains (``max_extract_chd``, ``param.F90``). ``extract_file``, ``extract_root_name``, ``N_chd``, ``theta_s_chd``, ``theta_b_chd`` and ``hc_chd`` take one entry per child, in the same order, e.g. ``extract_file = 'a.nc', 'b.nc'``, ``N_chd = 50, 30``. All children share ``output_period_extract`` and ``nrpf_extract``. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- Each child has its own vertical grid, so children with different ``N``/stretching are each remapped to their own levels. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- ``PARALLEL_IO``: each child is written to ``<extract_root_name>_bry.<date>.nc``. The extract decompositions in ``pio_roms.F90`` are kept per child and selected with ``pio_extract_child``. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- Without ``PARALLEL_IO``, all children share the per-rank ``_ext`` files and ``extract_data_join`` (unchanged) writes one ``<prefix>_bry`` file per child. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- Nesting files with any roms-tools prefix can be read: the child grid size comes from the file's ``<prefix>_xi_rho``/``<prefix>_eta_rho`` dimensions, falling back to ``child_*``. Previously only the default prefix ``child`` worked. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+
 Bug Fixes
 ~~~~~~~~~
 
-- N/A
+
+- ``roms_mpi.F90``: the ten ``exchange_*`` routines tested ``(present(skip)) .and. skip`` under ``PARALLEL_IO``, referencing the optional ``skip`` even when absent (Fortran does not short-circuit ``.and.``). Optimized builds happened to survive it; a ``PARALLEL_IO`` build with ``BUILD_MODE=test`` (ifx ``-O0 -init=zero -init=arrays``) segfaulted in ``exchange_2`` called from ``get_grid`` at startup, on main too and with any tiling. The test is now nested; behaviour is unchanged where the old form did not crash. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- ``extract_data.F90``: with ``PARALLEL_IO`` every rank runs each child's write code, including ranks without any of its points. The rho-point thickness step for vertical remapping lacked the ``np > 0`` guard the u/v steps have, so on those ranks it used unallocated arrays. gfortran segfaulted on the first write of any child whose vertical grid differs from the parent's (also on main, single child); ifx ran, but ``-check pointers`` stops there. Output is unchanged where it ran. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- CI: the ifx image puts PnetCDF on ``LIBRARY_PATH`` only, so ``PARALLEL_IO`` executables linked but could not start (``libpnetcdf.so.6`` not found). ``pytest_ifx`` now adds ``$PNETCDFHOME/lib`` to ``LD_LIBRARY_PATH``; this PR's test is the first to run a ``PARALLEL_IO`` build in CI. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- ``extract_data.F90``: with ``PARALLEL_IO`` every rank runs each child's write code, including ranks without any of its points. The rho-point thickness step for vertical remapping lacked the ``np > 0`` guard the u/v steps have, so on those ranks it used unallocated arrays. gfortran segfaulted on the first write of any child whose vertical grid differs from the parent's (also on main, single child); ifx ran, but ``-check pointers`` stops there. Output is unchanged where it ran. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- CI: the ifx image puts PnetCDF on ``LIBRARY_PATH`` only, so ``PARALLEL_IO`` executables linked but could not start (``libpnetcdf.so.6`` not found). ``pytest_ifx`` now adds ``$PNETCDFHOME/lib`` to ``LD_LIBRARY_PATH``; this PR's test is the first to run a ``PARALLEL_IO`` build in CI. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
 
 Improvements
 ~~~~~~~~~~~~
 
-- N/A
+
+- ROMS stops at startup with a clear message for: (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+
+  - ``extract_file`` entries that are not consecutive;
+  - an ``N_chd`` left unset for a child (previously that child silently got zero levels);
+  - two children sharing an ``extract_root_name`` (``PARALLEL_IO``);
+  - two children sharing a prefix, or having different ``N_chd`` (without ``PARALLEL_IO``, since all children share one ``s_rho`` there).
+
+- ``tests/test_extract.py`` (new): (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+
+  - Two roms-tools children in the test parent: child A on the parent's vertical grid, child B rotated against the parent and remapped. They sit on different ranks and each crosses a tile boundary.
+  - Builds with and without ``PARALLEL_IO``. In each, every child's data from the two-child run must equal its run alone, bit for bit.
+  - The ``PARALLEL_IO`` output is also checked against reference hashes, and the rejected settings are checked.
+  - It is the first pytest that runs a ``PARALLEL_IO`` build; CI previously only compiled one.
+
+- Also validated on a realistic case: the CCS parent (200×300×50, 100 ranks, MARBL), one day, hourly records, with the real CCS child plus a second roms-tools child (4 km, N = 30). (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+
+  - Single-child output matches main bit for bit, with and without ``PARALLEL_IO``.
+  - Each child of a two-child run matches main's run of that child alone.
+  - Without ``PARALLEL_IO``, all 100 per-rank files match.
+  - Model output is unchanged.
 
 Miscellaneous
 ~~~~~~~~~~~~~
 
 - ``tests/README.md`` explains how to read the statistics and the base-commit report, and how to compare two local runs. (`#392 <https://github.com/CWorthy-ocean/ucla-roms/pull/392>`_)
+- ``namelist.nml`` and ``docs/model_settings/runtime_settings.md`` document the per-child arrays and the ``PARALLEL_IO`` and per-rank rules. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- Not changed: ``w`` extraction under ``PARALLEL_IO`` still uses the non-PIO write call, as on main. None of the roms-tools nesting files request ``w``. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- C-Star blueprints still pass a single child; using several children through C-Star needs a C-Star change. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- Merged main for #392; ``tests/_helpers.py`` gains ``summarize_output()``, which summarizes an output file that needs no joining (PARALLEL_IO output), and ``get_summary_value()`` now calls it after ``ncjoin``. No existing reference hash changes. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
