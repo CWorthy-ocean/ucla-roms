@@ -118,8 +118,8 @@ module surf_flux
   ! real(kind=8),public :: dSSSdt = 0._8                           ! input units (cm/day)
 
 #if defined CDR_LITE
-      real(kind=8),public,allocatable,dimension(:,:) :: ddic_dco2  ! time interpolated carbonate sensitivity
-      real(kind=8),public,allocatable,dimension(:,:) :: ddic_dalk  ! time interpolated carbonate sensitivity
+      real(kind=8),public,allocatable,dimension(:,:) :: ddic_dco2  ! carbonate sensitivity at the forcing time
+      real(kind=8),public,allocatable,dimension(:,:) :: ddic_dalk  ! carbonate sensitivity at the forcing time
       real(kind=8),public,allocatable,dimension(:,:) :: k_gas      ! time interpolated gas transfer velocity
 
       type (ncforce) :: nc_ddic_dco2 = ncforce(vname='ddic_dco2',tname='ddic_dco2_time' )  ! carbonate sensitivity
@@ -130,7 +130,14 @@ module surf_flux
       ! forcing files. Optional namelist group; defaults to reading from file.
       ! Online mode assumes xco2_air_alt == xco2_air (see namelist.nml).
       logical, public :: cdr_online_carbonate_sensitivity = .false.
-      namelist /CDR_LITE_SETTINGS/ cdr_online_carbonate_sensitivity
+
+      ! If true (default), ddic_dco2/ddic_dalk read from the forcing files are
+      ! interpolated linearly in time between the two bracketing records. If
+      ! false, each record is held until the next one starts. Ignored when
+      ! cdr_online_carbonate_sensitivity is set.
+      logical, public :: cdr_carbonate_sensitivity_time_interpolation = .true.
+      namelist /CDR_LITE_SETTINGS/ cdr_online_carbonate_sensitivity,&
+      &                            cdr_carbonate_sensitivity_time_interpolation
 #endif
 
   ! Sea-surface DIC (sDIC) and ALK (sALK) data for restoring
@@ -233,6 +240,8 @@ contains
       &//trim(msg)&
       &)
     end if
+    nc_ddic_dco2%time_interpolation = cdr_carbonate_sensitivity_time_interpolation
+    nc_ddic_dalk%time_interpolation = cdr_carbonate_sensitivity_time_interpolation
 #endif
 
   close(namelist_unit)
