@@ -212,6 +212,46 @@ class TestCdr:
         )
 
 
+CDRGAS_NAME = "roms_cdrgas.20100101000000.nc"
+
+
+def _cdr_lite_parm_nml(input_dir) -> dict:
+    """Namelist of the parameterized ALK release forced by the ``_cdrgas`` files.
+
+    The same 20 steps as the MARBL run (``cdrgas_run``): its end bracket record
+    gives the forcing reader a record at the run's end. The per-rank pieces of
+    ``CDRGAS_NAME`` must sit beside the namelist.
+    """
+    nml = create_test_namelist_dict(input_dir)
+    nml["TIME_STEPPING"]["dt"] = 40
+    nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
+    nml["PARAM_SETTINGS"]["nt_bgc"] = 0
+    nml["PARAM_SETTINGS"]["nt_cdr_oae"] = 1
+    nml["FORCING_FILES"] = {
+        "frcfiles": [
+            str(input_dir / "example_input_boundary_forcing.nc"),
+            str(input_dir / "example_input_surface_forcing.nc"),
+            CDRGAS_NAME,
+        ]
+    }
+    nml["CDR_FRC_SETTINGS"].update({
+        "cdr_source": True,
+        "cdr_forcing_parameterized": True,
+        "cdr_relocate_to_wet_pts": True,
+        "cdr_ncdr_parm": 1,
+        "cdr_file": str(input_dir / "cdr_forcing_parm_cdr_lite.nc"),
+    })
+    nml["CDR_LITE_SETTINGS"]["cdr_online_carbonate_sensitivity"] = False
+    nml["CDR_LITE_OUTPUT_SETTINGS"].update({
+        "do_cdr_lite_output": True,
+        "wrt_cdr_lite_avg": False,
+        "output_period_cdr_lite": 400,
+        "nrpf_cdr_lite": 10,
+        "wrt_gas_exchange": True,
+    })
+    return nml
+
+
 class TestCdrLite:
     """CDR_LITE tracers (no MARBL) forced by a ROMS-MARBL run's ``_cdrgas`` files."""
 
@@ -247,41 +287,12 @@ class TestCdrLite:
         # per-rank pieces of the MARBL run's output serve as the listed
         # "roms_cdrgas.20100101000000.nc". Copied beside the namelist: a
         # relative name keeps the path inside ROMS's filename buffers.
-        cdrgas_name = "roms_cdrgas.20100101000000.nc"
         pieces = sorted(cdrgas_run.glob("roms_cdrgas.20100101000000.?.nc"))
         assert len(pieces) == 4
         for piece in pieces:
             shutil.copy(piece, tmp_path / piece.name)
 
-        nml = create_test_namelist_dict(input_dir)
-        # The same 20 steps as the MARBL run: its end bracket record gives the
-        # forcing reader a record at the run's end.
-        nml["TIME_STEPPING"]["dt"] = 40
-        nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
-        nml["PARAM_SETTINGS"]["nt_bgc"] = 0
-        nml["PARAM_SETTINGS"]["nt_cdr_oae"] = 1
-        nml["FORCING_FILES"] = {
-            "frcfiles": [
-                str(input_dir / "example_input_boundary_forcing.nc"),
-                str(input_dir / "example_input_surface_forcing.nc"),
-                cdrgas_name,
-            ]
-        }
-        nml["CDR_FRC_SETTINGS"].update({
-            "cdr_source": True,
-            "cdr_forcing_parameterized": True,
-            "cdr_relocate_to_wet_pts": True,
-            "cdr_ncdr_parm": 1,
-            "cdr_file": str(input_dir / "cdr_forcing_parm_cdr_lite.nc"),
-        })
-        nml["CDR_LITE_SETTINGS"]["cdr_online_carbonate_sensitivity"] = False
-        nml["CDR_LITE_OUTPUT_SETTINGS"].update({
-            "do_cdr_lite_output": True,
-            "wrt_cdr_lite_avg": False,
-            "output_period_cdr_lite": 400,
-            "nrpf_cdr_lite": 10,
-            "wrt_gas_exchange": True,
-        })
+        nml = _cdr_lite_parm_nml(input_dir)
         stdout = cdr_lite_conf.run(nml, cwd=tmp_path, capture_output=True)
 
         assert stdout.count("CDR_OAE_DIC1_flx not in forcing files") == 1
@@ -307,6 +318,71 @@ class TestCdrLite:
             reference_results, "cdr_lite_parm", {"physics": pv, "cdrtrc": tv}
         )
 
+    def test_sensitivity_time_interpolation_switch(
+        self, tmp_path, cdr_lite_conf, input_dir, cdrgas_run
+    ):
+        """With interpolation off, each ``ddic_*`` record holds until the next one.
+
+        The ``_cdrgas`` records are at 0, 100, 300, 500, 700 and 800 s, and the
+        20-step run evaluates the forcing before 800 s only. Holding the earlier
+        bracketing record therefore never uses the 800 s record: scaling it must
+        leave the output bit-identical. Interpolating uses it only after 700 s,
+        so the same change must alter the 800 s output record and leave the
+        400 s one bit-identical. Checked directly, so the test needs no reference.
+        """
+        pieces = sorted(cdrgas_run.glob("roms_cdrgas.20100101000000.?.nc"))
+        assert len(pieces) == 4
+
+        def run(name, interpolate, scale_last):
+            run_dir = tmp_path / name
+            run_dir.mkdir()
+            for piece in pieces:
+                if not scale_last:
+                    shutil.copy(piece, run_dir / piece.name)
+                    continue
+                with xr.open_dataset(
+                    piece, decode_times=False, decode_timedelta=False
+                ) as ds:
+                    ds = ds.load()
+                for var in ("ddic_dco2", "ddic_dalk"):
+                    tdim = ds[var].dims[0]
+                    last = {tdim: ds.sizes[tdim] - 1}
+                    ds[var][last] = 2 * ds[var][last]
+                ds.to_netcdf(run_dir / piece.name)
+
+            nml = _cdr_lite_parm_nml(input_dir)
+            nml["CDR_LITE_SETTINGS"][
+                "cdr_carbonate_sensitivity_time_interpolation"
+            ] = interpolate
+            cdr_lite_conf.run(nml, cwd=run_dir)
+            get_summary_value(  # joins the per-rank output
+                run_dir, prefix="roms_cdrtrc.20100101000640",
+                vars_to_exclude=["avg_begin_time", "avg_end_time"],
+            )
+            with xr.open_dataset(run_dir / "roms_cdrtrc.20100101000640.nc") as ds:
+                return {
+                    var: ds[var].values
+                    for var in ("CDR_OAE_DIC1", "FG_CDR_OAE_DIC1")
+                }
+
+        hold = run("hold", interpolate=False, scale_last=False)
+        hold_scaled = run("hold_scaled", interpolate=False, scale_last=True)
+        interp = run("interp", interpolate=True, scale_last=False)
+        interp_scaled = run("interp_scaled", interpolate=True, scale_last=True)
+
+        for var in hold:
+            assert np.isfinite(hold[var]).all(), var
+            assert hold[var].shape[0] == 2, var  # records at 400 s and 800 s
+            np.testing.assert_array_equal(hold_scaled[var], hold[var], err_msg=var)
+            np.testing.assert_array_equal(
+                interp_scaled[var][0], interp[var][0], err_msg=var
+            )
+        assert not np.array_equal(
+            interp_scaled["FG_CDR_OAE_DIC1"][1], interp["FG_CDR_OAE_DIC1"][1]
+        )
+        # The switch acts: holding and interpolating the same records differ
+        assert not np.array_equal(hold["FG_CDR_OAE_DIC1"], interp["FG_CDR_OAE_DIC1"])
+
     def test_dp_by_name_conserves_flux(
         self, tmp_path, cdr_lite_conf, input_dir, cdrgas_run
     ):
@@ -319,7 +395,6 @@ class TestCdrLite:
         fluxes only add up to the file's total if the remap conserves flux,
         not flux * thickness. Checked directly, so the test needs no reference.
         """
-        cdrgas_name = "roms_cdrgas.20100101000000.nc"
         for piece in sorted(cdrgas_run.glob("roms_cdrgas.20100101000000.?.nc")):
             shutil.copy(piece, tmp_path / piece.name)
 
@@ -350,7 +425,7 @@ class TestCdrLite:
             "frcfiles": [
                 str(input_dir / "example_input_boundary_forcing.nc"),
                 str(input_dir / "example_input_surface_forcing.nc"),
-                cdrgas_name,
+                CDRGAS_NAME,
             ]
         }
         nml["CDR_FRC_SETTINGS"].update({

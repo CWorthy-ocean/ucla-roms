@@ -358,8 +358,13 @@ nrpf_cdr = 4                       ! Time records per output file
 ! The surface-flux variables CDR_OAE_DIC<n>_flx and CDR_DOR_DIC<n>_flx in the
 ! forcing files are optional: if absent, the tracer's surface flux is zero and
 ! only the gas exchange (from ddic_dco2/ddic_dalk) acts.
+! cdr_carbonate_sensitivity_time_interpolation applies to ddic_dco2/ddic_dalk
+! read from frcfiles: if .true. (default), they are interpolated linearly in
+! time between the two bracketing records; if .false., each record is held
+! until the next one starts. It has no effect with the online option.
 !--------------------------
 cdr_online_carbonate_sensitivity = .false.
+cdr_carbonate_sensitivity_time_interpolation = .true.
 /
 
 &CDR_LITE_OUTPUT_SETTINGS                               !cdr_lite_output.F90
