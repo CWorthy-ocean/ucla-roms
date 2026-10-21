@@ -34,6 +34,12 @@ New Features
 - ``PARALLEL_IO``: each child is written to ``<extract_root_name>_bry.<date>.nc``. The extract decompositions in ``pio_roms.F90`` are kept per child and selected with ``pio_extract_child``. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
 - Without ``PARALLEL_IO``, all children share the per-rank ``_ext`` files and ``extract_data_join`` (unchanged) writes one ``<prefix>_bry`` file per child. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
 - Nesting files with any roms-tools prefix can be read: the child grid size comes from the file's ``<prefix>_xi_rho``/``<prefix>_eta_rho`` dimensions, falling back to ``child_*``. Previously only the default prefix ``child`` worked. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- New logical ``cdr_carbonate_sensitivity_time_interpolation`` in ``&CDR_LITE_SETTINGS`` controls how ``ddic_dco2`` and ``ddic_dalk`` from the forcing files vary in time. (`#396 <https://github.com/CWorthy-ocean/ucla-roms/pull/396>`_)
+
+  - ``.true.`` (default) interpolates linearly between the two bracketing forcing records, as before.
+  - ``.false.`` holds each record until model time passes the next record's time.
+  - The option has no effect when ``cdr_online_carbonate_sensitivity = .true.``, since nothing is read from file.
+
 
 Bug Fixes
 ~~~~~~~~~
@@ -78,3 +84,5 @@ Miscellaneous
 - Not changed: ``w`` extraction under ``PARALLEL_IO`` still uses the non-PIO write call, as on main. None of the roms-tools nesting files request ``w``. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
 - C-Star blueprints still pass a single child; using several children through C-Star needs a C-Star change. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
 - Merged main for #392; ``tests/_helpers.py`` gains ``summarize_output()``, which summarizes an output file that needs no joining (PARALLEL_IO output), and ``get_summary_value()`` now calls it after ``ncjoin``. No existing reference hash changes. (`#395 <https://github.com/CWorthy-ocean/ucla-roms/pull/395>`_)
+- The namelist template documents the new option with its default. (`#396 <https://github.com/CWorthy-ocean/ucla-roms/pull/396>`_)
+- A new reference-free test checks both settings of the option, and the CDR_LITE tests share one namelist helper. (`#396 <https://github.com/CWorthy-ocean/ucla-roms/pull/396>`_)
