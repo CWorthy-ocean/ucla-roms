@@ -112,7 +112,7 @@ contains
     use timers, only: start_timers, stop_timers
     use error_handling_mod, only: error_log
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
-    use upscale_output, only: wrt_upscale, do_upscale
+    use upscale_output, only: wrt_upscale_final, do_upscale
 #endif
 #if defined MARBL && defined CDR_FORCING
     use cdr_gas_exch_output, only: wrt_cdr_gas_final, do_cdr_gas_exch_output
@@ -134,7 +134,7 @@ contains
 ! This is where we might put a generic "final write" subroutine
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     if (do_upscale) then
-      call wrt_upscale
+      call wrt_upscale_final
     endif
 #endif
 #if defined MARBL && defined CDR_FORCING

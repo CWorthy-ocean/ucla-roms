@@ -24,3 +24,15 @@ Developers - build and push the container with:
 ```
 podman build --format=docker -f Containerfile_gnu -t ghcr.io/cworthy-ocean/marbl_gnu_mpich:<VERSION> .
 ```
+
+Run the gnu image with a larger `/dev/shm`:
+
+```
+podman run --rm -it --shm-size=1g ghcr.io/cworthy-ocean/marbl_gnu_mpich:latest
+```
+
+Docker and podman give a container 64 MB of `/dev/shm` by default.
+Under that default, the image's MPICH (UCX 1.22) can segfault in `MPI_Init`
+when `/dev/shm` runs low, with a `uct_mm_iface_recv_desc_init` backtrace.
+The comment on the `test_gnu` job's container in
+`.github/workflows/containerized_ci.yml` explains why.

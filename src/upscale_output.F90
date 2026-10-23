@@ -45,10 +45,13 @@ module upscale_output
   integer(kind=4) :: uscl_prec = nf90_double  ! Precision of output variables (nf90_float/nf90_double)
   character(len=15) :: module_name = "upscale_output"
   integer(kind=4)                        :: record_uscl=0   ! record number in file
-  real(kind=8)                           :: otime=0   ! time since last output; setting the initial
-  ! value to output_period should make it write a record upon startup (which
-  ! is desired)
+  real(kind=8)                           :: otime=0   ! time since the current window began
+  ! Each record averages the steps of one window [avg_begin_time, avg_end_time]:
+  ! windows are contiguous from the run start, and the last one may be partial.
+  real(kind=8) :: avg_begin_time = 0
   integer(kind=4) :: navg = 0
+  character(len=256) :: fname_uscl                ! current output file
+  logical :: coords_written = .false.             ! lat/lon written to fname_uscl
 
   ! CDR_LITE tracers occupy one contiguous index range right after the passive
   ! tracers (tracers.F90): icdr0+1 .. icdr0+ncdr_lite. Slot n of the cdr_*
@@ -133,7 +136,7 @@ module upscale_output
 
 #endif
 
-  public init_upscale, wrt_upscale, calc_forcing_rates, add_mixing_rates, read_nml_upscale
+  public init_upscale, wrt_upscale, wrt_upscale_final, calc_forcing_rates, add_mixing_rates, read_nml_upscale
 
 contains
 !     ----------------------------------------------------------------------
@@ -158,8 +161,7 @@ contains
       &)
     end if
     close(namelist_unit)
-    record_uscl = nrpf_uscl
-    otime = output_period_uscl
+    record_uscl = nrpf_uscl  ! the first window opens a new file
   end subroutine read_nml_upscale
 
   subroutine init_upscale ![
@@ -552,46 +554,68 @@ contains
   end subroutine calc_average  !]
 !----------------------------------------------------------------------
   subroutine wrt_upscale ![
-    ! extract data for all objects, for all vars
-    ! and write to file
+    ! Called once per step from step3d_t, where time is the start of the step:
+    ! add the step's boundary fluxes to the current window, and write the
+    ! window once it spans output_period_uscl.
     implicit none
 
-! local
-    character(len=11) :: sr_name = "wrt_upscale"
-    integer(kind=4) :: ierr,ncid
-    character(len=256),save :: fname
-    integer(kind=4),dimension(3) :: start2D
-    logical,save :: coords_written = .false.
+    if (navg == 0) then
+      avg_begin_time = time
+      ! A file is opened at the start of its first window, so its name is the
+      ! start of the period it covers
+      if (record_uscl == nrpf_uscl) then
+        call create_upscale_file(fname_uscl)
+        record_uscl = 0
+        coords_written = .false.
+      endif
+    endif
 
     call calc_average
     otime = otime + dt
 
-    if ((record_uscl==nrpf_uscl) .and. (otime>=output_period_uscl)) then
-      call create_upscale_file(fname)
-      record_uscl = 0
-      coords_written = .false.
-    endif
+    if (otime>=output_period_uscl) call wrt_upscale_record(time+dt)
 
-    if (otime>=output_period_uscl) then
+  end subroutine wrt_upscale  !]
+!----------------------------------------------------------------------
+  subroutine wrt_upscale_final ![
+    ! Called after the time loop, where time is the end of the run: write the
+    ! last window if it is partial. Its steps are already in the average.
+    implicit none
+    if (navg > 0) call wrt_upscale_record(time)
+  end subroutine wrt_upscale_final  !]
+!----------------------------------------------------------------------
+  subroutine wrt_upscale_record(end_time) ![
+    ! Write the average over the window [avg_begin_time, end_time] and start a
+    ! new window. ocean_time is the end of the window.
+    implicit none
+    real(kind=8), intent(in) :: end_time
+
+! local
+    character(len=18) :: sr_name = "wrt_upscale_record"
+    integer(kind=4) :: ierr,ncid
+    integer(kind=4),dimension(3) :: start2D
+
 #ifdef PARALLEL_IO
       record_uscl = record_uscl+1
 
       start2D = (/1,1,record_uscl/)
 
       if (mynode == 0) then
-        ierr=nf90_open(fname,nf90_write,ncid)
+        ierr=nf90_open(fname_uscl,nf90_write,ncid)
         if (ierr/=nf90_noerr) then
           call error_log%check_netcdf_status(netcdf_status=ierr, &
-            info="error opening "//trim(fname), &
+            info="error opening "//trim(fname_uscl), &
             context=module_name//"/"//sr_name)
         end if
-        call ncwrite(ncid,'ocean_time',(/time/),(/record_uscl/))
+        call ncwrite(ncid,'ocean_time',(/end_time/),(/record_uscl/))
+        call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record_uscl/))
+        call ncwrite(ncid,'avg_end_time',(/end_time/),(/record_uscl/))
         ierr=nf90_close(ncid)
       endif
       call error_log%abort_check()
       call MPI_Barrier(ocean_grid_comm, ierr)
 
-      call pio_open_or_abort(trim(fname), module_name//"/"//sr_name, PIO_write)
+      call pio_open_or_abort(trim(fname_uscl), module_name//"/"//sr_name, PIO_write)
       ncid = 0  ! unused when PP=.true.; required by ncwrite interface
 
       if (.not. coords_written) then
@@ -659,18 +683,15 @@ contains
       call MPI_Barrier(ocean_grid_comm, ierr)
       call PIO_closefile(pio_FileDesc)
 
-      otime = 0
-      navg=0
-
-    endif
-
 #else
-      ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_open(fname_uscl,nf90_write,ncid)
       record_uscl = record_uscl+1
 
       start2D = (/1,1,record_uscl/)
 
-      call ncwrite(ncid,'ocean_time',(/time/),(/record_uscl/))
+      call ncwrite(ncid,'ocean_time',(/end_time/),(/record_uscl/))
+      call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record_uscl/))
+      call ncwrite(ncid,'avg_end_time',(/end_time/),(/record_uscl/))
 
 #ifdef OBC_NORTH
       if (jnode==npy-1) then
@@ -725,14 +746,12 @@ contains
 #endif
 
       ierr=nf90_close(ncid)
+#endif
 
       otime = 0
       navg=0
 
-    endif
-#endif
-
-  end subroutine wrt_upscale  !]
+  end subroutine wrt_upscale_record  !]
 ! ----------------------------------------------------------------------
   subroutine create_upscale_file(fname) ![
     implicit none
@@ -795,6 +814,15 @@ contains
     integer(kind=4), intent(in) :: ncid
     logical, intent(in) :: all_boundaries
     integer(kind=4)             :: ierr, varid
+
+    ! Same units as ocean_time
+    varid = nccreate(ncid,'avg_begin_time',(/dn_tm/),(/0/),nf90_double)
+    ierr = nf90_put_att(ncid,varid,'long_name','Time at beginning of averaging period')
+    ierr = nf90_put_att(ncid,varid,'units','second')
+
+    varid = nccreate(ncid,'avg_end_time',(/dn_tm/),(/0/),nf90_double)
+    ierr = nf90_put_att(ncid,varid,'long_name','Time at end of averaging period')
+    ierr = nf90_put_att(ncid,varid,'units','second')
 
 #ifdef OBC_NORTH
     if (all_boundaries .or. jnode==npy-1) then

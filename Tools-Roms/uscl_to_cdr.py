@@ -20,6 +20,39 @@ CDR_ADD_VAR_RE = re.compile(
 )
 
 
+def uscl_windows(dataset: xr.Dataset) -> tuple[np.ndarray, np.ndarray, slice]:
+    """Averaging windows of the `_uscl` records, in seconds like `ocean_time`.
+
+    Returns the window starts and ends and the slice of `_uscl` records holding
+    their averages. Files from ucla-roms > 0.12.0 carry the windows as
+    `avg_begin_time`/`avg_end_time`. Older files have no bounds: their first
+    record is a one-step start-up sample and each later record averages the
+    period ending at its `ocean_time`, so the windows are taken from
+    consecutive stamps and the start-up sample is dropped.
+    """
+    if "avg_begin_time" in dataset.variables:
+        begin = np.asarray(dataset.avg_begin_time.values, dtype=float)
+        end = np.asarray(dataset.avg_end_time.values, dtype=float)
+        records = slice(None)
+    else:
+        print("No `avg_begin_time` in `_uscl` files (ucla-roms <= 0.12.0): "
+              "taking windows from consecutive `ocean_time` stamps and "
+              "dropping the start-up record")
+        stamps = np.asarray(dataset.ocean_time.values, dtype=float)
+        if stamps.size < 2:
+            raise ValueError("`_uscl` files without `avg_begin_time` need at least "
+                             "two records (a start-up record and one window)")
+        begin, end = stamps[:-1], stamps[1:]
+        records = slice(1, None)
+    if not np.all(end > begin):
+        raise ValueError("`_uscl` averaging windows must have positive length")
+    if not np.array_equal(begin[1:], end[:-1]):
+        raise ValueError("`_uscl` averaging windows are not contiguous. "
+                         "HINT: pass the files of one run, or of runs that "
+                         "continue each other")
+    return begin, end, records
+
+
 def cdr_tracer_sort_key(name: str) -> tuple:
     """Sort key matching ROMS tracer order: OAE ALK/DIC pairs, then DOR DICs."""
     for group, pattern, slot in [(0, r"CDR_OAE_ALK(\d+)", 0),
@@ -54,6 +87,11 @@ class CDRUpscaler:
     to apply each column to the tracer of that name, skipping tracers the parent
     run does not have (e.g. ALK and DIC without MARBL).
 
+    ROMS holds each CDR record from its `cdr_time` until the next one, so each
+    `_uscl` window average becomes a record at the window's start, and a
+    closing zero-flux record at the end of the last window ends the release
+    there (see `uscl_windows`).
+
     Use
     ---
     1. Initialize with a list of _joined_ `_uscl` files, e.g.
@@ -74,7 +112,8 @@ class CDRUpscaler:
         """
         Generate a CDRUpscaler instance from a list of joined, time-evolving `_uscl` files.
 
-        Sets simulation- and domain-related attributes eta_rho, xi_rho, s_rho and time.
+        Sets simulation- and domain-related attributes eta_rho, xi_rho, s_rho and the
+        averaging windows (window_begin, window_end, records; see `uscl_windows`).
         Determines how many boundary columns are present to be transformed into CDR profiles.
         """
 
@@ -88,12 +127,14 @@ class CDRUpscaler:
             concat_dim="time",
             combine="nested",
             data_vars="minimal",
-            coords="minimal"
+            coords="minimal",
+            decode_timedelta=False,
         )
         self.eta_rho: xr.DataArray = self.uscl_dataset.eta_rho
         self.xi_rho: xr.DataArray = self.uscl_dataset.xi_rho
         self.s_rho: xr.DataArray = self.uscl_dataset.s_rho
-        self.time: xr.DataArray = self.uscl_dataset.time
+        self.window_begin, self.window_end, self.records = uscl_windows(self.uscl_dataset)
+        self.n_windows: int = len(self.window_begin)
 
         # Determine active boundaries and add up all columns to get no. profiles
         self.child_boundaries: dict = {}
@@ -166,6 +207,8 @@ class CDRUpscaler:
         - cdr_trc_name: Tracer names along the tracer axis (only with CDR_LITE tracers)
         - cdr_lon, cdr_lat: 1D arrays specifying where each tracer flux profile is located
         - cdr_layer_thickness: Series of time-evolving layer heights used to remap the profiles onto the parent grid
+        - cdr_time: the start of each averaging window, then the end of the last one
+          (a closing zero-flux record)
         """
 
         ds = xr.Dataset()
@@ -173,7 +216,7 @@ class CDRUpscaler:
         trc_dim = "two" if n_trc == 2 else "ntrc"
 
         ds["cdr_trcflx_profile"] = xr.DataArray(
-            np.zeros((len(self.time), len(self.s_rho), n_trc, self.n_profiles)),
+            np.zeros((self.n_windows + 1, len(self.s_rho), n_trc, self.n_profiles)),
             dims=("cdr_time", "s_rho", trc_dim, "ncdr_prof"),
             attrs={
                 "long_name": "tracer flux [mmol/s]",
@@ -188,7 +231,7 @@ class CDRUpscaler:
             )
 
         ds["cdr_time"] = xr.DataArray(
-            self.uscl_dataset.ocean_time.values/86400.,
+            np.append(self.window_begin, self.window_end[-1])/86400.,
             dims=("cdr_time",),
             attrs={
                 "long_name": "CDR forcing time",
@@ -215,7 +258,7 @@ class CDRUpscaler:
         )
 
         ds["cdr_layer_thickness"] = xr.DataArray(
-            np.zeros((len(self.time), len(self.s_rho), self.n_profiles)),
+            np.zeros((self.n_windows + 1, len(self.s_rho), self.n_profiles)),
             dims=("cdr_time", "s_rho", "ncdr_prof"),
             attrs={
                 "long_name": "layer thicknesses of CDR release given in a vertical profile [m]",
@@ -271,11 +314,17 @@ class CDRUpscaler:
         self.cdr_dataset["cdr_lat"][:] = boundaries_to_profiles("lat")
         print("Populating `cdr_lon`...")
         self.cdr_dataset["cdr_lon"][:] = boundaries_to_profiles("lon")
+        # Records 0..n-1 are the window averages; the closing record n keeps
+        # zero flux and repeats the last window's layer thicknesses.
+        n = self.n_windows
         for i_trc, name in enumerate(self.tracer_names):
             print(f"Populating `cdr_trcflx_profile` for tracer {name}...")
-            self.cdr_dataset["cdr_trcflx_profile"][:,:,i_trc,:] = boundaries_to_profiles(f"{name}_add")
+            self.cdr_dataset["cdr_trcflx_profile"][:n,:,i_trc,:] = \
+                boundaries_to_profiles(f"{name}_add")[self.records]
         print("Populating `cdr_layer_thickness`...")
-        self.cdr_dataset["cdr_layer_thickness"][:] = boundaries_to_profiles("h")
+        h = boundaries_to_profiles("h")[self.records]
+        self.cdr_dataset["cdr_layer_thickness"][:n] = h
+        self.cdr_dataset["cdr_layer_thickness"][n] = h[-1]
 
 
     def save(self,filename: str | None = None) -> None:
@@ -327,6 +376,12 @@ def init_argparse() -> "ArgumentParser":
     Each column at the edge of the child boundary is converted to a time-varying
     depth profile with lat/lon information such that ROMS can vertically remap it
     at the correct point on the parent grid.
+
+    Each `uscl` record averages one window of the child run. It becomes a CDR
+    record at the start of its window, which ROMS holds until the next record,
+    and a closing zero-flux record at the end of the last window ends the
+    release there. Files from ucla-roms <= 0.12.0 carry no window bounds; their
+    windows are inferred from consecutive `ocean_time` stamps.
     """
 
     parser = argparse.ArgumentParser(
