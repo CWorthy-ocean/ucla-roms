@@ -273,6 +273,14 @@ jobs:
       packages: read
     container:
       image: ${{ needs.prepare.outputs.gnu_image }}
+      # The image's MPICH (ch4:ucx) runs UCX 1.22, whose shared-memory
+      # transport dereferences NULL in MPI_Init when free /dev/shm drops below
+      # UCX_POSIX_SHM_MIN_SIZE (16 MB) while the ranks start up, so mpirun
+      # exits 139 (or 9) with a uct_mm_iface_recv_desc_init backtrace.
+      # Docker's default /dev/shm is 64 MB, and late in the session something
+      # holds enough of it to reach that point.
+      # See environments/Containerfiles/README.md.
+      options: --shm-size=1g
     name: pytest_gnu
     steps:
     - name: Checkout Repository
@@ -284,7 +292,11 @@ jobs:
         echo "PATH=./:$PATH:$ROMS_ROOT/Tools-Roms" >> $GITHUB_ENV
       shell: bash
     - name: Print system info
-      run: lscpu
+      shell: bash
+      run: |
+        lscpu
+        df -h /dev/shm
+        micromamba run -n roms-ci bash -c 'ucx_info -v; mpichversion'
     - name: Compile Fortran Code
       shell: bash
       run: |
@@ -302,6 +314,18 @@ jobs:
         cd ${ROMS_ROOT}/tests/
         pytest -svvv -rfEx . --environ=github_gnu --inputs-out results/inputs_github_gnu --basetemp /tmp/pytest_head
         '
+    # What holds /dev/shm at the end of the session (see the container comment
+    # above). Neither MPICH nor UCX leaves named files behind, so usage that df
+    # reports but du does not is memory held by live processes.
+    - name: Show shared memory usage
+      if: always()
+      continue-on-error: true
+      shell: bash
+      run: |
+        df -k /dev/shm
+        du -sk /dev/shm
+        ls -la /dev/shm
+        ps -eo pid,ppid,stat,etime,rss,cmd
     - name: Upload computed results
       if: always()
       uses: actions/upload-artifact@v4
