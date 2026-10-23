@@ -252,7 +252,7 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 | `output_period_bgc_his` | Frequency of instantaneous BGC output (s) | `bgc.opt: output_period_his` |
 | `nrpf_bgc_his` | Number of time records per BGC output file | `bgc.opt: nrpf_his` |
 | `wrt_bgc_avg` | Write averaged BGC tracers to output | `bgc.opt: wrt_avg` |
-| `output_period_bgc_avg` | Output frequency/averaging period (s) | `bgc.opt: output_period_avg` |
+| `output_period_bgc_avg` | Output frequency/averaging period (s). Each record averages the model steps of the period ending at its `ocean_time` | `bgc.opt: output_period_avg` |
 | `nrpf_bgc_avg` | Number of time records per BGC average file | `bgc.opt: nrpf_avg` |
 | `wrt_bgc_dia_his` | Write instantaneous BGC diagnostics to output | `bgc.opt: wrt_his_dia` |
 | `output_period_bgc_his_dia` | Frequency of diagnostics output (s) | `bgc.opt: output_period_his_dia` |

@@ -275,18 +275,27 @@ class TestCdr:
         })
         whole, restarted = _run_with_restart(tmp_path, cdr_conf, nml)
 
-        ref = _joined_records(whole, "bgc_dia_avg")
-        new = _joined_records(restarted, "bgc_dia_avg")
-        start = xr.open_dataset(
-            whole / "roms_his.20100101000000.0.nc", decode_times=False
-        )["ocean_time"].values[0]
-        np.testing.assert_array_equal(ref["ocean_time"] - start, [200, 400, 600, 800])
-        np.testing.assert_array_equal(ref["ocean_time"][-2:], new["ocean_time"])
-        ref = ref.isel(time=slice(-2, None))
-        compared = [v for v in new.data_vars if "time" in new[v].dims]
+        compared = _check_restarted_averages(whole, restarted, "bgc_dia_avg")
         assert "FG_CO2" in compared
-        for var in compared:
-            np.testing.assert_array_equal(new[var].values, ref[var].values, err_msg=var)
+
+    def test_bgc_averages_survive_restart(self, tmp_path, cdr_conf, input_dir):
+        """``_bgc_avg`` windows hold the model steps of each period only, and a
+        restarted run's records equal the uninterrupted run's.
+
+        With ``wrt_bgc_his`` off, the start-up call used to add the start-up
+        state to the first window, so records came one step early.
+        """
+        nml = _restart_nml(input_dir, 200)
+        nml["BGC_SETTINGS"].update({
+            "wrt_bgc_his": False,
+            "wrt_bgc_avg": True,
+            "output_period_bgc_avg": 200,
+            "nrpf_bgc_avg": 2,
+        })
+        whole, restarted = _run_with_restart(tmp_path, cdr_conf, nml)
+
+        compared = _check_restarted_averages(whole, restarted, "bgc_avg")
+        assert "DIC" in compared
 
 
 def _restart_nml(input_dir, marbl_timestep) -> dict:
@@ -320,6 +329,30 @@ def _run_with_restart(tmp_path, conf, nml):
     conf.run(nml, cwd=restarted)
     return whole, restarted
 
+
+def _check_restarted_averages(whole, restarted, stream) -> list[str]:
+    """Check the 200 s averages of ``stream`` around the restart at 400 s.
+
+    In the whole run, the records end 200, 400, 600 and 800 s after the start,
+    two per file (``nrpf`` 2), so the files start at 200 and 600 s. The
+    restarted run's two records are bit-identical to the whole run's last two.
+    Returns the names of the variables compared.
+    """
+    assert sorted(p.name for p in whole.glob(f"roms_{stream}.*.0.nc")) == [
+        f"roms_{stream}.20100101000320.0.nc", f"roms_{stream}.20100101001000.0.nc"
+    ]
+    ref = _joined_records(whole, stream)
+    new = _joined_records(restarted, stream)
+    start = xr.open_dataset(
+        whole / "roms_his.20100101000000.0.nc", decode_times=False
+    )["ocean_time"].values[0]
+    np.testing.assert_array_equal(ref["ocean_time"] - start, [200, 400, 600, 800])
+    np.testing.assert_array_equal(ref["ocean_time"][-2:], new["ocean_time"])
+    ref = ref.isel(time=slice(-2, None))
+    compared = [v for v in new.data_vars if "time" in new[v].dims]
+    for var in compared:
+        np.testing.assert_array_equal(new[var].values, ref[var].values, err_msg=var)
+    return compared
 
 def _joined_records(run_dir, stream) -> xr.Dataset:
     """Join every ``roms_<stream>.<date>`` file set of a run; return all records."""

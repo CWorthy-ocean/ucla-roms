@@ -226,7 +226,6 @@ contains
     character(len=max_name_size),save :: fname_his,fname_avg
     character(len=1024) :: error_info
     integer(kind=4)                :: itrc, itavg, ierr
-    logical,save           :: first_step_avg=.true.
     logical,save           :: first_step_his=.true.
 
     if (wrt_bgc_his .and. mod(output_period_bgc_his, dt) /= 0) then
@@ -255,21 +254,14 @@ contains
       record_his = nrpf_bgc_his
       record_dia_his = nrpf_bgc_his_dia
     end if
-    if (first_step_avg) then
-      record_avg = nrpf_bgc_avg
-      record_dia_avg = nrpf_bgc_avg_dia
-    end if
 
     call error_log%abort_check()
 
 #ifdef PARALLEL_IO
     if (avg) then
 
-!        if (.not. first_step_avg) then
-      call calc_avg_bgc                          ! don't include t=0 in averaging
-      output_time_avg = output_time_avg + dt     ! only start count after first timestep
-!        endif
-!        first_step_avg=.false.
+      call calc_avg_bgc
+      output_time_avg = output_time_avg + dt
 
 
 !        if (mynode == 0) then
@@ -376,11 +368,8 @@ contains
 
     if (avg) then
 
-!        if (.not. first_step_avg) then
-      call calc_avg_bgc                          ! don't include t=0 in averaging
-      output_time_avg = output_time_avg + dt     ! only start count after first timestep
-!        endif
-!        first_step_avg=.false.
+      call calc_avg_bgc
+      output_time_avg = output_time_avg + dt
 
 
 !        if (mynode == 0) then
@@ -1040,14 +1029,9 @@ contains
 #ifdef MARBL_DIAGS
 #include "compute_tile_bounds.h"
 #endif
-    ! initialisation writting
-    if (wrt_bgc_his.and.present(init)) then
-      call wrt_bgc_tracers(.false.) ! write his data
-    else
-      ! local
-      if (wrt_bgc_his)     call wrt_bgc_tracers(.false.) ! write his data
-      if (wrt_bgc_avg)     call wrt_bgc_tracers(.true.) ! write avg data
-    endif
+    if (wrt_bgc_his) call wrt_bgc_tracers(.false.) ! write his data
+    ! the start-up state is not a step of any averaging window
+    if (wrt_bgc_avg .and. .not. present(init)) call wrt_bgc_tracers(.true.)
 
 #if defined BEC2_DIAG || defined MARBL_DIAGS
 #if defined MARBL
