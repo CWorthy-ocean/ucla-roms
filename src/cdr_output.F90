@@ -768,12 +768,13 @@ contains
       ! of steps since the last addition (nheld). Called right after each
       ! MARBL step, the values that step computed stand for the steps since
       ! the previous one: MARBL applies its flux to the tracers on that step
-      ! for the whole marbl_timestep, so the averaged flux lands in the window
-      ! that holds the DIC change. A restart file does not carry the held
-      ! values, and this way no average needs them from before a restart. At
-      ! a write (finalize_average), steps after the window's last MARBL step
-      ! take the values it computed; a restarted run reproduces those too as
-      ! long as output_period_cdr is at least marbl_timestep.
+      ! for the whole marbl_timestep, so a window that ends on a MARBL step
+      ! averages exactly the flux behind its DIC change. A restart file does
+      ! not carry the held values, and this way no average needs them from
+      ! before a restart. At a write (finalize_average), steps after the
+      ! window's last MARBL step take the values it computed; a restarted
+      ! run reproduces those too as long as output_period_cdr is at least
+      ! marbl_timestep (a shorter window may hold no MARBL step at all).
       implicit none
       integer :: i,j,k
       real(kind=8) :: c0, w

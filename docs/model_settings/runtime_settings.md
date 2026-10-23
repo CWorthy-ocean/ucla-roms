@@ -301,7 +301,7 @@ Write an output file containing CDR-relevant fields.
 | `do_cdr_output` | Write output file for CDR-relevant fields if `.true.`| `cdr_output.opt: do_cdr` |
 | `wrt_cdr_avg` | Write averaged (if `.true.`) or instantaneous (if `.false.`) output | `cdr_output.opt: do_avg` |
 | `cdr_monthly_averages` | Write averaged outputs per calendar month if `.true.`| `cdr_output.opt: monthly_averages` |
-| `output_period_cdr` | Frequency of CDR-relevant output | `cdr_output.opt: output_period` |
+| `output_period_cdr` | Frequency of CDR-relevant output. With averaging on, keep it a multiple of `marbl_timestep`: each window then averages the MARBL fields (`FG_CO2`, `pCO2SURF`, carbonate) MARBL applied within it. A restarted run's records match an uninterrupted run's bit for bit whenever the period is at least `marbl_timestep` | `cdr_output.opt: output_period` |
 | `nrpf_cdr` | Time records per output file | `cdr_output.opt: nrpf` |
 
 ### `UPSCALING_SETTINGS`

@@ -213,18 +213,25 @@ class TestCdr:
         )
 
 
-    def test_averages_survive_restart(self, tmp_path, cdr_conf, input_dir):
+    @pytest.mark.parametrize(
+        "marbl_timestep", [200, 120], ids=["restart_on_marbl_step", "restart_between"]
+    )
+    def test_averages_survive_restart(
+        self, tmp_path, cdr_conf, input_dir, marbl_timestep
+    ):
         """Averaged MARBL fields of a restarted run equal the uninterrupted run's.
 
-        MARBL runs every fifth step (``marbl_timestep`` 200 s, ``dt`` 40 s), so
-        the air-sea flux and carbonate diagnostics it computes are held between
-        MARBL steps, and the restart file does not carry those held values. A
-        20-step run is compared with the same run restarted at 400 s, a MARBL
-        step: every ``_cdr`` record after the restart must be bit-identical.
-        Checked directly, so the test needs no reference.
+        MARBL runs only every ``marbl_timestep`` (``dt`` 40 s), so the air-sea
+        flux and carbonate diagnostics it computes are held between MARBL
+        steps, and the restart file does not carry those held values. A 20-step
+        run is compared with the same run restarted at 400 s: every ``_cdr``
+        record after the restart must be bit-identical. With 200 s the restart
+        and every 200 s window end fall on a MARBL step; with 120 s (MARBL
+        every third step) the restart and most window ends fall between MARBL
+        steps. Checked directly, so the test needs no reference.
         """
         nml = _cdr_parm_nml(input_dir)
-        nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = 200
+        nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = marbl_timestep
         # every output file must end at a restart (precheck), hence the nrpf_*
         nml["BASIC_OUTPUT_SETTINGS"].update({
             "wrt_file_rst": True,
