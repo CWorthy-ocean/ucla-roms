@@ -258,7 +258,7 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 | `output_period_bgc_his_dia` | Frequency of diagnostics output (s) | `bgc.opt: output_period_his_dia` |
 | `nrpf_bgc_his_dia` | Number of time records per BGC diagnostics file | `bgc.opt: nrpf_his_dia` |
 | `wrt_bgc_dia_avg` | Write averaged BGC diagnostics to output | `bgc.opt: wrt_avg_dia` |
-| `output_period_bgc_avg_dia` | Frequency/period of averaged diagnostic output | `bgc.opt: output_period_avg_dia` |
+| `output_period_bgc_avg_dia` | Frequency/period of averaged diagnostic output (s). Each record averages the model steps of the period ending at its `ocean_time`. With MARBL, keep it a multiple of `marbl_timestep`: each window then averages the diagnostics of the MARBL steps within it. A restarted run's records match an uninterrupted run's bit for bit whenever the period is at least `marbl_timestep` | `bgc.opt: output_period_avg_dia` |
 | `nrpf_bgc_avg_dia` | Number of time records per BGC diagnostics file | `bgc.opt: nrpf_avg_dia` |
 
 ### `MARBL_BIOGEOCHEMISTRY_SETTINGS`

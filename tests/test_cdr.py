@@ -230,18 +230,7 @@ class TestCdr:
         every third step) the restart and most window ends fall between MARBL
         steps. Checked directly, so the test needs no reference.
         """
-        nml = _cdr_parm_nml(input_dir)
-        nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = marbl_timestep
-        # every output file must end at a restart (precheck), hence the nrpf_*
-        nml["BASIC_OUTPUT_SETTINGS"].update({
-            "wrt_file_rst": True,
-            "output_period_rst": 400,
-            "nrpf_his": 1,
-        })
-        nml["SPONGE_TUNE_SETTINGS"].update({
-            "output_period_sponge": 400,
-            "nrpf_sponge": 1,
-        })
+        nml = _restart_nml(input_dir, marbl_timestep)
         nml["CDR_OUTPUT_SETTINGS"].update({
             "do_cdr_output": True,
             "wrt_cdr_avg": True,
@@ -249,17 +238,7 @@ class TestCdr:
             "output_period_cdr": 200,
             "nrpf_cdr": 2,
         })
-        nml["BGC_SETTINGS"]["nrpf_bgc_his"] = 1
-
-        whole = tmp_path / "whole"
-        whole.mkdir()
-        cdr_conf.run(nml, cwd=whole)
-
-        restarted = tmp_path / "restarted"
-        restarted.mkdir()
-        nml["INITIAL_CONDITIONS"]["inifile"] = str(whole / "roms_rst.20100101000640.nc")
-        nml["TIME_STEPPING"]["ntimes"] = 10
-        cdr_conf.run(nml, cwd=restarted)
+        whole, restarted = _run_with_restart(tmp_path, cdr_conf, nml)
 
         ref = _joined_records(whole, "cdr")
         new = _joined_records(restarted, "cdr")
@@ -270,6 +249,76 @@ class TestCdr:
         assert "FG_CO2" in compared
         for var in compared:
             np.testing.assert_array_equal(new[var].values, ref[var].values, err_msg=var)
+
+
+    @pytest.mark.parametrize(
+        "marbl_timestep", [200, 120, 40],
+        ids=["restart_on_marbl_step", "restart_between", "marbl_every_step"],
+    )
+    def test_bgc_dia_averages_survive_restart(
+        self, tmp_path, cdr_conf, input_dir, marbl_timestep
+    ):
+        """``_bgc_dia_avg`` windows hold the model steps of each period only,
+        and a restarted run's records equal the uninterrupted run's.
+
+        The diagnostics computed from the start-up state are not a step of
+        any window, so the 200 s windows end at 200, 400, 600 and 800 s, and
+        none straddles the restart at 400 s. With ``marbl_timestep`` 200 and
+        120 s the diagnostics are held between MARBL steps, which the restart
+        file does not carry; with 40 s (``dt``) MARBL runs every step.
+        """
+        nml = _restart_nml(input_dir, marbl_timestep)
+        nml["BGC_SETTINGS"].update({
+            "wrt_bgc_dia_avg": True,
+            "output_period_bgc_avg_dia": 200,
+            "nrpf_bgc_avg_dia": 2,
+        })
+        whole, restarted = _run_with_restart(tmp_path, cdr_conf, nml)
+
+        ref = _joined_records(whole, "bgc_dia_avg")
+        new = _joined_records(restarted, "bgc_dia_avg")
+        start = xr.open_dataset(
+            whole / "roms_his.20100101000000.0.nc", decode_times=False
+        )["ocean_time"].values[0]
+        np.testing.assert_array_equal(ref["ocean_time"] - start, [200, 400, 600, 800])
+        np.testing.assert_array_equal(ref["ocean_time"][-2:], new["ocean_time"])
+        ref = ref.isel(time=slice(-2, None))
+        compared = [v for v in new.data_vars if "time" in new[v].dims]
+        assert "FG_CO2" in compared
+        for var in compared:
+            np.testing.assert_array_equal(new[var].values, ref[var].values, err_msg=var)
+
+
+def _restart_nml(input_dir, marbl_timestep) -> dict:
+    """Parameterized-release namelist for a 20-step run with a restart at 400 s."""
+    nml = _cdr_parm_nml(input_dir)
+    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = marbl_timestep
+    # every output file must end at a restart (precheck), hence the nrpf_*
+    nml["BASIC_OUTPUT_SETTINGS"].update({
+        "wrt_file_rst": True,
+        "output_period_rst": 400,
+        "nrpf_his": 1,
+    })
+    nml["SPONGE_TUNE_SETTINGS"].update({
+        "output_period_sponge": 400,
+        "nrpf_sponge": 1,
+    })
+    nml["BGC_SETTINGS"]["nrpf_bgc_his"] = 1
+    return nml
+
+
+def _run_with_restart(tmp_path, conf, nml):
+    """Run ``nml`` whole, then again from its 400 s restart; return both run dirs."""
+    whole = tmp_path / "whole"
+    whole.mkdir()
+    conf.run(nml, cwd=whole)
+
+    restarted = tmp_path / "restarted"
+    restarted.mkdir()
+    nml["INITIAL_CONDITIONS"]["inifile"] = str(whole / "roms_rst.20100101000640.nc")
+    nml["TIME_STEPPING"]["ntimes"] = 10
+    conf.run(nml, cwd=restarted)
+    return whole, restarted
 
 
 def _joined_records(run_dir, stream) -> xr.Dataset:
