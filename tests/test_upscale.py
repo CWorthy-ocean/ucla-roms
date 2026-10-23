@@ -15,6 +15,8 @@ bounds (ucla-roms <= 0.12.0). Everything is checked directly, so the module
 needs no reference hashes.
 """
 import importlib.util
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -30,7 +32,7 @@ from ._helpers import (
     ROMSConfiguration,
     join_output,
 )
-from .test_cdr import _cdr_parm_nml
+from .test_cdr import _cdr_base_nml, _cdr_parm_nml
 
 RUN_LENGTH = 800  # s: the 20 steps of 40 s of _cdr_parm_nml
 BOUNDARIES = ("north", "east", "south", "west")  # the converter's column order
@@ -250,3 +252,42 @@ class TestUsclToCdr:
         uscl = _open(whole_windows["files"]["roms_uscl.20100101000000"])
         with pytest.raises(ValueError, match="not contiguous"):
             uscl_to_cdr.uscl_windows(uscl.isel(time=[0, 1, 3]))
+
+    def test_script_forces_a_run(self, partial_window, uscl_conf, input_dir, tmp_path):
+        """The script, run as a command on a run's two files, makes forcing ROMS reads.
+
+        This is the path of a user without C-Star: ``uscl_to_cdr.py`` on the
+        joined ``_uscl`` files, then a depth-profile CDR run over the same
+        800 s. The forcing starts at the run start and ends at the run end, so
+        the reader finds a record on each side of every step, the first and
+        the last included, and the exported ALK reaches the run.
+        """
+        files = [str(path) for path in partial_window["files"].values()]
+        cdr_file = tmp_path / "cdr_from_uscl.nc"
+        subprocess.run(
+            [sys.executable, str(ROMS_ROOT / "Tools-Roms" / "uscl_to_cdr.py"),
+             *files, "-o", str(cdr_file)],
+            check=True,
+        )
+        with xr.open_dataset(cdr_file, decode_times=False) as cdr:
+            np.testing.assert_allclose(
+                cdr["cdr_time"].values * 86400 - partial_window["start"], [0, 600, 800],
+                rtol=0, atol=1e-4,
+            )
+
+        nml = _cdr_base_nml(input_dir)
+        nml["CDR_FRC_SETTINGS"].update({
+            "cdr_source": True,
+            "cdr_forcing_depth_profiles": True,
+            "cdr_file": str(cdr_file),
+            "cdr_relocate_to_wet_pts": True,
+            "cdr_nz_chd": 10,
+        })
+        stdout = uscl_conf.run(nml, cwd=tmp_path, capture_output=True)
+        assert "Ran out of time records" not in stdout
+
+        bgc = join_output(tmp_path, "roms_bgc.20100101000000")
+        with xr.open_dataset(bgc, decode_times=False) as ds:
+            assert ds.sizes["time"] == 3  # 0, 400 and 800 s: the run reached its end
+            added = (ds["ALK"] - ds["ALK_ALT_CO2"]).isel(time=-1).values
+        assert np.abs(added).max() > 0  # ALT_CO2 gets no CDR forcing
