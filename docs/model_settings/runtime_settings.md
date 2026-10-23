@@ -313,7 +313,9 @@ Settings controlling CDR upscaling, i.e. the recording of CDR-relevant tracer fl
 |--------|-------------|------------------------|
 | `do_upscale` | Record CDR tracer fluxes at domain boundaries if `.true.`| `upscale_output.opt: do_upscale` |
 | `nrpf_uscl` | Number of records per file | `upscale_output.opt: nrpf_uscl` |
-| `output_period_uscl` | Output frequency | `upscale_output.opt: output_period_uscl` |
+| `output_period_uscl` | Length of each averaging window (s) | `upscale_output.opt: output_period_uscl` |
+
+Each record of the `_uscl` files is the average of the boundary fluxes over one window of `output_period_uscl` seconds, labelled by `avg_begin_time` and `avg_end_time` (in seconds, like `ocean_time`, which is the window end). The windows follow each other from the start of the run; if the run length is not a multiple of `output_period_uscl`, the last window is partial and ends with the run. There is no record at the start of the run. A new file opens at the start of its first window and is named after that time. `Tools-Roms/uscl_to_cdr.py` turns each window into a CDR forcing record at the window's start, closed by a zero-flux record at the end of the last window.
 
 Note: the previously existing option `upscale_output.opt: uscl_prec` has been hardcoded to `nf90_double` in `upscale_output.F`.
 
