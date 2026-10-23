@@ -99,7 +99,7 @@ contains
   use scalars, only: nz, dt, nnew, nrhs, nt, nstp
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
   use upscale_output, only:&
-  &calc_forcing_rates, wrt_upscale, do_upscale
+  &calc_forcing_rates, add_mixing_rates, do_upscale
 #endif
 #ifdef ADV_ISONEUTRAL
   use eos_vars, only: drdx, drde, idrz
@@ -842,6 +842,10 @@ contains
           &+FSC(i,j,k2)-FSC(i,j,k1) )
         enddo
       enddo
+#  if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
+      ! FX,FE here are minus the flux in the +xi/+eta direction
+      if (do_upscale) call add_mixing_rates(itrc,k,FX,FE,istr,iend,jstr,jend,-1._8)
+#  endif
 
 # ifdef DIAGNOSTICS
       if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
@@ -1220,12 +1224,6 @@ enddo     !<-- itrc (horizontal advection and sources)
 #endif
   enddo     !<-- itrc
   enddo      !<-- j
-
-! Need to calculate/save additionality before the perturbation at the boundaries
-! is zeroed out in t3db_tile
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
-if (do_upscale) call wrt_upscale
-#endif
 
 do itrc=1,nt
   call t3dbc_tile (istr,iend,jstr,jend, itrc, wrk1)

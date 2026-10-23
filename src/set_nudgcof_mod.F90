@@ -84,7 +84,7 @@ contains
 #  ifdef PACIFIC
         wrk(i,j)=0.5_8 + 0.5_8*cos(pi*float(ibnd)/float(isp))
 #  else
-        wrk(i,j)=float(isp-ibnd)/float(isp)  ! 1 in interior, <1 within sponge
+        wrk(i,j)=float(isp-ibnd)/float(isp)  ! 1 on the boundary row, 0 from isp points in
 #  endif
       enddo
     enddo

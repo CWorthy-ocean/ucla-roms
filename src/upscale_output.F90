@@ -133,7 +133,7 @@ module upscale_output
 
 #endif
 
-  public init_upscale, wrt_upscale, calc_forcing_rates, read_nml_upscale
+  public init_upscale, wrt_upscale, calc_forcing_rates, add_mixing_rates, read_nml_upscale
 
 contains
 !     ----------------------------------------------------------------------
@@ -387,126 +387,99 @@ contains
   end subroutine init_upscale  !]
 !----------------------------------------------------------------------
   subroutine calc_forcing_rates(itrc,k,FX,FE,istr,iend,jstr,jend) ![
-    ! Calculate the instantaneous forcing rate in the halo by measuring the rate at
-    ! which tracer mass is added via advection
+    ! Start this step's boundary rates with the advective tracer flux
+    ! (step3d_t, FX/FE positive in the +xi/+eta direction). Horizontal
+    ! mixing adds its share later in the step (add_mixing_rates).
     implicit none
-
-    ! local
     integer(kind=4), intent(in) :: itrc,k
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY), intent(in) :: FX,FE
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
 
-    ! local
-    integer(kind=4) :: i,j
+    call store_boundary_rates(itrc,k,FX,FE,istr,iend,jstr,jend,1._8,.false.)
+  end subroutine calc_forcing_rates  !]
+!----------------------------------------------------------------------
+  subroutine add_mixing_rates(itrc,k,FX,FE,istr,iend,jstr,jend,sgn) ![
+    ! Add the horizontal mixing flux across the open-boundary faces to this
+    ! step's boundary rates. sgn is +1 if FX/FE are positive in the +xi/+eta
+    ! direction, -1 if the mixing code stores them with the opposite sign.
+    implicit none
+    integer(kind=4), intent(in) :: itrc,k
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY), intent(in) :: FX,FE
+    integer(kind=4), intent(in) :: istr, iend, jstr, jend
+    real(kind=8), intent(in) :: sgn
+
+    call store_boundary_rates(itrc,k,FX,FE,istr,iend,jstr,jend,sgn,.true.)
+  end subroutine add_mixing_rates  !]
+!----------------------------------------------------------------------
+  subroutine store_boundary_rates(itrc,k,FX,FE,istr,iend,jstr,jend,sgn,accumulate) ![
+    ! Outward tracer flux [tracer m^3/s] through the open-boundary faces of
+    ! level k: sgn*FE(:,jend+1) north, -sgn*FE(:,jstr) south, sgn*FX(iend+1,:)
+    ! east, -sgn*FX(istr,:) west. Stored into the rate arrays of itrc, or
+    ! added to them if accumulate.
+    implicit none
+    integer(kind=4), intent(in) :: itrc,k
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY), intent(in) :: FX,FE
+    integer(kind=4), intent(in) :: istr, iend, jstr, jend
+    real(kind=8), intent(in) :: sgn
+    logical, intent(in) :: accumulate
+
     integer(kind=4) :: islot
 
-    if ((itrc == iALK) .or. (itrc == iALK_alt) .or. (itrc == iDIC) .or. (itrc == iDIC_alt)) then
-
-#ifdef OBC_NORTH
-      ! North boundary
-      if (NORTHERN_EDGE) then
-        do i=istr,iend
-          if (itrc == iALK)&
-          &ALK_rate_north(i,k) = FE(i,jend+1)
-          if (itrc == iALK_alt)&
-          &ALK_alt_rate_north(i,k) = FE(i,jend+1)
-          if (itrc == iDIC)&
-          &DIC_rate_north(i,k) = FE(i,jend+1)
-          if (itrc == iDIC_alt)&
-          &DIC_alt_rate_north(i,k) = FE(i,jend+1)
-        enddo
-      endif
-#endif
-
-#ifdef OBC_SOUTH
-      ! South boundary
-      if (SOUTHERN_EDGE) then
-        do i=istr,iend
-          if (itrc == iALK)&
-          &ALK_rate_south(i,k) = -FE(i,jstr)
-          if (itrc == iALK_alt)&
-          &ALK_alt_rate_south(i,k) = -FE(i,jstr)
-          if (itrc == iDIC)&
-          &DIC_rate_south(i,k) = -FE(i,jstr)
-          if (itrc == iDIC_alt)&
-          &DIC_alt_rate_south(i,k) = -FE(i,jstr)
-        enddo
-      endif
-#endif
-
-#ifdef OBC_EAST
-      ! East boundary
-      if (EASTERN_EDGE) then
-        do j=jstr,jend
-          if (itrc == iALK)&
-          &ALK_rate_east(j,k) = FX(iend+1,j)
-          if (itrc == iALK_alt)&
-          &ALK_alt_rate_east(j,k) = FX(iend+1,j)
-          if (itrc == iDIC)&
-          &DIC_rate_east(j,k) = FX(iend+1,j)
-          if (itrc == iDIC_alt)&
-          &DIC_alt_rate_east(j,k) = FX(iend+1,j)
-        enddo
-      endif
-#endif
-
-#ifdef OBC_WEST
-      ! West boundary
-      if (WESTERN_EDGE) then
-        do j=jstr,jend
-          if (itrc == iALK)&
-          &ALK_rate_west(j,k) = -FX(istr,j)
-          if (itrc == iALK_alt)&
-          &ALK_alt_rate_west(j,k) = -FX(istr,j)
-          if (itrc == iDIC)&
-          &DIC_rate_west(j,k) = -FX(istr,j)
-          if (itrc == iDIC_alt)&
-          &DIC_alt_rate_west(j,k) = -FX(istr,j)
-        enddo
-      endif
-#endif
-
-    endif ! ALK/DIC itrc number
-
-    ! CDR_LITE tracers have no ALT_CO2 analogue; store the boundary flux directly.
     islot = cdr_uscl_slot(itrc)
-    if (islot > 0) then
 
 #ifdef OBC_NORTH
-      if (NORTHERN_EDGE) then
-        do i=istr,iend
-          cdr_rate_north(i,k,islot) = FE(i,jend+1)
-        enddo
-      endif
+    if (NORTHERN_EDGE) then
+      if (itrc == iALK)     call store(ALK_rate_north(istr:iend,k),     sgn*FE(istr:iend,jend+1))
+      if (itrc == iALK_alt) call store(ALK_alt_rate_north(istr:iend,k), sgn*FE(istr:iend,jend+1))
+      if (itrc == iDIC)     call store(DIC_rate_north(istr:iend,k),     sgn*FE(istr:iend,jend+1))
+      if (itrc == iDIC_alt) call store(DIC_alt_rate_north(istr:iend,k), sgn*FE(istr:iend,jend+1))
+      if (islot > 0)        call store(cdr_rate_north(istr:iend,k,islot), sgn*FE(istr:iend,jend+1))
+    endif
 #endif
 
 #ifdef OBC_SOUTH
-      if (SOUTHERN_EDGE) then
-        do i=istr,iend
-          cdr_rate_south(i,k,islot) = -FE(i,jstr)
-        enddo
-      endif
+    if (SOUTHERN_EDGE) then
+      if (itrc == iALK)     call store(ALK_rate_south(istr:iend,k),     -sgn*FE(istr:iend,jstr))
+      if (itrc == iALK_alt) call store(ALK_alt_rate_south(istr:iend,k), -sgn*FE(istr:iend,jstr))
+      if (itrc == iDIC)     call store(DIC_rate_south(istr:iend,k),     -sgn*FE(istr:iend,jstr))
+      if (itrc == iDIC_alt) call store(DIC_alt_rate_south(istr:iend,k), -sgn*FE(istr:iend,jstr))
+      if (islot > 0)        call store(cdr_rate_south(istr:iend,k,islot), -sgn*FE(istr:iend,jstr))
+    endif
 #endif
 
 #ifdef OBC_EAST
-      if (EASTERN_EDGE) then
-        do j=jstr,jend
-          cdr_rate_east(j,k,islot) = FX(iend+1,j)
-        enddo
-      endif
+    if (EASTERN_EDGE) then
+      if (itrc == iALK)     call store(ALK_rate_east(jstr:jend,k),     sgn*FX(iend+1,jstr:jend))
+      if (itrc == iALK_alt) call store(ALK_alt_rate_east(jstr:jend,k), sgn*FX(iend+1,jstr:jend))
+      if (itrc == iDIC)     call store(DIC_rate_east(jstr:jend,k),     sgn*FX(iend+1,jstr:jend))
+      if (itrc == iDIC_alt) call store(DIC_alt_rate_east(jstr:jend,k), sgn*FX(iend+1,jstr:jend))
+      if (islot > 0)        call store(cdr_rate_east(jstr:jend,k,islot), sgn*FX(iend+1,jstr:jend))
+    endif
 #endif
 
 #ifdef OBC_WEST
-      if (WESTERN_EDGE) then
-        do j=jstr,jend
-          cdr_rate_west(j,k,islot) = -FX(istr,j)
-        enddo
-      endif
+    if (WESTERN_EDGE) then
+      if (itrc == iALK)     call store(ALK_rate_west(jstr:jend,k),     -sgn*FX(istr,jstr:jend))
+      if (itrc == iALK_alt) call store(ALK_alt_rate_west(jstr:jend,k), -sgn*FX(istr,jstr:jend))
+      if (itrc == iDIC)     call store(DIC_rate_west(jstr:jend,k),     -sgn*FX(istr,jstr:jend))
+      if (itrc == iDIC_alt) call store(DIC_alt_rate_west(jstr:jend,k), -sgn*FX(istr,jstr:jend))
+      if (islot > 0)        call store(cdr_rate_west(jstr:jend,k,islot), -sgn*FX(istr,jstr:jend))
+    endif
 #endif
 
-    endif ! CDR_LITE itrc
+  contains
 
-  end subroutine calc_forcing_rates
+    subroutine store(rate, flx)
+      real(kind=8), intent(inout) :: rate(:)
+      real(kind=8), intent(in)    :: flx(:)
+      if (accumulate) then
+        rate = rate + flx
+      else
+        rate = flx
+      endif
+    end subroutine store
+
+  end subroutine store_boundary_rates  !]
 !----------------------------------------------------------------------
   subroutine calc_average ![
     ! Update averages
@@ -828,12 +801,12 @@ contains
     varid = nccreate(ncid,'ALK_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'ALK additionality on northern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
+    ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
     varid = nccreate(ncid,'DIC_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'DIC additionality on northern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
+    ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
 
     call def_cdr_uscl_vars(ncid,'north','northern',dn_xr,ds_xr)
 
@@ -859,12 +832,12 @@ contains
     varid = nccreate(ncid,'ALK_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'ALK additionality on southern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
+    ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
     varid = nccreate(ncid,'DIC_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'DIC additionality on southern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
+    ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
 
     call def_cdr_uscl_vars(ncid,'south','southern',dn_xr,ds_xr)
 
@@ -890,12 +863,12 @@ contains
     varid = nccreate(ncid,'ALK_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'ALK additionality on eastern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
+    ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
     varid = nccreate(ncid,'DIC_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'DIC additionality on eastern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
+    ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
 
     call def_cdr_uscl_vars(ncid,'east','eastern',dn_yr,ds_yr)
 
@@ -921,12 +894,12 @@ contains
     varid = nccreate(ncid,'ALK_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'ALK additionality on western boundary')
-    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iALK))//'s-1')
+    ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
     varid = nccreate(ncid,'DIC_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'DIC additionality on western boundary')
-    ierr = nf90_put_att(ncid,varid,'units',trim(t_units(iDIC))//'s-1')
+    ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
 
     call def_cdr_uscl_vars(ncid,'west','western',dn_yr,ds_yr)
 
@@ -1014,6 +987,15 @@ contains
     endif
   end function cdr_uscl_slot  !]
 ! ----------------------------------------------------------------------
+  function flux_units(itrc) ![
+    ! Units of a boundary rate: the flux through one cell face, tracer x m^3/s
+    ! (e.g. "meq/m^3 * m3/s" = meq/s).
+    implicit none
+    integer(kind=4), intent(in) :: itrc
+    character(len=len_trim(t_units(itrc))+7) :: flux_units
+    flux_units = trim(t_units(itrc))//' * m3/s'
+  end function flux_units  !]
+! ----------------------------------------------------------------------
   subroutine wrt_cdr_uscl(ncid, side, add, use_pio) ![
     ! Write the time-averaged boundary flux of every CDR_LITE tracer on one side.
     implicit none
@@ -1048,7 +1030,7 @@ contains
       &(/dimn1,dn_zr,dn_tm/),(/dims1,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &trim(t_vname(itrc))//' additionality on '//trim(side_adj)//' boundary')
-      ierr = nf90_put_att(ncid,varid,'units',trim(t_units(itrc))//'s-1')
+      ierr = nf90_put_att(ncid,varid,'units',flux_units(itrc))
     enddo
   end subroutine def_cdr_uscl_vars  !]
 ! ----------------------------------------------------------------------

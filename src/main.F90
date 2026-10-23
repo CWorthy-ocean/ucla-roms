@@ -472,6 +472,9 @@ contains
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
     use bgc_io, only: wrt_bgc
 #endif
+#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
+    use upscale_output, only: wrt_upscale, do_upscale
+#endif
 #ifdef DIAGNOSTICS
     use diagnostics, only: do_diagnostics, diag_uv, diag_trc
 #endif
@@ -655,6 +658,12 @@ contains
     call t3dmix
     call reg_toc(rg_t3dmix)
 # endif
+
+#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
+    ! After t3dmix, so the boundary rates hold this step's advective flux
+    ! (stored by step3d_t) plus its horizontal mixing flux (added by t3dmix)
+    if (do_upscale) call wrt_upscale
+#endif
 
 #ifdef MARBL
     ! use_constant_Fe (no-op otherwise): reset Fe after its last update of
