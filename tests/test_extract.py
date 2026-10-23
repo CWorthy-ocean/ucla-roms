@@ -19,7 +19,6 @@ settings extract_data rejects for several children stop ROMS at startup
 with a message.
 """
 import hashlib
-import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +32,7 @@ from ._helpers import (
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
+    assert_run_rejected,
     create_test_namelist_dict,
     summarize_output,
 )
@@ -57,13 +57,6 @@ CHILDREN = {
 }
 
 OUTPUT_PERIOD = 200  # s: 4 records over the 800 s run, all in one file
-
-# By default each rank prints its own errors and calls MPI_Abort (error_handling_mod,
-# gather_errors_on_main_rank = .false.), so one rank's abort can take another's
-# message with it: once, on gnu/MPICH, a rejected PARALLEL_IO run stopped with no
-# message at all. A rejected setting must stop ROMS on every attempt and name
-# itself on at least one.
-ABORT_ATTEMPTS = 5
 
 
 @pytest.fixture(scope="module")
@@ -165,11 +158,6 @@ def _per_rank_hashes(run_dir: Path) -> dict[str, str]:
     return hashes
 
 
-def _squeezed(text: str) -> str:
-    """``text`` without whitespace: ROMS wraps long messages, even mid-word."""
-    return "".join(text.split())
-
-
 def test_two_children(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files,
                       reference_results):
     """Each child's data from the two-child run equal its run alone, bit for bit."""
@@ -267,10 +255,4 @@ def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nes
         run_dir = tmp_path / case
         run_dir.mkdir()
         nml = _nml(conf, input_dir, pio_input_dir, children, scalars)
-        for _ in range(ABORT_ATTEMPTS):
-            with pytest.raises(subprocess.CalledProcessError) as excinfo:
-                conf.run(nml, cwd=run_dir, capture_output=True)
-            if _squeezed(message) in _squeezed(excinfo.value.output):
-                break
-        else:
-            pytest.fail(f"{case}: no run of {ABORT_ATTEMPTS} printed {message!r}")
+        assert_run_rejected(conf, nml, run_dir, [message], label=case)

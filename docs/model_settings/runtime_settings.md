@@ -252,13 +252,13 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 | `output_period_bgc_his` | Frequency of instantaneous BGC output (s) | `bgc.opt: output_period_his` |
 | `nrpf_bgc_his` | Number of time records per BGC output file | `bgc.opt: nrpf_his` |
 | `wrt_bgc_avg` | Write averaged BGC tracers to output | `bgc.opt: wrt_avg` |
-| `output_period_bgc_avg` | Output frequency/averaging period (s) | `bgc.opt: output_period_avg` |
+| `output_period_bgc_avg` | Output frequency/averaging period (s). Each record averages the model steps of the period ending at its `ocean_time` | `bgc.opt: output_period_avg` |
 | `nrpf_bgc_avg` | Number of time records per BGC average file | `bgc.opt: nrpf_avg` |
 | `wrt_bgc_dia_his` | Write instantaneous BGC diagnostics to output | `bgc.opt: wrt_his_dia` |
 | `output_period_bgc_his_dia` | Frequency of diagnostics output (s) | `bgc.opt: output_period_his_dia` |
 | `nrpf_bgc_his_dia` | Number of time records per BGC diagnostics file | `bgc.opt: nrpf_his_dia` |
 | `wrt_bgc_dia_avg` | Write averaged BGC diagnostics to output | `bgc.opt: wrt_avg_dia` |
-| `output_period_bgc_avg_dia` | Frequency/period of averaged diagnostic output | `bgc.opt: output_period_avg_dia` |
+| `output_period_bgc_avg_dia` | Frequency/period of averaged diagnostic output (s). Each record averages the model steps of the period ending at its `ocean_time`. With MARBL it must be a whole multiple of the MARBL timestep ROMS uses (`marbl_timestep` rounded down to a multiple of `dt`), or ROMS stops at startup: each window then ends on a MARBL step, averages the diagnostics of the MARBL steps within it, and a restarted run's records match an uninterrupted run's bit for bit | `bgc.opt: output_period_avg_dia` |
 | `nrpf_bgc_avg_dia` | Number of time records per BGC diagnostics file | `bgc.opt: nrpf_avg_dia` |
 
 ### `MARBL_BIOGEOCHEMISTRY_SETTINGS`
@@ -301,7 +301,7 @@ Write an output file containing CDR-relevant fields.
 | `do_cdr_output` | Write output file for CDR-relevant fields if `.true.`| `cdr_output.opt: do_cdr` |
 | `wrt_cdr_avg` | Write averaged (if `.true.`) or instantaneous (if `.false.`) output | `cdr_output.opt: do_avg` |
 | `cdr_monthly_averages` | Write averaged outputs per calendar month if `.true.`| `cdr_output.opt: monthly_averages` |
-| `output_period_cdr` | Frequency of CDR-relevant output | `cdr_output.opt: output_period` |
+| `output_period_cdr` | Frequency of CDR-relevant output. With averaging on (and `cdr_monthly_averages` off) it must be a whole multiple of the MARBL timestep ROMS uses (`marbl_timestep` rounded down to a multiple of `dt`), or ROMS stops at startup: each window then ends on a MARBL step, averages the MARBL fields (`FG_CO2`, `pCO2SURF`, carbonate) MARBL applied within it, and a restarted run's records match an uninterrupted run's bit for bit | `cdr_output.opt: output_period` |
 | `nrpf_cdr` | Time records per output file | `cdr_output.opt: nrpf` |
 
 ### `UPSCALING_SETTINGS`

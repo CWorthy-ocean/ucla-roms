@@ -8,6 +8,7 @@ from pathlib import Path
 
 import f90nml as nl
 import numpy as np
+import pytest
 import xarray as xr
 
 ROMS_ROOT = Path(os.environ["ROMS_ROOT"])
@@ -157,6 +158,39 @@ class ROMSConfiguration:
 
 # --------------------------------------------------------------------------
 # Output verification
+# --------------------------------------------------------------------------
+# Rejected settings
+# --------------------------------------------------------------------------
+# By default each rank prints its own errors and calls MPI_Abort (error_handling_mod,
+# gather_errors_on_main_rank = .false.), so one rank's abort can take another's
+# message with it: on gnu/MPICH, a rejected run has stopped with no message at
+# all (PARALLEL_IO extract settings, and the averaging-period precheck). A
+# rejected setting must stop ROMS on every attempt and name itself on at least one.
+ABORT_ATTEMPTS = 5
+
+
+def squeezed(text: str) -> str:
+    """``text`` without whitespace: ROMS wraps long messages, even mid-word."""
+    return "".join(text.split())
+
+
+def assert_run_rejected(
+    conf: "ROMSConfiguration", namelist_dict: dict, cwd: Path, messages, label: str = ""
+) -> None:
+    """Run ``namelist_dict``, which ROMS must refuse, up to ``ABORT_ATTEMPTS`` times.
+
+    Every run must fail, and at least one must print all of ``messages``
+    (compared without whitespace).
+    """
+    for _ in range(ABORT_ATTEMPTS):
+        with pytest.raises(subprocess.CalledProcessError) as excinfo:
+            conf.run(namelist_dict, cwd=cwd, capture_output=True)
+        output = squeezed(excinfo.value.output)
+        if all(squeezed(m) in output for m in messages):
+            return
+    pytest.fail(f"{label}: no run of {ABORT_ATTEMPTS} printed all of {list(messages)!r}")
+
+
 # --------------------------------------------------------------------------
 def join_output(test_dir: Path, prefix: str) -> Path:
     """Join the per-tile ``<prefix>.<rank>.nc`` files with ncjoin; return the joined file."""

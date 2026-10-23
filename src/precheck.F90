@@ -35,7 +35,12 @@ module precheck
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
   use cdr_output, only:&
-  &do_cdr_output, output_period_cdr, nrpf_cdr
+  &do_cdr_output, output_period_cdr, nrpf_cdr,&
+  &wrt_cdr_avg, cdr_monthly_averages
+#endif
+#if defined MARBL && defined MARBL_DIAGS
+  use scalars, only: dt
+  use marbl_driver, only: marbl_timestep_ratio
 #endif
   use cdr_lite_output, only:&
   &do_cdr_lite_output, output_period_cdr_lite, nrpf_cdr_lite
@@ -132,6 +137,15 @@ contains
     call check_output_divides_rst(wrt_bgc_dia_avg,&
     &output_period_bgc_avg_dia, nrpf_bgc_avg_dia, 'bgc_avg_dia')
 #endif
+#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+    call check_avg_ends_on_marbl_step(do_cdr_output .and. wrt_cdr_avg&
+    &.and. .not. cdr_monthly_averages,&
+    &output_period_cdr, 'output_period_cdr')
+#endif
+#if defined MARBL && defined MARBL_DIAGS
+    call check_avg_ends_on_marbl_step(wrt_bgc_dia_avg,&
+    &output_period_bgc_avg_dia, 'output_period_bgc_avg_dia')
+#endif
     call error_log%abort_check()
 
 #if defined(MARBL) || defined(BIOLOGY_BEC2)
@@ -178,6 +192,39 @@ contains
     endif
   end subroutine check_output_divides_rst
 !---------------------------------------------------
+#if defined MARBL && defined MARBL_DIAGS
+  subroutine check_avg_ends_on_marbl_step(avg_enabled, avg_period, label)
+    ! An averaging period must be a whole multiple of the MARBL timestep
+    ! ROMS uses (dt*marbl_timestep_ratio, set in marbldrv_configure_tracers
+    ! before this runs). MARBL updates its fluxes and diagnostics only on
+    ! MARBL steps and applies them for the whole MARBL timestep, so only a
+    ! window that ends on a MARBL step averages the fluxes MARBL applied in
+    ! it, and only then does a restart at a window end give bit-identical
+    ! averages.
+    logical, intent(in) :: avg_enabled
+    real(kind=8), intent(in) :: avg_period
+    character(len=*), intent(in) :: label
+
+    character(len=28) :: sr_name = "check_avg_ends_on_marbl_step"
+    character(len=1024) :: error_info
+    real(kind=8) :: marbl_dt
+
+    if (.not. avg_enabled) return
+
+    marbl_dt = dt*marbl_timestep_ratio
+    if (mod(avg_period, marbl_dt) /= 0) then
+      write(error_info,*) trim(label)//" = ", avg_period,&
+      &" s is not a whole multiple of the MARBL timestep ROMS uses",&
+      &" (marbl_timestep rounded to a multiple of dt) = ", marbl_dt,&
+      &" s. An averaging window must end on a MARBL step to average",&
+      &" the fluxes MARBL applied in it and to give bit-identical restarts."
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info=error_info)
+    endif
+  end subroutine check_avg_ends_on_marbl_step
+!---------------------------------------------------
+#endif
 
 
 end module precheck

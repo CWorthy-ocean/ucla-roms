@@ -22,8 +22,10 @@ from ._helpers import (
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
+    assert_run_rejected,
     create_test_namelist_dict,
     get_summary_value,
+    join_output,
 )
 
 
@@ -210,6 +212,217 @@ class TestCdr:
             reference_results, "cdr_gas_exch",
             {"physics": pv, "bgc": bv, "cdrgas": gv},
         )
+
+
+    @pytest.mark.parametrize(
+        "marbl_timestep", [200, 40], ids=["marbl_every_fifth_step", "marbl_every_step"]
+    )
+    def test_averages_survive_restart(
+        self, tmp_path, cdr_conf, input_dir, marbl_timestep
+    ):
+        """Averaged MARBL fields of a restarted run equal the uninterrupted run's.
+
+        MARBL runs only every ``marbl_timestep`` (``dt`` 40 s), so the air-sea
+        flux and carbonate diagnostics it computes are held between MARBL
+        steps, and the restart file does not carry those held values. A 20-step
+        run is compared with the same run restarted at 400 s: every ``_cdr``
+        record after the restart must be bit-identical. The 200 s windows and
+        the restart end on MARBL steps, as the precheck requires (see
+        ``test_avg_period_must_end_on_marbl_step``). With ``marbl_timestep``
+        200 s each window must also average exactly the values its one MARBL
+        step computed. Checked directly, so the test needs no reference.
+        """
+        nml = _restart_nml(input_dir, marbl_timestep)
+        nml["CDR_OUTPUT_SETTINGS"].update({
+            "do_cdr_output": True,
+            "wrt_cdr_avg": True,
+            "cdr_monthly_averages": False,
+            "output_period_cdr": 200,
+            "nrpf_cdr": 2,
+        })
+        whole, restarted = _run_with_restart(tmp_path, cdr_conf, nml)
+
+        compared = _check_restarted_averages(whole, restarted, "cdr")
+        assert "FG_CO2" in compared
+        if marbl_timestep == 200:
+            assert "FG_CO2" in _check_averages_hold_marbl_values(whole, "cdr")
+
+
+    @pytest.mark.parametrize(
+        "marbl_timestep", [200, 40], ids=["marbl_every_fifth_step", "marbl_every_step"]
+    )
+    def test_bgc_dia_averages_survive_restart(
+        self, tmp_path, cdr_conf, input_dir, marbl_timestep
+    ):
+        """``_bgc_dia_avg`` windows hold the model steps of each period only,
+        and a restarted run's records equal the uninterrupted run's.
+
+        The diagnostics computed from the start-up state are not a step of
+        any window, so the 200 s windows end at 200, 400, 600 and 800 s, and
+        none straddles the restart at 400 s. With ``marbl_timestep`` 200 s the
+        diagnostics are held between MARBL steps, which the restart file does
+        not carry, and each window must average exactly the values its one
+        MARBL step computed; with 40 s (``dt``) MARBL runs every step.
+        """
+        nml = _restart_nml(input_dir, marbl_timestep)
+        nml["BGC_SETTINGS"].update({
+            "wrt_bgc_dia_avg": True,
+            "output_period_bgc_avg_dia": 200,
+            "nrpf_bgc_avg_dia": 2,
+        })
+        whole, restarted = _run_with_restart(tmp_path, cdr_conf, nml)
+
+        compared = _check_restarted_averages(whole, restarted, "bgc_dia_avg")
+        assert "FG_CO2" in compared
+        if marbl_timestep == 200:
+            checked = _check_averages_hold_marbl_values(whole, "bgc_dia_avg")
+            assert "FG_CO2" in checked
+
+    @pytest.mark.parametrize("group, key, extra", [
+        ("CDR_OUTPUT_SETTINGS", "output_period_cdr",
+         {"do_cdr_output": True, "wrt_cdr_avg": True, "cdr_monthly_averages": False}),
+        ("BGC_SETTINGS", "output_period_bgc_avg_dia", {"wrt_bgc_dia_avg": True}),
+    ], ids=["cdr", "bgc_dia_avg"])
+    def test_avg_period_must_end_on_marbl_step(
+        self, tmp_path, cdr_conf, input_dir, group, key, extra
+    ):
+        """An averaging period that is not a multiple of the MARBL timestep stops
+        ROMS at startup: with ``marbl_timestep`` 120 s (``dt`` 40 s), 200 s
+        windows would end between MARBL steps."""
+        nml = _cdr_parm_nml(input_dir)
+        nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = 120
+        nml[group].update({**extra, key: 200})
+        assert_run_rejected(cdr_conf, nml, tmp_path, [
+            f"{key} =",
+            "is not a whole multiple of the MARBL timestep ROMS uses",
+            "bit-identical restarts",
+        ], label=key)
+
+    def test_bgc_averages_survive_restart(self, tmp_path, cdr_conf, input_dir):
+        """``_bgc_avg`` windows hold the model steps of each period only, and a
+        restarted run's records equal the uninterrupted run's.
+
+        With ``wrt_bgc_his`` off, the start-up call used to add the start-up
+        state to the first window, so records came one step early.
+        """
+        nml = _restart_nml(input_dir, 200)
+        nml["BGC_SETTINGS"].update({
+            "wrt_bgc_his": False,
+            "wrt_bgc_avg": True,
+            "output_period_bgc_avg": 200,
+            "nrpf_bgc_avg": 2,
+        })
+        whole, restarted = _run_with_restart(tmp_path, cdr_conf, nml)
+
+        compared = _check_restarted_averages(whole, restarted, "bgc_avg")
+        assert "DIC" in compared
+
+
+def _restart_nml(input_dir, marbl_timestep) -> dict:
+    """Parameterized-release namelist for a 20-step run with a restart at 400 s.
+
+    Instantaneous ``_bgc_dia`` records every 200 s give the MARBL values at
+    each window end (``_check_averages_hold_marbl_values``).
+    """
+    nml = _cdr_parm_nml(input_dir)
+    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = marbl_timestep
+    # every output file must end at a restart (precheck), hence the nrpf_*
+    nml["BASIC_OUTPUT_SETTINGS"].update({
+        "wrt_file_rst": True,
+        "output_period_rst": 400,
+        "nrpf_his": 1,
+    })
+    nml["SPONGE_TUNE_SETTINGS"].update({
+        "output_period_sponge": 400,
+        "nrpf_sponge": 1,
+    })
+    nml["BGC_SETTINGS"].update({
+        "nrpf_bgc_his": 1,
+        "wrt_bgc_dia_his": True,
+        "output_period_bgc_his_dia": 200,
+        "nrpf_bgc_his_dia": 2,
+    })
+    return nml
+
+
+def _run_with_restart(tmp_path, conf, nml):
+    """Run ``nml`` whole, then again from its 400 s restart; return both run dirs."""
+    whole = tmp_path / "whole"
+    whole.mkdir()
+    conf.run(nml, cwd=whole)
+
+    restarted = tmp_path / "restarted"
+    restarted.mkdir()
+    nml = copy.deepcopy(nml)
+    nml["INITIAL_CONDITIONS"]["inifile"] = str(whole / "roms_rst.20100101000640.nc")
+    nml["TIME_STEPPING"]["ntimes"] = 10
+    conf.run(nml, cwd=restarted)
+    return whole, restarted
+
+
+def _check_averages_hold_marbl_values(run_dir, stream) -> list[str]:
+    """Check that each window average of ``stream`` equals its MARBL values.
+
+    With ``marbl_timestep`` equal to the 200 s window, MARBL runs once per
+    window, on its last step, and its values stand for every step of the
+    window. Each average must then equal the instantaneous ``_bgc_dia``
+    record at the window end. This checks the weighting itself, which
+    comparing two runs cannot. Returns the names of the variables checked.
+    """
+    avg = _joined_records(run_dir, stream)
+    his = _joined_records(run_dir, "bgc_dia")
+    checked = [
+        v for v in avg.data_vars
+        if v in his.data_vars and "time" in avg[v].dims and v != "ocean_time"
+    ]
+    assert checked, f"no {stream} variable is in _bgc_dia"
+    for i, t in enumerate(avg["ocean_time"].values):
+        (j,) = np.flatnonzero(his["ocean_time"].values == t)
+        for var in checked:
+            np.testing.assert_allclose(
+                avg[var].isel(time=i).values, his[var].isel(time=j).values,
+                rtol=1e-13, atol=0, err_msg=f"{stream} {var} at {t}",
+            )
+    return checked
+
+
+def _check_restarted_averages(whole, restarted, stream) -> list[str]:
+    """Check the 200 s averages of ``stream`` around the restart at 400 s.
+
+    In the whole run, the records end 200, 400, 600 and 800 s after the start,
+    two per file (``nrpf`` 2), so the files start at 200 and 600 s. The
+    restarted run's two records are bit-identical to the whole run's last two.
+    Returns the names of the variables compared.
+    """
+    assert sorted(p.name for p in whole.glob(f"roms_{stream}.*.0.nc")) == [
+        f"roms_{stream}.20100101000320.0.nc", f"roms_{stream}.20100101001000.0.nc"
+    ]
+    ref = _joined_records(whole, stream)
+    new = _joined_records(restarted, stream)
+    start = xr.open_dataset(
+        whole / "roms_his.20100101000000.0.nc", decode_times=False
+    )["ocean_time"].values[0]
+    np.testing.assert_array_equal(ref["ocean_time"] - start, [200, 400, 600, 800])
+    np.testing.assert_array_equal(ref["ocean_time"][-2:], new["ocean_time"])
+    ref = ref.isel(time=slice(-2, None))
+    compared = [v for v in new.data_vars if "time" in new[v].dims]
+    for var in compared:
+        np.testing.assert_array_equal(new[var].values, ref[var].values, err_msg=var)
+    return compared
+
+def _joined_records(run_dir, stream) -> xr.Dataset:
+    """Join every ``roms_<stream>.<date>`` file set of a run; return all records."""
+    prefixes = sorted({
+        p.name.rsplit(".", 2)[0] for p in run_dir.glob(f"roms_{stream}.*.?.nc")
+    })
+    assert prefixes, f"no roms_{stream} output in {run_dir}"
+    datasets = [
+        xr.open_dataset(
+            join_output(run_dir, prefix), decode_times=False, decode_timedelta=False
+        ).load()
+        for prefix in prefixes
+    ]
+    return xr.concat(datasets, dim="time", data_vars="minimal")
 
 
 CDRGAS_NAME = "roms_cdrgas.20100101000000.nc"

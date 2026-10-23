@@ -83,9 +83,9 @@ module bgc_io
   integer(kind=4),save :: navg_bgc = 0               ! number of samples in average
   integer(kind=4),save :: navg_dia_bgc = 0           ! number of samples in average
   ! With MARBL the diagnostics change only on MARBL steps, so they are added
-  ! to the averaging sums lazily: nheld_dia counts the steps the current
-  ! values have been held since last added; dia_first marks the window's
-  ! first addition.
+  ! to the averaging sums lazily: nheld_dia counts the steps since they were
+  ! last added (see accumulate_dia_bgc); dia_first marks the window's first
+  ! addition.
   integer(kind=4),save :: nheld_dia = 0
   logical,save         :: dia_first = .true.
   integer(kind=4) :: record_avg = 0           ! Triggers making of initial file
@@ -226,7 +226,6 @@ contains
     character(len=max_name_size),save :: fname_his,fname_avg
     character(len=1024) :: error_info
     integer(kind=4)                :: itrc, itavg, ierr
-    logical,save           :: first_step_avg=.true.
     logical,save           :: first_step_his=.true.
 
     if (wrt_bgc_his .and. mod(output_period_bgc_his, dt) /= 0) then
@@ -255,21 +254,14 @@ contains
       record_his = nrpf_bgc_his
       record_dia_his = nrpf_bgc_his_dia
     end if
-    if (first_step_avg) then
-      record_avg = nrpf_bgc_avg
-      record_dia_avg = nrpf_bgc_avg_dia
-    end if
 
     call error_log%abort_check()
 
 #ifdef PARALLEL_IO
     if (avg) then
 
-!        if (.not. first_step_avg) then
-      call calc_avg_bgc                          ! don't include t=0 in averaging
-      output_time_avg = output_time_avg + dt     ! only start count after first timestep
-!        endif
-!        first_step_avg=.false.
+      call calc_avg_bgc
+      output_time_avg = output_time_avg + dt
 
 
 !        if (mynode == 0) then
@@ -376,11 +368,8 @@ contains
 
     if (avg) then
 
-!        if (.not. first_step_avg) then
-      call calc_avg_bgc                          ! don't include t=0 in averaging
-      output_time_avg = output_time_avg + dt     ! only start count after first timestep
-!        endif
-!        first_step_avg=.false.
+      call calc_avg_bgc
+      output_time_avg = output_time_avg + dt
 
 
 !        if (mynode == 0) then
@@ -463,15 +452,16 @@ contains
 #endif
   end subroutine wrt_bgc_tracers  !]
 ! ----------------------------------------------------------------------
-  subroutine wrt_bgc_diags ![
+  subroutine wrt_bgc_diags(init) ![
     implicit none
+    ! import/export
+    logical, intent(in) :: init   ! .true. for the start-up call (wrt_bgc(init))
 #if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
 ! local
     character(len=13) :: sr_name = "wrt_bgc_diags"
     character(len=max_name_size),save :: fname_his,fname_avg
     character(len=1024) :: error_info
     integer(kind=4)                :: itrc, ierr, idiag
-    logical,save           :: first_step_dia_avg=.true.
     logical,save           :: first_step_dia_his=.true.
 
     if (wrt_bgc_dia_his .and. mod(output_period_bgc_his_dia, dt) /= 0) then
@@ -500,14 +490,14 @@ contains
     if (wrt_bgc_dia_avg) then
 
 #ifdef PARALLEL_IO
-!         if (.not. first_step_dia_avg) then
-      call calc_avg_dia_bgc                              ! don't include t=0 in averaging
-      output_time_dia_avg = output_time_dia_avg + dt     ! only start count after first timestep
-!         endif
-!         first_step_dia_avg=.false.
+      if (.not. init) then          ! the start-up state is not a step of any window
+        call calc_avg_dia_bgc
+        output_time_dia_avg = output_time_dia_avg + dt
 #ifdef MARBL_DIAGS
-      if (is_marbl_step(iic+1)) call accumulate_dia_bgc  ! before MARBL changes them
+        ! add the MARBL diagnostics this step computed (see accumulate_dia_bgc)
+        if (is_marbl_step(iic)) call accumulate_dia_bgc
 #endif
+      endif
 
       if (output_time_dia_avg>=output_period_bgc_avg_dia) then  ! time for an output
 #ifdef MARBL_DIAGS
@@ -558,14 +548,14 @@ contains
         endif
       endif
 #else ! PARALLEL_IO
-!         if (.not. first_step_dia_avg) then
-      call calc_avg_dia_bgc                              ! don't include t=0 in averaging
-      output_time_dia_avg = output_time_dia_avg + dt     ! only start count after first timestep
-!         endif
-!         first_step_dia_avg=.false.
+      if (.not. init) then          ! the start-up state is not a step of any window
+        call calc_avg_dia_bgc
+        output_time_dia_avg = output_time_dia_avg + dt
 #ifdef MARBL_DIAGS
-      if (is_marbl_step(iic+1)) call accumulate_dia_bgc  ! before MARBL changes them
+        ! add the MARBL diagnostics this step computed (see accumulate_dia_bgc)
+        if (is_marbl_step(iic)) call accumulate_dia_bgc
 #endif
+      endif
 
       if (output_time_dia_avg>=output_period_bgc_avg_dia) then  ! time for an output
 #ifdef MARBL_DIAGS
@@ -882,9 +872,16 @@ contains
 # ifdef MARBL_DIAGS
 ! ----------------------------------------------------------------------
   subroutine accumulate_dia_bgc  ![
-    ! Add the held MARBL diagnostics to the averaging sums, weighted by the
-    ! number of steps they were held. Called before the next MARBL step and
-    ! before each write, this equals adding them at every step.
+    ! Add the MARBL diagnostics to the averaging sums once, weighted by the
+    ! number of steps since the last addition (nheld_dia). Called right
+    ! after each MARBL step, the values that step computed stand for the
+    ! steps since the previous one, the steps MARBL's tendencies cover, so a
+    ! window that ends on a MARBL step averages exactly the diagnostics
+    ! behind its tracer changes. A restart file does not carry the held
+    ! values, and this way no average needs them from before a restart.
+    ! The precheck makes output_period_bgc_avg_dia a multiple of the MARBL
+    ! timestep, so every window ends on a MARBL step and the call in
+    ! finalize_dia_bgc adds nothing.
     implicit none
     integer(kind=4) :: itrc, i, j, k
     real(kind=8)    :: c0, w
@@ -1031,14 +1028,9 @@ contains
 #ifdef MARBL_DIAGS
 #include "compute_tile_bounds.h"
 #endif
-    ! initialisation writting
-    if (wrt_bgc_his.and.present(init)) then
-      call wrt_bgc_tracers(.false.) ! write his data
-    else
-      ! local
-      if (wrt_bgc_his)     call wrt_bgc_tracers(.false.) ! write his data
-      if (wrt_bgc_avg)     call wrt_bgc_tracers(.true.) ! write avg data
-    endif
+    if (wrt_bgc_his) call wrt_bgc_tracers(.false.) ! write his data
+    ! the start-up state is not a step of any averaging window
+    if (wrt_bgc_avg .and. .not. present(init)) call wrt_bgc_tracers(.true.)
 
 #if defined BEC2_DIAG || defined MARBL_DIAGS
 #if defined MARBL
@@ -1046,7 +1038,7 @@ contains
       call marbldrv_compute_init_diagnostics(istr,iend,jstr,jend,t)
     end if
 #endif
-    call wrt_bgc_diags
+    call wrt_bgc_diags(present(init))
 #endif
 
 
