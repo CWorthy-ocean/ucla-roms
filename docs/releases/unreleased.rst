@@ -9,22 +9,28 @@ Unreleased
 Breaking Changes
 ~~~~~~~~~~~~~~~~
 
-- N/A
+
+- ``_uscl`` files no longer have a start-up record at the run start: a run of ``n`` whole windows writes ``n`` records, not ``n + 1``, and the first file is created at the run start but written at the end of the first window. (`#398 <https://github.com/CWorthy-ocean/ucla-roms/pull/398>`_)
+- ``_uscl`` window averages now cover the steps of the window ending at ``ocean_time`` exactly; before, each average was shifted one step late and the last window counted its last step twice, so ``_add_`` and ``h_`` values change slightly. (`#398 <https://github.com/CWorthy-ocean/ucla-roms/pull/398>`_)
+- ``Tools-Roms/uscl_to_cdr.py`` stamps each CDR record at the start of its window and appends a zero-flux record at the end of the last window, so its output has one more record than the ``_uscl`` windows and different ``cdr_time`` values. (`#398 <https://github.com/CWorthy-ocean/ucla-roms/pull/398>`_)
 
 New Features
 ~~~~~~~~~~~~
 
-- N/A
+
+- ``_uscl`` files carry ``avg_begin_time`` and ``avg_end_time`` (seconds, same units as ``ocean_time``), and a run whose length is not a multiple of ``output_period_uscl`` ends with a partial window instead of losing it. (`#398 <https://github.com/CWorthy-ocean/ucla-roms/pull/398>`_)
 
 Bug Fixes
 ~~~~~~~~~
 
-- N/A
+
+- Upscaled boundary fluxes are no longer applied one window late in the parent, and the child's last window of export is no longer dropped, when the CDR forcing is built with ``Tools-Roms/uscl_to_cdr.py``. (`#398 <https://github.com/CWorthy-ocean/ucla-roms/pull/398>`_)
 
 Improvements
 ~~~~~~~~~~~~
 
-- N/A
+
+- ``Tools-Roms/uscl_to_cdr.py`` refuses ``_uscl`` files whose windows do not follow each other (e.g. a missing file) instead of converting them silently. (`#398 <https://github.com/CWorthy-ocean/ucla-roms/pull/398>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
