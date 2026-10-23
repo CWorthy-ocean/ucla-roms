@@ -49,13 +49,15 @@ def uscl_conf(tmp_path_factory) -> ROMSConfiguration:
     return conf
 
 
-def _uscl_nml(input_dir, inifile) -> dict:
-    """Namelist of the perturbed-ALK run: one ``_uscl`` and ``_cdr`` record per step."""
+def _uscl_nml(input_dir) -> dict:
+    """Namelist of the perturbed-ALK run: one ``_uscl`` and ``_cdr`` record per step.
+
+    The caller sets ``inifile``.
+    """
     nml = create_test_namelist_dict(input_dir)
     nml["TIME_STEPPING"]["dt"] = DT
     nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = DT
     nml["PARAM_SETTINGS"]["nt_bgc"] = 32
-    nml["INITIAL_CONDITIONS"]["inifile"] = str(inifile)
     nml["FORCING_FILES"] = {
         "frcfiles": [
             str(input_dir / "example_input_boundary_forcing.nc"),
@@ -81,11 +83,12 @@ def _uscl_nml(input_dir, inifile) -> dict:
     return nml
 
 
-def _perturbed_initial_conditions(input_dir, path):
+def _perturbed_initial_conditions(input_dir, path, np_xi, np_eta):
     """The suite's initial state with ALK raised by ``ALK_PERTURBATION``.
 
-    Written to ``path`` and split across the 2x2 decomposition beside it, since
-    non-PIO ROMS reads one piece per rank. get_init masks the land points.
+    Written to ``path`` and split across the run's np_xi x np_eta decomposition
+    beside it, since non-PIO ROMS reads one piece per rank. get_init masks the
+    land points.
     """
     with xr.open_dataset(
         input_dir / "example_input_bgc_initial_conditions.nc",
@@ -95,7 +98,7 @@ def _perturbed_initial_conditions(input_dir, path):
     np.testing.assert_array_equal(ds["ALK"].values, ds["ALK_ALT_CO2"].values)
     ds["ALK"] = ds["ALK"] + ALK_PERTURBATION
     ds.to_netcdf(path)
-    subprocess.run(f"partit 2 2 {path.name}", cwd=path.parent, shell=True, check=True)
+    subprocess.run(["partit", str(np_xi), str(np_eta), path.name], cwd=path.parent, check=True)
     return path
 
 
@@ -109,7 +112,6 @@ def _uscl_export(run_dir, t_start, t_end):
     its own tile, so the export is summed over all of them.
     """
     total = 0.0
-    covered = 0.0
     sides_seen = set()
     for piece in sorted(run_dir.glob("roms_uscl.*.nc")):
         with xr.open_dataset(piece, decode_times=False, decode_timedelta=False) as ds:
@@ -125,11 +127,11 @@ def _uscl_export(run_dir, t_start, t_end):
                 rate = ds[f"ALK_add_{side}"].values  # (time, s_rho, along-boundary)
                 per_record = rate.reshape(rate.shape[0], -1).sum(axis=1)
                 total += float(np.sum(per_record[inside] * (end - begin)[inside]))
-            if sides and not covered:
+            if sides:  # every boundary file's records must cover the interval
                 covered = float(np.sum((end - begin)[inside]))
+                np.testing.assert_allclose(covered, t_end - t_start, rtol=0, atol=1e-6)
             sides_seen.update(sides)
     assert sides_seen == set(SIDES)
-    np.testing.assert_allclose(covered, t_end - t_start, rtol=0, atol=1e-6)
     return total
 
 
@@ -154,11 +156,17 @@ def test_export_closes_perturbation_budget(tmp_path, uscl_conf, input_dir):
     Nothing else in the run separates ALK from ALK_ALT_CO2 (no CDR source,
     no rivers, equal boundary values), so the budget closes to round-off.
     """
-    inifile = _perturbed_initial_conditions(input_dir, tmp_path / "ini_alk_perturbed.nc")
-    uscl_conf.run(_uscl_nml(input_dir, inifile), cwd=tmp_path)
+    nml = _uscl_nml(input_dir)
+    inifile = _perturbed_initial_conditions(
+        input_dir, tmp_path / "ini_alk_perturbed.nc",
+        nml["PARAM_SETTINGS"]["NP_XI"], nml["PARAM_SETTINGS"]["NP_ETA"],
+    )
+    nml["INITIAL_CONDITIONS"]["inifile"] = str(inifile)
+    uscl_conf.run(nml, cwd=tmp_path)
 
     times, inventory = _interior_inventory(tmp_path, input_dir)
-    assert len(times) == 20  # one record at the end of every step
+    # one record at the end of every step
+    assert len(times) == nml["TIME_STEPPING"]["ntimes"]
     np.testing.assert_allclose(np.diff(times), DT)
 
     export = _uscl_export(tmp_path, times[0], times[-1])

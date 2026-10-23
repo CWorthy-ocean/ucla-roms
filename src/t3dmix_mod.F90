@@ -264,6 +264,7 @@ contains
         enddo
       enddo
 #  if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
+      ! Zero at open faces while LapT has the gradient condition above
       if (do_upscale) call add_mixing_rates(itrc,k,FX,FE,istr,iend,jstr,jend,1._8)
 #  endif
 #endif /* TS_DIF4 */
