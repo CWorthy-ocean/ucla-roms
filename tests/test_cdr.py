@@ -294,10 +294,15 @@ class TestCdr:
         nml[group].update({**extra, key: 200})
         with pytest.raises(subprocess.CalledProcessError) as excinfo:
             cdr_conf.run(nml, cwd=tmp_path, capture_output=True)
-        log = " ".join(excinfo.value.output.split())
-        assert f"{key} =" in log
-        assert "is not a whole multiple of the MARBL timestep ROMS uses" in log
-        assert "bit-identical restarts" in log
+        # ifx wraps the error log's list-directed output at 80 columns, even
+        # mid-word, so compare with all whitespace removed
+        log = "".join(excinfo.value.output.split())
+        for text in (
+            f"{key} =",
+            "is not a whole multiple of the MARBL timestep ROMS uses",
+            "bit-identical restarts",
+        ):
+            assert "".join(text.split()) in log, text
 
     def test_bgc_averages_survive_restart(self, tmp_path, cdr_conf, input_dir):
         """``_bgc_avg`` windows hold the model steps of each period only, and a

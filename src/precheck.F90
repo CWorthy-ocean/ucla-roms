@@ -213,9 +213,8 @@ contains
 
     marbl_dt = dt*marbl_timestep_ratio
     if (mod(avg_period, marbl_dt) /= 0) then
-      ! explicit format: list-directed output wraps at 80 columns with ifx
-      write(error_info,'(2a,f0.3,a,f0.3,2a)') trim(label), " = ", avg_period,&
-      &" s is not a whole multiple of the MARBL timestep ROMS uses"//&
+      write(error_info,*) trim(label)//" = ", avg_period,&
+      &" s is not a whole multiple of the MARBL timestep ROMS uses",&
       &" (marbl_timestep rounded to a multiple of dt) = ", marbl_dt,&
       &" s. An averaging window must end on a MARBL step to average",&
       &" the fluxes MARBL applied in it and to give bit-identical restarts."
