@@ -29,7 +29,7 @@ These switches control fundamental aspects of the model setup, including the equ
 | `PRINT_HOSTNAME` | During initialization print information about the HPC cluster and MPI setup | disabled | |
 | `PRINT_TILE_RANGES` | Make each MPI rank print the size of its local subdomain | disabled | |
 | `CDR_FORCING` | enabled special forcing for marine CO2 removal | disabled | Required inputs and fields are specified in `cdr_frc.opt`. |
-| `UPSCALING` | Save advective tendencies at lateral boundaries for use in upscaling applications | disabled | Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any CDR_LITE tracers. Requires `MARBL` and `MARBL_DIAGS` to be enabled. |
+| `UPSCALING` | Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications | disabled | Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any CDR_LITE tracers. Requires `MARBL` and `MARBL_DIAGS` to be enabled. |
 
 ### `GRID OPTIONS`
 

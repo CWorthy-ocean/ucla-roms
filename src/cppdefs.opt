@@ -80,7 +80,7 @@
 ! tracers); 3D forcing needs MARBL.
 #undef CDR_FORCING
 
-! Save advective tendencies at lateral boundaries for use in upscaling applications.
+! Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications.
 ! Usage notes: Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any CDR_LITE tracers. Requires MARBL and MARBL_DIAGS to be enabled.
 #undef UPSCALING
 

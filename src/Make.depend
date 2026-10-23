@@ -55,7 +55,7 @@ check_switches_mod.o : check_switches_mod.F90 cppdefs.opt error_handling_mod.o p
 frc_output.o : frc_output.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o param.o dimensions.o nc_read_write.o roms_read_write.o scalars.o marbl_driver.o bulk_frc.o surf_flux.o pio_roms.o compute_tile_bounds.h
 param.o : param.opt
 roms_mpi.o : roms_mpi.F90 cppdefs.opt param.o dimensions.o error_handling_mod.o pio_roms.o insert_node_mod.o utils_mod.o mpi_masking_mod.o timers.o
-t3dmix_mod.o : t3dmix_mod.F90 cppdefs.opt param.o tracers.o scalars.o private_scratch.o grid.o roms_mpi.o dimensions.o mixing.o ocean_vars.o diagnostics.o
+t3dmix_mod.o : t3dmix_mod.F90 cppdefs.opt param.o tracers.o scalars.o private_scratch.o grid.o roms_mpi.o dimensions.o mixing.o ocean_vars.o diagnostics.o upscale_output.o
 mess_buffers.o : mess_buffers.F90 cppdefs.opt param.o scalars.o
 bgc_io.o : bgc_io.F90 cppdefs.opt param.o tracers.o marbl_driver.o bgc_shared_vars.o nc_read_write.o roms_read_write.o scalars.o dimensions.o error_handling_mod.o pio_roms.o bgc_forces.o compute_tile_bounds.h
 river_frc.o : river_frc.F90 cppdefs.opt namelist_open_mod.o roms_read_write.o nc_read_write.o scalars.o grid.o dimensions.o pio_roms.o param.o tracers.o error_handling_mod.o roms_mpi.o ana_frc_river.h
