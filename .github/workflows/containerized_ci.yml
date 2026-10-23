@@ -281,8 +281,10 @@ jobs:
       # other ranks wrote their segments in between), UCX dereferences NULL.
       # mpirun then exits 139 (or 9) with a uct_mm_iface_recv_desc_init
       # backtrace and no UCX error message. With 4 ranks this needs about
-      # 18-21 MB free at startup, which a clean container never has: late in
-      # the session something held the rest (see "Run tests" below).
+      # 18-21 MB free at startup. A clean container has far more, but each
+      # run that ends in MPI_Abort leaves a 4 MB mpich_shm_* file in /dev/shm.
+      # The tests that abort ROMS on purpose (test_bgc, test_extract) leave
+      # about 37 MB, so every later run started close to that band.
       options: --shm-size=1g
     name: pytest_gnu
     steps:
@@ -312,11 +314,11 @@ jobs:
         make ncjoin COMPILER=gnu
         '
 
-    # The background loop samples /dev/shm every 5 s while the tests run, to
-    # find what holds it (see the container comment above). Neither MPICH nor
-    # UCX leaves named files behind, so usage that df reports but du does not
-    # is memory held by live processes. A running 4-rank job accounts for
-    # about 20 MB of that gap, so ps is captured only when the gap passes
+    # The background loop samples /dev/shm every 5 s while the tests run (see
+    # the container comment above). du counts files, including the files that
+    # aborted runs leave behind. Usage that df reports but du does not is held
+    # by live processes through unlinked files. A running 4-rank job accounts
+    # for about 17 MB of that gap, so ps is captured only when the gap passes
     # 30 MB, and again each time it grows by another 8 MB.
     - name: Run tests
       shell: bash
