@@ -273,13 +273,16 @@ jobs:
       packages: read
     container:
       image: ${{ needs.prepare.outputs.gnu_image }}
-      # The image's MPICH (ch4:ucx) runs UCX 1.22, whose shared-memory
-      # transport dereferences NULL in MPI_Init when free /dev/shm drops below
-      # UCX_POSIX_SHM_MIN_SIZE (16 MB) while the ranks start up, so mpirun
-      # exits 139 (or 9) with a uct_mm_iface_recv_desc_init backtrace.
-      # Docker's default /dev/shm is 64 MB, and late in the session something
-      # holds enough of it to reach that point.
-      # See environments/Containerfiles/README.md.
+      # Docker's default /dev/shm is 64 MB, too small for this image's MPI.
+      # The image's MPICH (ch4:ucx) runs UCX 1.22.0, which checks free
+      # /dev/shm twice in MPI_Init: when it lists transports, and again when it
+      # opens its shared-memory transport. If the first check finds at least
+      # UCX_POSIX_SHM_MIN_SIZE (16 MB) free and the second finds less (the
+      # other ranks wrote their segments in between), UCX dereferences NULL.
+      # mpirun then exits 139 (or 9) with a uct_mm_iface_recv_desc_init
+      # backtrace and no UCX error message. With 4 ranks this needs about
+      # 18-21 MB free at startup, which a clean container never has: late in
+      # the session something held the rest (see "Run tests" below).
       options: --shm-size=1g
     name: pytest_gnu
     steps:
@@ -292,9 +295,11 @@ jobs:
         echo "PATH=./:$PATH:$ROMS_ROOT/Tools-Roms" >> $GITHUB_ENV
       shell: bash
     - name: Print system info
+      run: lscpu
+    - name: Print MPI and shared memory info
+      continue-on-error: true
       shell: bash
       run: |
-        lscpu
         df -h /dev/shm
         micromamba run -n roms-ci bash -c 'ucx_info -v; mpichversion'
     - name: Compile Fortran Code
@@ -307,21 +312,43 @@ jobs:
         make ncjoin COMPILER=gnu
         '
 
+    # The background loop samples /dev/shm every 5 s while the tests run, to
+    # find what holds it (see the container comment above). Neither MPICH nor
+    # UCX leaves named files behind, so usage that df reports but du does not
+    # is memory held by live processes. A running 4-rank job accounts for
+    # about 20 MB of that gap, so ps is captured only when the gap passes
+    # 30 MB, and again each time it grows by another 8 MB.
     - name: Run tests
       shell: bash
       run: |
+        (
+          set +e
+          last_gap=0
+          while true; do
+            used=$(df -k --output=used /dev/shm | tail -1 | tr -d ' ')
+            files=$(du -sk /dev/shm | cut -f1)
+            gap=$((used - files))
+            echo "$(date -u +%H:%M:%S) df_used_kb=$used du_kb=$files gap_kb=$gap"
+            if [ "$gap" -gt 30720 ] && [ "$gap" -gt $((last_gap + 8192)) ]; then
+              last_gap=$gap
+              ps -eo pid,ppid,stat,etime,rss,cmd
+            fi
+            sleep 5
+          done
+        ) > /tmp/shm_usage.log 2>&1 &
+        sampler=$!
+        trap 'kill $sampler' EXIT
         micromamba run -n roms-ci bash -c '
         cd ${ROMS_ROOT}/tests/
         pytest -svvv -rfEx . --environ=github_gnu --inputs-out results/inputs_github_gnu --basetemp /tmp/pytest_head
         '
-    # What holds /dev/shm at the end of the session (see the container comment
-    # above). Neither MPICH nor UCX leaves named files behind, so usage that df
-    # reports but du does not is memory held by live processes.
     - name: Show shared memory usage
       if: always()
       continue-on-error: true
       shell: bash
       run: |
+        cat /tmp/shm_usage.log
+        echo "== at the end of the session"
         df -k /dev/shm
         du -sk /dev/shm
         ls -la /dev/shm
