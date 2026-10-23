@@ -9,6 +9,7 @@ tmp_path so their output files cannot collide. The module-scoped
 """
 import copy
 import shutil
+import subprocess
 
 import numpy as np
 import pytest
@@ -214,7 +215,7 @@ class TestCdr:
 
 
     @pytest.mark.parametrize(
-        "marbl_timestep", [200, 120], ids=["restart_on_marbl_step", "restart_between"]
+        "marbl_timestep", [200, 40], ids=["marbl_every_fifth_step", "marbl_every_step"]
     )
     def test_averages_survive_restart(
         self, tmp_path, cdr_conf, input_dir, marbl_timestep
@@ -225,10 +226,10 @@ class TestCdr:
         flux and carbonate diagnostics it computes are held between MARBL
         steps, and the restart file does not carry those held values. A 20-step
         run is compared with the same run restarted at 400 s: every ``_cdr``
-        record after the restart must be bit-identical. With 200 s the restart
-        and every 200 s window end fall on a MARBL step; with 120 s (MARBL
-        every third step) the restart and most window ends fall between MARBL
-        steps. Checked directly, so the test needs no reference.
+        record after the restart must be bit-identical. The 200 s windows and
+        the restart end on MARBL steps, as the precheck requires (see
+        ``test_avg_period_must_end_on_marbl_step``). Checked directly, so the
+        test needs no reference.
         """
         nml = _restart_nml(input_dir, marbl_timestep)
         nml["CDR_OUTPUT_SETTINGS"].update({
@@ -252,8 +253,7 @@ class TestCdr:
 
 
     @pytest.mark.parametrize(
-        "marbl_timestep", [200, 120, 40],
-        ids=["restart_on_marbl_step", "restart_between", "marbl_every_step"],
+        "marbl_timestep", [200, 40], ids=["marbl_every_fifth_step", "marbl_every_step"]
     )
     def test_bgc_dia_averages_survive_restart(
         self, tmp_path, cdr_conf, input_dir, marbl_timestep
@@ -263,9 +263,9 @@ class TestCdr:
 
         The diagnostics computed from the start-up state are not a step of
         any window, so the 200 s windows end at 200, 400, 600 and 800 s, and
-        none straddles the restart at 400 s. With ``marbl_timestep`` 200 and
-        120 s the diagnostics are held between MARBL steps, which the restart
-        file does not carry; with 40 s (``dt``) MARBL runs every step.
+        none straddles the restart at 400 s. With ``marbl_timestep`` 200 s the
+        diagnostics are held between MARBL steps, which the restart file does
+        not carry; with 40 s (``dt``) MARBL runs every step.
         """
         nml = _restart_nml(input_dir, marbl_timestep)
         nml["BGC_SETTINGS"].update({
@@ -277,6 +277,27 @@ class TestCdr:
 
         compared = _check_restarted_averages(whole, restarted, "bgc_dia_avg")
         assert "FG_CO2" in compared
+
+    @pytest.mark.parametrize("group, key, extra", [
+        ("CDR_OUTPUT_SETTINGS", "output_period_cdr",
+         {"do_cdr_output": True, "wrt_cdr_avg": True, "cdr_monthly_averages": False}),
+        ("BGC_SETTINGS", "output_period_bgc_avg_dia", {"wrt_bgc_dia_avg": True}),
+    ], ids=["cdr", "bgc_dia_avg"])
+    def test_avg_period_must_end_on_marbl_step(
+        self, tmp_path, cdr_conf, input_dir, group, key, extra
+    ):
+        """An averaging period that is not a multiple of the MARBL timestep stops
+        ROMS at startup: with ``marbl_timestep`` 120 s (``dt`` 40 s), 200 s
+        windows would end between MARBL steps."""
+        nml = _cdr_parm_nml(input_dir)
+        nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = 120
+        nml[group].update({**extra, key: 200})
+        with pytest.raises(subprocess.CalledProcessError) as excinfo:
+            cdr_conf.run(nml, cwd=tmp_path, capture_output=True)
+        log = " ".join(excinfo.value.output.split())
+        assert f"{key} =" in log
+        assert "is not a whole multiple of the MARBL timestep ROMS uses" in log
+        assert "bit-identical restarts" in log
 
     def test_bgc_averages_survive_restart(self, tmp_path, cdr_conf, input_dir):
         """``_bgc_avg`` windows hold the model steps of each period only, and a

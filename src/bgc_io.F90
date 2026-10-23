@@ -878,11 +878,10 @@ contains
     ! steps since the previous one, the steps MARBL's tendencies cover, so a
     ! window that ends on a MARBL step averages exactly the diagnostics
     ! behind its tracer changes. A restart file does not carry the held
-    ! values, and this way no average needs them from before a restart. At
-    ! a write (finalize_dia_bgc), steps after the window's last MARBL step
-    ! take the values it computed; a restarted run reproduces those too as
-    ! long as output_period_bgc_avg_dia is at least marbl_timestep (a
-    ! shorter window may hold no MARBL step at all).
+    ! values, and this way no average needs them from before a restart.
+    ! The precheck makes output_period_bgc_avg_dia a multiple of the MARBL
+    ! timestep, so every window ends on a MARBL step and the call in
+    ! finalize_dia_bgc adds nothing.
     implicit none
     integer(kind=4) :: itrc, i, j, k
     real(kind=8)    :: c0, w

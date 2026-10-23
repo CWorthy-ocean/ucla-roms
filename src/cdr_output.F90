@@ -771,10 +771,11 @@ contains
       ! for the whole marbl_timestep, so a window that ends on a MARBL step
       ! averages exactly the flux behind its DIC change. A restart file does
       ! not carry the held values, and this way no average needs them from
-      ! before a restart. At a write (finalize_average), steps after the
-      ! window's last MARBL step take the values it computed; a restarted
-      ! run reproduces those too as long as output_period_cdr is at least
-      ! marbl_timestep (a shorter window may hold no MARBL step at all).
+      ! before a restart. The precheck makes output_period_cdr a multiple
+      ! of the MARBL timestep, so every window ends on a MARBL step; only
+      ! with cdr_monthly_averages, whose month ends need not be MARBL steps,
+      ! do the steps after a window's last MARBL step take, at the write
+      ! (finalize_average), the values that step computed.
       implicit none
       integer :: i,j,k
       real(kind=8) :: c0, w
