@@ -9,7 +9,6 @@ tmp_path so their output files cannot collide. The module-scoped
 """
 import copy
 import shutil
-import subprocess
 
 import numpy as np
 import pytest
@@ -23,6 +22,7 @@ from ._helpers import (
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
+    assert_run_rejected,
     create_test_namelist_dict,
     get_summary_value,
     join_output,
@@ -292,17 +292,11 @@ class TestCdr:
         nml = _cdr_parm_nml(input_dir)
         nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = 120
         nml[group].update({**extra, key: 200})
-        with pytest.raises(subprocess.CalledProcessError) as excinfo:
-            cdr_conf.run(nml, cwd=tmp_path, capture_output=True)
-        # ifx wraps the error log's list-directed output at 80 columns, even
-        # mid-word, so compare with all whitespace removed
-        log = "".join(excinfo.value.output.split())
-        for text in (
+        assert_run_rejected(cdr_conf, nml, tmp_path, [
             f"{key} =",
             "is not a whole multiple of the MARBL timestep ROMS uses",
             "bit-identical restarts",
-        ):
-            assert "".join(text.split()) in log, text
+        ], label=key)
 
     def test_bgc_averages_survive_restart(self, tmp_path, cdr_conf, input_dir):
         """``_bgc_avg`` windows hold the model steps of each period only, and a
