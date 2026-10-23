@@ -52,6 +52,8 @@ Bug Fixes
 
 - ``_bgc_avg`` no longer averages the start-up state into its first window when ``wrt_bgc_his`` is off. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
 - ``_bgc_dia_avg`` and ``_bgc_avg`` files hold ``nrpf_bgc_avg_dia`` / ``nrpf_bgc_avg`` records instead of one each. ``record_avg`` and ``record_dia_avg`` were reset on every call because the line clearing ``first_step_avg`` was commented out. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
+- ``_uscl`` boundary exports (``ALK_add_*``, ``DIC_add_*`` and the CDR_LITE ``<tracer>_add_*``) now include horizontal tracer mixing across the open boundaries, not only advection, so a child's export closes its tracer budget. (`#399 <https://github.com/CWorthy-ocean/ucla-roms/pull/399>`_)
+- The ``units`` attribute of the ``*_add_*`` variables now states a per-cell flux, tracer × m3/s (e.g. ``meq/m^3 * m3/s``), instead of ``meq/m^3s-1``. (`#399 <https://github.com/CWorthy-ocean/ucla-roms/pull/399>`_)
 
 Improvements
 ~~~~~~~~~~~~
@@ -76,3 +78,5 @@ Miscellaneous
 - Open PRs pick up the fix only after merging ``main`` (or a new push), because rerunning an old run reuses its old workflow. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
 - ``docs/model_settings/runtime_settings.md``: ``output_period_cdr`` and ``output_period_bgc_avg_dia`` state the multiple-of-MARBL-timestep requirement, and ``output_period_bgc_avg`` says what each record averages. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
 - ``src/Make.depend`` is regenerated, since ``precheck`` now uses ``scalars`` and ``marbl_driver``. The other line changes there are drift that was already on ``main``. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
+- New test: the interior inventory change of an ALK perturbation in a SPONGE + UPSCALING run matches minus the time-integrated ``_uscl`` export to round-off. (`#399 <https://github.com/CWorthy-ocean/ucla-roms/pull/399>`_)
+- Corrected the sponge-profile comment in ``set_nudgcof`` and the ``UPSCALING`` description in ``cppdefs.opt`` and the compile-time settings docs. (`#399 <https://github.com/CWorthy-ocean/ucla-roms/pull/399>`_)
