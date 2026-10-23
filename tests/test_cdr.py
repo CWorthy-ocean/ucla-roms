@@ -24,6 +24,7 @@ from ._helpers import (
     ROMSConfiguration,
     create_test_namelist_dict,
     get_summary_value,
+    join_output,
 )
 
 
@@ -210,6 +211,73 @@ class TestCdr:
             reference_results, "cdr_gas_exch",
             {"physics": pv, "bgc": bv, "cdrgas": gv},
         )
+
+
+    def test_averages_survive_restart(self, tmp_path, cdr_conf, input_dir):
+        """Averaged MARBL fields of a restarted run equal the uninterrupted run's.
+
+        MARBL runs every fifth step (``marbl_timestep`` 200 s, ``dt`` 40 s), so
+        the air-sea flux and carbonate diagnostics it computes are held between
+        MARBL steps, and the restart file does not carry those held values. A
+        20-step run is compared with the same run restarted at 400 s, a MARBL
+        step: every ``_cdr`` record after the restart must be bit-identical.
+        Checked directly, so the test needs no reference.
+        """
+        nml = _cdr_parm_nml(input_dir)
+        nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = 200
+        # every output file must end at a restart (precheck), hence the nrpf_*
+        nml["BASIC_OUTPUT_SETTINGS"].update({
+            "wrt_file_rst": True,
+            "output_period_rst": 400,
+            "nrpf_his": 1,
+        })
+        nml["SPONGE_TUNE_SETTINGS"].update({
+            "output_period_sponge": 400,
+            "nrpf_sponge": 1,
+        })
+        nml["CDR_OUTPUT_SETTINGS"].update({
+            "do_cdr_output": True,
+            "wrt_cdr_avg": True,
+            "cdr_monthly_averages": False,
+            "output_period_cdr": 200,
+            "nrpf_cdr": 2,
+        })
+        nml["BGC_SETTINGS"]["nrpf_bgc_his"] = 1
+
+        whole = tmp_path / "whole"
+        whole.mkdir()
+        cdr_conf.run(nml, cwd=whole)
+
+        restarted = tmp_path / "restarted"
+        restarted.mkdir()
+        nml["INITIAL_CONDITIONS"]["inifile"] = str(whole / "roms_rst.20100101000640.nc")
+        nml["TIME_STEPPING"]["ntimes"] = 10
+        cdr_conf.run(nml, cwd=restarted)
+
+        ref = _joined_records(whole, "cdr")
+        new = _joined_records(restarted, "cdr")
+        # records at 600 s and 800 s; the restart is at 400 s
+        np.testing.assert_array_equal(ref["ocean_time"][-2:], new["ocean_time"])
+        ref = ref.isel(time=slice(-2, None))
+        compared = [v for v in new.data_vars if "time" in new[v].dims]
+        assert "FG_CO2" in compared
+        for var in compared:
+            np.testing.assert_array_equal(new[var].values, ref[var].values, err_msg=var)
+
+
+def _joined_records(run_dir, stream) -> xr.Dataset:
+    """Join every ``roms_<stream>.<date>`` file set of a run; return all records."""
+    prefixes = sorted({
+        p.name.rsplit(".", 2)[0] for p in run_dir.glob(f"roms_{stream}.*.?.nc")
+    })
+    assert prefixes, f"no roms_{stream} output in {run_dir}"
+    datasets = [
+        xr.open_dataset(
+            join_output(run_dir, prefix), decode_times=False, decode_timedelta=False
+        ).load()
+        for prefix in prefixes
+    ]
+    return xr.concat(datasets, dim="time", data_vars="minimal")
 
 
 CDRGAS_NAME = "roms_cdrgas.20100101000000.nc"

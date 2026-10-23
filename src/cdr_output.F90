@@ -58,8 +58,8 @@ module cdr_output
 
       integer(kind=4) :: navg = 0
       ! Fields that MARBL updates only on MARBL steps (pH, carbonate, air-sea
-      ! CO2) are added to their sums lazily: nheld counts the steps the
-      ! current values have been held since they were last added, and
+      ! CO2) are added to their sums lazily: nheld counts the steps since
+      ! they were last added (see accumulate_marbl_fields), and
       ! marbl_first marks the first such addition in an averaging window.
       integer(kind=4) :: nheld = 0
       logical :: marbl_first = .true.
@@ -765,9 +765,15 @@ contains
       subroutine accumulate_marbl_fields ![
       ! pH, carbonate and air-sea CO2 fields come from MARBL and change only
       ! on MARBL steps. Add their current values once, weighted by the number
-      ! of steps they have been held (nheld). Called before the next MARBL
-      ! step and before each write, this gives the same sums as adding the
-      ! held values at every step.
+      ! of steps since the last addition (nheld). Called right after each
+      ! MARBL step, the values that step computed stand for the steps since
+      ! the previous one: MARBL applies its flux to the tracers on that step
+      ! for the whole marbl_timestep, so the averaged flux lands in the window
+      ! that holds the DIC change. A restart file does not carry the held
+      ! values, and this way no average needs them from before a restart. At
+      ! a write (finalize_average), steps after the window's last MARBL step
+      ! take the values it computed; a restarted run reproduces those too as
+      ! long as output_period_cdr is at least marbl_timestep.
       implicit none
       integer :: i,j,k
       real(kind=8) :: c0, w
@@ -1077,8 +1083,8 @@ contains
 
       if (wrt_cdr_avg) then
         call calc_average
-        ! add the MARBL-held fields before the next MARBL step changes them
-        if (is_marbl_step(iic+1)) call accumulate_marbl_fields
+        ! add the MARBL fields this step computed (see accumulate_marbl_fields)
+        if (is_marbl_step(iic)) call accumulate_marbl_fields
         if (writing) call finalize_average
       elseif (writing) then           ! instantaneous fields are only needed now
         if (cdr_source) call calc_cdr_source
