@@ -552,11 +552,8 @@ contains
 !     ------------------------------------------------------------------
     no_tracers_requested = .true.
     recognized_tracer = .false.
-    lstr = 1
-    lidx = 1
-    do while (lstr>0) ! Outer loop over namelist tracers list
+    do lidx = 1, size(marbl_tracers_to_write) ! Outer loop over namelist tracers list
       trcname = trim(marbl_tracers_to_write(lidx))
-      lidx=lidx+1
       lstr = lenstr(trcname)
       if (lstr == 0) exit
       do tidx=1,NT ! Inner loop over all possible tracers to check
@@ -1174,14 +1171,11 @@ contains
 
     no_diags_requested = .true. ! If we find any requested tracers, flip to false
     recognized_diag = .false.
-    lidx = 1
-    lstr = 1
 !     1. Read in MARBL diagnostics list file "marbl_diagnostic_output_list"
 !     ------------------------------------------------------------------
 
-    do while (lstr>0) ! outer loop over namelist diagnostics list
+    do lidx = 1, size(marbl_diagnostics_to_write) ! outer loop over namelist diagnostics list
       diagname = trim(marbl_diagnostics_to_write(lidx))
-      lidx=lidx+1
       lstr = lenstr(diagname)
       if (lstr == 0) exit
       recognized_diag = .false.
