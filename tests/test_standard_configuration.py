@@ -37,7 +37,7 @@ def test_default_cppkeys(read_cppdefs):
     Force the user to manually update a list in this test if the change was expected.
     """
     expected_cpp_keys=[
-        'EXACT_RESTARTS', 'NONLIN_EOS', 'SALINITY', 'SOLVE3D', 'SPLIT_EOS', 'TIDES', 'UV_ADV', 'UV_COR',
+        'NONLIN_EOS', 'SALINITY', 'SOLVE3D', 'SPLIT_EOS', 'TIDES', 'UV_ADV', 'UV_COR',
         'CURVGRID', 'MASKING', 'SPHERICAL', 'SPONGE', 'BULK_FRC', 'M2_FRC_BRY', 'M3_FRC_BRY', 'OBC_EAST',
         'OBC_M2FLATHER', 'OBC_M3ORLANSKI', 'OBC_NORTH', 'OBC_SOUTH', 'OBC_TORLANSKI', 'OBC_WEST', 'T_FRC_BRY',
         'Z_FRC_BRY', 'LMD_BKPP', 'LMD_KPP', 'LMD_MIXING', 'LMD_NONLOCAL', 'LMD_RIMIX', 'TS_DIF2', 'UV_VIS2',
