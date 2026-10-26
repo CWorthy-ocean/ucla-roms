@@ -463,11 +463,11 @@ zob = 1.e-2    ! Bottom roughness height (m)
 
 &VERTICAL_MIXING_SETTINGS                                              !scalars.F
 !------------------------
-!Requires SOLVE3D cppkey (and MY_BAK_MIXING cppkey for akq_bak)
+!Requires SOLVE3D cppkey (and MY25_MIXING cppkey for akq_bak)
 !------------------------
 akv_bak = 0.0        ! Vertical viscosity (m2/s)
 akt_bak = 0.0 0.0    ! Vertical mixing (m2/s) for each tracer
-!akq_bak = 0.        ! Background vertical mixing for TKE (m2/s, if MY_BAK_MIXING)
+!akq_bak = 0.        ! Background vertical mixing for TKE (m2/s, if MY25_MIXING)
 /
 
 &LATERAL_VISC_SETTINGS                                                 !scalars.F
@@ -479,7 +479,8 @@ visc2 = 0. ! Horizontal Laplacian kinematic viscosity (m2/s)
 
 &UBIND_SETTINGS                                                        !scalars.F
 !--------------
-!Requires T_FRC_BRY, M2_FRC_BRY, Z_FRC_BRY, M3_FRC_BRY, or M2NUDGING cppkeys
+!Requires T_FRC_BRY, M2_FRC_BRY, Z_FRC_BRY, M3_FRC_BRY, TNUDGING, M2NUDGING,
+!or M3NUDGING cppkeys
 !--------------
 ubind = 0.1 ! Open boundary binding velocity (m/s)
 /
