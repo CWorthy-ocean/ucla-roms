@@ -158,7 +158,9 @@ module scalars
   namelist /LATERAL_VISC_SETTINGS/ visc2
 #endif
   namelist /TIME_STEPPING/ dt, ndtfast, ntimes, ninfo
-#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M
+#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
+  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
+                                             || defined M3NUDGING
   namelist /UBIND_SETTINGS/ ubind
 #endif
 #ifdef SPONGE
@@ -338,7 +340,9 @@ contains
     dtfast = dt/dble(ndtfast)
 !===============================================================================
 ! ubind
-#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M
+#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
+  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
+                                             || defined M3NUDGING
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=UBIND_SETTINGS, iostat=ios, iomsg=msg)
 

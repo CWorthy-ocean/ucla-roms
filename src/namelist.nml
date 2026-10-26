@@ -3,7 +3,7 @@
 !================================================================================
 ! Previously set in `roms.in`
 !================================================================================
-&SIMULATION_NAME_SETTINGS                                      !roms_read_write.F
+&SIMULATION_NAME_SETTINGS                                    !roms_read_write.F90
 !------------------------
 output_root_name = "roms" ! output file prefix (e.g. `roms_bgc.20120101120000.nc`)
 title = "roms_run"        ! title used in output metadata
@@ -14,7 +14,7 @@ title = "roms_run"        ! title used in output metadata
 !================================================================================
 ! Previously set in `roms.in`
 !================================================================================
-&TIME_STEPPING							       !scalars.F
+&TIME_STEPPING                                                       !scalars.F90
 !-------------
 ntimes = 20               ! Number of time steps in this run
 dt = 40                   ! Time step (seconds)
@@ -22,7 +22,7 @@ ndtfast = 30              ! Number of fast time-steps per slow timestep
 ninfo = 1                 ! Number of steps between runtime diagnostics (STDOUT)
 /
 
-&REFERENCE_DATE_SETTINGS                    !instant_output.F & roms_read_write.F
+&REFERENCE_DATE_SETTINGS                                     !roms_read_write.F90
 !-------------
 reference_date = 2000, 1, 1 ! Model reference date. year, month, day
 /
@@ -30,14 +30,14 @@ reference_date = 2000, 1, 1 ! Model reference date. year, month, day
 !================================================================================
 !                              GRID AND INPUT FILES
 !================================================================================
-&GRID_SETTINGS	                                                    !dimensions.F
+&GRID_SETTINGS                                                    !dimensions.F90
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
 grdname = "input_data/example_input_grid.nc" ! grid filepath
 /
 
-&S_COORD                                                                !scoord.F
+&S_COORD                                                              !scoord.F90
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
@@ -46,7 +46,7 @@ theta_b = 6.D0                  ! S-coordinate bottom stretching parameter
 hc = 25.0D0                     ! Critical depth (m)
 /
 
-&PARAM_SETTINGS                                                          !param.F
+&PARAM_SETTINGS                                                        !param.F90
 !------------------------------
 ! Previously set in `param.opt`
 !------------------------------
@@ -61,21 +61,21 @@ nt_cdr_dor = 0      ! Number of DOR (DIC-mimicking) passive CDR_LITE tracers
 nt_bgc = 32          ! Number of BGC tracers
 /
 
-&PIO_SETTINGS                                                          !pio_roms.F90
+&PIO_SETTINGS                                                       !pio_roms.F90
 !---------------------------
 ! Stride between MPI ranks assigned as PIO I/O tasks (requires PARALLEL_IO)
 !---------------------------
 pio_stride = 1
 /
 
-&INITIAL_CONDITIONS                                            !roms_read_write.F
+&INITIAL_CONDITIONS                                          !roms_read_write.F90
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
 inifile = "my_initial_conditions.nc" ! Initial conditions (IC) file path
 /
 
-&FORCING_FILES                                                 !roms_read_write.F
+&FORCING_FILES                                               !roms_read_write.F90
 !---------------------------
 ! Previously set in `roms.in`
 !---------------------------
@@ -88,7 +88,7 @@ frcfiles =
 !================================================================================
 !                             FORCING SETTINGS
 !================================================================================
-&SURF_FRC_SETTINGS
+&SURF_FRC_SETTINGS                                                  !bulk_frc.F90
 !---------------------------------
 ! Previously set in `bulk_frc.opt and flux_frc.opt`
 !---------------------------------
@@ -102,7 +102,7 @@ interp_flux_frc = .true.       ! Interpolate forcing from coarser input grid if 
 !================================================================================
 ! Previously set in `river_frc.opt`
 !================================================================================
-&RIVER_FRC_SETTINGS                                                  !river_frc.F
+&RIVER_FRC_SETTINGS                                                !river_frc.F90
 river_source = .false.              ! T if river inputs used, else F
 river_analytical = .false.          ! T if river inputs specified analytically
 nriv = 1                            ! Number of rivers
@@ -114,7 +114,7 @@ nriv = 1                            ! Number of rivers
 ! Previously set in `tides.opt`
 ! Requires TIDES cppkey
 !================================================================================
-&TIDAL_FRC_SETTINGS                                                          !tides.F
+&TIDAL_FRC_SETTINGS                                                    !tides.F90
 bry_tides = .false.                ! Barotropic tides at domain boundaries
 pot_tides = .false.                ! Surface potential tides
 ana_tides = .false.                ! Tidal forcing specified analytically
@@ -124,7 +124,7 @@ ntides = 10                        ! Number of tidal constituents
 !================================================================================
 !                        BASIC MODEL NETCDF OUTPUT CONTROLS
 !================================================================================
-&BASIC_OUTPUT_SETTINGS                                            !basic_output.F
+&BASIC_OUTPUT_SETTINGS                                          !basic_output.F90
 !---------------------
 ! Previously set in `ocean_vars.opt`
 !---------------------
@@ -174,7 +174,7 @@ monthly_restarts = .false.  ! Write restart files at start of calendar month
 output_period_rst = 2000    ! Write restart files at regular frequency (s)
 /
 
-&TS_OUTPUT_SETTINGS
+&TS_OUTPUT_SETTINGS                                                  !tracers.F90
 !------------------------------
 ! Previously set in tracers.opt
 !------------------------------
@@ -184,7 +184,7 @@ wrt_temp_dia = .false.      ! Include temperature diagnostics in output fields
 wrt_salt_dia = .false.      ! Include salinity diagnostics in output fields
 /
 
-&FRC_OUTPUT_SETTINGS                                                !frc_output.F
+&FRC_OUTPUT_SETTINGS                                              !frc_output.F90
 !-------------------
 ! Previously set in `frc_output.opt`
 !-------------------
@@ -197,7 +197,7 @@ nrpf_frc = 4                    ! Number of time records in forcing files
 !================================================================================
 !                               NESTED SIMULATIONS
 !================================================================================
-&EXTRACT_DATA_SETTINGS                                            !extract_data.F
+&EXTRACT_DATA_SETTINGS                                          !extract_data.F90
 !---------------------
 ! Previously set in `extract_data.opt`,
 ! require EXTRACT_DATA cppkey
@@ -226,7 +226,7 @@ hc_chd = 250.0                    ! `hc` of nested domain(s)
 extract_root_name = "child"       ! Output file root(s) (PARALLEL_IO)
 /
 
-&SPONGE_TUNE_SETTINGS                                              !sponge_tune.F
+&SPONGE_TUNE_SETTINGS                                            !sponge_tune.F90
 !--------------------
 ! Previously set in `sponge_tune.opt`
 ! Require SPONGE_TUNE cppkey
@@ -239,7 +239,7 @@ nrpf_sponge = 7               ! Number of records per sponge file
 output_period_sponge = 86400  ! Output frequency of sponge tuning file
 /
 
-&CALC_PFLX_SETTINGS                                              !calc_pflx_mod.F
+&CALC_PFLX_SETTINGS                                            !calc_pflx_mod.F90
 !---------------------
 ! Previously set in `calc_pflx.opt`
 !---------------------
@@ -252,7 +252,7 @@ pflx_timescale = 86400      ! timescale for filtering pressure fluxes (s)
 !================================================================================
 ! Previously set in `zslice_output.opt`
 !================================================================================
-&ZSLICE_SETTINGS                                                 !zslice_output.F
+&ZSLICE_SETTINGS                                               !zslice_output.F90
 do_zslice = .false.   ! Output certain variables on regular z-levels
 zslice_avg = .false.  ! Averaged output (T) or instantaneous (F)
 wrt_T_zslice = .false.   ! Write tracers to z-level output
@@ -272,7 +272,7 @@ trc2zsc = 1, 2        ! Indices of tracers to include
 !================================================================================
 ! Requires MARBL or BIOLOGY_BEC2 cpp keys
 !================================================================================
-&BGC_SETTINGS                                                !bgc_shared_vars.opt
+&BGC_SETTINGS                                                !bgc_shared_vars.F90
 !------------
 ! Previously set in `bgc.opt`
 !------------
@@ -297,7 +297,7 @@ nrpf_bgc_avg_dia = 10           ! Number of time records per BGC diagnostics fil
 xco2air_default = 284.7         ! Atmospheric xCO2 (ppm) when PCO2AIR_FORCING is off
 /
 
-&MARBL_BIOGEOCHEMISTRY_SETTINGS                                  !marbl_driver.F
+&MARBL_BIOGEOCHEMISTRY_SETTINGS                                 !marbl_driver.F90
 !------------------------------
 ! Previously set in `roms.in`
 !------------------------------
@@ -312,7 +312,7 @@ constant_Fe_value = 3.0e-3        ! Fe imposed when use_constant_Fe (mmol/m^3, F
 !================================================================================
 !                    CARBON DIOXIDE REMOVAL FORCING & OUTPUT
 !================================================================================
-&CDR_FRC_SETTINGS                                                      !cdr_frc.F
+&CDR_FRC_SETTINGS                                                    !cdr_frc.F90
 !----------------
 ! Previously set in `cdr_frc.opt`
 ! Requires CDR_FORCING cppkey. Parameterized releases can target any tracer
@@ -336,7 +336,7 @@ cdr_relocate_to_wet_pts = .false. ! Relocate CDR perturbation to sea if on land
 cdr_volume = .false.             ! Read in volume flux/tracer concentration
 /
 
-&CDR_OUTPUT_SETTINGS                                               !cdr_output.F
+&CDR_OUTPUT_SETTINGS                                              !cdr_output.F90
 !-------------------
 ! Previously set in `cdr_output.opt`
 !-------------------
@@ -347,7 +347,7 @@ output_period_cdr = 3600           ! Frequency of CDR-relevant output
 nrpf_cdr = 4                       ! Time records per output file
 /
 
-&CDR_LITE_SETTINGS                                      !surf_flux.F90
+&CDR_LITE_SETTINGS                                                 !surf_flux.F90
 !--------------------------
 ! Optional. Carbonate sensitivities (beta = dDIC/dCO2, eta = dDIC/dALK) for
 ! the linearized air-sea CO2 flux of the CDR_LITE DIC tracers. If .true., they are
@@ -367,7 +367,7 @@ cdr_online_carbonate_sensitivity = .false.
 cdr_carbonate_sensitivity_time_interpolation = .true.
 /
 
-&CDR_LITE_OUTPUT_SETTINGS                               !cdr_lite_output.F90
+&CDR_LITE_OUTPUT_SETTINGS                                    !cdr_lite_output.F90
 !--------------------------
 ! Output for CDR_OAE_ALK/DIC and CDR_DOR_DIC
 ! Requires nt_cdr_oae or nt_cdr_dor > 0 (PARAM_SETTINGS); works with or
@@ -387,7 +387,7 @@ wrt_dic = .true.                     ! Write CDR_OAE_DIC, CDR_DOR_DIC and varian
 wrt_gas_exchange = .false.           ! Write FG_CDR_*_DIC: air-sea CO2 flux into each CDR_LITE DIC tracer (mmol/m^2/s, + into ocean)
 /
 
-&CDR_GAS_EXCH_OUTPUT_SETTINGS                       !cdr_gas_exch_output.F90
+&CDR_GAS_EXCH_OUTPUT_SETTINGS                            !cdr_gas_exch_output.F90
 !----------------------------
 ! Output for ddic_dco2 (beta) and ddic_dalk (eta)
 ! Requires MARBL and CDR_FORCING cppkeys
@@ -410,7 +410,7 @@ output_period_cdr_gas = 3600         ! Frequency of CDR gas-exch output (s)
 nrpf_cdr_gas = 4                     ! Time records per output file
 /
 
-&UPSCALE_SETTINGS                                              !upscale_output.F
+&UPSCALE_SETTINGS                                             !upscale_output.F90
 !----------------
 ! Previously set in `upscale_output.opt`
 ! Requires UPSCALING cppkey
@@ -425,7 +425,7 @@ output_period_uscl = 100       ! Output frequency
 !================================================================================
 ! Previously set in `roms.in`
 !================================================================================
-&LIN_RHO_EOS_SETTINGS                                                  !scalars.F
+&LIN_RHO_EOS_SETTINGS                                               !eos_vars.F90
 !-----------------------------------
 ! Unused if NONLIN_EOS cppkey active
 !-----------------------------------
@@ -435,56 +435,57 @@ Scoef = 0.822    ! Saline contraction coefficient   (kg/m3/psu)
 S0 = 1.0         ! Reference salinity               (psu)
 /
 
-&RHO0_SETTINGS                                                         !scalars.F
+&RHO0_SETTINGS                                                       !scalars.F90
 !-------------
 ! Requires SOLVE3D cppkey
 !-------------
 rho0 = 1027.5    ! Boussinesq reference density (kg/m3)
 /
 
-&GAMMA2_SETTINGS                                                       !scalars.F
+&GAMMA2_SETTINGS                                                     !scalars.F90
 !---------------
 gamma2 = 1.0 ! Slipperiness parameter (free-slip = +1, no-slip = -1)
 /
 
-&TRACER_DIFF2                                                          !scalars.F
+&TRACER_DIFF2                                                        !scalars.F90
 !------------
 ! Requires SOLVE3D and TS_DIF2 cppkeys
 !------------
 tnu2=0.0 0.0 ! Horizontal Laplacian diffusion (m2/s) for each tracer
 /
 
-&BOTTOM_DRAG_SETTINGS                                                  !scalars.F
+&BOTTOM_DRAG_SETTINGS                                                !scalars.F90
 !--------------------
 rdrg = 0.e-4   ! Linear bottom drag co-efficient (m/s)
 rdrg2 = 1.0e-3 ! Quadratic bottom drag co-efficient (dimensionless)
 zob = 1.e-2    ! Bottom roughness height (m)
 /
 
-&VERTICAL_MIXING_SETTINGS                                              !scalars.F
+&VERTICAL_MIXING_SETTINGS                                            !scalars.F90
 !------------------------
-!Requires SOLVE3D cppkey (and MY_BAK_MIXING cppkey for akq_bak)
+!Requires SOLVE3D cppkey (and MY25_MIXING cppkey for akq_bak)
 !------------------------
 akv_bak = 0.0        ! Vertical viscosity (m2/s)
 akt_bak = 0.0 0.0    ! Vertical mixing (m2/s) for each tracer
-!akq_bak = 0.        ! Background vertical mixing for TKE (m2/s, if MY_BAK_MIXING)
+!akq_bak = 0.        ! Background vertical mixing for TKE (m2/s, if MY25_MIXING)
 /
 
-&LATERAL_VISC_SETTINGS                                                 !scalars.F
+&LATERAL_VISC_SETTINGS                                               !scalars.F90
 !---------------------
 ! Requires UV_VIS2 cppkey
 !---------------------
 visc2 = 0. ! Horizontal Laplacian kinematic viscosity (m2/s)
 /
 
-&UBIND_SETTINGS                                                        !scalars.F
+&UBIND_SETTINGS                                                      !scalars.F90
 !--------------
-!Requires T_FRC_BRY, M2_FRC_BRY, Z_FRC_BRY, M3_FRC_BRY, or M2NUDGING cppkeys
+!Requires T_FRC_BRY, M2_FRC_BRY, Z_FRC_BRY, M3_FRC_BRY, TNUDGING, M2NUDGING,
+!or M3NUDGING cppkeys
 !--------------
 ubind = 0.1 ! Open boundary binding velocity (m/s)
 /
 
-&V_SPONGE_SETTINGS                                                     !scalars.F
+&V_SPONGE_SETTINGS                                                   !scalars.F90
 !-----------------
 !Requires SPONGE cppkey
 !-----------------
@@ -496,21 +497,21 @@ v_sponge = 1.0 ! Maximum viscosity in sponge layer (m2/s)
 !================================================================================
 ! Previously set in `roms.in`
 !================================================================================
-&SSS_CORRECTION                                                       !surf_flx.F
+&SSS_CORRECTION                                                    !surf_flux.F90
 !--------------
 ! Requires SFLX_CORR and SALINITY cppkeys
 !--------------
 dSSSdt = 7.777 ! SSS correction co-efficient as piston velocity (cm/day)
 /
 
-&SST_CORRECTION                                                       !surf_flx.F
+&SST_CORRECTION                                                    !surf_flux.F90
 !--------------
 ! Requires QCORRECTION cppkey
 !--------------
 dSSTdt = 7.777 ! SST correction co-efficient as piston velocity (cm/day)
 /
 
-&DIC_ALK_CORRECTION                                                   !surf_flx.F
+&DIC_ALK_CORRECTION                                                !surf_flux.F90
 !--------------
 ! Requires CFLX_CORR and MARBL cppkey
 !--------------
@@ -520,7 +521,7 @@ dCdt = 7.777 ! DIC/ALK correction co-efficient as piston velocity (cm/day)
 !================================================================================
 !                           OTHER OUTPUT CONTROLS
 !================================================================================
-&DIAGNOSTICS_SETTINGS                                              !diagnostics.F
+&DIAGNOSTICS_SETTINGS                                            !diagnostics.F90
 !--------------------
 ! Previously set in `diagnostics.opt`
 ! Requires DIAGNOSTICS cppkey
@@ -532,7 +533,7 @@ output_period_diag = 3600       ! Output frequency (s)
 nrpf_diag = 4                   ! Number of records per output file
 /
 
-&STDOUT_DIAG_SETTINGS
+&STDOUT_DIAG_SETTINGS                                               !diag_mod.F90
 !-----------------------------
 ! Previously set in `diag.opt`
 !-----------------------------
@@ -540,7 +541,7 @@ code_check_mode = .false.  ! diagnostics in stdout formatted for code testing
 /
 
 
-&RANDOM_OUTPUT_SETTINGS
+&RANDOM_OUTPUT_SETTINGS                                        !random_output.F90
 !----------------------
 ! Previously set in `random_output.opt`
 !----------------------
@@ -549,13 +550,13 @@ output_period_random = 3600       ! Frequency of custom output (s)
 nrpf_random=10                    ! Number of records per output file
 /
 
-&SURF_FLX_OUTPUT_SETTINGS
+&SURF_FLX_OUTPUT_SETTINGS                                          !surf_flux.F90
 !-----------------
 ! Previously set in `surf_flx.opt`
 !-----------------
 wrt_smflx = .false.        ! Output surface momentum flux
 wrt_stflx = .false.        ! Output surface tracer flux
-wrt_rstflx = .false.       ! Output surface restoring flux (already accounted in stflx)
+wrt_rstflx = .false.       ! Not supported: must be .false. (restoring flux is part of stflx)
 wrt_swflx = .false.        ! Output surface water flux (P-E)
 sflx_avg = .false.         ! Output average (T) or instantaneous (F) fields
 output_period_sflx = 120        ! Frequency of surface flux output (s)
@@ -567,7 +568,7 @@ nrpf_sflx = 10                  ! Number of records per surface flux file
 !================================================================================
 ! Formerly in `pipe_frc.opt`
 !================================================================================
-&PIPE_FRC_SETTINGS
+&PIPE_FRC_SETTINGS                                                  !pipe_frc.F90
 pipe_source = .false.     ! T if pipe inputs used, else F
 p_analytical = .false.    ! T if pipe inputs specified analytically
 npip = 1                  ! Number of pipe inputs
@@ -578,7 +579,7 @@ npip = 1                  ! Number of pipe inputs
 !================================================================================
 ! Formerly in `particles.opt`
 !================================================================================
-&PARTICLES_SETTINGS
+&PARTICLES_SETTINGS                                                !particles.F90
 floats = .false.         ! Release Lagrangian particles (T) or not (F)
 np=50                    ! Local number of particles
 extra_space_fac = 1.5    ! Buffer space to receive extra exchanged particles
