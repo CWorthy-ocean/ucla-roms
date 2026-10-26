@@ -1,19 +1,21 @@
 # ROMS simulation settings (runtime)
 
-Settings in ROMS are now generally supplied at runtime via a namelist file, though many "on-off" switches to features of the code remain controlled at compile time via CPP keys.
+Most ROMS settings are read at runtime from a namelist file. Features of the code are switched on and off at compile time with CPP keys (see [compile-time settings](compile_time_settings.md)).
 
-The runtime settings/namelist file is provided as an argument to the ROMS executable, e.g.
+Pass the namelist file to the ROMS executable as its first argument:
 
 ```
 mpirun -n 64 ./roms my_namelist.nml
 ```
 
-An example namelist file is provided at `$ROMS_ROOT/src/namelist.nml`.
+Unless `MPI_MASKING` is defined, the number of MPI processes must equal `NP_XI * NP_ETA` from `PARAM_SETTINGS`.
 
-This page contains a description of all the settings in the namelist file. Each section of the namelist file gets a section of the page below including a table of settings covered in that section. For users of the previous ROMS settings system, a "Previous location/name" column is provided.
+Start from `$ROMS_ROOT/src/namelist.nml`, which contains every group below with a default for each setting. ROMS reads a group only when the feature it belongs to is compiled in (noted below as "Read only with ..."), and ignores the others. A group that ROMS reads must be present, except where noted, and a misspelled or unknown setting in it stops ROMS at startup.
+
+This page describes every setting in the namelist file, one section per group. For users of the previous ROMS settings system, a "Previous location/name" column is provided.
 
 ### `SIMULATION_NAME_SETTINGS`
-(read by module `roms_read_write.F`)
+(read by module `roms_read_write.F90`)
 
 |  Setting      | Description   | Previous location/name |
 | ------------- | ------------- | ------ |
@@ -21,7 +23,7 @@ This page contains a description of all the settings in the namelist file. Each 
 | `title` |  title used in output metadata  | `roms.in` |
 
 ### `TIME_STEPPING`
-(read by module `scalars.F`)
+(read by module `scalars.F90`)
 
 |  Setting      | Description   | Previous location/name |
 | ------------- | ------------- | ------ |
@@ -30,8 +32,19 @@ This page contains a description of all the settings in the namelist file. Each 
 | `ndtfast` | Mode-splitting ratio. Number of "fast" time-steps (for 2D equations) per "slow" timestep (`dt`) 	| `roms.in` |
 | `ninfo` | Number of steps between runtime diagnostics printed to standard output | `roms.in` |
 
+### `REFERENCE_DATE_SETTINGS`
+(read by module `roms_read_write.F90`)
+
+Optional: if the group is missing, or ROMS cannot read it (a misspelled key, for example), the reference date is 2000-01-01, with no warning.
+
+| Setting | Description | Previous location/name |
+|--------|-------------|------------------------|
+| `reference_date` | Calendar date (year, month, day) of model time zero, e.g. `2000, 1, 1`. It sets the dates in output file names and the time units written to output. Use the reference date the input files were made with (roms-tools' `model_reference_date`, by default 2000-01-01). | new |
+
 ### `GRID_SETTINGS`
-(read by module `dimensions.F`)
+(read by module `dimensions.F90`)
+
+Not read with `ANA_GRID`.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -40,7 +53,7 @@ This page contains a description of all the settings in the namelist file. Each 
 
 
 ### `S_COORD`
-(read by module `scoord.F`)
+(read by module `scoord.F90`)
 
 These settings control the vertical sigma co-ordinate system. For more information, see [this documentation page](https://roms-tools.readthedocs.io/en/latest/methods.html#vertical-coordinate-system).
 
@@ -52,7 +65,7 @@ These settings control the vertical sigma co-ordinate system. For more informati
 
 
 ### `PARAM_SETTINGS`
-(read by module `param.F`)
+(read by module `param.F90`)
 
 These settings specify the grid size, MPI decomposition, and number of tracers.
 
@@ -64,10 +77,21 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `MMm` | Number of grid points in ETA direction | `param.opt: MMm` |
 | `nz` | Number of vertical levels | `param.opt: N` |
 | `nt_passive` | Number of passive tracers | `param.opt: nt_passive` |
+| `nt_cdr_oae` | Number of OAE `CDR_LITE` tracer pairs. Each pair is an ALK-mimicking and a DIC-mimicking passive tracer (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`), so it adds two tracers. The `CDR_LITE` CPP key adds their air-sea CO2 exchange. | new |
+| `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`) | new |
 | `nt_bgc` | Number of biogeochemical tracers: 32 for default `MARBL`, 26 for `BIOLOGY_BEC2` (29 with `Ncycle_SY`), 0 if neither is defined | `param.opt: ntrc_bio` |
 
+### `PIO_SETTINGS`
+(read by module `pio_roms.F90`)
+
+Read only with `PARALLEL_IO`.
+
+| Setting | Description | Previous location/name |
+|--------|-------------|------------------------|
+| `pio_stride` | Stride between the MPI ranks that do parallel I/O: ROMS uses `max(1, ranks / pio_stride)` I/O tasks. The default, `1`, makes every rank an I/O task. | new |
+
 ### `INITIAL_CONDITIONS`
-(read by module `roms_read_write.F`)
+(read by module `roms_read_write.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -75,14 +99,14 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 
 
 ### `FORCING_FILES`
-(read by module `roms_read_write.F`)
+(read by module `roms_read_write.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `frcfiles` | Comma-separated list of strings of forcing NetCDF file paths (boundary, surface, river, etc.) | `roms.in` |
 
 ### `SURF_FRC_SETTINGS`
-(read by module `bulk_frc.F`)
+(read by module `bulk_frc.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -91,7 +115,7 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `interp_flux_frc` | Interpolate forcing from coarser input grid if .true. | `flux_frc.opt: interp_frc` |
 
 ### `RIVER_FRC_SETTINGS`
-(read by module `river_frc.F`)
+(read by module `river_frc.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -101,7 +125,7 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 
 
 ### `TIDAL_FRC_SETTINGS`
-(read by module `tides.F`)
+(read by module `tides.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -112,7 +136,7 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 
 
 ### `BASIC_OUTPUT_SETTINGS`
-(read by module `basic_output.F`)
+(read by module `basic_output.F90`)
 
 Controls setting specifying the output of the basic physical model state (not including diagnostics, customized fields, or biogeochemistry)
 
@@ -156,7 +180,7 @@ Controls setting specifying the output of the basic physical model state (not in
 
 
 ### `TS_OUTPUT_SETTINGS`
-(read by module `tracers.F`)
+(read by module `tracers.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -167,7 +191,7 @@ Controls setting specifying the output of the basic physical model state (not in
 
 
 ### `FRC_OUTPUT_SETTINGS`
-(read by module `frc_output.F`)
+(read by module `frc_output.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -178,7 +202,7 @@ Controls setting specifying the output of the basic physical model state (not in
 
 
 ### `EXTRACT_DATA_SETTINGS`
-(read by module `extract_data.F`)
+(read by module `extract_data.F90`)
 
 These settings control "data extraction", typically used for generating boundary conditions for child domains nested within the current simulation.
 
@@ -198,7 +222,7 @@ Boundary data can be extracted for up to 8 child domains in one run. `extract_fi
 
 
 ### `SPONGE_TUNE_SETTINGS`
-(read by module `sponge_tune.F`)
+(read by module `sponge_tune.F90`)
 
 Sponge tuning tunes the sponge values near the boundaries to attempt to match the incoming baroclinic wave flux from the parent.
 
@@ -213,7 +237,7 @@ Sponge tuning tunes the sponge values near the boundaries to attempt to match th
 
 
 ### `CALC_PFLX_SETTINGS`
-(read by module `calc_pflx_mod.F`)
+(read by module `calc_pflx_mod.F90`)
 
 These settings control the calculation of baroclinic pressure fluxes, e.g. at nested domain boundaries.
 
@@ -224,7 +248,7 @@ These settings control the calculation of baroclinic pressure fluxes, e.g. at ne
 
 
 ### `ZSLICE_SETTINGS`
-(read by module `zslice_output.F`)
+(read by module `zslice_output.F90`)
 
 These settings control "Z-slice" output, i.e. the output of certain fields vertically remapped online onto a z-level grid, which may be preferable for analysis over output on sigma co-ordinates.
 
@@ -243,7 +267,9 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 | `trc2zsc` | Indices of tracers to include | `zslice_output.opt: trc2zsc` |
 
 ### `BGC_SETTINGS`
-(read by module `bgc_shared_vars.opt`)
+(read by module `bgc_shared_vars.F90`)
+
+Read only with `MARBL` or `BIOLOGY_BEC2`.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -260,9 +286,12 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 | `wrt_bgc_dia_avg` | Write averaged BGC diagnostics to output | `bgc.opt: wrt_avg_dia` |
 | `output_period_bgc_avg_dia` | Frequency/period of averaged diagnostic output (s). Each record averages the model steps of the period ending at its `ocean_time`. With MARBL it must be a whole multiple of the MARBL timestep ROMS uses (`marbl_timestep` rounded down to a multiple of `dt`), or ROMS stops at startup: each window then ends on a MARBL step, averages the diagnostics of the MARBL steps within it, and a restarted run's records match an uninterrupted run's bit for bit | `bgc.opt: output_period_avg_dia` |
 | `nrpf_bgc_avg_dia` | Number of time records per BGC diagnostics file | `bgc.opt: nrpf_avg_dia` |
+| `xco2air_default` | Atmospheric xCO2 (ppm) that MARBL uses when `PCO2AIR_FORCING` is not defined. Default `284.7` (pre-industrial) | new |
 
 ### `MARBL_BIOGEOCHEMISTRY_SETTINGS`
-(read by module `marbl_driver.F`)
+(read by module `marbl_driver.F90`)
+
+Read only with `MARBL`.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -274,9 +303,11 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 | `constant_Fe_value` | Fe concentration imposed when `use_constant_Fe` is on, in Fe's units (mmol/m^3; 1 nM = 1e-3 mmol/m^3). Must be non-negative. Default `3.0e-3` | new |
 
 ### `CDR_FRC_SETTINGS`
-(read by module `cdr_frc.F`)
+(read by module `cdr_frc.F90`)
 
-Settings controlling Carbon Dioxide Removal (CDR) experiments using Ocean Alkalinity Enhancement (OAE) perturbations.
+Read only with `CDR_FORCING`.
+
+Settings controlling Carbon Dioxide Removal (CDR) forcing: tracer releases read from `cdr_file`. Parameterized releases can target any tracer (passive, `CDR_LITE` or BGC) and work with or without MARBL; 3D forcing supplies ALK and DIC and needs MARBL.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -286,13 +317,15 @@ Settings controlling Carbon Dioxide Removal (CDR) experiments using Ocean Alkali
 | `cdr_nz_chd` | Number of vertical levels in a depth-profile CDR forcing file; `0` takes it from the file's `s_rho` (a nonzero value must match it) | `cdr_frc.opt: nz_chd` |
 | `cdr_forcing_depth_profiles` | Apply CDR forcing from a depth profile if `.true.`. Each column of `cdr_trcflx_profile` goes to the tracer named in `cdr_trc_name` (columns for tracers the run lacks are skipped); files without `cdr_trc_name` have two columns, ALK and DIC, which need MARBL. The flux of each profile is conserved when it is remapped onto the local layers. | `cdr_frc.opt: forcing_depth_profiles` |
 | `cdr_forcing_3d` | Apply CDR forcing from a fully 3D distribution if `.true.`| `cdr_frc.opt: forcing_3d` |
-| `cdr_forcing_parameterized` | Apply CDR forcing from Guassian parameters if `.true.`| `cdr_frc.opt: forcing_parameterized` |
+| `cdr_forcing_parameterized` | Apply CDR forcing from Gaussian parameters if `.true.`| `cdr_frc.opt: forcing_parameterized` |
 | `cdr_time_interpolation` | Interpolate linearly between CDR forcing records if `.true.` | `cdr_frc.opt: time_interpolation` |
-| `relocate_to_wet_points` | Relocate CDR perturbation to nearest ocean point if on land | `cdr_frc.opt: relocate_to_wet_points` |
+| `cdr_relocate_to_wet_pts` | Relocate CDR perturbation to nearest ocean point if on land. Use it with depth profiles from upscaling, so profiles from child-boundary points that fall on parent land go to the nearest wet parent point | `cdr_frc.opt: relocate_to_wet_points` |
 | `cdr_volume` | Read in volume flux/tracer concentration | `cdr_frc.opt: cdr_volume` |
 
 ### `CDR_OUTPUT_SETTINGS`
-(read by module `cdr_output.F`)
+(read by module `cdr_output.F90`)
+
+Read only with `MARBL`, `MARBL_DIAGS` and `CDR_FORCING`.
 
 Write an output file containing CDR-relevant fields.
 
@@ -304,10 +337,61 @@ Write an output file containing CDR-relevant fields.
 | `output_period_cdr` | Frequency of CDR-relevant output. With averaging on (and `cdr_monthly_averages` off) it must be a whole multiple of the MARBL timestep ROMS uses (`marbl_timestep` rounded down to a multiple of `dt`), or ROMS stops at startup: each window then ends on a MARBL step, averages the MARBL fields (`FG_CO2`, `pCO2SURF`, carbonate) MARBL applied within it, and a restarted run's records match an uninterrupted run's bit for bit | `cdr_output.opt: output_period` |
 | `nrpf_cdr` | Time records per output file | `cdr_output.opt: nrpf` |
 
-### `UPSCALING_SETTINGS`
-(read by module `upscale_output.F`)
+### `CDR_LITE_SETTINGS`
+(read by module `surf_flux.F90`)
 
-Settings controlling CDR upscaling, i.e. the recording of CDR-relevant tracer fluxes at the boundaries of the domain, such that a wider domain can be run to capture their further propagation.
+Read only with `CDR_LITE`. Optional: if the group is missing, the defaults apply.
+
+These settings control the carbonate sensitivities (beta = dDIC/dCO2, eta = dDIC/dALK) used in the linearized air-sea CO2 flux of the `CDR_LITE` DIC tracers.
+
+| Setting | Description | Previous location/name |
+|--------|-------------|------------------------|
+| `cdr_online_carbonate_sensitivity` | If `.true.`, compute the sensitivities every step from the model's ALT_CO2 (no-CDR) surface state; this needs MARBL, and with `PCO2AIR_FORCING` the forcing files' `xco2_air_alt` must equal `xco2_air`. If `.false.` (default), read `ddic_dco2` and `ddic_dalk` from `frcfiles` (for example a `CDR_GAS_EXCH_OUTPUT_SETTINGS` file from another run). | new |
+| `cdr_carbonate_sensitivity_time_interpolation` | For sensitivities read from `frcfiles`: interpolate linearly in time between records if `.true.` (default), or hold each record until the next one starts if `.false.` | new |
+
+The surface-flux variables `CDR_OAE_DIC<n>_flx` and `CDR_DOR_DIC<n>_flx` in the forcing files are optional: without them, a tracer's only surface flux is the air-sea gas exchange.
+
+### `CDR_LITE_OUTPUT_SETTINGS`
+(read by module `cdr_lite_output.F90`)
+
+Output of the `CDR_LITE` tracers (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`, `CDR_DOR_DIC<n>`), which need `nt_cdr_oae` or `nt_cdr_dor` > 0 in `PARAM_SETTINGS`. ROMS reads this group in every configuration, so keep it in the namelist.
+
+| Setting | Description | Previous location/name |
+|--------|-------------|------------------------|
+| `do_cdr_lite_output` | Write the `CDR_LITE` output file if `.true.` | new |
+| `wrt_cdr_lite_avg` | Write averaged (if `.true.`) or instantaneous (if `.false.`) output | new |
+| `cdr_lite_monthly_averages` | Write averaged outputs per calendar month if `.true.` | new |
+| `output_period_cdr_lite` | Output frequency (s) | new |
+| `nrpf_cdr_lite` | Time records per output file | new |
+| `wrt_tracers` | Write the tracer concentrations | new |
+| `wrt_vertical_integrals` | Write vertical integrals (`int_z_*` fields) | new |
+| `wrt_thickness_weighted` | Write layer-thickness-weighted fields (`h*`, `h*_avg`) | new |
+| `wrt_sources` | Write the CDR source fields (`*_source`); needs `CDR_FORCING` and `cdr_source` | new |
+| `wrt_alk` | Write `CDR_OAE_ALK` and its variants | new |
+| `wrt_dic` | Write `CDR_OAE_DIC`, `CDR_DOR_DIC` and their variants | new |
+| `wrt_gas_exchange` | Write `FG_CDR_*_DIC`, the air-sea CO2 flux into each `CDR_LITE` DIC tracer (mmol/m^2/s, positive into the ocean) | new |
+
+### `CDR_GAS_EXCH_OUTPUT_SETTINGS`
+(read by module `cdr_gas_exch_output.F90`)
+
+Read only with `MARBL` and `CDR_FORCING`.
+
+Output of the carbonate sensitivities `ddic_dco2` (beta) and `ddic_dalk` (eta), in a form a `CDR_LITE` run can read from its `frcfiles` (with `cdr_online_carbonate_sensitivity = .false.`). Each run writes an instantaneous record at its start and end time, in addition to the `nrpf_cdr_gas` regular records, so each chunk of a chain of restarted runs is self-contained. Averaged records average 1/beta and eta/beta, as the gas exchange uses them, and are stamped at the window midpoint. The run that reads them must use the same `reference_date` and start at or after the first record.
+
+| Setting | Description | Previous location/name |
+|--------|-------------|------------------------|
+| `do_cdr_gas_exch_output` | Write the gas-exchange sensitivity file if `.true.` | new |
+| `wrt_cdr_gas_avg` | Write averaged (if `.true.`) or instantaneous (if `.false.`) output | new |
+| `cdr_gas_monthly_averages` | Write averaged outputs per calendar month if `.true.` | new |
+| `output_period_cdr_gas` | Output frequency (s) | new |
+| `nrpf_cdr_gas` | Time records per output file | new |
+
+### `UPSCALE_SETTINGS`
+(read by module `upscale_output.F90`)
+
+Read only with `UPSCALING`, `MARBL` and `MARBL_DIAGS`.
+
+Settings controlling CDR upscaling: recording the fluxes of CDR-relevant tracers through the open boundaries of a child domain, so that its parent domain can be re-run with them as CDR forcing to follow their further propagation. The fluxes cover advection and horizontal mixing, for the ALK and DIC perturbations (relative to their ALT_CO2 analogues) and for any `CDR_LITE` tracers.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -317,12 +401,12 @@ Settings controlling CDR upscaling, i.e. the recording of CDR-relevant tracer fl
 
 Each record of the `_uscl` files is the average of the boundary fluxes over one window of `output_period_uscl` seconds, labelled by `avg_begin_time` and `avg_end_time` (in seconds, like `ocean_time`, which is the window end). The windows follow each other from the start of the run; if the run length is not a multiple of `output_period_uscl`, the last window is partial and ends with the run. There is no record at the start of the run. A new file opens at the start of its first window and is named after that time. `Tools-Roms/uscl_to_cdr.py` turns each window into a CDR forcing record at the window's start, closed by a zero-flux record at the end of the last window.
 
-Note: the previously existing option `upscale_output.opt: uscl_prec` has been hardcoded to `nf90_double` in `upscale_output.F`.
-
 ### `LIN_RHO_EOS_SETTINGS`
-(read by module `scalars.F`)
+(read by module `eos_vars.F90`)
 
-Linear equation of state parameters, if the `NONLIN_EOS` cppkey is not defined.
+Read only when `NONLIN_EOS` is not defined.
+
+Linear equation of state parameters.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -332,28 +416,30 @@ Linear equation of state parameters, if the `NONLIN_EOS` cppkey is not defined.
 | `S0` | Reference salinity               (psu) | `roms.in` |
 
 ### `RHO0_SETTINGS`
-(read by module `scalars.F`)
+(read by module `scalars.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `rho0` | Boussinesq reference density (kg/m3) | `roms.in` |
 
 ### `GAMMA2_SETTINGS`
-(read by module `scalars.F`)
+(read by module `scalars.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `gamma2` | Sliperiness parameter (free-slip = +1, no-slip = -1) | `roms.in` |
 
 ### `TRACER_DIFF2`
-(read by module `scalars.F`)
+(read by module `scalars.F90`)
+
+Read only with `TS_DIF2`.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `tnu2` | List of horizontal Laplacian diffusion (m2/s) for each tracer | `roms.in` |
 
 ### `BOTTOM_DRAG_SETTINGS`
-(read by module `scalars.F`)
+(read by module `scalars.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -362,7 +448,7 @@ Linear equation of state parameters, if the `NONLIN_EOS` cppkey is not defined.
 | `zob` | Bottom roughness height (m) | `roms.in` |
 
 ### `VERTICAL_MIXING_SETTINGS`
-(read by module `scalars.F`)
+(read by module `scalars.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
@@ -370,42 +456,61 @@ Linear equation of state parameters, if the `NONLIN_EOS` cppkey is not defined.
 | `akt_bak` | List of vertical mixing coefficients (m2/s) for each tracer | `roms.in` |
 
 ### `LATERAL_VISC_SETTINGS`
-(read by module `scalars.F`)
+(read by module `scalars.F90`)
+
+Read only with `UV_VIS2`.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `visc2` | Horizontal Laplacian kinematic viscosity (m2/s) | `roms.in` |
 
 ### `UBIND_SETTINGS`
-(read by module `scalars.F`)
+(read by module `scalars.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `ubind` | Open boundary binding velocity (m/s) | `roms.in` |
 
 ### `V_SPONGE_SETTINGS`
-(read by module `scalars.F`)
+(read by module `scalars.F90`)
+
+Read only with `SPONGE`.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `v_sponge` | Maximum viscosity in sponge layer (m2/s) | `roms.in` |
 
 ### `SSS_CORRECTION`
-(read by module `surf_flx.F`)
+(read by module `surf_flux.F90`)
+
+Read only with `SFLX_CORR` and `SALINITY`.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `dSSSdt` | Sea surface salinity correction co-efficient as piston velocity (cm/day) | `roms.in` |
 
 ### `SST_CORRECTION`
-(read by module `surf_flx.F`)
+(read by module `surf_flux.F90`)
+
+Read only with `QCORRECTION`.
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
 | `dSSTdt` | Sea surface temperature correction co-efficient as piston velocity (cm/day) | `roms.in` |
 
+### `DIC_ALK_CORRECTION`
+(read by module `surf_flux.F90`)
+
+Read only with `CFLX_CORR` and `MARBL`.
+
+| Setting | Description | Previous location/name |
+|--------|-------------|------------------------|
+| `dCdt` | Restoring of surface DIC and ALK toward the `sDIC` and `sALK` fields in the forcing files, as a piston velocity (cm/day). The restoring flux is computed from `DIC_ALT_CO2` and `ALK_ALT_CO2` and applied equally to them and to `DIC` and `ALK`, so it does not damp a CDR perturbation | new |
+
 ### `DIAGNOSTICS_SETTINGS`
-(read by module `diagnostics.F`)
+(read by module `diagnostics.F90`)
+
+Read only with `DIAGNOSTICS`.
 
 Controls output of diagnostics concerning the physical ocean state.
 
@@ -419,7 +524,7 @@ Controls output of diagnostics concerning the physical ocean state.
 
 
 ### `STDOUT_DIAG_SETTINGS`
-(read by module `diag_mod.F`)
+(read by module `diag_mod.F90`)
 
 Controls output of diagnostics in model STDOUT
 
@@ -428,7 +533,7 @@ Controls output of diagnostics in model STDOUT
 | `code_check_mode` | Format standard output diagnostics for code testing | `diag.opt: code_check_mode` |
 
 ### `RANDOM_OUTPUT_SETTINGS`
-(read by module `random_output.F`)
+(read by module `random_output.F90`)
 
 Controls output of user-specified custom fields defined in `random_output.F`
 
@@ -439,7 +544,7 @@ Controls output of user-specified custom fields defined in `random_output.F`
 | `nrpf_random` | Number of records per output file | `random_output.opt: nrpf` |
 
 ### `SURF_FLX_OUTPUT_SETTINGS`
-(read by module `surf_flx.F`)
+(read by module `surf_flux.F90`)
 
 Controls the output of model surface fluxes.
 
@@ -447,13 +552,14 @@ Controls the output of model surface fluxes.
 |--------|-------------|------------------------|
 | `wrt_smflx` | Output surface momentum flux if `.true.`| `surf_flx.opt: wrt_smflx` |
 | `wrt_stflx` | Output surface tracer flux if `.true.`| `surf_flx.opt: wrt_stflx` |
+| `wrt_rstflx` | Meant to output the surface restoring fluxes, which are already part of the surface tracer flux. Their output is currently disabled, so this writes nothing; leave it `.false.` | new |
 | `wrt_swflx` | Output surface water flux (P-E) if `.true.` | `surf_flx.opt: wrt_swflx` |
 | `sflx_avg` | Output average (if `.true`) or instantaneous (if `.false`) fields | `surf_flx.opt: sflx_avg` |
 | `output_period_sflx` | Frequency of surface flux output (s) | `surf_flx.opt: output_period` |
 | `nrpf_sflx` | Number of records per surface flux file | `surf_flx.opt: nrpf` |
 
 ### `PIPE_FRC_SETTINGS`
-(read by module `pipe_frc.F`)
+(read by module `pipe_frc.F90`)
 
 These settings control "pipe forcing", i.e. the input of water and tracers at a single-cell inflow point in the surface layer.
 
@@ -464,7 +570,7 @@ These settings control "pipe forcing", i.e. the input of water and tracers at a 
 | `npip` | Number of pipes | `pipe_frc.opt: npip` |
 
 ### `PARTICLES_SETTINGS`
-(read by module `particles.F`)
+(read by module `particles.F90`)
 
 | Setting | Description | Previous location/name |
 |--------|-------------|------------------------|
