@@ -96,3 +96,4 @@ Miscellaneous
 - Corrected the sponge-profile comment in ``set_nudgcof`` and the ``UPSCALING`` description in ``cppdefs.opt`` and the compile-time settings docs. (`#399 <https://github.com/CWorthy-ocean/ucla-roms/pull/399>`_)
 - Every file-name variable and its broadcast use ``max_name_size`` (now in ``param``), so raising it is a one-line change. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
 - The test namelist helper asks for MARBL's default settings and every diagnostic, which is what the tests ran with before; new ``TestFileNames`` tests cover these limits. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
+- Removed the no-op ``EXACT_RESTARTS`` and ``PRINT_HOSTNAME`` keys from the default and example ``cppdefs.opt`` files and the compile-time settings docs; existing files that still set them compile unchanged. (`#403 <https://github.com/CWorthy-ocean/ucla-roms/pull/403>`_)
