@@ -21,9 +21,7 @@ contains
     use scalars, only:&
     &barr_count, gamma2, iic, iif, init, knew,&
     &kstp, nfast, nnew, nrhs, nstp, ntstart, start_time
-    use roms_read_write, only:&
-    &max_frc_files, ncfrc,&
-    &init_output_indices
+    use roms_read_write, only: init_output_indices
     use dimensions, only: init_dimensions
 #ifdef SOLVE3D
     use set_weights_mod, only: set_weights
@@ -32,7 +30,6 @@ contains
     use, intrinsic :: iso_fortran_env, only: real32
 
     implicit none
-    integer(kind=4)  i
 
     real(kind=8) :: nan  !real(real32) :: nan
     nan = IEEE_VALUE(nan, IEEE_QUIET_NAN)
@@ -76,10 +73,6 @@ contains
     ! Set slipperness parameter to "free slip"
     gamma2=1._8              ! along the straight boundaries: this may
     ! be overwritten later by "read_inp".
-
-    do i=1,max_frc_files
-      ncfrc(i)=-1
-    enddo
 
     call init_dimensions                                 ! needs to come before init_output_indices
     call init_output_indices      ! retire this soon (the bfx, bfy thing)

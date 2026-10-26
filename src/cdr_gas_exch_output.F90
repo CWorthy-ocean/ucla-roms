@@ -8,7 +8,7 @@ module cdr_gas_exch_output
 #if defined MARBL && defined CDR_FORCING
   use namelist_open_mod, only: open_namelist_file
   use tracers, only: t_vname
-  use param, only: itemp, isalt, nt
+  use param, only: itemp, isalt, nt, max_name_size
   use marbl_driver, only: iALK_alt, iDIC_alt
   use bgc_shared_vars, only: t, mynode, lm, mm
   use dimensions, only: i0, i1, j0, j1, nz, eta_rho, xi_rho
@@ -357,7 +357,7 @@ contains
     implicit none
     logical, intent(in) :: bracket
     character(len=18) :: sr_name = "wrt_cdr_gas_output"
-    character(len=99), save :: fname
+    character(len=max_name_size), save :: fname
     character(len=56) :: wrote_msg
     integer(kind=4) :: ncid, ierr
     real(kind=8) :: forcing_time, begin_time
@@ -386,7 +386,7 @@ contains
         ierr=nf90_enddef(ncid)
         ierr = nf90_close(ncid)
       endif
-      call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
       record = 0
       periodic_in_file = 0
     endif

@@ -7,6 +7,7 @@ module cdr_output
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
       use namelist_open_mod, only: open_namelist_file
       use tracers, only: t_units, t_vname
+      use param, only: max_name_size
       use param, only: itemp, isalt, nt
       use marbl_driver, only:&
      &     marbl_saved_state_3d, ialk, is_marbl_step,&
@@ -1107,7 +1108,7 @@ contains
 
 ! local
     character(len=14) :: sr_name = "wrt_cdr_output"
-    character(len=256),save :: fname
+    character(len=max_name_size),save :: fname
     integer(kind=4),dimension(3)   :: start
     integer(kind=4)                :: idx,ncid,ierr
 
@@ -1121,7 +1122,7 @@ contains
         ierr=nf90_enddef(ncid)
         ierr = nf90_close(ncid)
       endif
-      call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
       record = 0
     endif
 

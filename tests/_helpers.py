@@ -85,6 +85,14 @@ def create_test_namelist_dict(input_dir: Path) -> dict:
 
     this_nml["STDOUT_DIAG_SETTINGS"]["code_check_mode"] = True
 
+    # MARBL with its default settings. The template names a "marbl_in" the
+    # tests don't provide; ROMS used to create it empty and run on the
+    # defaults, and now stops instead. test_bgc.py sets its own marbl_in.
+    this_nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_config_file"] = ""
+    # Every MARBL diagnostic, which CDR output needs; the template's default
+    # used to be read as one unrecognized name, which also wrote them all.
+    this_nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_diagnostics_to_write"] = ""
+
     return this_nml
 
 
@@ -175,17 +183,20 @@ def squeezed(text: str) -> str:
 
 
 def assert_run_rejected(
-    conf: "ROMSConfiguration", namelist_dict: dict, cwd: Path, messages, label: str = ""
+    conf: "ROMSConfiguration", namelist_dict: dict, cwd: Path, messages, label: str = "",
+    absent=(),
 ) -> None:
     """Run ``namelist_dict``, which ROMS must refuse, up to ``ABORT_ATTEMPTS`` times.
 
     Every run must fail, and at least one must print all of ``messages``
-    (compared without whitespace).
+    (compared without whitespace). No run may print any of ``absent``.
     """
     for _ in range(ABORT_ATTEMPTS):
         with pytest.raises(subprocess.CalledProcessError) as excinfo:
             conf.run(namelist_dict, cwd=cwd, capture_output=True)
         output = squeezed(excinfo.value.output)
+        for text in absent:
+            assert squeezed(text) not in output, f"{label}: printed {text!r}"
         if all(squeezed(m) in output for m in messages):
             return
     pytest.fail(f"{label}: no run of {ABORT_ATTEMPTS} printed all of {list(messages)!r}")

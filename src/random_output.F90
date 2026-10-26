@@ -3,6 +3,7 @@ module random_output
 
 #include "cppdefs.opt"
 
+  use param, only: max_name_size
   use param, only: mynode, ocean_grid_comm
   use namelist_open_mod, only: open_namelist_file
   use dimensions, only: i0, i1, j0, j1, nz, eta_rho, eta_v, xi_rho, xi_u,&
@@ -127,7 +128,7 @@ contains
     implicit none
     character(len=10) :: sr_name = "wrt_random"
     ! local
-    character(len=256),save :: fname
+    character(len=max_name_size),save :: fname
     integer(kind=4),dimension(3)   :: start
     integer(kind=4)                :: ncid,ierr
 
@@ -147,7 +148,7 @@ contains
           call def_vars_random(ncid)
           ierr = nf90_close(ncid)
         endif
-        call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+        call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
         call MPI_Barrier(ocean_grid_comm, ierr)
 #else
         call create_file('_rnd',fname)

@@ -10,15 +10,17 @@ module namelist_open_mod
   !     DATE: 2026-04-10
   !-----------------------------------------------------------------------
   use error_handling_mod, only: error_log
+  use param, only: max_name_size
 
   implicit none
   private
 
 
   character(len=18) :: module_name = "namelist_open_mod"
-  character(len=256) :: namelist_fname = ""
+  character(len=max_name_size) :: namelist_fname = ""
 
   public :: open_namelist_file
+  public :: check_nml_string
 
 contains
 
@@ -64,7 +66,6 @@ contains
 
     character(len=22) :: sr_name = "get_namelist_filename"
     character(len=256) :: error_info = ""
-    integer :: max_fname = 256
     integer is
 
 #ifdef MPI
@@ -73,7 +74,7 @@ contains
        is=iargc() ; if (is == 1) call getarg(is,namelist_fname)
 #ifdef MPI
     endif
-    call MPI_Bcast(namelist_fname,max_fname,MPI_BYTE, 0, ocean_grid_comm, ierr)
+    call MPI_Bcast(namelist_fname,max_name_size,MPI_BYTE, 0, ocean_grid_comm, ierr)
 #endif
 
     if(namelist_fname == "") then
@@ -87,5 +88,32 @@ contains
     end if
 
   end subroutine get_namelist_filename
+
+  subroutine check_nml_string(value, key, context, ok)
+    !-----------------------------------------------------------------------
+    !     SUBROUTINE: check_nml_string
+    !     DESCRIPTION:
+    !     A namelist read cuts a string longer than its variable off without
+    !     an error, so a value that fills its whole variable was probably cut
+    !     off: raise an error naming the key and the limit. `ok` returns
+    !     whether the value fits, for callers that must not use a cut-off one.
+    !-----------------------------------------------------------------------
+
+    implicit none
+
+    character(len=*), intent(in) :: value    ! the value as read
+    character(len=*), intent(in) :: key      ! e.g. "INITIAL_CONDITIONS inifile"
+    character(len=*), intent(in) :: context
+    logical, intent(out), optional :: ok
+    character(len=16) :: limit
+
+    if (present(ok)) ok = len_trim(value) < len(value)
+    if (len_trim(value) < len(value)) return
+    write(limit,'(I0)') len(value)
+    call error_log%raise_global(context=context,&
+         info=trim(key)//" is "//trim(limit)//" characters or longer, the most "//&
+         "ROMS can hold, so it was probably cut off: '"//value//"'. "//&
+         "Use a shorter path, e.g. one relative to the run directory.")
+  end subroutine check_nml_string
 
   end module namelist_open_mod

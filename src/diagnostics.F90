@@ -25,6 +25,7 @@ module diagnostics
   &nz, nx, ny, i0, i1, j0, j1, eta_v, xi_u, eta_rho, xi_rho,&
   &inode, jnode, npx, npy&
   &, ds_xr, ds_yr, ds_zr, ds_xu, ds_yv, ds_zw
+  use param, only: max_name_size
   use param, only: lm, mm, ieast, iwest, jnorth, jsouth, mynode,&
   &ew_periodic, ns_periodic, ocean_grid_comm
   use grid, only:&
@@ -774,7 +775,7 @@ contains
     ! local
     integer(kind=4) :: ierr = 0
     integer(kind=4) :: dim,diag, prev_fill_mode
-    character(len=256),save  :: fname
+    character(len=max_name_size),save  :: fname
     character(len=100) :: output_time_string
     call calc_diag_avg
 
@@ -1071,7 +1072,7 @@ contains
 
       ierr = nf90_close(ncid)
     endif
-    call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
 #else
     call create_file('_dia',fname)

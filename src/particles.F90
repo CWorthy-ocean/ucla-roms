@@ -11,6 +11,7 @@ module particles
   &nf90_open, nf90_close
   use ocean_vars, only: z_w, u, v, hz, z_r, flxu, flxv
   use scalars, only: dt, nnew, iic, tdays, time
+  use param, only: max_name_size
   use param, only:&
   &ocean_grid_comm, mynode, isw_corn, jsw_corn,&
   &obc_east, obc_west, obc_south, obc_north
@@ -427,7 +428,7 @@ contains
 
     ! local
     integer(kind=4) :: ierr,diag, prev_fill_mode,ncid
-    character(len=256),save  :: fname
+    character(len=max_name_size),save  :: fname
     integer(kind=4),save            :: record=0
     logical,save :: first_step=.true.
     integer(kind=4),dimension(3) :: start
@@ -481,7 +482,7 @@ contains
 
     character(len=22) :: sr_name = "create_particles_file"
     !input/output
-    character(len=256),intent(out) :: fname
+    character(len=max_name_size),intent(out) :: fname
 
     ! local
     integer(kind=4) :: ncid,ierr,varid

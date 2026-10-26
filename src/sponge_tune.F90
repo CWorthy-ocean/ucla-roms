@@ -19,6 +19,7 @@ module sponge_tune
   &dn_yr, bc_options, create_file, set_frc_data,&
   &store_string_att
   use dimensions, only: inode, jnode, ds_xr
+  use param, only: max_name_size
   use param, only:&
   &obc_east, obc_north, obc_south, obc_west,&
   &mynode, np_eta, np_xi, ocean_grid_comm
@@ -377,7 +378,7 @@ contains
     character(len=13) :: sr_name = "write_sponge_tune"
     !local
     integer(kind=4)            :: ncid,ierr
-    character(len=256)  :: fname
+    character(len=max_name_size)  :: fname
     save fname
 
 #ifdef PARALLEL_IO
@@ -385,7 +386,7 @@ contains
       call create_sp_tune_file(fname)
       record = 0
     endif
-    call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
     record = record + 1
 

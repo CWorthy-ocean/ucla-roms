@@ -57,12 +57,12 @@ module extract_data
 
 #include "cppdefs.opt"
   use calc_pflx_mod, only: calc_pflx
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: open_namelist_file, check_nml_string
   use grid, only: angler, rmask, umask, vmask
   use dimensions, only: nx, ny, nz
   use nc_read_write, only: nccreate, ncread, ncwrite
   use roms_read_write, only: findstr, create_file, output_root_name, append_date_node,&
-  &dn_tm, refdatestr
+  &dn_tm, refdatestr, max_fname_tail
   use netcdf, only:&
   &nf90_double, nf90_write, nf90_nowrite,&
   &nf90_put_att, nf90_inq_varid, nf90_open, nf90_close,&
@@ -74,7 +74,7 @@ module extract_data
   use scalars, only: dt, knew, nstp, time, tdays
   use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
   &nt_passive, mynode, lm, mm, nz, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
-  &max_extract_chd
+  &max_extract_chd, max_name_size
   use scoord, only: theta_s, theta_b, hc
   use calc_pflx_mod, only:  up, vp
   use basic_output, only: &
@@ -107,8 +107,8 @@ module extract_data
 
   ! Per child domain, in the same order in every array. A namelist entry
   ! without an index (extract_file = '...') sets child 1, as before.
-  character(len=256) :: extract_file(max_extract_chd) = ' '      ! nesting file
-  character(len=256) :: extract_root_name(max_extract_chd) = ' ' ! PARALLEL_IO output root
+  character(len=max_name_size) :: extract_file(max_extract_chd) = ' '      ! nesting file
+  character(len=max_name_size) :: extract_root_name(max_extract_chd) = ' ' ! PARALLEL_IO output root
 
   ! S-coordinate parameters for child grid. Only child 1 has defaults for
   ! theta_s_chd/theta_b_chd/hc_chd (set in read_nml_extract); every other
@@ -146,7 +146,7 @@ module extract_data
   logical, dimension(max_extract_chd) :: parent_child_grid_mismatch = .true.
 
   ! Output file: one per child with PARALLEL_IO, else fname(1) for all
-  character(len=256), dimension(max_extract_chd) :: fname = ' '
+  character(len=max_name_size), dimension(max_extract_chd) :: fname = ' '
 
   real(kind=8)    :: otime=0   ! time since last output
 
@@ -242,6 +242,7 @@ contains
     integer(kind=4) ::  namelist_unit, ios, ic, jc
     character(len=17) :: sr_name = "read_nml_extract"
     character(len=8) :: num
+    character(len=1024) :: error_info
     ! Read namelist
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
@@ -274,6 +275,8 @@ contains
     endif
     do ic = 1,nchd
       write(num,'(I0)') ic
+      call check_nml_string(extract_file(ic), 'EXTRACT_DATA_SETTINGS extract_file('//trim(num)//')',&
+      &module_name//'/'//sr_name)
       if (N_chd(ic) <= 0) then
         call error_log%raise_global(context=module_name//'/'//sr_name,&
         &info='N_chd('//trim(num)//') is not set for '//trim(extract_file(ic)))
@@ -292,6 +295,14 @@ contains
         &info='hc_chd('//trim(num)//') is not set for '//trim(extract_file(ic)))
       endif
 #ifdef PARALLEL_IO
+      ! Its file names are extract_root_name plus up to max_fname_tail characters
+      if (len_trim(extract_root_name(ic)) > max_name_size - max_fname_tail) then
+        write(error_info,'(3A,I0,4A)') 'extract_root_name(', trim(num),&
+        &') is longer than ', max_name_size - max_fname_tail, ' characters, the most',&
+        &' that leaves room for "_bry", the date and ".nc": ''', trim(extract_root_name(ic)),&
+        &'''. Use a shorter root, e.g. one relative to the run directory.'
+        call error_log%raise_global(context=module_name//'/'//sr_name, info=error_info)
+      endif
       ! Each child is written to its own file, named from extract_root_name
       if (nchd > 1) then
         if (extract_root_name(ic) == ' ') then
@@ -1522,7 +1533,7 @@ contains
 
       ierr = nf90_close(ncid)
     endif ! mynode == 0
-    call MPI_Bcast(fname(ic),256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(fname(ic),max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
     enddo ! ic
 #else

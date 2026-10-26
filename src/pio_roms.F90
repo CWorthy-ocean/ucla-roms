@@ -17,6 +17,7 @@ module pio_roms
   use pio_nf, only : PIO_inq_varid, PIO_inq_dimid, PIO_strerror
   use pionfatt_mod, only : put_att_desc_text
   use mpi_f08, only: mpi_character, mpi_wtime
+  use param, only: max_name_size
   use param, only: LLm, MMm, nz, ocean_grid_comm, nt, mynode, max_extract_chd
   use timers, only: tstart
   use namelist_open_mod, only: open_namelist_file
@@ -43,7 +44,7 @@ module pio_roms
   ! paths). Set only by pio_open_or_abort; the forcing readers compare against
   ! it to decide whether a re-open is needed, and pio_inq_varid_or_abort uses
   ! it to name the file in its error message.
-  character(len=256), public :: pio_current_file = ''
+  character(len=max_name_size), public :: pio_current_file = ''
   !> @brief Rank of processor running the code.
   integer(kind=4), public :: pio_myRank
   !> @brief Number of processors participating in MPI communicator.
@@ -623,7 +624,7 @@ module pio_roms
 !      public  :: pio_createFile
 !      public  :: pio_createVar
 
-  character(len=256), public     :: pio_root_name
+  character(len=max_name_size), public     :: pio_root_name
   character(len=21), public     :: pio_refdatestr
 
 !! WRITER

@@ -11,6 +11,7 @@ module instant_output
   &nf90_netcdf4, nf90_create, nf90_global, nf90_inq_dimid
   use error_handling_mod, only: error_log
   use nc_read_write, only: nccreate
+  use param, only: max_name_size
   use param, only: mynode, nnodes, isw_corn, iwest, jsouth, jsw_corn, np_xi, np_eta
   use scalars, only: time
   use dimensions, only: i0,i1,j0,j1,inode,jnode,gnx,gny
@@ -38,7 +39,7 @@ module instant_output
     module procedure  wrt_instant_2D, wrt_instant_3D
   end interface wrt_instant
 
-  character(len=256),public :: instant_root_name
+  character(len=max_name_size),public :: instant_root_name
 
   ! Public functions
   public wrt_instant
@@ -125,7 +126,7 @@ contains
     character(len=10) :: sr_name = "wrt_instant"
     ! local
     integer(kind=4),dimension(2)   :: varsize
-    character(len=256),save :: fname
+    character(len=max_name_size),save :: fname
     integer(kind=4)                :: ncid,ierr
 
     varsize = shape(var)
@@ -159,7 +160,7 @@ contains
     character(len=10) :: sr_name = "wrt_instant"
     ! local
     integer(kind=4),dimension(3)   :: varsize
-    character(len=256),save :: fname
+    character(len=max_name_size),save :: fname
     integer(kind=4)                :: ncid,ierr
 
     varsize = shape(var)

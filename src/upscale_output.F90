@@ -12,6 +12,7 @@ module upscale_output
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
 
   use dimensions, only: i0, i1, j0, j1, inode, jnode, npx, npy, ds_xr, ds_yr, ds_zr
+  use param, only: max_name_size
   use param, only: jnorth, jsouth, ieast, iwest, nsub_e, nsub_x, np_xi, np_eta&
   &,mynode, ocean_grid_comm, nt_passive, nt_cdr_oae, nt_cdr_dor, lm, mm
   use namelist_open_mod, only: open_namelist_file
@@ -50,7 +51,7 @@ module upscale_output
   ! windows are contiguous from the run start, and the last one may be partial.
   real(kind=8) :: avg_begin_time = 0
   integer(kind=4) :: navg = 0
-  character(len=256) :: fname_uscl                ! current output file
+  character(len=max_name_size) :: fname_uscl                ! current output file
   logical :: coords_written = .false.             ! lat/lon written to fname_uscl
 
   ! CDR_LITE tracers occupy one contiguous index range right after the passive
@@ -757,7 +758,7 @@ contains
     implicit none
 
     !input/output
-    character(len=256),intent(out) :: fname
+    character(len=max_name_size),intent(out) :: fname
 
     !local
     integer(kind=4) :: ncid,ierr
@@ -787,7 +788,7 @@ contains
       ierr = nf90_close(ncid)
     endif
     call error_log%abort_check()
-    call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
 #else ! PARALLEL_IO
     call create_file('_uscl',fname)

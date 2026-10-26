@@ -27,6 +27,9 @@ module param
   ! Maximum number of child domains extract_data writes boundary data for
   ! (the length of its per-child EXTRACT_DATA_SETTINGS arrays).
   integer(kind=4), parameter, public :: max_extract_chd = 8
+  ! Length of every file-name variable: the paths read from the namelist
+  ! (grdname, inifile, frcfiles, ...) and the output file names built from them.
+  integer(kind=4), parameter, public :: max_name_size = 256
 ! Array dimensions and bounds of the used portions of sub-arrays:
 
 #ifdef MPI
@@ -103,7 +106,7 @@ contains
     integer(kind=4) ::  namelist_unit, ios, is, ierr
     character(len=20) :: sr_name = "read_nml_frc_output"
     character(len=512) :: msg = ""
-    character(len=256) :: nml_fname = ""
+    character(len=max_name_size) :: nml_fname = ""
 
 ! Get the name of the namelist file
 #ifdef MPI
@@ -112,7 +115,7 @@ contains
       is=iargc() ; if (is == 1) call getarg(is,nml_fname)
 #ifdef MPI
     endif
-    call MPI_Bcast(nml_fname,256,MPI_BYTE, 0, ocean_grid_comm, ierr)
+    call MPI_Bcast(nml_fname,max_name_size,MPI_BYTE, 0, ocean_grid_comm, ierr)
 #endif
 
 ! Open the namelist file

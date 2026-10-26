@@ -1,9 +1,9 @@
 module roms_read_write
   ! ROMS specific read write functionality
   !
-  ! output_root_name is used as prefix of all output files
-  ! Length is limited to 18 characters, because output_file_names
-  ! are appended with frame and node number and are limited to 32
+  ! output_root_name is the prefix of every output file name. ROMS appends a
+  ! suffix, the date, the rank and '.nc' (at most max_fname_tail characters),
+  ! so it can be up to max_name_size - max_fname_tail characters long.
 #include "cppdefs.opt"
 
   use add_git_hash_mod, only: add_git_hash, git_hash
@@ -20,7 +20,7 @@ module roms_read_write
   &eta_rho, xi_rho, xi_u, eta_v,&
   &x_,x0,x1,y_,y0,y1
   use dimensions, only: ds_xr, ds_xu, ds_yr, ds_yv, ds_zr, ds_zw
-  use param, only: mynode, nnodes
+  use param, only: mynode, nnodes, max_name_size
   use dimensions, only: inode, jnode
   use roms_mpi, only: exchange_xxx, new_part
   use pio_roms, only: use_pio, pio_gtype
@@ -77,7 +77,7 @@ module roms_read_write
     integer(kind=4)                           :: it1 = 1, it2 = 2              ! used to cycle between correct entri
     real(kind=8),dimension(2)                 :: times = -99 ! [-99,-99]       ! stores 2 times that go with 'data'
     logical                           :: ungridded = .false.
-    character(len=1024)                :: ungridded_forcing_file=''
+    character(len=max_name_size)       :: ungridded_forcing_file=''
     logical                           :: time_interpolation = .true.
     ! If true and the variable is absent from all forcing files, leave
     ! the field at zero instead of aborting (used for optional tracers).
@@ -96,13 +96,16 @@ module roms_read_write
     integer(kind=4)                           :: it1 = 1, it2 = 2              ! used to cycle between correct entri
     real(kind=8),dimension(2)                 :: times = -99 ! [-99,-99]       ! stores 2 times that go with 'data'
     logical                           :: ungridded = .false.
-    character(len=1024)                :: ungridded_forcing_file=''
+    character(len=max_name_size)       :: ungridded_forcing_file=''
     logical                           :: time_interpolation = .true.
   end type ncforce3d
 
   integer(kind=4), target :: test_var
-  integer(kind=4), parameter, public :: max_name_size=256
   character(len=max_name_size), public  :: output_root_name
+  ! Most characters an output file name adds to its root name: the longest
+  ! suffix ('_bgc_dia_avg', 12), the date (15), the rank (6) and '.nc' (3).
+  ! Raise it if a longer suffix is added.
+  integer(kind=4), parameter, public :: max_fname_tail = 36
   ! Dimension names for in and output in netcdf files
   ! All dimension names need to be strings of 7 characters
 !     character(len=7), public,parameter  :: xdim = 'xi_rho '
@@ -124,11 +127,10 @@ module roms_read_write
   real(kind=8),dimension(:,:),allocatable   :: cdata     ! Array to read in coarse surface forcing data
 
   integer(kind=4),parameter :: max_options_string=20000
-  ! forcing file list attribute: sized to hold every allowed forcing file
-  ! path (max_frc_files) plus a separating ', ' each, so it can't overflow
-  integer(kind=4), parameter, public :: max_frc_files=360
-  integer(kind=4),parameter :: max_frc_string=&
-  &max_frc_files*(max_name_size+2)
+  ! Most entries FORCING_FILES can hold. frcfiles is read into an array this
+  ! long and then cut to the files listed, so the cap costs memory only while
+  ! the namelist is read.
+  integer(kind=4), parameter, public :: max_frc_files=10000
 
   ! option string to go into output file attributes
 
@@ -143,7 +145,9 @@ module roms_read_write
   ! forcing file specifications
   character(len=max_options_string),public::grid_files='N/A'
   character(len=max_options_string),public::ini_files='N/A'
-  character(len=max_frc_string),public::force_files='N/A'
+  ! forcing file list attribute, sized in read_nml_roms_read_write to hold
+  ! every listed file plus a separating ', ' each, so it can't overflow
+  character(len=:),allocatable,public::force_files
   character(len=max_options_string),public::force_info='N/A'
   character(len=100),public::frctype ! variable across netcdf files (forcing module)
   ! average files
@@ -155,7 +159,7 @@ module roms_read_write
 
 
   ! from old ncvars **************:
-  integer(kind=4), public :: max_frc, ncfrc(max_frc_files)
+  integer(kind=4), public :: max_frc   ! number of forcing files listed
   integer(kind=4), public :: nrrec = 2   ! IC record index: hardcoded, no longer namelist-configurable
   ! Horizontal Grid Type Codes =  0,1,2,3 for RHO-, U-, V-, PSI-points
   integer(kind=4), parameter, public :: r_var=0, u_var=1, v_var=2, q_var=3
@@ -168,7 +172,7 @@ module roms_read_write
 
   integer(kind=4) :: irec_stride
   integer(kind=4) :: ifile_stride
-  integer(kind=4), public :: ifile_max_recs(max_frc_files)
+  integer(kind=4), allocatable, public :: ifile_max_recs(:)   ! records in each forcing file
 
 #if defined MPI && defined PARALLEL_FILES
 !      integer, public ::  xi_rho, xi_u, eta_rho, eta_v
@@ -179,12 +183,8 @@ module roms_read_write
 
   character, public :: date_str*44
   character(len=80), public :: title = "my roms run"
-!     character(len=max_name_size), public :: inifile, grdname, frcfiles(max_frc_files)
   character(len=max_name_size), public :: inifile = ""
-  character(len=max_name_size), public ::&
-  &frcfiles(max_frc_files) = ""
-  character(len=max_name_size), public ::&
-  &frcfile_full(max_frc_files) = ""
+  character(len=max_name_size), allocatable, public :: frcfiles(:)
   namelist /SIMULATION_NAME_SETTINGS/ output_root_name, title
 #ifndef ANA_INITIAL
   namelist /INITIAL_CONDITIONS/ inifile
@@ -225,12 +225,14 @@ contains
     use insert_node_mod, only: insert_node
     use param, only: mynode, nsize
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
+    use namelist_open_mod, only: open_namelist_file, check_nml_string
     use utils_mod, only: lenstr
-    integer(kind=4) ::  namelist_unit, ios, lstr, testunit
+    integer(kind=4) ::  namelist_unit, ios, lstr, testunit, nlisted
+    logical :: fits
     character(len=25) :: sr_name = "read_nml_roms_read_write"
     character(len=512) :: msg = ""
     character(len=max_name_size) :: fname
+    character(len=max_name_size), allocatable :: listed(:)
     ! Read namelist
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
@@ -244,6 +246,18 @@ contains
       &//' section of namelist file: '&
       &//trim(msg)&
       &)
+    end if
+!     Every output file name is output_root_name plus up to max_fname_tail
+!     characters, and has to fit in max_name_size
+    if (len_trim(output_root_name) > max_name_size - max_fname_tail) then
+      write(error_info,'(A,I0,4A)')&
+      &'SIMULATION_NAME_SETTINGS output_root_name is longer than ',&
+      &max_name_size - max_fname_tail, ' characters, the most that leaves ',&
+      &'room for the suffix, date, rank and ".nc" of an output file name: ''',&
+      &trim(output_root_name), '''. Use a shorter root, e.g. one relative to the run directory.'
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info=error_info)
     end if
 !     Read in `reference_date` from the "REFERENCE_DATE_SETTINGS" section of the namelist file
     rewind(namelist_unit)
@@ -264,6 +278,9 @@ contains
       &//trim(msg)&
       &)
     end if
+    call check_nml_string(inifile, 'INITIAL_CONDITIONS inifile',&
+    &module_name//'/'//sr_name, fits)
+    if (.not. fits) return
 
 
     lstr = lenstr(inifile)
@@ -289,85 +306,89 @@ contains
 
 #endif /*ANA_INITIAL*/
 !==========================================================================================
+!     Read the list into max_frc_files entries; only the files listed are kept (below).
+    if (allocated(frcfiles)) deallocate(frcfiles)
+    allocate(frcfiles(max_frc_files))
+    frcfiles = ''
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=FORCING_FILES, iostat=ios, iomsg=msg)
 
     if (ios /= 0) then
+      write(error_info,'(A,I0,2A)') 'could not read FORCING_FILES section '//&
+      &'of namelist file (frcfiles holds at most ', max_frc_files,&
+      &' files): ', trim(msg)
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
-      &info='could not read FORCING_FILES'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
+      &info=error_info)
     end if
-!     Reset forcing storage.
 
-    force_files = ''
+!     Files are listed up to the first blank entry
+    nlisted = 0
+    do while (nlisted < max_frc_files)
+      if (len_trim(frcfiles(nlisted+1)) == 0) exit
+      nlisted = nlisted + 1
+    end do
+
+!     Reset forcing storage.
+    if (allocated(force_files)) deallocate(force_files)
+    allocate(character(len=max(1, nlisted*(max_name_size+2))) :: force_files)
+    force_files(:) = ''      ! (:) keeps the length; force_files = '' would reallocate it
+    if (allocated(ifile_max_recs)) deallocate(ifile_max_recs)
+    allocate(ifile_max_recs(nlisted))
+    ifile_max_recs = 0
     force_info  = ''
     max_frc     = 0
-    lstr        = 1
 
+    do while (max_frc < nlisted)
 
-!  Read filenames until a blank line or max_frc_files reached.
-    do while (lstr > 0 .and. max_frc < max_frc_files)
-
+      call check_nml_string(frcfiles(max_frc+1), 'FORCING_FILES frcfiles',&
+      &module_name//'/'//sr_name, fits)
+      if (.not. fits) return
       fname = trim(frcfiles(max_frc+1))
       lstr = lenstr(trim(fname))
-      if (lstr > 0) then
 # if defined MPI && defined PARALLEL_FILES
 #ifndef PARALLEL_IO
-        call insert_node(fname, lstr, mynode, nsize)
+      call insert_node(fname, lstr, mynode, nsize)
 #endif
 # endif
 ! Test file availability
 
-        open(newunit=testunit, file=fname,&
-        &status='old', iostat=ios)
-        if (ios /= 0) then
-          call error_log%raise_from_rank(&
-          &info="Cannot find input file '" // fname // "'",&
-          &context=module_name&
-          &)
-          return
-        end if
-        close(testunit)
+      open(newunit=testunit, file=fname,&
+      &status='old', iostat=ios)
+      if (ios /= 0) then
+        call error_log%raise_from_rank(&
+        &info="Cannot find input file '" // fname // "'",&
+        &context=module_name&
+        &)
+        return
+      end if
+      close(testunit)
 
-! Store file if within limit of allowed no. of forcing files
-
-        if (max_frc < max_frc_files) then
-
-          max_frc = max_frc + 1
-          frcfiles(max_frc) = trim(fname)
+      max_frc = max_frc + 1
+      frcfiles(max_frc) = trim(fname)
 ! Write file info to output stream
 # ifdef MPI_SILENT_MODE
-          if (mynode == 0) then
+      if (mynode == 0) then
 # endif
-            if (max_frc == 1) then
-              write(*,'(1x,2A)') 'forcing data file(s): ',&
-              &trim(frcfiles(max_frc))
-            else
-              write(*,'(23x,A)') trim(frcfiles(max_frc))
-            endif
+        if (max_frc == 1) then
+          write(*,'(1x,2A)') 'forcing data file(s): ',&
+          &trim(frcfiles(max_frc))
+        else
+          write(*,'(23x,A)') trim(frcfiles(max_frc))
+        endif
 
 ! Add to attributes
 # ifdef MPI_SILENT_MODE
-          end if
+      end if
 # endif
-          call store_string_att(force_files,&
-          &frcfiles(max_frc)(1:lstr))
-
-        else !(if max_frc < max_frc_files )
-          write(error_info,*)&
-          &'Too many forcing files are ',&
-          &'specified in input script.',  'Increase parameter ',&
-          &'''max_frc_files'' in ',&
-          &'roms_read_write and recompile.'
-          call error_log%raise_global(&
-          &info=error_info,&
-          &context=module_name//"/"//sr_name)
-        end if !(max_frc < max_frc_files)
-      end if   ! lstr > 0
+      call store_string_att(force_files,&
+      &frcfiles(max_frc)(1:lstr))
     end do      ! filename loop
+
+!     Keep only the files listed
+    allocate(listed(max_frc))
+    listed = frcfiles(1:max_frc)
+    call move_alloc(listed, frcfiles)
 !================================================================================
 
     close(namelist_unit)
@@ -1330,7 +1351,7 @@ contains
       call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
-      call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_max_recs,size(ifile_max_recs),MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1592,7 +1613,7 @@ contains
       call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
-      call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(ifile_max_recs,size(ifile_max_recs),MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -1720,7 +1741,7 @@ contains
     call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(ifile,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(ifile_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
-    call MPI_Bcast(ifile_max_recs,max_frc_files,MPI_INTEGER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(ifile_max_recs,size(ifile_max_recs),MPI_INTEGER,0,ocean_grid_comm,ierr)
     call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
     call find_new_record(vname,tname,modtime,ifile,irec,&
@@ -2118,6 +2139,15 @@ contains
 #endif
     endif
     fname = trim(fname) // '.nc'
+
+    ! A name that fills fname was cut off. read_nml_roms_read_write leaves room
+    ! for max_fname_tail characters after the root, so a suffix outgrew it.
+    if (len_trim(fname) == len(fname)) then
+      call error_log%raise_from_rank(&
+      &context=module_name//"/"//sr_name,&
+      &info="output file name '"//fname//"' was cut off at its "//&
+      &"length; raise max_fname_tail in roms_read_write.F90")
+    endif
 
   end subroutine append_date_node !]
 !-----------------------------------------------------------------------

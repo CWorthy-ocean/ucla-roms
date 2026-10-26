@@ -21,6 +21,7 @@ contains
 
   subroutine read_namelists
 
+    use error_handling_mod, only: error_log
     use param, only: read_nml_param
 #ifndef ANA_GRID
     use dimensions, only: read_nml_grid           !GRID_SETTINGS
@@ -130,6 +131,10 @@ contains
    call read_nml_pio
 #endif
    call read_nml_stdout_diag
+
+   ! Stop on any namelist error before the values are used (a path cut off
+   ! by the read, a missing input file, ...)
+   call error_log%abort_check()
   end subroutine read_namelists
 
   end module namelist_read_mod

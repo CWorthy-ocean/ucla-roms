@@ -8,6 +8,7 @@ module grid
   ! spherical
   ! non-traditional (horizontal coriolis components
 
+  use param, only: max_name_size
   use param, only:&
   &mynode, isw_corn, jsw_corn, lm, mm,&
   &ocean_grid_comm, obc_east, obc_north, obc_south, obc_west,&
@@ -113,7 +114,7 @@ module grid
 
   real(kind=8) :: xl,el
 
-  character(len=256),public  :: ana_grdname
+  character(len=max_name_size),public  :: ana_grdname
 
   public :: get_grid
 
