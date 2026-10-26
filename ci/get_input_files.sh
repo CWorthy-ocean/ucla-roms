@@ -1,1 +1,0 @@
-../Examples/input_data/get_input_files.sh

@@ -37,7 +37,8 @@ module particles
   real(kind=8)    :: ppm3 = 1e-6          ! target particles per cubic meter
   integer(kind=4) :: pmin = 200 ! minimum of allocated space for particle array
 
-  logical, public :: floats, full_seed
+  logical, public :: floats = .false.     ! release Lagrangian particles
+  logical, public :: full_seed = .false.  ! seed at constant density ppm3 (T) or np at random (F)
   namelist /PARTICLES_SETTINGS/ np, extra_space_fac, exchange_facx,&
   &exchange_facy, exchange_facc, output_period_particles, nrpf_particles, ppm3, pmin,&
   &floats, full_seed

@@ -245,7 +245,7 @@ contains
     ! ----------------
     use surf_flux, only:&
     &srflx, vwnd, uwnd, stflx, sustr_r, svstr_r,&
-    &sustr, svstr, swflx, wrt_rstflx, rstflx
+    &sustr, svstr, swflx
 #if defined(SFLX_CORR) && defined SALINITY && !defined ANA_SSFLUX
     use surf_flux, only:&
     &sss, dSSSdt
@@ -879,13 +879,6 @@ contains
 #  ifdef MASKING
      &*rmask(i,j)
 #  endif
-     if (wrt_rstflx) then
-          rstflx(i,j,isalt) = -dSSSdt*(&
-          &t(i,j,nz,nrhs,isalt) - sss(i,j)  )&
-#  ifdef MASKING
-          &*rmask(i,j)
-#  endif
-     endif
 # endif
 # endif
 
@@ -913,18 +906,6 @@ contains
 #  ifdef MASKING
        &*rmask(i,j)
 #  endif
-       if (wrt_rstflx) then
-           rstflx(i,j,itrc2read) = -dCdt*(&
-           &t(i,j,nz,nrhs,itrc2read) - sDIC(i,j)  )&
-#  ifdef MASKING
-           &*rmask(i,j)
-#  endif
-           rstflx(i,j,itrc2writ) = -dCdt*(&
-           &t(i,j,nz,nrhs,itrc2read) - sDIC(i,j)  )&
-#  ifdef MASKING
-           &*rmask(i,j)
-#  endif
-       endif
 
 !!!!!!!      ALK
        do itrc = iTandS+1,NT
@@ -944,18 +925,6 @@ contains
 #  ifdef MASKING
           &*rmask(i,j)
 #  endif
-       if (wrt_rstflx) then
-           rstflx(i,j,itrc2read) = -dCdt*(&
-           &t(i,j,nz,nrhs,itrc2read) - sALK(i,j)  )&
-#  ifdef MASKING
-           &*rmask(i,j)
-#  endif
-           rstflx(i,j,itrc2writ) = -dCdt*(&
-           &t(i,j,nz,nrhs,itrc2read) - sALK(i,j)  )&
-#  ifdef MASKING
-           &*rmask(i,j)
-#  endif
-       endif
 
 # endif
 

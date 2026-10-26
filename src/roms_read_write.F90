@@ -32,7 +32,7 @@ module roms_read_write
   use pio, only : PIO_closefile
 #endif
   use error_handling_mod, only: error_log ! Note, abort_check should be called by caller of set_frc_data
-  use instant_output, only: wrt_instant, instant_root_name
+  use instant_output, only: wrt_instant, instant_root_name, instant_reference_date
   implicit none
   character(len=15) :: module_name="roms_read_write"
 
@@ -264,6 +264,7 @@ contains
     read(unit=namelist_unit, nml=REFERENCE_DATE_SETTINGS, iostat=ios, iomsg=msg)
     output_root_name=trim(output_root_name)
     instant_root_name = output_root_name
+    instant_reference_date = reference_date
     mpi_master_only write(*,'(/1x,A)') trim(title)
 !==========================================================================================
 #ifndef ANA_INITIAL

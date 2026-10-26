@@ -48,25 +48,12 @@ module surf_flux
   real,public :: dCdt   = 7.777  ! DIC/Alk correction (required CFLX_CORR)
 #endif
 
-! This block not used currently. It won't compile since the array to indicate which tracers to write diagnostics
-! for (`rst2diag`), is fixed in length, but `nt` can vary.
-!  ! Diagnose restoring surface fluxes  :
-!#if defined(MARBL)
-!  integer, parameter :: rst2diag(nt) = (/ 0,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 /)
-!#elif defined(BIOLOGY_BEC2)
-!  integer, parameter :: rst2diag(nt) = (/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 /)
-!#else
-!#  ifdef SALINITY
-!     integer, parameter :: rst2diag(nt) = (/ 0,0 /)
-!#  else
-!     integer, parameter :: rst2diag(nt) = (/0 /)
-!#  endif
-!#endif
-
   real(kind=8), public    :: output_period_sflx = 120       ! output averaging period in seconds
   integer(kind=4), public :: nrpf_sflx          = 10 ! total recs per file
   logical, public ::&
-  &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
+  &wrt_smflx = .false., wrt_stflx = .false., wrt_swflx = .false., sflx_avg = .false.
+  ! Accepted so existing namelists still read; ROMS stops if it is .true.
+  logical, public :: wrt_rstflx = .false.
   namelist /SURF_FLX_OUTPUT_SETTINGS/ output_period_sflx, nrpf_sflx,&
   &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
 #if defined(QCORRECTION) && !defined(ANA_SST)
@@ -146,10 +133,6 @@ module surf_flux
   real(kind=8),public,allocatable,dimension(:,:) :: sALK
 ! real(kind=8),public :: dCdt                                  ! input units (cm/day)
 
-  ! Surface fluxes of restoring tracer type variables (rho-points)
-  real,public,allocatable,dimension(:,:,:) :: rstflx
-  real,allocatable,dimension(:,:,:):: rstflx_avg
-
   ! Netcdf outputting:
   real(kind=8)    :: output_time = 0
   integer(kind=4) :: record = 0     ! to trigger the first file creation
@@ -184,6 +167,13 @@ contains
       &info='could not read SURF_FLX_OUTPUT_SETTINGS'&
       &//' section of namelist file: '&
       &//trim(msg)&
+      &)
+    end if
+    if (wrt_rstflx) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='SURF_FLX_OUTPUT_SETTINGS wrt_rstflx = .true. is not supported:'&
+      &//' ROMS does not write the surface restoring flux. Set it to .false.'&
       &)
     end if
 
@@ -315,13 +305,6 @@ subroutine init_arrays_surf_flx ![
     allocate(swflx_avg(i0:i1,j0:j1)); swflx_avg=0._8
   endif
 
-  if (wrt_rstflx) then
-     allocate( rstflx  (GLOBAL_2D_ARRAY,nt) ); rstflx=init
-     if (sflx_avg) then
-        allocate( rstflx_avg(i0:i1,j0:j1,nt))
-     endif
-  endif
-
 end subroutine init_arrays_surf_flx  !]
 ! ----------------------------------------------------------------------
 subroutine set_surf_field_corr ![
@@ -409,8 +392,6 @@ subroutine calc_sflx_avg  ![
   if (wrt_swflx) then  ! surface water flux
     swflx_avg = swflx_avg*(1-coef)+swflx(i0:i1,j0:j1)*coef
   end if
-  ! rstflx_avg is not averaged: its write is disabled (see wrt_sflux), so the
-  ! per-step update over all nt tracers did nothing.
 
 end subroutine calc_sflx_avg !]
 !----------------------------------------------------------------------
@@ -421,8 +402,7 @@ subroutine create_sflx_vars(ncid)  ![
   ! input
   integer(kind=4),intent(in) :: ncid
   ! local
-  integer(kind=4)           :: ierr, varid, itrc
-  character(len=20) :: varname
+  integer(kind=4)           :: ierr, varid
 
   ! output surface flux as per Eq.Sys. units m^2/s^2 not N/m^2
   if (wrt_smflx) then
@@ -452,18 +432,6 @@ subroutine create_sflx_vars(ncid)  ![
       ierr = nf90_put_att(ncid,varid,'units','PSU m/s')
     endif
   endif
-!  if (wrt_rstflx) then
-!    do itrc = 1, nt
-!      if (rst2diag(itrc)==1) then
-!        write(varname,'("RSTFLX_tracer",I2.2)') itrc
-!        varid = nccreate(ncid,varname,&
-!        &(/dn_xr,dn_yr,dn_tm/),(/xi_rho,eta_rho,0/))
-!        ierr = nf90_put_att(ncid,varid,'long_name',&
-!        &'Surface restoring flux (included in SRFFLX)')
-!        ierr = nf90_put_att(ncid,varid,'units','tracer units m/s')
-!      endif
-!    enddo
-!  endif
   if (wrt_swflx) then
     varid = nccreate(ncid,'swflx',(/dn_xr,dn_yr,dn_tm/),&
     &(/ds_xr,ds_yr,0/))
@@ -484,8 +452,7 @@ subroutine wrt_sflux  ![
   ! local
   integer(kind=4),dimension(4)   :: start
   character(len=max_name_size),save :: fname
-  integer(kind=4)                :: ierr, itrc
-  character(len=20)      :: varname
+  integer(kind=4)                :: ierr
 
   output_time = output_time + dt
 
@@ -531,14 +498,6 @@ subroutine wrt_sflux  ![
           call ncwrite(ncid,'ssflx',stflx_avg(i0:i1,j0:j1,2),start,.true.)
         endif
       endif
-!      if (wrt_rstflx) then
-!        do itrc = 1, nt
-!         if (rst2diag(itrc)==1) then
-!         write(varname,'("RSTFLX_tracer",I2.2)') itrc
-!         call ncwrite(ncid,varname,rstflx_avg(i0:i1,j0:j1,itrc),start,.true.)
-!         endif
-!        enddo
-!      endif
       if (wrt_swflx) then
         pio_gtype = '2Drw'
         call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),start,.true.)
@@ -557,14 +516,6 @@ subroutine wrt_sflux  ![
           call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,2),start,.true.)
         endif
       endif
-!      if (wrt_rstflx) then
-!        do itrc = 1, nt
-!         if (rst2diag(itrc)==1) then
-!         write(varname,'("RSTFLX_tracer",I2.2)') itrc
-!         call ncwrite(ncid,varname,rstflx(i0:i1,j0:j1,itrc),start,.true.)
-!         endif
-!        enddo
-!      endif
       if (wrt_swflx) then
         pio_gtype = '2Drw'
         call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),start,.true.)
