@@ -33,6 +33,7 @@ New Features
 
 
 - ``_uscl`` files carry ``avg_begin_time`` and ``avg_end_time`` (seconds, same units as ``ocean_time``), and a run whose length is not a multiple of ``output_period_uscl`` ends with a partial window instead of losing it. (`#398 <https://github.com/CWorthy-ocean/ucla-roms/pull/398>`_)
+- ``marbl_config_file = ""`` runs MARBL with its default settings. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
 
 Bug Fixes
 ~~~~~~~~~
@@ -54,6 +55,17 @@ Bug Fixes
 - ``_bgc_dia_avg`` and ``_bgc_avg`` files hold ``nrpf_bgc_avg_dia`` / ``nrpf_bgc_avg`` records instead of one each. ``record_avg`` and ``record_dia_avg`` were reset on every call because the line clearing ``first_step_avg`` was commented out. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
 - ``_uscl`` boundary exports (``ALK_add_*``, ``DIC_add_*`` and the CDR_LITE ``<tracer>_add_*``) now include horizontal tracer mixing across the open boundaries, not only advection, so a child's export closes its tracer budget. (`#399 <https://github.com/CWorthy-ocean/ucla-roms/pull/399>`_)
 - The ``units`` attribute of the ``*_add_*`` variables now states a per-cell flux, tracer × m3/s (e.g. ``meq/m^3 * m3/s``), instead of ``meq/m^3s-1``. (`#399 <https://github.com/CWorthy-ocean/ucla-roms/pull/399>`_)
+- File names too long for ROMS are no longer cut off silently; ROMS stops at startup naming the namelist key and the limit. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
+
+  - A path of 256 characters or more in ``grdname``, ``inifile``, ``frcfiles``, ``cdr_file``, ``extract_file`` or ``marbl_config_file`` was cut off and then reported as a missing file.
+  - An ``output_root_name`` or ``extract_root_name`` longer than 220 characters left output file names cut off, so files could overwrite each other.
+  - CDR_LITE tracer and CDR gas-exchange output cut their file names at 99 characters, so with a root longer than about 74 characters each file overwrote the last.
+
+- A missing MARBL settings file (``marbl_config_file``) now stops ROMS at startup; ROMS used to create it empty and run MARBL on its default settings without saying so. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
+- MARBL output lists: the template's ``marbl_diagnostics_to_write`` default now writes the two diagnostics it names (it was read as one unrecognized name and wrote all 343), and full lists are no longer read past their end. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
+
+  - Every unrecognized name in ``marbl_tracers_to_write`` is now reported, not only those before the first recognized one.
+
 
 Improvements
 ~~~~~~~~~~~~
@@ -65,6 +77,8 @@ Improvements
   - The file-rollover precheck already requires the restart period to be a multiple of each output file's period. A restart therefore always falls on a MARBL step when averaging is on.
 
 - PIO branches get the same changes. Each step does the same work as before, with one scalar check at startup. The cost should be negligible, but it is unverified at scale. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
+- ``FORCING_FILES`` holds up to 10000 files (was 360); the list is sized to the files given, so the higher cap costs memory only while the namelist is read. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
+- Namelist errors stop ROMS right after the namelist is read, before any value is used. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -80,3 +94,5 @@ Miscellaneous
 - ``src/Make.depend`` is regenerated, since ``precheck`` now uses ``scalars`` and ``marbl_driver``. The other line changes there are drift that was already on ``main``. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
 - New test: the interior inventory change of an ALK perturbation in a SPONGE + UPSCALING run matches minus the time-integrated ``_uscl`` export to round-off. (`#399 <https://github.com/CWorthy-ocean/ucla-roms/pull/399>`_)
 - Corrected the sponge-profile comment in ``set_nudgcof`` and the ``UPSCALING`` description in ``cppdefs.opt`` and the compile-time settings docs. (`#399 <https://github.com/CWorthy-ocean/ucla-roms/pull/399>`_)
+- Every file-name variable and its broadcast use ``max_name_size`` (now in ``param``), so raising it is a one-line change. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
+- The test namelist helper asks for MARBL's default settings and every diagnostic, which is what the tests ran with before; new ``TestFileNames`` tests cover these limits. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
