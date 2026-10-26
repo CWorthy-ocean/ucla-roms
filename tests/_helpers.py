@@ -19,7 +19,7 @@ ADDITIONAL_FILES = ROMS_ROOT / "tests" / "additional_files"
 # --------------------------------------------------------------------------
 UNIVERSAL_CPP_KEYS = [
     "SOLVE3D", "UV_ADV", "UV_COR", "UV_VIS2", "TS_DIF2",
-    "MASKING", "EXACT_RESTARTS",
+    "MASKING",
 ]
 OCEAN_PHYSICS_CPP_KEYS = [
     "SALINITY", "NONLIN_EOS", "SPLIT_EOS",

@@ -11,7 +11,6 @@ These switches control fundamental aspects of the model setup, including the equ
 
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
-| `EXACT_RESTARTS` | Attempt to do an exact restart using the initial conditions | enabled | Requires two time records in the init file; will return a warning but not crash the model if two records are not available. Only known to work with double-precision output. |
 | `NONLIN_EOS` | Use Jackett and McDougall (1995) nonlinear equation of state | enabled | |
 | `SALINITY` | Use salinity as a thermodynamic variable | enabled | |
 | `SOLVE3D` | Solve the governing equations in three dimensions | enabled | We have never tested what happens if this is undefined |
@@ -26,7 +25,6 @@ These switches control fundamental aspects of the model setup, including the equ
 | `DIAGNOSTICS_NHMG` | enabled the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation | disabled | |
 | `NHMG` | Use non-hydrostatic momentum equations | disabled | Solves prognostically for the vertical velocity. Approximately doubles the cost of the model. WARNING: Presently untested and unmaintained by [C]Worthy. May break important features like exact restarts, and may require extra inputs to work successfully (unknown). |
 | `NHMGDIAG` | Write momentum equation diagnostics for non-hydrostatic mode | disabled | |
-| `PRINT_HOSTNAME` | During initialization print information about the HPC cluster and MPI setup | disabled | |
 | `PRINT_TILE_RANGES` | Make each MPI rank print the size of its local subdomain | disabled | |
 | `CDR_FORCING` | enabled special forcing for marine CO2 removal | disabled | Required inputs and fields are specified in `cdr_frc.opt`. |
 | `UPSCALING` | Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications | disabled | Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any CDR_LITE tracers. Requires `MARBL` and `MARBL_DIAGS` to be enabled. |

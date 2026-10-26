@@ -467,7 +467,7 @@ jobs:
         run: |
           micromamba run -n roms-ci bash -c '
           ci/compile_only.sh /tmp/pio_build \
-            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING \
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
@@ -486,7 +486,7 @@ jobs:
         run: |
           micromamba run -n roms-ci bash -c '
           ci/compile_only.sh /tmp/pio_masking_build \
-            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING \
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
@@ -505,7 +505,7 @@ jobs:
         run: |
           micromamba run -n roms-ci bash -c '
           ci/compile_only.sh /tmp/diag_build \
-            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING \
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
@@ -520,7 +520,7 @@ jobs:
         run: |
           micromamba run -n roms-ci bash -c '
           ci/compile_only.sh /tmp/cdr_nomarbl_build \
-            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING \
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
@@ -562,7 +562,7 @@ jobs:
         run: |
           export COMPILER=intel
           ci/compile_only.sh /tmp/pio_build \
-            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING \
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
@@ -580,7 +580,7 @@ jobs:
         run: |
           export COMPILER=intel
           ci/compile_only.sh /tmp/pio_masking_build \
-            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING \
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
@@ -598,7 +598,7 @@ jobs:
         run: |
           export COMPILER=intel
           ci/compile_only.sh /tmp/cdr_nomarbl_build \
-            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING EXACT_RESTARTS \
+            SOLVE3D UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING \
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
