@@ -5,7 +5,7 @@
 !================================================================================
 &SIMULATION_NAME_SETTINGS                                      !roms_read_write.F
 !------------------------
-output_root_name = "roms" ! output file prefix (e.g. `roms_bgc.20120101120000.nc`)
+output_root_name = "output/iceland_child" ! output file prefix (e.g. `roms_bgc.20120101120000.nc`)
 title = "Iceland_child"        ! title used in output metadata
 /
 
@@ -69,6 +69,7 @@ inifile = "input_data/iceland_child_initial_conditions.nc" ! Initial conditions 
 frcfiles = 'input_data/iceland_child_tides.nc',
 'input_data/iceland_child_surface_forcing.nc',
 'input_data/iceland_child_bgc_surface_forcing.nc',
+'input_data/iceland_child_co2_surface_forcing.nc',
 'input_data/iceland_child_boundary_forcing.nc',
 'input_data/iceland_child_river_forcing.nc'
 /
@@ -462,14 +463,13 @@ diag_uv = .false.          ! Output momentum diagnostics
 diag_trc = .false.         ! Output tracer diagnostics
 output_period_diag = 3600       ! Output frequency (s)
 nrpf_diag = 4                   ! Number of records per output file
-code_check_mode = .false.  ! diagnostics in stdout formatted for code testing
 /
 
 &STDOUT_DIAG_SETTINGS
 !-----------------------------
 ! Previously set in `diag.opt`
 !-----------------------------
-code_check_mode = .false.
+code_check_mode = .false.   ! diagnostics in stdout formatted for code testing
 /
 
 
