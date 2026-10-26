@@ -29,8 +29,12 @@ To compile tools:
 ! ============
 
  partit -	Separates single input files over domain into multiple input
- 		files based on the MPI tiling based on the parameters you set
- 		in param.h file.
+ 		files, one per MPI rank, for a tiling of NP_XI x NP_ETA ranks:
+
+ 		       partit NP_XI NP_ETA files.nc
+
+ 		Use the NP_XI and NP_ETA of the namelist's PARAM_SETTINGS.
+ 		Not needed with PARALLEL_IO, which reads whole input files.
 
  ncjoin_mpi -	Generic netCDF assembly tool that reads ROMS partial netCDF files (.nc)
 		and assembles them into a file for the whole physical grid.
@@ -39,7 +43,7 @@ To compile tools:
  		Compresses joined file (no need for nc3to4z).
  		Currently, ncjoin_mpi can only be used  on Xsede's expanse.
  		To run on Expanse, see run script here:
- 		Documentation/machine-specific/Job_submission_scrips/run_script_expanse_ncjoin_mpi
+ 		Documentation/machine-specific/Job_submission_scripts/run_script_expanse_ncjoin_mpi
 
 		ncjoin_mpi usage:
 
@@ -86,26 +90,19 @@ zslice -        Produces slice across constant depth from your result files.
     now.
 
 
-! Online child boundary interpolation
-! ===================================
+! Nesting and upscaling
+! ======================
 
-		As of 2021/04 ROMS now has functionality to generate online interpolated
-		child boundary files using src/bry_extract_child.F. This functionality
-		requires the following two auxiliary tools:
+ extract_data_join -
+		Joins the per-rank files written by ROMS' data extraction
+		(EXTRACT_DATA_SETTINGS, e.g. child boundary conditions) into one
+		file per nesting-file prefix. Not needed with PARALLEL_IO, which
+		writes one file per child.
 
-  bry_child_input_gen.m:
-
-		This matlab script takes in the child grid and parent grid, and produces
-		a netcdf file with the child boundary r, u and v points in terms of the
-		parent grid"s i and j coordinates. This way the child grid can be easily
-		located within the parent grid simulation.
-
-		For more info see the matlab script and complete the user input section.
-
-  join_child_bry:
-
-		This fortran program is somewhat based off ncjoin, and it borrows pre-
-		processing subroutines from ncjoin_mod.F.
+ uscl_to_cdr.py -
+		Python script that turns the _uscl boundary-flux files of a
+		child run (UPSCALING) into CDR forcing depth profiles for
+		re-running the parent. Run it with -h for usage.
 
 
 
@@ -115,13 +112,6 @@ zslice -        Produces slice across constant depth from your result files.
 ! ============
 
  chkindent -    checks identing and alignment of CPP #directives;
-
- mreplace -  	searches and renames objects in Fortran source codes.
-              	Useful for speed editing multiple files if consistent name
-              	changes are required simultaneously in many places in many
-              	files.  Also known to be useful for speed editing labels in
-              	LaTeX files where it is non-practical or too cumbersome to
-              	do it manually by standard editing tools.
 
 
 All the above are compile-once-use-forever, stand-alone, self-explanatory

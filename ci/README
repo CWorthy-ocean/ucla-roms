@@ -1,9 +1,12 @@
-The ci directory houses files necessary for continuous integration for github actions
+The ci directory houses helper files for the GitHub Actions workflows in $ROMS_ROOT/.github/workflows/
 
-- environment.yml : defines conda environment that can be used to compile ROMS and MARBL on a GitHub runner
-- get_input_files.sh: allows GitHub runner to obtain netcdf datasets to run example cases
-- ci_makefiles: makefiles that allow the GitHub runner to compile using gfortran
-- set_environs.sh: allows testing in a GitHub codespaces session
+- compile_only.sh: compiles ROMS with a given set of CPP keys and no run; containerized_ci.yml uses it to check builds the pytest suite doesn't cover (e.g. PARALLEL_IO, MPI_MASKING)
+- set_environs.sh: sets the ROMS environment variables for a conda environment (e.g. in a GitHub Codespaces session)
+- pre-commit/: scripts for the repository's pre-commit hooks (.pre-commit-config.yaml)
+- update_release_notes.py, finalize_release_notes.py, release_body.py: maintain docs/releases/ and the release text, run by the release-notes and publish workflows; test_*.py are their unit tests
 
-See also:
-$ROMS_ROOT/.github/workflows/automated_testing_workflow.yml: the series of actions to be executed on the GitHub runner
+The main workflows:
+- containerized_ci.yml: builds the CI container images when they change and runs the pytest suite (tests/) in them, with gfortran and ifx
+- pre-commit.yaml: runs pre-commit on every pull request and push to main
+- sphinx.yaml: builds the documentation on every pull request
+- automated_testing_workflow_python_mpc.yml: tests the mpc preprocessor (Tools-Roms/mpc_python) when it changes
