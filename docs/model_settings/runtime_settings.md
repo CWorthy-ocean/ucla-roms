@@ -458,6 +458,7 @@ Read only with `TS_DIF2`.
 |--------|-------------|
 | `akv_bak` | Vertical viscosity (m2/s) |
 | `akt_bak` | List of vertical mixing coefficients (m2/s) for each tracer |
+| `akq_bak` | Background vertical mixing for turbulent kinetic energy (m2/s); read only with `MY25_MIXING` (commented out in the template) |
 
 ### `LATERAL_VISC_SETTINGS`
 (read by module `scalars.F90`)
@@ -471,7 +472,7 @@ Read only with `UV_VIS2`.
 ### `UBIND_SETTINGS`
 (read by module `scalars.F90`)
 
-Read only with boundary forcing (`T_FRC_BRY`, `M2_FRC_BRY`, `M3_FRC_BRY`, `Z_FRC_BRY` or `TNUDGING`).
+Read only with boundary forcing or nudging (`T_FRC_BRY`, `M2_FRC_BRY`, `M3_FRC_BRY`, `Z_FRC_BRY`, `TNUDGING`, `M2NUDGING` or `M3NUDGING`).
 
 | Setting | Description |
 |--------|-------------|
@@ -558,7 +559,7 @@ Controls the output of model surface fluxes.
 |--------|-------------|
 | `wrt_smflx` | Output surface momentum flux if `.true.`|
 | `wrt_stflx` | Output surface tracer flux if `.true.`|
-| `wrt_rstflx` | Meant to output the surface restoring fluxes, which are already part of the surface tracer flux. Their output is currently disabled, so this writes nothing; leave it `.false.` |
+| `wrt_rstflx` | Not supported: keep it `.false.`, as `.true.` stops ROMS at startup. ROMS does not write the surface restoring fluxes separately; they are part of the surface tracer flux |
 | `wrt_swflx` | Output surface water flux (P-E) if `.true.` |
 | `sflx_avg` | Output average (if `.true`) or instantaneous (if `.false`) fields |
 | `output_period_sflx` | Frequency of surface flux output (s) |
