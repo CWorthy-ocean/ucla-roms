@@ -8,11 +8,11 @@ Pass the namelist file to the ROMS executable as its first argument:
 mpirun -n 64 ./roms my_namelist.nml
 ```
 
-Unless `MPI_MASKING` is defined, the number of MPI processes must equal `NP_XI * NP_ETA` from `PARAM_SETTINGS`.
+With the standard tiling (no tiles skipped over land, as `MPI_MASKING` does), the number of MPI processes must equal `NP_XI * NP_ETA` from `PARAM_SETTINGS`.
 
 Start from `$ROMS_ROOT/src/namelist.nml`, which contains every group below with a default for each setting. ROMS reads a group only when the feature it belongs to is compiled in (noted below as "Read only with ..."), and ignores the others. A group that ROMS reads must be present, except where noted, and a misspelled or unknown setting in it stops ROMS at startup.
 
-This page describes every setting in the namelist file, one section per group.
+This page describes every setting in `src/namelist.nml`, one section per group.
 
 ### `SIMULATION_NAME_SETTINGS`
 (read by module `roms_read_write.F90`)
@@ -39,7 +39,7 @@ Optional: if the group is missing, or ROMS cannot read it (a misspelled key, for
 
 | Setting | Description |
 |--------|-------------|
-| `reference_date` | Calendar date (year, month, day) of model time zero, e.g. `2000, 1, 1`. It sets the dates in output file names and the time units written to output. Use the reference date the input files were made with (roms-tools' `model_reference_date`, by default 2000-01-01). |
+| `reference_date` | Calendar date (year, month, day) of model time zero, e.g. `2000, 1, 1`. It sets the dates in output file names and the reference date in the description (`long_name`) of the output time variable. Use the reference date the input files were made with (roms-tools' `model_reference_date`, by default 2000-01-01). |
 
 ### `GRID_SETTINGS`
 (read by module `dimensions.F90`)
@@ -92,6 +92,8 @@ Read only with `PARALLEL_IO`.
 
 ### `INITIAL_CONDITIONS`
 (read by module `roms_read_write.F90`)
+
+Not read with `ANA_INITIAL`.
 
 | Setting | Description |
 |--------|-------------|
@@ -425,6 +427,8 @@ Linear equation of state parameters.
 ### `GAMMA2_SETTINGS`
 (read by module `scalars.F90`)
 
+Not read when the domain is periodic in both directions (`EW_PERIODIC` and `NS_PERIODIC`).
+
 | Setting | Description |
 |--------|-------------|
 | `gamma2` | Sliperiness parameter (free-slip = +1, no-slip = -1) |
@@ -467,6 +471,8 @@ Read only with `UV_VIS2`.
 ### `UBIND_SETTINGS`
 (read by module `scalars.F90`)
 
+Read only with boundary forcing (`T_FRC_BRY`, `M2_FRC_BRY`, `M3_FRC_BRY`, `Z_FRC_BRY` or `TNUDGING`).
+
 | Setting | Description |
 |--------|-------------|
 | `ubind` | Open boundary binding velocity (m/s) |
@@ -483,7 +489,7 @@ Read only with `SPONGE`.
 ### `SSS_CORRECTION`
 (read by module `surf_flux.F90`)
 
-Read only with `SFLX_CORR` and `SALINITY`.
+Read only with `SFLX_CORR` and `SALINITY`, and without `ANA_SSFLUX`.
 
 | Setting | Description |
 |--------|-------------|
@@ -492,7 +498,7 @@ Read only with `SFLX_CORR` and `SALINITY`.
 ### `SST_CORRECTION`
 (read by module `surf_flux.F90`)
 
-Read only with `QCORRECTION`.
+Read only with `QCORRECTION`, and without `ANA_SST`.
 
 | Setting | Description |
 |--------|-------------|
@@ -535,7 +541,7 @@ Controls output of diagnostics in model STDOUT
 ### `RANDOM_OUTPUT_SETTINGS`
 (read by module `random_output.F90`)
 
-Controls output of user-specified custom fields defined in `random_output.F`
+Controls output of user-specified custom fields defined in `random_output.F90`
 
 | Setting | Description |
 |--------|-------------|

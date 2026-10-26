@@ -1,6 +1,6 @@
 The ci directory houses helper files for the GitHub Actions workflows in $ROMS_ROOT/.github/workflows/
 
-- compile_only.sh: compiles ROMS with a given set of CPP keys and no run; containerized_ci.yml uses it to check builds the pytest suite doesn't cover (e.g. PARALLEL_IO, MPI_MASKING)
+- compile_only.sh: compiles ROMS with a given set of CPP keys and no run; containerized_ci.yml uses it to check that CPP-key combinations the pytest suite doesn't run still compile (PARALLEL_IO with and without MPI_MASKING, DIAGNOSTICS, CDR forcing without MARBL)
 - set_environs.sh: sets the ROMS environment variables for a conda environment (e.g. in a GitHub Codespaces session)
 - pre-commit/: scripts for the repository's pre-commit hooks (.pre-commit-config.yaml)
 - update_release_notes.py, finalize_release_notes.py, release_body.py: maintain docs/releases/ and the release text, run by the release-notes and publish workflows; test_*.py are their unit tests

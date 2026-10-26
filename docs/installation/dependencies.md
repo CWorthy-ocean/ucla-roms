@@ -76,9 +76,9 @@ If `netcdf-fortran` is installed in a different prefix from netCDF-C (not the ca
 ## Using LMOD on supported HPC systems.
 
 The ROMS repo includes a selection of files for configuring the environment for ROMS on supported HPC systems, in the `environments` directory: `NCAR_derecho.sh`, `NERSC_perlmutter.sh`, `RCAC_anvil.sh` and `SDSC_expanse.sh`.
-If you are on a supported machine, run `source <machinename>.sh` inside that directory (note that paths in these files are relative, so they should not be moved). The scripts load modules and set `ROMS_ROOT`, `MPIHOME`, `NETCDFHOME` and `PATH`.
+If you are on a supported machine, run `source <machinename>.sh` inside that directory (note that paths in these files are relative, so they should not be moved). The scripts load modules and set `ROMS_ROOT`, `MPIHOME` and `NETCDFHOME`; all but `SDSC_expanse.sh` also add `$ROMS_ROOT/Tools-Roms` to `PATH`, so on Expanse run `export PATH=$PATH:$ROMS_ROOT/Tools-Roms` yourself.
 
-`NCAR_derecho.sh` and `SDSC_expanse.sh` load Intel compilers, while ROMS compiles with gfortran unless told otherwise, so pass `COMPILER=intel` (ifx) or `COMPILER=ifort` (the older ifort, deprecated) to `make` there (see the {doc}`following page <compilation>`).
+ROMS compiles with gfortran unless told otherwise (see the {doc}`following page <compilation>`). `NCAR_derecho.sh` loads Intel oneAPI, so pass `COMPILER=intel` (ifx) to `make` there. `SDSC_expanse.sh` loads Intel 19, which has no ifx, so pass `COMPILER=ifort` (deprecated) there.
 
 If you are running ROMS on another system and would like to share your configuration, or to report that one of these configurations is out of date, please open an [issue](https://github.com/CWorthy-ocean/ucla-roms/issues/new) or [pull request](https://github.com/CWorthy-ocean/ucla-roms/compare).
 
@@ -129,7 +129,7 @@ cd ParallelIO
 cmake -S . -B build \
     -DCMAKE_C_COMPILER=mpicc \
     -DCMAKE_Fortran_COMPILER=mpifort \
-    -DCMAKE_PREFIX_PATH=<netCDF and PnetCDF prefixes, e.g. $CONDA_PREFIX> \
+    -DCMAKE_PREFIX_PATH=<netCDF, netcdf-fortran and PnetCDF prefixes, e.g. $CONDA_PREFIX> \
     -DHAVE_PAR_FILTERS=FALSE \
     -DPIO_ENABLE_TIMING=OFF \
     -DPIO_ENABLE_TESTS=OFF \
@@ -138,6 +138,8 @@ cmake -S . -B build \
     -DBUILD_SHARED_LIBS=OFF
 cmake --build build --parallel 4
 ```
+
+PIO finds netCDF through pkg-config and PnetCDF through `pnetcdf-config`: outside a conda environment, put the `lib/pkgconfig` directories of netCDF, netcdf-fortran and PnetCDF on `PKG_CONFIG_PATH`, and `pnetcdf-config` on `PATH`, before running `cmake`, as the Containerfiles in `environments/Containerfiles/` do. Use the same netCDF that ROMS links (`NETCDFHOME`).
 
 On macOS, also pass `-DCMAKE_RANLIB=$(which ranlib)` to the first `cmake` command; otherwise, with conda's compilers, linking `libpioc.a` fails with `llvm-ranlib: error: Invalid option: '-c'`.
 

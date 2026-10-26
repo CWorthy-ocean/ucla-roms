@@ -29,8 +29,9 @@ Directories:
 
 Less relevant: (you're unlikely to use these)
 
-   New-tools/     - Partitioning tools for land-masked MPI tilings
-                    (MPI_MASKING), with their own Makefile.
+   New-tools/     - Offline partitioning tools for land-masked MPI tilings,
+                    with their own Makefile (the MPI_MASKING CPP key chooses
+                    such a tiling at runtime instead).
 
    NHMG/          - Non-hydrostatic modules (unmaintained).
 
