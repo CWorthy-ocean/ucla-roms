@@ -16,7 +16,7 @@ module cdr_lite_output
   use dimensions, only: i0, i1, j0, j1, nx, ny, nz, eta_rho, xi_rho
   use roms_read_write, only:&
  &     dn_tm, dn_xr, dn_yr, dn_zr,&
- &     create_file, sec2date
+ &     create_file, sec2date, max_name_size
   use nc_read_write, only: nccreate, ncwrite
   use netcdf, only:&
  &     nf90_noerr, nf90_write, nf90_double, nf90_open,&
@@ -726,7 +726,7 @@ contains
   subroutine wrt_cdr_lite_output
     implicit none
     character(len=19) :: sr_name = "wrt_cdr_lite_output"
-    character(len=99), save :: fname
+    character(len=max_name_size), save :: fname
     character(len=32) :: vname
     integer(kind=4) :: ncid, ierr, ioae, idor, itrc
 
@@ -740,7 +740,7 @@ contains
         ierr=nf90_enddef(ncid)
         ierr = nf90_close(ncid)
       endif
-      call MPI_Bcast(fname,99,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+      call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
       record = 0
     endif
     record = record+1
