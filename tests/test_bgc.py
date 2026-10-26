@@ -7,8 +7,6 @@ what that option promises directly, so it needs no reference hashes.
 ``TestFileNames`` checks the limits on the file names and forcing-file list
 the namelist gives ROMS, against the same case.
 """
-import subprocess
-
 import numpy as np
 import pytest
 import xarray as xr
@@ -117,11 +115,10 @@ class TestConstantFe:
         nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"].update(
             {"use_constant_Fe": True, "constant_Fe_value": -1.0}
         )
-        with pytest.raises(subprocess.CalledProcessError) as excinfo:
-            marbl_conf.run(nml, cwd=tmp_path, capture_output=True)
-        log = excinfo.value.output
-        assert "constant_Fe_value must be non-negative" in log
-        assert "MARBL Fe held constant" not in log
+        assert_run_rejected(
+            marbl_conf, nml, tmp_path, ["constant_Fe_value must be non-negative"],
+            label="constant_Fe_value", absent=["MARBL Fe held constant"],
+        )
 
 
 class TestFileNames:
