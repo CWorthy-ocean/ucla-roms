@@ -56,6 +56,8 @@ conda env update -f environments/Containerfiles/conda_python_deps.yml --name rom
 conda activate roms_env
 ```
 
+These files are written for Linux (they also build the gfortran CI container). On macOS the first command fails, because the pinned `binutils` has no macOS build; use a container there instead.
+
 **NOTE** If planning to run ROMS with MARBL biogeochemistry, MARBL will need to be built separately. See the section below on installing MARBL.
 
 You will also need to set some necessary environment variables telling ROMS where to find your conda-installed libraries:
