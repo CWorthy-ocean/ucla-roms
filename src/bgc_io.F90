@@ -11,7 +11,8 @@ module bgc_io
 #if defined BIOLOGY_BEC2 || defined MARBL
 
   ! param needed for GLOBAL_2D_array to work. NT = number tracer from param
-  use param, only: ieast, itemp, iwest, jnorth, jsouth, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor
+  use param, only: ieast, itemp, iwest, jnorth, jsouth, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
+  &max_name_size
   use tracers, only: t_avg, wrt_t_avg, nt_2_t_avg, t_units
 #ifdef MARBL_DIAGS
   use marbl_driver, only: marbldrv_compute_init_diagnostics, is_marbl_step
@@ -53,7 +54,7 @@ module bgc_io
   use nc_read_write, only: nccreate, ncwrite
   use roms_read_write, only:&
   &dn_tm, dn_xr, dn_yr, dn_zr,&
-  &create_file, set_frc_data, max_name_size
+  &create_file, set_frc_data
 
   use netcdf, only:&
   &nf90_write, nf90_open, nf90_close, nf90_redef, nf90_enddef,&

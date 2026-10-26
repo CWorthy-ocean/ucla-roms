@@ -6,7 +6,7 @@ module dimensions
   ! ========================================
 
   ! coded by Jeroen Molemaker
-  use param, only: llm, mmm, nz, lm, mm, np_eta, np_xi
+  use param, only: llm, mmm, nz, lm, mm, np_eta, np_xi, max_name_size
   use insert_node_mod, only: insert_node
 #ifdef PARALLEL_IO
   use pio_roms, only: use_pio,pio_i0, pio_i1, pio_j0, pio_j1
@@ -51,7 +51,7 @@ module dimensions
 
   public :: init_dimensions, read_nml_grid
   character(len=10) :: module_name = "dimensions"
-  character(len=256), public :: grdname = "roms_grid.nc"
+  character(len=max_name_size), public :: grdname = "roms_grid.nc"
   namelist /GRID_SETTINGS/ grdname
 contains
 
@@ -59,11 +59,12 @@ contains
   subroutine read_nml_grid
     use param, only: mynode, nsize
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
+    use namelist_open_mod, only: open_namelist_file, check_nml_string
     use utils_mod, only: lenstr
 !     Read the "GRID_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios, lstr
     integer(kind=4) :: testunit
+    logical :: fits
 !$  $$      character(len=256) :: fname
     character(len=20) :: sr_name = "read_nml_grid"
     character(len=512) :: msg = ""
@@ -81,6 +82,8 @@ contains
       &//trim(msg)&
       &)
     end if
+    call check_nml_string(grdname, 'GRID_SETTINGS grdname', module_name//'/'//sr_name, fits)
+    if (.not. fits) return
 
 
     lstr = lenstr(grdname)

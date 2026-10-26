@@ -14,7 +14,7 @@ module basic_output
   use dimensions, only:  eta_rho, eta_v, xi_rho, xi_u&
   &, ds_xr, ds_yr, ds_zr, ds_xu, ds_yv, ds_zw
   use roms_read_write, only:&
-  &max_name_size, dn_tm, dn_xr, dn_xu,&
+  &dn_tm, dn_xr, dn_xu,&
   &dn_yr, dn_yv, dn_zr, dn_zw,&
   &avg_output, create_file, sec2date, output_root_name,&
   &refdatestr, put_global_atts, append_date_node
@@ -26,7 +26,8 @@ module basic_output
   use ocean_vars, only:&
   &zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,&
   &w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
-  use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor
+  use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
+  &max_name_size
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO

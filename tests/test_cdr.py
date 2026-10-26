@@ -326,8 +326,6 @@ def _restart_nml(input_dir, marbl_timestep) -> dict:
     """
     nml = _cdr_parm_nml(input_dir)
     nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = marbl_timestep
-    # write every MARBL diagnostic, so the restart checks cover all of them
-    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_diagnostics_to_write"] = ""
     # every output file must end at a restart (precheck), hence the nrpf_*
     nml["BASIC_OUTPUT_SETTINGS"].update({
         "wrt_file_rst": True,

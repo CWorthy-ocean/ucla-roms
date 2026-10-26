@@ -4,6 +4,8 @@ The MARBL tests share one binary, built once per module, and each runs in its
 own tmp_path. ``test_bgc_real_marbl`` is checked against the reference hashes;
 ``TestConstantFe`` reruns the same case with ``use_constant_Fe`` on and checks
 what that option promises directly, so it needs no reference hashes.
+``TestFileNames`` checks the limits on the file names and forcing-file list
+the namelist gives ROMS, against the same case.
 """
 import subprocess
 
@@ -20,6 +22,7 @@ from ._helpers import (
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
+    assert_run_rejected,
     create_test_namelist_dict,
     get_summary_value,
     join_output,
@@ -119,3 +122,62 @@ class TestConstantFe:
         log = excinfo.value.output
         assert "constant_Fe_value must be non-negative" in log
         assert "MARBL Fe held constant" not in log
+
+
+class TestFileNames:
+    """File names and the forcing-file list in the namelist."""
+
+    def test_long_forcing_list(self, tmp_path, marbl_conf, input_dir):
+        """More than the 360 forcing files ROMS used to hold are read, and
+        repeating listed files changes nothing: the first file holding a
+        record is used."""
+        nml = _marbl_nml(input_dir)
+        plain = tmp_path / "plain"
+        plain.mkdir()
+        marbl_conf.run(nml, cwd=plain)
+
+        files = nml["FORCING_FILES"]["frcfiles"]
+        nml["FORCING_FILES"]["frcfiles"] = files + [files[0]] * (400 - len(files))
+        long_list = tmp_path / "long_list"
+        long_list.mkdir()
+        marbl_conf.run(nml, cwd=long_list)
+
+        for prefix in ("roms_his.20100101000000", "roms_bgc.20100101000000"):
+            assert (get_summary_value(long_list, prefix).variables
+                    == get_summary_value(plain, prefix).variables), prefix
+
+    def test_cut_off_path_rejected(self, tmp_path, marbl_conf, input_dir):
+        """A path too long for its variable is cut off by the namelist read;
+        ROMS stops instead of looking for the shortened path."""
+        nml = _marbl_nml(input_dir)
+        nml["INITIAL_CONDITIONS"]["inifile"] = str(tmp_path / ("x" * 300 + ".nc"))
+        assert_run_rejected(marbl_conf, nml, tmp_path, [
+            "INITIAL_CONDITIONS inifile is 256 characters or longer",
+        ], label="inifile")
+
+    def test_long_output_root_name_rejected(self, tmp_path, marbl_conf, input_dir):
+        """An output_root_name that leaves no room for the suffix, date, rank
+        and .nc of an output file name stops ROMS at startup."""
+        nml = _marbl_nml(input_dir)
+        nml["SIMULATION_NAME_SETTINGS"]["output_root_name"] = "r" * 230
+        assert_run_rejected(marbl_conf, nml, tmp_path, [
+            "SIMULATION_NAME_SETTINGS output_root_name is longer than 220 characters",
+        ], label="output_root_name")
+
+    def test_missing_marbl_config_file_rejected(self, tmp_path, marbl_conf, input_dir):
+        """A MARBL settings file that does not exist stops ROMS, rather than
+        running MARBL with its defaults (the open used to create it empty)."""
+        missing = tmp_path / "no_such_marbl_in"
+        nml = _marbl_nml(input_dir)
+        nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_config_file"] = str(missing)
+        assert_run_rejected(marbl_conf, nml, tmp_path, [
+            "could not open MARBL settings file",
+        ], label="marbl_config_file")
+        assert not missing.exists()
+
+    def test_empty_marbl_config_file_uses_defaults(self, tmp_path, marbl_conf, input_dir):
+        """``marbl_config_file = ""`` runs MARBL with its default settings."""
+        nml = _marbl_nml(input_dir)
+        nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_config_file"] = ""
+        stdout = marbl_conf.run(nml, cwd=tmp_path, capture_output=True)
+        assert 'marbl_config_file = "": using default MARBL settings' in stdout

@@ -8,13 +8,13 @@ module cdr_gas_exch_output
 #if defined MARBL && defined CDR_FORCING
   use namelist_open_mod, only: open_namelist_file
   use tracers, only: t_vname
-  use param, only: itemp, isalt, nt
+  use param, only: itemp, isalt, nt, max_name_size
   use marbl_driver, only: iALK_alt, iDIC_alt
   use bgc_shared_vars, only: t, mynode, lm, mm
   use dimensions, only: i0, i1, j0, j1, nz, eta_rho, xi_rho
   use roms_read_write, only:&
  &     dn_tm, dn_xr, dn_yr,&
- &     create_file, sec2date, max_name_size
+ &     create_file, sec2date
   use nc_read_write, only: nccreate, ncwrite
   use netcdf, only:&
  &     nf90_noerr, nf90_write, nf90_double, nf90_open,&

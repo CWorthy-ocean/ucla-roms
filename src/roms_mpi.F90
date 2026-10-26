@@ -17,6 +17,7 @@ module roms_mpi
 !      possible options for mpi_buffer_exchange: full 8, 4 (no corners),
 !      2 (left, down only), send NE, recv SW
 
+  use param, only: max_name_size
   use param, only:&
   &ieast, iwest, jnorth, jsouth, llm,&
   &lm, mm, mmm, ocean_grid_comm,&
@@ -96,10 +97,9 @@ contains
     integer(kind=4),dimension(8) :: neighbors
     integer(kind=4),dimension(2) :: subdompos
     integer(kind=4),dimension(4) :: partition
-    character(len=128) :: fname
     integer(kind=4) :: offx,offy
     character(len=9) :: sr_name = "mpi_setup"
-    character(len=256) :: grdname_tile
+    character(len=max_name_size) :: grdname_tile
     integer(kind=4) :: lstr
     logical :: grid_tile_open
 

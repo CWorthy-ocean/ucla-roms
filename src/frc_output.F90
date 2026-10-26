@@ -6,6 +6,7 @@ module frc_output
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
   use error_handling_mod, only: error_log
+  use param, only: max_name_size
   use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x,&
   &lm, mm, isalt, itemp, mynode, ocean_grid_comm
   use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u,&
@@ -222,7 +223,7 @@ contains
 
     ! local
     integer(kind=4) :: ierr,itrc,ncid
-    character(len=256),save :: fname
+    character(len=max_name_size),save :: fname
 
     if (record==nrpf_frc) then
       call create_frc_file(fname)
@@ -420,7 +421,7 @@ contains
     implicit none
 
     !input/output
-    character(len=256),intent(out) :: fname
+    character(len=max_name_size),intent(out) :: fname
 
     !local
     integer(kind=4) :: ncid,ierr
@@ -450,7 +451,7 @@ contains
       ierr = nf90_close(ncid)
     endif
     call error_log%abort_check()
-    call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
     call MPI_Barrier(ocean_grid_comm, ierr)
 #else
     call create_file('_frc',fname)

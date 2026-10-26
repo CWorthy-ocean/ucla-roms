@@ -31,6 +31,7 @@ module marbl_driver
   use MARBL_interface_public_types, only: marbl_diagnostics_type,&
   &marbl_saved_state_type
 #endif
+  use param, only: max_name_size
   use param                       , only: mynode,nt,nt_bgc,&
   &isalt,itemp,Lm,Mm,&
   &ocean_grid_comm
@@ -72,7 +73,7 @@ module marbl_driver
 !     MARBL config:
   integer(kind=4), public :: marbl_timestep_ratio
   real(kind=8), public :: marbl_timestep = 3600.0
-  character(len=256), public :: marbl_config_file='marbl_in'
+  character(len=max_name_size), public :: marbl_config_file='marbl_in'
   character(len=32), public ::&
   &marbl_tracers_to_write(40) = ""
 #ifdef MARBL_DIAGS
@@ -185,7 +186,7 @@ contains
 
   subroutine read_nml_marbl
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
+    use namelist_open_mod, only: open_namelist_file, check_nml_string
 !     Read the "MARBL_BIOGEOCHEMISTRY_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios, tidx
     character(len=21) :: sr_name = "read_nml_marbl"
@@ -204,6 +205,8 @@ contains
       &//trim(msg)&
       &)
     end if
+    call check_nml_string(marbl_config_file,&
+    &'MARBL_BIOGEOCHEMISTRY_SETTINGS marbl_config_file', module_name//'/'//sr_name)
     mpi_master_only write(*,'(1x,A,15x,A)')&
     &'MARBL config file',trim(marbl_config_file)
     if (use_constant_Fe) then
@@ -276,20 +279,29 @@ contains
 !     1. Read in MARBL settings file (marbl_in), pass settings to MARBL:
 !     ------------------------------------------------------------------
 
-!     read the marbl_in into buffer
-    if (mynode==0) then
-      open(unit=marbl_settings_in, file=marbl_config_file,&
-      &iostat=open_status)
-      if (open_status .ne. 0) then ! can't find namelist file, skip
-        write(*, '(A, I0, 3A)') "IO WARNING ", open_status,&
-        &"could not open namelist file : ", trim(marbl_config_file)&
-        &,". attempting to proceed with default MARBL settings"
-
+!     read the marbl_in into buffer; marbl_config_file = "" runs MARBL with its defaults
+    open_status = -1
+    if (len_trim(marbl_config_file) == 0) then
+      if (mynode==printnode) then
+        write(*,'(A)') 'marbl_config_file = "": using default MARBL settings'
+      end if
+    else
+      if (mynode==0) then
+        open(unit=marbl_settings_in, file=marbl_config_file, status='old',&
+        &action='read', iostat=open_status)
+      end if
+#ifdef MPI
+      call MPI_Bcast(open_status,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
+#endif
+      if (open_status /= 0) then
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info="could not open MARBL settings file '"//trim(marbl_config_file)//&
+        &"' (marbl_config_file); set marbl_config_file = """" to run MARBL "//&
+        &"with its default settings")
+        call error_log%abort_check()
       end if
     end if
-#ifdef MPI
-    call MPI_Bcast(open_status,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
-#endif
     if (open_status==0) then
       namelist_line = ''
       do                  !namelist line-by-line read
@@ -556,6 +568,7 @@ contains
       trcname = trim(marbl_tracers_to_write(lidx))
       lstr = lenstr(trcname)
       if (lstr == 0) exit
+      recognized_tracer = .false.
       do tidx=1,NT ! Inner loop over all possible tracers to check
         if (trim(t_vname(tidx)) == trim(trcname)) then
           wrt_t(tidx) =.true.

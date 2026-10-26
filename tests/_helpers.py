@@ -85,6 +85,14 @@ def create_test_namelist_dict(input_dir: Path) -> dict:
 
     this_nml["STDOUT_DIAG_SETTINGS"]["code_check_mode"] = True
 
+    # MARBL with its default settings. The template names a "marbl_in" the
+    # tests don't provide; ROMS used to create it empty and run on the
+    # defaults, and now stops instead. test_bgc.py sets its own marbl_in.
+    this_nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_config_file"] = ""
+    # Every MARBL diagnostic, which CDR output needs; the template's default
+    # used to be read as one unrecognized name, which also wrote them all.
+    this_nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_diagnostics_to_write"] = ""
+
     return this_nml
 
 

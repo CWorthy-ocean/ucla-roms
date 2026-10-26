@@ -12,11 +12,11 @@ module cdr_lite_output
 
   use namelist_open_mod, only: open_namelist_file
   use tracers, only: t, t_units, t_lname, iTandS, cdr_gas_flx
-  use param, only: nt_passive, nt_cdr_oae, nt_cdr_dor, mynode, lm, mm
+  use param, only: nt_passive, nt_cdr_oae, nt_cdr_dor, mynode, lm, mm, max_name_size
   use dimensions, only: i0, i1, j0, j1, nx, ny, nz, eta_rho, xi_rho
   use roms_read_write, only:&
  &     dn_tm, dn_xr, dn_yr, dn_zr,&
- &     create_file, sec2date, max_name_size
+ &     create_file, sec2date
   use nc_read_write, only: nccreate, ncwrite
   use netcdf, only:&
  &     nf90_noerr, nf90_write, nf90_double, nf90_open,&

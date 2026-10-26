@@ -4,6 +4,7 @@ module zslice_output
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
   use grid, only: rmask
+  use param, only: max_name_size
   use param, only: lm, mm, mynode, ocean_grid_comm
   use roms_mpi, only: exchange_xxx
   use dimensions, only: nx, ny, nz, i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u&
@@ -428,7 +429,7 @@ contains
     implicit none
     character(len=10) :: sr_name= "wrt_zslice"
     ! local
-    character(len=256),save :: fname
+    character(len=max_name_size),save :: fname
     integer(kind=4),dimension(3)   :: start
     integer(kind=4)                :: ncid,ierr
     integer(kind=4)                :: i,j,k,n
@@ -469,7 +470,7 @@ contains
           ierr = nf90_close(ncid)
         endif
         call error_log%abort_check()
-        call MPI_Bcast(fname,256,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+        call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
         call MPI_Barrier(ocean_grid_comm, ierr)
         record = 0
       endif

@@ -15,7 +15,7 @@ module cdr_frc
   ! cdr_trc_name, or MARBL's ALK and DIC for older two-column files without
   ! it. 3D forcing supplies ALK and DIC fluxes for MARBL's tracers and
   ! therefore needs MARBL.
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: open_namelist_file, check_nml_string
   use roms_read_write, only:&
   &ncforce, ncforce3d, cdr_frc_opt,&
   &set_frc_data, store_string_att
@@ -23,7 +23,7 @@ module cdr_frc
   use grid, only: rmask, lonr,latr
   use dimensions, only: nx, ny, nz
   use ocean_vars, only: hz, z_r0, hz0
-  use param, only: mynode, lm, mm, ocean_grid_comm, itemp
+  use param, only: mynode, lm, mm, ocean_grid_comm, itemp, max_name_size
   use tracers, only: iTandS, t_vname
   use nc_read_write, only: ncread
   use pio_roms, only: pio_gtype
@@ -49,7 +49,7 @@ module cdr_frc
   private
   character(len=7) :: module_name="cdr_frc"
   character(len=1024) :: error_info=""
-  character(len=256) :: cdr_file = 'cdr_release.nc'
+  character(len=max_name_size) :: cdr_file = 'cdr_release.nc'
   integer(kind=4),public :: cdr_ncdr_parm=0
 
   ! Forcing file settings:
@@ -236,6 +236,7 @@ contains
       &'could not read CDR_FRC_SETTINGS section of namelist file'&
       &)
     end if
+    call check_nml_string(cdr_file, 'CDR_FRC_SETTINGS cdr_file', module_name//'/'//sr_name)
     close(namelist_unit)
 
   end subroutine read_nml_cdr_frc

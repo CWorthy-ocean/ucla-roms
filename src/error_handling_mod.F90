@@ -60,7 +60,7 @@ module error_handling_mod
 
 #include "cppdefs.opt"
 
-  use param, only: mynode, nnodes, ocean_grid_comm
+  use param, only: mynode, nnodes, ocean_grid_comm, max_name_size
   use utils_mod, only: replace_string
 #ifdef MPI
   use mpi_f08, only: MPI_Gather, MPI_Gatherv, MPI_INTEGER, MPI_CHARACTER, MPI_MAX, MPI_Allreduce, MPI_Barrier, MPI_Abort
@@ -1006,7 +1006,7 @@ contains
       integer ::  namelist_unit, ios, is, ierr
       character(len=20) :: sr_name = "read_nml_frc_output"
       character(len=512) :: msg = ""
-      character(len=256) :: nml_fname = ""
+      character(len=max_name_size) :: nml_fname = ""
 
 ! Get the name of the namelist file
 #ifdef MPI
@@ -1015,7 +1015,7 @@ contains
          is=iargc() ; if (is == 1) call getarg(is,nml_fname)
 #ifdef MPI
       endif
-      call MPI_Bcast(nml_fname,256,MPI_BYTE, 0, ocean_grid_comm, ierr)
+      call MPI_Bcast(nml_fname,max_name_size,MPI_BYTE, 0, ocean_grid_comm, ierr)
 #endif
 
 ! Open the namelist file

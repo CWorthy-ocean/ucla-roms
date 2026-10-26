@@ -301,7 +301,7 @@ xco2air_default = 284.7         ! Atmospheric xCO2 (ppm) when PCO2AIR_FORCING is
 !------------------------------
 ! Previously set in `roms.in`
 !------------------------------
-marbl_config_file = "marbl_in"  ! MARBL configuration file
+marbl_config_file = "marbl_in"  ! MARBL configuration file ("" runs MARBL with its default settings)
 marbl_tracers_to_write = ""     ! MARBL tracers to include in BGC output
 marbl_diagnostics_to_write = "FG_CO2", "FG_ALT_CO2" ! MARBL diagnostics to include in BGC output ("" writes all)
 marbl_timestep = 3600.0           ! Desired MARBL timestep (s); rounded to a whole multiple of dt (max 10800)
