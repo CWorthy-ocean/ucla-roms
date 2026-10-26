@@ -22,7 +22,8 @@ module instant_output
   private
 
   character(len=13) :: module_name = "instant_output"
-  integer(kind=4),parameter,dimension(3) :: reference_date = (/2000,1,1/)  ! year, month, day
+  ! year, month, day; set from REFERENCE_DATE_SETTINGS by roms_read_write
+  integer(kind=4),public,dimension(3) :: instant_reference_date = (/2000,1,1/)
 
   ! Dimension names for in netcdf files
   character(len=7),public,parameter :: dn_xr = 'xi_rho'
@@ -346,9 +347,9 @@ contains
 
 !     jul0 = floor(jul0)
 
-    y = reference_date(1)
-    m = reference_date(2)
-    d = reference_date(3)
+    y = instant_reference_date(1)
+    m = instant_reference_date(2)
+    d = instant_reference_date(3)
 
     jul = d-32075 + 1461*(y + 4800 + (m-14)/12)/4 +&
     &367*(m-2-((m-14)/12)*12)/12 -&
