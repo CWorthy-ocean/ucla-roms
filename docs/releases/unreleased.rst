@@ -66,6 +66,10 @@ Bug Fixes
 
   - Every unrecognized name in ``marbl_tracers_to_write`` is now reported, not only those before the first recognized one.
 
+- Builds with ``M2NUDGING`` or ``M3NUDGING`` but no boundary-forcing key now read ``ubind`` from ``UBIND_SETTINGS``; before, it was declared but never read. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
+- Instant (``wrt_instant``) output now dates its records from ``REFERENCE_DATE_SETTINGS`` instead of a fixed 2000-01-01. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
+- The particle switches ``floats`` and ``full_seed``, and the ``SURF_FLX_OUTPUT_SETTINGS`` output switches, now default to ``.false.`` when a namelist omits them, instead of being undefined. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
+
 
 Improvements
 ~~~~~~~~~~~~
@@ -79,6 +83,7 @@ Improvements
 - PIO branches get the same changes. Each step does the same work as before, with one scalar check at startup. The cost should be negligible, but it is unverified at scale. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
 - ``FORCING_FILES`` holds up to 10000 files (was 360); the list is sized to the files given, so the higher cap costs memory only while the namelist is read. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
 - Namelist errors stop ROMS right after the namelist is read, before any value is used. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
+- ``wrt_rstflx = .true.`` now stops ROMS at startup with a clear message; the restoring-flux output it asked for was never written. The key is still accepted, so existing namelists keep working. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -97,3 +102,5 @@ Miscellaneous
 - Every file-name variable and its broadcast use ``max_name_size`` (now in ``param``), so raising it is a one-line change. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
 - The test namelist helper asks for MARBL's default settings and every diagnostic, which is what the tests ran with before; new ``TestFileNames`` tests cover these limits. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
 - Removed the no-op ``EXACT_RESTARTS`` and ``PRINT_HOSTNAME`` keys from the default and example ``cppdefs.opt`` files and the compile-time settings docs; existing files that still set them compile unchanged. (`#403 <https://github.com/CWorthy-ocean/ucla-roms/pull/403>`_)
+- Removed the unused ``param.opt`` template file, which ``PARAM_SETTINGS`` replaced, and a broken link to a CI input-download script that no longer exists. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
+- Each group header in the namelist template now names the ``.F90`` module that declares the group, and the ``akq_bak`` and ``ubind`` comments name the correct cpp keys. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
