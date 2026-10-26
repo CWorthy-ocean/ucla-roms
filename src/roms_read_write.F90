@@ -183,8 +183,6 @@ module roms_read_write
   character(len=max_name_size), public :: inifile = ""
   character(len=max_name_size), public ::&
   &frcfiles(max_frc_files) = ""
-  character(len=max_name_size), public ::&
-  &frcfile_full(max_frc_files) = ""
   namelist /SIMULATION_NAME_SETTINGS/ output_root_name, title
 #ifndef ANA_INITIAL
   namelist /INITIAL_CONDITIONS/ inifile
