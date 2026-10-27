@@ -69,6 +69,9 @@ Bug Fixes
 - Builds with ``M2NUDGING`` or ``M3NUDGING`` but no boundary-forcing key now read ``ubind`` from ``UBIND_SETTINGS``; before, it was declared but never read. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
 - Instant (``wrt_instant``) output now dates its records from ``REFERENCE_DATE_SETTINGS`` instead of a fixed 2000-01-01. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
 - The particle switches ``floats`` and ``full_seed``, and the ``SURF_FLX_OUTPUT_SETTINGS`` output switches, now default to ``.false.`` when a namelist omits them, instead of being undefined. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
+- The tutorial notebooks run again with the documented environment (roms-tools 5.1.1), and their saved outputs and figures are regenerated. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
+- The nested tutorial's file paths, CDR output names (``_cdr``) and namelist tables now match the Iceland example cases. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
+- In the from-scratch template, switching biogeochemistry off now builds without MARBL, ``RESTART_FREQUENCY`` now writes restarts, and the physics output includes temperature and salinity. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
 
 
 Improvements
@@ -84,6 +87,8 @@ Improvements
 - ``FORCING_FILES`` holds up to 10000 files (was 360); the list is sized to the files given, so the higher cap costs memory only while the namelist is read. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
 - Namelist errors stop ROMS right after the namelist is read, before any value is used. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
 - ``wrt_rstflx = .true.`` now stops ROMS at startup with a clear message; the restoring-flux output it asked for was never written. The key is still accepted, so existing namelists keep working. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
+- The tutorials stream ERA5 surface forcing from the cloud, so no ERA5 download is needed. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
+- The nested tutorial shows the ``copernicusmarine`` command that downloads its GLORYS subset. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -104,3 +109,4 @@ Miscellaneous
 - Removed the no-op ``EXACT_RESTARTS`` and ``PRINT_HOSTNAME`` keys from the default and example ``cppdefs.opt`` files and the compile-time settings docs; existing files that still set them compile unchanged. (`#403 <https://github.com/CWorthy-ocean/ucla-roms/pull/403>`_)
 - Removed the unused ``param.opt`` template file, which ``PARAM_SETTINGS`` replaced, and a broken link to a CI input-download script that no longer exists. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
 - Each group header in the namelist template now names the ``.F90`` module that declares the group, and the ``akq_bak`` and ``ubind`` comments name the correct cpp keys. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
+- Iceland examples: a CO2 forcing file, child output under ``output/``, a 31-day parent restart, and tidied namelist keys and ``cppdefs.opt`` comments. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
