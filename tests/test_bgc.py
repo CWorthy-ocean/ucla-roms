@@ -249,11 +249,11 @@ class TestRestoringFluxOutput:
 
     def test_carbon_fluxes_are_the_applied_fluxes(self, rstflx_runs):
         """``dicflx_rst`` and ``alkflx_rst`` equal the ``vflux`` of DIC, ALK and
-        their _ALT_CO2 twins, the fluxes the model applied.
+        their _ALT_CO2 twins, the fluxes the model applied, at every step.
 
-        Step 1 is left out: the applied MARBL tracer fluxes are reset there (a
-        separate known issue). The surface-flux files hold single precision; the
-        forcing file double.
+        Both are zero at step 1: the applied MARBL tracer fluxes are reset there
+        (claude-docs#116), and the restoring fluxes report that. The surface-flux
+        files hold single precision; the forcing file double.
         """
         run = rstflx_runs["snapshot"]
         flx, frc = run["roms_flx_his"], run["roms_frc"]
@@ -261,7 +261,7 @@ class TestRestoringFluxOutput:
                            ("alkflx_rst", "vflux_ALK"), ("alkflx_rst", "vflux_ALK_ALT_CO2")]:
             assert np.abs(flx[rst].values[1:]).max() > 0
             np.testing.assert_array_equal(
-                flx[rst].values[1:], frc[vflux].values[1:].astype(np.float32), err_msg=vflux
+                flx[rst].values, frc[vflux].values.astype(np.float32), err_msg=vflux
             )
 
     @pytest.mark.parametrize("flux, sname, tracer", [
