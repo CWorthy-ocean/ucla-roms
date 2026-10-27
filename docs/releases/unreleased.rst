@@ -82,7 +82,7 @@ Bug Fixes
 - In the from-scratch template, switching biogeochemistry off now builds without MARBL, ``RESTART_FREQUENCY`` now writes restarts, and the physics output includes temperature and salinity. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
 - Runs with QCORRECTION crashed at the first forcing read, because the restoring SST array was never allocated. (`#407 <https://github.com/CWorthy-ocean/ucla-roms/pull/407>`_)
 - Without PARALLEL_IO, surface-flux snapshots (``sflx_avg = .false.``) were not written, and averaged output wrote the instantaneous ``swflx``. (`#407 <https://github.com/CWorthy-ocean/ucla-roms/pull/407>`_)
-- ``wrt_swflx`` or ``wrt_rstflx`` on their own wrote no surface-flux file, and skipped the check that the output period fits the restart period. (`#407 <https://github.com/CWorthy-ocean/ucla-roms/pull/407>`_)
+- ``wrt_swflx`` on its own wrote no surface-flux file, and skipped the check that the output period fits the restart period. (`#407 <https://github.com/CWorthy-ocean/ucla-roms/pull/407>`_)
 
 
 Improvements
@@ -97,7 +97,6 @@ Improvements
 - PIO branches get the same changes. Each step does the same work as before, with one scalar check at startup. The cost should be negligible, but it is unverified at scale. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
 - ``FORCING_FILES`` holds up to 10000 files (was 360); the list is sized to the files given, so the higher cap costs memory only while the namelist is read. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
 - Namelist errors stop ROMS right after the namelist is read, before any value is used. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
-- ``wrt_rstflx = .true.`` now stops ROMS at startup with a clear message; the restoring-flux output it asked for was never written. The key is still accepted, so existing namelists keep working. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
 - The tutorials stream ERA5 surface forcing from the cloud, so no ERA5 download is needed. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
 - The nested tutorial shows the ``copernicusmarine`` command that downloads its GLORYS subset. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
 - ``v_sponge_trc`` is printed at startup and written as a global attribute next to ``v_sponge``. (`#408 <https://github.com/CWorthy-ocean/ucla-roms/pull/408>`_)
@@ -105,13 +104,9 @@ Improvements
 Miscellaneous
 ~~~~~~~~~~~~~
 
-- CI: the ``test_gnu`` container runs with ``options: --shm-size=1g``. Transports and code paths are unchanged, so output hashes cannot move. ``test_ifx`` (OpenMPI) and the ``compile_*`` jobs are unchanged. The base-commit rerun step runs in the same container and gets the fix too. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
-- CI: a new ``Print MPI and shared memory info`` step (``continue-on-error: true``) prints ``df -h /dev/shm``, ``ucx_info -v`` and ``mpichversion``. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
-- CI: the ``/dev/shm`` sampler described above. It runs in the background of ``Run tests`` and is stopped by an ``EXIT`` trap, so pytest's exit status is unchanged. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
-- CI: a new ``Show shared memory usage`` step (``if: always()``, ``continue-on-error: true``) prints the sampler log. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
-- Tested locally in the image with stand-ins for pytest, run the way GitHub runs it (``bash -eo pipefail``). An unlinked 40 MB holder was caught with one ``ps`` snapshot, a failing exit status (3) came through unchanged, and the sampler stopped when the step ended. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
-- Docs: ``environments/Containerfiles/README.md`` shows ``podman run --shm-size=1g`` and points to the workflow comment, which holds the full explanation. Podman's default is also 64 MB, so local users of the image can hit the crash too. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
-- Open PRs pick up the fix only after merging ``main`` (or a new push), because rerunning an old run reuses its old workflow. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
+- CI: the ``test_gnu`` container gets a 1 GB ``/dev/shm`` (``options: --shm-size=1g``) instead of the 64 MB default, which let UCX segfault intermittently inside ``MPI_Init``. Output hashes are unchanged; ``test_ifx`` and the ``compile_*`` jobs are unchanged. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
+- CI: new steps print MPI and shared-memory information (``df -h /dev/shm``, ``ucx_info -v``, ``mpichversion``) and log ``/dev/shm`` usage while the tests run; they never change pytest's exit status. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
+- Docs: ``environments/Containerfiles/README.md`` shows ``podman run --shm-size=1g``. Podman's default is also 64 MB, so local users of the image can hit the crash too. (`#401 <https://github.com/CWorthy-ocean/ucla-roms/pull/401>`_)
 - ``docs/model_settings/runtime_settings.md``: ``output_period_cdr`` and ``output_period_bgc_avg_dia`` state the multiple-of-MARBL-timestep requirement, and ``output_period_bgc_avg`` says what each record averages. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
 - ``src/Make.depend`` is regenerated, since ``precheck`` now uses ``scalars`` and ``marbl_driver``. The other line changes there are drift that was already on ``main``. (`#400 <https://github.com/CWorthy-ocean/ucla-roms/pull/400>`_)
 - New test: the interior inventory change of an ALK perturbation in a SPONGE + UPSCALING run matches minus the time-integrated ``_uscl`` export to round-off. (`#399 <https://github.com/CWorthy-ocean/ucla-roms/pull/399>`_)
