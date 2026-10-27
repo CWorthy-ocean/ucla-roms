@@ -5,7 +5,8 @@ MARBL+CDR_FORCING binary, built once per module, but each runs in its own
 tmp_path so their output files cannot collide. The module-scoped
 ``cdrgas_run`` fixture runs the parameterized case once more with the
 ``_cdrgas`` gas-exchange output on; ``TestCdr`` checks that output and
-``TestCdrLite`` (a no-MARBL CDR_LITE build) reads it back as forcing.
+``TestCdrLite`` (a no-MARBL CDR_LITE build) reads it back as forcing. The same
+binary has no restoring term, so it also checks that ``wrt_rstflx`` is rejected.
 """
 import copy
 import shutil
@@ -297,6 +298,18 @@ class TestCdr:
             "is not a whole multiple of the MARBL timestep ROMS uses",
             "bit-identical restarts",
         ], label=key)
+
+    def test_rstflx_needs_a_restoring_term(self, tmp_path, cdr_conf, input_dir):
+        """``wrt_rstflx`` on a binary with no restoring term compiled in (this
+        one has BULK_FRC and MARBL but none of QCORRECTION, SFLX_CORR, CFLX_CORR)
+        stops ROMS at startup instead of writing nothing."""
+        nml = _cdr_parm_nml(input_dir)
+        nml["SURF_FLX_OUTPUT_SETTINGS"].update({"wrt_stflx": True, "wrt_rstflx": True})
+        assert_run_rejected(cdr_conf, nml, tmp_path, [
+            "SURF_FLX_OUTPUT_SETTINGS wrt_rstflx = .true. needs at least one restoring "
+            "term compiled in (QCORRECTION, SFLX_CORR, or CFLX_CORR with MARBL, together "
+            "with BULK_FRC). Set it to .false. otherwise.",
+        ], label="wrt_rstflx")
 
     def test_bgc_averages_survive_restart(self, tmp_path, cdr_conf, input_dir):
         """``_bgc_avg`` windows hold the model steps of each period only, and a

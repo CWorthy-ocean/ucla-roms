@@ -34,6 +34,10 @@ subroutine set_forces
   &ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, itemp
   use flux_frc, only: set_flux_frc
   use surf_flux, only: set_surf_field_corr, set_carbonate_sensitivity
+#if defined(CFLX_CORR) && defined(MARBL) && defined(BULK_FRC)
+  use surf_flux, only: wrt_rstflx, dicflx_rst, alkflx_rst
+  use scalars, only: iic, forw_start
+#endif
   use tracers, only: set_surf_tracer_flx, iTandS
   use river_frc, only:  set_river_frc, river_source
   use pipe_frc, only: set_pipe_frc, pipe_source
@@ -135,6 +139,15 @@ subroutine set_forces
 #  endif
 # endif
   if(nt>iTandS) call set_surf_tracer_flx
+#if defined(CFLX_CORR) && defined(MARBL) && defined(BULK_FRC)
+  ! set_surf_tracer_flx zeroes the MARBL tracer fluxes on the first time step,
+  ! DIC/ALK restoring included, so report the zero flux actually applied.
+  ! Remove once that restoring applies on the first step (claude-docs#116).
+  if (wrt_rstflx .and. FIRST_TIME_STEP) then
+    dicflx_rst=0._8
+    alkflx_rst=0._8
+  endif
+#endif
   ! BGC surface flux:
 
 # if defined(BIOLOGY_BEC2) || defined(MARBL)

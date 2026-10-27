@@ -559,7 +559,7 @@ Controls the output of model surface fluxes.
 |--------|-------------|
 | `wrt_smflx` | Output surface momentum flux if `.true.`|
 | `wrt_stflx` | Output surface tracer flux if `.true.`|
-| `wrt_rstflx` | Not supported: keep it `.false.`, as `.true.` stops ROMS at startup. ROMS does not write the surface restoring fluxes separately; they are part of the surface tracer flux |
+| `wrt_rstflx` | Output the surface restoring fluxes of the compiled-in restoring terms if `.true.` (`shflx_rst` with `QCORRECTION`, `ssflx_rst` with `SFLX_CORR`, `dicflx_rst` and `alkflx_rst` with `CFLX_CORR` and `MARBL`; `BULK_FRC` only). ROMS stops at startup if none is compiled in |
 | `wrt_swflx` | Output surface water flux (P-E) if `.true.` |
 | `sflx_avg` | Output average (if `.true`) or instantaneous (if `.false`) fields |
 | `output_period_sflx` | Frequency of surface flux output (s) |

@@ -25,7 +25,7 @@ module precheck
   use zslice_output, only:&
   &do_zslice, output_period_zslice, nrpf_zslice
   use surf_flux, only:&
-  &wrt_smflx, wrt_stflx, output_period_sflx, nrpf_sflx
+  &do_sflx, output_period_sflx, nrpf_sflx
   use particles, only: floats, output_period_particles, nrpf_particles
   use sponge_tune, only:&
   &wrt_sponge, output_period_sponge, nrpf_sponge
@@ -103,7 +103,7 @@ contains
     &output_period_random, nrpf_random, 'random')
     call check_output_divides_rst(do_zslice,&
     &output_period_zslice, nrpf_zslice, 'zslice')
-    call check_output_divides_rst(wrt_smflx.or.wrt_stflx,&
+    call check_output_divides_rst(do_sflx,&
     &output_period_sflx, nrpf_sflx, 'sflx')
     call check_output_divides_rst(floats,&
     &output_period_particles, nrpf_particles, 'particles')

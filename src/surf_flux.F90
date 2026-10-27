@@ -52,8 +52,10 @@ module surf_flux
   integer(kind=4), public :: nrpf_sflx          = 10 ! total recs per file
   logical, public ::&
   &wrt_smflx = .false., wrt_stflx = .false., wrt_swflx = .false., sflx_avg = .false.
-  ! Accepted so existing namelists still read; ROMS stops if it is .true.
+  ! Output the surface restoring fluxes of the compiled-in restoring terms (rst_heat, rst_salt, rst_carbon)
   logical, public :: wrt_rstflx = .false.
+  ! Any surface-flux output requested (set by read_nml_surf_flx)
+  logical, public, protected :: do_sflx = .false.
   namelist /SURF_FLX_OUTPUT_SETTINGS/ output_period_sflx, nrpf_sflx,&
   &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
 #if defined(QCORRECTION) && !defined(ANA_SST)
@@ -72,6 +74,23 @@ module surf_flux
   logical,parameter :: salinity=.false.
 #endif
 
+  ! Which restoring terms are compiled in (only bulk_frc computes them)
+#if defined(QCORRECTION) && !defined(ANA_SST) && defined(BULK_FRC)
+  logical,public,parameter :: rst_heat=.true.
+#else
+  logical,public,parameter :: rst_heat=.false.
+#endif
+#if defined(SFLX_CORR) && defined(SALINITY) && !defined(ANA_SSFLUX) && defined(BULK_FRC)
+  logical,public,parameter :: rst_salt=.true.
+#else
+  logical,public,parameter :: rst_salt=.false.
+#endif
+#if defined(CFLX_CORR) && defined(MARBL) && defined(BULK_FRC)
+  logical,public,parameter :: rst_carbon=.true.   ! DIC and ALK
+#else
+  logical,public,parameter :: rst_carbon=.false.
+#endif
+
   logical :: init_done=.false.        ! flag to init surf_flux
   integer(kind=4) :: navg_sflx = 0            ! number of samples in average
 
@@ -84,6 +103,12 @@ module surf_flux
   real(kind=8),public,allocatable,dimension(:,:,:) :: stflx    ! Surface fluxes of tracer type variables (rho-points
   real(kind=8),public,allocatable,dimension(:,:)   :: srflx    ! Short-wave radiation surface flux
   real(kind=8),public,allocatable,dimension(:,:)   :: swflx ! Precip minus evaporation flux (surface water flux)
+
+  ! Restoring fluxes, included in stflx (allocated if wrt_rstflx and the term is compiled in)
+  real(kind=8),public,allocatable,dimension(:,:)   :: shflx_rst   ! heat (SST restoring)
+  real(kind=8),public,allocatable,dimension(:,:)   :: ssflx_rst   ! salinity (SSS restoring)
+  real(kind=8),public,allocatable,dimension(:,:)   :: dicflx_rst  ! DIC (sDIC restoring)
+  real(kind=8),public,allocatable,dimension(:,:)   :: alkflx_rst  ! alkalinity (sALK restoring)
 
   real(kind=8),public,allocatable,dimension(:,:) ::  uwnd             ! time interpolated u-wind
   real(kind=8),public,allocatable,dimension(:,:) ::  vwnd             ! time interpolated v-wind
@@ -98,6 +123,10 @@ module surf_flux
   real(kind=8),allocatable,dimension(:,:)  :: svstr_avg     ! surf stress v-point average
   real(kind=8),allocatable,dimension(:,:,:):: stflx_avg     ! surf tracer flux average
   real(kind=8),allocatable,dimension(:,:)  :: swflx_avg ! surf srw flux average
+  real(kind=8),allocatable,dimension(:,:)  :: shflx_rst_avg   ! restoring flux averages
+  real(kind=8),allocatable,dimension(:,:)  :: ssflx_rst_avg
+  real(kind=8),allocatable,dimension(:,:)  :: dicflx_rst_avg
+  real(kind=8),allocatable,dimension(:,:)  :: alkflx_rst_avg
 
   ! Sea-surface temperature (SST) and salinity (SSS) data for restoring
   real(kind=8),public,allocatable,dimension(:,:) :: sst
@@ -169,11 +198,13 @@ contains
       &//trim(msg)&
       &)
     end if
-    if (wrt_rstflx) then
+    do_sflx = wrt_smflx .or. wrt_stflx .or. wrt_swflx .or. wrt_rstflx
+    if (wrt_rstflx .and. .not.(rst_heat .or. rst_salt .or. rst_carbon)) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
-      &info='SURF_FLX_OUTPUT_SETTINGS wrt_rstflx = .true. is not supported:'&
-      &//' ROMS does not write the surface restoring flux. Set it to .false.'&
+      &info='SURF_FLX_OUTPUT_SETTINGS wrt_rstflx = .true. needs at least one'&
+      &//' restoring term compiled in (QCORRECTION, SFLX_CORR, or CFLX_CORR'&
+      &//' with MARBL, together with BULK_FRC). Set it to .false. otherwise.'&
       &)
     end if
 
@@ -257,7 +288,7 @@ subroutine init_arrays_surf_flx ![
   allocate( stflx  (GLOBAL_2D_ARRAY,nt) ); stflx=init
   allocate( srflx  (GLOBAL_2D_ARRAY)    ); srflx=init
   allocate( swflx  (GLOBAL_2D_ARRAY)    ); swflx = 0
-#if defined(Q_CORRECTION) && !defined(ANA_SST)
+#if defined(QCORRECTION) && !defined(ANA_SST)
   allocate( sst(GLOBAL_2D_ARRAY)        ); sst=init
   allocate(nc_sst%vdata(GLOBAL_2D_ARRAY,2) )
 #endif
@@ -296,6 +327,15 @@ subroutine init_arrays_surf_flx ![
   call store_string_att(surf_forcing_strings,'cm/day')
 #endif
 
+  if (wrt_rstflx) then
+    if (rst_heat)   then; allocate( shflx_rst  (GLOBAL_2D_ARRAY) ); shflx_rst  =0._8; endif
+    if (rst_salt)   then; allocate( ssflx_rst  (GLOBAL_2D_ARRAY) ); ssflx_rst  =0._8; endif
+    if (rst_carbon) then
+      allocate( dicflx_rst(GLOBAL_2D_ARRAY) ); dicflx_rst=0._8
+      allocate( alkflx_rst(GLOBAL_2D_ARRAY) ); alkflx_rst=0._8
+    endif
+  endif
+
   if (sflx_avg) then
     ! zeroed because the first running-mean update multiplies the old
     ! contents by 0, and NaN x 0 = NaN
@@ -303,6 +343,14 @@ subroutine init_arrays_surf_flx ![
     allocate(svstr_avg(i0:i1,1:j1)); svstr_avg=0._8
     allocate(stflx_avg(i0:i1,j0:j1,nt)); stflx_avg=0._8
     allocate(swflx_avg(i0:i1,j0:j1)); swflx_avg=0._8
+    if (wrt_rstflx) then
+      if (rst_heat)   then; allocate(shflx_rst_avg(i0:i1,j0:j1)); shflx_rst_avg=0._8; endif
+      if (rst_salt)   then; allocate(ssflx_rst_avg(i0:i1,j0:j1)); ssflx_rst_avg=0._8; endif
+      if (rst_carbon) then
+        allocate(dicflx_rst_avg(i0:i1,j0:j1)); dicflx_rst_avg=0._8
+        allocate(alkflx_rst_avg(i0:i1,j0:j1)); alkflx_rst_avg=0._8
+      endif
+    endif
   endif
 
 end subroutine init_arrays_surf_flx  !]
@@ -392,6 +440,14 @@ subroutine calc_sflx_avg  ![
   if (wrt_swflx) then  ! surface water flux
     swflx_avg = swflx_avg*(1-coef)+swflx(i0:i1,j0:j1)*coef
   end if
+  if (wrt_rstflx) then  ! surface restoring fluxes
+    if (rst_heat) shflx_rst_avg = shflx_rst_avg*(1-coef)+shflx_rst(i0:i1,j0:j1)*coef
+    if (rst_salt) ssflx_rst_avg = ssflx_rst_avg*(1-coef)+ssflx_rst(i0:i1,j0:j1)*coef
+    if (rst_carbon) then
+      dicflx_rst_avg = dicflx_rst_avg*(1-coef)+dicflx_rst(i0:i1,j0:j1)*coef
+      alkflx_rst_avg = alkflx_rst_avg*(1-coef)+alkflx_rst(i0:i1,j0:j1)*coef
+    endif
+  endif
 
 end subroutine calc_sflx_avg !]
 !----------------------------------------------------------------------
@@ -438,6 +494,34 @@ subroutine create_sflx_vars(ncid)  ![
     ierr = nf90_put_att(ncid,varid,'long_name',&
     &'Fresh water flux (P-E)')
     ierr = nf90_put_att(ncid,varid,'units','m/s')
+  endif
+  if (wrt_rstflx) then
+    if (rst_heat) then
+      varid = nccreate(ncid,'shflx_rst',(/dn_xr,dn_yr,dn_tm/),&
+      &(/ds_xr,ds_yr,0/))
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'Surface heat flux from SST restoring (included in shflx)')
+      ierr = nf90_put_att(ncid,varid,'units','degC m/s')
+    endif
+    if (rst_salt) then
+      varid = nccreate(ncid,'ssflx_rst',(/dn_xr,dn_yr,dn_tm/),&
+      &(/ds_xr,ds_yr,0/))
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'Surface salinity flux from SSS restoring (equal to ssflx: SSS restoring replaces the salt flux)')
+      ierr = nf90_put_att(ncid,varid,'units','PSU m/s')
+    endif
+    if (rst_carbon) then
+      varid = nccreate(ncid,'dicflx_rst',(/dn_xr,dn_yr,dn_tm/),&
+      &(/ds_xr,ds_yr,0/))
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'Surface DIC flux from sDIC restoring (applied to DIC and DIC_ALT_CO2)')
+      ierr = nf90_put_att(ncid,varid,'units','mmol/m^2/s')
+      varid = nccreate(ncid,'alkflx_rst',(/dn_xr,dn_yr,dn_tm/),&
+      &(/ds_xr,ds_yr,0/))
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'Surface alkalinity flux from sALK restoring (applied to ALK and ALK_ALT_CO2)')
+      ierr = nf90_put_att(ncid,varid,'units','mmol/m^2/s')
+    endif
   endif
 
 end subroutine create_sflx_vars  !]
@@ -502,6 +586,15 @@ subroutine wrt_sflux  ![
         pio_gtype = '2Drw'
         call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),start,.true.)
       endif
+      if (wrt_rstflx) then
+        pio_gtype = '2Drw'
+        if (rst_heat) call ncwrite(ncid,'shflx_rst',shflx_rst_avg(i0:i1,j0:j1),start,.true.)
+        if (rst_salt) call ncwrite(ncid,'ssflx_rst',ssflx_rst_avg(i0:i1,j0:j1),start,.true.)
+        if (rst_carbon) then
+          call ncwrite(ncid,'dicflx_rst',dicflx_rst_avg(i0:i1,j0:j1),start,.true.)
+          call ncwrite(ncid,'alkflx_rst',alkflx_rst_avg(i0:i1,j0:j1),start,.true.)
+        endif
+      endif
     else  ! snapshots
       if (wrt_smflx) then
         pio_gtype = '2Duw'
@@ -519,6 +612,15 @@ subroutine wrt_sflux  ![
       if (wrt_swflx) then
         pio_gtype = '2Drw'
         call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),start,.true.)
+      endif
+      if (wrt_rstflx) then
+        pio_gtype = '2Drw'
+        if (rst_heat) call ncwrite(ncid,'shflx_rst',shflx_rst(i0:i1,j0:j1),start,.true.)
+        if (rst_salt) call ncwrite(ncid,'ssflx_rst',ssflx_rst(i0:i1,j0:j1),start,.true.)
+        if (rst_carbon) then
+          call ncwrite(ncid,'dicflx_rst',dicflx_rst(i0:i1,j0:j1),start,.true.)
+          call ncwrite(ncid,'alkflx_rst',alkflx_rst(i0:i1,j0:j1),start,.true.)
+        endif
       endif
     endif
 
@@ -557,7 +659,37 @@ subroutine wrt_sflux  ![
         endif
       endif
       if (wrt_swflx) then
+        call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),start)
+      endif
+      if (wrt_rstflx) then
+        if (rst_heat) call ncwrite(ncid,'shflx_rst',shflx_rst_avg,start)
+        if (rst_salt) call ncwrite(ncid,'ssflx_rst',ssflx_rst_avg,start)
+        if (rst_carbon) then
+          call ncwrite(ncid,'dicflx_rst',dicflx_rst_avg,start)
+          call ncwrite(ncid,'alkflx_rst',alkflx_rst_avg,start)
+        endif
+      endif
+    else  ! snapshots
+      if (wrt_smflx) then
+        call ncwrite(ncid,'sustr',sustr(1:i1,j0:j1),start)
+        call ncwrite(ncid,'svstr',svstr(i0:i1,1:j1),start)
+      endif
+      if (wrt_stflx) then
+        call ncwrite(ncid,'shflx',stflx(i0:i1,j0:j1,1),start)
+        if (salinity) then
+          call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,2),start)
+        endif
+      endif
+      if (wrt_swflx) then
         call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),start)
+      endif
+      if (wrt_rstflx) then
+        if (rst_heat) call ncwrite(ncid,'shflx_rst',shflx_rst(i0:i1,j0:j1),start)
+        if (rst_salt) call ncwrite(ncid,'ssflx_rst',ssflx_rst(i0:i1,j0:j1),start)
+        if (rst_carbon) then
+          call ncwrite(ncid,'dicflx_rst',dicflx_rst(i0:i1,j0:j1),start)
+          call ncwrite(ncid,'alkflx_rst',alkflx_rst(i0:i1,j0:j1),start)
+        endif
       endif
     endif
     ierr=nf90_close(ncid)
