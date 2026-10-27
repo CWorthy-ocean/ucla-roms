@@ -507,7 +507,7 @@ subroutine create_sflx_vars(ncid)  ![
       varid = nccreate(ncid,'ssflx_rst',(/dn_xr,dn_yr,dn_tm/),&
       &(/ds_xr,ds_yr,0/))
       ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'Surface salinity flux from SSS restoring (included in ssflx)')
+      &'Surface salinity flux from SSS restoring (equal to ssflx: SSS restoring replaces the salt flux)')
       ierr = nf90_put_att(ncid,varid,'units','PSU m/s')
     endif
     if (rst_carbon) then
