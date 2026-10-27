@@ -18,7 +18,6 @@ To set up your own configuration, make a new directory with a copy of `$ROMS_ROO
 The example needs input files (grid, initial conditions and forcing) in its `input_data/` directory. Part 1 of the {doc}`nested CDR tutorial <../tutorials/nested_cdr_tutorial/index>` generates them with roms-tools and splits them into one file per MPI rank with `partit`. With the inputs in place, run the model with
 
 ```
-mkdir -p output
 mpirun -n 9 ./roms namelist.nml
 ```
 
@@ -32,10 +31,11 @@ The screen should fill with live output from the model.
 
 
 ## Processing the output
-The namelist's `output_root_name` is `output/iceland_parent`, so the output files are written to `output/`, which must exist before the run (ROMS does not create directories). Each output file is written once per processor, e.g. `iceland_parent_his.<date>.0.nc` to `iceland_parent_his.<date>.8.nc` (`<date>` is the file's first time, as `YYYYMMDDhhmmss`), each holding one ninth of the domain. Stitch them together with the `ncjoin` tool included with ROMS:
+The namelist's `output_root_name` is `output/iceland_parent`, so the output files are written to `output/`. Each output file is written once per processor, e.g. `iceland_parent_his.<date>.0.nc` to `iceland_parent_his.<date>.8.nc` (`<date>` is the file's first time, as `YYYYMMDDhhmmss`), each holding one ninth of the domain. Stitch each set together with the `ncjoin` tool included with ROMS, run from inside `output/` (`ncjoin` misreads file paths that contain other dots, such as `../`):
 
 ```
-ncjoin output/iceland_parent_his.*.nc
+cd output
+ncjoin iceland_parent_his.<date>.?.nc
 ```
 
-after which, for each set of per-processor files, there will be an additional netCDF file such as `output/iceland_parent_his.<date>.nc` containing the whole domain, ready for analysis. Add `-d` to delete the per-processor files once they are joined. A configuration compiled with `PARALLEL_IO` reads whole input files and writes joined output, so it needs neither `partit` nor `ncjoin` (except for particle output, which stays one file per processor).
+after which there will be an additional netCDF file `iceland_parent_his.<date>.nc` containing the whole domain, ready for analysis. Add `-d` to delete the per-processor files once they are joined. A configuration compiled with `PARALLEL_IO` reads whole input files and writes joined output, so it needs neither `partit` nor `ncjoin` (except for particle output, which stays one file per processor).
