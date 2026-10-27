@@ -1,6 +1,6 @@
 ROMS settings
 ===============
-ROMS settings are now predominantly controlled at runtime via a namelist, which is described :doc:`here <runtime_settings>`. An example namelist is provided at ``$ROMS_ROOT/src/namelist.nml``. Certain features are enabled or disabled at compile time via C pre-processor macros, which are set in ``$ROMS_ROOT/src/cppdefs.opt``.
+Most ROMS settings are read at runtime from a namelist file, described :doc:`here <runtime_settings>`; start from the template at ``$ROMS_ROOT/src/namelist.nml``. Features of the model are enabled or disabled at compile time with C pre-processor macros, described :doc:`here <compile_time_settings>`. They are set in a ``cppdefs.opt`` file in your case directory, copied from ``$ROMS_ROOT/src/cppdefs.opt``.
 
 .. toctree::
    :maxdepth: 1

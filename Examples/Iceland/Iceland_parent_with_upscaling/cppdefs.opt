@@ -67,11 +67,13 @@
 #undef PRINT_TILE_RANGES
 
 ! Enable special forcing for marine CO2 removal
-! Usage notes: Required inputs and fields are specified in cdr_frc.opt.
+! Usage notes: Settings in CDR_FRC_SETTINGS (namelist). Parameterized and
+! depth-profile releases work with or without MARBL (e.g. for CDR_LITE
+! tracers); 3D forcing needs MARBL.
 #define CDR_FORCING
 
-! Save advective tendencies at lateral boundaries for use in upscaling applications.
-! Usage notes: Meant to be used in child domains when forcing will be subsequently applied to parent domains. Only saves ALK and DIC perturbations. Requires MARBL and MARBL_DIAGS to be enabled.
+! Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications.
+! Usage notes: Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any CDR_LITE tracers. Requires MARBL and MARBL_DIAGS to be enabled.
 #undef UPSCALING
 
 
@@ -160,7 +162,7 @@
 #undef AKIMA
 
 ! Use the fourth-order Akima scheme for vertical advection
-! Usage notes: Overrides the default piecewise parabolic reconstruction
+! Usage notes: Unused; vertical fluxes come from module advection.
 #undef AKIMA_V
 
 
