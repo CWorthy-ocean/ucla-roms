@@ -110,3 +110,15 @@ Miscellaneous
 - Removed the unused ``param.opt`` template file, which ``PARAM_SETTINGS`` replaced, and a broken link to a CI input-download script that no longer exists. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
 - Each group header in the namelist template now names the ``.F90`` module that declares the group, and the ``akq_bak`` and ``ubind`` comments name the correct cpp keys. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
 - Iceland examples: a CO2 forcing file, child output under ``output/``, a 31-day parent restart, and tidied namelist keys and ``cppdefs.opt`` comments. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
+- The namelist and compile-time settings pages now document every group and key in the namelist template and every switch in the default ``cppdefs.opt``, plus ``PARALLEL_IO``. (`#404 <https://github.com/CWorthy-ocean/ucla-roms/pull/404>`_)
+
+  - The namelist page gave the upscaling group as ``UPSCALING_SETTINGS`` and the CDR key as ``relocate_to_wet_points``; ROMS reads ``UPSCALE_SETTINGS`` and ``cdr_relocate_to_wet_pts``.
+  - The advection entries are corrected: ``AKIMA_V`` is unused, the default vertical scheme is thickness-aware U3, and ``PARABOLIC_SPLINES`` restores the splines.
+  - Each namelist group now says which CPP keys it needs, and the "Previous location/name" column is gone.
+
+- The installation pages describe the current build: compiling and running the Iceland example, the CI container images, building ParallelIO for ``PARALLEL_IO``, and ``make`` options such as ``COMPILER=intel``. (`#404 <https://github.com/CWorthy-ocean/ucla-roms/pull/404>`_)
+
+  - Fixes the ``export $MARBL_ROOT`` typo and explains that a build without MARBL must undefine both ``MARBL`` and ``MARBL_DIAGS``.
+  - Notes that the conda environment files are Linux-only, so Mac users should use a container.
+
+- The top-level, CI and Tools-Roms READMEs now describe files that exist, and the ``Documentation/`` directory is marked as historical upstream material. (`#404 <https://github.com/CWorthy-ocean/ucla-roms/pull/404>`_)
