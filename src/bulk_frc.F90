@@ -248,15 +248,15 @@ contains
     &sustr, svstr, swflx
 #if defined(SFLX_CORR) && defined SALINITY && !defined ANA_SSFLUX
     use surf_flux, only:&
-    &sss, dSSSdt
+    &sss, dSSSdt, ssflx_rst, wrt_rstflx
 #endif
 #if defined(QCORRECTION) && !defined(ANA_SST)
     use surf_flux, only:&
-    &sst, dSSTdt
+    &sst, dSSTdt, shflx_rst, wrt_rstflx
 #endif
 #if defined(MARBL) && defined(CFLX_CORR)
     use surf_flux, only:&
-    &sDIC, sALK, dCdt
+    &sDIC, sALK, dCdt, dicflx_rst, alkflx_rst, wrt_rstflx
 #endif
     use tracers, only: t, itands, t_vname
     use grid, only: rmask, umask, vmask
@@ -866,6 +866,14 @@ contains
 #  ifdef MASKING
         &*rmask(i,j)
 #  endif
+#  ifndef ANA_SST
+        if (wrt_rstflx) then
+          shflx_rst(i,j)= -dSSTdt*(t(i,j,nz,nrhs,itemp) - sst(i,j))
+#   ifdef MASKING
+          shflx_rst(i,j)=shflx_rst(i,j)*rmask(i,j)
+#   endif
+        endif
+#  endif
 # endif /* QCORRECTION */
 
 !
@@ -878,6 +886,9 @@ contains
      &t(i,j,nz,nrhs,isalt)-sss(i,j))&
 #  ifdef MASKING
      &*rmask(i,j)
+#  endif
+#  ifndef ANA_SSFLUX
+     if (wrt_rstflx) ssflx_rst(i,j)=stflx(i,j,isalt)
 #  endif
 # endif
 # endif
@@ -906,6 +917,7 @@ contains
 #  ifdef MASKING
        &*rmask(i,j)
 #  endif
+       if (wrt_rstflx) dicflx_rst(i,j)=stflx(i,j,itrc2writ)
 
 !!!!!!!      ALK
        do itrc = iTandS+1,NT
@@ -925,6 +937,7 @@ contains
 #  ifdef MASKING
           &*rmask(i,j)
 #  endif
+          if (wrt_rstflx) alkflx_rst(i,j)=stflx(i,j,itrc2writ)
 
 # endif
 
@@ -935,6 +948,9 @@ contains
 #ifdef SEA_ICE_NOFLUX
         if( t(i,j,nz,nrhs,itemp) .le. -1.8_8 ) then
           stflx(i,j,itemp)=0._8
+#   if defined(QCORRECTION) && !defined(ANA_SST)
+          if (wrt_rstflx) shflx_rst(i,j)=0._8  ! the correction actually applied
+#   endif
 #   if defined LMD_KPP
           srflx(i,j)=0._8
 #    endif

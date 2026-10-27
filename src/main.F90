@@ -438,7 +438,7 @@ contains
 
     use sponge_tune, only: adjust_orlanski, ub_tune
     use particles, only: do_particles, floats
-    use surf_flux, only: wrt_sflux, wrt_smflx, wrt_stflx
+    use surf_flux, only: wrt_sflux, do_sflx
     use random_output, only: wrt_random, do_random
 #ifdef MARBL
     use marbl_driver, only: marbl_timestep_ratio, marbldrv_impose_constant_fe_all
@@ -706,7 +706,7 @@ contains
 
     if (floats)     call do_particles
 
-    if (wrt_smflx.or.wrt_stflx) call wrt_sflux
+    if (do_sflx) call wrt_sflux
 
 #ifdef DIAGNOSTICS
     if (diag_uv.or.diag_trc) call do_diagnostics
