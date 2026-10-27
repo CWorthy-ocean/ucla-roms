@@ -69,6 +69,7 @@ inifile = "input_data/iceland_parent_rst.20120201000000.nc" ! Initial conditions
 frcfiles = 'input_data/iceland_parent_tides.nc',
 'input_data/iceland_parent_surface_bulk_forcing.nc',
 'input_data/iceland_parent_bgc_surface_forcing.nc',
+'input_data/iceland_parent_co2_surface_forcing.nc',
 'input_data/iceland_parent_phys_boundary_forcing.nc',
 'input_data/iceland_parent_bgc_boundary_forcing.nc',
 'input_data/iceland_parent_river_forcing.nc'
@@ -218,7 +219,7 @@ output_period_sponge = 86400  ! Output frequency of sponge tuning file
 !---------------------
 ! Previously set in `calc_pflx.opt`
 !---------------------
-calc_pflx = .true.     ! Enable baroclinic pressure flux calculation
+calc_pflx = .false.    ! Enable baroclinic pressure flux calculation
 pflx_timescale = 86400      ! timescale for filtering pressure fluxes (s)
 /
 
@@ -463,14 +464,13 @@ diag_uv = .false.          ! Output momentum diagnostics
 diag_trc = .false.         ! Output tracer diagnostics
 output_period_diag = 3600       ! Output frequency (s)
 nrpf_diag = 4                   ! Number of records per output file
-code_check_mode = .false.  ! diagnostics in stdout formatted for code testing
 /
 
 &STDOUT_DIAG_SETTINGS
 !-----------------------------
 ! Previously set in `diag.opt`
 !-----------------------------
-code_check_mode = .false.
+code_check_mode = .false.   ! diagnostics in stdout formatted for code testing
 /
 
 

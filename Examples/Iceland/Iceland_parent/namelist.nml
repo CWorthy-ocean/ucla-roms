@@ -16,7 +16,7 @@ title = "Iceland_parent"        ! title used in output metadata
 !================================================================================
 &TIME_STEPPING							       !scalars.F
 !-------------
-ntimes = 5586             ! Number of time steps in this run
+ntimes = 5712             ! Number of time steps in this run
 dt = 900                  ! Time step (seconds)
 ndtfast = 30              ! Number of fast time-steps per slow timestep
 ninfo = 1                 ! Number of steps between runtime diagnostics (STDOUT)
@@ -69,6 +69,7 @@ inifile = "input_data/iceland_parent_initial_conditions.nc" ! Initial conditions
 frcfiles = "input_data/iceland_parent_tides.nc",
 "input_data/iceland_parent_surface_bulk_forcing.nc",
 "input_data/iceland_parent_bgc_surface_forcing.nc",
+"input_data/iceland_parent_co2_surface_forcing.nc",
 "input_data/iceland_parent_phys_boundary_forcing.nc",
 "input_data/iceland_parent_bgc_boundary_forcing.nc",
 "input_data/iceland_parent_river_forcing.nc"
@@ -159,8 +160,8 @@ wrt_avg_Hbbl=.true.         ! Include `hbbl`
 ! RESTART FILES
 !
 wrt_file_rst = .true.       ! Write restart files (containing full model state)
-monthly_restarts = .true.  ! Write restart files at start of calendar month
-output_period_rst = 0    ! Write restart files at regular frequency (s)
+monthly_restarts = .false. ! Write restart files at start of calendar month
+output_period_rst = 2678400 ! Write restart files at regular frequency (s)
 /
 
 &TS_OUTPUT_SETTINGS
@@ -208,7 +209,7 @@ hc_chd = 300.0                    ! `hc` of nested domain
 !--------------------
 ub_tune = .false.      ! Tune boundary "sponge" to match parent bry conditions
 sponge_timescale = 86400    ! Filtering time scale (s)
-wrt_sponge = .true.    ! Write out sponge tuning values
+wrt_sponge = .false.   ! Write out sponge tuning values
 sponge_avg = .true.       ! Sponge tuning output averaged (T) or instantaneous (F)
 nrpf_sponge = 7               ! Number of records per sponge file
 output_period_sponge = 86400  ! Output frequency of sponge tuning file
@@ -218,7 +219,7 @@ output_period_sponge = 86400  ! Output frequency of sponge tuning file
 !---------------------
 ! Previously set in `calc_pflx.opt`
 !---------------------
-calc_pflx = .true.     ! Enable baroclinic pressure flux calculation
+calc_pflx = .false.    ! Enable baroclinic pressure flux calculation
 pflx_timescale = 86400      ! timescale for filtering pressure fluxes (s)
 /
 
