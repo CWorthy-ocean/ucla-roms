@@ -34,6 +34,12 @@ New Features
 
 - ``_uscl`` files carry ``avg_begin_time`` and ``avg_end_time`` (seconds, same units as ``ocean_time``), and a run whose length is not a multiple of ``output_period_uscl`` ends with a partial window instead of losing it. (`#398 <https://github.com/CWorthy-ocean/ucla-roms/pull/398>`_)
 - ``marbl_config_file = ""`` runs MARBL with its default settings. (`#402 <https://github.com/CWorthy-ocean/ucla-roms/pull/402>`_)
+- ``wrt_rstflx = .true.`` writes the restoring fluxes of the compiled-in terms to the surface-flux file, in snapshot and averaged output. (`#407 <https://github.com/CWorthy-ocean/ucla-roms/pull/407>`_)
+
+  - ``shflx_rst`` with QCORRECTION, ``ssflx_rst`` with SFLX_CORR, and ``dicflx_rst`` and ``alkflx_rst`` with CFLX_CORR and MARBL (BULK_FRC runs only).
+  - Each field is the restoring flux ROMS applies: the heat term is added to ``shflx``, while the salinity, DIC and ALK restoring is the whole surface flux of its tracer (``ssflx_rst`` equals ``ssflx``); the DIC and ALK fluxes are applied to both the tracer and its ``_ALT_CO2`` twin.
+  - ROMS stops at startup with a message saying what to change if ``wrt_rstflx = .true.`` but no restoring term is compiled in.
+
 
 Bug Fixes
 ~~~~~~~~~
@@ -72,6 +78,9 @@ Bug Fixes
 - The tutorial notebooks run again with the documented environment (roms-tools 5.1.1), and their saved outputs and figures are regenerated. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
 - The nested tutorial's file paths, CDR output names (``_cdr``) and namelist tables now match the Iceland example cases. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
 - In the from-scratch template, switching biogeochemistry off now builds without MARBL, ``RESTART_FREQUENCY`` now writes restarts, and the physics output includes temperature and salinity. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
+- Runs with QCORRECTION crashed at the first forcing read, because the restoring SST array was never allocated. (`#407 <https://github.com/CWorthy-ocean/ucla-roms/pull/407>`_)
+- Without PARALLEL_IO, surface-flux snapshots (``sflx_avg = .false.``) were not written, and averaged output wrote the instantaneous ``swflx``. (`#407 <https://github.com/CWorthy-ocean/ucla-roms/pull/407>`_)
+- ``wrt_swflx`` or ``wrt_rstflx`` on their own wrote no surface-flux file, and skipped the check that the output period fits the restart period. (`#407 <https://github.com/CWorthy-ocean/ucla-roms/pull/407>`_)
 
 
 Improvements
@@ -122,3 +131,4 @@ Miscellaneous
   - Notes that the conda environment files are Linux-only, so Mac users should use a container.
 
 - The top-level, CI and Tools-Roms READMEs now describe files that exist, and the ``Documentation/`` directory is marked as historical upstream material. (`#404 <https://github.com/CWorthy-ocean/ucla-roms/pull/404>`_)
+- The ``SURF_FLX_OUTPUT_SETTINGS`` table in the runtime-settings documentation lists ``wrt_rstflx``. (`#407 <https://github.com/CWorthy-ocean/ucla-roms/pull/407>`_)
