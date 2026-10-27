@@ -28,7 +28,7 @@ contains
     &visc2_p, diff2
     use scalars, only: nt&
 #ifdef SPONGE
-    &, v_sponge
+    &, v_sponge, v_sponge_trc
 #endif
 
     implicit none
@@ -109,7 +109,7 @@ contains
     do itrc=1,NT           ! diffusivity for the tracers
       do j=jstrR,jendR
         do i=istrR,iendR
-          diff2(i,j,itrc)=diff2(i,j,itrc)+v_sponge*wrk(i,j)
+          diff2(i,j,itrc)=diff2(i,j,itrc)+v_sponge_trc*wrk(i,j)
         enddo
       enddo
     enddo

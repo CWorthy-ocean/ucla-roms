@@ -2256,7 +2256,7 @@ contains
     &ubind,&
 #endif
 #ifdef SPONGE
-    &v_sponge,&
+    &v_sponge, v_sponge_trc,&
 #endif
     &dtfast, gamma2, ndtfast, ntimes, rdrg, rdrg2,&
     &rho0, tnu2, visc2, zob
@@ -2413,6 +2413,8 @@ contains
 #ifdef SPONGE
     ierr=nf90_put_att(ncid, nf90_global, 'v_sponge', v_sponge)     ! Maximum viscosity in sponge layer
     ierr=nf90_put_att (ncid, nf90_global, 'v_sponge_units','m^2/s')
+    ierr=nf90_put_att(ncid, nf90_global, 'v_sponge_trc', v_sponge_trc) ! Maximum tracer diffusivity in sponge layer
+    ierr=nf90_put_att (ncid, nf90_global, 'v_sponge_trc_units','m^2/s')
 #endif
 
     ierr=nf90_put_att(ncid,nf90_global, 'rdrg', rdrg)              ! Bottom drag parameters.

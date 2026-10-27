@@ -148,30 +148,66 @@ def _interior_inventory(run_dir, input_dir):
     return times, inventory
 
 
-def test_export_closes_perturbation_budget(tmp_path, uscl_conf, input_dir):
+@pytest.fixture(scope="module")
+def budget_run(tmp_path_factory, uscl_conf, input_dir):
+    """Run the perturbed-ALK case once per ``v_sponge_trc``; return (times, inventory, export).
+
+    ``v_sponge_trc = -1`` is the template's value: the tracer sponge takes
+    ``v_sponge``, as a namelist without the key does. The runs are cached for
+    the module so the budget and comparison tests share them.
+    """
+    cache = {}
+
+    def run(v_sponge_trc):
+        if v_sponge_trc not in cache:
+            run_dir = tmp_path_factory.mktemp(f"uscl_run_trc_{v_sponge_trc}")
+            nml = _uscl_nml(input_dir)
+            nml["V_SPONGE_SETTINGS"]["v_sponge_trc"] = v_sponge_trc
+            inifile = _perturbed_initial_conditions(
+                input_dir, run_dir / "ini_alk_perturbed.nc",
+                nml["PARAM_SETTINGS"]["NP_XI"], nml["PARAM_SETTINGS"]["NP_ETA"],
+            )
+            nml["INITIAL_CONDITIONS"]["inifile"] = str(inifile)
+            uscl_conf.run(nml, cwd=run_dir)
+
+            times, inventory = _interior_inventory(run_dir, input_dir)
+            # one record at the end of every step
+            assert len(times) == nml["TIME_STEPPING"]["ntimes"]
+            np.testing.assert_allclose(np.diff(times), DT)
+            export = _uscl_export(run_dir, times[0], times[-1])
+            cache[v_sponge_trc] = (times, inventory, export)
+        return cache[v_sponge_trc]
+
+    return run
+
+
+@pytest.mark.parametrize("v_sponge_trc", [-1.0, 0.0], ids=["trc_same_as_v_sponge", "trc_off"])
+def test_export_closes_perturbation_budget(budget_run, v_sponge_trc):
     """Interior ALK-perturbation inventory changes by minus the ``_uscl`` export.
 
-    With SPONGE the boundary-row diffusivity is v_sponge, so much of what
-    leaves goes by mixing; an export of the advective flux alone misses it.
-    Nothing else in the run separates ALK from ALK_ALT_CO2 (no CDR source,
-    no rivers, equal boundary values), so the budget closes to round-off.
+    With SPONGE the boundary-row diffusivity is v_sponge (``v_sponge_trc``
+    when set), so much of what leaves goes by mixing; an export of the
+    advective flux alone misses it. Nothing else in the run separates ALK
+    from ALK_ALT_CO2 (no CDR source, no rivers, equal boundary values), so
+    the budget closes to round-off, with the tracer sponge on or off.
     """
-    nml = _uscl_nml(input_dir)
-    inifile = _perturbed_initial_conditions(
-        input_dir, tmp_path / "ini_alk_perturbed.nc",
-        nml["PARAM_SETTINGS"]["NP_XI"], nml["PARAM_SETTINGS"]["NP_ETA"],
-    )
-    nml["INITIAL_CONDITIONS"]["inifile"] = str(inifile)
-    uscl_conf.run(nml, cwd=tmp_path)
-
-    times, inventory = _interior_inventory(tmp_path, input_dir)
-    # one record at the end of every step
-    assert len(times) == nml["TIME_STEPPING"]["ntimes"]
-    np.testing.assert_allclose(np.diff(times), DT)
-
-    export = _uscl_export(tmp_path, times[0], times[-1])
+    _, inventory, export = budget_run(v_sponge_trc)
     change = inventory[-1] - inventory[0]
-    assert change < 0  # the perturbation leaves through the open boundaries
+    if v_sponge_trc < 0:
+        assert change < 0  # the sponge's mixing carries the perturbation out
     # Closes to round-off (about 1e-13 relative); the advective flux alone
     # leaves a gap of tens of percent.
     np.testing.assert_allclose(change, -export, rtol=1e-8)
+
+
+def test_tracer_sponge_strength_changes_export(budget_run):
+    """``v_sponge_trc = 0`` removes the sponge's mixing flux from the export.
+
+    With tnu2 = 0 the only boundary mixing is the sponge's, so with the tracer
+    sponge off the perturbation crosses the boundaries by advection alone. In
+    this short run that is a small net inflow, against a net outflow with the
+    sponge on, so the export changes by far more than round-off.
+    """
+    _, _, export_same = budget_run(-1.0)
+    _, _, export_off = budget_run(0.0)
+    assert abs(export_same - export_off) > 0.1 * abs(export_same)
