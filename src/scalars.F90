@@ -89,7 +89,7 @@ module scalars
 # endif
 #endif
 #ifdef SPONGE
-  real(kind=8) v_sponge
+  real(kind=8) v_sponge, v_sponge_trc
 #endif
 
 # if defined OBC_M2ORLANSKI && ( defined M2_FRC_BRY \
@@ -164,7 +164,7 @@ module scalars
   namelist /UBIND_SETTINGS/ ubind
 #endif
 #ifdef SPONGE
-  namelist /V_SPONGE_SETTINGS/ v_sponge
+  namelist /V_SPONGE_SETTINGS/ v_sponge, v_sponge_trc
 #endif
   namelist /RHO0_SETTINGS/ rho0
   public read_nml_scalars
@@ -361,6 +361,7 @@ contains
 !===============================================================================
 !v_sponge
 #ifdef SPONGE
+    v_sponge_trc = -1._8   ! negative (or absent): tracers get the same sponge as momentum
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=V_SPONGE_SETTINGS, iostat=ios, iomsg=msg)
 
@@ -375,6 +376,11 @@ contains
     mpi_master_only write(*,'(3x,A,F10.2,2x,A)')&
     &      'v_sponge =', v_sponge,&
     &      'maximum viscosity in sponge layer [m^2/s]'
+
+    if (v_sponge_trc < 0._8) v_sponge_trc = v_sponge
+    mpi_master_only write(*,'(3x,A,F10.2,2x,A)')&
+    &      'v_sponge_trc =', v_sponge_trc,&
+    &      'maximum tracer diffusivity in sponge layer [m^2/s]'
 
 #endif
 !===============================================================================

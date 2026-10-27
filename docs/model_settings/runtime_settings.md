@@ -485,7 +485,8 @@ Read only with `SPONGE`.
 
 | Setting | Description |
 |--------|-------------|
-| `v_sponge` | Maximum viscosity in sponge layer (m2/s) |
+| `v_sponge` | Maximum viscosity in sponge layer (m2/s); also the tracer diffusivity unless `v_sponge_trc` is set |
+| `v_sponge_trc` | Maximum tracer diffusivity in sponge layer (m2/s). `0` gives a sponge on currents only; negative (the template's `-1.0`) or absent means the same as `v_sponge` |
 
 ### `SSS_CORRECTION`
 (read by module `surf_flux.F90`)

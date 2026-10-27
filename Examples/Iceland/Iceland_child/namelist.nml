@@ -429,6 +429,7 @@ ubind = 0.1 ! Open boundary binding velocity (m/s)
 !Requires SPONGE cppkey
 !-----------------
 v_sponge = 1.0 ! Maximum viscosity in sponge layer (m2/s)
+v_sponge_trc = -1.0 ! Maximum tracer diffusivity in sponge layer (m2/s); 0 for a sponge on currents only, negative for the same as v_sponge
 /
 
 !================================================================================

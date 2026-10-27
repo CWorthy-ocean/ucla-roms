@@ -92,7 +92,7 @@
 #define SPHERICAL
 
 ! Increase viscosity and diffusivity for momentum and tracers near the lateral boundaries
-! Usage notes: The magnitude is set under the header "v_sponge" in the runtime .in file
+! Usage notes: The magnitude is set by v_sponge (and v_sponge_trc for tracers) in the V_SPONGE_SETTINGS namelist group
 #define SPONGE
 
 ! Choose MPI tiling at runtime from the land mask (skip fully-masked tiles).
