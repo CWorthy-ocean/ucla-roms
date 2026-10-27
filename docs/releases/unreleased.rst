@@ -40,6 +40,8 @@ New Features
   - Each field is the restoring flux ROMS applies: the heat term is added to ``shflx``, while the salinity, DIC and ALK restoring is the whole surface flux of its tracer (``ssflx_rst`` equals ``ssflx``); the DIC and ALK fluxes are applied to both the tracer and its ``_ALT_CO2`` twin.
   - ROMS stops at startup with a message saying what to change if ``wrt_rstflx = .true.`` but no restoring term is compiled in.
 
+- New namelist key ``v_sponge_trc`` in ``V_SPONGE_SETTINGS`` (needs the ``SPONGE`` cpp key): the maximum tracer diffusivity added in the sponge band, in m2/s. A negative value (the template's ``-1.0``) or no value means the same as ``v_sponge``, as before. ``0`` applies the sponge to currents only. (`#408 <https://github.com/CWorthy-ocean/ucla-roms/pull/408>`_)
+
 
 Bug Fixes
 ~~~~~~~~~
@@ -98,6 +100,7 @@ Improvements
 - ``wrt_rstflx = .true.`` now stops ROMS at startup with a clear message; the restoring-flux output it asked for was never written. The key is still accepted, so existing namelists keep working. (`#405 <https://github.com/CWorthy-ocean/ucla-roms/pull/405>`_)
 - The tutorials stream ERA5 surface forcing from the cloud, so no ERA5 download is needed. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
 - The nested tutorial shows the ``copernicusmarine`` command that downloads its GLORYS subset. (`#406 <https://github.com/CWorthy-ocean/ucla-roms/pull/406>`_)
+- ``v_sponge_trc`` is printed at startup and written as a global attribute next to ``v_sponge``. (`#408 <https://github.com/CWorthy-ocean/ucla-roms/pull/408>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -132,3 +135,4 @@ Miscellaneous
 
 - The top-level, CI and Tools-Roms READMEs now describe files that exist, and the ``Documentation/`` directory is marked as historical upstream material. (`#404 <https://github.com/CWorthy-ocean/ucla-roms/pull/404>`_)
 - The ``SURF_FLX_OUTPUT_SETTINGS`` table in the runtime-settings documentation lists ``wrt_rstflx``. (`#407 <https://github.com/CWorthy-ocean/ucla-roms/pull/407>`_)
+- The runtime and compile-time settings docs describe ``v_sponge_trc``. The SPONGE comment in ``src/cppdefs.opt`` and the Iceland copies no longer points to the retired ``.in`` file. (`#408 <https://github.com/CWorthy-ocean/ucla-roms/pull/408>`_)
