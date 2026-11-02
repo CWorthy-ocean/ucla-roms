@@ -120,18 +120,25 @@ else       !--> standard code applies for T,S
   enddo
 
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
+# ifndef EW_PERIODIC
+!     The OBC overwrites the boundary row every step, so the higher-order
+!     stencil above borrows anomaly from it that is never paid back: a
+!     spurious source in the child and an inward _uscl export
+!     (claude-docs#127, #130).  Make the open-boundary face flux pure
+!     upwind in both directions.
   if (inode==0) then ! (.not. west_exchng)
     do j=jstr,jend
-      FX(istr,j) = FX(istr,j) + 0.5_8*(t(istr-1,j,k,nrhs,itrc)-t(istr,j,k,nrhs,itrc))&
-      &* max(FlxU(istr,j,k),0.0_8)
+      FX(istr,j) = t(istr-1,j,k,nrhs,itrc)*max(FlxU(istr,j,k),0._8)&
+      &+ t(istr,j,k,nrhs,itrc)*min(FlxU(istr,j,k),0._8)
     enddo
   endif
   if (inode==npx-1) then ! (.not. east_exchng)
     do j=jstr,jend
-      FX(iend+1,j) = FX(iend+1,j) + 0.5_8*(t(iend+1,j,k,nrhs,itrc)-t(iend,j,k,nrhs,itrc))&
-      &* min(FlxU(iend+1,j,k),0.0_8)
+      FX(iend+1,j) = t(iend,j,k,nrhs,itrc)*max(FlxU(iend+1,j,k),0._8)&
+      &+ t(iend+1,j,k,nrhs,itrc)*min(FlxU(iend+1,j,k),0._8)
     enddo
   endif
+# endif
 #endif
 
 #ifndef NS_PERIODIC
@@ -205,18 +212,25 @@ else       !--> standard code applies for T,S
   enddo             !--> discard curv,grad, keep FE
 
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
+# ifndef NS_PERIODIC
+!     The OBC overwrites the boundary row every step, so the higher-order
+!     stencil above borrows anomaly from it that is never paid back: a
+!     spurious source in the child and an inward _uscl export
+!     (claude-docs#127, #130).  Make the open-boundary face flux pure
+!     upwind in both directions.
   if (jnode==0) then ! (.not. south_west)
     do i=istr,iend
-      FE(i,jstr) = FE(i,jstr) + 0.5_8*(t(i,jstr-1,k,nrhs,itrc)-t(i,jstr,k,nrhs,itrc))&
-      &* max(FlxV(i,jstr,k),0.0_8)
+      FE(i,jstr) = t(i,jstr-1,k,nrhs,itrc)*max(FlxV(i,jstr,k),0._8)&
+      &+ t(i,jstr,k,nrhs,itrc)*min(FlxV(i,jstr,k),0._8)
     enddo
   endif
   if (jnode==npy-1) then ! (.not. north_exchng)
     do i=istr,iend
-      FE(i,jend+1) = FE(i,jend+1) + 0.5_8*(t(i,jend+1,k,nrhs,itrc)-t(i,jend,k,nrhs,itrc))&
-      &* min(FlxV(i,jend+1,k),0.0_8)
+      FE(i,jend+1) = t(i,jend,k,nrhs,itrc)*max(FlxV(i,jend+1,k),0._8)&
+      &+ t(i,jend+1,k,nrhs,itrc)*min(FlxV(i,jend+1,k),0._8)
     enddo
   endif
+# endif
 #endif
 
 #ifdef BIO_1ST_USTREAM_TEST

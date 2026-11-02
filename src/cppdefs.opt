@@ -73,7 +73,7 @@
 #undef CDR_FORCING
 
 ! Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications.
-! Usage notes: Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any CDR_LITE tracers. Requires MARBL and MARBL_DIAGS to be enabled.
+! Usage notes: Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any CDR_LITE tracers. Requires MARBL and MARBL_DIAGS to be enabled. UPSCALING also makes the advective tracer flux across open-boundary faces first-order upwind, so enabling it changes the child's numerics at its open boundaries.
 #undef UPSCALING
 
 

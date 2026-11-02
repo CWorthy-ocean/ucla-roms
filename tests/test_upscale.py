@@ -13,6 +13,11 @@ run start, with no start-up record, and ``ocean_time`` is the window end.
 records closed by a zero-flux record, and infers the windows of files without
 bounds (ucla-roms <= 0.12.0). Everything is checked directly, so the module
 needs no reference hashes.
+
+A third run releases ALK one column further in (xi = 38), where the flow also
+leaves east, and checks that the export across the eastern face never goes
+inward: the face flux at an open boundary is first-order upwind, since the
+higher-order stencil would borrow from the boundary row the OBC overwrites.
 """
 import importlib.util
 import subprocess
@@ -65,27 +70,41 @@ def uscl_conf(tmp_path_factory) -> ROMSConfiguration:
     return conf
 
 
-@pytest.fixture(scope="module")
-def boundary_release(tmp_path_factory, input_dir):
-    """The suite's parameterized ALK release, moved beside the eastern boundary.
+def _release_at(tmp_path_factory, input_dir, xi, name):
+    """The suite's parameterized ALK release, moved to cell (eta, xi) = (10, ``xi``).
 
-    Cell (eta, xi) = (10, 39) is in the last interior column, where the flow
-    leaves the domain, and the flux is raised from 1e-3 to 1e6 mmol/s: within
-    the run the release crosses the boundary face well above roundoff, so the
-    ALK additionality is a real signal.
+    The flux is raised from 1e-3 to 1e6 mmol/s: within the run the release
+    crosses the boundary face well above roundoff, so the ALK additionality is
+    a real signal.
     """
     with xr.open_dataset(input_dir / "example_input_grid.nc") as grid:
-        assert grid["mask_rho"].values[10, 39] == 1
-        lon = float(grid["lon_rho"][10, 39]) - 360
-        lat = float(grid["lat_rho"][10, 39])
+        assert grid["mask_rho"].values[10, xi] == 1
+        lon = float(grid["lon_rho"][10, xi]) - 360
+        lat = float(grid["lat_rho"][10, xi])
     with xr.open_dataset(input_dir / "cdr_forcing_parm.nc", decode_timedelta=False) as ds:
         ds = ds.load()
     ds["cdr_trcflx"] = 1e9 * ds["cdr_trcflx"]
     ds["cdr_lon"][:] = lon
     ds["cdr_lat"][:] = lat
-    path = tmp_path_factory.mktemp("uscl_release") / "cdr_forcing_parm_east.nc"
+    path = tmp_path_factory.mktemp("uscl_release") / name
     ds.to_netcdf(path)
     return path
+
+
+@pytest.fixture(scope="module")
+def boundary_release(tmp_path_factory, input_dir):
+    """The release beside the eastern boundary.
+
+    Cell (eta, xi) = (10, 39) is in the last interior column, where the flow
+    leaves the domain.
+    """
+    return _release_at(tmp_path_factory, input_dir, 39, "cdr_forcing_parm_east.nc")
+
+
+@pytest.fixture(scope="module")
+def inner_release(tmp_path_factory, input_dir):
+    """The release one column further in, at (eta, xi) = (10, 38)."""
+    return _release_at(tmp_path_factory, input_dir, 38, "cdr_forcing_parm_east_inner.nc")
 
 
 def _run_upscaling(conf, input_dir, release, run_dir, period, nrpf) -> dict:
@@ -127,6 +146,15 @@ def partial_window(tmp_path_factory, uscl_conf, input_dir, boundary_release) -> 
     run_dir = tmp_path_factory.mktemp("uscl_partial")
     return _run_upscaling(
         uscl_conf, input_dir, boundary_release, run_dir, period=600, nrpf=1
+    )
+
+
+@pytest.fixture(scope="module")
+def inner_windows(tmp_path_factory, uscl_conf, input_dir, inner_release) -> dict:
+    """200 s windows of the run with the release in the second-to-last column."""
+    run_dir = tmp_path_factory.mktemp("uscl_inner")
+    return _run_upscaling(
+        uscl_conf, input_dir, inner_release, run_dir, period=200, nrpf=10
     )
 
 
@@ -191,6 +219,25 @@ class TestUsclOutput:
         assert partial.keys() == last_whole.keys()
         for name, values in partial.items():
             np.testing.assert_array_equal(values, last_whole[name], err_msg=name)
+
+
+def test_outflow_face_never_exports_inward(inner_windows):
+    """An anomaly one column inside the east boundary never exports inward.
+
+    The OBC overwrites the boundary row every step, so a higher-order
+    stencil at the outflow face would borrow from it flux that is never paid
+    back. With anomaly a in iend-1, b in iend and c in the boundary row, the
+    old UPSTREAM_TS face flux was (5b + 2c - a) F / 6, negative while b/a is
+    below 0.2: the release spills only a few percent into iend, so every
+    window exported inward. The first-order upwind face flux is t(iend) F,
+    never negative here. Summed over the face, since the j-direction stencil
+    can undershoot slightly in column 39; the run total > 0 keeps a zero export
+    (an inflow face at the release depth) from passing.
+    """
+    ds = _open(inner_windows["files"]["roms_uscl.20100101000000"])
+    per_window = ds["ALK_add_east"].values.reshape(ds.sizes["time"], -1).sum(axis=1)
+    assert (per_window >= 0).all(), per_window
+    assert (per_window * (ds["avg_end_time"] - ds["avg_begin_time"]).values).sum() > 0
 
 
 def _convert(path, output):

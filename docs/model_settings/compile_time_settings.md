@@ -27,7 +27,7 @@ These switches control fundamental aspects of the model setup, including the equ
 | `NHMGDIAG` | Write momentum equation diagnostics for non-hydrostatic mode | disabled | |
 | `PRINT_TILE_RANGES` | Make each MPI rank print the size of its local subdomain | disabled | |
 | `CDR_FORCING` | Enable special forcing for marine CO2 removal | disabled | Settings are in the `CDR_FRC_SETTINGS` namelist group |
-| `UPSCALING` | Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications | disabled | Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any `CDR_LITE` tracers. Requires `MARBL` and `MARBL_DIAGS` to be enabled. Settings are in the `UPSCALE_SETTINGS` namelist group |
+| `UPSCALING` | Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications | disabled | Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any `CDR_LITE` tracers. Requires `MARBL` and `MARBL_DIAGS` to be enabled. `UPSCALING` also makes the advective tracer flux across open-boundary faces first-order upwind, so enabling it changes the child's numerics at its open boundaries. Settings are in the `UPSCALE_SETTINGS` namelist group |
 
 ### `GRID OPTIONS`
 
