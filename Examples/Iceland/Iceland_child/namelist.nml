@@ -167,10 +167,12 @@ output_period_rst = 2000    ! Write restart files at regular frequency (s)
 !------------------------------
 ! Previously set in tracers.opt
 !------------------------------
-wrt_temp = .false.          ! Include temperature in output fields
-wrt_salt = .false.          ! Include salinity in output fields
-wrt_temp_dia = .false.      ! Include temperature diagnostics in output fields
-wrt_salt_dia = .false.      ! Include salinity diagnostics in output fields
+wrt_temp = .false.          ! Include `temp` in history files
+wrt_salt = .false.          ! Include `salt` in history files
+wrt_avg_temp = .false.      ! Include `temp` in averages files
+wrt_avg_salt = .false.      ! Include `salt` in averages files
+wrt_temp_dia = .false.      ! Include temperature terms in the diagnostics file (needs diag_trc)
+wrt_salt_dia = .false.      ! Include salinity terms in the diagnostics file (needs diag_trc)
 /
 
 &FRC_OUTPUT_SETTINGS                                                !frc_output.F
