@@ -9,7 +9,8 @@ module diagnostics
   use netcdf, only:&
   &nf90_double, nf90_global, nf90_nofill,&
   &nf90_put_att, nf90_set_fill, nf90_noerr,&
-  &nf90_write, nf90_inq_varid, nf90_close, nf90_open
+  &nf90_write, nf90_inq_varid, nf90_close, nf90_open,&
+  &nf90_redef, nf90_enddef
   use tracers, only: wrt_t_dia, t_vname, t
   use ocean_vars, only: flxu, flxv, u, v, z_w, hz, wi, we
   use scalars, only: nt
@@ -989,9 +990,36 @@ contains
     real(kind=8), dimension(:,:,:,:),intent(inout) :: ud,vd
 
     !local
+#ifdef PARALLEL_IO
+    character(len=4),dimension(nmd),parameter :: term =&
+    &(/'_pgr','_cor','_adv','_dis','_hmx','_vmx','_cpl'/)
+    real(kind=8),dimension(:,:,:),allocatable :: uw, vw
+    integer(kind=4) :: it
+#else
     integer(kind=4),   dimension(4) :: start    ! start vector for writing
+#endif
 
     if (inode.eq.0) ud(1,:,:,:) = 0
+    if (jnode.eq.0) vd(:,1,:,:) = 0
+
+#ifdef PARALLEL_IO
+    ! The PIO write decompositions include the physical-boundary points of
+    ! boundary tiles, u(1:i1,j0:j1,:) and v(i0:i1,1:j1,:) as in wrt_his, which
+    ! ud and vd (1:nx,1:ny) do not hold: write copies padded with zeros.
+    allocate(uw(1:i1,j0:j1,nz), vw(i0:i1,1:j1,nz))
+    uw = 0
+    vw = 0
+    pio_gtype = '3Duw'
+    do it=1,nmd
+      uw(1:nx,1:ny,:) = ud(:,:,:,it)
+      call ncwrite(ncid,'u'//term(it),uw,(/1,1,1,record/),.true.)
+    enddo
+    pio_gtype = '3Dvw'
+    do it=1,nmd
+      vw(1:nx,1:ny,:) = vd(:,:,:,it)
+      call ncwrite(ncid,'v'//term(it),vw,(/1,1,1,record/),.true.)
+    enddo
+#else
     start = (/1, bfy, 1, record/)
 
     pio_gtype = '3Duw'
@@ -1003,7 +1031,6 @@ contains
     call ncwrite(ncid,'u_vmx',ud(:,:,:,6),start,.true.)
     call ncwrite(ncid,'u_cpl',ud(:,:,:,7),start,.true.)
 
-    if (jnode.eq.0) vd(:,1,:,:) = 0
     start = (/bfx, 1, 1, record/)
 
     pio_gtype = '3Dvw'
@@ -1014,6 +1041,7 @@ contains
     call ncwrite(ncid,'v_hmx',vd(:,:,:,5),start,.true.)
     call ncwrite(ncid,'v_vmx',vd(:,:,:,6),start,.true.)
     call ncwrite(ncid,'v_cpl',vd(:,:,:,7),start,.true.)
+#endif
 
   end subroutine wrt_diag_uv  !]
 ! ----------------------------------------------------------------------
@@ -1061,6 +1089,7 @@ contains
       call create_file('_dia',fname, nonode=.true.)
 
       ierr=nf90_open(fname,nf90_write,ncid)
+      ierr=nf90_redef(ncid)
 
       ! Diagnostics options
       ierr=nf90_put_att (ncid, nf90_global, 'diagnostic_options', adjustl(diagnostic_opt))
@@ -1070,6 +1099,7 @@ contains
 
       call create_diagvars(ncid)
 
+      ierr=nf90_enddef(ncid)
       ierr = nf90_close(ncid)
     endif
     call MPI_Bcast(fname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
@@ -1078,6 +1108,7 @@ contains
     call create_file('_dia',fname)
 
     ierr=nf90_open(fname,nf90_write,ncid)
+    ierr=nf90_redef(ncid)
 
     ! Diagnostics options
     ierr=nf90_put_att (ncid, nf90_global, 'diagnostic_options', adjustl(diagnostic_opt))
@@ -1087,6 +1118,7 @@ contains
 
     call create_diagvars(ncid)
 
+    ierr=nf90_enddef(ncid)
     ierr = nf90_close(ncid)
 #endif
 
