@@ -186,10 +186,14 @@ Controls setting specifying the output of the basic physical model state (not in
 
 | Setting | Description |
 |--------|-------------|
-| `wrt_temp` | Include temperature in output fields if `.true.` |
-| `wrt_salt` | Include salinity in output fields if `.true.` |
-| `wrt_temp_dia` | Include temperature diagnostics in output fields if `.true.` |
-| `wrt_salt_dia` | Include salinity diagnostics in output fields if `.true.` |
+| `wrt_temp` | Include `temp` in history files if `.true.` |
+| `wrt_salt` | Include `salt` in history files if `.true.` |
+| `wrt_avg_temp` | Include `temp` in averages files if `.true.` (needs `wrt_file_avg`) |
+| `wrt_avg_salt` | Include `salt` in averages files if `.true.` (needs `wrt_file_avg`) |
+| `wrt_temp_dia` | Include the temperature terms in the diagnostics file if `.true.` (needs `diag_trc`) |
+| `wrt_salt_dia` | Include the salinity terms in the diagnostics file if `.true.` (needs `diag_trc`) |
+
+With `MARBL`, naming `temp` or `salt` in `marbl_tracers_to_write` also adds it to both the history and averages files, and an empty `marbl_tracers_to_write` adds every tracer to both, whatever these settings say.
 
 
 ### `FRC_OUTPUT_SETTINGS`

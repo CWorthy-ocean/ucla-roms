@@ -98,7 +98,9 @@ module tracers
   integer(kind=4),public        :: n_t_avg                               ! number of tracer averages to output <= NT
 
   logical, public :: wrt_temp, wrt_salt, wrt_temp_dia, wrt_salt_dia
-  namelist /TS_OUTPUT_SETTINGS/ wrt_temp, wrt_salt, wrt_temp_dia, wrt_salt_dia
+  logical, public :: wrt_avg_temp = .false., wrt_avg_salt = .false.  ! .false. if absent from namelist
+  namelist /TS_OUTPUT_SETTINGS/ wrt_temp, wrt_salt, wrt_avg_temp, wrt_avg_salt,&
+  &wrt_temp_dia, wrt_salt_dia
 #if defined(BIOLOGY_BEC2) && !defined(MARBL)
 # include "BEC_tracers_indx.h"
 #endif
@@ -550,12 +552,14 @@ contains
     t_vname(itemp)='temp';        t_units(itemp)='Celsius'
     t_lname(itemp)='potential temperature'
     if(wrt_temp) wrt_t(itemp) = .true.
+    if(wrt_avg_temp) wrt_t_avg(itemp) = .true.
     if(wrt_temp_dia) wrt_t_dia(itemp) = .true.
     iTandS = 1                ! if only temp, no salt.
 #ifdef SALINITY
     t_vname(isalt)='salt';        t_units(isalt)='PSU'
     t_lname(isalt)='salinity'
     if(wrt_salt) wrt_t(isalt) = .true.
+    if(wrt_avg_salt) wrt_t_avg(isalt) = .true.
     if(wrt_salt_dia) wrt_t_dia(isalt) = .true.
     iTandS = 2         ! if both temp and salt.
 #endif
