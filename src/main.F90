@@ -601,13 +601,17 @@ contains
 
     ! Boundary data for time n+1 (used by step2d and the 3D corrector).
     ! tdays is n+1/2 here, so '1/2 fwd' reads at n+1; 'forward' read at
-    ! n+3/2. The boundary tidal harmonics follow at n+1; the potential stays
-    ! at n+1/2.
+    ! n+3/2. The boundary tidal harmonics are added to the 2D boundary
+    ! arrays, which only the fast loop reads (u2dbc, v2dbc). The fast loop
+    ! advances the barotropic mode from n to n+1 with these values held
+    ! fixed, so they are evaluated at the centre of that interval, n+1/2;
+    ! at n+1 the boundary-forced tide leads by about omega*dt/2. The
+    ! potential is at n+1/2 as well, where prsgrd uses it.
     tdays = (time+0.5_8*dt)*sec2day
     frc_time = '1/2 fwd'
     call reg_tic(rg_set_bry)
     call set_bry_all  ! get for time n+1
-    if (bry_tides.or.pot_tides) call set_tides(0, bry_phase=1.0_8)
+    if (bry_tides.or.pot_tides) call set_tides(0, bry_phase=0.5_8)
     call reg_toc(rg_set_bry)
 
     ! All of this seems to happen with Hz's from time n
