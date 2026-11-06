@@ -47,7 +47,7 @@ mixing.o : mixing.F90 cppdefs.opt param.o scalars.o tracers.o
 ext_copy_prv2shr_mod.o : ext_copy_prv2shr_mod.F90 cppdefs.opt param.o dimensions.o
 diag_mod.o : diag_mod.F90 cppdefs.opt error_handling_mod.o namelist_open_mod.o param.o dimensions.o private_scratch.o scalars.o compute_tile_bounds.h comm_vars.o diag_vars.o eos_vars.o grid.o ocean_vars.o timers.o
 namelist_open_mod.o : namelist_open_mod.F90 error_handling_mod.o param.o
-set_depth_mod.o : set_depth_mod.F90 cppdefs.opt param.o coupling.o grid.o roms_mpi.o dimensions.o ocean_vars.o scalars.o scoord.o pio_roms.o instant_output.o private_scratch.o strings.o error_handling_mod.o utils_mod.o
+set_depth_mod.o : set_depth_mod.F90 cppdefs.opt param.o coupling.o grid.o roms_mpi.o dimensions.o ocean_vars.o scalars.o scoord.o pio_roms.o instant_output.o river_frc.o private_scratch.o strings.o error_handling_mod.o utils_mod.o
 calc_pflx_mod.o : calc_pflx_mod.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o dimensions.o scalars.o param.o grid.o ocean_vars.o nc_read_write.o diagnostics.o roms_mpi.o pio_roms.o
 v3dbc_mod.o : v3dbc_mod.F90 cppdefs.opt param.o dimensions.o boundary.o grid.o ocean_vars.o scalars.o sponge_tune.o
 transp_nodes.o : transp_nodes.F cppdefs.opt param.o utils_mod.o

@@ -247,12 +247,15 @@ contains
     use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
     use grid, only: dn_u, dm_v
     use roms_mpi, only: exchange_xxx
-    use ocean_vars, only: flxu, u, hz, flxv, v, hz_u, hz_v
+    use ocean_vars, only: flxu, u, hz, flxv, v, hz_u, hz_v, z_w
     use dimensions, only: inode, jnode
     use scalars, only: nz, nrhs
+    use river_frc, only: river_source, riv_vol, riv_uflx, riv_vflx,&
+    &nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
 
     implicit none
-    integer(kind=4) istr,iend,jstr,jend, i,j,k
+    integer(kind=4) istr,iend,jstr,jend, i,j,k, iface, ir
+    real(kind=8) rflx
 
 # include "compute_auxiliary_bounds.h"
 
@@ -273,6 +276,35 @@ contains
         enddo
       enddo
     enddo
+
+    ! River faces: the predictor transport is the river transport at the
+    ! current forcing time, distributed over the column as the river tracer
+    ! flux of the predictor is (compute_horiz_tracer_fluxes.h). u(nrhs) on a
+    ! river face holds the previous step's river velocity (or 0 from an
+    ! initial file without it), so a time-varying river would otherwise
+    ! enter the predictor with a different volume than its tracers.
+    if (river_source) then
+      do iface=1,nriv_u
+        i = riv_u_i(iface); j = riv_u_j(iface)
+        if (i < istr .or. i > iendR .or. j < jstrR .or. j > jendR) cycle
+        ir = nint(riv_uflx(i,j)/10)
+        rflx = riv_vol(ir)*(riv_uflx(i,j)-10*ir)/( 0.5_8*(&
+        &z_w(i-1,j,nz)-z_w(i-1,j,0) +z_w(i,j,nz)-z_w(i,j,0) ) )
+        do k=1,nz
+          FlxU(i,j,k) = Hz_u(i,j,k)*rflx
+        enddo
+      enddo
+      do iface=1,nriv_v
+        i = riv_v_i(iface); j = riv_v_j(iface)
+        if (i < istrR .or. i > iendR .or. j < jstr .or. j > jendR) cycle
+        ir = nint(riv_vflx(i,j)/10)
+        rflx = riv_vol(ir)*(riv_vflx(i,j)-10*ir)/( 0.5_8*(&
+        &z_w(i,j-1,nz)-z_w(i,j-1,0) +z_w(i,j,nz)-z_w(i,j,0) ) )
+        do k=1,nz
+          FlxV(i,j,k) = Hz_v(i,j,k)*rflx
+        enddo
+      enddo
+    endif
 
 !      call wrt_instant(Hz, 'Hz')
 
