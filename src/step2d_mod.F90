@@ -136,6 +136,27 @@ contains
       enddo
     enddo
 
+! River faces carry the river transport itself into the free surface
+! and into DU_avg2/DV_avg2 (the transport of the 3D step and of its
+! river tracer fluxes). DUon from the extrapolated ubar would lag a
+! time-varying river and start from the initial file's ubar (often 0).
+! The ranges include the halo faces the free-surface update below uses.
+
+    if (river_source) then
+      do iface=1,nriv_u
+        i = riv_u_i(iface); j = riv_u_j(iface)
+        if (i < istrU-1 .or. i > iend+1 .or. j < jstr-1 .or. j > jend+1) cycle
+        iriver = nint(riv_uflx(i,j)/10)
+        DUon(i,j) = riv_vol(iriver)*(riv_uflx(i,j)-10*iriver)
+      enddo
+      do iface=1,nriv_v
+        i = riv_v_i(iface); j = riv_v_j(iface)
+        if (i < istr-1 .or. i > iend+1 .or. j < jstrV-1 .or. j > jend+1) cycle
+        iriver = nint(riv_vflx(i,j)/10)
+        DVom(i,j) = riv_vol(iriver)*(riv_vflx(i,j)-10*iriver)
+      enddo
+    endif
+
 
 ! Advance free-surface:  Compute "zeta_new" at new time step and
 !-------- ---- --------  interpolate it half-step backward, "zwrk"
