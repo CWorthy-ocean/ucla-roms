@@ -33,6 +33,10 @@ module tides
   real(kind=8), dimension(:,:,:),allocatable :: ptide_r,ptide_i
   real(kind=8), public,dimension(:,:),  allocatable :: ptide
   real(kind=8) :: ptide_time = -1.0d99   ! model time ptide was last computed for
+  ! time of the tidal potential within the step: time + pot_phase*dt. 0.5 (n+1/2, where the split's
+  ! fast loop and the 3-D step use it); the implicit free surface (implicit_fs_mod, fs_pot_time = 'af')
+  ! sets alpha_f = 1/(1+fs_rho_inf), the time at which the generalized-alpha step takes its explicit forcing
+  real(kind=8), public :: pot_phase = 0.5_8
 
   public set_tides, read_nml_tides
 
@@ -123,9 +127,11 @@ contains
     ! potential
     ! bry_phase (optional, units of dt): time of the boundary tidal
     ! harmonics, time + bry_phase*dt. Default 0.5 (n+1/2). The potential is
-    ! always at n+1/2, where prsgrd uses it. Both calls in roms_step use
-    ! n+1/2: the harmonics enter only the 2D boundary conditions of the
-    ! fast loop, which runs from n to n+1 (see the second call there).
+    ! at time + pot_phase*dt (n+1/2 unless the implicit free surface sets
+    ! it). Both calls in roms_step use n+1/2 for the split fast loop, which
+    ! runs from n to n+1 with the harmonics (2D boundary conditions) held
+    ! fixed; with the implicit free surface the second call passes 1.0,
+    ! its boundary data being at n+alpha_f (see the second call there).
     ! DevinD created seperate step as can't have compute_tile_bounds
     ! and compute_auxilliary_bounds in the same subroutine as they both
     ! declare and compute. Fortan doesn't allow.
@@ -177,7 +183,7 @@ contains
     do itide=1,ntides
 
       omT  = ftide(itide)*(time+bphase*dt)   ! boundary harmonics
-      omTp = ftide(itide)*(time+0.5_8*dt)    ! tidal potential (n+1/2)
+      omTp = ftide(itide)*(time+pot_phase*dt) ! tidal potential (n+1/2; implicit FS n+alpha_f)
 
       if (bry_tides) then
 
