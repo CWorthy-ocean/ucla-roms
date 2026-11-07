@@ -214,6 +214,12 @@ contains
     &nf90_double, nf90_noerr, nf90_nowrite,&
     &nf90_write, nf90_open, nf90_put_att, nf90_close, nf90_inq_varid
     use mpi_f08, only: mpi_double_precision, mpi_max
+#ifdef PARALLEL_IO
+    use mpi_f08, only: MPI_Barrier
+    use netcdf, only: nf90_redef, nf90_enddef
+    use pio, only: PIO_write
+    use dimensions, only: ds_xr, ds_yr
+#endif
     implicit none
 
     character(len=14) :: sr_name = "init_river_frc"
@@ -223,6 +229,9 @@ contains
     real(kind=8)  :: riv_cells,riv_east,riv_west
     real(kind=8)  :: local_maxval, global_maxval
     character(len=1024) :: error_info
+#ifdef PARALLEL_IO
+    character(len=4) :: gtype_save
+#endif
 
     allocate( riv_uflx(GLOBAL_2D_ARRAY) ); riv_uflx = 0._8
     allocate( riv_vflx(GLOBAL_2D_ARRAY) ); riv_vflx = 0._8
@@ -252,14 +261,32 @@ contains
         enddo
       enddo
 
+# ifdef PARALLEL_IO
+      ! The analytical grid file is one joined file under PARALLEL_IO (see
+      ! wrt_ana_grid): rank 0 defines river_flux, then every rank writes its
+      ! part through PIO.
+      if (mynode == 0) then
+        ierr=nf90_open(ana_grdname,nf90_write,ncid)
+        ierr=nf90_redef(ncid)
+        varid = nccreate(ncid,'river_flux',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
+        ierr=nf90_put_att(ncid, varid,'long_name','River volume flux')
+        ierr=nf90_enddef(ncid)
+        ierr=nf90_close(ncid)
+      endif
+      call MPI_Barrier(ocean_grid_comm, ierr)
+      call pio_open_or_abort(trim(ana_grdname), module_name//"/"//sr_name, PIO_write)
+      gtype_save = pio_gtype
+      pio_gtype = '2Drw'
+      call ncwrite(-1,'river_flux', rflx(i0:i1,j0:j1), PP=.true.)
+      call PIO_closefile(pio_FileDesc)
+      pio_gtype = gtype_save
+# else
       ierr=nf90_open(ana_grdname,nf90_write,ncid)
       varid = nccreate(ncid,'river_flux',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
       ierr=nf90_put_att(ncid, varid,'long_name','River volume flux')
-!       ierr=nf90_close(ncid)
-!       print *,'added river_flux',mynode
-!       ierr=nf90_open(ana_grdname,nf90_write,ncid)
       call ncwrite(ncid,'river_flux', rflx(i0:i1,j0:j1))
       ierr=nf90_close(ncid)
+# endif
 
     else                      ! Not analytical, read from file
       ! Start by checking forcing file for separate variables
