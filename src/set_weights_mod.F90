@@ -17,6 +17,7 @@ contains
     use coupling, only: weight
     use param, only: mynode
     use scalars, only: ndtfast, nfast
+    use error_handling_mod, only: error_log
 
     implicit none
 
@@ -31,6 +32,12 @@ contains
     real(kind=8) zeta(4), DUon, Zt_av1, DU_av2, cff1,cff2,cff3
 # endif
     real(kind=QUAD) sum, shft, cff
+    character(len=96) :: info
+    if (2*ndtfast > size(weight,2)) then   ! the loops below fill weight(:,1:2*ndtfast)
+      write(info,'(A,I6,A,I6)') 'ndtfast =', ndtfast, ' exceeds the coupling weights limit', size(weight,2)/2
+      call error_log%raise_global(context='set_weights', info=trim(info))
+      return
+    end if
     nfast=0
     do i=1,2*ndtfast                     ! Reset both sets of
        weight(1,i)=0._8                     ! weights to all-zeros.

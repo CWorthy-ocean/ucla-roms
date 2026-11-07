@@ -14,7 +14,7 @@ module coupling
 ! these are fast-time-averaged barotropic variables.
 !
 #ifdef SOLVE3D
-  real(kind=8) weight(2,288)
+  real(kind=8) weight(2,1024)   ! ndtfast <= 512 (set_weights checks); was 288 (ndtfast <= 144, unchecked)
 
   real(kind=8),allocatable,dimension(:,:) :: rufrc
   real(kind=8),allocatable,dimension(:,:) :: rvfrc
