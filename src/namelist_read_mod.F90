@@ -78,6 +78,7 @@ contains
     use pio_roms, only: read_nml_pio              !PIO_SETTINGS
 #endif
     use diag_mod, only: read_nml_stdout_diag
+    use implicit_fs_mod, only: read_nml_implicit_fs !IMPLICIT_FS (optional)
     implicit none
     call read_nml_param
 #ifndef ANA_GRID
@@ -131,6 +132,7 @@ contains
    call read_nml_pio
 #endif
    call read_nml_stdout_diag
+   call read_nml_implicit_fs
 
    ! Stop on any namelist error before the values are used (a path cut off
    ! by the read, a missing input file, ...)
