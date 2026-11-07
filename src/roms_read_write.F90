@@ -208,6 +208,7 @@ module roms_read_write
   public :: insert_nodes
   public :: findstr,append_date_node
   public :: set_frc_data
+  public :: frc_data_at
   public :: init_output_indices
   public :: find_new_record
   public :: get_frc_dim_len
@@ -989,6 +990,29 @@ contains
     endif
 
   end subroutine set_frc_data_surf  !]
+! ----------------------------------------------------------------------
+  subroutine frc_data_at(nc,var2d,modtime)  ![
+    ! The 2-D forcing field of the two data slots last filled by set_frc_data, interpolated in
+    ! time to modtime [days] with set_frc_data's formula (linear; past the second slot a linear
+    ! extrapolation). No read, no change to nc. Used by the implicit free surface for the wind
+    ! stress at t_{n+alpha_f} (bulk_frc/flux_frc *_stress_shift). Zero if the variable is missing.
+    implicit none
+    type(ncforce),              intent(in)  :: nc
+    real(kind=8),dimension(:,:),intent(out) :: var2d
+    real(kind=8),               intent(in)  :: modtime
+    real(kind=8) :: cff1,cff2
+    if (nc%missing .or. .not. allocated(nc%vdata)) then
+      var2d = 0._8
+      return
+    endif
+    if (nc%time_interpolation) then
+      cff1=( nc%times(nc%it2)-modtime )/( nc%times(nc%it2)-nc%times(nc%it1) )
+      cff2=( modtime-nc%times(nc%it1) )/( nc%times(nc%it2)-nc%times(nc%it1) )
+      var2d = cff1*nc%vdata(:,:,nc%it1) + cff2*nc%vdata(:,:,nc%it2)
+    else
+      var2d = nc%vdata(:,:,nc%it1)
+    endif
+  end subroutine frc_data_at  !]
 ! ----------------------------------------------------------------------
   subroutine find_new_record(vname,tname,time,ifile,irec,vtime,ungridded_filename,allow_missing,var_absent,first_fill) ![
     ! Finds the index for the filename and record number of the first record
