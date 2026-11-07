@@ -36,15 +36,13 @@ contains
     &nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
     use pipe_frc, only: pipe_idx, pipe_flx, pipe_source
 #ifdef CDR_FORCING
-    use cdr_frc, only: cdr_source, cdr_volume,&
-    &cdr_prf, cdr_nprf,&
-    &cdr_icdr, cdr_iloc, cdr_jloc, cdr_vol
+    use cdr_frc, only: cdr_source, cdr_volume, cdr_zsrc
 #endif
     use coupling, only:&
     &rhos, rhoa, weight, du_avg_bak, du_avg2,&
     &du_avg1, dv_avg_bak, dv_avg2, dv_avg1, zt_avg1, rufrc, rvfrc
     use grid, only: h, dn_u, dm_v, pn, pm, rmask, umask, vmask
-    use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi, itemp
+    use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
     use ocean_vars, only: zeta, ubar, vbar
     use scalars, only: dtfast, g, iif, knew, kstp, nfast
     use roms_mpi, only: exchange_xxx
@@ -57,7 +55,7 @@ contains
     use zetabc_mod, only: zetabc_tile
 
     implicit none
-    integer(kind=4) istr,iend,jstr,jend, i,j, kbak, kold, icdr, cidx, iface
+    integer(kind=4) istr,iend,jstr,jend, i,j, kbak, kold, iface
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: zeta_new, Dnew,&
     &rubar,rvbar,  urhs,vrhs,  DUon,DVom,&
     &Drhs, UFx,UFe,VFx,VFe
@@ -166,18 +164,6 @@ contains
 #define rzeta  UFe
 #define rzeta2  VFe
 #define rzetaSA VFx
-#ifdef CDR_FORCING
-    if (cdr_source.and.cdr_volume) then
-      do cidx=1,cdr_nprf
-        icdr = cdr_icdr(cidx)
-        i = cdr_iloc(cidx)
-        j = cdr_jloc(cidx)
-
-        zeta(i,j,kstp)=zeta(i,j,kstp) + dtfast*pm(i,j)*pn(i,j)&
-        &*cdr_vol(icdr)*sum(cdr_prf(cidx,itemp,:))
-      enddo
-    endif
-#endif
     do j=jstrV-1,jend !! why are these from ...-1?
       do i=istrU-1,iend
         zeta_new(i,j)=zeta(i,j,kstp) + dtfast*pm(i,j)*pn(i,j)&
@@ -188,6 +174,13 @@ contains
             zeta_new(i,j)=zeta_new(i,j) + dtfast*pm(i,j)*pn(i,j)*pipe_flx(i,j)
           endif
         endif
+#ifdef CDR_FORCING
+        ! CDR volume releases (cdr_zsrc is exchanged, so the halo cells
+        ! get it too, as for pipe_flx)
+        if (cdr_source.and.cdr_volume) then
+          zeta_new(i,j)=zeta_new(i,j) + dtfast*cdr_zsrc(i,j)
+        endif
+#endif
 
 
 #ifdef MASKING

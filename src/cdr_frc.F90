@@ -20,7 +20,8 @@ module cdr_frc
   &ncforce, ncforce3d, cdr_frc_opt,&
   &set_frc_data, store_string_att
   use scalars, only: nt, deg2rad, nz, pi
-  use grid, only: rmask, lonr,latr
+  use grid, only: rmask, lonr,latr, pm, pn
+  use roms_mpi, only: exchange_xxx
   use dimensions, only: nx, ny, nz
   use ocean_vars, only: hz, z_r0, hz0
   use param, only: mynode, lm, mm, ocean_grid_comm, itemp, max_name_size
@@ -122,6 +123,7 @@ module cdr_frc
 
 !!! Variables used only for (1)
   real(kind=8),public,allocatable,dimension(:)           :: cdr_vol       ! cdr volume
+  real(kind=8),public,allocatable,dimension(:,:)         :: cdr_zsrc      ! cdr volume per unit area [m/s], incl. halos
   real(kind=8),public,allocatable,dimension(:,:)         :: cdr_trc ! cdr tracer concentration
   real(kind=8), allocatable, dimension(:)                :: cdr_hsc       ! cdr horizontal scale
   real(kind=8),allocatable,dimension(:)                  :: cdr_vsc       ! cdr vertical scale
@@ -204,6 +206,7 @@ contains
         do icdr=1,ncdr
           cdr_flx(icdr,:) = cdr_vol(icdr)*cdr_trc(icdr,:)
         enddo
+        call set_cdr_zsrc
 
       else
         call set_frc_data(nc_cdrflx,var2d=cdr_flx)          ! set cdr tracer flux for all cdrs at current time
@@ -219,6 +222,30 @@ contains
     call error_log%abort_check()
 
   end subroutine set_cdr_frc !]
+! ----------------------------------------------------------------------
+  subroutine set_cdr_zsrc  ![
+
+    ! Free-surface source of the volume releases, cdr_vol * (column total
+    ! of the temp profile) per unit area [m/s], as a 2D field. step2d adds
+    ! it to zeta like the pipe and surface freshwater fluxes. The release
+    ! cells are listed on their owning rank only, so the field is exchanged:
+    ! step2d also needs it in the halo, where it computes the new free
+    ! surface of the neighbouring cells.
+
+    implicit none
+    integer(kind=4) :: cidx, icdr, i, j
+
+    cdr_zsrc = 0._8
+    do cidx=1,cdr_nprf
+      icdr = cdr_icdr(cidx)
+      i = cdr_iloc(cidx)
+      j = cdr_jloc(cidx)
+      cdr_zsrc(i,j) = cdr_zsrc(i,j)&
+      &+ pm(i,j)*pn(i,j)*cdr_vol(icdr)*sum(cdr_prf(cidx,itemp,:))
+    enddo
+    call exchange_xxx(cdr_zsrc)
+
+  end subroutine set_cdr_zsrc !]
 
   subroutine read_nml_cdr_frc
 
@@ -550,6 +577,9 @@ contains
 
     ncdr = cdr_ncdr_parm
     allocate(cdr_vol(cdr_ncdr_parm)) ; cdr_vol(:) = 0
+    if (cdr_volume) then
+      allocate(cdr_zsrc(GLOBAL_2D_ARRAY)); cdr_zsrc(:,:) = 0
+    endif
     allocate(cdr_trc(cdr_ncdr_parm,nt)); cdr_trc(:,:) = 0
     allocate(cdr_vsc(cdr_ncdr_parm)); cdr_vsc(:) = 0
     allocate(cdr_dep(cdr_ncdr_parm)); cdr_vsc(:) = 0
