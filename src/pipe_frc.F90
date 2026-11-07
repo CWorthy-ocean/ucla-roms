@@ -115,9 +115,30 @@ contains
 #endif
     endif
 
-    if (.not. init_pipe_done) call init_pipe_frc
+    if (.not. init_pipe_done) then
+      call init_pipe_frc
+    else if (.not. p_analytical) then
+      call set_pipe_flx                                  ! pipe_flx from this call's pipe_vol
+    endif
 
   end subroutine set_pipe_frc !]
+! ----------------------------------------------------------------------
+  subroutine set_pipe_flx  ![
+    ! Realistic pipes: pipe flux per grid point from the time-interpolated pipe volume of
+    ! this call (set_frc_data above). It used to be set once in init_pipe_frc, so a
+    ! pipe_volume that varies in time was not applied after the first step (and a restart
+    ! froze the value at the restart time). Every user of pipe_flx (step2d, omega,
+    ! pre_step3d, step3d_t) now sees the step's pipe volume.
+    implicit none
+    integer(kind=4) :: i,j
+    do j = 1,ny
+      do i = 1,nx
+        if (pipe_idx(i,j) > 0._8) then
+          pipe_flx(i,j)=pipe_fraction(i,j)*pipe_vol( pipe_idx(i,j) )
+        endif
+      enddo
+    enddo
+  end subroutine set_pipe_flx  !]
 ! ----------------------------------------------------------------------
   subroutine init_pipe_frc  ![
 
