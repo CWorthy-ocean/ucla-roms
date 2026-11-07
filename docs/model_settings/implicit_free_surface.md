@@ -1,0 +1,92 @@
+# Implicit free surface
+
+By default ROMS advances the barotropic (depth-integrated) mode with the split-explicit fast loop: `ndtfast` short steps of `step2d` per baroclinic step `dt`, with weights that average the fast mode over the baroclinic step. Setting `fs_mode = 'implicit'` in the namelist group `IMPLICIT_FS` replaces that loop with **one implicit step of the depth-integrated momentum and continuity equations per baroclinic step**. The step reduces to a two-dimensional elliptic (Helmholtz) equation for the free-surface increment, which is solved by a preconditioned conjugate-gradient method with a geometric multigrid preconditioner.
+
+The implicit step has no barotropic Courant limit and does not use `ndtfast`. Everything else in the time step (the 3-D predictor and corrector, the coupling of the two modes through `DU_avg1`, `DU_avg2` and `DU_avg_bak`, the tracer step) is unchanged. With `fs_mode = 'split'` (the default, also when the group is absent from the namelist) the model is bit-for-bit the same as without this feature.
+
+## 1. When to use it
+
+- **Cost.** The implicit step replaces `ndtfast` fast steps with a few multigrid-preconditioned iterations (typically 5-10 per step at the default tolerance). The barotropic step becomes cheaper, and its cost no longer grows with `ndtfast`. The overall saving at a given `dt` is moderate (a few percent to about 10 % of the run time on realistic domains, more where the fast loop dominates, e.g. with large `ndtfast`), because `dt` itself is still limited by the baroclinic physics (internal waves, advection).
+- **Long baroclinic time steps.** The implicit step is stable for any barotropic Courant number and does not need `ndtfast` to grow with `dt`. It is meant for configurations whose baroclinic step is long compared with the barotropic wave time scale.
+- **Exact volume budget.** The new free surface is computed from the exact divergence of the transports that the 3-D step uses, so the domain volume changes by exactly the prescribed sources and the boundary inflow, independent of the solver tolerance. River, pipe and CDR volume sources are delivered exactly in every step (section 5).
+
+The implicit and the split schemes give different answers: they are different discretisations of the barotropic mode. The split loop's averaging filter and the implicit scheme's damping (controlled by `fs_rho_inf`, section 2) act differently on fast barotropic waves and on tides; for example, the semidiurnal tide differs by a few percent in amplitude and a few degrees in phase between the two schemes on a 900 s Pacific configuration.
+
+## 2. Time scheme
+
+The step is the generalized-alpha method (Jansen, Whiting and Hulbert, 2000) applied to the linear system of the free-surface pressure gradient and the divergence, written as a theta step with memory. With `r = fs_rho_inf`, the spectral radius of the step for infinitely fast modes,
+
+    alpha_m = (3 - r) / (2 (1 + r)),  alpha_f = 1 / (1 + r),  gamma = 1/2 + alpha_m - alpha_f
+    beta1   = gamma / alpha_m,        theta* = gamma alpha_f / alpha_m
+
+the implicit weights of the pressure gradient and of the divergence are `theta_p = theta* + fs_theta - 1/2` and `theta_d = theta* + fs_theta_div - 1/2`. The explicit right-hand side (the 3-D model's depth-integrated forcing `rufrc`, `rvfrc`, which contains advection, Coriolis, viscosity, bottom and surface stress and the baroclinic pressure gradient) enters with weight `beta1`, and the rates of the previous step (`dU/dt`, the transport that advanced the free surface, the volume source) with weight `1 - beta1`. The rates are stored between steps and in the restart file.
+
+- `fs_rho_inf = 0` (default): L-stable. Fast barotropic modes are damped strongly (amplitude factors 0.30 / 0.15 per step at `omega dt` = 10 / 30); the M2 tide is damped by about 0.05 / 0.4 / 1.2 % per cycle at `dt` = 480 / 960 / 1440 s (the split loop: about 0.5 / 0.9 / 1.4 %).
+- `fs_rho_inf = 1`: Crank-Nicolson, no memory and no damping.
+- Intermediate values trade damping for accuracy. Values of 0.2 or more can make a configuration that runs at its own internal-wave stability limit blow up where `r = 0` (and the split loop) only saturate a computational mode; use `r = 0` unless the baroclinic step is well inside its stability limit.
+
+The scheme is second order when its explicit forcing is taken at `t_{n+alpha_f}`. The step therefore re-evaluates two forcings at that time (`n+1` at the default `r = 0`):
+
+- **Tidal potential** (`fs_pot_time = 'af'`): the equilibrium tide is evaluated at `time + alpha_f dt` instead of `n+1/2`.
+- **Surface stress** (`fs_stress_time = 'af'`): the 2-D step adds the change of the surface stress from `n+1/2` to `n+alpha_f` to `rufrc`, `rvfrc`, from the two forcing records already in memory (no extra read). With `BULK_FRC` the bulk stress is recomputed from the wind at that time with the step's drag coefficient and air density; otherwise the stress data are re-interpolated. Analytical stress (`ANA_SMFLUX` without `BULK_FRC`) is not shifted. The 3-D step keeps the stress at `n+1/2`.
+
+The baroclinic pressure gradient and the other terms of `rufrc` stay at their usual time levels.
+
+Coriolis is explicit (through `rufrc`). To keep the generalized-alpha memory from lagging it, which lets depth-mean inertial oscillations grow in closed basins, an estimate of the depth-integrated Coriolis force on `U^n` (with the curvilinear metric terms with `CURVGRID` and `UV_ADV`) is kept out of the memory (`fs_mom_mem = 'cor'`, default).
+
+The predictor's barotropic transport (`set_HUV1` through `DU_avg_bak`) is the extrapolation `1.5 U^n - 0.5 U^{n-1}` (`fs_pred_ext = 'ab2'`).
+
+## 3. Elliptic solver
+
+The free-surface increment `delta = zeta^{n+1} - zeta^n` satisfies a symmetric positive-definite five-point Helmholtz equation on the active cells. It is solved by preconditioned conjugate gradients (one halo exchange and two global reductions per iteration), started from the previous step's increment (`fs_warm = 1`) and stopped when the area-weighted residual has fallen by `fs_tol` relative to the right-hand side, or after `fs_maxit` iterations (counted, the run continues). The momentum and the free surface are then updated from the solution; the free surface uses the exact divergence of the final fluxes, so the volume budget does not depend on `fs_tol`.
+
+Preconditioners (`fs_precond`):
+
+- `'mg'` (default): one geometric multigrid V-cycle. The distributed levels aggregate 2 x 2 cells inside each tile; at the first level whose global grid has at most `fs_mg_gather` cells the level is gathered into one global grid, which is coarsened further and solved directly (banded Cholesky) by the ranks chosen with `fs_mg_global_on` (one per node by default). Smoother: red-black Gauss-Seidel (`fs_mg_smoother = 'rbgs'`) or damped Jacobi, `fs_mg_nu` sweeps before and after each coarse-grid correction. The coarse operators are rebuilt every `fs_mg_lag` steps. With `MPI_MASKING`, the dropped all-land tiles are inactive blocks of the global levels.
+- `'jacobi'`: diagonal scaling (more iterations; for testing).
+
+`fs_mg_global_on`, `fs_exch_thin` and `fs_cost_sync` change only how the work is distributed or timed: results are bit-for-bit the same.
+
+## 4. Boundary conditions
+
+- **Closed edges and land**: no flux through the face; the normal barotropic velocity on a closed physical edge is set to zero each step.
+- **Open edges** (`OBC_WEST`, ... with `M2_FRC_BRY` and `Z_FRC_BRY`, which the implicit step requires): with `OBC_M2FLATHER` the normal transport is a Flather condition on the flux that advances the free surface, `U_b = D dn ubar_ext + s c_b (zeta_int - zeta_ext)` with `c_b = D dn sqrt(g/h)`, treated implicitly (a Robin term of the elliptic equation). `OBC_M2ORLANSKI` and open edges without an `OBC_M2` type use the same Flather form (a note is printed). `OBC_M2SPECIFIED` prescribes the transport. `fs_obc_flux = 'ext'` evaluates the external data at the implicit level instead of carrying the boundary transport in the generalized-alpha memory.
+- **Free surface on open edges**: backward-Euler upwind radiation (the implicit form of `zetabc`).
+- **Tangential velocities on open edges** (`fs_tang`): `'adv'` (default) is the backward-Euler form of the split mode's condition (upwind advection by the normal flow, nudging to the external data on inflow, rate scaled by `fs_tang_nudge`). `'orl'` (normal-radiation Orlanski), `'nudge'` and `'grav'` are alternatives.
+- **Tides at the boundary**: with the implicit free surface the boundary tidal harmonics are evaluated at `n+1` (the split loop uses `n+1/2`, the centre of its fast-step interval).
+
+## 5. Volume sources
+
+River transports (`river_source`), the surface freshwater flux, pipes and CDR volume releases enter the implicit step with the same values that the 3-D step uses (`fs_src_mem = 'none'`, default): river faces carry exactly the river transport, and the cell sources are added to the free-surface equation. The volume the free surface gains therefore equals the volume the 3-D step adds with the tracers, which keeps tracer concentrations constant at the sources (a closed basin with every source at the ambient salinity keeps its salinity to rounding). `fs_src_mem = 'all'` passes the sources through the generalized-alpha memory instead (a start-up lag, and the free-surface volume then differs from the 3-D volume).
+
+With `fs_verbose >= 2` the `FS_VOL` line reports each step's global volume budget and the `FS_SRC` line the mapped and delivered river discharge and the pipe, CDR and surface freshwater volumes (`FS_SRC` also with `fs_mode = 'split'`).
+
+## 6. Restarts
+
+With `fs_mode = 'implicit'` the restart file also holds the generalized-alpha rates (`fs_udu`, `fs_udv`, `fs_gru`, `fs_grv`, `fs_qd`), the last increment (`fs_delta`, the solver's warm start), a set of scalars (`fs_rst_scal`) and, with `fs_mg_lag > 1`, the fine operator of the last coarse-operator build (`fs_mge0`, `fs_mgcu`, `fs_mgcv`). A restarted run then reproduces the continuous run bit for bit. Split-mode restart files are unchanged.
+
+A run can start from a restart file without these variables (a split-mode run's file, or an initial file): the first implicit step then starts the memory with `beta1 = 1` (`fs_ga_start = 'step'`). A change of `fs_mom_mem` or `fs_mg_lag` across a restart is allowed and is logged; the restart is then not exact.
+
+## 7. Diagnostics
+
+| Line | When | Content |
+|------|------|---------|
+| `IMPLICIT_FS ...` | startup | settings, scheme coefficients, multigrid layout |
+| `FS_SOLVE` | `fs_verbose >= 1`, every step | iterations, relative residual, max `abs(delta)` |
+| `FS_VOL` | `fs_verbose >= 2`, every step | volume change, `dt` x (sources + inflow), relative error, volume |
+| `FS_SRC`, `FS_WALL` | `fs_verbose >= 2`, every step | source volumes; largest velocity on closed and masked faces |
+| `FS_STAT`, `FS_COST`, `FS_MGLEV` | end of run | solves, mean iterations, unconverged solves; cost by piece and by multigrid level (ms per step, slowest rank) |
+
+`fs_selftest = 1` solves a manufactured problem with the first step's operator and a point volume source at startup (`FS_TEST` lines).
+
+## 8. Limitations
+
+- Requires `SOLVE3D`. With open boundaries, `M2_FRC_BRY` and `Z_FRC_BRY` are required; `OBC_M2ORLANSKI` has no implicit form (Flather is used).
+- Coriolis is explicit; `fs_coriolis_implicit = .true.` is not implemented.
+- The baroclinic pressure gradient in `rufrc` stays at `n+1/2`, a lag of `(alpha_f - 1/2) dt` behind the time at which the scheme takes its forcing.
+- Results depend on the solver tolerance, so runs on different tilings or rank counts differ at about the level of `fs_tol` (the split mode is not tiling-invariant either, at rounding level).
+- `fs_rho_inf >= 0.2` can turn a saturated computational mode of a configuration running at its internal-wave stability limit into a blow-up (section 2).
+- Reflecting closed basins excited by an unbalanced start show more energy in their basin seiches than the split loop, growing with `fs_rho_inf`; use `fs_rho_inf = 0` there.
+- Not tested with `NHMG`.
+
+Settings: see [`IMPLICIT_FS`](runtime_settings.md#implicit_fs) in the runtime settings.

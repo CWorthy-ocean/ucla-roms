@@ -29,7 +29,7 @@ This page describes every setting in `src/namelist.nml`, one section per group.
 | ------------- | ------------- |
 | `ntimes` | Number of time steps in this run  |
 | `dt` | Time step (seconds)  |
-| `ndtfast` | Mode-splitting ratio. Number of "fast" time-steps (for 2D equations) per "slow" timestep (`dt`) 	|
+| `ndtfast` | Mode-splitting ratio. Number of "fast" time-steps (for 2D equations) per "slow" timestep (`dt`). Not used with `fs_mode = 'implicit'` (`IMPLICIT_FS`) 	|
 | `ninfo` | Number of steps between runtime diagnostics printed to standard output |
 
 ### `REFERENCE_DATE_SETTINGS`
@@ -580,6 +580,57 @@ These settings control "pipe forcing", i.e. the input of water and tracers at a 
 | `pipe_source` | Apply "pipe forcing" if `.true.` |
 | `p_analytical` | Specify pipe locations/properties analytically if `.true.` or via netCDF if `.false.` |
 | `npip` | Number of pipes |
+
+### `IMPLICIT_FS`
+(read by module `implicit_fs_mod.F90`)
+
+Optional: if the group is absent, `fs_mode = 'split'`. Selects the time stepping of the barotropic mode: the split-explicit fast loop (`'split'`, the default, `ndtfast` fast steps per `dt`) or one implicit step per `dt` (`'implicit'`), which solves an elliptic equation for the free surface. The other settings are read only with `fs_mode = 'implicit'`, except `fs_verbose` (its `FS_SRC` line is also written in split mode). The scheme, its options and its limitations are described in [Implicit free surface](implicit_free_surface.md).
+
+Main settings:
+
+| Setting | Default | Description |
+|--------|---------|-------------|
+| `fs_mode` | `'split'` | `'split'`: split-explicit fast loop (`step2d`); `'implicit'`: implicit free surface |
+| `fs_rho_inf` | `0.0` | Spectral radius of the generalized-alpha step at infinite frequency, 0 to 1. 0 damps fast barotropic modes most (L-stable); 1 is Crank-Nicolson (no damping). Keep 0 where the configuration runs near its internal-wave stability limit |
+| `fs_theta`, `fs_theta_div` | `0.5`, `0.5` | Extra off-centring (0.5 to 1) of the free-surface pressure gradient and of the divergence; 0.5 = none |
+| `fs_tol` | `1.0e-8` | Relative residual at which the elliptic solve stops (the volume budget is exact regardless) |
+| `fs_maxit` | `1000` | Iteration cap of the solve (exceeding it is counted in `FS_STAT`; the run continues) |
+| `fs_precond` | `'mg'` | Preconditioner: `'mg'` multigrid V-cycle, `'jacobi'` diagonal |
+| `fs_verbose` | `0` | 1: `FS_SOLVE` line per step; 2: also `FS_VOL` (volume budget), `FS_SRC` (source volumes) and `FS_WALL` lines |
+
+Multigrid settings (`fs_precond = 'mg'`):
+
+| Setting | Default | Description |
+|--------|---------|-------------|
+| `fs_mg_levels` | `0` | 0: automatic; else the maximum number of distributed coarse levels |
+| `fs_mg_nu` | `2` | Smoothing sweeps before and after each coarse-grid correction |
+| `fs_mg_smoother` | `'rbgs'` | `'rbgs'` red-black Gauss-Seidel, `'jacobi'` damped Jacobi |
+| `fs_mg_lag` | `1` | Rebuild the coarse operators every `fs_mg_lag` steps |
+| `fs_mg_gather` | `1024` | Gather the distributed levels into one global grid at the first level whose global grid has at most this many cells; 0: when a tile would fall below 4 x 4 cells |
+| `fs_mg_global_on` | `'node'` | Ranks that solve the global levels: `'node'` one per node, `'all'` every rank, `'one'` rank 0 (same results) |
+| `fs_mg_faces` | `'width'` | Coarse face coefficients scaled by the aggregates' widths (`'width'`) or by 0.5 (`'half'`) |
+| `fs_exch_thin` | `.true.` | One-cell halo exchanges without corners in the solver (same results) |
+| `fs_cost_sync` | `.false.` | Timing only: barriers before the solver's collective operations, so that `FS_COST` separates waiting from communication |
+
+Scheme options (the defaults are the recommended settings):
+
+| Setting | Default | Description |
+|--------|---------|-------------|
+| `fs_warm` | `1` | Start of the solve: 1 the previous step's increment, 0 zero |
+| `fs_pot_time` | `'af'` | Tidal potential at `n+alpha_f` (`'af'`, where the scheme takes its forcing) or at `n+1/2` (`'mid'`) |
+| `fs_stress_time` | `'af'` | Surface stress of the barotropic step at `n+alpha_f` (`'af'`) or at `n+1/2` (`'mid'`); the 3-D step keeps `n+1/2` |
+| `fs_mom_mem` | `'cor'` | Generalized-alpha memory of the momentum increment: `'cor'` all except an estimate of the Coriolis force, `'pg'` the free-surface pressure gradient only, `'all'` all of it (depth-mean inertial oscillations can grow in closed basins) |
+| `fs_cor_est` | `'n'` | `'cor'`: Coriolis estimate from `U^n` (`'n'`) or from `1.5 U^n - 0.5 U^{n-1}` (`'ab2'`; restarts are then not exact) |
+| `fs_cor_metric` | `.true.` | `'cor'`: include the curvilinear metric terms in the estimate (`CURVGRID` and `UV_ADV` only) |
+| `fs_src_mem` | `'none'` | Volume sources (rivers, surface freshwater flux, pipes, CDR): `'none'` the step's values, as the 3-D step uses them (exact delivery); `'all'` through the generalized-alpha memory |
+| `fs_ga_start` | `'step'` | Start of the memory without stored rates: `'step'` a first step without memory; `'rhs'` rates from the explicit right-hand side |
+| `fs_pred_ext` | `'ab2'` | Barotropic transport of the 3-D predictor: `'ab2'` `1.5 U^n - 0.5 U^{n-1}`; `'stock'` the split mode's extrapolation |
+| `fs_obc_flux` | `'mem'` | Flather transport of open normal faces: `'mem'` with the generalized-alpha memory, `'ext'` from the external data at the implicit level |
+| `fs_tang` | `'adv'` | Tangential barotropic velocity on open edges: `'adv'` implicit form of the split mode's condition, `'orl'` normal-radiation Orlanski, `'nudge'` nudging only, `'grav'` gravity-wave radiation |
+| `fs_tang_nudge` | `1.0` | Factor on the tangential inflow nudging rate (`'adv'`, `'orl'`, `'nudge'`) |
+| `fs_drag_implicit` | `.false.` | Treat the linear bottom-drag increment implicitly |
+| `fs_coriolis_implicit` | `.false.` | Not implemented (`.true.` stops ROMS) |
+| `fs_selftest` | `0` | 1: solver test with the first step's operator at startup (`FS_TEST` lines) |
 
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)
