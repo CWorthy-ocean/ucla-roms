@@ -450,6 +450,20 @@ contains
 
 #ifdef ANA_GRID
     call ana_grid
+    ! ana_grid.h evaluates its formulas on the ghost points too. In a periodic
+    ! direction those values are not the periodic images, and at MPI interfaces
+    ! they can differ from the neighbour's interior values by rounding (or be
+    ! left unset). Exchange the fields the dynamics reads in the ghost points,
+    ! as the file-based path below does. The coordinates and f are left as
+    ! ana_grid.h set them (see setup_Corls_tile).
+    call exchange_xxx(h)
+    call exchange_xxx(pm,pn)
+# ifdef CURVGRID
+    call exchange_xxx(angler)
+# endif
+# ifdef MASKING
+    call exchange_xxx(rmask)
+# endif
     call wrt_ana_grid
 #else
 
