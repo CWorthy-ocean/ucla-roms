@@ -140,10 +140,10 @@ contains
 #   ifdef M2_FRC_BRY
         vbar(i,jstr,knew)=vbar_south(i)
 #   else
-        vbar(i,jstr,knew)=vbclm(i,jstr)&
+        vbar(i,jstr,knew)=vbclm(i,jstr)
 #   endif
 #   ifdef MASKING
-        &*vmask(i,jstr)
+        vbar(i,jstr,knew)=vbar(i,jstr,knew)*vmask(i,jstr)
 #   endif
       enddo
 #  else
@@ -264,10 +264,10 @@ contains
 #   ifdef M2_FRC_BRY
         vbar(i,jend+1,knew)=vbar_north(i)
 #   else
-        vbar(i,jend+1,knew)=vbclm(i,jend+1)&
+        vbar(i,jend+1,knew)=vbclm(i,jend+1)
 #   endif
 #   ifdef MASKING
-        &*vmask(i,jend+1)
+        vbar(i,jend+1,knew)=vbar(i,jend+1,knew)*vmask(i,jend+1)
 #   endif
       enddo
 #  else

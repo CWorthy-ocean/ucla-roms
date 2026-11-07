@@ -154,10 +154,10 @@ contains
 #   ifdef M2_FRC_BRY
         ubar(istr,j,knew)=ubar_west(j)
 #   else
-        ubar(istr,j,knew)=ubclm(istr,j)&
+        ubar(istr,j,knew)=ubclm(istr,j)
 #   endif
 #   ifdef MASKING
-        &*umask(istr,j)
+        ubar(istr,j,knew)=ubar(istr,j,knew)*umask(istr,j)
 #   endif
       enddo
 #  else
@@ -280,10 +280,10 @@ contains
 #   ifdef M2_FRC_BRY
         ubar(iend+1,j,knew)=ubar_east(j)
 #   else
-        ubar(iend+1,j,knew)=ubclm(iend+1,j)&
+        ubar(iend+1,j,knew)=ubclm(iend+1,j)
 #   endif
 #   ifdef MASKING
-        &*umask(iend+1,j)
+        ubar(iend+1,j,knew)=ubar(iend+1,j,knew)*umask(iend+1,j)
 #   endif
       enddo
 #  else
