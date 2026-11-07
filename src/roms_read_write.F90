@@ -172,6 +172,19 @@ module roms_read_write
 
   integer(kind=4) :: irec_stride
   integer(kind=4) :: ifile_stride
+
+  ! Exact restart at a forcing record time t_k. A run that passes through
+  ! t_k still holds the record pair (k-1,k) there (the slots are refreshed
+  ! only once the model time exceeds the second record), while the first
+  ! record search of a run started at t_k picks (k,k+1). Both interpolate
+  ! the record value, but with different weights, which (division done as a
+  ! reciprocal multiply) can differ by an ulp, so the restarted run would
+  ! not reproduce the continuous one. get_init sets frc_restart_exact for an
+  ! exact restart; then, until the end of the first time step, the initial
+  ! search of each variable takes a record at exactly the model time as the
+  ! second slot (when an earlier record exists), as the continuous run has.
+  logical, public :: frc_restart_exact = .false.
+  logical :: frc_first_fill = .false.   ! set_frc_data is filling both slots for the first time
   integer(kind=4), allocatable, public :: ifile_max_recs(:)   ! records in each forcing file
 
 #if defined MPI && defined PARALLEL_FILES
@@ -636,6 +649,7 @@ contains
     if (nc%times(it2) < modtime) then  ! need to refresh data
 
       if (nc%ifile == 0) then   ! the first time, we need to fill both slots
+        frc_first_fill = .true.
         call fill_frc_slice(nc,modtime,it1,d1,bry)
       else ! cycle it1,it2 between 1 and 2
         it1 = mod(it1,2) + 1
@@ -643,6 +657,7 @@ contains
       endif
 
       call fill_frc_slice(nc,modtime,it2,d1,bry)
+      frc_first_fill = .false.
 
       ! If (new irec) is greater than (old irec-1), this means we skipped one or more
       ! forcing entries. Then we need to also do fill_frc_slice for it1,
@@ -737,6 +752,7 @@ contains
     if (nc%times(it2) < modtime) then  ! need to refresh data
 
       if (nc%ifile == 0) then   ! the first time, we need to fill both slots
+        frc_first_fill = .true.
         call fill_frc_slice(nc,modtime,it1,d1,bry)
       else ! cycle it1,it2 between 1 and 2
         it1 = mod(it1,2) + 1
@@ -744,6 +760,7 @@ contains
       endif
 
       call fill_frc_slice(nc,modtime,it2,d1,bry)
+      frc_first_fill = .false.
       ! If (new irec) is greater than (old irec-1), this means we skipped one or more
       ! forcing entries. Then we need to also do fill_frc_slice for it1,
       ! and we will read in the greatest irec that is less than (new irec)
@@ -825,6 +842,7 @@ contains
     if (nc%times(it2) < modtime) then  ! need to refresh data
 
       if (nc%ifile == 0) then   ! the first time, we need to fill both slots
+        frc_first_fill = .true.
         call fill_frc_slice_aux3d(nc,modtime,it1,bry)
       else ! cycle it1,it2 between 1 and 2
         it1 = mod(it1,2) + 1
@@ -832,6 +850,7 @@ contains
       endif
 
       call fill_frc_slice_aux3d(nc,modtime,it2,bry)
+      frc_first_fill = .false.
 
       ! If (new irec) is greater than (old irec-1), this means we skipped one or more
       ! forcing entries. Then we need to also do fill_frc_slice for it1,
@@ -914,6 +933,7 @@ contains
     if (nc%times(it2) < modtime) then  ! need to refresh data
 
       if (nc%ifile == 0) then   ! the first time, we need to fill both slots
+        frc_first_fill = .true.
         call fill_frc_slice_surf(nc,modtime,it1,gtype)
       else ! cycle it1,it2 between 1 and 2
         it1 = mod(it1,2) + 1
@@ -921,6 +941,7 @@ contains
       endif
 
       call fill_frc_slice_surf(nc,modtime,it2,gtype)
+      frc_first_fill = .false.
 
       ! If (new irec) is greater than (old irec-1), this means we skipped one or more
       ! forcing entries. Then we need to also do fill_frc_slice for it1,
@@ -1082,9 +1103,15 @@ contains
           ierr=nf90_get_var(ncid,tid,ltime,(/irec/), (/1/))        ! Get vtime (nf90 needs array hence syntax)
           vtime = ltime(1)
 
-          if (vtime>time) then                                     ! correct time
-            found_rec = .true.
-          else                                                     ! not yet
+          found_rec = vtime>time                                   ! correct time
+          if (vtime==time .and. frc_restart_exact .and. frc_first_fill) then   ! see frc_restart_exact
+            if (.not. first) then
+              found_rec = .true.
+            elseif (irec_old > 0) then                             ! an earlier record exists
+              found_rec = .true.
+            endif
+          endif
+          if (.not. found_rec) then                                ! not yet
             irec_old = irec
             ifile_old = ifile                                      ! only needed initially. See label (A)
             time_old = vtime
@@ -1200,6 +1227,7 @@ contains
       if (vtime>time) then
         exit
       endif
+      if (vtime==time .and. frc_restart_exact .and. frc_first_fill) exit   ! see frc_restart_exact
     enddo
 
     if (first) then

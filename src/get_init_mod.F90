@@ -44,7 +44,7 @@ contains
     &nf90_strerror, nf90_inq_varid, nf90_get_var, nf90_close,&
     &nf90_open
     use nc_read_write, only: ncread
-    use roms_read_write, only: inifile
+    use roms_read_write, only: inifile, frc_restart_exact
     use grid, only:&
     &riv_umask, riv_vmask, rmask, umask, vmask
     use dimensions, only: i0, i1, j0, j1, nz, x_,x0,x1,y_,y0,y1
@@ -373,6 +373,7 @@ contains
       elseif (tindx == 1) then
         if (forw_start == 1) then
           init_type=exact_rst
+          frc_restart_exact = .true.   ! forcing record search as in the continuous run
         else
           init_type=apprx_rst
         endif

@@ -458,7 +458,7 @@ contains
     &wrt_his_ocean_vars, wrt_rst_ocean_vars
     use boundary, only: set_bry_all
     use tides, only: set_tides, pot_tides, bry_tides
-    use roms_read_write, only: frc_time
+    use roms_read_write, only: frc_time, frc_restart_exact
 #ifdef SOLVE3D
     use omega_mod, only: omega
     use pre_step3d_mod, only: pre_step3d
@@ -677,6 +677,11 @@ contains
     call marbldrv_impose_constant_fe_all(t)
 #endif
 
+
+    ! The first step after an exact restart has made the initial forcing
+    ! reads (see frc_restart_exact in roms_read_write); later first reads
+    ! follow the normal rule, as in the continuous run.
+    frc_restart_exact = .false.
 
     ! at this point, u,v,w and tracers are up to n+1
     ! rho, omega, and fluxes are at n+1/2
