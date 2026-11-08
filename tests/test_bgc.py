@@ -15,7 +15,8 @@ tracer subcycling: hashed output at two window lengths and both free-surface
 modes, the per-window budgets, the positivity limiter, an exact restart at a
 window boundary and the rejection of restarts inside a window;
 ``TestBgcSubcycleShortWindow`` a window shorter than MARBL's interval and the
-rejection of window lengths that ROMS would have to round.
+rejection of window lengths that ROMS would have to round. ``TestMarblBalance``
+checks that ``marbl_balance`` ships columns between ranks and changes no output.
 """
 import re
 from pathlib import Path
@@ -551,7 +552,7 @@ class TestBgcSubcycleShortWindow:
 
     def test_windows_and_marbl_calls(self, tmp_path, marbl_conf, input_dir, reference_results):
         """Windows end every 2 steps and conserve as in ``TestBgcSubcycling``;
-        MARBL runs every 4 steps, at the end of every second window."""
+        MARBL runs every 4 steps (3 calls in 12 steps)."""
         nml = _subcycle_nml(input_dir, 4, window=2)
         stdout = marbl_conf.run(nml, cwd=tmp_path, capture_output=True)
 
@@ -562,7 +563,8 @@ class TestBgcSubcycleShortWindow:
             assert w["budget"] < 1e-12, w
             assert w["cont"] < 1e-11, w
             assert w["shadow"] < w["cont"] + 1e-11, w
-        assert "MARBL at the end of every 2 window(s)" in stdout
+        calls = re.search(r"MARBL load balance \(\s*(\d+) calls", stdout)
+        assert calls is not None and int(calls.group(1)) == 3
 
         pv = get_summary_value(tmp_path, prefix="roms_his.20100101000000")
         bv = get_summary_value(tmp_path, prefix="roms_bgc.20100101000000")
@@ -606,3 +608,35 @@ class TestBgcSubcycleShortWindow:
         nml = _subcycle_nml(input_dir, 4)
         nml["BGC_SETTINGS"]["bgc_physics_timestep"] = seconds
         assert_run_rejected(marbl_conf, nml, tmp_path, messages, label="bgc_physics_timestep")
+
+
+class TestMarblBalance:
+    """``marbl_balance``: ranks with more wet columns than the mean ship columns
+    to ranks with fewer, which compute MARBL for them."""
+
+    @pytest.mark.parametrize("subcycle", [False, True])
+    def test_balance_changes_nothing(self, tmp_path, marbl_conf, input_dir, subcycle):
+        """Columns are shipped, and the history, BGC and BGC diagnostics output
+        equal the run without balancing bit for bit (MARBL every step, and every
+        4 steps with BGC subcycling)."""
+        runs, stdout = {}, ""
+        for bal in (False, True):
+            run_dir = tmp_path / f"balance_{bal}"
+            run_dir.mkdir()
+            nml = _subcycle_nml(input_dir, 4) if subcycle else _marbl_nml(input_dir)
+            dt = nml["TIME_STEPPING"]["dt"]
+            nml["BGC_SETTINGS"].update(
+                {"wrt_bgc_dia_his": True, "output_period_bgc_his_dia": 4 * dt}
+            )
+            nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_balance"] = bal
+            stdout = marbl_conf.run(nml, cwd=run_dir, capture_output=True)
+            runs[bal] = run_dir
+        shipped = re.search(r"marbl_balance:.*?(\d+) columns shipped per call", stdout)
+        assert shipped is not None and int(shipped.group(1)) > 0
+        assert "MARBL load balance" in stdout
+        for prefix in ("roms_his.20100101000000", "roms_bgc.20100101000000",
+                       "roms_bgc_dia.20100101000000"):
+            on = get_summary_value(runs[True], prefix)
+            off = get_summary_value(runs[False], prefix)
+            assert len(on.variables) > 0
+            assert on.variables == off.variables, prefix

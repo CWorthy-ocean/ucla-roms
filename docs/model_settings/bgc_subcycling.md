@@ -92,3 +92,5 @@ With `bgc_subcycle_diag = 1`, one line per window:
 - `BGCSUBNEG`: negative values that the window made from non-negative ones (before MARBL).
 
 The `BGCSUB` lines are for testing: they cost several global reductions per window.
+
+With MARBL, the end of every run prints the MARBL load balance after the region timers: wet columns per rank, MARBL wall time per call (min/mean/max over the ranks), time per wet column and the correlation of the ranks' MARBL time with their wet columns. With `bgc_subcycle_diag > 0` (also with `bgc_physics_subcycle = .false.`) rank 0 also writes `marbl_load.txt` in the working directory, one line per rank with its tile position, node, wet columns and cells and the wall time of every MARBL call. `marbl_balance` (`MARBL_BIOGEOCHEMISTRY_SETTINGS`) evens out that load.
