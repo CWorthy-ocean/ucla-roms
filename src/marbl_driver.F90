@@ -179,7 +179,7 @@ module marbl_driver
   integer(kind=4), allocatable :: bal_sp(:), bal_sn(:), bal_so(:)   ! rank, columns, offset
   integer(kind=4), allocatable :: bal_rp(:), bal_rn(:), bal_ro(:)
   real(kind=8), allocatable, asynchronous :: bal_sin(:,:), bal_sout(:,:), bal_rin(:,:), bal_rout(:,:)
-  real(kind=8), allocatable :: bal_r1(:), bal_q1(:)
+  real(kind=8) :: bal_tsetup = 0._8              ! wall time of bal_setup (one-off)
 #ifdef MARBL_DIAGS
 !     MARBL's particulate fluxes at its reference depth (POC_FLUX_100m etc.,
 !     marbldrv_configure_diagnostics): MARBL sets them only in a column with
@@ -1549,13 +1549,18 @@ contains
     real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt), intent(inout) :: tracer_array
     integer(kind=4), parameter :: nchunk = 16      ! columns between message tests
     type(mpi_request), allocatable :: rqri(:), rqro(:), rqsi(:), rqso(:)
-    logical, allocatable :: done(:)
+    logical, allocatable :: sdone(:), rdone(:)   ! outputs stored / columns computed, per partner
     logical :: flag
     integer(kind=4) :: p, c, c0, ierr, nleft
+    real(kind=8) :: ts0
 
-    if (.not. bal_ready) call bal_setup(istr,iend,jstr,jend)
+    if (.not. bal_ready) then
+      ts0 = mpi_wtime()
+      call bal_setup(istr,iend,jstr,jend)
+      bal_tsetup = mpi_wtime() - ts0
+    end if
     allocate(rqri(bal_nrp), rqro(bal_nrp), rqsi(bal_nsp), rqso(bal_nsp))
-    allocate(done(max(bal_nrp, bal_nsp, 1)))
+    allocate(sdone(max(bal_nsp, 1)), rdone(max(bal_nrp, 1)))
     rqro = mpi_request_null
     do p = 1, bal_nrp            ! inputs of the columns computed for others
       call mpi_irecv(bal_rin(:,bal_ro(p)+1:bal_ro(p)+bal_rn(p)), bal_rn(p)*nrin,&
@@ -1572,7 +1577,7 @@ contains
       call mpi_isend(bal_sin(:,bal_so(p)+1:bal_so(p)+bal_sn(p)), bal_sn(p)*nrin,&
       &              mpi_double_precision, bal_sp(p), 31, ocean_grid_comm, rqsi(p), ierr)
     end do
-    done = .false.
+    sdone = .false. ; rdone = .false.
     nleft = bal_nrp
     do c0 = 1, bal_nkeep, nchunk ! own columns in chunks
       do c = c0, min(c0+nchunk-1, bal_nkeep)
@@ -1581,20 +1586,20 @@ contains
       if (bal_nsp > 0) then      ! outputs of shipped columns back yet?
         call mpi_testall(bal_nsp, rqsi, flag, mpi_statuses_ignore, ierr)
         do p = 1, bal_nsp
-          if (done(p)) cycle
+          if (sdone(p)) cycle
           call mpi_test(rqso(p), flag, mpi_status_ignore, ierr)
           if (flag) then
             call unpack_from(p)
-            done(p) = .true.
+            sdone(p) = .true.
           end if
         end do
       end if
       do p = 1, bal_nrp          ! a sender's inputs arrived: its columns now
-        if (done(p)) cycle
+        if (rdone(p)) cycle
         call mpi_test(rqri(p), flag, mpi_status_ignore, ierr)
         if (flag) then
           call compute_for(p)
-          done(p) = .true. ; nleft = nleft - 1
+          rdone(p) = .true. ; nleft = nleft - 1
         end if
       end do
       if (bal_nrp > 0) call mpi_testall(bal_nrp, rqro, flag, mpi_statuses_ignore, ierr)
@@ -1602,12 +1607,12 @@ contains
     do while (nleft > 0)         ! remaining senders, in order of arrival
       call mpi_waitany(bal_nrp, rqri, p, mpi_status_ignore, ierr)
       if (p == mpi_undefined) exit
-      if (done(p)) cycle
+      if (rdone(p)) cycle
       call compute_for(p)
-      done(p) = .true. ; nleft = nleft - 1
+      rdone(p) = .true. ; nleft = nleft - 1
     end do
     do p = 1, bal_nsp            ! remaining outputs of shipped columns
-      if (done(p)) cycle
+      if (sdone(p)) cycle
       call mpi_waitall(1, rqso(p:p), mpi_statuses_ignore, ierr)
       call unpack_from(p)
     end do
@@ -1743,7 +1748,6 @@ contains
     q_d3 = q_d2 + n2w ; nrout = q_d3 + n3w*nz
     allocate(bal_sin(nrin, max(bal_ncol-bal_nkeep,1)), bal_sout(nrout, max(bal_ncol-bal_nkeep,1)))
     allocate(bal_rin(nrin, max(sum(bal_rn(1:bal_nrp)),1)), bal_rout(nrout, max(sum(bal_rn(1:bal_nrp)),1)))
-    allocate(bal_r1(nrin), bal_q1(nrout))
     bal_ready = .true.
     if (mynode == 0) then
       write(*,'(1x,A,I9,A,I7,A,I7,A,I5,A,I6,A,I6,A)') 'marbl_balance: ', tot, ' wet columns, share',&
@@ -1995,29 +1999,34 @@ contains
 !     every wet column over all nz levels, so wet cells = columns * nz),
 !     the MARBL wall time per call (min/mean/max over ranks, averaged
 !     over the calls), the time per wet column and the correlation of
-!     the ranks' MARBL time with their wet columns. With detail, rank 0
-!     also writes marbl_load.txt (working directory): one line per rank
-!     with its tile position, node, wet columns and cells and the wall
-!     time of every call.
+!     the ranks' MARBL time with their wet columns; then the first call
+!     (with marbl_balance: the plan, bal_setup, and the first touch of its
+!     buffers) and the later calls separately. With detail, rank 0 also
+!     writes marbl_load.txt (working directory): one line per rank with
+!     its tile position, node, wet columns and cells and the wall time of
+!     every call. Every rank takes the same branches (counts reduced).
 !-----------------------------------------------------------------------
     use mpi_f08, only: mpi_allreduce, mpi_gather, mpi_double_precision,&
     &                  mpi_integer, mpi_max, mpi_min, mpi_sum, mpi_character,&
     &                  mpi_get_processor_name, mpi_max_processor_name, mpi_comm_size
     use dimensions, only: inode, jnode
     logical, intent(in) :: detail
-    integer(kind=4) :: nr, nc, ierr, r, ln, iu, n
+    integer(kind=4) :: nr, nc, ierr, r, ln, iu, nmin, nmax
     real(kind=8), allocatable :: tmax(:), tsum(:), tmin(:), allt(:,:), rt(:)
     integer(kind=4), allocatable :: allc(:), allij(:,:)
     integer(kind=4) :: myij(2), myc
-    real(kind=8) :: mt, mc, sxy, sxx, syy, cr, bal(3)
+    real(kind=8) :: mt, mc, sxy, sxx, syy, cr, bal(3), tsu(2)
     character(len=mpi_max_processor_name) :: host
     character(len=mpi_max_processor_name), allocatable :: hosts(:)
     character(len=32) :: fmt
 
     call mpi_comm_size(ocean_grid_comm, nr, ierr)
     nc = ld_ncall
-    call mpi_allreduce(ld_ncall, n, 1, mpi_integer, mpi_min, ocean_grid_comm, ierr)
-    if (n /= nc .or. nc == 0) return       ! no MARBL calls (or ranks disagree)
+    call mpi_allreduce(ld_ncall, nmin, 1, mpi_integer, mpi_min, ocean_grid_comm, ierr)
+    call mpi_allreduce(ld_ncall, nmax, 1, mpi_integer, mpi_max, ocean_grid_comm, ierr)
+    if (nmin /= nmax .or. nmin == 0) return  ! no MARBL calls, or ranks disagree: all return
+    call mpi_allreduce(bal_tsetup, tsu(1), 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    call mpi_allreduce(bal_tsetup, tsu(2), 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     allocate(tmax(nc), tsum(nc), tmin(nc), rt(nr), allc(nr))
     call mpi_allreduce(ld_t(1:nc), tmax, nc, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
     call mpi_allreduce(ld_t(1:nc), tmin, nc, mpi_double_precision, mpi_min, ocean_grid_comm, ierr)
@@ -2041,6 +2050,11 @@ contains
       &  maxval(rt/max(dble(allc),1._8), allc > 0)
       write(*,'(3x,A,F7.4,A,F7.4)') 'corr(rank time, wet columns)', cr,&
       &  '   max/mean per call', bal(3)/max(bal(2),1.d-300)
+      write(*,'(3x,A,3F9.4)') 'first call s       min/mean/max', tmin(1), tsum(1)/nr, tmax(1)
+      if (nc > 1) write(*,'(3x,A,3F9.4)') 'later calls s      min/mean/max',&
+      &  sum(tmin(2:nc))/(nc-1), sum(tsum(2:nc))/(nr*(nc-1)), sum(tmax(2:nc))/(nc-1)
+      if (marbl_balance) write(*,'(3x,A,2F9.4)') 'marbl_balance plan (bal_setup) s mean/max',&
+      &  tsu(2)/nr, tsu(1)
       write(*,*)
     end if
     if (detail) then
