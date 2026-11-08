@@ -86,6 +86,10 @@ module tracers
   type (ncforce), allocatable    :: nc_t( : )                                   ! array of ncvs for each tracer
   integer(kind=4),public :: iTandS                                       ! combined index of temperature and salinit
   integer(kind=4),public :: ibgc0 = 0  ! tracers before the BGC ones: BGC (MARBL/BEC2) tracers are ibgc0+1..nt
+  ! Tracers 1..nt_step are transported every step (pre_step3d, step3d_t,
+  ! t3dmix, their boundary conditions and exchanges): nt, or iTandS when
+  ! the others (passive, CDR and BGC tracers) are subcycled (bgc_subcycle).
+  integer(kind=4),public :: nt_step = 1
   ! public as used in set_forces.F. Need to be parame
 !     integer,public :: nt_passive=0                                 ! total number of passive tracers
   integer(kind=4)        :: itot=0                                       ! index counter to count total number of tr
@@ -722,27 +726,32 @@ contains
       endif
     enddo
 
+    nt_step = nt
+
   end subroutine init_tracers  !]
 
-  subroutine exchange_tracers(tidx)  ![
-    ! Halo-exchange all tracers at time index tidx, four per MPI exchange
-    ! instead of one, to cut the number of messages per step.
+  subroutine exchange_tracers(tidx, ntr)  ![
+    ! Halo-exchange tracers 1..ntr (default all) at time index tidx, four
+    ! per MPI exchange instead of one, to cut the number of messages per step.
     implicit none
     integer(kind=4), intent(in) :: tidx
-    integer(kind=4) :: itrc, nrem
+    integer(kind=4), intent(in), optional :: ntr
+    integer(kind=4) :: itrc, nrem, n
 # ifdef EXCHANGE
-    do itrc=1,nt-3,4
+    n = nt
+    if (present(ntr)) n = ntr
+    do itrc=1,n-3,4
       call exchange_xxx(t(:,:,:,tidx,itrc),   t(:,:,:,tidx,itrc+1),&
       &                 t(:,:,:,tidx,itrc+2), t(:,:,:,tidx,itrc+3))
     enddo
-    nrem = mod(nt,4)
+    nrem = mod(n,4)
     if (nrem == 3) then
-      call exchange_xxx(t(:,:,:,tidx,nt-2), t(:,:,:,tidx,nt-1),&
-      &                 t(:,:,:,tidx,nt))
+      call exchange_xxx(t(:,:,:,tidx,n-2), t(:,:,:,tidx,n-1),&
+      &                 t(:,:,:,tidx,n))
     elseif (nrem == 2) then
-      call exchange_xxx(t(:,:,:,tidx,nt-1), t(:,:,:,tidx,nt))
+      call exchange_xxx(t(:,:,:,tidx,n-1), t(:,:,:,tidx,n))
     elseif (nrem == 1) then
-      call exchange_xxx(t(:,:,:,tidx,nt))
+      call exchange_xxx(t(:,:,:,tidx,n))
     endif
 # endif
   end subroutine exchange_tracers  !]
