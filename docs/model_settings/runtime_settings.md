@@ -305,7 +305,7 @@ Read only with `MARBL`.
 |--------|-------------|
 | `marbl_config_file` | MARBL configuration file |
 | `marbl_tracers_to_write` | Comma-separated (string) list of MARBL tracers to include in BGC output |
-| `marbl_diagnostics_to_write` | Comma-separated (string) list of MARBL diagnostics to include in BGC diagnostics output |
+| `marbl_diagnostics_to_write` | Comma-separated (string) list of MARBL diagnostics to include in BGC diagnostics output. An empty list selects all of them (about 340), and ROMS then copies every one from MARBL at every MARBL step, written or not: on a 512 x 432 x 100 domain that adds about 18 % to MARBL's time, against under 1 % for the 12 diagnostics `cdr_output` needs. MARBL itself computes all its diagnostics whatever the list (about 17 % of its time) |
 | `marbl_timestep` | Desired MARBL timestep (seconds). ROMS solves BGC every `max(1, int(marbl_timestep/dt))` model steps (rounding `marbl_timestep` to that whole multiple of `dt`, max 10800 s); on other steps BGC tracers are advected/diffused but not updated by MARBL. Set `= dt` to update every step. With `bgc_physics_subcycle` (`BGC_SETTINGS`) the BGC tracers are transported and mixed every `bgc_physics_timestep`, which must divide this interval (0: this interval). |
 | `use_constant_Fe` | Hold MARBL's dissolved iron (`Fe`) at `constant_Fe_value` at every wet point, from the initial conditions on. MARBL computes with that value, and each step's changes to Fe (MARBL's sources and sinks, iron deposition, transport, boundary and river inputs) are discarded. Default `.false.` |
 | `constant_Fe_value` | Fe concentration imposed when `use_constant_Fe` is on, in Fe's units (mmol/m^3; 1 nM = 1e-3 mmol/m^3). Must be non-negative. Default `3.0e-3` |
