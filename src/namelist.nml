@@ -625,3 +625,20 @@ fs_tol = 1.0e-8                      ! Relative residual of the elliptic solve (
 fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost table at the end; 2 + FS_VOL
                                      ! volume budget and FS_SRC source volumes (FS_SRC also with fs_mode = 'split')
 /
+
+&BGC_SUBCYCLE_SETTINGS                                              !bgc_subcycle_mod.F90
+!--------------------------
+! Optional (absent: bgc_subcycle = .false.). Transport, mix and force the
+! tracers beyond T and S (passive, CDR_LITE, MARBL) once per window of k steps
+! with the window's accumulated transports, and run MARBL at the window end;
+! T, S and the dynamics still step every dt. With MARBL, k = marbl_timestep/dt.
+! Restarts must fall on window boundaries (output_period_rst a multiple of
+! k*dt, no monthly_restarts). See docs/model_settings/bgc_subcycling.md.
+!--------------------------
+bgc_subcycle = .false.               ! Subcycle the tracers beyond T and S
+bgc_subcycle_steps = 0               ! k without MARBL (>= 1); with MARBL 0 or marbl_timestep/dt
+bgc_subcycle_pos = .false.           ! Flux-corrected positivity limiter on the advective fluxes
+bgc_subcycle_diag = 0                ! 1: BGCSUB/BGCSUBNEG lines per window (Courant numbers, continuity,
+                                     ! constancy, budget residual, new negatives; for testing);
+                                     ! 2: also clip the window-start state at 0 (changes results)
+/
