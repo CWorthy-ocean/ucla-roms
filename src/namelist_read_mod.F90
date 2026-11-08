@@ -79,6 +79,7 @@ contains
 #endif
     use diag_mod, only: read_nml_stdout_diag
     use implicit_fs_mod, only: read_nml_implicit_fs !IMPLICIT_FS (optional)
+    use bgc_subcycle_mod, only: read_nml_bgc_subcycle !BGC_SUBCYCLE_SETTINGS (optional)
     implicit none
     call read_nml_param
 #ifndef ANA_GRID
@@ -133,6 +134,7 @@ contains
 #endif
    call read_nml_stdout_diag
    call read_nml_implicit_fs
+   call read_nml_bgc_subcycle
 
    ! Stop on any namelist error before the values are used (a path cut off
    ! by the read, a missing input file, ...)
