@@ -475,7 +475,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: wrt_upscale, do_upscale
 #endif
-    use implicit_fs_mod, only: fs_on, fs_step, fs_save_bry, fs_srcdiag, fs_src_diag
+    use implicit_fs_mod, only: fs_on, fs_step, fs_srcdiag, fs_src_diag
 #ifdef DIAGNOSTICS
     use diagnostics, only: do_diagnostics, diag_uv, diag_trc
 #endif
@@ -532,7 +532,6 @@ contains
     call set_bry_all
 
     if (bry_tides.or.pot_tides) call set_tides(0)
-    if (fs_on) call fs_save_bry   ! fs_obc_flux = 'ext': boundary data at n+1/2
     call reg_toc(rg_set_bry)
 
 #ifdef SOLVE3D

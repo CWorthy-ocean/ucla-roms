@@ -35,7 +35,7 @@ module implicit_fs_mod
 
   public :: read_nml_implicit_fs
   public :: fs_step
-  public :: fs_save_bry, fs_rst_def, fs_rst_wrt, fs_rst_get, fs_rst_wrt_scal
+  public :: fs_rst_def, fs_rst_wrt, fs_rst_get, fs_rst_wrt_scal
   public :: fs_src_diag
 
   character(len=14) :: module_name = "implicit_fs"
@@ -71,46 +71,18 @@ module implicit_fs_mod
   logical :: fs_exch_thin = .true.             ! 'mg': the fine-level halo exchanges of the PCG direction p and of the
                                                ! V-cycle's z one cell wide without corners (all their readers use the
                                                ! 5-point stencil; same values); .false.: the full exchange_xxx
-  logical :: fs_cost_sync = .false.            ! timing only: a barrier (FS_COST 'sync') before the multigrid
-                                               ! gathers and the PCG allreduces, so that those pieces exclude the
-                                               ! wait for the slowest rank
   logical :: fs_drag_implicit = .false.        ! implicit correction of the linear drag increment
-  logical :: fs_coriolis_implicit = .false.    ! not implemented (.true. stops)
   integer(kind=4) :: fs_warm = 1               ! PCG start: 1 previous delta, 0 zero
-  character(len=8) :: fs_pred_ext = 'ab2'      ! the predictor's barotropic transport (set_HUV1, through
-                                               ! DU_avg_bak): 'ab2' 1.5 U^n - 0.5 U^n-1; 'stock' the
-                                               ! split path's NOW/MID/BAK extrapolation
-  character(len=8) :: fs_obc_flux = 'mem'      ! open normal faces (Flather): 'mem' the flux with U_b^n and the
-                                               ! generalized-alpha memory; 'ext' Flather at the th_d level with
-                                               ! external data at n+1/2 and n+1, no memory
-  character(len=8) :: fs_tang = 'adv'          ! tangential open-boundary ubar/vbar: 'adv' (default) the
-                                               ! backward-Euler form of u2dbc/v2dbc (OBC_M2FLATHER: upwind
-                                               ! advection by the normal flow, nudging at |u_n|/dx on inflow);
-                                               ! 'orl' normal-radiation Orlanski + ubind nudging on inflow;
-                                               ! 'nudge' ubind nudging only; 'grav' gravity-wave
-                                               ! radiation
-  real(kind=8)    :: fs_tang_nudge = 1._8      ! factor on the tangential nudging rate ('orl', 'adv', 'nudge')
-  character(len=8) :: fs_mom_mem = 'cor'       ! generalized-alpha memory of the momentum increment: 'cor' (default)
-                                               ! all of it except an estimate of the depth-integrated Coriolis
-                                               ! force on U^n (which enters with weight 1); 'pg' only the
-                                               ! free-surface pressure gradient; 'all' all of it (the memory
-                                               ! then lags the explicit Coriolis force and depth-mean inertial
-                                               ! oscillations can grow, e.g. in closed f-plane basins)
-  character(len=8) :: fs_src_mem = 'none'     ! prescribed volume sources (river faces; swflx, pipes, CDR
-                                               ! volume): 'none' (default) the step's own value, as the
-                                               ! split's fast loop and the 3-D step use it; 'all' through the
-                                               ! generalized-alpha memory like the operator terms (a start-up
-                                               ! lag, and the zeta volume then differs from the volume the
-                                               ! 3-D step adds)
-  character(len=8) :: fs_ga_start = 'step'    ! first step of a run without stored rates (cold start): 'rhs'
-                                               ! the rates from the explicit right-hand side at n
-                                               ! (dU/dt = the explicit momentum tendency, G = U^n, q = Q^n), then
-                                               ! an ordinary generalized-alpha step; 'step' (default) a step
-                                               ! without memory (beta1 = 1) whose increments become the rates
-  character(len=8) :: fs_cor_est = 'n'        ! fs_mom_mem = 'cor': the velocities of the Coriolis estimate, 'n'
-                                               ! (default) U^n; 'ab2' 1.5 U^n - 0.5 U^n-1 (the predictor's
-                                               ! extrapolation; restart not exact: U^n-1 is not in the restart file)
-  logical :: fs_cor_metric = .true.            ! fs_mom_mem = 'cor' with CURVGRID and UV_ADV: the estimate includes
+  ! Fixed parts of the scheme: the predictor's barotropic transport is the AB2 extrapolation 1.5 U^n - 0.5 U^n-1
+  ! (through DU_avg_bak); open normal faces (Flather) use the flux with U_b^n and the generalized-alpha memory;
+  ! tangential open-boundary ubar/vbar are the backward-Euler form of u2dbc/v2dbc (OBC_M2FLATHER: upwind advection
+  ! by the normal flow, nudging at |u_n|/dx on inflow); the generalized-alpha memory holds all of the momentum
+  ! increment except an estimate of the depth-integrated Coriolis force on U^n (which enters with weight 1);
+  ! prescribed volume sources enter with the step's own value (as the split's fast loop and the 3-D step use
+  ! them); a run without stored rates starts with a step without memory (beta1 = 1) whose increments become the
+  ! rates.
+  real(kind=8)    :: fs_tang_nudge = 1._8      ! factor on the tangential inflow nudging rate
+  logical :: fs_cor_metric = .true.            ! with CURVGRID and UV_ADV: the Coriolis estimate includes
                                                ! the curvilinear metric terms of the 3-D rhs (.false.: fomn only)
   character(len=8) :: fs_pot_time = 'af'      ! time of the tidal potential (pot_tides; it reaches the step through
                                                ! rufrc): 'af' n+alpha_f = n+1/(1+fs_rho_inf), the time at which the
@@ -128,13 +100,12 @@ module implicit_fs_mod
                                                ! A (FS_TEST lines), then the step as usual
   namelist /IMPLICIT_FS/ fs_mode, fs_rho_inf, fs_theta, fs_theta_div, fs_tol, fs_maxit, fs_precond,&
   &  fs_mg_levels, fs_mg_nu, fs_mg_smoother, fs_mg_lag, fs_mg_gather, fs_mg_global_on, fs_mg_faces,&
-  &  fs_exch_thin, fs_cost_sync, fs_drag_implicit, fs_coriolis_implicit,&
-  &  fs_warm, fs_verbose, fs_selftest, fs_pred_ext, fs_obc_flux, fs_tang, fs_tang_nudge, fs_mom_mem,&
-  &  fs_src_mem, fs_ga_start, fs_cor_est, fs_cor_metric, fs_pot_time, fs_stress_time
+  &  fs_exch_thin, fs_drag_implicit,&
+  &  fs_warm, fs_verbose, fs_selftest, fs_tang_nudge,&
+  &  fs_cor_metric, fs_pot_time, fs_stress_time
 
   logical, public, protected :: fs_on = .false.   ! fs_mode = 'implicit'
   logical, public, protected :: fs_srcdiag = .false.  ! fs_verbose >= 2: FS_SRC line per step (both modes)
-  logical :: src_mem = .false.              ! fs_src_mem = 'all'
 
 #ifdef SOLVE3D
   ! tile interior and physical edges (set at the first step)
@@ -190,29 +161,20 @@ module implicit_fs_mod
   ! Scheme coefficients of the step: beta1 (weight of the rhs at n; 1 - beta1 on the rates),
   ! thp, thd (implicit weights of the PG and of the divergence), gam_a (rate update)
   real(kind=8), allocatable, dimension(:,:) :: udu, udv, gru, grv, qd
-  real(kind=8), allocatable, dimension(:,:) :: du1o, dv1o   ! DU_avg1, DV_avg1 at entry (U^n; 'ab2')
-  logical :: ext_ab2 = .true.
-  logical :: obc_ext = .false.              ! fs_obc_flux = 'ext'
-  integer(kind=4) :: tang_kind = 2          ! fs_tang: 1 'orl', 2 'adv', 3 'nudge', 4 'grav'
+  real(kind=8), allocatable, dimension(:,:) :: du1o, dv1o   ! DU_avg1, DV_avg1 at entry (U^n; AB2 predictor)
   logical :: rst_rates = .false.            ! the rates and delta were read from the restart file
-  integer(kind=4) :: mem_kind = 3           ! fs_mom_mem: 1 'all', 2 'pg', 3 'cor'
-  logical :: ga_rhs = .false.               ! fs_ga_start = 'rhs'
-  logical :: cor_ab2 = .false.              ! fs_cor_est = 'ab2'
+  integer(kind=4), parameter :: mem_kind = 3  ! restart scalar 4: the memory kind of the rates (3: all but the
+                                              ! Coriolis estimate; 1 and 2 were removed development options)
   logical :: stress_af = .false.            ! fs_stress_time = 'af' (and alpha_f /= 1/2)
   real(kind=8) :: alf = 1._8                ! alpha_f
   ! fs_stress_time = 'af': the change of the kinematic surface stress [m2/s2] from n+1/2 to n+alpha_f (u, v faces)
   real(kind=8), allocatable, dimension(:,:) :: dsu, dsv
-  ! 'cor' estimate: depth-mean velocities used (ubx, vbx: U^n or the AB2 extrapolation), the Coriolis + metric
-  ! factor per cell (fcr; = fomn without metric terms), and for 'ab2' ubar, vbar(kstp) of this step (ubn, vbn) and
-  ! of the step before (ubo, vbo); cor_iic: the step (iic) ubn belongs to (rotated once per step)
-  real(kind=8), allocatable, dimension(:,:) :: ubx, vbx, fcr, ubn, vbn, ubo, vbo
-  integer(kind=4) :: cor_iic = -1
-  logical :: cor_new = .false., cor_old = .false.
-  ! the part of the explicit momentum increment kept out of the memory [m3/s] ('pg': all but the PG at
-  ! zeta^n; 'cor': the Coriolis estimate), and the cell transports U^n, V^n used by the estimate
+  ! Coriolis estimate: depth-mean velocities U^n (ubx, vbx) and the Coriolis + metric factor per cell (fcr; = fomn
+  ! without metric terms)
+  real(kind=8), allocatable, dimension(:,:) :: ubx, vbx, fcr
+  ! the part of the explicit momentum increment kept out of the memory [m3/s] (the Coriolis estimate), and the
+  ! cell transports U^n, V^n used by the estimate
   real(kind=8), allocatable, dimension(:,:) :: xru, xrv, cou, cov
-  ! fs_obc_flux = 'ext': the normal external data at n+1/2 (fs_save_bry, after the first set_bry_all)
-  real(kind=8), allocatable, dimension(:) :: zw_h, uw_h, ze_h, ue_h, zs_h, vs_h, zn_h, vn_h
   logical :: ga_first = .true.
   real(kind=8) :: beta1 = 1._8, thp = 0.5_8, thd = 0.5_8, gam_a = 0.5_8, ths = 0.5_8
   ! fs_mg_lag > 1 (exact restart): the fine operator of the last coarse-operator build
@@ -226,12 +188,12 @@ module implicit_fs_mod
   ! statistics and timing: per-step solve count, iterations, worst residual; cost pieces
   integer(kind=4) :: n_solve = 0, n_its = 0, n_unconv = 0, its_last = 0
   real(kind=8) :: res_last = 0._8
-  integer(kind=4), parameter :: ntm = 22
+  integer(kind=4), parameter :: ntm = 21
   real(kind=8) :: tm(ntm) = 0._8, tm_t0 = 0._8
   character(len=12), parameter :: tm_name(ntm) = [character(len=12) :: 'setup', 'exch_coef',&
   &  'pcg_start', 'pcg_op', 'pcg_pc', 'pcg_exch', 'pcg_allred', 'pcg_vec', 'finish',&
   &  'exch_fin', 'bc_uv', 'set_depth', 'mg_smooth', 'mg_exch', 'mg_transfer', 'mg_gather', 'mg_coarse',&
-  &  'mg_setup', 'sync', 'mgs_gather', 'mgs_global', 'mg_scatter']
+  &  'mg_setup', 'mgs_gather', 'mgs_global', 'mg_scatter']
 #endif
 
 contains
@@ -247,16 +209,20 @@ contains
     implicit none
     integer(kind=4) :: namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_implicit_fs"
+    character(len=256) :: msg
 
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
-    read (unit=namelist_unit, nml=IMPLICIT_FS, iostat=ios)
+    msg = ''
+    read (unit=namelist_unit, nml=IMPLICIT_FS, iostat=ios, iomsg=msg)
     close(namelist_unit)
     if (ios == iostat_end) then
       fs_mode = 'split'
     else if (ios /= 0) then
       call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
-      &info="could not read the IMPLICIT_FS section of the namelist file")
+      &info="could not read the IMPLICIT_FS section of the namelist file ("//trim(msg)//"). Note: the"&
+      &//" development keys fs_mom_mem, fs_src_mem, fs_tang, fs_obc_flux, fs_pred_ext, fs_ga_start,"&
+      &//" fs_cor_est, fs_coriolis_implicit and fs_cost_sync are not read; delete them from the namelist")
       return
     end if
     fs_on = (trim(fs_mode) == 'implicit')
@@ -284,47 +250,11 @@ contains
       call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
       &  info="fs_pot_time must be 'af' or 'mid'")
     end select
-    ext_ab2 = (trim(fs_pred_ext) == 'ab2')
-    obc_ext = (trim(fs_obc_flux) == 'ext')
-    if (.not. obc_ext .and. trim(fs_obc_flux) /= 'mem') call error_log%raise_global(&
-    &  context=trim(module_name)//"/"//sr_name, info="fs_obc_flux must be 'mem' or 'ext'")
-    select case (trim(fs_tang))
-    case ('orl') ; tang_kind = 1
-    case ('adv') ; tang_kind = 2
-    case ('nudge') ; tang_kind = 3
-    case ('grav') ; tang_kind = 4
-    case default
-      call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
-      &  info="fs_tang must be 'orl', 'adv', 'nudge' or 'grav'")
-    end select
-    select case (trim(fs_src_mem))
-    case ('none') ; src_mem = .false.
-    case ('all') ; src_mem = .true.
-    case default
-      call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
-      &  info="fs_src_mem must be 'none' or 'all'")
-    end select
-    select case (trim(fs_mom_mem))
-    case ('all') ; mem_kind = 1
-    case ('pg') ; mem_kind = 2
-    case ('cor') ; mem_kind = 3
-    case default
-      call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
-      &  info="fs_mom_mem must be 'cor', 'pg' or 'all'")
-    end select
-    cor_ab2 = (trim(fs_cor_est) == 'ab2')
-    if (.not. cor_ab2 .and. trim(fs_cor_est) /= 'n') call error_log%raise_global(&
-    &  context=trim(module_name)//"/"//sr_name, info="fs_cor_est must be 'n' or 'ab2'")
-    ga_rhs = (trim(fs_ga_start) == 'rhs')
     if (trim(fs_stress_time) /= 'af' .and. trim(fs_stress_time) /= 'mid') call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_stress_time must be 'af' or 'mid'")
     stress_af = (trim(fs_stress_time) == 'af' .and. abs(alf - 0.5_8) > 1.e-12_8)
-    if (.not. ga_rhs .and. trim(fs_ga_start) /= 'step') call error_log%raise_global(&
-    &  context=trim(module_name)//"/"//sr_name, info="fs_ga_start must be 'rhs' or 'step'")
     if (fs_tang_nudge < 0._8) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_tang_nudge must be >= 0")
-    if (.not. ext_ab2 .and. trim(fs_pred_ext) /= 'stock') call error_log%raise_global(&
-    &  context=trim(module_name)//"/"//sr_name, info="fs_pred_ext must be 'ab2' or 'stock'")
     if (fs_tol <= 0._8 .or. fs_maxit < 1) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_tol > 0 and fs_maxit >= 1 required")
     if (trim(fs_precond) /= 'jacobi' .and. trim(fs_precond) /= 'mg')&
@@ -338,8 +268,6 @@ contains
     &  trim(fs_mg_global_on) /= 'one') .or. (trim(fs_mg_faces) /= 'half' .and. trim(fs_mg_faces) /= 'width'))&
     &  call error_log%raise_global(context=trim(module_name)//"/"//sr_name, info="fs_mg_gather >= 0, fs_mg_global_on"&
     &  //" 'all', 'node' or 'one', fs_mg_faces 'half' or 'width' required")
-    if (fs_coriolis_implicit) call error_log%raise_global(&
-    &  context=trim(module_name)//"/"//sr_name, info="fs_coriolis_implicit = .true. is not implemented")
 #if defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH
 # if !defined M2_FRC_BRY || !defined Z_FRC_BRY
     call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
@@ -355,15 +283,10 @@ contains
       &  ' fs_tol =', fs_tol, ' fs_maxit =', fs_maxit,&
       &  ' fs_precond = ', trim(fs_precond), ' fs_drag_implicit = ', fs_drag_implicit,&
       &  ' fs_warm =', fs_warm, ' fs_verbose =', fs_verbose
-      write(*,'(1x,A,A,A,A,A,A,A,F8.3,A,A)') 'IMPLICIT_FS: fs_pred_ext = ', trim(fs_pred_ext), ' fs_obc_flux = ',&
-      &  trim(fs_obc_flux), ' fs_tang = ', trim(fs_tang), ' fs_tang_nudge =', fs_tang_nudge, ' fs_mom_mem = ',&
-      &  trim(fs_mom_mem)
-      write(*,'(1x,A,A)') 'IMPLICIT_FS: fs_src_mem = ', trim(fs_src_mem)
-      if (mg_on) write(*,'(1x,A,I7,A,A,A,A,A,I3,A,L1,A,L1)') 'IMPLICIT_FS: fs_mg_gather =', fs_mg_gather,&
+      write(*,'(1x,A,F8.3,A,L1)') 'IMPLICIT_FS: fs_tang_nudge =', fs_tang_nudge, ' fs_cor_metric = ', fs_cor_metric
+      if (mg_on) write(*,'(1x,A,I7,A,A,A,A,A,I3,A,L1)') 'IMPLICIT_FS: fs_mg_gather =', fs_mg_gather,&
       &  ' fs_mg_global_on = ', trim(fs_mg_global_on), ' fs_mg_faces = ', trim(fs_mg_faces),&
-      &  ' fs_mg_lag =', fs_mg_lag, ' fs_cost_sync = ', fs_cost_sync, ' fs_exch_thin = ', fs_exch_thin
-      write(*,'(1x,A,A,A,A,A,L1)') 'IMPLICIT_FS: fs_ga_start = ', trim(fs_ga_start), ' fs_cor_est = ',&
-      &  trim(fs_cor_est), ' fs_cor_metric = ', fs_cor_metric
+      &  ' fs_mg_lag =', fs_mg_lag, ' fs_exch_thin = ', fs_exch_thin
       write(*,'(1x,A,A,A,F7.4,A)') 'IMPLICIT_FS: fs_pot_time = ', trim(fs_pot_time), ' (tidal potential at time +',&
       &  pot_phase, ' dt)'
       if (stress_af) then
@@ -392,53 +315,6 @@ contains
 
 
   !----------------------------------------------------------------------
-  subroutine fs_save_bry
-    ! fs_obc_flux = 'ext': the normal open-boundary data (zeta, normal ubar/vbar) at
-    ! n+1/2, right after the step's first set_bry_all/set_tides(0) (main.F90); the
-    ! Flather flux uses x(n+th_d) = (2 th_d - 1) x(n+1) + 2 (1 - th_d) x(n+1/2)
-#if defined M2_FRC_BRY && defined Z_FRC_BRY
-    use boundary, only:&
-# ifdef OBC_WEST
-    &  zeta_west, ubar_west,&
-# endif
-# ifdef OBC_EAST
-    &  zeta_east, ubar_east,&
-# endif
-# ifdef OBC_SOUTH
-    &  zeta_south, vbar_south,&
-# endif
-# ifdef OBC_NORTH
-    &  zeta_north, vbar_north,&
-# endif
-    &  set_bry_all
-#endif
-    implicit none
-    if (.not. (fs_on .and. obc_ext)) return
-#if defined M2_FRC_BRY && defined Z_FRC_BRY
-# ifdef OBC_WEST
-    if (.not. allocated(zw_h)) allocate(zw_h, mold=zeta_west)
-    if (.not. allocated(uw_h)) allocate(uw_h, mold=ubar_west)
-    zw_h = zeta_west ; uw_h = ubar_west
-# endif
-# ifdef OBC_EAST
-    if (.not. allocated(ze_h)) allocate(ze_h, mold=zeta_east)
-    if (.not. allocated(ue_h)) allocate(ue_h, mold=ubar_east)
-    ze_h = zeta_east ; ue_h = ubar_east
-# endif
-# ifdef OBC_SOUTH
-    if (.not. allocated(zs_h)) allocate(zs_h, mold=zeta_south)
-    if (.not. allocated(vs_h)) allocate(vs_h, mold=vbar_south)
-    zs_h = zeta_south ; vs_h = vbar_south
-# endif
-# ifdef OBC_NORTH
-    if (.not. allocated(zn_h)) allocate(zn_h, mold=zeta_north)
-    if (.not. allocated(vn_h)) allocate(vn_h, mold=vbar_north)
-    zn_h = zeta_north ; vn_h = vbar_north
-# endif
-#endif
-  end subroutine fs_save_bry
-
-  !----------------------------------------------------------------------
   subroutine fs_rst_def(ncid)
     ! restart file (EXACT_RESTART, basic_output): the generalized-alpha rates and the
     ! PCG warm start delta, so that a restart continues the step exactly (section 6);
@@ -464,8 +340,9 @@ contains
     varid = nccreate(ncid,'fs_delta',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),nf90_double)
     ierr = nf90_put_att(ncid, varid, 'long_name', 'implicit_fs last zeta increment (PCG warm start)')
     ! scalars (fs_rst_wrt_scal): 1 version (1), 2 fs_mg_lag, 3 phase of the coarse-operator rebuild
-    ! counter for the next step, 4 fs_mom_mem (1 'all', 2 'pg', 3 'cor'), 5 the fine operator of the
-    ! last build is in fs_mge0, fs_mgcu, fs_mgcv (1/0)
+    ! counter for the next step, 4 the memory kind of the rates (3; 1 and 2 were the development
+    ! options fs_mom_mem 'all' and 'pg'), 5 the fine operator of the last build is in fs_mge0,
+    ! fs_mgcu, fs_mgcv (1/0)
     varid = nccreate(ncid,'fs_rst_scal',[character(len=8) :: 'fs_nscal', dn_tm],(/fs_nsc,0/),nf90_double)
     ierr = nf90_put_att(ncid, varid, 'long_name', 'implicit_fs restart scalars (implicit_fs_mod.F90 fs_rst_def)')
     if (mg_on .and. fs_mg_lag > 1) then
@@ -561,7 +438,7 @@ contains
     integer(kind=4) :: ierr, varid, start(3)
     real(kind=8) :: qm(1), gqm(1), sc(fs_nsc)
     character(len=len(pio_gtype)) :: gsv
-    character(len=4), parameter :: mem_name(3) = ['all ', 'pg  ', 'cor ']
+    character(len=4), parameter :: mem_name(2) = ['all ', 'pg  ']
     if (.not. fs_on) return
     ! scalars (files written before them: rates as they are, coarse operators built at the first step)
     sc = 0._8
@@ -569,9 +446,12 @@ contains
     if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, sc, start=(/1,record/), count=(/fs_nsc,1/))
     if (ierr /= nf90_noerr) sc = 0._8
     if (nint(sc(1)) == 1 .and. nint(sc(4)) /= mem_kind) then
-      if (mynode == 0) write(*,'(1x,A)') 'IMPLICIT_FS: the restart record''s rates were made with fs_mom_mem = '''&
-      &//trim(mem_name(max(1,min(3,nint(sc(4))))))//''', this run has '''//trim(mem_name(mem_kind))//&
-      &''': cold start of the generalized-alpha memory'
+      ! rates of another memory kind (the development options fs_mom_mem 'all' or 'pg'): not usable
+      ! with this scheme, so the generalized-alpha memory starts cold (as for a file without rates);
+      ! the model state is read as usual, the continuation is not bit-exact
+      if (mynode == 0) write(*,'(1x,A)') 'IMPLICIT_FS: the restart record''s rates were made with the removed'&
+      &//' option fs_mom_mem = '''//trim(mem_name(max(1,min(2,nint(sc(4))))))//''': cold start of the'&
+      &//' generalized-alpha memory (not an exact restart)'
       return
     end if
     mg_ph0 = 0 ; mg_rpend = .false.
@@ -713,9 +593,8 @@ contains
     allocate( du1o(GLOBAL_2D_ARRAY), dv1o(GLOBAL_2D_ARRAY) ) ; du1o = 0._8 ; dv1o = 0._8
     allocate( xru(GLOBAL_2D_ARRAY), xrv(GLOBAL_2D_ARRAY), cou(GLOBAL_2D_ARRAY), cov(GLOBAL_2D_ARRAY) )
     xru = 0._8 ; xrv = 0._8 ; cou = 0._8 ; cov = 0._8
-    allocate( ubx(GLOBAL_2D_ARRAY), vbx(GLOBAL_2D_ARRAY), fcr(GLOBAL_2D_ARRAY), ubn(GLOBAL_2D_ARRAY),&
-    &         vbn(GLOBAL_2D_ARRAY), ubo(GLOBAL_2D_ARRAY), vbo(GLOBAL_2D_ARRAY) )
-    ubx = 0._8 ; vbx = 0._8 ; fcr = 0._8 ; ubn = 0._8 ; vbn = 0._8 ; ubo = 0._8 ; vbo = 0._8
+    allocate( ubx(GLOBAL_2D_ARRAY), vbx(GLOBAL_2D_ARRAY), fcr(GLOBAL_2D_ARRAY) )
+    ubx = 0._8 ; vbx = 0._8 ; fcr = 0._8
     allocate( dsu(GLOBAL_2D_ARRAY), dsv(GLOBAL_2D_ARRAY) ) ; dsu = 0._8 ; dsv = 0._8
   end subroutine fs_alloc
 
@@ -807,38 +686,26 @@ contains
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     integer(kind=4) :: i, j, iface, iriv, its, ierr, icdr, cidx
-    real(kind=8) :: th, b1, df, ainv, gam, m, d, hf, cb, cx, resid, rf, t0, xw1, xwh
+    real(kind=8) :: th, b1, df, ainv, gam, m, d, hf, cb, cx, resid, rf, t0
     real(kind=8) :: vloc(4), vglob(4)
-    logical :: conv, ga0, rhs0
+    logical :: conv, ga0
 
 #include "compute_auxiliary_bounds.h"
 
     if (.not. ready) call fs_init(istr,iend,jstr,jend)
     th = thp
     b1 = beta1
-    ga0 = ga_first .and. .not. ga_rhs       ! no rates yet, 'step': the step without memory
-    rhs0 = ga_first .and. ga_rhs            ! no rates yet, 'rhs': rates from the explicit rhs at n
+    ga0 = ga_first                          ! no rates yet: the step without memory
     if (ga0) b1 = 1._8
-    xw1 = 2._8*thd - 1._8                   ! fs_obc_flux = 'ext': x(n+th_d) = xw1 x(n+1) + xwh x(n+1/2)
-    xwh = 2._8*(1._8 - thd)
     call tq0
 
     ! ---- (A) the predictor's DU_avg_bak (EXTRAP_BAR_FLUXES; step2d at iif = 1)
 #ifdef EXTRAP_BAR_FLUXES
-    if (ext_ab2) then                       ! U^n for the end of the step
-      do j=jstrR,jendR
-        do i=istrR,iendR
-          du1o(i,j) = DU_avg1(i,j) ; dv1o(i,j) = DV_avg1(i,j)
-        enddo
+    do j=jstrR,jendR                        ! U^n for the end of the step
+      do i=istrR,iendR
+        du1o(i,j) = DU_avg1(i,j) ; dv1o(i,j) = DV_avg1(i,j)
       enddo
-    else
-      do j=jstrR,jendR
-        do i=istrR,iendR
-          DU_avg_bak(i,j) = DU_avg1(i,j) - 0.1024390243902439D0*DU_avg2(i,j)
-          DV_avg_bak(i,j) = DV_avg1(i,j) - 0.1024390243902439D0*DV_avg2(i,j)
-        enddo
-      enddo
-    end if
+    enddo
 #endif
 
     ! ---- (B) per-face setup: D^n, U^n, Ustar, a, c, Ftil
@@ -854,59 +721,33 @@ contains
         unu(i,j) = 0.5_8*(wd(i-1,j)+wd(i,j))*dn_u(i,j)*ubar(i,j,kstp)
       enddo
     enddo
-    if (rhs0) then                          ! 'rhs' start: the rate flux at n is U^n
-      do j=jstr,jend
-        do i=istr,iend+1
-          gru(i,j) = unu(i,j)
-        enddo
+    ! Coriolis estimate: depth-integrated velocities [m2/s] of U^n, V^n incl. one halo
+    do j=jstr-1,jend+1                      ! velocities incl. one halo row and column
+      do i=istr-1,iend+1
+        ubx(i,j) = ubar(i,j,kstp) ; vbx(i,j) = vbar(i,j,kstp)
       enddo
-    end if
-    if (mem_kind == 3) then                 ! depth-integrated velocities [m2/s] of U^n, V^n incl. one halo
-      if (cor_ab2 .and. iic /= cor_iic) then  ! a new step: ubar, vbar(kstp) of the last step become U^n-1
-        if (cor_new) then
-          ubo = ubn ; vbo = vbn ; cor_old = .true.
-        end if
-        do j=jstr-1,jend+1
-          do i=istr-1,iend+1
-            ubn(i,j) = ubar(i,j,kstp) ; vbn(i,j) = vbar(i,j,kstp)
-          enddo
-        enddo
-        cor_new = .true. ; cor_iic = iic
-      end if
-      do j=jstr-1,jend+1                    ! velocities incl. one halo row and column
-        do i=istr-1,iend+1
-          ubx(i,j) = ubar(i,j,kstp) ; vbx(i,j) = vbar(i,j,kstp)
-        enddo
+    enddo
+    do j=jstr-1,jend+1                      ! row/column (vbar, ubar(kstp) and zeta are exchanged)
+      do i=istr,iend+1
+        cou(i,j) = 0.5_8*(wd(i-1,j)+wd(i,j))*ubx(i,j)
       enddo
-      if (cor_ab2 .and. cor_old) then
-        do j=jstr-1,jend+1
-          do i=istr-1,iend+1
-            ubx(i,j) = 1.5_8*ubar(i,j,kstp) - 0.5_8*ubo(i,j) ; vbx(i,j) = 1.5_8*vbar(i,j,kstp) - 0.5_8*vbo(i,j)
-          enddo
-        enddo
-      end if
-      do j=jstr-1,jend+1                    ! row/column (vbar, ubar(kstp) and zeta are exchanged)
-        do i=istr,iend+1
-          cou(i,j) = 0.5_8*(wd(i-1,j)+wd(i,j))*ubx(i,j)
-        enddo
+    enddo
+    do j=jstr,jend+1
+      do i=istr-1,iend+1
+        cov(i,j) = 0.5_8*(wd(i,j-1)+wd(i,j))*vbx(i,j)
       enddo
-      do j=jstr,jend+1
-        do i=istr-1,iend+1
-          cov(i,j) = 0.5_8*(wd(i,j-1)+wd(i,j))*vbx(i,j)
-        enddo
-      enddo
-      ! the Coriolis factor per cell, with the curvilinear metric terms of the 3-D rhs
-      ! (compute_horiz_rhs_uv_terms.h: fomn + 0.5 ((v(j)+v(j+1)) dndx - (u(i)+u(i+1)) dmde))
-      do j=jstrV-1,jend
-        do i=istrU-1,iend
-          fcr(i,j) = fomn(i,j)
+    enddo
+    ! the Coriolis factor per cell, with the curvilinear metric terms of the 3-D rhs
+    ! (compute_horiz_rhs_uv_terms.h: fomn + 0.5 ((v(j)+v(j+1)) dndx - (u(i)+u(i+1)) dmde))
+    do j=jstrV-1,jend
+      do i=istrU-1,iend
+        fcr(i,j) = fomn(i,j)
 #if defined CURVGRID && defined UV_ADV
-          if (fs_cor_metric) fcr(i,j) = fomn(i,j) + 0.5_8*( (vbx(i,j)+vbx(i,j+1))*dndx(i,j)&
-          &                                              - (ubx(i,j)+ubx(i+1,j))*dmde(i,j) )
+        if (fs_cor_metric) fcr(i,j) = fomn(i,j) + 0.5_8*( (vbx(i,j)+vbx(i,j+1))*dndx(i,j)&
+        &                                              - (ubx(i,j)+ubx(i+1,j))*dmde(i,j) )
 #endif
-        enddo
       enddo
-    end if
+    enddo
     do j=jstr,jend
       do i=istrU,iend
         df = 0.5_8*(wd(i-1,j)+wd(i,j))
@@ -918,22 +759,11 @@ contains
         m = umask(i,j)
 #endif
         au(i,j) = th*dt*g*dn_u(i,j)*dn_u(i,j)*df*ainv*m/(1._8+gam)
-        if (mem_kind == 2) then             ! memory only on the PG part: x = dt dn A^-1 rufrc, p = PG(zeta^n) dt
-          d = dt*dn_u(i,j)*ainv*rufrc(i,j)
-          hf = dt*g*dn_u(i,j)*dn_u(i,j)*df*ainv*(zeta(i-1,j,kstp)-zeta(i,j,kstp))
-          if (rhs0) udu(i,j) = m*hf/(dt*(1._8+gam))
-          usu(i,j) = m*(unu(i,j) + (d + (1._8-b1)*(dt*udu(i,j) - hf))/(1._8+gam))
-          xru(i,j) = m*(d - hf)/(1._8+gam)
-        else if (mem_kind == 3) then        ! memory on all but the Coriolis estimate c (ROMS rhs3d form, U^n)
-          d = dt*dn_u(i,j)*ainv*rufrc(i,j)
-          hf = dt*dn_u(i,j)*ainv*0.25_8*( fcr(i,j)*(cov(i,j)+cov(i,j+1)) + fcr(i-1,j)*(cov(i-1,j)+cov(i-1,j+1)) )
-          if (rhs0) udu(i,j) = m*(d - hf)/(dt*(1._8+gam))
-          usu(i,j) = m*(unu(i,j) + (hf + b1*(d - hf) + (1._8-b1)*dt*udu(i,j))/(1._8+gam))
-          xru(i,j) = m*hf/(1._8+gam)
-        else
-        if (rhs0) udu(i,j) = m*dn_u(i,j)*ainv*rufrc(i,j)/(1._8+gam)
-        usu(i,j) = m*(unu(i,j) + dt*(b1*dn_u(i,j)*ainv*rufrc(i,j) + (1._8-b1)*udu(i,j))/(1._8+gam))
-        endif
+        ! memory on all but the Coriolis estimate c (ROMS rhs3d form, U^n)
+        d = dt*dn_u(i,j)*ainv*rufrc(i,j)
+        hf = dt*dn_u(i,j)*ainv*0.25_8*( fcr(i,j)*(cov(i,j)+cov(i,j+1)) + fcr(i-1,j)*(cov(i-1,j)+cov(i-1,j+1)) )
+        usu(i,j) = m*(unu(i,j) + (hf + b1*(d - hf) + (1._8-b1)*dt*udu(i,j))/(1._8+gam))
+        xru(i,j) = m*hf/(1._8+gam)
         ftu(i,j) = m*(b1*unu(i,j) + (1._8-b1)*gru(i,j) + thd*(usu(i,j)-unu(i,j)))
         cu(i,j) = thd*dt*au(i,j)
       enddo
@@ -943,13 +773,6 @@ contains
         unv(i,j) = 0.5_8*(wd(i,j-1)+wd(i,j))*dm_v(i,j)*vbar(i,j,kstp)
       enddo
     enddo
-    if (rhs0) then
-      do j=jstr,jend+1
-        do i=istr,iend
-          grv(i,j) = unv(i,j)
-        enddo
-      enddo
-    end if
     do j=jstrV,jend
       do i=istr,iend
         df = 0.5_8*(wd(i,j-1)+wd(i,j))
@@ -961,22 +784,10 @@ contains
         m = vmask(i,j)
 #endif
         av(i,j) = th*dt*g*dm_v(i,j)*dm_v(i,j)*df*ainv*m/(1._8+gam)
-        if (mem_kind == 2) then
-          d = dt*dm_v(i,j)*ainv*rvfrc(i,j)
-          hf = dt*g*dm_v(i,j)*dm_v(i,j)*df*ainv*(zeta(i,j-1,kstp)-zeta(i,j,kstp))
-          if (rhs0) udv(i,j) = m*hf/(dt*(1._8+gam))
-          usv(i,j) = m*(unv(i,j) + (d + (1._8-b1)*(dt*udv(i,j) - hf))/(1._8+gam))
-          xrv(i,j) = m*(d - hf)/(1._8+gam)
-        else if (mem_kind == 3) then
-          d = dt*dm_v(i,j)*ainv*rvfrc(i,j)
-          hf = -dt*dm_v(i,j)*ainv*0.25_8*( fcr(i,j)*(cou(i,j)+cou(i+1,j)) + fcr(i,j-1)*(cou(i,j-1)+cou(i+1,j-1)) )
-          if (rhs0) udv(i,j) = m*(d - hf)/(dt*(1._8+gam))
-          usv(i,j) = m*(unv(i,j) + (hf + b1*(d - hf) + (1._8-b1)*dt*udv(i,j))/(1._8+gam))
-          xrv(i,j) = m*hf/(1._8+gam)
-        else
-        if (rhs0) udv(i,j) = m*dm_v(i,j)*ainv*rvfrc(i,j)/(1._8+gam)
-        usv(i,j) = m*(unv(i,j) + dt*(b1*dm_v(i,j)*ainv*rvfrc(i,j) + (1._8-b1)*udv(i,j))/(1._8+gam))
-        endif
+        d = dt*dm_v(i,j)*ainv*rvfrc(i,j)
+        hf = -dt*dm_v(i,j)*ainv*0.25_8*( fcr(i,j)*(cou(i,j)+cou(i+1,j)) + fcr(i,j-1)*(cou(i,j-1)+cou(i+1,j-1)) )
+        usv(i,j) = m*(unv(i,j) + (hf + b1*(d - hf) + (1._8-b1)*dt*udv(i,j))/(1._8+gam))
+        xrv(i,j) = m*hf/(1._8+gam)
         ftv(i,j) = m*(b1*unv(i,j) + (1._8-b1)*grv(i,j) + thd*(usv(i,j)-unv(i,j)))
         cv(i,j) = thd*dt*av(i,j)
       enddo
@@ -990,11 +801,7 @@ contains
         rf = riv_vol(iriv)*(riv_uflx(i,j)-10*iriv)
         au(i,j) = 0._8 ; cu(i,j) = 0._8 ; xru(i,j) = 0._8
         usu(i,j) = rf
-        if (src_mem) then                   ! fs_src_mem = 'all': through the memory (start-up lag)
-          ftu(i,j) = b1*unu(i,j) + (1._8-b1)*gru(i,j) + thd*(rf-unu(i,j))
-        else                                ! the step's discharge (= DU_avg2, as the split delivers it)
-          ftu(i,j) = rf
-        end if
+        ftu(i,j) = rf                       ! the step's discharge (= DU_avg2, as the split delivers it)
       enddo
       do iface=1,nriv_v
         i = riv_v_i(iface) ; j = riv_v_j(iface)
@@ -1003,11 +810,7 @@ contains
         rf = riv_vol(iriv)*(riv_vflx(i,j)-10*iriv)
         av(i,j) = 0._8 ; cv(i,j) = 0._8 ; xrv(i,j) = 0._8
         usv(i,j) = rf
-        if (src_mem) then
-          ftv(i,j) = b1*unv(i,j) + (1._8-b1)*grv(i,j) + thd*(rf-unv(i,j))
-        else
-          ftv(i,j) = rf
-        end if
+        ftv(i,j) = rf
       enddo
     endif
     ! open normal boundary faces: Flather on the th_d-level flux (or specified)
@@ -1026,13 +829,8 @@ contains
 #  else
         hf = 0.5_8*(h(istr-1,j)+h(istr,j))
         cb = m*dn_u(istr,j)*df*sqrt(g/hf)
-        if (obc_ext) then                   ! external data at the th_d level, no memory
-          ftu(istr,j) = m*(df*dn_u(istr,j)*(xw1*ubar_west(j) + xwh*uw_h(j))&
-          &           - cb*(zeta(istr,j,kstp) - (xw1*zeta_west(j) + xwh*zw_h(j))))
-        else
         ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
         &           - cb*(zeta(istr,j,kstp) - zeta_west(j)) - unu(istr,j)))
-        endif
         rb(istr,j) = rb(istr,j) + dt*thd*cb ; cbu(istr,j) = cb
 #  endif
       enddo
@@ -1052,13 +850,8 @@ contains
 #  else
         hf = 0.5_8*(h(iend,j)+h(iend+1,j))
         cb = m*dn_u(iend+1,j)*df*sqrt(g/hf)
-        if (obc_ext) then
-          ftu(iend+1,j) = m*(df*dn_u(iend+1,j)*(xw1*ubar_east(j) + xwh*ue_h(j))&
-          &             + cb*(zeta(iend,j,kstp) - (xw1*zeta_east(j) + xwh*ze_h(j))))
-        else
         ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
         &             + cb*(zeta(iend,j,kstp) - zeta_east(j)) - unu(iend+1,j)))
-        endif
         rb(iend,j) = rb(iend,j) + dt*thd*cb ; cbu(iend+1,j) = cb
 #  endif
       enddo
@@ -1080,13 +873,8 @@ contains
 #  else
         hf = 0.5_8*(h(i,jstr-1)+h(i,jstr))
         cb = m*dm_v(i,jstr)*df*sqrt(g/hf)
-        if (obc_ext) then
-          ftv(i,jstr) = m*(df*dm_v(i,jstr)*(xw1*vbar_south(i) + xwh*vs_h(i))&
-          &           - cb*(zeta(i,jstr,kstp) - (xw1*zeta_south(i) + xwh*zs_h(i))))
-        else
         ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
         &           - cb*(zeta(i,jstr,kstp) - zeta_south(i)) - unv(i,jstr)))
-        endif
         rb(i,jstr) = rb(i,jstr) + dt*thd*cb ; cbv(i,jstr) = cb
 #  endif
       enddo
@@ -1106,13 +894,8 @@ contains
 #  else
         hf = 0.5_8*(h(i,jend)+h(i,jend+1))
         cb = m*dm_v(i,jend+1)*df*sqrt(g/hf)
-        if (obc_ext) then
-          ftv(i,jend+1) = m*(df*dm_v(i,jend+1)*(xw1*vbar_north(i) + xwh*vn_h(i))&
-          &             + cb*(zeta(i,jend,kstp) - (xw1*zeta_north(i) + xwh*zn_h(i))))
-        else
         ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
         &             + cb*(zeta(i,jend,kstp) - zeta_north(i)) - unv(i,jend+1)))
-        endif
         rb(i,jend) = rb(i,jend) + dt*thd*cb ; cbv(i,jend+1) = cb
 #  endif
       enddo
@@ -1138,21 +921,7 @@ contains
       enddo
     endif
 #endif
-    if (rhs0) then                          ! 'rhs' start: q at n is Q^n
-      do j=jstr,jend
-        do i=istr,iend
-          qd(i,j) = qs(i,j)
-        enddo
-      enddo
-    end if
-    if (src_mem) then                       ! fs_src_mem = 'all': Qbar = beta1 Q + (1 - beta1) q
-      do j=jstr,jend
-        do i=istr,iend
-          qs(i,j) = b1*qs(i,j) + (1._8-b1)*qd(i,j)
-        enddo
-      enddo
-    end if                                  ! else Qbar = Q (the volume the 3-D step adds: omega, step3d_t)
-    call tq(1)
+    call tq(1)                              ! Qbar = Q (the volume the 3-D step adds: omega, step3d_t)
 
     ! ---- (C) halos of the face coefficients and explicit fluxes (E1)
     call exchange_xxx(cu, cv, ftu, ftv)
@@ -1425,16 +1194,14 @@ contains
       enddo
     enddo
 #ifdef EXTRAP_BAR_FLUXES
-    ! fs_pred_ext = 'ab2': DU_avg_bak such that set_HUV1's NOW DU_avg1 - MID DU_avg2 + BAK DU_avg_bak
-    ! (NOW, MID, BAK = 3.63, 4.47, 2.05 of set_depth_mod) is 1.5 U^n+1 - 0.5 U^n
-    if (ext_ab2) then
-      do j=jstrR,jendR
-        do i=istrR,iendR
-          DU_avg_bak(i,j) = ((1.5_8-3.63_8)*DU_avg1(i,j) - 0.5_8*du1o(i,j) + 4.47_8*DU_avg2(i,j))/2.05_8
-          DV_avg_bak(i,j) = ((1.5_8-3.63_8)*DV_avg1(i,j) - 0.5_8*dv1o(i,j) + 4.47_8*DV_avg2(i,j))/2.05_8
-        enddo
+    ! the predictor's transport: DU_avg_bak such that set_HUV1's NOW DU_avg1 - MID DU_avg2 + BAK DU_avg_bak
+    ! (NOW, MID, BAK = 3.63, 4.47, 2.05 of set_depth_mod) is 1.5 U^n+1 - 0.5 U^n (AB2)
+    do j=jstrR,jendR
+      do i=istrR,iendR
+        DU_avg_bak(i,j) = ((1.5_8-3.63_8)*DU_avg1(i,j) - 0.5_8*du1o(i,j) + 4.47_8*DU_avg2(i,j))/2.05_8
+        DV_avg_bak(i,j) = ((1.5_8-3.63_8)*DV_avg1(i,j) - 0.5_8*dv1o(i,j) + 4.47_8*DV_avg2(i,j))/2.05_8
       enddo
-    end if
+    enddo
 #endif
     call tq(9)
     call exchange_xxx(ubar(:,:,knew),vbar(:,:,knew))         ! E4b
@@ -1615,33 +1382,22 @@ contains
   subroutine fs_tang_bc(istr,iend,jstr,jend)
     ! Tangential barotropic velocities on the boundary rows/columns (v at the
     ! western/eastern ghost columns, u at the southern/northern ghost rows) and the
-    ! corners (section 4). fs_tang = 'orl': open edges the
-    ! normal-radiation Orlanski form of
-    ! u2dbc/v2dbc (OBC_RAD_NORMAL: no tangential-gradient term) with dt,
-    !   v_b = (cff v_b^n + cx v_1^n+1)/(cff + cx), cx = max(dft dfx, 0), cff = max(dfx^2, eps),
-    !   dft = v_1^n - v_1^n+1, dfx = v_1^n+1 - v_2^n+1 (v_1, v_2 the first two interior values),
-    ! then on inflow (cx = 0) the implicit nudging v_b = (v_b + ce v_ext)/(1 + ce),
-    ! ce = dt ubind pm (pn); a convex combination, bounded for any dt (u2dbc/v2dbc's full
-    ! form with the tangential term and dt in place of dtfast is unstable);
-    ! OBC_M2SPECIFIED the external value; closed edges gamma2 v_int; corners as u2dbc/v2dbc.
-    ! fs_tang: 'orl' the above; 'adv' (default) the backward-Euler form of
-    ! u2dbc/v2dbc under OBC_M2FLATHER (which redefines the tangential faces as
-    ! OBC_M2ORLANSKI, non-legacy branch): explicit upwind advection along the edge by the
-    ! tangential velocity (Courant number clamped to [-1, 1]), implicit upwind advection by
-    ! the outward normal velocity un, v_b = (v' + ca v_1^n+1)/(1 + ca), ca = dt un/dx, and on
-    ! inflow nudging v_b = (v' + ce v_ext)/(1 + ce), ce = -ca fs_tang_nudge; 'nudge'
-    ! v_b = (v_b^n + ce v_ext)/(1 + ce) with the 'orl' rate; 'grav' v_b = (v_b^n + cw v_1^n+1)/(1 + cw),
-    ! cw = dt sqrt(g h)/dx. fs_tang_nudge multiplies the nudging rate ('orl', 'adv', 'nudge').
+    ! corners (section 4). Open edges: the backward-Euler form of u2dbc/v2dbc under
+    ! OBC_M2FLATHER (which redefines the tangential faces as OBC_M2ORLANSKI, non-legacy branch):
+    ! explicit upwind advection along the edge by the tangential velocity (Courant number clamped
+    ! to [-1, 1]), implicit upwind advection by the outward normal velocity un,
+    ! v_b = (v' + ca v_1^n+1)/(1 + ca), ca = dt un/dx, and on inflow nudging
+    ! v_b = (v' + ce v_ext)/(1 + ce), ce = -ca fs_tang_nudge; OBC_M2SPECIFIED the external value;
+    ! closed edges gamma2 v_int; corners as u2dbc/v2dbc.
     use param, only: np_xi, np_eta
     use dimensions, only: inode, jnode
-    use scalars, only: dt, g, knew, kstp, gamma2
+    use scalars, only: dt, knew, kstp, gamma2
     use ocean_vars, only: ubar, vbar
-    use grid, only: h, pm, pn
+    use grid, only: pm, pn
 #ifdef MASKING
     use grid, only: umask, vmask
 #endif
 #if defined M2_FRC_BRY
-    use scalars, only: ubind
     use boundary, only:&
 # ifdef OBC_WEST
     &  vbar_west,&
@@ -1660,8 +1416,7 @@ contains
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     integer(kind=4) :: i, j
-    real(kind=8) :: cx, cff, dft, dfx, ce, ca, cy, cw
-    real(kind=8), parameter :: eps = 1.e-33_8
+    real(kind=8) :: ca, cy
 #include "compute_auxiliary_bounds.h"
 #ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
@@ -1670,35 +1425,19 @@ contains
 #  ifdef OBC_M2SPECIFIED
         vbar(istr-1,j,knew) = vbar_west(j)
 #  else
-        if (tang_kind == 1) then
-        dft = vbar(istr,j,kstp) - vbar(istr,j,knew)
-        dfx = vbar(istr,j,knew) - vbar(istr+1,j,knew)
-        cx = max(dft*dfx, 0._8) ; cff = max(dfx*dfx, eps)
-        vbar(istr-1,j,knew) = (cff*vbar(istr-1,j,kstp) + cx*vbar(istr,j,knew))/(cff+cx)
+        ca = -0.125_8*dt*(ubar(istr,j,kstp)+ubar(istr,j-1,kstp))&
+        &   *(pm(istr-1,j)+pm(istr-1,j-1)+pm(istr,j)+pm(istr,j-1))
+        cy = 0.125_8*dt*(vbar(istr-1,j,kstp)+vbar(istr,j,kstp))&
+        &   *(pn(istr-1,j)+pn(istr-1,j-1)+pn(istr,j)+pn(istr,j-1))
 #   ifdef M2_FRC_BRY
-        if (cx <= 0._8) then
-          ce = dt*ubind*0.5_8*(pm(istr-1,j-1)+pm(istr-1,j))
-          if (fs_tang_nudge /= 1._8) ce = ce*fs_tang_nudge
-          vbar(istr-1,j,knew) = (vbar(istr-1,j,knew) + ce*vbar_west(j))/(1._8+ce)
-        endif
-#   endif
-        else
-          ca = -0.125_8*dt*(ubar(istr,j,kstp)+ubar(istr,j-1,kstp))&
-          &   *(pm(istr-1,j)+pm(istr-1,j-1)+pm(istr,j)+pm(istr,j-1))
-          cy = 0.125_8*dt*(vbar(istr-1,j,kstp)+vbar(istr,j,kstp))&
-          &   *(pn(istr-1,j)+pn(istr-1,j-1)+pn(istr,j)+pn(istr,j-1))
-          cw = dt*sqrt(0.5_8*g*(h(istr-1,j-1)+h(istr-1,j)))*0.5_8*(pm(istr-1,j-1)+pm(istr-1,j))
-#   ifdef M2_FRC_BRY
-          ce = dt*ubind*0.5_8*(pm(istr-1,j-1)+pm(istr-1,j))*fs_tang_nudge
-          vbar(istr-1,j,knew) = tnew(vbar(istr-1,j,kstp), vbar(istr,j,knew), ca, cy,&
-          &  vbar(istr-1,j,kstp)-vbar(istr-1,j-1,kstp), vbar(istr-1,j+1,kstp)-vbar(istr-1,j,kstp),&
-          &  cw, ce, vbar_west(j), .true.)
+        vbar(istr-1,j,knew) = tnew(vbar(istr-1,j,kstp), vbar(istr,j,knew), ca, cy,&
+        &  vbar(istr-1,j,kstp)-vbar(istr-1,j-1,kstp), vbar(istr-1,j+1,kstp)-vbar(istr-1,j,kstp),&
+        &  vbar_west(j), .true.)
 #   else
-          vbar(istr-1,j,knew) = tnew(vbar(istr-1,j,kstp), vbar(istr,j,knew), ca, cy,&
-          &  vbar(istr-1,j,kstp)-vbar(istr-1,j-1,kstp), vbar(istr-1,j+1,kstp)-vbar(istr-1,j,kstp),&
-          &  cw, 0._8, 0._8, .false.)
+        vbar(istr-1,j,knew) = tnew(vbar(istr-1,j,kstp), vbar(istr,j,knew), ca, cy,&
+        &  vbar(istr-1,j,kstp)-vbar(istr-1,j-1,kstp), vbar(istr-1,j+1,kstp)-vbar(istr-1,j,kstp),&
+        &  0._8, .false.)
 #   endif
-        endif
 #  endif
 #  ifdef MASKING
         vbar(istr-1,j,knew) = vbar(istr-1,j,knew)*vmask(istr-1,j)
@@ -1719,35 +1458,19 @@ contains
 #  ifdef OBC_M2SPECIFIED
         vbar(iend+1,j,knew) = vbar_east(j)
 #  else
-        if (tang_kind == 1) then
-        dft = vbar(iend,j,kstp) - vbar(iend,j,knew)
-        dfx = vbar(iend,j,knew) - vbar(iend-1,j,knew)
-        cx = max(dft*dfx, 0._8) ; cff = max(dfx*dfx, eps)
-        vbar(iend+1,j,knew) = (cff*vbar(iend+1,j,kstp) + cx*vbar(iend,j,knew))/(cff+cx)
+        ca = 0.125_8*dt*(ubar(iend+1,j,kstp)+ubar(iend+1,j-1,kstp))&
+        &   *(pm(iend,j)+pm(iend,j-1)+pm(iend+1,j)+pm(iend+1,j-1))
+        cy = 0.125_8*dt*(vbar(iend,j,kstp)+vbar(iend+1,j,kstp))&
+        &   *(pn(iend,j)+pn(iend,j-1)+pn(iend+1,j)+pn(iend+1,j-1))
 #   ifdef M2_FRC_BRY
-        if (cx <= 0._8) then
-          ce = dt*ubind*0.5_8*(pm(iend+1,j-1)+pm(iend+1,j))
-          if (fs_tang_nudge /= 1._8) ce = ce*fs_tang_nudge
-          vbar(iend+1,j,knew) = (vbar(iend+1,j,knew) + ce*vbar_east(j))/(1._8+ce)
-        endif
-#   endif
-        else
-          ca = 0.125_8*dt*(ubar(iend+1,j,kstp)+ubar(iend+1,j-1,kstp))&
-          &   *(pm(iend,j)+pm(iend,j-1)+pm(iend+1,j)+pm(iend+1,j-1))
-          cy = 0.125_8*dt*(vbar(iend,j,kstp)+vbar(iend+1,j,kstp))&
-          &   *(pn(iend,j)+pn(iend,j-1)+pn(iend+1,j)+pn(iend+1,j-1))
-          cw = dt*sqrt(0.5_8*g*(h(iend+1,j-1)+h(iend+1,j)))*0.5_8*(pm(iend+1,j-1)+pm(iend+1,j))
-#   ifdef M2_FRC_BRY
-          ce = dt*ubind*0.5_8*(pm(iend+1,j-1)+pm(iend+1,j))*fs_tang_nudge
-          vbar(iend+1,j,knew) = tnew(vbar(iend+1,j,kstp), vbar(iend,j,knew), ca, cy,&
-          &  vbar(iend+1,j,kstp)-vbar(iend+1,j-1,kstp), vbar(iend+1,j+1,kstp)-vbar(iend+1,j,kstp),&
-          &  cw, ce, vbar_east(j), .true.)
+        vbar(iend+1,j,knew) = tnew(vbar(iend+1,j,kstp), vbar(iend,j,knew), ca, cy,&
+        &  vbar(iend+1,j,kstp)-vbar(iend+1,j-1,kstp), vbar(iend+1,j+1,kstp)-vbar(iend+1,j,kstp),&
+        &  vbar_east(j), .true.)
 #   else
-          vbar(iend+1,j,knew) = tnew(vbar(iend+1,j,kstp), vbar(iend,j,knew), ca, cy,&
-          &  vbar(iend+1,j,kstp)-vbar(iend+1,j-1,kstp), vbar(iend+1,j+1,kstp)-vbar(iend+1,j,kstp),&
-          &  cw, 0._8, 0._8, .false.)
+        vbar(iend+1,j,knew) = tnew(vbar(iend+1,j,kstp), vbar(iend,j,knew), ca, cy,&
+        &  vbar(iend+1,j,kstp)-vbar(iend+1,j-1,kstp), vbar(iend+1,j+1,kstp)-vbar(iend+1,j,kstp),&
+        &  0._8, .false.)
 #   endif
-        endif
 #  endif
 #  ifdef MASKING
         vbar(iend+1,j,knew) = vbar(iend+1,j,knew)*vmask(iend+1,j)
@@ -1770,35 +1493,19 @@ contains
 #  ifdef OBC_M2SPECIFIED
         ubar(i,jstr-1,knew) = ubar_south(i)
 #  else
-        if (tang_kind == 1) then
-        dft = ubar(i,jstr,kstp) - ubar(i,jstr,knew)
-        dfx = ubar(i,jstr,knew) - ubar(i,jstr+1,knew)
-        cx = max(dft*dfx, 0._8) ; cff = max(dfx*dfx, eps)
-        ubar(i,jstr-1,knew) = (cff*ubar(i,jstr-1,kstp) + cx*ubar(i,jstr,knew))/(cff+cx)
+        ca = -0.125_8*dt*(vbar(i,jstr,kstp)+vbar(i-1,jstr,kstp))&
+        &   *(pn(i,jstr-1)+pn(i-1,jstr-1)+pn(i,jstr)+pn(i-1,jstr))
+        cy = 0.125_8*dt*(ubar(i,jstr-1,kstp)+ubar(i,jstr,kstp))&
+        &   *(pm(i,jstr-1)+pm(i-1,jstr-1)+pm(i,jstr)+pm(i-1,jstr))
 #   ifdef M2_FRC_BRY
-        if (cx <= 0._8) then
-          ce = dt*ubind*0.5_8*(pn(i-1,jstr-1)+pn(i,jstr-1))
-          if (fs_tang_nudge /= 1._8) ce = ce*fs_tang_nudge
-          ubar(i,jstr-1,knew) = (ubar(i,jstr-1,knew) + ce*ubar_south(i))/(1._8+ce)
-        endif
-#   endif
-        else
-          ca = -0.125_8*dt*(vbar(i,jstr,kstp)+vbar(i-1,jstr,kstp))&
-          &   *(pn(i,jstr-1)+pn(i-1,jstr-1)+pn(i,jstr)+pn(i-1,jstr))
-          cy = 0.125_8*dt*(ubar(i,jstr-1,kstp)+ubar(i,jstr,kstp))&
-          &   *(pm(i,jstr-1)+pm(i-1,jstr-1)+pm(i,jstr)+pm(i-1,jstr))
-          cw = dt*0.5_8*(pn(i-1,jstr-1)+pn(i,jstr-1))*sqrt(0.5_8*g*(h(i-1,jstr-1)+h(i,jstr-1)))
-#   ifdef M2_FRC_BRY
-          ce = dt*ubind*0.5_8*(pn(i-1,jstr-1)+pn(i,jstr-1))*fs_tang_nudge
-          ubar(i,jstr-1,knew) = tnew(ubar(i,jstr-1,kstp), ubar(i,jstr,knew), ca, cy,&
-          &  ubar(i,jstr-1,kstp)-ubar(i-1,jstr-1,kstp), ubar(i+1,jstr-1,kstp)-ubar(i,jstr-1,kstp),&
-          &  cw, ce, ubar_south(i), .true.)
+        ubar(i,jstr-1,knew) = tnew(ubar(i,jstr-1,kstp), ubar(i,jstr,knew), ca, cy,&
+        &  ubar(i,jstr-1,kstp)-ubar(i-1,jstr-1,kstp), ubar(i+1,jstr-1,kstp)-ubar(i,jstr-1,kstp),&
+        &  ubar_south(i), .true.)
 #   else
-          ubar(i,jstr-1,knew) = tnew(ubar(i,jstr-1,kstp), ubar(i,jstr,knew), ca, cy,&
-          &  ubar(i,jstr-1,kstp)-ubar(i-1,jstr-1,kstp), ubar(i+1,jstr-1,kstp)-ubar(i,jstr-1,kstp),&
-          &  cw, 0._8, 0._8, .false.)
+        ubar(i,jstr-1,knew) = tnew(ubar(i,jstr-1,kstp), ubar(i,jstr,knew), ca, cy,&
+        &  ubar(i,jstr-1,kstp)-ubar(i-1,jstr-1,kstp), ubar(i+1,jstr-1,kstp)-ubar(i,jstr-1,kstp),&
+        &  0._8, .false.)
 #   endif
-        endif
 #  endif
 #  ifdef MASKING
         ubar(i,jstr-1,knew) = ubar(i,jstr-1,knew)*umask(i,jstr-1)
@@ -1819,35 +1526,19 @@ contains
 #  ifdef OBC_M2SPECIFIED
         ubar(i,jend+1,knew) = ubar_north(i)
 #  else
-        if (tang_kind == 1) then
-        dft = ubar(i,jend,kstp) - ubar(i,jend,knew)
-        dfx = ubar(i,jend,knew) - ubar(i,jend-1,knew)
-        cx = max(dft*dfx, 0._8) ; cff = max(dfx*dfx, eps)
-        ubar(i,jend+1,knew) = (cff*ubar(i,jend+1,kstp) + cx*ubar(i,jend,knew))/(cff+cx)
+        ca = 0.125_8*dt*(vbar(i,jend+1,kstp)+vbar(i-1,jend+1,kstp))&
+        &   *(pn(i,jend)+pn(i-1,jend)+pn(i,jend+1)+pn(i-1,jend+1))
+        cy = 0.125_8*dt*(ubar(i,jend,kstp)+ubar(i,jend+1,kstp))&
+        &   *(pm(i,jend)+pm(i-1,jend)+pm(i,jend+1)+pm(i-1,jend+1))
 #   ifdef M2_FRC_BRY
-        if (cx <= 0._8) then
-          ce = dt*ubind*0.5_8*(pn(i-1,jend+1)+pn(i,jend+1))
-          if (fs_tang_nudge /= 1._8) ce = ce*fs_tang_nudge
-          ubar(i,jend+1,knew) = (ubar(i,jend+1,knew) + ce*ubar_north(i))/(1._8+ce)
-        endif
-#   endif
-        else
-          ca = 0.125_8*dt*(vbar(i,jend+1,kstp)+vbar(i-1,jend+1,kstp))&
-          &   *(pn(i,jend)+pn(i-1,jend)+pn(i,jend+1)+pn(i-1,jend+1))
-          cy = 0.125_8*dt*(ubar(i,jend,kstp)+ubar(i,jend+1,kstp))&
-          &   *(pm(i,jend)+pm(i-1,jend)+pm(i,jend+1)+pm(i-1,jend+1))
-          cw = dt*0.5_8*(pn(i-1,jend+1)+pn(i,jend+1))*sqrt(0.5_8*g*(h(i-1,jend+1)+h(i,jend+1)))
-#   ifdef M2_FRC_BRY
-          ce = dt*ubind*0.5_8*(pn(i-1,jend+1)+pn(i,jend+1))*fs_tang_nudge
-          ubar(i,jend+1,knew) = tnew(ubar(i,jend+1,kstp), ubar(i,jend,knew), ca, cy,&
-          &  ubar(i,jend+1,kstp)-ubar(i-1,jend+1,kstp), ubar(i+1,jend+1,kstp)-ubar(i,jend+1,kstp),&
-          &  cw, ce, ubar_north(i), .true.)
+        ubar(i,jend+1,knew) = tnew(ubar(i,jend+1,kstp), ubar(i,jend,knew), ca, cy,&
+        &  ubar(i,jend+1,kstp)-ubar(i-1,jend+1,kstp), ubar(i+1,jend+1,kstp)-ubar(i,jend+1,kstp),&
+        &  ubar_north(i), .true.)
 #   else
-          ubar(i,jend+1,knew) = tnew(ubar(i,jend+1,kstp), ubar(i,jend,knew), ca, cy,&
-          &  ubar(i,jend+1,kstp)-ubar(i-1,jend+1,kstp), ubar(i+1,jend+1,kstp)-ubar(i,jend+1,kstp),&
-          &  cw, 0._8, 0._8, .false.)
+        ubar(i,jend+1,knew) = tnew(ubar(i,jend+1,kstp), ubar(i,jend,knew), ca, cy,&
+        &  ubar(i,jend+1,kstp)-ubar(i-1,jend+1,kstp), ubar(i+1,jend+1,kstp)-ubar(i,jend+1,kstp),&
+        &  0._8, .false.)
 #   endif
-        endif
 #  endif
 #  ifdef MASKING
         ubar(i,jend+1,knew) = ubar(i,jend+1,knew)*umask(i,jend+1)
@@ -1889,31 +1580,21 @@ contains
     endif
 #endif
   contains
-    real(kind=8) function tnew(vbn, v1, ca, cy, gm, gp, cw, ce, vext, has_ext)
-      ! fs_tang = 'adv' (2), 'nudge' (3), 'grav' (4) for one tangential boundary face:
-      ! vbn the ghost value at n, v1 the first interior value at n+1, ca the outward-normal
-      ! advective Courant number, cy the along-edge one, gm/gp the along-edge differences
-      ! at n (v(k)-v(k-1), v(k+1)-v(k)), cw the gravity-wave Courant number, ce the 'nudge'
-      ! rate (incl. fs_tang_nudge), vext the external value
-      real(kind=8), intent(in) :: vbn, v1, ca, cy, gm, gp, cw, ce, vext
+    real(kind=8) function tnew(vbn, v1, ca, cy, gm, gp, vext, has_ext)
+      ! one tangential boundary face: vbn the ghost value at n, v1 the first interior value at n+1, ca the
+      ! outward-normal advective Courant number, cy the along-edge one, gm/gp the along-edge differences at n
+      ! (v(k)-v(k-1), v(k+1)-v(k)), vext the external value (has_ext: M2_FRC_BRY)
+      real(kind=8), intent(in) :: vbn, v1, ca, cy, gm, gp, vext
       logical, intent(in) :: has_ext
       real(kind=8) :: c, r
-      select case (tang_kind)
-      case (2)
-        c = min(1._8, max(-1._8, cy))
-        r = vbn - max(c,0._8)*gm - min(c,0._8)*gp
-        if (ca > 0._8) then
-          r = (r + ca*v1)/(1._8 + ca)
-        else if (has_ext) then
-          c = -ca*fs_tang_nudge
-          r = (r + c*vext)/(1._8 + c)
-        endif
-      case (3)
-        r = vbn
-        if (has_ext) r = (r + ce*vext)/(1._8 + ce)
-      case default
-        r = (vbn + cw*v1)/(1._8 + cw)
-      end select
+      c = min(1._8, max(-1._8, cy))
+      r = vbn - max(c,0._8)*gm - min(c,0._8)*gp
+      if (ca > 0._8) then
+        r = (r + ca*v1)/(1._8 + ca)
+      else if (has_ext) then
+        c = -ca*fs_tang_nudge
+        r = (r + c*vext)/(1._8 + c)
+      endif
       tnew = r
     end function tnew
   end subroutine fs_tang_bc
@@ -2146,7 +1827,6 @@ contains
     call fs_precond_apply(rr, zz, loc(1), loc(2), zq)
     pp = zz
     call tq(3)
-    call fs_sync
     call mpi_allreduce(loc, glob, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     call tq(7)
     rz = glob(1) ; bn2 = glob(3)
@@ -2169,8 +1849,7 @@ contains
         enddo
       enddo
       call tq(8)
-      call fs_sync
-      call mpi_allreduce(loc(1), pq, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+        call mpi_allreduce(loc(1), pq, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
       call tq(7)
       alpha = rz/pq
       do j=jb0,jb1
@@ -2182,8 +1861,7 @@ contains
       call tq(8)
       call fs_precond_apply(rr, zz, loc(1), loc(2), loc(3))
       call tq(5)
-      call fs_sync
-      call mpi_allreduce(loc, glob, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+        call mpi_allreduce(loc, glob, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
       call tq(7)
       rznew = glob(1)
       resid = sqrt(glob(2)/bn2)
@@ -2611,18 +2289,6 @@ contains
   end subroutine fs_exch1
 
   !----------------------------------------------------------------------
-  subroutine fs_sync
-    ! fs_cost_sync (timing only): wait for all ranks before a collective, timed as 'sync'
-    use param, only: ocean_grid_comm
-    use mpi_f08, only: mpi_barrier
-    implicit none
-    integer(kind=4) :: ierr
-    if (.not. fs_cost_sync) return
-    call mpi_barrier(ocean_grid_comm, ierr)
-    call tq(19)
-  end subroutine fs_sync
-
-  !----------------------------------------------------------------------
   subroutine tq0
     use mpi_f08, only: mpi_wtime
     implicit none
@@ -2952,10 +2618,8 @@ contains
   subroutine mg_setup
     ! coarse operators of all levels from the step's fine operator; the global levels only on
     ! the ranks that hold them (mg_lead)
-    use param, only: ocean_grid_comm
-    use mpi_f08, only: mpi_barrier
     implicit none
-    integer(kind=4) :: l, o, ierr
+    integer(kind=4) :: l, o
     if (.not. mg_ready) call mg_build_layout
     ! level 1 from the fine level
     o = mg_off(1)
@@ -2968,16 +2632,12 @@ contains
       &               mg_cs(mg_off(l)), mg_di(mg_off(l)))
     enddo
     call tq(18)
-    if (fs_cost_sync) then
-      call mpi_barrier(ocean_grid_comm, ierr)
-      call tq(19)
-    end if
     ! gather level mg_ld into the global level mg_ld+1
     l = mg_ld
     call mg_gather_coef(mg_nx(l), mg_ny(l), mg_e(mg_off(l)), mg_cw(mg_off(l)), mg_cs(mg_off(l)),&
     &                   mg_nx(l+1), mg_ny(l+1), mg_e(mg_off(l+1)), mg_cw(mg_off(l+1)), mg_cs(mg_off(l+1)),&
     &                   mg_di(mg_off(l+1)))
-    call tq(20)
+    call tq(19)
     if (mg_lead) then
       do l=mg_ld+2,mg_lc
         call mg_coarsen(mg_nx(l-1), mg_ny(l-1), mg_e(mg_off(l-1)), mg_cw(mg_off(l-1)), mg_cs(mg_off(l-1)),&
@@ -2988,7 +2648,7 @@ contains
       l = mg_lc
       call mg_factor(mg_nx(l), mg_ny(l), mg_e(mg_off(l)), mg_cw(mg_off(l)), mg_cs(mg_off(l)))
     end if
-    call tq(21)
+    call tq(20)
     mg_built = mg_built + 1
   end subroutine mg_setup
 
@@ -3291,13 +2951,12 @@ contains
   !----------------------------------------------------------------------
   subroutine mg_vcycle(r, z)
     ! z = one V-cycle applied to r (fine-level arrays, interior), from z = 0
-    use param, only: lm, mm, ocean_grid_comm
+    use param, only: lm, mm
     use roms_mpi, only: exchange_xxx
-    use mpi_f08, only: mpi_barrier
     implicit none
     real(kind=8), dimension(GLOBAL_2D_ARRAY), intent(in) :: r
     real(kind=8), dimension(GLOBAL_2D_ARRAY), intent(inout) :: z
-    integer(kind=4) :: l, k, o, op, ierr
+    integer(kind=4) :: l, k, o, op
     ! ---- level 0: pre-smoothing from 0, residual, restriction
     mg_cl = 0
     z = 0._8
@@ -3320,10 +2979,6 @@ contains
     enddo
     ! ---- gather level mg_ld's rhs into the global level
     l = mg_ld
-    if (fs_cost_sync) then
-      call mpi_barrier(ocean_grid_comm, ierr)
-      call tqm(7)
-    end if
     call mg_gather_vec(mg_nx(l), mg_ny(l), mg_b(mg_off(l)), mg_nx(l+1), mg_ny(l+1), mg_b(mg_off(l+1)))
     call tqm(4)
     ! ---- global levels (on the ranks that hold them)
@@ -3348,7 +3003,7 @@ contains
     ! ---- scatter: this rank's block of the global level into level mg_ld
     l = mg_ld
     call mg_scatter_vec(mg_nx(l+1), mg_ny(l+1), mg_x(mg_off(l+1)), mg_nx(l), mg_ny(l), mg_x(mg_off(l)))
-    call tqm(10)
+    call tqm(9)
     do l=mg_ld-1,1,-1
       o = mg_off(l)
       mg_cl = l
@@ -3735,7 +3390,7 @@ contains
 
   subroutine tqm(id)
     ! MG timing pieces into tm(12+id): 1 smooth, 2 exch, 3 transfer/resid, 4 gather, 5 coarse solve,
-    ! 7 sync, 10 scatter; 1-3 also per level (tml, level mg_cl)
+    ! 9 scatter; 1-3 also per level (tml, level mg_cl)
     use mpi_f08, only: mpi_wtime
     implicit none
     integer(kind=4), intent(in) :: id

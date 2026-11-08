@@ -32,9 +32,9 @@ The scheme is second order when its explicit forcing is taken at `t_{n+alpha_f}`
 
 The baroclinic pressure gradient and the other terms of `rufrc` stay at their usual time levels.
 
-Coriolis is explicit (through `rufrc`). To keep the generalized-alpha memory from lagging it, which lets depth-mean inertial oscillations grow in closed basins, an estimate of the depth-integrated Coriolis force on `U^n` (with the curvilinear metric terms with `CURVGRID` and `UV_ADV`) is kept out of the memory (`fs_mom_mem = 'cor'`, default).
+Coriolis is explicit (through `rufrc`). To keep the generalized-alpha memory from lagging it, which lets depth-mean inertial oscillations grow in closed basins, an estimate of the depth-integrated Coriolis force on `U^n` (with the curvilinear metric terms with `CURVGRID` and `UV_ADV`) is kept out of the memory.
 
-The predictor's barotropic transport (`set_HUV1` through `DU_avg_bak`) is the extrapolation `1.5 U^n - 0.5 U^{n-1}` (`fs_pred_ext = 'ab2'`).
+The predictor's barotropic transport (`set_HUV1` through `DU_avg_bak`) is the extrapolation `1.5 U^n - 0.5 U^{n-1}`.
 
 ## 3. Elliptic solver
 
@@ -45,19 +45,19 @@ Preconditioners (`fs_precond`):
 - `'mg'` (default): one geometric multigrid V-cycle. The distributed levels aggregate 2 x 2 cells inside each tile; at the first level whose global grid has at most `fs_mg_gather` cells the level is gathered into one global grid, which is coarsened further and solved directly (banded Cholesky) by the ranks chosen with `fs_mg_global_on` (one per node by default). Smoother: red-black Gauss-Seidel (`fs_mg_smoother = 'rbgs'`) or damped Jacobi, `fs_mg_nu` sweeps before and after each coarse-grid correction. The coarse operators are rebuilt every `fs_mg_lag` steps. With `MPI_MASKING`, the dropped all-land tiles are inactive blocks of the global levels.
 - `'jacobi'`: diagonal scaling (more iterations; for testing).
 
-`fs_mg_global_on`, `fs_exch_thin` and `fs_cost_sync` change only how the work is distributed or timed: results are bit-for-bit the same.
+`fs_mg_global_on` and `fs_exch_thin` change only how the work is distributed: results are bit-for-bit the same.
 
 ## 4. Boundary conditions
 
 - **Closed edges and land**: no flux through the face; the normal barotropic velocity on a closed physical edge is set to zero each step.
-- **Open edges** (`OBC_WEST`, ... with `M2_FRC_BRY` and `Z_FRC_BRY`, which the implicit step requires): with `OBC_M2FLATHER` the normal transport is a Flather condition on the flux that advances the free surface, `U_b = D dn ubar_ext + s c_b (zeta_int - zeta_ext)` with `c_b = D dn sqrt(g/h)`, treated implicitly (a Robin term of the elliptic equation). `OBC_M2ORLANSKI` and open edges without an `OBC_M2` type use the same Flather form (a note is printed). `OBC_M2SPECIFIED` prescribes the transport. `fs_obc_flux = 'ext'` evaluates the external data at the implicit level instead of carrying the boundary transport in the generalized-alpha memory.
+- **Open edges** (`OBC_WEST`, ... with `M2_FRC_BRY` and `Z_FRC_BRY`, which the implicit step requires): with `OBC_M2FLATHER` the normal transport is a Flather condition on the flux that advances the free surface, `U_b = D dn ubar_ext + s c_b (zeta_int - zeta_ext)` with `c_b = D dn sqrt(g/h)`, treated implicitly (a Robin term of the elliptic equation). `OBC_M2ORLANSKI` and open edges without an `OBC_M2` type use the same Flather form (a note is printed). `OBC_M2SPECIFIED` prescribes the transport. The boundary transport carries the generalized-alpha memory, so the external data enter at the scheme's forcing time.
 - **Free surface on open edges**: backward-Euler upwind radiation (the implicit form of `zetabc`).
-- **Tangential velocities on open edges** (`fs_tang`): `'adv'` (default) is the backward-Euler form of the split mode's condition (upwind advection by the normal flow, nudging to the external data on inflow, rate scaled by `fs_tang_nudge`). `'orl'` (normal-radiation Orlanski), `'nudge'` and `'grav'` are alternatives.
+- **Tangential velocities on open edges**: the backward-Euler form of the split mode's condition (upwind advection by the normal flow, nudging to the external data on inflow, rate scaled by `fs_tang_nudge`).
 - **Tides at the boundary**: with the implicit free surface the boundary tidal harmonics are evaluated at `n+1` (the split loop uses `n+1/2`, the centre of its fast-step interval).
 
 ## 5. Volume sources
 
-River transports (`river_source`), the surface freshwater flux, pipes and CDR volume releases enter the implicit step with the same values that the 3-D step uses (`fs_src_mem = 'none'`, default): river faces carry exactly the river transport, and the cell sources are added to the free-surface equation. The volume the free surface gains therefore equals the volume the 3-D step adds with the tracers, which keeps tracer concentrations constant at the sources (a closed basin with every source at the ambient salinity keeps its salinity to rounding). `fs_src_mem = 'all'` passes the sources through the generalized-alpha memory instead (a start-up lag, and the free-surface volume then differs from the 3-D volume).
+River transports (`river_source`), the surface freshwater flux, pipes and CDR volume releases enter the implicit step with the same values that the 3-D step uses: river faces carry exactly the river transport, and the cell sources are added to the free-surface equation. The volume the free surface gains therefore equals the volume the 3-D step adds with the tracers, which keeps tracer concentrations constant at the sources (a closed basin with every source at the ambient salinity keeps its salinity to rounding).
 
 With `fs_verbose >= 2` the `FS_VOL` line reports each step's global volume budget and the `FS_SRC` line the mapped and delivered river discharge and the pipe, CDR and surface freshwater volumes (`FS_SRC` also with `fs_mode = 'split'`).
 
@@ -65,7 +65,7 @@ With `fs_verbose >= 2` the `FS_VOL` line reports each step's global volume budge
 
 With `fs_mode = 'implicit'` the restart file also holds the generalized-alpha rates (`fs_udu`, `fs_udv`, `fs_gru`, `fs_grv`, `fs_qd`), the last increment (`fs_delta`, the solver's warm start), a set of scalars (`fs_rst_scal`) and, with `fs_mg_lag > 1`, the fine operator of the last coarse-operator build (`fs_mge0`, `fs_mgcu`, `fs_mgcv`). A restarted run then reproduces the continuous run bit for bit. Split-mode restart files are unchanged.
 
-A run can start from a restart file without these variables (a split-mode run's file, or an initial file): the first implicit step then starts the memory with `beta1 = 1` (`fs_ga_start = 'step'`). A change of `fs_mom_mem` or `fs_mg_lag` across a restart is allowed and is logged; the restart is then not exact.
+A run can start from a restart file without these variables (a split-mode run's file, or an initial file): the first implicit step then starts the memory with `beta1 = 1`. A change of `fs_mg_lag` across a restart is allowed and is logged; the restart is then not exact. A restart file written by a development version with another momentum memory (`fs_mom_mem = 'all'` or `'pg'`, recorded in `fs_rst_scal`) is read as such a cold start of the memory, with a log line.
 
 ## 7. Diagnostics
 
@@ -82,7 +82,7 @@ A run can start from a restart file without these variables (a split-mode run's 
 ## 8. Limitations
 
 - Requires `SOLVE3D`. With open boundaries, `M2_FRC_BRY` and `Z_FRC_BRY` are required; `OBC_M2ORLANSKI` has no implicit form (Flather is used).
-- Coriolis is explicit; `fs_coriolis_implicit = .true.` is not implemented.
+- Coriolis is explicit.
 - The baroclinic pressure gradient in `rufrc` stays at `n+1/2`, a lag of `(alpha_f - 1/2) dt` behind the time at which the scheme takes its forcing.
 - Results depend on the solver tolerance, so runs on different tilings or rank counts differ at about the level of `fs_tol` (the split mode is not tiling-invariant either, at rounding level).
 - `fs_rho_inf >= 0.2` can turn a saturated computational mode of a configuration running at its internal-wave stability limit into a blow-up (section 2).
@@ -90,3 +90,5 @@ A run can start from a restart file without these variables (a split-mode run's 
 - Not tested with `NHMG`.
 
 Settings: see [`IMPLICIT_FS`](runtime_settings.md#implicit_fs) in the runtime settings.
+
+The development keys `fs_mom_mem`, `fs_src_mem`, `fs_tang`, `fs_obc_flux`, `fs_pred_ext`, `fs_ga_start`, `fs_cor_est`, `fs_coriolis_implicit` and `fs_cost_sync` are not read: a namelist that still sets one of them stops ROMS at the `IMPLICIT_FS` read, with the compiler's message and this list. Delete them; the behaviour they selected by default is the one described above.

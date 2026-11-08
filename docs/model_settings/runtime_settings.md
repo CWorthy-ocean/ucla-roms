@@ -610,7 +610,6 @@ Multigrid settings (`fs_precond = 'mg'`):
 | `fs_mg_global_on` | `'node'` | Ranks that solve the global levels: `'node'` one per node, `'all'` every rank, `'one'` rank 0 (same results) |
 | `fs_mg_faces` | `'width'` | Coarse face coefficients scaled by the aggregates' widths (`'width'`) or by 0.5 (`'half'`) |
 | `fs_exch_thin` | `.true.` | One-cell halo exchanges without corners in the solver (same results) |
-| `fs_cost_sync` | `.false.` | Timing only: barriers before the solver's collective operations, so that `FS_COST` separates waiting from communication |
 
 Scheme options (the defaults are the recommended settings):
 
@@ -619,18 +618,12 @@ Scheme options (the defaults are the recommended settings):
 | `fs_warm` | `1` | Start of the solve: 1 the previous step's increment, 0 zero |
 | `fs_pot_time` | `'af'` | Tidal potential at `n+alpha_f` (`'af'`, where the scheme takes its forcing) or at `n+1/2` (`'mid'`) |
 | `fs_stress_time` | `'af'` | Surface stress of the barotropic step at `n+alpha_f` (`'af'`) or at `n+1/2` (`'mid'`); the 3-D step keeps `n+1/2` |
-| `fs_mom_mem` | `'cor'` | Generalized-alpha memory of the momentum increment: `'cor'` all except an estimate of the Coriolis force, `'pg'` the free-surface pressure gradient only, `'all'` all of it (depth-mean inertial oscillations can grow in closed basins) |
-| `fs_cor_est` | `'n'` | `'cor'`: Coriolis estimate from `U^n` (`'n'`) or from `1.5 U^n - 0.5 U^{n-1}` (`'ab2'`; restarts are then not exact) |
-| `fs_cor_metric` | `.true.` | `'cor'`: include the curvilinear metric terms in the estimate (`CURVGRID` and `UV_ADV` only) |
-| `fs_src_mem` | `'none'` | Volume sources (rivers, surface freshwater flux, pipes, CDR): `'none'` the step's values, as the 3-D step uses them (exact delivery); `'all'` through the generalized-alpha memory |
-| `fs_ga_start` | `'step'` | Start of the memory without stored rates: `'step'` a first step without memory; `'rhs'` rates from the explicit right-hand side |
-| `fs_pred_ext` | `'ab2'` | Barotropic transport of the 3-D predictor: `'ab2'` `1.5 U^n - 0.5 U^{n-1}`; `'stock'` the split mode's extrapolation |
-| `fs_obc_flux` | `'mem'` | Flather transport of open normal faces: `'mem'` with the generalized-alpha memory, `'ext'` from the external data at the implicit level |
-| `fs_tang` | `'adv'` | Tangential barotropic velocity on open edges: `'adv'` implicit form of the split mode's condition, `'orl'` normal-radiation Orlanski, `'nudge'` nudging only, `'grav'` gravity-wave radiation |
-| `fs_tang_nudge` | `1.0` | Factor on the tangential inflow nudging rate (`'adv'`, `'orl'`, `'nudge'`) |
+| `fs_cor_metric` | `.true.` | Include the curvilinear metric terms in the Coriolis estimate that is kept out of the generalized-alpha memory (`CURVGRID` and `UV_ADV` only) |
+| `fs_tang_nudge` | `1.0` | Factor on the inflow nudging rate of the tangential barotropic velocity on open edges |
 | `fs_drag_implicit` | `.false.` | Treat the linear bottom-drag increment implicitly |
-| `fs_coriolis_implicit` | `.false.` | Not implemented (`.true.` stops ROMS) |
 | `fs_selftest` | `0` | 1: solver test with the first step's operator at startup (`FS_TEST` lines) |
+
+The keys `fs_mom_mem`, `fs_src_mem`, `fs_tang`, `fs_obc_flux`, `fs_pred_ext`, `fs_ga_start`, `fs_cor_est`, `fs_coriolis_implicit` and `fs_cost_sync` of the development versions are not read: a namelist that sets one of them stops ROMS at the `IMPLICIT_FS` read (see [the implicit free surface](implicit_free_surface.md)).
 
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)

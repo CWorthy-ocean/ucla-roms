@@ -626,24 +626,14 @@ fs_mg_global_on = 'node'             ! 'mg': ranks solving the gathered levels: 
                                      ! 'all' every rank | 'one' rank 0 (same results)
 fs_mg_faces = 'width'                ! 'mg': coarse face factor from the aggregates' widths | 'half' 0.5
 fs_exch_thin = .true.                ! 'mg': one-cell halo exchanges in the solver (same results)
-fs_cost_sync = .false.               ! Timing only: barriers before the solver's collectives
 fs_drag_implicit = .false.           ! Implicit correction of the linear bottom-drag increment
-fs_coriolis_implicit = .false.       ! Not implemented (.true. stops)
 fs_warm = 1                          ! Solver start: 1 the previous step's increment, 0 zero
 fs_verbose = 0                       ! 1 FS_SOLVE line per step; 2 + FS_VOL volume budget and FS_SRC
                                      ! source volumes (FS_SRC also with fs_mode = 'split')
 fs_selftest = 0                      ! 1: test of the solver at the first step (FS_TEST lines)
-fs_pred_ext = 'ab2'                  ! Predictor's barotropic transport: 'ab2' 1.5 U^n - 0.5 U^n-1 |
-                                     ! 'stock' the split mode's extrapolation
-fs_obc_flux = 'mem'                  ! Flather flux of open normal faces: 'mem' | 'ext'
-fs_tang = 'adv'                      ! Tangential open-boundary ubar/vbar: 'adv' | 'orl' | 'nudge' | 'grav'
 fs_tang_nudge = 1.0                  ! Factor on the tangential inflow nudging rate
-fs_mom_mem = 'cor'                   ! Momentum memory: 'cor' all but a Coriolis estimate | 'pg' | 'all'
-fs_src_mem = 'none'                  ! Volume sources (rivers, swflx, pipes, CDR): 'none' the step's
-                                     ! value | 'all' through the generalized-alpha memory
-fs_ga_start = 'step'                 ! Cold start of the memory: 'step' | 'rhs'
-fs_cor_est = 'n'                     ! 'cor' estimate from U^n ('n') | 'ab2' (restart not exact)
-fs_cor_metric = .true.               ! 'cor' estimate with the curvilinear metric terms
+fs_cor_metric = .true.               ! Coriolis estimate of the momentum memory with the curvilinear
+                                     ! metric terms (CURVGRID and UV_ADV)
 fs_pot_time = 'af'                   ! Tidal potential at n+alpha_f ('af') | n+1/2 ('mid')
 fs_stress_time = 'af'                ! Surface stress of the 2-D step at n+alpha_f ('af') | n+1/2 ('mid')
 /
