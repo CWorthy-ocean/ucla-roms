@@ -26,7 +26,7 @@ Both keys are in the namelist group `BGC_SETTINGS`. With MARBL or BEC2 that grou
 
 A window ends on the steps `iic` with `modulo(iic, k) == 0`; with MARBL every MARBL step is one of them (with the default `k`, every window end is a MARBL step). The "BGC tracers" are all tracers with index above temperature and salinity: passive tracers, the CDR_LITE OAE/DOR tracers, the MARBL tracers and their ALT_CO2 twins.
 
-Between window ends the BGC tracers hold the window-start state in all three time levels; the every-step tracer code (`pre_step3d`, `step3d_t`, `t3dmix`, the tracer boundary conditions and halo exchanges) handles only temperature and salinity.
+Between window ends the BGC tracers hold the window-start state in time levels 1 and 2 and in the surface layer of level 3 (the predictor level, read between windows only at the surface: CFLX_CORR restoring, the CDR_LITE gas flux); the every-step tracer code (`pre_step3d`, `step3d_t`, `t3dmix`, the tracer boundary conditions and halo exchanges) handles only temperature and salinity.
 
 ### 3.1 Accumulation (every step)
 
@@ -50,7 +50,7 @@ After the horizontal pass, the vertical flux through a w-face is the content of 
 
 ### 3.5 Boundaries and MARBL
 
-Open boundaries use the stock conditions over the window: Orlanski radiation (`OBC_TORLANSKI`) with the window Courant numbers of the accumulated boundary transports, nudging to the window-end boundary data (`T_FRC_BRY`), `OBC_TSPECIFIED`, gradient conditions and corners. As in the stock scheme, inflow faces of open boundaries carry the boundary-cell value (first-order upwind); outflow faces keep the swept flux. At window ends that are MARBL steps, MARBL then runs with its usual `marbl_timestep` (its tendencies and surface fluxes applied over `marbl_timestep`, as in the stock model), and the new state is exchanged and copied to all time levels.
+Open boundaries use the stock conditions over the window: Orlanski radiation (`OBC_TORLANSKI`) with the window Courant numbers of the accumulated boundary transports, nudging to the window-end boundary data (`T_FRC_BRY`), `OBC_TSPECIFIED`, gradient conditions and corners. As in the stock scheme, inflow faces of open boundaries carry the boundary-cell value (first-order upwind); outflow faces keep the swept flux. At window ends that are MARBL steps, MARBL then runs with its usual `marbl_timestep` (its tendencies and surface fluxes applied over `marbl_timestep`, as in the stock model), and the new state is exchanged and copied to the other time levels (level 3: surface layer only).
 
 ### 3.6 Positivity
 

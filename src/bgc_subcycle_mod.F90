@@ -27,8 +27,10 @@ module bgc_subcycle_mod
   ! from BGC_SETTINGS like the two above but left out of the namelist
   ! template and the key tables (described in section 6 of the docs page).
   !
-  ! The BGC state is kept identical in the three time levels of t between
-  ! window ends; the stock tracer code loops over itrc = 1, nt_step
+  ! Between window ends the BGC state is held in time levels 1 and 2 of t,
+  ! and at the surface of level 3 (the only part of level 3 read between
+  ! windows; see the copy at the window end); the stock tracer code loops
+  ! over itrc = 1, nt_step
   ! (tracers module; nt_step = iTandS here, nt when bgc_physics_subcycle is off).
 
 #include "cppdefs.opt"
@@ -921,11 +923,25 @@ contains
         call exchange_xxx(t(:,:,:,nnew,itrc))
       end select
     end do
-    do itrc = it0+1, nt
-      do l = 1, 3
-        if (l /= nnew) t(:,:,:,l,itrc) = t(:,:,:,nnew,itrc)
+    ! Copy to the other time levels. At the window end nnew is 1 or 2 (the
+    ! corrector's), and until the next window end only the other of the two
+    ! is read in full; level 3 (nrhs of the next correctors) is read only at
+    ! the surface (CFLX_CORR restoring in bulk_frc, the CDR_LITE gas flux and
+    ! the surface-flux exchange in tracers.F90), the window itself uses it as
+    ! scratch, and the stock tracer code touches it only for T and S, so it
+    ! gets the surface layer only (halving the copy).
+    if (nnew == 3) then
+      do itrc = it0+1, nt
+        t(:,:,:,1,itrc) = t(:,:,:,3,itrc)
+        t(:,:,:,2,itrc) = t(:,:,:,3,itrc)
       end do
-    end do
+    else
+      l = 3 - nnew
+      do itrc = it0+1, nt
+        t(:,:,:,l,itrc) = t(:,:,:,nnew,itrc)
+        t(:,:,nz,3,itrc) = t(:,:,nz,nnew,itrc)
+      end do
+    end if
     call reg_toc(rg_bgcsub_bc)
 
     ! ======================= next window ====================================
