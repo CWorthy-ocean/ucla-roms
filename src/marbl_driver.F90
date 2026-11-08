@@ -180,6 +180,15 @@ module marbl_driver
   integer(kind=4), allocatable :: bal_rp(:), bal_rn(:), bal_ro(:)
   real(kind=8), allocatable, asynchronous :: bal_sin(:,:), bal_sout(:,:), bal_rin(:,:), bal_rout(:,:)
   real(kind=8), allocatable :: bal_r1(:), bal_q1(:)
+#ifdef MARBL_DIAGS
+!     MARBL's particulate fluxes at its reference depth (POC_FLUX_100m etc.,
+!     marbldrv_configure_diagnostics): MARBL sets them only in a column with
+!     a layer containing that depth; elsewhere they would keep the previous
+!     column's values, so ROMS sets them to 0 there (reset_flux_at_ref_depth)
+  integer(kind=4) :: nref_diag = 0
+  integer(kind=4) :: iref_diag(5)
+  real(kind=8) :: flux_ref_depth = 0._8
+#endif
 ! ----------------------------------------------------------------------
 
   public :: marbldrv_configure_tracers
@@ -1171,7 +1180,90 @@ contains
                          .eq. "none"
     end do
 
+    call find_flux_at_ref_depth_diags
+
   end subroutine marbldrv_configure_diagnostics
+
+!-----------------------------------------------------------------------
+  subroutine find_flux_at_ref_depth_diags
+!-----------------------------------------------------------------------
+!     Find MARBL's five particulate fluxes at its reference depth among
+!     the interior tendency diagnostics, from MARBL's metadata: the 2D
+!     diagnostics with a reference depth (ref_depth > 0) named
+!     <particle>_FLUX_<depth>m, as MARBL names them (POC_FLUX_100m with the
+!     default particulate_flux_ref_depth = 100 m; ROMS runs MARBL in mks).
+!     reset_flux_at_ref_depth sets them to 0 in columns without a layer
+!     containing that depth. Any other diagnostic with a reference depth,
+!     a missing one or unequal depths abort: MARBL has changed and the
+!     reset must be revisited.
+!-----------------------------------------------------------------------
+    character(len=28) :: sr_name = "find_flux_at_ref_depth_diags"
+    character(len=6), parameter :: pname(5) = [character(len=6) ::&
+    &  'POC', 'POP', 'CaCO3', 'SiO2', 'P_iron']
+    character(len=32) :: dstr
+    integer(kind=4) :: m, n, nfound
+    logical :: ok
+
+    nref_diag = 0 ; nfound = 0 ; ok = .true.
+    do m = 1, size(MARBL_instance%interior_tendency_diags%diags)
+      associate(dg => MARBL_instance%interior_tendency_diags%diags(m))
+        if (dg%ref_depth <= 0._8) cycle
+        nfound = nfound + 1
+        if (nfound == 1) flux_ref_depth = dg%ref_depth
+        write(dstr,'(I0,A)') int(dg%ref_depth), 'm'
+        do n = 1, 5
+          if (trim(dg%short_name) == trim(pname(n))//'_FLUX_'//trim(dstr)) exit
+        end do
+        if (n > 5 .or. .not. interior_tendency_diag_is_2d(m) .or.&
+        &   dg%ref_depth /= flux_ref_depth .or. nref_diag == 5) then
+          ok = .false.
+          write(error_info,*) 'unexpected MARBL diagnostic with a reference depth: ',&
+          &  trim(dg%short_name)
+        else
+          nref_diag = nref_diag + 1 ; iref_diag(nref_diag) = m
+        end if
+      end associate
+    end do
+    if (ok .and. nref_diag /= 5) then
+      ok = .false.
+      write(error_info,'(A,I0,A)') 'found ', nref_diag,&
+      &  ' of MARBL''s five particulate fluxes at the reference depth (*_FLUX_100m)'
+    end if
+    if (.not. ok) then
+      nref_diag = 0
+      call error_log%raise_global(context=module_name//"/"//sr_name, info=error_info)
+      call error_log%abort_check()
+    end if
+  end subroutine find_flux_at_ref_depth_diags
+
+!-----------------------------------------------------------------------
+  subroutine reset_flux_at_ref_depth
+!-----------------------------------------------------------------------
+!     Right after MARBL's interior_tendency_compute for one column: if no
+!     layer of the column contains MARBL's reference depth, MARBL has not
+!     set its particulate fluxes at that depth in this column, and its five
+!     *_FLUX_100m diagnostics hold the values of the column it computed
+!     before (which depends on the tiling and, with marbl_balance, on the
+!     order in which columns are computed). Set them to 0, the value MARBL
+!     itself gives a column whose reference depth lies below the sea floor.
+!     The test is MARBL's (compute_particulate_terms: levels k = 1..km from
+!     the surface, top of level 1 at depth 0) on the geometry MARBL just
+!     used. Diagnostics only: nothing in MARBL or ROMS reads them back.
+!-----------------------------------------------------------------------
+    integer(kind=4) :: k, n
+    real(kind=8) :: ztop
+    if (nref_diag == 0) return
+    associate(zw => MARBL_instance%domain%zw)
+      ztop = 0._8
+      do k = 1, MARBL_instance%domain%km
+        if (k > 1) ztop = zw(k-1)
+        if (ztop <= flux_ref_depth .and. flux_ref_depth < zw(k)) return
+      end do
+    end associate
+    do n = 1, nref_diag
+      MARBL_instance%interior_tendency_diags%diags(iref_diag(n))%field_2d(1) = 0._8
+    end do
+  end subroutine reset_flux_at_ref_depth
 
 !-----------------------------------------------------------------------
   subroutine marbldrv_parse_diagnostic_output_list(&
@@ -1820,6 +1912,9 @@ contains
       call col_log(iown, li, lj)
     end if
     call marbl_instance%StatusLog%erase()
+#ifdef MARBL_DIAGS
+    call reset_flux_at_ref_depth
+#endif
     do m = 1, nt_marbl
       q(q_tr+(m-1)*nz+1:q_tr+m*nz) = q(q_tr+(m-1)*nz+1:q_tr+m*nz) +&
       &  marbl_instance%interior_tendencies(m,nz:1:-1)*(dt*marbl_timestep_ratio)
@@ -2508,6 +2603,9 @@ contains
     end if
 !     call print_marbl_log(marbl_instance%StatusLog,i,j)
     call marbl_instance%StatusLog%erase()
+#ifdef MARBL_DIAGS
+    call reset_flux_at_ref_depth
+#endif
   end subroutine marbldrv_compute_interior_tendency
 !-----------------------------------------------------------------------
 
