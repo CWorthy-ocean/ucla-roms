@@ -66,8 +66,8 @@ module bgc_subcycle_mod
   real(kind=8), allocatable, dimension(:,:) :: RMU, RMV
   integer(kind=4) :: nhu = -1, nhv = -1
   integer(kind=4), allocatable, dimension(:) :: hu_i, hu_j, hv_i, hv_j
-  ! positivity limiter work (per tracer)
-  real(kind=8), allocatable, dimension(:,:,:) :: FXa, FEa, RRa
+  ! positivity limiter work (per tracer of a group of up to four)
+  real(kind=8), allocatable, dimension(:,:,:,:) :: FXa, FEa, RRa
 #endif
 
 contains
@@ -194,7 +194,7 @@ contains
       QONE = 1._8; CSH = 0._8; QSH = 1._8
     end if
     if (bgc_subcycle_pos) then
-      allocate(FXa(GLOBAL_2D_ARRAY,nz), FEa(GLOBAL_2D_ARRAY,nz), RRa(GLOBAL_2D_ARRAY,nz))
+      allocate(FXa(GLOBAL_2D_ARRAY,nz,4), FEa(GLOBAL_2D_ARRAY,nz,4), RRa(GLOBAL_2D_ARRAY,nz,4))
       FXa = 0._8; FEa = 0._8; RRa = 1._8
     end if
     nwin = 0
@@ -389,6 +389,9 @@ contains
     ! 2-D work over the tile with its 2-point halo
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: vol, qs, sx, sy, Fxi, Fyi, Fx, Fy,&
     &                                                      FLx, FLy, dx2, dy2, dmx
+    ! per level (shared by the tracers): face transports fm*V, swept fractions c
+    ! of the upstream cells, denominators of the pseudo-density inner operators
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: vxf, cxf, vyf, cyf, dnx, dny
     ! column work
     real(kind=8), dimension(istr-2:iend+2,0:nz) :: v1r, wr, fcr, pivr, cfr
     real(kind=8), dimension(istr-2:iend+2) :: topr
@@ -397,7 +400,7 @@ contains
     ! column sums of the accumulated transports through river faces
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: rcolu, rcolv
     integer(kind=4) :: ilo, ihi, jlo, jhi, i, j, k, ib, itrc, iface, l, nloop, pid, cidx, ierr
-    integer(kind=4) :: ib0, isub, msub, mk(nz)
+    integer(kind=4) :: ib0, isub, msub, mk(nz), klo, khi, ig, ng, islot
     real(kind=8) :: lck(5,nz), gck(5,nz), fmk(nz), crit, ccell, cfc
     real(kind=8) :: dtw, cff, cout, smax, wmax, a, cl, p, rr, fm, cface, c1d, rv, dvx, dvy, v1min
     real(kind=8) :: lmax(6), gmax(6)
@@ -577,6 +580,15 @@ contains
 
     ! ======================= horizontal pass ===============================
     call reg_tic(rg_bgcsub_h)
+    if (diag) then                 ! content at the window start
+      do ib = ib0, nb
+        if (ib == 0) then
+          call window_start_content(QONE)
+        else
+          call window_start_content(t(:,:,:,nstp,it0+ib))
+        end if
+      end do
+    end if
     ! content per area into t(:,:,:,nnew,itrc) (shadow: CSH); sub-pass s > 1
     ! starts from the previous sub-pass's concentrations (time level 3 is
     ! scratch here: every level is rewritten at the end of the window)
@@ -584,6 +596,14 @@ contains
       if (isub == 1) then
         VS = HZS
       else
+        ! levels klo..khi hold every level with a sub-pass isub; only they are
+        ! updated, so only they are exchanged
+        klo = nz ; khi = 1
+        do k = 1, nz
+          if (isub <= mk(k)) then
+            klo = min(klo, k) ; khi = max(khi, k)
+          end if
+        end do
         do k = 1, nz
           if (isub > mk(k)) cycle
           do j = jstr, jend
@@ -593,7 +613,7 @@ contains
             end do
           end do
         end do
-        call exchange_xxx(VS)
+        call exchange_xxx(VS(:,:,klo:khi))
         call edge_copy(VS, HZS)
         do ib = ib0, nb
           itrc = it0 + ib
@@ -614,39 +634,80 @@ contains
           itrc = it0 + ib
           select case (min(4, nb-ib+1))
           case (4)
-            call exchange_xxx(t(:,:,:,3,itrc), t(:,:,:,3,itrc+1), t(:,:,:,3,itrc+2), t(:,:,:,3,itrc+3))
+            call exchange_xxx(t(:,:,klo:khi,3,itrc), t(:,:,klo:khi,3,itrc+1),&
+            &                 t(:,:,klo:khi,3,itrc+2), t(:,:,klo:khi,3,itrc+3))
           case (3)
-            call exchange_xxx(t(:,:,:,3,itrc), t(:,:,:,3,itrc+1), t(:,:,:,3,itrc+2))
+            call exchange_xxx(t(:,:,klo:khi,3,itrc), t(:,:,klo:khi,3,itrc+1),&
+            &                 t(:,:,klo:khi,3,itrc+2))
           case (2)
-            call exchange_xxx(t(:,:,:,3,itrc), t(:,:,:,3,itrc+1))
+            call exchange_xxx(t(:,:,klo:khi,3,itrc), t(:,:,klo:khi,3,itrc+1))
           case (1)
-            call exchange_xxx(t(:,:,:,3,itrc))
+            call exchange_xxx(t(:,:,klo:khi,3,itrc))
           end select
         end do
         do ib = 1, nb
           call edge_copy(t(:,:,:,3,it0+ib), t(:,:,:,nstp,it0+ib))
         end do
         if (diag) then
-          call exchange_xxx(QSH)
+          call exchange_xxx(QSH(:,:,klo:khi))
           call edge_copy(QSH, QONE)
         end if
       end if
-      do ib = ib0, nb
-        itrc = it0 + ib
-        if (ib == 0) then
-          if (isub == 1) then
-            call hpass(QONE, CSH)
-          else
-            call hpass(QSH, CSH)
-          end if
-        else
-          if (isub == 1) then
-            call hpass(t(:,:,:,nstp,itrc), t(:,:,:,nnew,itrc))
-          else
-            call hpass(t(:,:,:,3,itrc), t(:,:,:,nnew,itrc))
-          end if
+      if (bgc_subcycle_pos) then
+        ! groups of four tracers: high-order fluxes and cell factors R of
+        ! every level, one exchange of the four R, then the limited fluxes
+        if (diag) then             ! the shadow tracer is not limited
+          ib = 0 ; itrc = it0
+          do k = 1, nz
+            if (isub > mk(k)) cycle
+            call hcoef
+            if (isub == 1) then
+              call hlevel(QONE, CSH)
+            else
+              call hlevel(QSH, CSH)
+            end if
+          end do
         end if
-      end do
+        do ig = 1, nb, 4
+          ng = min(4, nb-ig+1)
+          do k = 1, nz
+            if (isub > mk(k)) cycle
+            call hcoef
+            do ib = ig, ig+ng-1
+              itrc = it0 + ib ; islot = ib-ig+1
+              if (isub == 1) then
+                call hlevel(t(:,:,:,nstp,itrc), t(:,:,:,nnew,itrc))
+              else
+                call hlevel(t(:,:,:,3,itrc), t(:,:,:,nnew,itrc))
+              end if
+            end do
+          end do
+          call limit_group
+        end do
+      else
+        ! level by level: the level's transports, swept fractions and
+        ! denominators are computed once for all tracers
+        do k = 1, nz
+          if (isub > mk(k)) cycle
+          call hcoef
+          do ib = ib0, nb
+            itrc = it0 + ib
+            if (ib == 0) then
+              if (isub == 1) then
+                call hlevel(QONE, CSH)
+              else
+                call hlevel(QSH, CSH)
+              end if
+            else
+              if (isub == 1) then
+                call hlevel(t(:,:,:,nstp,itrc), t(:,:,:,nnew,itrc))
+              else
+                call hlevel(t(:,:,:,3,itrc), t(:,:,:,nnew,itrc))
+              end if
+            end if
+          end do
+        end do
+      end if
     end do
 
     call reg_toc(rg_bgcsub_h)
@@ -834,132 +895,207 @@ contains
 
   contains
 
-    subroutine hpass(q3, c3)
-      ! one tracer, all levels, sub-pass isub: Lin-Rood swept pass of q3 with
-      ! the transports fm*V in the pseudo-volumes VS; content per area into
-      ! c3 (interior): HZS q - pm pn div F on the first sub-pass, then
-      ! c3 - pm pn div F
+    subroutine window_start_content(q3)
+      ! diagnostics: content and minimum of one tracer at the window start
+      real(kind=8), intent(in) :: q3(GLOBAL_2D_ARRAY,nz)
+      integer(kind=4) :: ii, jj, kk
+      do kk = 1, nz
+        do jj = jstr, jend
+          do ii = istr, iend
+            bud(1,ib) = bud(1,ib) + HZS(ii,jj,kk)*q3(ii,jj,kk)/(pm(ii,jj)*pn(ii,jj))*rmask(ii,jj)
+            if (ib > 0 .and. rmask(ii,jj) > 0.5_8) tmn(1,ib) = min(tmn(1,ib), q3(ii,jj,kk))
+          end do
+        end do
+      end do
+    end subroutine window_start_content
+
+    subroutine hcoef
+      ! level k, sub-pass isub: pseudo-volumes, face transports fm*V and the
+      ! swept fractions c = |fm V| / volume of the upstream cell on the faces
+      ! of the inner and outer sweeps, denominators of the inner operators
+      integer(kind=4) :: ii, jj
+      real(kind=8) :: vv
+      fm = fmk(k)
+      do jj = jlo, jhi
+        do ii = ilo, ihi
+          vol(ii,jj) = VS(ii,jj,k)/(pm(ii,jj)*pn(ii,jj))
+        end do
+      end do
+      do jj = jlo, jhi
+        do ii = istr, iend+1
+          vv = fm*VX(ii,jj,k)
+          vxf(ii,jj) = vv
+          if (vv > 0._8) then
+            cxf(ii,jj) = vv/vol(ii-1,jj)
+          else if (vv < 0._8) then
+            cxf(ii,jj) = -vv/vol(ii,jj)
+          else
+            cxf(ii,jj) = 0._8
+          end if
+        end do
+      end do
+      do jj = jstr, jend+1
+        do ii = ilo, ihi
+          vv = fm*VY(ii,jj,k)
+          vyf(ii,jj) = vv
+          if (vv > 0._8) then
+            cyf(ii,jj) = vv/vol(ii,jj-1)
+          else if (vv < 0._8) then
+            cyf(ii,jj) = -vv/vol(ii,jj)
+          else
+            cyf(ii,jj) = 0._8
+          end if
+        end do
+      end do
+      do jj = jstr, jend
+        do ii = ilo, ihi
+          dny(ii,jj) = vol(ii,jj) - fm*(VY(ii,jj+1,k)-VY(ii,jj,k))
+        end do
+      end do
+      do jj = jlo, jhi
+        do ii = istr, iend
+          dnx(ii,jj) = vol(ii,jj) - fm*(VX(ii+1,jj,k)-VX(ii,jj,k))
+        end do
+      end do
+    end subroutine hcoef
+
+    subroutine hlevel(q3, c3)
+      ! one tracer, level k, sub-pass isub (after hcoef): Lin-Rood swept pass
+      ! of q3 with the transports fm*V in the pseudo-volumes VS; content per
+      ! area into c3 (interior): HZS q - pm pn div F on the first sub-pass,
+      ! then c3 - pm pn div F. With the limiter, the high-order fluxes and the
+      ! cell factors R are stored instead (applied by limit_group).
       real(kind=8), intent(in) :: q3(GLOBAL_2D_ARRAY,nz)
       real(kind=8), intent(inout) :: c3(GLOBAL_2D_ARRAY,nz)
       integer(kind=4) :: ii, jj
-      if (diag .and. isub == 1) then          ! content at the window start
-        do k = 1, nz
-          do jj = jstr, jend
-            do ii = istr, iend
-              bud(1,ib) = bud(1,ib) + HZS(ii,jj,k)*q3(ii,jj,k)/(pm(ii,jj)*pn(ii,jj))*rmask(ii,jj)
-              if (ib > 0 .and. rmask(ii,jj) > 0.5_8) tmn(1,ib) = min(tmn(1,ib), q3(ii,jj,k))
-            end do
+      do jj = jlo, jhi
+        do ii = ilo, ihi
+          qs(ii,jj) = q3(ii,jj,k)
+        end do
+      end do
+      ! inner fluxes: y on the x-extended range, x on the y-extended range
+      call sweep_y(qs, Fyi, ilo, ihi)
+      call sweep_x(qs, Fxi, jlo, jhi)
+      if (river_source) call river_faces(Fxi, Fyi, ilo, ihi, jlo, jhi)
+      ! outer fields (q + Yq)/2 and (q + Xq)/2, pseudo-density inner operators
+      do jj = jstr, jend
+        do ii = ilo, ihi
+          if (rmask(ii,jj) > 0.5_8) then
+            sx(ii,jj) = 0.5_8*(qs(ii,jj) + (vol(ii,jj)*qs(ii,jj) - (Fyi(ii,jj+1)-Fyi(ii,jj)))&
+            &          /dny(ii,jj))
+          else
+            sx(ii,jj) = qs(ii,jj)
+          end if
+        end do
+      end do
+      do jj = jlo, jhi
+        do ii = istr, iend
+          if (rmask(ii,jj) > 0.5_8) then
+            sy(ii,jj) = 0.5_8*(qs(ii,jj) + (vol(ii,jj)*qs(ii,jj) - (Fxi(ii+1,jj)-Fxi(ii,jj)))&
+            &          /dnx(ii,jj))
+          else
+            sy(ii,jj) = qs(ii,jj)
+          end if
+        end do
+      end do
+      call sweep_x(sx, Fx, jstr, jend)
+      call sweep_y(sy, Fy, istr, iend)
+      if (river_source) call river_faces(Fx, Fy, istr, iend, jstr, jend)
+      if (bgc_subcycle_pos .and. ib > 0) then
+        ! limiter R of each interior cell from the donor-cell content
+        call donor(FLx, FLy)
+        do jj = jstr, jend
+          do ii = istr, iend
+            if (isub == 1) then
+              cl = HZS(ii,jj,k)*qs(ii,jj)
+            else
+              cl = c3(ii,jj,k)
+            end if
+            cl = cl - pm(ii,jj)*pn(ii,jj)*(FLx(ii+1,jj)-FLx(ii,jj)+FLy(ii,jj+1)-FLy(ii,jj))
+            p = pm(ii,jj)*pn(ii,jj)*( max(Fx(ii+1,jj)-FLx(ii+1,jj),0._8) - min(Fx(ii,jj)-FLx(ii,jj),0._8)&
+            &                       +max(Fy(ii,jj+1)-FLy(ii,jj+1),0._8) - min(Fy(ii,jj)-FLy(ii,jj),0._8) )
+            if (p > 0._8) then
+              RRa(ii,jj,k,islot) = min(1._8, max(cl,0._8)/p)
+            else
+              RRa(ii,jj,k,islot) = 1._8
+            end if
           end do
         end do
+        FXa(istr:iend+1,jstr:jend,k,islot) = Fx(istr:iend+1,jstr:jend)
+        FEa(istr:iend,jstr:jend+1,k,islot) = Fy(istr:iend,jstr:jend+1)
+      else
+        call hupdate(Fx, Fy, c3)
       end if
+    end subroutine hlevel
+
+    subroutine limit_group
+      ! positivity limiter, tracers ig..ig+ng-1 of sub-pass isub (after their
+      ! hlevel calls): R on the halo (shared faces are limited alike on both
+      ! ranks; boundary rows unlimited), then the limited fluxes of every level
+      integer(kind=4) :: ii, jj
+      klo = nz ; khi = 1
+      do k = 1, nz
+        if (isub <= mk(k)) then
+          klo = min(klo, k) ; khi = max(khi, k)
+        end if
+      end do
+      select case (ng)
+      case (4)
+        call exchange_xxx(RRa(:,:,klo:khi,1), RRa(:,:,klo:khi,2), RRa(:,:,klo:khi,3), RRa(:,:,klo:khi,4))
+      case (3)
+        call exchange_xxx(RRa(:,:,klo:khi,1), RRa(:,:,klo:khi,2), RRa(:,:,klo:khi,3))
+      case (2)
+        call exchange_xxx(RRa(:,:,klo:khi,1), RRa(:,:,klo:khi,2))
+      case (1)
+        call exchange_xxx(RRa(:,:,klo:khi,1))
+      end select
+#ifndef EW_PERIODIC
+      if (WESTERN_EDGE) RRa(istr-1,:,:,:) = 1._8
+      if (EASTERN_EDGE) RRa(iend+1,:,:,:) = 1._8
+#endif
+#ifndef NS_PERIODIC
+      if (SOUTHERN_EDGE) RRa(:,jstr-1,:,:) = 1._8
+      if (NORTHERN_EDGE) RRa(:,jend+1,:,:) = 1._8
+#endif
       do k = 1, nz
         if (isub > mk(k)) cycle
         fm = fmk(k)
-        do jj = jlo, jhi
-          do ii = ilo, ihi
-            vol(ii,jj) = VS(ii,jj,k)/(pm(ii,jj)*pn(ii,jj))
-            qs(ii,jj) = q3(ii,jj,k)
-          end do
-        end do
-        ! inner fluxes: y on the x-extended range, x on the y-extended range
-        call sweep_y(qs, VY(:,:,k), Fyi, ilo, ihi)
-        call sweep_x(qs, VX(:,:,k), Fxi, jlo, jhi)
-        if (river_source) call river_faces(Fxi, Fyi, ilo, ihi, jlo, jhi)
-        ! outer fields (q + Yq)/2 and (q + Xq)/2, pseudo-density inner operators
-        do jj = jstr, jend
-          do ii = ilo, ihi
-            if (rmask(ii,jj) > 0.5_8) then
-              sx(ii,jj) = 0.5_8*(qs(ii,jj) + (vol(ii,jj)*qs(ii,jj) - (Fyi(ii,jj+1)-Fyi(ii,jj)))&
-              &          /(vol(ii,jj) - fm*(VY(ii,jj+1,k)-VY(ii,jj,k))))
-            else
-              sx(ii,jj) = qs(ii,jj)
-            end if
-          end do
-        end do
-        do jj = jlo, jhi
-          do ii = istr, iend
-            if (rmask(ii,jj) > 0.5_8) then
-              sy(ii,jj) = 0.5_8*(qs(ii,jj) + (vol(ii,jj)*qs(ii,jj) - (Fxi(ii+1,jj)-Fxi(ii,jj)))&
-              &          /(vol(ii,jj) - fm*(VX(ii+1,jj,k)-VX(ii,jj,k))))
-            else
-              sy(ii,jj) = qs(ii,jj)
-            end if
-          end do
-        end do
-        call sweep_x(sx, VX(:,:,k), Fx, jstr, jend)
-        call sweep_y(sy, VY(:,:,k), Fy, istr, iend)
-        if (river_source) call river_faces(Fx, Fy, istr, iend, jstr, jend)
-        if (bgc_subcycle_pos .and. ib > 0) then
-          ! limiter R of each interior cell from the donor-cell content
-          call donor(FLx, FLy)
-          do jj = jstr, jend
-            do ii = istr, iend
-              if (isub == 1) then
-                cl = HZS(ii,jj,k)*qs(ii,jj)
-              else
-                cl = c3(ii,jj,k)
-              end if
-              cl = cl - pm(ii,jj)*pn(ii,jj)*(FLx(ii+1,jj)-FLx(ii,jj)+FLy(ii,jj+1)-FLy(ii,jj))
-              p = pm(ii,jj)*pn(ii,jj)*( max(Fx(ii+1,jj)-FLx(ii+1,jj),0._8) - min(Fx(ii,jj)-FLx(ii,jj),0._8)&
-              &                       +max(Fy(ii,jj+1)-FLy(ii,jj+1),0._8) - min(Fy(ii,jj)-FLy(ii,jj),0._8) )
-              if (p > 0._8) then
-                RRa(ii,jj,k) = min(1._8, max(cl,0._8)/p)
-              else
-                RRa(ii,jj,k) = 1._8
-              end if
-            end do
-          end do
-          FXa(istr:iend+1,jstr:jend,k) = Fx(istr:iend+1,jstr:jend)
-          FEa(istr:iend,jstr:jend+1,k) = Fy(istr:iend,jstr:jend+1)
-        else
-          call hupdate(Fx, Fy, c3)
-        end if
-      end do  ! k
-
-      if (bgc_subcycle_pos .and. ib > 0) then
-        ! R on the halo (shared faces are limited alike on both ranks); boundary rows unlimited
-        call exchange_xxx(RRa)
-#ifndef EW_PERIODIC
-        if (WESTERN_EDGE) RRa(istr-1,:,:) = 1._8
-        if (EASTERN_EDGE) RRa(iend+1,:,:) = 1._8
-#endif
-#ifndef NS_PERIODIC
-        if (SOUTHERN_EDGE) RRa(:,jstr-1,:) = 1._8
-        if (NORTHERN_EDGE) RRa(:,jend+1,:) = 1._8
-#endif
-        do k = 1, nz
-          if (isub > mk(k)) cycle
-          fm = fmk(k)
+        do ib = ig, ig+ng-1
+          itrc = it0 + ib ; islot = ib-ig+1
           do jj = jlo, jhi
             do ii = ilo, ihi
-              qs(ii,jj) = q3(ii,jj,k)
+              if (isub == 1) then
+                qs(ii,jj) = t(ii,jj,k,nstp,itrc)
+              else
+                qs(ii,jj) = t(ii,jj,k,3,itrc)
+              end if
             end do
           end do
           call donor(FLx, FLy)
           do jj = jstr, jend
             do ii = istr, iend+1
-              a = FXa(ii,jj,k) - FLx(ii,jj)
+              a = FXa(ii,jj,k,islot) - FLx(ii,jj)
               if (a >= 0._8) then
-                Fx(ii,jj) = FLx(ii,jj) + a*RRa(ii-1,jj,k)
+                Fx(ii,jj) = FLx(ii,jj) + a*RRa(ii-1,jj,k,islot)
               else
-                Fx(ii,jj) = FLx(ii,jj) + a*RRa(ii,jj,k)
+                Fx(ii,jj) = FLx(ii,jj) + a*RRa(ii,jj,k,islot)
               end if
             end do
           end do
           do jj = jstr, jend+1
             do ii = istr, iend
-              a = FEa(ii,jj,k) - FLy(ii,jj)
+              a = FEa(ii,jj,k,islot) - FLy(ii,jj)
               if (a >= 0._8) then
-                Fy(ii,jj) = FLy(ii,jj) + a*RRa(ii,jj-1,k)
+                Fy(ii,jj) = FLy(ii,jj) + a*RRa(ii,jj-1,k,islot)
               else
-                Fy(ii,jj) = FLy(ii,jj) + a*RRa(ii,jj,k)
+                Fy(ii,jj) = FLy(ii,jj) + a*RRa(ii,jj,k,islot)
               end if
             end do
           end do
-          call hupdate(Fx, Fy, c3)
+          call hupdate(Fx, Fy, t(:,:,:,nnew,itrc))
         end do
-      end if
-    end subroutine hpass
+      end do
+    end subroutine limit_group
 
     subroutine edge_copy(dst, src)
       ! physical-edge rows (boundary cells, not updated by the pass) from src
@@ -1097,11 +1233,11 @@ contains
     end if
     end subroutine vpass
 
-    subroutine sweep_x(s, V, F, j0, j1)
-      ! Swept fluxes through the x-faces istr..iend+1 of rows j0..j1:
-      ! F = V [q_u + d_near (1-c)(2-c)/6 + d_far (1-c)(1+c)/6], c = |V|/vol_u,
+    subroutine sweep_x(s, F, j0, j1)
+      ! Swept fluxes through the x-faces istr..iend+1 of rows j0..j1 (level k,
+      ! after hcoef): F = V [q_u + d_near (1-c)(2-c)/6 + d_far (1-c)(1+c)/6],
       ! the UP3 parabola of the upstream cell integrated over the swept part.
-      real(kind=8), intent(in) :: s(istr-2:iend+2,jstr-2:jend+2), V(GLOBAL_2D_ARRAY)
+      real(kind=8), intent(in) :: s(istr-2:iend+2,jstr-2:jend+2)
       real(kind=8), intent(out) :: F(istr-2:iend+2,jstr-2:jend+2)
       integer(kind=4), intent(in) :: j0, j1
       integer(kind=4) :: ii, jj
@@ -1111,9 +1247,9 @@ contains
           dx2(ii,jj) = (s(ii,jj)-s(ii-1,jj))*umask(ii,jj)
         end do
         do ii = istr, iend+1
-          vv = fm*V(ii,jj)
+          vv = vxf(ii,jj)
           if (vv > 0._8) then
-            c = vv/vol(ii-1,jj)
+            c = cxf(ii,jj)
             dn = dx2(ii,jj)
             if (ii-1 > ilo) then
               df = dx2(ii-1,jj)
@@ -1125,7 +1261,7 @@ contains
             end if
             F(ii,jj) = vv*(s(ii-1,jj) + (1._8-c)*((2._8-c)*dn + (1._8+c)*df)*r6)
           else if (vv < 0._8) then
-            c = -vv/vol(ii,jj)
+            c = cxf(ii,jj)
             dn = dx2(ii,jj)
             if (ii+1 <= ihi) then
               df = dx2(ii+1,jj)
@@ -1143,9 +1279,9 @@ contains
       end do
     end subroutine sweep_x
 
-    subroutine sweep_y(s, V, F, i0, i1)
+    subroutine sweep_y(s, F, i0, i1)
       ! as sweep_x for the y-faces jstr..jend+1 of columns i0..i1
-      real(kind=8), intent(in) :: s(istr-2:iend+2,jstr-2:jend+2), V(GLOBAL_2D_ARRAY)
+      real(kind=8), intent(in) :: s(istr-2:iend+2,jstr-2:jend+2)
       real(kind=8), intent(out) :: F(istr-2:iend+2,jstr-2:jend+2)
       integer(kind=4), intent(in) :: i0, i1
       integer(kind=4) :: ii, jj
@@ -1157,9 +1293,9 @@ contains
       end do
       do jj = jstr, jend+1
         do ii = i0, i1
-          vv = fm*V(ii,jj)
+          vv = vyf(ii,jj)
           if (vv > 0._8) then
-            c = vv/vol(ii,jj-1)
+            c = cyf(ii,jj)
             dn = dy2(ii,jj)
             if (jj-1 > jlo) then
               df = dy2(ii,jj-1)
@@ -1171,7 +1307,7 @@ contains
             end if
             F(ii,jj) = vv*(s(ii,jj-1) + (1._8-c)*((2._8-c)*dn + (1._8+c)*df)*r6)
           else if (vv < 0._8) then
-            c = -vv/vol(ii,jj)
+            c = cyf(ii,jj)
             dn = dy2(ii,jj)
             if (jj+1 <= jhi) then
               df = dy2(ii,jj+1)
