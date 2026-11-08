@@ -26,7 +26,7 @@ Both keys are in the namelist group `BGC_SETTINGS`. With MARBL or BEC2 that grou
 
 A window ends on the steps `iic` with `modulo(iic, k) == 0`; with MARBL every MARBL step is one of them (with the default `k`, every window end is a MARBL step). The "BGC tracers" are all tracers with index above temperature and salinity: passive tracers, the CDR_LITE OAE/DOR tracers, the MARBL tracers and their ALT_CO2 twins.
 
-Between window ends the BGC tracers hold the window-start state in time levels 1 and 2 and in the surface layer of level 3 (the predictor level, read between windows only at the surface: CFLX_CORR restoring, the CDR_LITE gas flux); the every-step tracer code (`pre_step3d`, `step3d_t`, `t3dmix`, the tracer boundary conditions and halo exchanges) handles only temperature and salinity.
+Between window ends the BGC tracers hold the window-start state in time levels 1 and 2 and in the surface layer of level 3 (the predictor level, read between windows only at the surface: CFLX_CORR restoring, the CDR_LITE gas flux, the surface-flux exchange). With `bgc_subcycle_diag > 0` the rest of level 3 is filled with a signalling NaN at every window end, so that a reader of it fails loudly (a floating-point trap with `-fpe0`, NaN in the BGC state and output otherwise); results are otherwise unchanged. The every-step tracer code (`pre_step3d`, `step3d_t`, `t3dmix`, the tracer boundary conditions and halo exchanges) handles only temperature and salinity.
 
 ### 3.1 Accumulation (every step)
 
