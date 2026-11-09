@@ -940,8 +940,9 @@ contains
     end do
     ! Test runs (bgc_subcycle_diag > 0): fill the rest of level 3 with a
     ! signalling NaN, so that any reader of it between windows fails
-    ! loudly: with floating-point traps (-fpe0) at its first arithmetic
-    ! use, otherwise as NaN in the BGC state and output.
+    ! loudly, as NaN in the BGC state and output (or as a trap at its first
+    ! arithmetic use where floating-point traps can be enabled; an -fpe0
+    ! build on Derecho traps earlier, in the HDF5 library's start-up).
     if (bgc_subcycle_diag > 0) then
       snan = ieee_value(1._8, ieee_signaling_nan)
       do itrc = it0+1, nt
