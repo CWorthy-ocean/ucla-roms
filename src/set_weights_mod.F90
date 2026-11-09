@@ -31,6 +31,11 @@ contains
     real(kind=8) zeta(4), DUon, Zt_av1, DU_av2, cff1,cff2,cff3
 # endif
     real(kind=QUAD) sum, shft, cff
+    ! The loops below fill weight(:,1:2*ndtfast), so size the array from
+    ! ndtfast (read from the namelist before this call) instead of a fixed
+    ! limit; the old weight(2,288) overflowed silently for ndtfast > 144.
+    if (allocated(weight)) deallocate(weight)
+    allocate(weight(2,2*ndtfast))
     nfast=0
     do i=1,2*ndtfast                     ! Reset both sets of
        weight(1,i)=0._8                     ! weights to all-zeros.

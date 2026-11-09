@@ -1,6 +1,9 @@
 module u2dbc_mod
 
 #include "cppdefs.opt"
+#if defined OBC_M2SPECIFIED && !defined M2_FRC_BRY
+#error "OBC_M2SPECIFIED needs M2_FRC_BRY: this code has no barotropic climatology (ubclm/vbclm) to specify the boundary from"
+#endif
   implicit none
   private
   public :: u2dbc_tile
@@ -151,13 +154,9 @@ contains
 
 #  elif defined OBC_M2SPECIFIED
       do j=jstr,jend
-#   ifdef M2_FRC_BRY
         ubar(istr,j,knew)=ubar_west(j)
-#   else
-        ubar(istr,j,knew)=ubclm(istr,j)&
-#   endif
 #   ifdef MASKING
-        &*umask(istr,j)
+        ubar(istr,j,knew)=ubar(istr,j,knew)*umask(istr,j)
 #   endif
       enddo
 #  else
@@ -277,13 +276,9 @@ contains
 
 #  elif defined OBC_M2SPECIFIED
       do j=jstr,jend
-#   ifdef M2_FRC_BRY
         ubar(iend+1,j,knew)=ubar_east(j)
-#   else
-        ubar(iend+1,j,knew)=ubclm(iend+1,j)&
-#   endif
 #   ifdef MASKING
-        &*umask(iend+1,j)
+        ubar(iend+1,j,knew)=ubar(iend+1,j,knew)*umask(iend+1,j)
 #   endif
       enddo
 #  else
@@ -402,11 +397,7 @@ contains
         ubar(i,jstr-1,knew)=( ubar(i,jstr-1,kstp)&
         &+cx*ubar(i,jstr,knew) )/(1._8+cx)
 #   elif defined OBC_M2SPECIFIED
-#    ifdef M2_FRC_BRY
         ubar(i,jstr-1,knew)=ubar_south(i)
-#    else
-        ubar(i,jstr-1,knew)=ubclm(i,jstr-1)
-#    endif
 #   else
         ubar(i,jstr-1,knew)=ubar(i,jstr,knew)
 #   endif
@@ -524,11 +515,7 @@ contains
       ubar(i,jend+1,knew)=( ubar(i,jend+1,kstp)&
       &+cx*ubar(i,jend,knew))/(1._8+cx)
 #   elif defined OBC_M2SPECIFIED
-#    ifdef M2_FRC_BRY
       ubar(i,jend+1,knew)=ubar_north(i)
-#    else
-      ubar(i,jend+1,knew)=ubclm(i,jend+1)
-#    endif
 #   else
       ubar(i,jend+1,knew)=ubar(i,jend,knew)
 #   endif

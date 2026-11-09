@@ -74,10 +74,13 @@ def create_roms_inputs(target_dir: Path):
         target_dir=target_dir,
     )
 
+    # Rivers must sit on land cells with a wet neighbour (calc_river_flux
+    # aborts otherwise); these are coastal land cells of the grid above,
+    # straddling the xi = 20/21 edge of the 2x2 decomposition.
     river_forcing_ds = create_river_or_pipe_data(
         input_type="river",
-        forcing_i=[10, 11, 12, 13, 14],
-        forcing_j=[20, 19, 19, 18, 18],
+        forcing_i=[15, 15, 15, 15, 16],
+        forcing_j=[19, 20, 21, 22, 16],
         grid=grid,
     )
     river_forcing_ds.to_netcdf(target_dir / "example_input_river_forcing.nc")
@@ -100,6 +103,38 @@ def create_roms_inputs(target_dir: Path):
     subprocess.run(
         "partit 2 2 cdr_forcing_3d.nc",
         text=True, shell=True, cwd=target_dir,
+    )
+    for input_type in ("river", "pipe"):
+        check_partitioned_source_file(target_dir, input_type)
+
+
+def check_partitioned_source_file(target_dir: Path, input_type: str, nranks: int = 4):
+    """Fail if ``partit`` did not carry the river/pipe forcing into the per-rank files.
+
+    partit garbles files that hold int64 or string variables (zero volumes and
+    times, garbage index/fraction fields), which left ``test_rivers_real`` and
+    ``test_pipes_real`` running without any river or pipe for a long time. The
+    source files are written numeric-only to avoid that; this check makes a
+    regression loud instead of silently blinding those tests.
+    """
+    joined = xr.open_dataset(target_dir / f"example_input_{input_type}_forcing.nc", decode_times=False)
+    total_fraction = 0.0
+    for rank in range(nranks):
+        part = xr.open_dataset(
+            target_dir / f"example_input_{input_type}_forcing.{rank}.nc", decode_times=False
+        )
+        np.testing.assert_array_equal(
+            part[f"{input_type}_volume"].values, joined[f"{input_type}_volume"].values,
+            err_msg=f"{input_type}_volume differs in rank {rank} partition",
+        )
+        np.testing.assert_array_equal(
+            part[f"{input_type}_time"].values, joined[f"{input_type}_time"].values,
+            err_msg=f"{input_type}_time differs in rank {rank} partition",
+        )
+        total_fraction += float(part[f"{input_type}_fraction"].values.sum())
+    # Each cell belongs to exactly one rank's partition (the halos are not written).
+    assert abs(total_fraction - float(joined[f"{input_type}_fraction"].values.sum())) < 1e-12, (
+        f"{input_type}_fraction sums to {total_fraction} over the partitions"
     )
 
 
@@ -459,58 +494,52 @@ def create_roms_cdr_forcing_parm_cdr_lite(
 
 
 def create_river_or_pipe_data(input_type, forcing_i, forcing_j, grid):
+    """River or pipe forcing: one source of 2000 m3/s spread evenly over the
+    cells (``forcing_i``, ``forcing_j``) = (eta, xi), with constant tracers.
+
+    Numeric-only on purpose: ``partit`` garbles files with int64 or string
+    variables (a ``names`` coordinate, an ``abs_time`` axis), and ROMS reads
+    none of them. Rivers must be on land cells with at least one wet
+    neighbour; pipes on wet cells.
+    """
     grid_ds = grid.ds
     n_inputs = 1
     ntracers = 2
     forcing_time = np.arange(0.5, 360.5)
 
-    ref_time = pd.Timestamp("2000-01-01 00:00:00")
-    abs_time = ref_time + pd.to_timedelta(forcing_time, unit="D")
+    mask = grid_ds.mask_rho.values
+    for eta, xi in zip(forcing_i, forcing_j):
+        wet_neighbours = mask[eta - 1, xi] + mask[eta + 1, xi] + mask[eta, xi - 1] + mask[eta, xi + 1]
+        if input_type == "river":
+            assert mask[eta, xi] == 0 and wet_neighbours > 0, (
+                f"river cell (eta={eta}, xi={xi}) must be land with a wet neighbour"
+            )
+        else:
+            assert mask[eta, xi] == 1, f"pipe cell (eta={eta}, xi={xi}) must be wet"
 
-    forcing_time_coords = {
-        f"{input_type}_time": forcing_time,
-        "abs_time": (f"{input_type}_time", abs_time),
-        f"n{input_type}": np.arange(1, n_inputs + 1),
-        f"{input_type}_name": (
-            f"n{input_type}",
-            [f"Example{input_type.capitalize()}"],
-        ),
-    }
-    tracer_coords = {
-        "ntracers": np.arange(1, ntracers + 1),
-        "tracer_name": ("ntracers", ["temp", "salt"]),
-        "tracer_unit": ("ntracers", ["degrees Celsius", "PSU"]),
-        "tracer_long_name": ("ntracers", ["potential temperature", "salinity"]),
-    }
-
-    constant_value = 2000.  # m3/s
-    forcing_volume_data = np.full((len(forcing_time), n_inputs), constant_value, dtype=np.float32)
-    forcing_volume = xr.DataArray(
-        forcing_volume_data,
-        dims=(f"{input_type}_time", f"n{input_type}"),
-        coords=forcing_time_coords,
-        attrs={
-            "long_name": f"{input_type.capitalize()} volume flux",
-            "units": "m^3/s",
-        },
-    )
-    forcing_volume[f"{input_type}_time"].attrs.update({
+    time_attrs = {
         "long_name": "relative time: days since 2000-01-01 00:00:00",
         "units": "yearday",
         "cycle_length": 360,
-    })
+    }
+    coords = {f"{input_type}_time": (f"{input_type}_time", forcing_time, time_attrs)}
 
-    forcing_tracer_data = np.zeros((len(forcing_time), ntracers, n_inputs), dtype=np.float32)
+    constant_value = 2000.  # m3/s
+    forcing_volume = xr.DataArray(
+        np.full((len(forcing_time), n_inputs), constant_value),
+        dims=(f"{input_type}_time", f"n{input_type}"),
+        coords=coords,
+        attrs={"long_name": f"{input_type.capitalize()} volume flux", "units": "m^3/s"},
+    )
+
+    forcing_tracer_data = np.zeros((len(forcing_time), ntracers, n_inputs))
     forcing_tracer_data[:, 0, :] = 17.0  # Temperature
     forcing_tracer_data[:, 1, :] = 1.0   # Salinity
     forcing_tracer = xr.DataArray(
         forcing_tracer_data,
         dims=(f"{input_type}_time", "ntracers", f"n{input_type}"),
-        coords={**forcing_time_coords, **tracer_coords},
-        attrs={"long_name": f"{input_type.capitalize()} tracer data"},
-    )
-    forcing_tracer[f"{input_type}_time"].attrs.update(
-        forcing_volume[f"{input_type}_time"].attrs
+        coords=coords,
+        attrs={"long_name": f"{input_type.capitalize()} tracer data (temp, salt)"},
     )
 
     forcing_index_data = np.zeros((len(grid_ds.eta_rho), len(grid_ds.xi_rho)))

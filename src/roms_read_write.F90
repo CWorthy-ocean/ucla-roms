@@ -172,6 +172,19 @@ module roms_read_write
 
   integer(kind=4) :: irec_stride
   integer(kind=4) :: ifile_stride
+
+  ! Exact restart at a forcing record time t_k. A run that passes through
+  ! t_k still holds the record pair (k-1,k) there (the slots are refreshed
+  ! only once the model time exceeds the second record), while the first
+  ! record search of a run started at t_k picks (k,k+1). Both interpolate
+  ! the record value, but with different weights, which (division done as a
+  ! reciprocal multiply) can differ by an ulp, so the restarted run would
+  ! not reproduce the continuous one. get_init sets frc_restart_exact for an
+  ! exact restart; then, until the end of the first time step, the initial
+  ! search of each variable (set_frc_data passes first_fill while it fills
+  ! both slots) takes a record at exactly the model time as the second slot
+  ! (when an earlier record exists), as the continuous run has.
+  logical, public :: frc_restart_exact = .false.
   integer(kind=4), allocatable, public :: ifile_max_recs(:)   ! records in each forcing file
 
 #if defined MPI && defined PARALLEL_FILES
@@ -607,6 +620,7 @@ contains
     logical :: do_interp
 
     integer(kind=4)           :: it1,it2
+    logical :: first_fill     ! filling both slots for the first time (see frc_restart_exact)
     real(kind=8),dimension(2) :: vtimes
 
     if (nc%missing) then
@@ -635,14 +649,15 @@ contains
 
     if (nc%times(it2) < modtime) then  ! need to refresh data
 
-      if (nc%ifile == 0) then   ! the first time, we need to fill both slots
-        call fill_frc_slice(nc,modtime,it1,d1,bry)
+      first_fill = (nc%ifile == 0)
+      if (first_fill) then      ! the first time, we need to fill both slots
+        call fill_frc_slice(nc,modtime,it1,d1,bry,first_fill=first_fill)
       else ! cycle it1,it2 between 1 and 2
         it1 = mod(it1,2) + 1
         it2 = mod(it2,2) + 1
       endif
 
-      call fill_frc_slice(nc,modtime,it2,d1,bry)
+      call fill_frc_slice(nc,modtime,it2,d1,bry,first_fill=first_fill)
 
       ! If (new irec) is greater than (old irec-1), this means we skipped one or more
       ! forcing entries. Then we need to also do fill_frc_slice for it1,
@@ -708,6 +723,7 @@ contains
     logical :: do_interp
 
     integer(kind=4)           :: it1,it2
+    logical :: first_fill     ! filling both slots for the first time (see frc_restart_exact)
     real(kind=8),dimension(2) :: vtimes
 
     if (nc%missing) then
@@ -736,14 +752,15 @@ contains
 
     if (nc%times(it2) < modtime) then  ! need to refresh data
 
-      if (nc%ifile == 0) then   ! the first time, we need to fill both slots
-        call fill_frc_slice(nc,modtime,it1,d1,bry)
+      first_fill = (nc%ifile == 0)
+      if (first_fill) then      ! the first time, we need to fill both slots
+        call fill_frc_slice(nc,modtime,it1,d1,bry,first_fill=first_fill)
       else ! cycle it1,it2 between 1 and 2
         it1 = mod(it1,2) + 1
         it2 = mod(it2,2) + 1
       endif
 
-      call fill_frc_slice(nc,modtime,it2,d1,bry)
+      call fill_frc_slice(nc,modtime,it2,d1,bry,first_fill=first_fill)
       ! If (new irec) is greater than (old irec-1), this means we skipped one or more
       ! forcing entries. Then we need to also do fill_frc_slice for it1,
       ! and we will read in the greatest irec that is less than (new irec)
@@ -803,6 +820,7 @@ contains
     integer(kind=4) :: bry
 
     integer(kind=4)           :: it1,it2
+    logical :: first_fill     ! filling both slots for the first time (see frc_restart_exact)
     real(kind=8),dimension(2) :: vtimes
 
     if (present(obry)) then
@@ -824,14 +842,15 @@ contains
 
     if (nc%times(it2) < modtime) then  ! need to refresh data
 
-      if (nc%ifile == 0) then   ! the first time, we need to fill both slots
-        call fill_frc_slice_aux3d(nc,modtime,it1,bry)
+      first_fill = (nc%ifile == 0)
+      if (first_fill) then      ! the first time, we need to fill both slots
+        call fill_frc_slice_aux3d(nc,modtime,it1,bry,first_fill=first_fill)
       else ! cycle it1,it2 between 1 and 2
         it1 = mod(it1,2) + 1
         it2 = mod(it2,2) + 1
       endif
 
-      call fill_frc_slice_aux3d(nc,modtime,it2,bry)
+      call fill_frc_slice_aux3d(nc,modtime,it2,bry,first_fill=first_fill)
 
       ! If (new irec) is greater than (old irec-1), this means we skipped one or more
       ! forcing entries. Then we need to also do fill_frc_slice for it1,
@@ -891,6 +910,7 @@ contains
     integer(kind=4) :: bry
 
     integer(kind=4)           :: it1,it2
+    logical :: first_fill     ! filling both slots for the first time (see frc_restart_exact)
     real(kind=8),dimension(2) :: vtimes
 
     if (nc%missing) then
@@ -913,14 +933,15 @@ contains
 
     if (nc%times(it2) < modtime) then  ! need to refresh data
 
-      if (nc%ifile == 0) then   ! the first time, we need to fill both slots
-        call fill_frc_slice_surf(nc,modtime,it1,gtype)
+      first_fill = (nc%ifile == 0)
+      if (first_fill) then      ! the first time, we need to fill both slots
+        call fill_frc_slice_surf(nc,modtime,it1,gtype,first_fill=first_fill)
       else ! cycle it1,it2 between 1 and 2
         it1 = mod(it1,2) + 1
         it2 = mod(it2,2) + 1
       endif
 
-      call fill_frc_slice_surf(nc,modtime,it2,gtype)
+      call fill_frc_slice_surf(nc,modtime,it2,gtype,first_fill=first_fill)
 
       ! If (new irec) is greater than (old irec-1), this means we skipped one or more
       ! forcing entries. Then we need to also do fill_frc_slice for it1,
@@ -969,7 +990,7 @@ contains
 
   end subroutine set_frc_data_surf  !]
 ! ----------------------------------------------------------------------
-  subroutine find_new_record(vname,tname,time,ifile,irec,vtime,ungridded_filename,allow_missing,var_absent) ![
+  subroutine find_new_record(vname,tname,time,ifile,irec,vtime,ungridded_filename,allow_missing,var_absent,first_fill) ![
     ! Finds the index for the filename and record number of the first record
     ! with a time that is larger than the model time. It will stores
     ! the corresponding time of the record in vtime.
@@ -991,6 +1012,7 @@ contains
     ! local
     logical, optional             ,intent(in)   :: allow_missing ! if .true., absent var is not fatal
     logical, optional             ,intent(out)  :: var_absent    ! .true. if var was not in any file
+    logical, optional             ,intent(in)   :: first_fill    ! set_frc_data is filling both slots for the first time
     integer(kind=4), dimension(1) :: dimids     ! time dimension ID
     real(kind=8)    :: time_old
     logical :: found_var                ! is variable in file
@@ -1004,12 +1026,17 @@ contains
     integer(kind=4) :: vid,tid                  ! ID's of variable and its time
     real(kind=8)    :: cycle_length             ! cyclical data
     logical :: first                    ! first time call for this variable
+    logical :: exact_rst                ! initial search of an exact restart (see frc_restart_exact)
 
     real(kind=8),dimension(1)    :: ltime
 
     allow_miss = .false.
     if (present(allow_missing)) allow_miss = allow_missing
     if (present(var_absent)) var_absent = .false.
+    exact_rst = .false.
+    if (present(first_fill)) then
+      if (first_fill) exact_rst = frc_restart_exact
+    endif
 
     if (ifile==0) then                                             ! first time for this variable
       first = .true.
@@ -1061,7 +1088,7 @@ contains
         ! Check if the time has a cycle length
         ierr=nf90_get_att(ncid, tid, 'cycle_length', cycle_length)
         if (ierr==nf90_noerr) then
-          call find_new_record_cycle(ncid,tid,time,irec,vtime,cycle_length,first)
+          call find_new_record_cycle(ncid,tid,time,irec,vtime,cycle_length,first,exact_rst)
           found_rec = .true.
         elseif (ierr==nf90_enotatt) then                           ! non-cyclical var won't have attribute
           cycle_length = -1                                        ! nf90_enotatt = attribute not found
@@ -1082,9 +1109,15 @@ contains
           ierr=nf90_get_var(ncid,tid,ltime,(/irec/), (/1/))        ! Get vtime (nf90 needs array hence syntax)
           vtime = ltime(1)
 
-          if (vtime>time) then                                     ! correct time
-            found_rec = .true.
-          else                                                     ! not yet
+          found_rec = vtime>time                                   ! correct time
+          if (vtime==time .and. exact_rst) then                   ! see frc_restart_exact
+            if (.not. first) then
+              found_rec = .true.
+            elseif (irec_old > 0) then                             ! an earlier record exists
+              found_rec = .true.
+            endif
+          endif
+          if (.not. found_rec) then                                ! not yet
             irec_old = irec
             ifile_old = ifile                                      ! only needed initially. See label (A)
             time_old = vtime
@@ -1167,7 +1200,7 @@ contains
     endif
   end subroutine find_new_record  !]
 ! ----------------------------------------------------------------------
-  subroutine find_new_record_cycle(ncid,tid,time,irec,vtime,cycle_length,first) ![
+  subroutine find_new_record_cycle(ncid,tid,time,irec,vtime,cycle_length,first,exact_rst) ![
     ! Find the first record that has vtime>time, or if it's
     ! the first time calling, the record preceeding that one.
     implicit none
@@ -1180,6 +1213,7 @@ contains
     real(kind=8)                          ,intent(out) :: vtime! correct record time
     real(kind=8)                          ,intent(in)  :: cycle_length
     logical                       ,intent(in)  :: first
+    logical                       ,intent(in)  :: exact_rst   ! see frc_restart_exact
 
     ! local
     integer(kind=4)                       :: icycle,max_rec,ierr
@@ -1200,6 +1234,7 @@ contains
       if (vtime>time) then
         exit
       endif
+      if (vtime==time .and. exact_rst) exit                   ! see frc_restart_exact
     enddo
 
     if (first) then
@@ -1264,7 +1299,7 @@ contains
 
   end subroutine abort_if_no_frc_record !]
 ! ----------------------------------------------------------------------
-  subroutine fill_frc_slice_aux(nc,modtime,it,d1,bry) ![
+  subroutine fill_frc_slice_aux(nc,modtime,it,d1,bry,first_fill) ![
     ! Fill a time slice of forcing data, not surface forcing
 
     use param, only: ocean_grid_comm
@@ -1279,6 +1314,7 @@ contains
     integer(kind=4)            ,intent(in)    :: it      ! index (1 or 2) of the forcing data
     logical            ,intent(in)    :: d1      ! 1 or 2 dimensional forcing data
     integer(kind=4)            ,intent(in)    :: bry     ! suppress terminal output of boundary
+    logical, optional          ,intent(in)    :: first_fill ! passed on to find_new_record
 
     ! local
     integer(kind=4) :: ierr,ncid
@@ -1306,7 +1342,7 @@ contains
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it), nc%ungridded_forcing_file,&
-        &allow_missing=nc%allow_missing, var_absent=var_absent)
+        &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill)
 
         if (.not. var_absent) then
           ierr=nf90_open(nc%ungridded_forcing_file,nf90_nowrite, ncid)
@@ -1341,7 +1377,7 @@ contains
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it),&
-        &allow_missing=nc%allow_missing, var_absent=var_absent)
+        &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill)
       endif
       call MPI_Bcast(var_absent,1,MPI_LOGICAL,0,ocean_grid_comm,ierr)
       if (var_absent) then
@@ -1357,7 +1393,7 @@ contains
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
       &nc%times(it),&
-      &allow_missing=nc%allow_missing, var_absent=var_absent)
+      &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill)
       if (var_absent) then
         call mark_ncforce_missing(nc, bry)
         return
@@ -1553,7 +1589,7 @@ contains
 
   end function get_frc_dim_len !]
 ! ----------------------------------------------------------------------
-  subroutine fill_frc_slice_aux3d(nc,modtime,it,bry) ![
+  subroutine fill_frc_slice_aux3d(nc,modtime,it,bry,first_fill) ![
     ! Fill a time slice of forcing data, not surface forcing
 
     use param, only: ocean_grid_comm
@@ -1566,6 +1602,7 @@ contains
     real(kind=8)               ,intent(in)    :: modtime ! current time of the model
     integer(kind=4)            ,intent(in)    :: it      ! index (1 or 2) of the forcing data
     integer(kind=4)            ,intent(in)    :: bry     ! suppress terminal output of boundary
+    logical, optional          ,intent(in)    :: first_fill ! passed on to find_new_record
     ! local
     integer(kind=4) :: ierr,ncid
 
@@ -1587,7 +1624,7 @@ contains
                           ! into a rank-0-only PIO collective (deadlock)
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
-        &nc%times(it), nc%ungridded_forcing_file)
+        &nc%times(it), nc%ungridded_forcing_file, first_fill=first_fill)
         ierr=nf90_open(nc%ungridded_forcing_file,nf90_nowrite, ncid)
         call ncread(ncid,vname,nc%vdata(:,:,:,it),(/1,1,1,irec/))
         ierr = nf90_close(ncid)
@@ -1608,7 +1645,7 @@ contains
 #ifdef PARALLEL_IO
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
-        &nc%times(it) )
+        &nc%times(it), first_fill=first_fill)
       endif
       call MPI_Bcast(irec,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
       call MPI_Bcast(irec_stride,1,MPI_INTEGER,0,ocean_grid_comm,ierr)
@@ -1618,7 +1655,7 @@ contains
       call MPI_Bcast(nc%times(it),1,MPI_DOUBLE_PRECISION,0,ocean_grid_comm,ierr)
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
-      &nc%times(it) )
+      &nc%times(it), first_fill=first_fill)
 #endif
 
       call abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file=.true.)
@@ -1694,7 +1731,7 @@ contains
 
   end subroutine fill_frc_slice_aux3d !]
 ! ----------------------------------------------------------------------
-  subroutine fill_frc_slice_surf(nc,modtime,it,gtype) ![
+  subroutine fill_frc_slice_surf(nc,modtime,it,gtype,first_fill) ![
     ! Fill a time slice of forcing data
     use param, only: ocean_grid_comm
     use mpi_f08, only: mpi_double_precision, mpi_integer, mpi_bcast, mpi_barrier,&
@@ -1708,6 +1745,7 @@ contains
     real(kind=8)               ,intent(in)    :: modtime ! current time of the model
     integer(kind=4)            ,intent(in)    :: it      ! index (1 or 2) of the forcing data
     character(len=1)   ,intent(in)    :: gtype   ! 'u','v','r' grid type
+    logical, optional  ,intent(in)    :: first_fill ! passed on to find_new_record
 
     ! local
     integer(kind=4) :: ierr,ncid
@@ -1731,7 +1769,7 @@ contains
     if (mynode == 0) then
       call find_new_record(vname,tname,modtime,ifile,irec,&
       &nc%times(it),&
-      &allow_missing=nc%allow_missing, var_absent=var_absent)
+      &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill)
     endif
     call MPI_Bcast(var_absent,1,MPI_LOGICAL,0,ocean_grid_comm,ierr)
     if (var_absent) then
@@ -1747,7 +1785,7 @@ contains
 #else
     call find_new_record(vname,tname,modtime,ifile,irec,&
     &nc%times(it),&
-    &allow_missing=nc%allow_missing, var_absent=var_absent)
+    &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill)
     if (var_absent) then
       call mark_ncforce_missing(nc, 0)
       return

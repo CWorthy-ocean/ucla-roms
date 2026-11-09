@@ -220,6 +220,13 @@ contains
     integer(kind=4) i,j
     real(kind=8)    u_pist
 
+#if defined(CFLX_CORR) && defined(MARBL) && defined(BULK_FRC)
+    ! calc_all_bulk_forces (called before this routine) sets the DIC and ALK
+    ! restoring flux every step, so it must not be zeroed on the first step
+    if (trim(t_vname(itrc))=='DIC' .or. trim(t_vname(itrc))=='ALK' .or. &
+      & trim(t_vname(itrc))=='DIC_ALT_CO2' .or. trim(t_vname(itrc))=='ALK_ALT_CO2') return
+#endif
+
     ! Currently set up for zero surface tracer flux
     ! Also, time invariant so only set once for efficiency (doesn't change each timestep)
     if (FIRST_TIME_STEP) then ! Only first timestep

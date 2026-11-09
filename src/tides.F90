@@ -123,9 +123,9 @@ contains
     ! potential
     ! bry_phase (optional, units of dt): time of the boundary tidal
     ! harmonics, time + bry_phase*dt. Default 0.5 (n+1/2). The potential is
-    ! always at n+1/2, where prsgrd uses it. roms_step passes 1.0 on the
-    ! second call, so the harmonics match the boundary data read for n+1;
-    ! upstream UCLA ROMS evaluates both calls at n+1/2.
+    ! always at n+1/2, where prsgrd uses it. Both calls in roms_step use
+    ! n+1/2: the harmonics enter only the 2D boundary conditions of the
+    ! fast loop, which runs from n to n+1 (see the second call there).
     ! DevinD created seperate step as can't have compute_tile_bounds
     ! and compute_auxilliary_bounds in the same subroutine as they both
     ! declare and compute. Fortan doesn't allow.

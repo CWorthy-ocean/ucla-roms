@@ -19,6 +19,7 @@ module pipe_frc
   use nc_read_write, only: ncread
   use param, only: nz, lm, mm, nt, mynode
   use error_handling_mod, only: error_log
+  use roms_mpi, only: exchange_xxx
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_file_is_open, pio_FileDesc, pio_IoSystem,&
   &pio_type, pio_gtype, pio_open_or_abort
@@ -115,9 +116,34 @@ contains
 #endif
     endif
 
-    if (.not. init_pipe_done) call init_pipe_frc
+    if (.not. init_pipe_done) then
+      call init_pipe_frc
+    else if (.not. p_analytical) then
+      call set_pipe_flx                                  ! pipe_flx from this call's pipe_vol
+    endif
 
   end subroutine set_pipe_frc !]
+! ----------------------------------------------------------------------
+  subroutine set_pipe_flx  ![
+    ! Realistic pipes: pipe flux per grid point from the time-interpolated pipe volume of
+    ! this call (set_frc_data above). It used to be set once in init_pipe_frc, so a
+    ! pipe_volume that varies in time was not applied after the first step (and a restart
+    ! froze the value at the restart time). Every user of pipe_flx (step2d, omega,
+    ! pre_step3d, step3d_t) now sees the step's pipe volume.
+    implicit none
+    integer(kind=4) :: i,j
+    do j = 1,ny
+      do i = 1,nx
+        if (pipe_idx(i,j) > 0._8) then
+          pipe_flx(i,j)=pipe_fraction(i,j)*pipe_vol( pipe_idx(i,j) )
+        endif
+      enddo
+    enddo
+    ! pipe_flx is set on owned points only. step2d adds it to zeta_new on the halo
+    ! row/column too (the momentum update at a tile's first face uses it), so a pipe
+    ! next to a tile edge needs it there: take it from the neighbour that owns the cell.
+    call exchange_xxx(pipe_flx)
+  end subroutine set_pipe_flx  !]
 ! ----------------------------------------------------------------------
   subroutine init_pipe_frc  ![
 
@@ -234,6 +260,11 @@ contains
           endif
         enddo
       enddo
+      call exchange_xxx(pipe_flx)                        ! halo points, as in set_pipe_flx
+      ! step2d also tests pipe_idx on the halo row/column, where it is not set either
+      pidx_real = real(pipe_idx, 8)
+      call exchange_xxx(pidx_real)
+      pipe_idx = nint(pidx_real)
       call error_log%abort_check()
     end if ! p_analytical
     init_pipe_done = .true.

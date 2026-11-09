@@ -19,7 +19,7 @@ module grid
   &nf90_close
   use nc_read_write, only: ncread
   use dimensions, only:&
-  &i0, i1, j0, j1, gnx, gny, nx, ny, nz, eta_rho, xi_rho, grdname,&
+  &i0, i1, j0, j1, gnx, gny, nx, ny, nz, ds_xr, ds_yr, grdname,&
   &x0,x1,y0,y1
   use roms_read_write, only:&
   &dn_xr, dn_yr, dn_tm, particle_opt, nrrec, create_file, store_string_att
@@ -28,7 +28,9 @@ module grid
   use pio_roms, only: use_pio, pio_gtype
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
-  use pio, only : PIO_closefile
+  use pio, only : PIO_closefile, PIO_write
+  use netcdf, only: nf90_redef, nf90_enddef
+  use mpi_f08, only: MPI_Bcast, MPI_Barrier, MPI_CHARACTER
 #endif
   use instant_output, only: wrt_instant
   implicit none
@@ -205,12 +207,32 @@ contains
 
     integer(kind=4) :: ncid,ierr
 
+#ifdef PARALLEL_IO
+    ! One joined file: rank 0 creates it, defines the variables and writes the
+    ! scalars; then every rank writes its part of the 2D fields through PIO.
+    ncid = -1
+    if (mynode == 0) then
+      call create_file('_grd',ana_grdname,.true.,.true.)   ! no date label, no node number
+      ierr=nf90_open(ana_grdname,nf90_write,ncid)
+      ierr=nf90_redef(ncid)       ! a classic-format file: define mode for def_grid
+      call def_grid(ncid)
+      ierr=nf90_enddef(ncid)
+      call wrt_grid_scalars(ncid)
+      ierr=nf90_close(ncid)
+    endif
+    call MPI_Bcast(ana_grdname,max_name_size,MPI_CHARACTER,0,ocean_grid_comm,ierr)
+    call MPI_Barrier(ocean_grid_comm, ierr)
+    call pio_open_or_abort(trim(ana_grdname), 'grid/wrt_ana_grid', PIO_write)
+    call wrt_grid_fields(ncid)
+    call PIO_closefile(pio_FileDesc)
+#else
     call create_file('_grd',ana_grdname,.true.) ! last argument is to skip date label
 
     ierr=nf90_open(ana_grdname,nf90_write,ncid)
     call def_grid(ncid)
     call wrt_grid(ncid)
     ierr=nf90_close(ncid)
+#endif
 
   end subroutine wrt_ana_grid  !]
 !----------------------------------------------------------------------
@@ -255,26 +277,26 @@ contains
 #endif
 
 ! Bathymetry.
-    varid = nccreate(ncid,'h',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
+    varid = nccreate(ncid,'h',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'bathymetry at RHO-points')
     ierr=nf90_put_att(ncid, varid, 'units', 'meter')
     ierr=nf90_put_att(ncid, varid, 'field', 'bath, scalar')
 
 ! Coriolis Parameter.
-    varid = nccreate(ncid,'f',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
+    varid = nccreate(ncid,'f',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'Coriolis parameter at RHO-points')
     ierr=nf90_put_att(ncid, varid, 'units', 'second-1')
     ierr=nf90_put_att(ncid, varid, 'field', 'coriolis, scalar')
 
 ! Curvilinear coordinate metric coefficients pm,pn.
-    varid = nccreate(ncid,'pm',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
+    varid = nccreate(ncid,'pm',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'curvilinear coordinate metric in XI')
     ierr=nf90_put_att(ncid, varid, 'units', 'meter-1')
     ierr=nf90_put_att(ncid, varid, 'field', 'pm, scalar')
-    varid = nccreate(ncid,'pn',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
+    varid = nccreate(ncid,'pn',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'curvilinear coordinate metric in ETA')
     ierr=nf90_put_att(ncid, varid, 'units', 'meter-1')
@@ -282,23 +304,23 @@ contains
 
 ! Longitude-latitude or cartesian coordinates of RHO-points.
 #ifdef SPHERICAL
-    varid = nccreate(ncid,'lon_rho',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
+    varid = nccreate(ncid,'lon_rho',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'longitude of RHO-points')
     ierr=nf90_put_att(ncid, varid, 'units', 'degree_east')
     ierr=nf90_put_att(ncid, varid, 'field', 'lon_rho, scalar')
-    varid = nccreate(ncid,'lat_rho',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
+    varid = nccreate(ncid,'lat_rho',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
     ierr=nf90_put_att(ncid,varid,'long_name',&
     &'latitude of RHO-points')
     ierr=nf90_put_att(ncid, varid, 'units', 'degree_north')
     ierr=nf90_put_att(ncid, varid, 'field', 'lat_rho, scalar')
 #else
-    varid = nccreate(ncid,'x_rho',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
+    varid = nccreate(ncid,'x_rho',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'x-locations of RHO-points')
     ierr=nf90_put_att(ncid, varid, 'units', 'meter')
     ierr=nf90_put_att(ncid, varid, 'field', 'x_rho, scalar')
-    varid = nccreate(ncid,'y_rho',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
+    varid = nccreate(ncid,'y_rho',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'y-locations of RHO-points')
     ierr=nf90_put_att(ncid, varid, 'units', 'meter')
@@ -306,7 +328,7 @@ contains
 #endif
 #ifdef CURVGRID
 ! Angle between XI-axis and EAST at RHO-points
-    varid = nccreate(ncid,'angle',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
+    varid = nccreate(ncid,'angle',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'angle between XI-axis and EAST')
     ierr=nf90_put_att(ncid, varid, 'units', 'radians')
@@ -314,7 +336,7 @@ contains
 #endif
 #ifdef MASKING
 ! Land-Sea mask at RHO-points.
-    varid = nccreate(ncid,'mask_rho',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
+    varid = nccreate(ncid,'mask_rho',(/dn_xr,dn_yr/),(/ds_xr,ds_yr/), nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'mask on RHO-points')
     ierr=nf90_put_att(ncid, varid, 'option_0', 'land' )
@@ -330,9 +352,18 @@ contains
     !
     ! Arguments: ncid    netCDF unit-ID of NetCDF file, which must be
     !                            already opened and in definition mode
+    implicit none
+    integer(kind=4),intent(in) :: ncid
+
+    call wrt_grid_scalars(ncid)
+    call wrt_grid_fields(ncid)
+
+  end subroutine wrt_grid  !]
+!----------------------------------------------------------------------
+  subroutine wrt_grid_scalars(ncid)  ![
+    ! The scalar part of wrt_grid (grid type, domain lengths).
 
     use netcdf, only: nf90_put_var
-    use nc_read_write, only: ncwrite
     use error_handling_mod, only: error_log ! do not abort here, mynode==0
 
     implicit none
@@ -408,24 +439,43 @@ contains
     endif
 #endif
 
-    call ncwrite(ncid,'h', h(i0:i1,j0:j1))                    ! Bathymetry.
-    call ncwrite(ncid,'f', f(i0:i1,j0:j1))                    ! Coriolis parameter.
+  end subroutine wrt_grid_scalars  !]
+!----------------------------------------------------------------------
+  subroutine wrt_grid_fields(ncid)  ![
+    ! The 2D part of wrt_grid. Under PARALLEL_IO every rank writes its part
+    ! through PIO into pio_FileDesc, which the caller has opened (ncid unused).
 
-    call ncwrite(ncid,'pm', pm(i0:i1,j0:j1))                  ! pm=1._8/dx, pn=1._8/dy
-    call ncwrite(ncid,'pn', pn(i0:i1,j0:j1))
+    use nc_read_write, only: ncwrite
+
+    implicit none
+    ! input
+    integer(kind=4),intent(in) :: ncid
+#ifdef PARALLEL_IO
+    ! local
+    character(len=4) :: gtype_save
+
+    gtype_save = pio_gtype
+    pio_gtype = '2Drw'
+#endif
+
+    call put2d('h', h(i0:i1,j0:j1))                    ! Bathymetry.
+    call put2d('f', f(i0:i1,j0:j1))                    ! Coriolis parameter.
+
+    call put2d('pm', pm(i0:i1,j0:j1))                  ! pm=1._8/dx, pn=1._8/dy
+    call put2d('pn', pn(i0:i1,j0:j1))
 
 #ifdef SPHERICAL
-    call ncwrite(ncid,'lon_rho', lonr(i0:i1,j0:j1))           ! longitude-latitude
-    call ncwrite(ncid,'lat_rho', latr(i0:i1,j0:j1))           !
+    call put2d('lon_rho', lonr(i0:i1,j0:j1))           ! longitude-latitude
+    call put2d('lat_rho', latr(i0:i1,j0:j1))           !
 #else
-    call ncwrite(ncid,'x_rho', xr(i0:i1,j0:j1))               ! Cartesian coordinates
-    call ncwrite(ncid,'y_rho', yr(i0:i1,j0:j1))
+    call put2d('x_rho', xr(i0:i1,j0:j1))               ! Cartesian coordinates
+    call put2d('y_rho', yr(i0:i1,j0:j1))
 #endif
 #ifdef CURVGRID
-    call ncwrite(ncid,'angle', angler(i0:i1,j0:j1))           ! angle between XI-axis and EAST at RHO-points
+    call put2d('angle', angler(i0:i1,j0:j1))           ! angle between XI-axis and EAST at RHO-points
 #endif
 #ifdef MASKING
-    call ncwrite(ncid,'mask_rho', rmask(i0:i1,j0:j1))         ! masking fields at RHO-points.
+    call put2d('mask_rho', rmask(i0:i1,j0:j1))         ! masking fields at RHO-points.
 #endif
 #ifdef MPI_SILENT_MODE
     if (mynode == 0) then
@@ -434,8 +484,23 @@ contains
 #ifdef MPI_SILENT_MODE
     endif
 #endif
+#ifdef PARALLEL_IO
+    pio_gtype = gtype_save
+#endif
 
-  end subroutine wrt_grid  !]
+  contains
+
+    subroutine put2d(vname, a)
+      character(len=*), intent(in) :: vname
+      real(kind=8), dimension(:,:) :: a
+#ifdef PARALLEL_IO
+      call ncwrite(ncid, vname, a, PP=.true.)
+#else
+      call ncwrite(ncid, vname, a)
+#endif
+    end subroutine put2d
+
+  end subroutine wrt_grid_fields  !]
 !----------------------------------------------------------------------
   subroutine get_grid  ![
 ! read in grid data from NetCDF file or define analytical grid
@@ -450,6 +515,25 @@ contains
 
 #ifdef ANA_GRID
     call ana_grid
+    ! ana_grid.h evaluates its formulas on the ghost points too. In a periodic
+    ! direction those values are not the periodic images, and at MPI interfaces
+    ! they can differ from the neighbour's interior values by rounding (or be
+    ! left unset). Exchange the same fields, in the same combinations, as the
+    ! file-based path below does. Spherical: f is not read there, it is computed
+    ! from latr on the extended range in setup_Corls_tile.
+    call exchange_xxx(h)
+    call exchange_xxx(pm,pn)
+# ifdef SPHERICAL
+    call exchange_xxx(lonr,latr)
+# else
+    call exchange_xxx(xr,yr,f)
+# endif
+# ifdef CURVGRID
+    call exchange_xxx(angler)
+# endif
+# ifdef MASKING
+    call exchange_xxx(rmask)
+# endif
     call wrt_ana_grid
 #else
 
