@@ -607,6 +607,11 @@ contains
     ! fixed, so they are evaluated at the centre of that interval, n+1/2;
     ! at n+1 the boundary-forced tide leads by about omega*dt/2. The
     ! potential is at n+1/2 as well, where prsgrd uses it.
+    ! The non-tidal 2D boundary data (zeta/ubar/vbar_west, ...) the
+    ! harmonics are added to stay at n+1: set_bry_all reads them together
+    ! with the 3D boundary data the corrector applies at n+1, and at the
+    ! daily to monthly resolution of boundary files the half step does
+    ! not matter, while for a tide it is a phase error of omega*dt/2.
     tdays = (time+0.5_8*dt)*sec2day
     frc_time = '1/2 fwd'
     call reg_tic(rg_set_bry)
