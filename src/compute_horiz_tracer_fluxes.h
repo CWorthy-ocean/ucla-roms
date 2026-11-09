@@ -119,19 +119,32 @@ else       !--> standard code applies for T,S
     enddo           !--> discard curv,grad, keep FX
   enddo
 
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
-  if (inode==0) then ! (.not. west_exchng)
+! Inflow faces of open boundaries: first-order upwind with the ghost
+! (boundary-data) value.  The edge slope is extrapolated above, so the
+! ghost curvature is zero and on inflow the UP3 (corrector) face value
+! degenerates to the centred 0.5*(g + c_N): every inflow would carry
+! half of the domain's own boundary-cell concentration back in.  Adding
+! 0.5*(g - c_N)*Q on inflow faces (FlxU > 0 west, < 0 east) makes the
+! corrector flux g*Q, and the C4 predictor flux (11/12 g + 1/6 c_N
+! - 1/12 c_N-1)*Q.  Outflow faces keep the scheme's flux.  Open-boundary
+! sides only (as in t3dbc): never at a periodic seam or a wall.
+#ifndef EW_PERIODIC
+# ifdef OBC_WEST
+  if (WESTERN_EDGE) then
     do j=jstr,jend
       FX(istr,j) = FX(istr,j) + 0.5_8*(t(istr-1,j,k,nrhs,itrc)-t(istr,j,k,nrhs,itrc))&
       &* max(FlxU(istr,j,k),0.0_8)
     enddo
   endif
-  if (inode==npx-1) then ! (.not. east_exchng)
+# endif
+# ifdef OBC_EAST
+  if (EASTERN_EDGE) then
     do j=jstr,jend
       FX(iend+1,j) = FX(iend+1,j) + 0.5_8*(t(iend+1,j,k,nrhs,itrc)-t(iend,j,k,nrhs,itrc))&
       &* min(FlxU(iend+1,j,k),0.0_8)
     enddo
   endif
+# endif
 #endif
 
 #ifndef NS_PERIODIC
@@ -204,19 +217,24 @@ else       !--> standard code applies for T,S
     enddo
   enddo             !--> discard curv,grad, keep FE
 
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
-  if (jnode==0) then ! (.not. south_west)
+! Inflow faces of southern/northern open boundaries: see FX above.
+#ifndef NS_PERIODIC
+# ifdef OBC_SOUTH
+  if (SOUTHERN_EDGE) then
     do i=istr,iend
       FE(i,jstr) = FE(i,jstr) + 0.5_8*(t(i,jstr-1,k,nrhs,itrc)-t(i,jstr,k,nrhs,itrc))&
       &* max(FlxV(i,jstr,k),0.0_8)
     enddo
   endif
-  if (jnode==npy-1) then ! (.not. north_exchng)
+# endif
+# ifdef OBC_NORTH
+  if (NORTHERN_EDGE) then
     do i=istr,iend
       FE(i,jend+1) = FE(i,jend+1) + 0.5_8*(t(i,jend+1,k,nrhs,itrc)-t(i,jend,k,nrhs,itrc))&
       &* min(FlxV(i,jend+1,k),0.0_8)
     enddo
   endif
+# endif
 #endif
 
 #ifdef BIO_1ST_USTREAM_TEST

@@ -77,6 +77,8 @@ These switches control the numerical schemes used by the model for tracer advect
 
 These switches control the configuration of the open boundaries, including which sides are open and which schemes are used to apply forcing and allow waves to exit.
 
+Tracer advection through an open-boundary face is first-order upwind on inflow: the face takes the boundary (ghost-cell) value, so incoming water carries the boundary data rather than a centred average of the boundary data and the first interior cell. Outflow faces use the interior advection scheme. This needs no key and applies to every tracer on every open side.
+
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
 | `M2_FRC_BRY` | Apply barotropic (2D) momentum forcing at the open boundaries | enabled | Can be combined with other keys (`M2NUDGING`, `OBC_M2SPECIFIED`) to have different effects. Requires inputs for `ubar` and `vbar`. |
