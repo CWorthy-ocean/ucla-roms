@@ -9,7 +9,9 @@ Unreleased
 Breaking Changes
 ~~~~~~~~~~~~~~~~
 
-- N/A
+
+- Model results change for every configuration with an open boundary and flow through it: tracers in the cells next to an inflow boundary first, then the rest of the domain. Closed and periodic configurations, and ``UPSCALING`` builds with open boundaries, are bit-identical. There is no switch to restore the previous flux; the previous release reproduces the previous answers. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
+- Test references change for 11 of the 14 keys in ``tests/results/results_github_{gnu,ifx}.json`` (updated in this PR); ``filament``, ``pipes_ana`` and ``rivers_ana`` do not. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
 
 New Features
 ~~~~~~~~~~~~
@@ -45,6 +47,12 @@ Bug Fixes
 - Configurations with OBC_M2SPECIFIED did not compile. They now build with M2_FRC_BRY; without it the build stops with a message, because this code has no barotropic climatology (``ubclm``) to specify the boundary from. (`#414 <https://github.com/CWorthy-ocean/ucla-roms/pull/414>`_)
 - ``ndtfast`` above 144 wrote past the end of the barotropic coupling weights array and could crash; the array is now allocated from ``ndtfast``. (`#414 <https://github.com/CWorthy-ocean/ucla-roms/pull/414>`_)
 - With MARBL, CFLX_CORR and BULK_FRC, the DIC and ALK restoring was not applied on the first step of a run or of a restart. (`#414 <https://github.com/CWorthy-ocean/ucla-roms/pull/414>`_)
+- Tracer inflow through an open boundary no longer re-imports half of the domain's own boundary-cell concentration; it now carries the boundary data, in every build. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
+
+  - Applies to all tracers, on open sides only; closed walls and periodic directions are unaffected.
+  - No namelist or cppdefs change is needed.
+
+- The inflow correction in UPSCALING builds no longer acts at a periodic seam, where it broke tracer conservation. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
 
 Improvements
 ~~~~~~~~~~~~
@@ -58,3 +66,5 @@ Miscellaneous
 - The docs note that with MARBL an empty ``marbl_tracers_to_write`` adds temperature and salinity to the history and averages files whatever these settings say. (`#413 <https://github.com/CWorthy-ocean/ucla-roms/pull/413>`_)
 - The BGC restoring-flux test now also checks the first step. (`#414 <https://github.com/CWorthy-ocean/ucla-roms/pull/414>`_)
 - ``test_rivers_real`` and ``test_pipes_real`` now carry a river and a pipe: ``partit`` garbled the generated forcing files (int64 and string variables), leaving zero volumes, so both tests ran source-free. The files are written numeric-only, the river sits on coastal land cells, and a check after partitioning fails if the per-rank files lose the forcing again. (`#414 <https://github.com/CWorthy-ocean/ucla-roms/pull/414>`_)
+- The boundary-conditions documentation describes the inflow treatment at open boundaries. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
+- References of the open-boundary regression tests are updated. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
