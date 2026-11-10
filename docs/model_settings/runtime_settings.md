@@ -593,6 +593,7 @@ Main settings:
 | `fs_mode` | `'split'` | `'split'`: split-explicit fast loop (`step2d`); `'implicit'`: implicit free surface |
 | `fs_rho_inf` | `0.0` | Spectral radius of the generalized-alpha step at infinite frequency, 0 to 1. 0 damps fast barotropic modes most (L-stable); 1 is Crank-Nicolson (no damping). Values below 1 are stable; 1 must not be used (resonant with a 2 dt forcing). Where the configuration runs at its internal-wave stability limit any value fails eventually and larger values fail sooner: shorten dt |
 | `fs_theta`, `fs_theta_div` | `0.5`, `0.5` | Extra off-centring (0.5 to 1) of the free-surface pressure gradient and of the divergence; 0.5 = none |
+| `fs_nsub` | `1` | Implicit sub-steps of `dt/fs_nsub` per baroclinic step (1 to 4). More accurate tides (phase and amplitude errors about `1/fs_nsub^2`) for one elliptic solve per sub-step; moves the forcing times of `fs_pot_time`/`fs_stress_time = 'af'` and of the boundary tidal harmonics (see [sub-steps](implicit_free_surface.md#sub-steps-fs_nsub)) |
 | `fs_tol` | `1.0e-8` | Relative residual at which the elliptic solve stops (the volume budget is exact regardless) |
 | `fs_maxit` | `1000` | Iteration cap of the solve (exceeding it is counted in `FS_STAT`; the run continues) |
 | `fs_precond` | `'mg'` | Preconditioner: `'mg'` multigrid V-cycle, `'jacobi'` diagonal |
@@ -616,8 +617,8 @@ Scheme options (the defaults are the recommended settings):
 | Setting | Default | Description |
 |--------|---------|-------------|
 | `fs_warm` | `1` | Start of the solve: 1 the previous step's increment, 0 zero |
-| `fs_pot_time` | `'af'` | Tidal potential at `n+alpha_f` (`'af'`, where the scheme takes its forcing) or at `n+1/2` (`'mid'`) |
-| `fs_stress_time` | `'af'` | Surface stress of the barotropic step at `n+alpha_f` (`'af'`) or at `n+1/2` (`'mid'`); the 3-D step keeps `n+1/2` |
+| `fs_pot_time` | `'af'` | Tidal potential at `n+alpha_f` (`'af'`, where the scheme takes its forcing; with `fs_nsub > 1` the mean of the sub-steps' forcing times) or at `n+1/2` (`'mid'`) |
+| `fs_stress_time` | `'af'` | Surface stress of the barotropic step at `n+alpha_f` (`'af'`; with `fs_nsub > 1` as `fs_pot_time`) or at `n+1/2` (`'mid'`); the 3-D step keeps `n+1/2` |
 | `fs_cor_metric` | `.true.` | Include the curvilinear metric terms in the Coriolis estimate that is kept out of the generalized-alpha memory (`CURVGRID` and `UV_ADV` only) |
 | `fs_tang_nudge` | `1.0` | Factor on the inflow nudging rate of the tangential barotropic velocity on open edges |
 | `fs_drag_implicit` | `.false.` | Treat the linear bottom-drag increment implicitly |

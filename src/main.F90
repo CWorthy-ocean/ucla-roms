@@ -475,7 +475,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: wrt_upscale, do_upscale
 #endif
-    use implicit_fs_mod, only: fs_on, fs_step, fs_srcdiag, fs_src_diag
+    use implicit_fs_mod, only: fs_on, fs_step, fs_srcdiag, fs_src_diag, fs_bry_phase
 #ifdef DIAGNOSTICS
     use diagnostics, only: do_diagnostics, diag_uv, diag_trc
 #endif
@@ -610,7 +610,9 @@ contains
     ! potential is at n+1/2 as well, where prsgrd uses it (the implicit
     ! free surface moves it, see pot_phase). With the implicit free surface
     ! (fs_on) the same arrays are read by the implicit step, whose boundary
-    ! face takes data at n+alpha_f, so fs_on keeps the harmonics at n+1.
+    ! face takes data at n+alpha_f, so fs_on keeps the harmonics at n+1
+    ! (fs_bry_phase = 1; with fs_nsub sub-steps, which hold these values,
+    ! the mean of the sub-steps' end times, (fs_nsub+1)/(2 fs_nsub)).
     ! The non-tidal 2D boundary data (zeta/ubar/vbar_west, ...) the
     ! harmonics are added to stay at n+1: set_bry_all reads them together
     ! with the 3D boundary data the corrector applies at n+1, and at the
@@ -622,7 +624,7 @@ contains
     call set_bry_all  ! get for time n+1
     if (bry_tides.or.pot_tides) then
       if (fs_on) then
-        call set_tides(0, bry_phase=1.0_8)
+        call set_tides(0, bry_phase=fs_bry_phase)
       else
         call set_tides(0, bry_phase=0.5_8)
       end if

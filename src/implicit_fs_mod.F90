@@ -26,6 +26,9 @@ module implicit_fs_mod
   !     rufrc (3-D corrector) contains the 3-D pressure gradient at zeta^n, so
   !     only the increment's PG is added. zeta^n+1 is recomputed from the exact
   !     divergence of the final fluxes (volume exact, independent of fs_tol).
+  !     fs_nsub > 1: fs_nsub such steps of dt/fs_nsub per baroclinic step, rufrc
+  !     held; DU_avg1 = U of the last sub-step, DU_avg2 = the mean flux of the
+  !     sub-steps (section 2).
   !-----------------------------------------------------------------------
 #include "cppdefs.opt"
 
@@ -86,26 +89,35 @@ module implicit_fs_mod
                                                ! the curvilinear metric terms of the 3-D rhs (.false.: fomn only)
   character(len=8) :: fs_pot_time = 'af'      ! time of the tidal potential (pot_tides; it reaches the step through
                                                ! rufrc): 'af' n+alpha_f = n+1/(1+fs_rho_inf), the time at which the
-                                               ! generalized-alpha step takes its explicit forcing (default); 'mid'
+                                               ! generalized-alpha step takes its explicit forcing (default; with
+                                               ! fs_nsub > 1 n+sft, see sft); 'mid'
                                                ! n+1/2 as the split (a phase lag of the potential-forced tide of
                                                ! (alpha_f - 1/2) omega dt)
   character(len=8) :: fs_stress_time = 'af'   ! time of the surface stress in the 2-D step's rufrc: 'af' (default)
                                                ! t_{n+alpha_f}, alpha_f = 1/(1+fs_rho_inf), the time at which the
-                                               ! generalized-alpha step takes its explicit forcing (the stress data
+                                               ! generalized-alpha step takes its explicit forcing (fs_nsub > 1:
+                                               ! n+sft; the stress data
                                                ! re-interpolated to it; the 3-D step keeps n+1/2); 'mid' n+1/2 as
                                                ! set_forces (the forced response then lags by (alpha_f - 1/2) dt)
   integer(kind=4) :: fs_verbose = 0            ! 1 FS_SOLVE line per step, 2 + FS_VOL and FS_SRC lines
                                                ! (FS_SRC also in fs_mode = 'split')
   integer(kind=4) :: fs_selftest = 0           ! 1: at the first step, a manufactured solution of
                                                ! A (FS_TEST lines), then the step as usual
+  integer(kind=4) :: fs_nsub = 1               ! implicit barotropic sub-steps of dt/fs_nsub per 3-D step (1..4);
+                                               ! rufrc is held over the step, the forcing times move to
+                                               ! s = (alpha_f + (fs_nsub-1)/2)/fs_nsub of the step
   namelist /IMPLICIT_FS/ fs_mode, fs_rho_inf, fs_theta, fs_theta_div, fs_tol, fs_maxit, fs_precond,&
   &  fs_mg_levels, fs_mg_nu, fs_mg_smoother, fs_mg_lag, fs_mg_gather, fs_mg_global_on, fs_mg_faces,&
   &  fs_exch_thin, fs_drag_implicit,&
   &  fs_warm, fs_verbose, fs_selftest, fs_tang_nudge,&
-  &  fs_cor_metric, fs_pot_time, fs_stress_time
+  &  fs_cor_metric, fs_pot_time, fs_stress_time, fs_nsub
 
   logical, public, protected :: fs_on = .false.   ! fs_mode = 'implicit'
   logical, public, protected :: fs_srcdiag = .false.  ! fs_verbose >= 2: FS_SRC line per step (both modes)
+  real(kind=8), public, protected :: fs_bry_phase = 1._8  ! time (units of dt after n) of the boundary tidal harmonics
+                                                       ! (main.F90 set_tides): n+1, the end of the step; with
+                                                       ! fs_nsub > 1, which hold the boundary data over the step, the
+                                                       ! mean of the sub-steps' end times (fs_nsub+1)/(2 fs_nsub)
 
 #ifdef SOLVE3D
   ! tile interior and physical edges (set at the first step)
@@ -165,8 +177,11 @@ module implicit_fs_mod
   logical :: rst_rates = .false.            ! the rates and delta were read from the restart file
   integer(kind=4), parameter :: mem_kind = 3  ! restart scalar 4: the memory kind of the rates (3: all but the
                                               ! Coriolis estimate; 1 and 2 were removed development options)
-  logical :: stress_af = .false.            ! fs_stress_time = 'af' (and alpha_f /= 1/2)
+  logical :: stress_af = .false.            ! fs_stress_time = 'af' (and sft /= 1/2)
   real(kind=8) :: alf = 1._8                ! alpha_f
+  real(kind=8) :: sft = 1._8                ! the time (fraction of dt) of the step's explicit forcing (tidal
+                                            ! potential, stress shift): alpha_f, with sub-steps the mean of the
+                                            ! sub-steps' n + (k-1+alpha_f)/fs_nsub, (alpha_f + (fs_nsub-1)/2)/fs_nsub
   ! fs_stress_time = 'af': the change of the kinematic surface stress [m2/s2] from n+1/2 to n+alpha_f (u, v faces)
   real(kind=8), allocatable, dimension(:,:) :: dsu, dsv
   ! Coriolis estimate: depth-mean velocities U^n (ubx, vbx) and the Coriolis + metric factor per cell (fcr; = fomn
@@ -186,8 +201,16 @@ module implicit_fs_mod
   logical :: mg_rpend = .false.
   integer(kind=4), parameter :: fs_nsc = 8
   ! statistics and timing: per-step solve count, iterations, worst residual; cost pieces
-  integer(kind=4) :: n_solve = 0, n_its = 0, n_unconv = 0, its_last = 0
+  integer(kind=4) :: n_solve = 0, n_its = 0, n_unconv = 0, its_last = 0, n_step = 0
   real(kind=8) :: res_last = 0._8
+  ! fs_nsub > 1: sums over the sub-steps of fbu, fbv (fsu, fsv) and of DU_avg2, DV_avg2 (asu, asv); the step's
+  ! iteration sum and maximum, worst residual and max |delta| of its sub-steps (FS_SOLVE line)
+  real(kind=8), allocatable, dimension(:,:) :: fsu, fsv, asu, asv
+  integer(kind=4) :: its_sum = 0, its_max = 0
+  real(kind=8) :: dts = 0._8                ! length of the barotropic (sub-)step, dt/fs_nsub. A module variable only
+                                            ! for code shape: as a local, ifx -O3 reassociates the dts products and
+                                            ! divisions differently (rounding-level change of fs_nsub = 1 results)
+  real(kind=8) :: res_max = 0._8, dz_max = 0._8
   integer(kind=4), parameter :: ntm = 21
   real(kind=8) :: tm(ntm) = 0._8, tm_t0 = 0._8
   character(len=12), parameter :: tm_name(ntm) = [character(len=12) :: 'setup', 'exch_coef',&
@@ -242,9 +265,19 @@ contains
     &  info="fs_theta and fs_theta_div must lie in [0.5, 1]")
     if (fs_rho_inf < 0._8 .or. fs_rho_inf > 1._8) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_rho_inf must lie in [0, 1]")
+    if (fs_nsub < 1 .or. fs_nsub > 4) call error_log%raise_global(&
+    &  context=trim(module_name)//"/"//sr_name, info="fs_nsub must lie in [1, 4]")
     call fs_scheme_coef
-    select case (trim(fs_pot_time))         ! the tidal potential at n+alpha_f (tides: pot_phase)
-    case ('af') ; pot_phase = 1._8/(1._8+fs_rho_inf)
+    ! forcing time of the step: alpha_f; with sub-steps (rufrc held over the step) the mean of the sub-steps'
+    ! forcing times n + (k-1+alpha_f)/fs_nsub
+    sft = alf
+    if (fs_nsub > 1) sft = (alf + 0.5_8*real(fs_nsub-1,8))/real(fs_nsub,8)
+    fs_bry_phase = 1._8
+    if (fs_nsub > 1) fs_bry_phase = 0.5_8*real(fs_nsub+1,8)/real(fs_nsub,8)
+    select case (trim(fs_pot_time))         ! the tidal potential at n+sft (tides: pot_phase)
+    case ('af')
+      pot_phase = 1._8/(1._8+fs_rho_inf)
+      if (fs_nsub > 1) pot_phase = sft
     case ('mid') ; pot_phase = 0.5_8
     case default
       call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
@@ -252,7 +285,7 @@ contains
     end select
     if (trim(fs_stress_time) /= 'af' .and. trim(fs_stress_time) /= 'mid') call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_stress_time must be 'af' or 'mid'")
-    stress_af = (trim(fs_stress_time) == 'af' .and. abs(alf - 0.5_8) > 1.e-12_8)
+    stress_af = (trim(fs_stress_time) == 'af' .and. abs(sft - 0.5_8) > 1.e-12_8)
     if (fs_tang_nudge < 0._8) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_tang_nudge must be >= 0")
     if (fs_tol <= 0._8 .or. fs_maxit < 1) call error_log%raise_global(&
@@ -284,6 +317,8 @@ contains
       &  ' fs_precond = ', trim(fs_precond), ' fs_drag_implicit = ', fs_drag_implicit,&
       &  ' fs_warm =', fs_warm, ' fs_verbose =', fs_verbose
       write(*,'(1x,A,F8.3,A,L1)') 'IMPLICIT_FS: fs_tang_nudge =', fs_tang_nudge, ' fs_cor_metric = ', fs_cor_metric
+      write(*,'(1x,A,I2,A,F7.4,A,F7.4,A)') 'IMPLICIT_FS: fs_nsub =', fs_nsub, ' (implicit sub-steps of dt/fs_nsub;'&
+      &//' explicit forcing at time +', sft, ' dt, boundary tidal harmonics at time +', fs_bry_phase, ' dt)'
       if (mg_on) write(*,'(1x,A,I7,A,A,A,A,A,I3,A,L1)') 'IMPLICIT_FS: fs_mg_gather =', fs_mg_gather,&
       &  ' fs_mg_global_on = ', trim(fs_mg_global_on), ' fs_mg_faces = ', trim(fs_mg_faces),&
       &  ' fs_mg_lag =', fs_mg_lag, ' fs_exch_thin = ', fs_exch_thin
@@ -291,7 +326,7 @@ contains
       &  pot_phase, ' dt)'
       if (stress_af) then
         write(*,'(1x,A,A,A,F7.4,A)') 'IMPLICIT_FS: fs_stress_time = ', trim(fs_stress_time),&
-        &  ' (surface stress of the 2-D step at time +', alf, ' dt; the 3-D step keeps n+1/2)'
+        &  ' (surface stress of the 2-D step at time +', sft, ' dt; the 3-D step keeps n+1/2)'
 #if !defined BULK_FRC && defined ANA_SMFLUX
         write(*,'(1x,A)') 'IMPLICIT_FS: note: ANA_SMFLUX: the analytical stress is not shifted'
 #endif
@@ -342,7 +377,7 @@ contains
     ! scalars (fs_rst_wrt_scal): 1 version (1), 2 fs_mg_lag, 3 phase of the coarse-operator rebuild
     ! counter for the next step, 4 the memory kind of the rates (3; 1 and 2 were the development
     ! options fs_mom_mem 'all' and 'pg'), 5 the fine operator of the last build is in fs_mge0,
-    ! fs_mgcu, fs_mgcv (1/0)
+    ! fs_mgcu, fs_mgcv (1/0), 6 fs_nsub (0 in files written before the key existed)
     varid = nccreate(ncid,'fs_rst_scal',[character(len=8) :: 'fs_nscal', dn_tm],(/fs_nsc,0/),nf90_double)
     ierr = nf90_put_att(ncid, varid, 'long_name', 'implicit_fs restart scalars (implicit_fs_mod.F90 fs_rst_def)')
     if (mg_on .and. fs_mg_lag > 1) then
@@ -418,6 +453,7 @@ contains
     sc(1) = 1._8 ; sc(2) = dble(fs_mg_lag) ; sc(3) = dble(mod(n_solve + mg_ph0, fs_mg_lag))
     sc(4) = dble(mem_kind)
     if (mg_built > 0 .and. allocated(mg_se0)) sc(5) = 1._8
+    sc(6) = dble(fs_nsub)
     ierr = nf90_inq_varid(ncid, 'fs_rst_scal', varid)
     if (ierr == nf90_noerr) ierr = nf90_put_var(ncid, varid, sc, start=(/1,rec/), count=(/fs_nsc,1/))
   end subroutine fs_rst_wrt_scal
@@ -454,6 +490,9 @@ contains
       &//' generalized-alpha memory (not an exact restart)'
       return
     end if
+    if (nint(sc(6)) > 0 .and. nint(sc(6)) /= fs_nsub .and. mynode == 0) write(*,'(1x,A,I2,A,I2,A)')&
+    &  'IMPLICIT_FS: the restart record was written with fs_nsub =', nint(sc(6)), ', this run uses', fs_nsub,&
+    &  ' (the rates are per second and are used as they are; not an exact restart)'
     mg_ph0 = 0 ; mg_rpend = .false.
     if (mg_on .and. fs_mg_lag > 1 .and. nint(sc(1)) == 1 .and. nint(sc(2)) == fs_mg_lag .and.&
     &   nint(sc(3)) /= 0) then
@@ -596,6 +635,10 @@ contains
     allocate( ubx(GLOBAL_2D_ARRAY), vbx(GLOBAL_2D_ARRAY), fcr(GLOBAL_2D_ARRAY) )
     ubx = 0._8 ; vbx = 0._8 ; fcr = 0._8
     allocate( dsu(GLOBAL_2D_ARRAY), dsv(GLOBAL_2D_ARRAY) ) ; dsu = 0._8 ; dsv = 0._8
+    if (fs_nsub > 1) then
+      allocate( fsu(GLOBAL_2D_ARRAY), fsv(GLOBAL_2D_ARRAY), asu(GLOBAL_2D_ARRAY), asv(GLOBAL_2D_ARRAY) )
+      fsu = 0._8 ; fsv = 0._8 ; asu = 0._8 ; asv = 0._8
+    end if
   end subroutine fs_alloc
 
   !----------------------------------------------------------------------
@@ -621,7 +664,7 @@ contains
     integer(kind=4) :: i, j
     real(kind=8) :: tsh
 #include "compute_auxiliary_bounds.h"
-    tsh = (time + alf*dt)*sec2day          ! time is t_n during the step (main.F90)
+    tsh = (time + sft*dt)*sec2day          ! time is t_n during the step (main.F90); sft = alpha_f (fs_nsub = 1)
 #ifdef BULK_FRC
     call bulk_stress_shift(tsh, dsu, dsv, istr-1, iend, jstr-1, jend)
 #elif !defined ANA_SMFLUX
@@ -685,8 +728,8 @@ contains
     use mpi_f08, only: mpi_wtime, mpi_allreduce, mpi_double_precision, mpi_sum, mpi_max
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
-    integer(kind=4) :: i, j, iface, iriv, its, ierr, icdr, cidx
-    real(kind=8) :: th, b1, df, ainv, gam, m, d, hf, cb, cx, resid, rf, t0
+    integer(kind=4) :: i, j, iface, iriv, its, ierr, icdr, cidx, k, ks, kn, l, nl, lsc(2)
+    real(kind=8) :: th, b1, df, ainv, gam, m, d, hf, cb, cx, resid, rf, t0, c, rn
     real(kind=8) :: vloc(4), vglob(4)
     logical :: conv, ga0
 
@@ -694,9 +737,6 @@ contains
 
     if (.not. ready) call fs_init(istr,iend,jstr,jend)
     th = thp
-    b1 = beta1
-    ga0 = ga_first                          ! no rates yet: the step without memory
-    if (ga0) b1 = 1._8
     call tq0
 
     ! ---- (A) the predictor's DU_avg_bak (EXTRAP_BAR_FLUXES; step2d at iif = 1)
@@ -708,26 +748,50 @@ contains
     enddo
 #endif
 
-    ! ---- (B) per-face setup: D^n, U^n, Ustar, a, c, Ftil
+    ! ---- sub-steps k = 1..fs_nsub of length dts = dt/fs_nsub (section 2), each from the source level ks to
+    ! the level kn: ks = kstp (zeta^n) for k = 1, else the level of sub-step k-1; kn = knew for the last
+    ! sub-step, else one of the two time levels other than kstp and knew (unused during the barotropic
+    ! step; the levels alternate), so that no sub-step reads a level it writes. rufrc (with the 3-D pressure
+    ! gradient of zeta^n) is held over the step; sub-steps k > 1 add the pressure gradient of
+    ! zeta(ks) - zeta^n. fs_nsub = 1 is the single step. The levels other than kstp and knew are read by nothing
+    ! in implicit mode (set_HUV1's KEEP_CORIOLIS write to knew-1 precedes this step and is not read).
+    dts = dt
+    if (fs_nsub > 1) dts = dt/real(fs_nsub,8)
+    nl = 0
+    do l=1,4
+      if (l /= kstp .and. l /= knew .and. nl < 2) then
+        nl = nl + 1 ; lsc(nl) = l
+      end if
+    enddo
+    do k=1,fs_nsub
+    ks = kstp
+    if (k > 1) ks = lsc(mod(k-2,2)+1)
+    kn = knew
+    if (k < fs_nsub) kn = lsc(mod(k-1,2)+1)
+    b1 = beta1
+    ga0 = ga_first                          ! no rates yet: the first sub-step of the run without memory
+    if (ga0) b1 = 1._8
+
+    ! ---- (B) per-face setup: D^n, U^n (of the sub-step: level ks), Ustar, a, c, Ftil
     do j=jstr-1,jend+1
       do i=istr-1,iend+1
-        wd(i,j) = h(i,j) + zeta(i,j,kstp)
+        wd(i,j) = h(i,j) + zeta(i,j,ks)
       enddo
     enddo
     au = 0._8 ; av = 0._8 ; cu = 0._8 ; cv = 0._8 ; ftu = 0._8 ; ftv = 0._8 ; usu = 0._8 ; usv = 0._8
     rb = 0._8 ; cbu = 0._8 ; cbv = 0._8
     do j=jstrR,jendR
       do i=istr,iend+1
-        unu(i,j) = 0.5_8*(wd(i-1,j)+wd(i,j))*dn_u(i,j)*ubar(i,j,kstp)
+        unu(i,j) = 0.5_8*(wd(i-1,j)+wd(i,j))*dn_u(i,j)*ubar(i,j,ks)
       enddo
     enddo
     ! Coriolis estimate: depth-integrated velocities [m2/s] of U^n, V^n incl. one halo
     do j=jstr-1,jend+1                      ! velocities incl. one halo row and column
       do i=istr-1,iend+1
-        ubx(i,j) = ubar(i,j,kstp) ; vbx(i,j) = vbar(i,j,kstp)
+        ubx(i,j) = ubar(i,j,ks) ; vbx(i,j) = vbar(i,j,ks)
       enddo
     enddo
-    do j=jstr-1,jend+1                      ! row/column (vbar, ubar(kstp) and zeta are exchanged)
+    do j=jstr-1,jend+1                      ! row/column (vbar, ubar(ks) and zeta are exchanged)
       do i=istr,iend+1
         cou(i,j) = 0.5_8*(wd(i-1,j)+wd(i,j))*ubx(i,j)
       enddo
@@ -753,24 +817,24 @@ contains
         df = 0.5_8*(wd(i-1,j)+wd(i,j))
         ainv = 0.25_8*(pm(i,j)+pm(i-1,j))*(pn(i,j)+pn(i-1,j))
         gam = 0._8
-        if (fs_drag_implicit) gam = dt*0.5_8*(r_D(i-1,j)+r_D(i,j))/df
+        if (fs_drag_implicit) gam = dts*0.5_8*(r_D(i-1,j)+r_D(i,j))/df
         m = 1._8
 #ifdef MASKING
         m = umask(i,j)
 #endif
-        au(i,j) = th*dt*g*dn_u(i,j)*dn_u(i,j)*df*ainv*m/(1._8+gam)
+        au(i,j) = th*dts*g*dn_u(i,j)*dn_u(i,j)*df*ainv*m/(1._8+gam)
         ! memory on all but the Coriolis estimate c (ROMS rhs3d form, U^n)
-        d = dt*dn_u(i,j)*ainv*rufrc(i,j)
-        hf = dt*dn_u(i,j)*ainv*0.25_8*( fcr(i,j)*(cov(i,j)+cov(i,j+1)) + fcr(i-1,j)*(cov(i-1,j)+cov(i-1,j+1)) )
-        usu(i,j) = m*(unu(i,j) + (hf + b1*(d - hf) + (1._8-b1)*dt*udu(i,j))/(1._8+gam))
+        d = dts*dn_u(i,j)*ainv*rufrc(i,j)
+        hf = dts*dn_u(i,j)*ainv*0.25_8*( fcr(i,j)*(cov(i,j)+cov(i,j+1)) + fcr(i-1,j)*(cov(i-1,j)+cov(i-1,j+1)) )
+        usu(i,j) = m*(unu(i,j) + (hf + b1*(d - hf) + (1._8-b1)*dts*udu(i,j))/(1._8+gam))
         xru(i,j) = m*hf/(1._8+gam)
         ftu(i,j) = m*(b1*unu(i,j) + (1._8-b1)*gru(i,j) + thd*(usu(i,j)-unu(i,j)))
-        cu(i,j) = thd*dt*au(i,j)
+        cu(i,j) = thd*dts*au(i,j)
       enddo
     enddo
     do j=jstr,jend+1
       do i=istrR,iendR
-        unv(i,j) = 0.5_8*(wd(i,j-1)+wd(i,j))*dm_v(i,j)*vbar(i,j,kstp)
+        unv(i,j) = 0.5_8*(wd(i,j-1)+wd(i,j))*dm_v(i,j)*vbar(i,j,ks)
       enddo
     enddo
     do j=jstrV,jend
@@ -778,20 +842,39 @@ contains
         df = 0.5_8*(wd(i,j-1)+wd(i,j))
         ainv = 0.25_8*(pm(i,j)+pm(i,j-1))*(pn(i,j)+pn(i,j-1))
         gam = 0._8
-        if (fs_drag_implicit) gam = dt*0.5_8*(r_D(i,j-1)+r_D(i,j))/df
+        if (fs_drag_implicit) gam = dts*0.5_8*(r_D(i,j-1)+r_D(i,j))/df
         m = 1._8
 #ifdef MASKING
         m = vmask(i,j)
 #endif
-        av(i,j) = th*dt*g*dm_v(i,j)*dm_v(i,j)*df*ainv*m/(1._8+gam)
-        d = dt*dm_v(i,j)*ainv*rvfrc(i,j)
-        hf = -dt*dm_v(i,j)*ainv*0.25_8*( fcr(i,j)*(cou(i,j)+cou(i+1,j)) + fcr(i,j-1)*(cou(i,j-1)+cou(i+1,j-1)) )
-        usv(i,j) = m*(unv(i,j) + (hf + b1*(d - hf) + (1._8-b1)*dt*udv(i,j))/(1._8+gam))
+        av(i,j) = th*dts*g*dm_v(i,j)*dm_v(i,j)*df*ainv*m/(1._8+gam)
+        d = dts*dm_v(i,j)*ainv*rvfrc(i,j)
+        hf = -dts*dm_v(i,j)*ainv*0.25_8*( fcr(i,j)*(cou(i,j)+cou(i+1,j)) + fcr(i,j-1)*(cou(i,j-1)+cou(i+1,j-1)) )
+        usv(i,j) = m*(unv(i,j) + (hf + b1*(d - hf) + (1._8-b1)*dts*udv(i,j))/(1._8+gam))
         xrv(i,j) = m*hf/(1._8+gam)
         ftv(i,j) = m*(b1*unv(i,j) + (1._8-b1)*grv(i,j) + thd*(usv(i,j)-unv(i,j)))
-        cv(i,j) = thd*dt*av(i,j)
+        cv(i,j) = thd*dts*av(i,j)
       enddo
     enddo
+    if (k > 1) then
+      ! sub-steps after the first: rufrc holds the pressure gradient of zeta^n, so the explicit pressure gradient
+      ! of zeta(ks) - zeta^n is added, in the discrete form of the implicit increment's (au/th per unit
+      ! difference, with its mask and drag factor) and with the weight b1 of the explicit rhs; Ftil follows
+      do j=jstr,jend
+        do i=istrU,iend
+          c = b1*(au(i,j)/th)*( (zeta(i-1,j,ks)-zeta(i-1,j,kstp)) - (zeta(i,j,ks)-zeta(i,j,kstp)) )
+          usu(i,j) = usu(i,j) + c
+          ftu(i,j) = ftu(i,j) + thd*c
+        enddo
+      enddo
+      do j=jstrV,jend
+        do i=istr,iend
+          c = b1*(av(i,j)/th)*( (zeta(i,j-1,ks)-zeta(i,j-1,kstp)) - (zeta(i,j,ks)-zeta(i,j,kstp)) )
+          usv(i,j) = usv(i,j) + c
+          ftv(i,j) = ftv(i,j) + thd*c
+        enddo
+      enddo
+    end if
     ! river faces: Dirichlet transport (owned faces, as step2d)
     if (river_source) then
       do iface=1,nriv_u
@@ -830,8 +913,8 @@ contains
         hf = 0.5_8*(h(istr-1,j)+h(istr,j))
         cb = m*dn_u(istr,j)*df*sqrt(g/hf)
         ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
-        &           - cb*(zeta(istr,j,kstp) - zeta_west(j)) - unu(istr,j)))
-        rb(istr,j) = rb(istr,j) + dt*thd*cb ; cbu(istr,j) = cb
+        &           - cb*(zeta(istr,j,ks) - zeta_west(j)) - unu(istr,j)))
+        rb(istr,j) = rb(istr,j) + dts*thd*cb ; cbu(istr,j) = cb
 #  endif
       enddo
 # endif
@@ -851,8 +934,8 @@ contains
         hf = 0.5_8*(h(iend,j)+h(iend+1,j))
         cb = m*dn_u(iend+1,j)*df*sqrt(g/hf)
         ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
-        &             + cb*(zeta(iend,j,kstp) - zeta_east(j)) - unu(iend+1,j)))
-        rb(iend,j) = rb(iend,j) + dt*thd*cb ; cbu(iend+1,j) = cb
+        &             + cb*(zeta(iend,j,ks) - zeta_east(j)) - unu(iend+1,j)))
+        rb(iend,j) = rb(iend,j) + dts*thd*cb ; cbu(iend+1,j) = cb
 #  endif
       enddo
 # endif
@@ -874,8 +957,8 @@ contains
         hf = 0.5_8*(h(i,jstr-1)+h(i,jstr))
         cb = m*dm_v(i,jstr)*df*sqrt(g/hf)
         ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
-        &           - cb*(zeta(i,jstr,kstp) - zeta_south(i)) - unv(i,jstr)))
-        rb(i,jstr) = rb(i,jstr) + dt*thd*cb ; cbv(i,jstr) = cb
+        &           - cb*(zeta(i,jstr,ks) - zeta_south(i)) - unv(i,jstr)))
+        rb(i,jstr) = rb(i,jstr) + dts*thd*cb ; cbv(i,jstr) = cb
 #  endif
       enddo
 # endif
@@ -895,15 +978,15 @@ contains
         hf = 0.5_8*(h(i,jend)+h(i,jend+1))
         cb = m*dm_v(i,jend+1)*df*sqrt(g/hf)
         ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
-        &             + cb*(zeta(i,jend,kstp) - zeta_north(i)) - unv(i,jend+1)))
-        rb(i,jend) = rb(i,jend) + dt*thd*cb ; cbv(i,jend+1) = cb
+        &             + cb*(zeta(i,jend,ks) - zeta_north(i)) - unv(i,jend+1)))
+        rb(i,jend) = rb(i,jend) + dts*thd*cb ; cbv(i,jend+1) = cb
 #  endif
       enddo
 # endif
     endif
 #endif
 
-    ! volume sources Q [m/s]
+    ! volume sources Q [m/s] (the same in every sub-step)
     do j=jstr,jend
       do i=istr,iend
         qs(i,j) = swflx(i,j)
@@ -948,7 +1031,7 @@ contains
         if (m > 0._8 .and. d > 0._8) act(i,j) = 1._8
         dinv(i,j) = 0._8
         if (act(i,j) > 0._8) dinv(i,j) = 1._8/d
-        bb(i,j) = act(i,j)*( -dt*(ftu(i+1,j)-ftu(i,j)+ftv(i,j+1)-ftv(i,j)) + dt*ar(i,j)*qs(i,j) )
+        bb(i,j) = act(i,j)*( -dts*(ftu(i+1,j)-ftu(i,j)+ftv(i,j+1)-ftv(i,j)) + dts*ar(i,j)*qs(i,j) )
       enddo
     enddo
     if (fs_warm == 0) xx = 0._8
@@ -967,6 +1050,13 @@ contains
     call fs_pcg(its, resid, conv)
     n_solve = n_solve + 1 ; n_its = n_its + its ; its_last = its ; res_last = resid
     if (.not. conv) n_unconv = n_unconv + 1
+    if (fs_nsub > 1) then                   ! the step's FS_SOLVE statistics
+      if (k == 1) then
+        its_sum = 0 ; its_max = 0 ; res_max = 0._8 ; dz_max = 0._8
+      end if
+      its_sum = its_sum + its ; its_max = max(its_max, its) ; res_max = max(res_max, resid)
+      if (fs_verbose >= 1) dz_max = max(dz_max, maxval(abs(xx(ib0:ib1,jb0:jb1))))
+    end if
 
     ! ---- (F) momentum and fluxes on owned faces
     call exchange_xxx(xx)                                    ! E2
@@ -1025,16 +1115,16 @@ contains
       enddo
     endif
 #endif
-    ! generalized-alpha rates for the next step
+    ! generalized-alpha rates for the next (sub-)step
     if (ga0) then
       do j=jstr,jend
         do i=istr,iend+1
-          udu(i,j) = (u1u(i,j)-unu(i,j)-xru(i,j))/dt ; gru(i,j) = fbu(i,j)
+          udu(i,j) = (u1u(i,j)-unu(i,j)-xru(i,j))/dts ; gru(i,j) = fbu(i,j)
         enddo
       enddo
       do j=jstr,jend+1
         do i=istr,iend
-          udv(i,j) = (u1v(i,j)-unv(i,j)-xrv(i,j))/dt ; grv(i,j) = fbv(i,j)
+          udv(i,j) = (u1v(i,j)-unv(i,j)-xrv(i,j))/dts ; grv(i,j) = fbv(i,j)
         enddo
       enddo
       do j=jstr,jend
@@ -1045,13 +1135,13 @@ contains
     else
       do j=jstr,jend
         do i=istr,iend+1
-          udu(i,j) = ((u1u(i,j)-unu(i,j)-xru(i,j))/dt - (1._8-gam_a)*udu(i,j))/gam_a
+          udu(i,j) = ((u1u(i,j)-unu(i,j)-xru(i,j))/dts - (1._8-gam_a)*udu(i,j))/gam_a
           gru(i,j) = (fbu(i,j) - (1._8-gam_a)*gru(i,j))/gam_a
         enddo
       enddo
       do j=jstr,jend+1
         do i=istr,iend
-          udv(i,j) = ((u1v(i,j)-unv(i,j)-xrv(i,j))/dt - (1._8-gam_a)*udv(i,j))/gam_a
+          udv(i,j) = ((u1v(i,j)-unv(i,j)-xrv(i,j))/dts - (1._8-gam_a)*udv(i,j))/gam_a
           grv(i,j) = (fbv(i,j) - (1._8-gam_a)*grv(i,j))/gam_a
         enddo
       enddo
@@ -1073,43 +1163,43 @@ contains
 #ifdef MASKING
         m = rmask(i,j)
 #endif
-        zn(i,j) = m*( zeta(i,j,kstp) - dt*pm(i,j)*pn(i,j)*(fbu(i+1,j)-fbu(i,j)+fbv(i,j+1)-fbv(i,j))&
-        &             + dt*qs(i,j) )
+        zn(i,j) = m*( zeta(i,j,ks) - dts*pm(i,j)*pn(i,j)*(fbu(i+1,j)-fbu(i,j)+fbv(i,j+1)-fbv(i,j))&
+        &             + dts*qs(i,j) )
       enddo
     enddo
     do j=jstr,jend
       do i=istr,iend
-        zeta(i,j,knew) = zn(i,j)
+        zeta(i,j,kn) = zn(i,j)
       enddo
     enddo
-    call fs_zeta_bc(istr,iend,jstr,jend, .false.)
+    call fs_zeta_bc(istr,iend,jstr,jend, .false., ks, kn, dts)
     call tq(9)
-    if (fs_verbose >= 2) call fs_volume_check(istr,iend,jstr,jend)
-    call exchange_xxx(zeta(:,:,knew))                        ! E4a
-    call fs_zeta_bc(istr,iend,jstr,jend, .true.)   ! boundary rho points in the halo rows
+    call exchange_xxx(zeta(:,:,kn))                          ! E4a
+    call fs_zeta_bc(istr,iend,jstr,jend, .true., ks, kn, dts)   ! boundary rho points in the halo rows
     call tq(10)
 
-    ! ---- (H) ubar, vbar(knew) on owned faces; normal and tangential boundary faces
+    ! ---- (H) ubar, vbar(kn) on owned faces; normal and tangential boundary faces
     do j=jstr-1,jend+1
       do i=istr-1,iend+1
-        wd(i,j) = h(i,j) + zeta(i,j,knew)
+        wd(i,j) = h(i,j) + zeta(i,j,kn)
       enddo
     enddo
     do j=jstr,jend
       do i=istrU,iend
-        ubar(i,j,knew) = 2._8*u1u(i,j)/((wd(i,j)+wd(i-1,j))*dn_u(i,j))
+        ubar(i,j,kn) = 2._8*u1u(i,j)/((wd(i,j)+wd(i-1,j))*dn_u(i,j))
       enddo
     enddo
     do j=jstrV,jend
       do i=istr,iend
-        vbar(i,j,knew) = 2._8*u1v(i,j)/((wd(i,j)+wd(i,j-1))*dm_v(i,j))
+        vbar(i,j,kn) = 2._8*u1v(i,j)/((wd(i,j)+wd(i,j-1))*dm_v(i,j))
       enddo
     enddo
-    call fs_normal_bc(istr,iend,jstr,jend)
-    call fs_tang_bc(istr,iend,jstr,jend)
+    call fs_normal_bc(istr,iend,jstr,jend, ks, kn)
+    call fs_tang_bc(istr,iend,jstr,jend, ks, kn, dts)
     call tq(11)
 
-    ! ---- (I) hand-over: DU_avg1 = U^n+1, DU_avg2 = Fbar, Zt_avg1
+    ! ---- (I) hand-over: DU_avg1 = U^n+1, DU_avg2 = Fbar (of the sub-step; with sub-steps DU_avg2 becomes the
+    ! mean over the sub-steps below)
     do j=jstr,jend
       do i=istrU,iend
         DU_avg1(i,j) = u1u(i,j) ; DU_avg2(i,j) = fbu(i,j)
@@ -1123,27 +1213,27 @@ contains
 #ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do j=jstrR,jendR
-        DU_avg1(istrU-1,j) = 0.5_8*(wd(istrU-1,j)+wd(istrU-2,j))*ubar(istrU-1,j,knew)*dn_u(istrU-1,j)
+        DU_avg1(istrU-1,j) = 0.5_8*(wd(istrU-1,j)+wd(istrU-2,j))*ubar(istrU-1,j,kn)*dn_u(istrU-1,j)
         DU_avg2(istrU-1,j) = thd*DU_avg1(istrU-1,j) + (1._8-thd)*unu(istrU-1,j)
       enddo
       do j=jstr,jend
         DU_avg2(istr,j) = fbu(istr,j)
       enddo
       do j=jstrV,jend
-        DV_avg1(istr-1,j) = 0.5_8*(wd(istr-1,j)+wd(istr-1,j-1))*vbar(istr-1,j,knew)*dm_v(istr-1,j)
+        DV_avg1(istr-1,j) = 0.5_8*(wd(istr-1,j)+wd(istr-1,j-1))*vbar(istr-1,j,kn)*dm_v(istr-1,j)
         DV_avg2(istr-1,j) = thd*DV_avg1(istr-1,j) + (1._8-thd)*unv(istr-1,j)
       enddo
     endif
     if (EASTERN_EDGE) then
       do j=jstrR,jendR
-        DU_avg1(iend+1,j) = 0.5_8*(wd(iend+1,j)+wd(iend,j))*ubar(iend+1,j,knew)*dn_u(iend+1,j)
+        DU_avg1(iend+1,j) = 0.5_8*(wd(iend+1,j)+wd(iend,j))*ubar(iend+1,j,kn)*dn_u(iend+1,j)
         DU_avg2(iend+1,j) = thd*DU_avg1(iend+1,j) + (1._8-thd)*unu(iend+1,j)
       enddo
       do j=jstr,jend
         DU_avg2(iend+1,j) = fbu(iend+1,j)
       enddo
       do j=jstrV,jend
-        DV_avg1(iend+1,j) = 0.5_8*(wd(iend+1,j)+wd(iend+1,j-1))*vbar(iend+1,j,knew)*dm_v(iend+1,j)
+        DV_avg1(iend+1,j) = 0.5_8*(wd(iend+1,j)+wd(iend+1,j-1))*vbar(iend+1,j,kn)*dm_v(iend+1,j)
         DV_avg2(iend+1,j) = thd*DV_avg1(iend+1,j) + (1._8-thd)*unv(iend+1,j)
       enddo
     endif
@@ -1151,11 +1241,11 @@ contains
 #ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do i=istrU,iend
-        DU_avg1(i,jstr-1) = 0.5_8*(wd(i,jstr-1)+wd(i-1,jstr-1))*ubar(i,jstr-1,knew)*dn_u(i,jstr-1)
+        DU_avg1(i,jstr-1) = 0.5_8*(wd(i,jstr-1)+wd(i-1,jstr-1))*ubar(i,jstr-1,kn)*dn_u(i,jstr-1)
         DU_avg2(i,jstr-1) = thd*DU_avg1(i,jstr-1) + (1._8-thd)*unu(i,jstr-1)
       enddo
       do i=istrR,iendR
-        DV_avg1(i,jstrV-1) = 0.5_8*(wd(i,jstrV-1)+wd(i,jstrV-2))*vbar(i,jstrV-1,knew)*dm_v(i,jstrV-1)
+        DV_avg1(i,jstrV-1) = 0.5_8*(wd(i,jstrV-1)+wd(i,jstrV-2))*vbar(i,jstrV-1,kn)*dm_v(i,jstrV-1)
         DV_avg2(i,jstrV-1) = thd*DV_avg1(i,jstrV-1) + (1._8-thd)*unv(i,jstrV-1)
       enddo
       do i=istr,iend
@@ -1164,11 +1254,11 @@ contains
     endif
     if (NORTHERN_EDGE) then
       do i=istrU,iend
-        DU_avg1(i,jend+1) = 0.5_8*(wd(i,jend+1)+wd(i-1,jend+1))*ubar(i,jend+1,knew)*dn_u(i,jend+1)
+        DU_avg1(i,jend+1) = 0.5_8*(wd(i,jend+1)+wd(i-1,jend+1))*ubar(i,jend+1,kn)*dn_u(i,jend+1)
         DU_avg2(i,jend+1) = thd*DU_avg1(i,jend+1) + (1._8-thd)*unu(i,jend+1)
       enddo
       do i=istrR,iendR
-        DV_avg1(i,jend+1) = 0.5_8*(wd(i,jend+1)+wd(i,jend))*vbar(i,jend+1,knew)*dm_v(i,jend+1)
+        DV_avg1(i,jend+1) = 0.5_8*(wd(i,jend+1)+wd(i,jend))*vbar(i,jend+1,kn)*dm_v(i,jend+1)
         DV_avg2(i,jend+1) = thd*DV_avg1(i,jend+1) + (1._8-thd)*unv(i,jend+1)
       enddo
       do i=istr,iend
@@ -1180,14 +1270,50 @@ contains
       do iface=1,nriv_u
         i = riv_u_i(iface) ; j = riv_u_j(iface)
         if (i < istrU .or. i > iend .or. j < jstr .or. j > jend) cycle
-        ubar(i,j,knew) = 2._8*u1u(i,j)/(dn_u(i,j)*(wd(i-1,j)+wd(i,j)))
+        ubar(i,j,kn) = 2._8*u1u(i,j)/(dn_u(i,j)*(wd(i-1,j)+wd(i,j)))
       enddo
       do iface=1,nriv_v
         i = riv_v_i(iface) ; j = riv_v_j(iface)
         if (i < istr .or. i > iend .or. j < jstrV .or. j > jend) cycle
-        vbar(i,j,knew) = 2._8*u1v(i,j)/(dm_v(i,j)*(wd(i,j-1)+wd(i,j)))
+        vbar(i,j,kn) = 2._8*u1v(i,j)/(dm_v(i,j)*(wd(i,j-1)+wd(i,j)))
       enddo
     endif
+    if (fs_nsub > 1) then                   ! sums over the sub-steps of Fbar and of DU_avg2 (all the faces it is set on)
+      if (k == 1) then
+        fsu = fbu ; fsv = fbv
+      else
+        fsu = fsu + fbu ; fsv = fsv + fbv
+      end if
+      do j=jstrR,jendR
+        do i=istrR,iendR
+          if (k == 1) then
+            asu(i,j) = DU_avg2(i,j) ; asv(i,j) = DV_avg2(i,j)
+          else
+            asu(i,j) = asu(i,j) + DU_avg2(i,j) ; asv(i,j) = asv(i,j) + DV_avg2(i,j)
+          end if
+        enddo
+      enddo
+    end if
+    if (k < fs_nsub) then
+      call tq(9)
+      call exchange_xxx(ubar(:,:,kn),vbar(:,:,kn))           ! E4b of the sub-step
+      call tq(10)
+    end if
+    enddo                                   ! sub-steps
+
+    if (fs_nsub > 1) then
+      ! DU_avg2 = the mean flux of the sub-steps: zeta^n+1 = zeta^n - dt pm pn Div(DU_avg2) + dt Q (to rounding);
+      ! fbu, fbv likewise for the step's volume check
+      rn = 1._8/real(fs_nsub,8)
+      fbu = rn*fsu ; fbv = rn*fsv
+      do j=jstrR,jendR
+        do i=istrR,iendR
+          DU_avg2(i,j) = rn*asu(i,j) ; DV_avg2(i,j) = rn*asv(i,j)
+        enddo
+      enddo
+    end if
+    if (fs_verbose >= 2) call fs_volume_check(istr,iend,jstr,jend)   ! the whole step
+    n_step = n_step + 1
     do j=jstrR,jendR
       do i=istrR,iendR
         Zt_avg1(i,j) = zeta(i,j,knew)
@@ -1214,16 +1340,17 @@ contains
   end subroutine fs_step_tile
 
   !----------------------------------------------------------------------
-  subroutine fs_zeta_bc(istr,iend,jstr,jend, halo)
-    ! Boundary rho points of zeta(knew) (section 4): on open edges other than
+  subroutine fs_zeta_bc(istr,iend,jstr,jend, halo, ks, kn, dts)
+    ! Boundary rho points of zeta(kn) (section 4; kn the level the (sub-)step writes, ks its
+    ! source level, dts its length): on open edges other than
     ! OBC_M2SPECIFIED the backward-Euler form of zetabc's upwind radiation,
-    ! zeta_b = (zeta_b^n + cx zeta_int^n+1)/(1+cx), cx = dt pm(int) sqrt(g h(int));
+    ! zeta_b = (zeta_b^n + cx zeta_int^n+1)/(1+cx), cx = dts pm(int) sqrt(g h(int));
     ! else zero gradient. halo = .false.: the tile's own rows/columns and the
-    ! physical corners; .true. (after the exchange of zeta(knew)): the boundary
+    ! physical corners; .true. (after the exchange of zeta(kn)): the boundary
     ! points in the halo rows/columns next to a tile seam.
     use param, only: np_xi, np_eta
     use dimensions, only: inode, jnode
-    use scalars, only: dt, g, knew, kstp
+    use scalars, only: g
     use ocean_vars, only: zeta
     use grid, only: h, pm, pn
 #ifdef MASKING
@@ -1232,6 +1359,8 @@ contains
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     logical, intent(in) :: halo
+    integer(kind=4), intent(in) :: ks, kn
+    real(kind=8), intent(in) :: dts
     integer(kind=4) :: i, j, j0, j1, i0, i1, k
     integer(kind=4) :: jl(2), il(2), nl
     real(kind=8) :: cx, m
@@ -1313,14 +1442,14 @@ contains
 #endif
 #if !defined EW_PERIODIC && !defined NS_PERIODIC
     if (.not. halo) then                      ! physical corners: mean of the two edge neighbours
-      if (WESTERN_EDGE .and. SOUTHERN_EDGE) zeta(istr-1,jstr-1,knew) =&
-      &  0.5_8*(zeta(istr-1,jstr,knew) + zeta(istr,jstr-1,knew))
-      if (EASTERN_EDGE .and. SOUTHERN_EDGE) zeta(iend+1,jstr-1,knew) =&
-      &  0.5_8*(zeta(iend+1,jstr,knew) + zeta(iend,jstr-1,knew))
-      if (WESTERN_EDGE .and. NORTHERN_EDGE) zeta(istr-1,jend+1,knew) =&
-      &  0.5_8*(zeta(istr-1,jend,knew) + zeta(istr,jend+1,knew))
-      if (EASTERN_EDGE .and. NORTHERN_EDGE) zeta(iend+1,jend+1,knew) =&
-      &  0.5_8*(zeta(iend+1,jend,knew) + zeta(iend,jend+1,knew))
+      if (WESTERN_EDGE .and. SOUTHERN_EDGE) zeta(istr-1,jstr-1,kn) =&
+      &  0.5_8*(zeta(istr-1,jstr,kn) + zeta(istr,jstr-1,kn))
+      if (EASTERN_EDGE .and. SOUTHERN_EDGE) zeta(iend+1,jstr-1,kn) =&
+      &  0.5_8*(zeta(iend+1,jstr,kn) + zeta(iend,jstr-1,kn))
+      if (WESTERN_EDGE .and. NORTHERN_EDGE) zeta(istr-1,jend+1,kn) =&
+      &  0.5_8*(zeta(istr-1,jend,kn) + zeta(istr,jend+1,kn))
+      if (EASTERN_EDGE .and. NORTHERN_EDGE) zeta(iend+1,jend+1,kn) =&
+      &  0.5_8*(zeta(iend+1,jend,kn) + zeta(iend,jend+1,kn))
     end if
 #endif
   contains
@@ -1331,10 +1460,10 @@ contains
       m = rmask(istr-1,jj)
 #endif
 #if defined OBC_WEST && !defined OBC_M2SPECIFIED
-      cx = dt*pm(istr,jj)*sqrt(g*h(istr,jj))
-      zeta(istr-1,jj,knew) = m*(zeta(istr-1,jj,kstp) + cx*zeta(istr,jj,knew))/(1._8+cx)
+      cx = dts*pm(istr,jj)*sqrt(g*h(istr,jj))
+      zeta(istr-1,jj,kn) = m*(zeta(istr-1,jj,ks) + cx*zeta(istr,jj,kn))/(1._8+cx)
 #else
-      zeta(istr-1,jj,knew) = m*zeta(istr,jj,knew)
+      zeta(istr-1,jj,kn) = m*zeta(istr,jj,kn)
 #endif
     end subroutine wbc
     subroutine ebc(jj)
@@ -1344,10 +1473,10 @@ contains
       m = rmask(iend+1,jj)
 #endif
 #if defined OBC_EAST && !defined OBC_M2SPECIFIED
-      cx = dt*pm(iend,jj)*sqrt(g*h(iend,jj))
-      zeta(iend+1,jj,knew) = m*(zeta(iend+1,jj,kstp) + cx*zeta(iend,jj,knew))/(1._8+cx)
+      cx = dts*pm(iend,jj)*sqrt(g*h(iend,jj))
+      zeta(iend+1,jj,kn) = m*(zeta(iend+1,jj,ks) + cx*zeta(iend,jj,kn))/(1._8+cx)
 #else
-      zeta(iend+1,jj,knew) = m*zeta(iend,jj,knew)
+      zeta(iend+1,jj,kn) = m*zeta(iend,jj,kn)
 #endif
     end subroutine ebc
     subroutine sbc(ii)
@@ -1357,10 +1486,10 @@ contains
       m = rmask(ii,jstr-1)
 #endif
 #if defined OBC_SOUTH && !defined OBC_M2SPECIFIED
-      cx = dt*pn(ii,jstr)*sqrt(g*h(ii,jstr))
-      zeta(ii,jstr-1,knew) = m*(zeta(ii,jstr-1,kstp) + cx*zeta(ii,jstr,knew))/(1._8+cx)
+      cx = dts*pn(ii,jstr)*sqrt(g*h(ii,jstr))
+      zeta(ii,jstr-1,kn) = m*(zeta(ii,jstr-1,ks) + cx*zeta(ii,jstr,kn))/(1._8+cx)
 #else
-      zeta(ii,jstr-1,knew) = m*zeta(ii,jstr,knew)
+      zeta(ii,jstr-1,kn) = m*zeta(ii,jstr,kn)
 #endif
     end subroutine sbc
     subroutine nbc(ii)
@@ -1370,28 +1499,29 @@ contains
       m = rmask(ii,jend+1)
 #endif
 #if defined OBC_NORTH && !defined OBC_M2SPECIFIED
-      cx = dt*pn(ii,jend)*sqrt(g*h(ii,jend))
-      zeta(ii,jend+1,knew) = m*(zeta(ii,jend+1,kstp) + cx*zeta(ii,jend,knew))/(1._8+cx)
+      cx = dts*pn(ii,jend)*sqrt(g*h(ii,jend))
+      zeta(ii,jend+1,kn) = m*(zeta(ii,jend+1,ks) + cx*zeta(ii,jend,kn))/(1._8+cx)
 #else
-      zeta(ii,jend+1,knew) = m*zeta(ii,jend,knew)
+      zeta(ii,jend+1,kn) = m*zeta(ii,jend,kn)
 #endif
     end subroutine nbc
   end subroutine fs_zeta_bc
 
   !----------------------------------------------------------------------
-  subroutine fs_tang_bc(istr,iend,jstr,jend)
+  subroutine fs_tang_bc(istr,iend,jstr,jend, ks, kn, dts)
     ! Tangential barotropic velocities on the boundary rows/columns (v at the
     ! western/eastern ghost columns, u at the southern/northern ghost rows) and the
     ! corners (section 4). Open edges: the backward-Euler form of u2dbc/v2dbc under
     ! OBC_M2FLATHER (which redefines the tangential faces as OBC_M2ORLANSKI, non-legacy branch):
     ! explicit upwind advection along the edge by the tangential velocity (Courant number clamped
     ! to [-1, 1]), implicit upwind advection by the outward normal velocity un,
-    ! v_b = (v' + ca v_1^n+1)/(1 + ca), ca = dt un/dx, and on inflow nudging
+    ! v_b = (v' + ca v_1^n+1)/(1 + ca), ca = dts un/dx, and on inflow nudging
     ! v_b = (v' + ce v_ext)/(1 + ce), ce = -ca fs_tang_nudge; OBC_M2SPECIFIED the external value;
-    ! closed edges gamma2 v_int; corners as u2dbc/v2dbc.
+    ! closed edges gamma2 v_int; corners as u2dbc/v2dbc. ks, kn, dts: the (sub-)step's source and new
+    ! levels and its length.
     use param, only: np_xi, np_eta
     use dimensions, only: inode, jnode
-    use scalars, only: dt, knew, kstp, gamma2
+    use scalars, only: gamma2
     use ocean_vars, only: ubar, vbar
     use grid, only: pm, pn
 #ifdef MASKING
@@ -1414,7 +1544,8 @@ contains
     &  set_bry_all
 #endif
     implicit none
-    integer(kind=4), intent(in) :: istr, iend, jstr, jend
+    integer(kind=4), intent(in) :: istr, iend, jstr, jend, ks, kn
+    real(kind=8), intent(in) :: dts
     integer(kind=4) :: i, j
     real(kind=8) :: ca, cy
 #include "compute_auxiliary_bounds.h"
@@ -1423,31 +1554,31 @@ contains
 # ifdef OBC_WEST
       do j=jstrV,jend
 #  ifdef OBC_M2SPECIFIED
-        vbar(istr-1,j,knew) = vbar_west(j)
+        vbar(istr-1,j,kn) = vbar_west(j)
 #  else
-        ca = -0.125_8*dt*(ubar(istr,j,kstp)+ubar(istr,j-1,kstp))&
+        ca = -0.125_8*dts*(ubar(istr,j,ks)+ubar(istr,j-1,ks))&
         &   *(pm(istr-1,j)+pm(istr-1,j-1)+pm(istr,j)+pm(istr,j-1))
-        cy = 0.125_8*dt*(vbar(istr-1,j,kstp)+vbar(istr,j,kstp))&
+        cy = 0.125_8*dts*(vbar(istr-1,j,ks)+vbar(istr,j,ks))&
         &   *(pn(istr-1,j)+pn(istr-1,j-1)+pn(istr,j)+pn(istr,j-1))
 #   ifdef M2_FRC_BRY
-        vbar(istr-1,j,knew) = tnew(vbar(istr-1,j,kstp), vbar(istr,j,knew), ca, cy,&
-        &  vbar(istr-1,j,kstp)-vbar(istr-1,j-1,kstp), vbar(istr-1,j+1,kstp)-vbar(istr-1,j,kstp),&
+        vbar(istr-1,j,kn) = tnew(vbar(istr-1,j,ks), vbar(istr,j,kn), ca, cy,&
+        &  vbar(istr-1,j,ks)-vbar(istr-1,j-1,ks), vbar(istr-1,j+1,ks)-vbar(istr-1,j,ks),&
         &  vbar_west(j), .true.)
 #   else
-        vbar(istr-1,j,knew) = tnew(vbar(istr-1,j,kstp), vbar(istr,j,knew), ca, cy,&
-        &  vbar(istr-1,j,kstp)-vbar(istr-1,j-1,kstp), vbar(istr-1,j+1,kstp)-vbar(istr-1,j,kstp),&
+        vbar(istr-1,j,kn) = tnew(vbar(istr-1,j,ks), vbar(istr,j,kn), ca, cy,&
+        &  vbar(istr-1,j,ks)-vbar(istr-1,j-1,ks), vbar(istr-1,j+1,ks)-vbar(istr-1,j,ks),&
         &  0._8, .false.)
 #   endif
 #  endif
 #  ifdef MASKING
-        vbar(istr-1,j,knew) = vbar(istr-1,j,knew)*vmask(istr-1,j)
+        vbar(istr-1,j,kn) = vbar(istr-1,j,kn)*vmask(istr-1,j)
 #  endif
       enddo
 # else
       do j=jstr,jendR
-        vbar(istr-1,j,knew) = gamma2*vbar(istr,j,knew)
+        vbar(istr-1,j,kn) = gamma2*vbar(istr,j,kn)
 #  ifdef MASKING
-        vbar(istr-1,j,knew) = vbar(istr-1,j,knew)*vmask(istr-1,j)
+        vbar(istr-1,j,kn) = vbar(istr-1,j,kn)*vmask(istr-1,j)
 #  endif
       enddo
 # endif
@@ -1456,31 +1587,31 @@ contains
 # ifdef OBC_EAST
       do j=jstrV,jend
 #  ifdef OBC_M2SPECIFIED
-        vbar(iend+1,j,knew) = vbar_east(j)
+        vbar(iend+1,j,kn) = vbar_east(j)
 #  else
-        ca = 0.125_8*dt*(ubar(iend+1,j,kstp)+ubar(iend+1,j-1,kstp))&
+        ca = 0.125_8*dts*(ubar(iend+1,j,ks)+ubar(iend+1,j-1,ks))&
         &   *(pm(iend,j)+pm(iend,j-1)+pm(iend+1,j)+pm(iend+1,j-1))
-        cy = 0.125_8*dt*(vbar(iend,j,kstp)+vbar(iend+1,j,kstp))&
+        cy = 0.125_8*dts*(vbar(iend,j,ks)+vbar(iend+1,j,ks))&
         &   *(pn(iend,j)+pn(iend,j-1)+pn(iend+1,j)+pn(iend+1,j-1))
 #   ifdef M2_FRC_BRY
-        vbar(iend+1,j,knew) = tnew(vbar(iend+1,j,kstp), vbar(iend,j,knew), ca, cy,&
-        &  vbar(iend+1,j,kstp)-vbar(iend+1,j-1,kstp), vbar(iend+1,j+1,kstp)-vbar(iend+1,j,kstp),&
+        vbar(iend+1,j,kn) = tnew(vbar(iend+1,j,ks), vbar(iend,j,kn), ca, cy,&
+        &  vbar(iend+1,j,ks)-vbar(iend+1,j-1,ks), vbar(iend+1,j+1,ks)-vbar(iend+1,j,ks),&
         &  vbar_east(j), .true.)
 #   else
-        vbar(iend+1,j,knew) = tnew(vbar(iend+1,j,kstp), vbar(iend,j,knew), ca, cy,&
-        &  vbar(iend+1,j,kstp)-vbar(iend+1,j-1,kstp), vbar(iend+1,j+1,kstp)-vbar(iend+1,j,kstp),&
+        vbar(iend+1,j,kn) = tnew(vbar(iend+1,j,ks), vbar(iend,j,kn), ca, cy,&
+        &  vbar(iend+1,j,ks)-vbar(iend+1,j-1,ks), vbar(iend+1,j+1,ks)-vbar(iend+1,j,ks),&
         &  0._8, .false.)
 #   endif
 #  endif
 #  ifdef MASKING
-        vbar(iend+1,j,knew) = vbar(iend+1,j,knew)*vmask(iend+1,j)
+        vbar(iend+1,j,kn) = vbar(iend+1,j,kn)*vmask(iend+1,j)
 #  endif
       enddo
 # else
       do j=jstr,jendR
-        vbar(iend+1,j,knew) = gamma2*vbar(iend,j,knew)
+        vbar(iend+1,j,kn) = gamma2*vbar(iend,j,kn)
 #  ifdef MASKING
-        vbar(iend+1,j,knew) = vbar(iend+1,j,knew)*vmask(iend+1,j)
+        vbar(iend+1,j,kn) = vbar(iend+1,j,kn)*vmask(iend+1,j)
 #  endif
       enddo
 # endif
@@ -1491,31 +1622,31 @@ contains
 # ifdef OBC_SOUTH
       do i=istrU,iend
 #  ifdef OBC_M2SPECIFIED
-        ubar(i,jstr-1,knew) = ubar_south(i)
+        ubar(i,jstr-1,kn) = ubar_south(i)
 #  else
-        ca = -0.125_8*dt*(vbar(i,jstr,kstp)+vbar(i-1,jstr,kstp))&
+        ca = -0.125_8*dts*(vbar(i,jstr,ks)+vbar(i-1,jstr,ks))&
         &   *(pn(i,jstr-1)+pn(i-1,jstr-1)+pn(i,jstr)+pn(i-1,jstr))
-        cy = 0.125_8*dt*(ubar(i,jstr-1,kstp)+ubar(i,jstr,kstp))&
+        cy = 0.125_8*dts*(ubar(i,jstr-1,ks)+ubar(i,jstr,ks))&
         &   *(pm(i,jstr-1)+pm(i-1,jstr-1)+pm(i,jstr)+pm(i-1,jstr))
 #   ifdef M2_FRC_BRY
-        ubar(i,jstr-1,knew) = tnew(ubar(i,jstr-1,kstp), ubar(i,jstr,knew), ca, cy,&
-        &  ubar(i,jstr-1,kstp)-ubar(i-1,jstr-1,kstp), ubar(i+1,jstr-1,kstp)-ubar(i,jstr-1,kstp),&
+        ubar(i,jstr-1,kn) = tnew(ubar(i,jstr-1,ks), ubar(i,jstr,kn), ca, cy,&
+        &  ubar(i,jstr-1,ks)-ubar(i-1,jstr-1,ks), ubar(i+1,jstr-1,ks)-ubar(i,jstr-1,ks),&
         &  ubar_south(i), .true.)
 #   else
-        ubar(i,jstr-1,knew) = tnew(ubar(i,jstr-1,kstp), ubar(i,jstr,knew), ca, cy,&
-        &  ubar(i,jstr-1,kstp)-ubar(i-1,jstr-1,kstp), ubar(i+1,jstr-1,kstp)-ubar(i,jstr-1,kstp),&
+        ubar(i,jstr-1,kn) = tnew(ubar(i,jstr-1,ks), ubar(i,jstr,kn), ca, cy,&
+        &  ubar(i,jstr-1,ks)-ubar(i-1,jstr-1,ks), ubar(i+1,jstr-1,ks)-ubar(i,jstr-1,ks),&
         &  0._8, .false.)
 #   endif
 #  endif
 #  ifdef MASKING
-        ubar(i,jstr-1,knew) = ubar(i,jstr-1,knew)*umask(i,jstr-1)
+        ubar(i,jstr-1,kn) = ubar(i,jstr-1,kn)*umask(i,jstr-1)
 #  endif
       enddo
 # else
       do i=istr,iendR
-        ubar(i,jstr-1,knew) = gamma2*ubar(i,jstr,knew)
+        ubar(i,jstr-1,kn) = gamma2*ubar(i,jstr,kn)
 #  ifdef MASKING
-        ubar(i,jstr-1,knew) = ubar(i,jstr-1,knew)*umask(i,jstr-1)
+        ubar(i,jstr-1,kn) = ubar(i,jstr-1,kn)*umask(i,jstr-1)
 #  endif
       enddo
 # endif
@@ -1524,31 +1655,31 @@ contains
 # ifdef OBC_NORTH
       do i=istrU,iend
 #  ifdef OBC_M2SPECIFIED
-        ubar(i,jend+1,knew) = ubar_north(i)
+        ubar(i,jend+1,kn) = ubar_north(i)
 #  else
-        ca = 0.125_8*dt*(vbar(i,jend+1,kstp)+vbar(i-1,jend+1,kstp))&
+        ca = 0.125_8*dts*(vbar(i,jend+1,ks)+vbar(i-1,jend+1,ks))&
         &   *(pn(i,jend)+pn(i-1,jend)+pn(i,jend+1)+pn(i-1,jend+1))
-        cy = 0.125_8*dt*(ubar(i,jend,kstp)+ubar(i,jend+1,kstp))&
+        cy = 0.125_8*dts*(ubar(i,jend,ks)+ubar(i,jend+1,ks))&
         &   *(pm(i,jend)+pm(i-1,jend)+pm(i,jend+1)+pm(i-1,jend+1))
 #   ifdef M2_FRC_BRY
-        ubar(i,jend+1,knew) = tnew(ubar(i,jend+1,kstp), ubar(i,jend,knew), ca, cy,&
-        &  ubar(i,jend+1,kstp)-ubar(i-1,jend+1,kstp), ubar(i+1,jend+1,kstp)-ubar(i,jend+1,kstp),&
+        ubar(i,jend+1,kn) = tnew(ubar(i,jend+1,ks), ubar(i,jend,kn), ca, cy,&
+        &  ubar(i,jend+1,ks)-ubar(i-1,jend+1,ks), ubar(i+1,jend+1,ks)-ubar(i,jend+1,ks),&
         &  ubar_north(i), .true.)
 #   else
-        ubar(i,jend+1,knew) = tnew(ubar(i,jend+1,kstp), ubar(i,jend,knew), ca, cy,&
-        &  ubar(i,jend+1,kstp)-ubar(i-1,jend+1,kstp), ubar(i+1,jend+1,kstp)-ubar(i,jend+1,kstp),&
+        ubar(i,jend+1,kn) = tnew(ubar(i,jend+1,ks), ubar(i,jend,kn), ca, cy,&
+        &  ubar(i,jend+1,ks)-ubar(i-1,jend+1,ks), ubar(i+1,jend+1,ks)-ubar(i,jend+1,ks),&
         &  0._8, .false.)
 #   endif
 #  endif
 #  ifdef MASKING
-        ubar(i,jend+1,knew) = ubar(i,jend+1,knew)*umask(i,jend+1)
+        ubar(i,jend+1,kn) = ubar(i,jend+1,kn)*umask(i,jend+1)
 #  endif
       enddo
 # else
       do i=istr,iendR
-        ubar(i,jend+1,knew) = gamma2*ubar(i,jend,knew)
+        ubar(i,jend+1,kn) = gamma2*ubar(i,jend,kn)
 #  ifdef MASKING
-        ubar(i,jend+1,knew) = ubar(i,jend+1,knew)*umask(i,jend+1)
+        ubar(i,jend+1,kn) = ubar(i,jend+1,kn)*umask(i,jend+1)
 #  endif
       enddo
 # endif
@@ -1557,26 +1688,26 @@ contains
     ! corners between adjacent open boundaries (u2dbc, v2dbc)
 #if defined OBC_SOUTH && defined OBC_WEST
     if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
-      ubar(istr,jstr-1,knew) = 0.5_8*(ubar(istr+1,jstr-1,knew) + ubar(istr,jstr,knew))
-      vbar(istr-1,jstr,knew) = 0.5_8*(vbar(istr-1,jstr+1,knew) + vbar(istr,jstr,knew))
+      ubar(istr,jstr-1,kn) = 0.5_8*(ubar(istr+1,jstr-1,kn) + ubar(istr,jstr,kn))
+      vbar(istr-1,jstr,kn) = 0.5_8*(vbar(istr-1,jstr+1,kn) + vbar(istr,jstr,kn))
     endif
 #endif
 #if defined OBC_SOUTH && defined OBC_EAST
     if (EASTERN_EDGE .and. SOUTHERN_EDGE) then
-      ubar(iend+1,jstr-1,knew) = 0.5_8*(ubar(iend,jstr-1,knew) + ubar(iend+1,jstr,knew))
-      vbar(iend+1,jstr,knew) = 0.5_8*(vbar(iend+1,jstr+1,knew) + vbar(iend,jstr,knew))
+      ubar(iend+1,jstr-1,kn) = 0.5_8*(ubar(iend,jstr-1,kn) + ubar(iend+1,jstr,kn))
+      vbar(iend+1,jstr,kn) = 0.5_8*(vbar(iend+1,jstr+1,kn) + vbar(iend,jstr,kn))
     endif
 #endif
 #if defined OBC_NORTH && defined OBC_WEST
     if (WESTERN_EDGE .and. NORTHERN_EDGE) then
-      ubar(istr,jend+1,knew) = 0.5_8*(ubar(istr+1,jend+1,knew) + ubar(istr,jend,knew))
-      vbar(istr-1,jend+1,knew) = 0.5_8*(vbar(istr-1,jend,knew) + vbar(istr,jend+1,knew))
+      ubar(istr,jend+1,kn) = 0.5_8*(ubar(istr+1,jend+1,kn) + ubar(istr,jend,kn))
+      vbar(istr-1,jend+1,kn) = 0.5_8*(vbar(istr-1,jend,kn) + vbar(istr,jend+1,kn))
     endif
 #endif
 #if defined OBC_NORTH && defined OBC_EAST
     if (EASTERN_EDGE .and. NORTHERN_EDGE) then
-      ubar(iend+1,jend+1,knew) = 0.5_8*(ubar(iend,jend+1,knew) + ubar(iend+1,jend,knew))
-      vbar(iend+1,jend+1,knew) = 0.5_8*(vbar(iend+1,jend,knew) + vbar(iend,jend+1,knew))
+      ubar(iend+1,jend+1,kn) = 0.5_8*(ubar(iend,jend+1,kn) + ubar(iend+1,jend,kn))
+      vbar(iend+1,jend+1,kn) = 0.5_8*(vbar(iend+1,jend,kn) + vbar(iend,jend+1,kn))
     endif
 #endif
   contains
@@ -1600,18 +1731,18 @@ contains
   end subroutine fs_tang_bc
 
   !----------------------------------------------------------------------
-  subroutine fs_normal_bc(istr,iend,jstr,jend)
-    ! Normal boundary faces of ubar/vbar(knew) (before fs_tang_bc, which sets the
+  subroutine fs_normal_bc(istr,iend,jstr,jend, ks, kn)
+    ! Normal boundary faces of ubar/vbar(kn) (before fs_tang_bc, which sets the
     ! tangential faces). Open edges: Flather U_b^n+1 = Ue(n+1) + s cb (zeta_int^n+1 - ze(n+1)),
-    ! ubar = U_b/(Df^n+1 dn_u); specified: ubar = ubar_ext(n+1). wd holds D^n+1.
-    ! Closed physical edges (no OBC_<edge>, not periodic): ubar/vbar(knew) = 0 on the normal
+    ! ubar = U_b/(Df^n+1 dn_u); specified: ubar = ubar_ext(n+1). wd holds D^n+1. ks, kn: the
+    ! (sub-)step's source and new levels.
+    ! Closed physical edges (no OBC_<edge>, not periodic): ubar/vbar(kn) = 0 on the normal
     ! faces every step, as u2dbc/v2dbc's closed-edge branch (no-flux). The solve treats these
     ! faces as closed (a = c = Ftil = 0, Fbar = 0) but sets no velocity there, so without this
     ! an initial or restart value persisted in the ubar ring and reached DU_avg1 (U^n+1 of the
     ! hand-over, 0.5 (D+D) ubar dn_u) and the 3-D step.
     use param, only: np_xi, np_eta
     use dimensions, only: inode, jnode
-    use scalars, only: knew, kstp
     use ocean_vars, only: zeta, ubar, vbar
     use grid, only: h, dn_u, dm_v
 #ifdef MASKING
@@ -1634,7 +1765,7 @@ contains
     &  set_bry_all
 #endif
     implicit none
-    integer(kind=4), intent(in) :: istr, iend, jstr, jend
+    integer(kind=4), intent(in) :: istr, iend, jstr, jend, ks, kn
     integer(kind=4) :: i, j
     real(kind=8) :: m, dfn, ub
 #include "compute_auxiliary_bounds.h"
@@ -1642,14 +1773,14 @@ contains
 # ifndef OBC_WEST
     if (WESTERN_EDGE) then
       do j=jstr,jend
-        ubar(istr,j,knew) = 0._8
+        ubar(istr,j,kn) = 0._8
       enddo
     endif
 # endif
 # ifndef OBC_EAST
     if (EASTERN_EDGE) then
       do j=jstr,jend
-        ubar(iend+1,j,knew) = 0._8
+        ubar(iend+1,j,kn) = 0._8
       enddo
     endif
 # endif
@@ -1658,14 +1789,14 @@ contains
 # ifndef OBC_SOUTH
     if (SOUTHERN_EDGE) then
       do i=istr,iend
-        vbar(i,jstr,knew) = 0._8
+        vbar(i,jstr,kn) = 0._8
       enddo
     endif
 # endif
 # ifndef OBC_NORTH
     if (NORTHERN_EDGE) then
       do i=istr,iend
-        vbar(i,jend+1,knew) = 0._8
+        vbar(i,jend+1,kn) = 0._8
       enddo
     endif
 # endif
@@ -1680,11 +1811,11 @@ contains
         m = umask(istr,j)
 #   endif
 #   ifdef OBC_M2SPECIFIED
-        ubar(istr,j,knew) = m*ubar_west(j)
+        ubar(istr,j,kn) = m*ubar_west(j)
 #   else
-        dfn = 0.5_8*(h(istr-1,j)+zeta(istr-1,j,kstp)+h(istr,j)+zeta(istr,j,kstp))
-        ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,knew) - zeta_west(j)) )
-        ubar(istr,j,knew) = 2._8*ub/((wd(istr-1,j)+wd(istr,j))*dn_u(istr,j))
+        dfn = 0.5_8*(h(istr-1,j)+zeta(istr-1,j,ks)+h(istr,j)+zeta(istr,j,ks))
+        ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,kn) - zeta_west(j)) )
+        ubar(istr,j,kn) = 2._8*ub/((wd(istr-1,j)+wd(istr,j))*dn_u(istr,j))
 #   endif
       enddo
     endif
@@ -1697,11 +1828,11 @@ contains
         m = umask(iend+1,j)
 #   endif
 #   ifdef OBC_M2SPECIFIED
-        ubar(iend+1,j,knew) = m*ubar_east(j)
+        ubar(iend+1,j,kn) = m*ubar_east(j)
 #   else
-        dfn = 0.5_8*(h(iend,j)+zeta(iend,j,kstp)+h(iend+1,j)+zeta(iend+1,j,kstp))
-        ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,knew) - zeta_east(j)) )
-        ubar(iend+1,j,knew) = 2._8*ub/((wd(iend,j)+wd(iend+1,j))*dn_u(iend+1,j))
+        dfn = 0.5_8*(h(iend,j)+zeta(iend,j,ks)+h(iend+1,j)+zeta(iend+1,j,ks))
+        ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,kn) - zeta_east(j)) )
+        ubar(iend+1,j,kn) = 2._8*ub/((wd(iend,j)+wd(iend+1,j))*dn_u(iend+1,j))
 #   endif
       enddo
     endif
@@ -1716,11 +1847,11 @@ contains
         m = vmask(i,jstr)
 #   endif
 #   ifdef OBC_M2SPECIFIED
-        vbar(i,jstr,knew) = m*vbar_south(i)
+        vbar(i,jstr,kn) = m*vbar_south(i)
 #   else
-        dfn = 0.5_8*(h(i,jstr-1)+zeta(i,jstr-1,kstp)+h(i,jstr)+zeta(i,jstr,kstp))
-        ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,knew) - zeta_south(i)) )
-        vbar(i,jstr,knew) = 2._8*ub/((wd(i,jstr-1)+wd(i,jstr))*dm_v(i,jstr))
+        dfn = 0.5_8*(h(i,jstr-1)+zeta(i,jstr-1,ks)+h(i,jstr)+zeta(i,jstr,ks))
+        ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,kn) - zeta_south(i)) )
+        vbar(i,jstr,kn) = 2._8*ub/((wd(i,jstr-1)+wd(i,jstr))*dm_v(i,jstr))
 #   endif
       enddo
     endif
@@ -1733,11 +1864,11 @@ contains
         m = vmask(i,jend+1)
 #   endif
 #   ifdef OBC_M2SPECIFIED
-        vbar(i,jend+1,knew) = m*vbar_north(i)
+        vbar(i,jend+1,kn) = m*vbar_north(i)
 #   else
-        dfn = 0.5_8*(h(i,jend)+zeta(i,jend,kstp)+h(i,jend+1)+zeta(i,jend+1,kstp))
-        ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,knew) - zeta_north(i)) )
-        vbar(i,jend+1,knew) = 2._8*ub/((wd(i,jend)+wd(i,jend+1))*dm_v(i,jend+1))
+        dfn = 0.5_8*(h(i,jend)+zeta(i,jend,ks)+h(i,jend+1)+zeta(i,jend+1,ks))
+        ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,kn) - zeta_north(i)) )
+        vbar(i,jend+1,kn) = 2._8*ub/((wd(i,jend)+wd(i,jend+1))*dm_v(i,jend+1))
 #   endif
       enddo
     endif
@@ -2233,6 +2364,13 @@ contains
     implicit none
     real(kind=8) :: loc, glob
     integer(kind=4) :: ierr
+    if (fs_nsub > 1) then                   ! sub-steps: iterations summed over the step (and the largest of one
+      ! sub-step), the worst residual, the largest increment of a sub-step
+      call mpi_allreduce(dz_max, glob, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+      if (mynode == 0) write(*,'(1x,A,I8,A,I6,A,ES10.3,A,ES11.4,A,I2,A,I6)') 'FS_SOLVE', iic, ' its', its_sum,&
+      &  ' rel_res', res_max, ' max|dzeta|', glob, ' sub-steps', fs_nsub, ' max its', its_max
+      return
+    end if
     loc = maxval(abs(xx(ib0:ib1,jb0:jb1)))
     call mpi_allreduce(loc, glob, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
     if (mynode == 0) write(*,'(1x,A,I8,A,I6,A,ES10.3,A,ES11.4)') 'FS_SOLVE', iic, ' its', its_last,&
@@ -2254,12 +2392,13 @@ contains
     if (mynode == 0) then
       write(*,'(1x,A,I7,A,F9.2,A,I6)') 'FS_STAT solves', n_solve, ' mean its', real(n_its,8)/max(n_solve,1),&
       &  ' unconverged', n_unconv
-      write(*,'(1x,A,I6,A)') 'FS_COST [ms per step, max rank over', n_solve, ' steps]:'
+      if (fs_nsub > 1) write(*,'(1x,A,I7,A,I2,A)') 'FS_STAT steps', n_step, ' (', fs_nsub, ' sub-steps each)'
+      write(*,'(1x,A,I6,A)') 'FS_COST [ms per step, max rank over', n_step, ' steps]:'
       do i=1,ntm
-        write(*,'(1x,A,1x,A12,F9.3)') 'FS_COST', tm_name(i), 1.e3_8*g(i)/max(n_solve,1)
+        write(*,'(1x,A,1x,A12,F9.3)') 'FS_COST', tm_name(i), 1.e3_8*g(i)/max(n_step,1)
       enddo
-      write(*,'(1x,A,1x,A12,F9.3)') 'FS_COST', 'SUM', 1.e3_8*sum(g)/max(n_solve,1)
-      write(*,'(1x,A,1x,A12,F9.3)') 'FS_COST', 'TOTAL', 1.e3_8*gt(1)/max(n_solve,1)
+      write(*,'(1x,A,1x,A12,F9.3)') 'FS_COST', 'SUM', 1.e3_8*sum(g)/max(n_step,1)
+      write(*,'(1x,A,1x,A12,F9.3)') 'FS_COST', 'TOTAL', 1.e3_8*gt(1)/max(n_step,1)
     end if
     if (mg_on .and. mg_ready) then
       call mpi_allreduce(tml, gl, size(tml), mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
@@ -2267,7 +2406,7 @@ contains
         write(*,'(1x,A)') 'FS_MGLEV [ms per step, max rank]: level nx ny global smooth exch transfer'
         do i=0,mg_lc
           write(*,'(1x,A,I3,2I6,1x,L1,3F9.3)') 'FS_MGLEV', i, mg_nx(i), mg_ny(i), mg_glob(i),&
-          &  1.e3_8*gl(i,1:3)/max(n_solve,1)
+          &  1.e3_8*gl(i,1:3)/max(n_step,1)
         enddo
       end if
     end if

@@ -36,6 +36,25 @@ Coriolis is explicit (through `rufrc`). To keep the generalized-alpha memory fro
 
 The predictor's barotropic transport (`set_HUV1` through `DU_avg_bak`) is the extrapolation `1.5 U^n - 0.5 U^{n-1}`.
 
+### Sub-steps (`fs_nsub`)
+
+With `fs_nsub = N` (1 to 4, default 1) the barotropic mode takes `N` implicit steps of length `dt/N` per baroclinic step instead of one. Each sub-step is the step described above, started from the previous sub-step's free surface and transports; the 3-D forcing `rufrc`, `rvfrc` is held over the baroclinic step (as the split loop holds it over its fast steps), and sub-steps after the first add the pressure gradient of their own free-surface change since `n` (`rufrc` contains the pressure gradient of `zeta^n`). The generalized-alpha rates are carried from sub-step to sub-step. The 3-D step receives `DU_avg1` = the transport of the last sub-step and `DU_avg2` = the mean flux of the sub-steps, so the free surface still changes by exactly `dt` times the divergence of `DU_avg2` plus the sources.
+
+The phase and amplitude errors of resolved barotropic waves fall by about the square of `N` in a linear model of the step (one Fourier mode of a non-rotating gravity wave, 900 s step; period error / amplitude lost per period):
+
+| steps per period | `r = 0` | `r = 0`, `N = 2` | `r = 0.5` | `r = 0.5`, `N = 2` |
+|---|---|---|---|---|
+| 50 (M2 at `dt` = 900 s) | 0.52 % / 0.30 % | 0.13 % / 0.04 % | 0.18 % / 0.01 % | 0.04 % / 0.00 % |
+| 25 (M4) | 2.0 % / 2.1 % | 0.52 % / 0.30 % | 0.70 % / 0.09 % | 0.18 % / 0.01 % |
+
+The model has no rotation. In the sub-steps only the free-surface pressure gradient and the Coriolis estimate kept out of the memory follow the sub-step's state; the rest of the Coriolis force stays in the held `rufrc`, so for rotation-modified tides the gain is smaller than the table suggests (on a 900 s Pacific configuration with `r = 0.5` the M2 phase error against a reference fell by roughly a factor 2-3).
+
+Unresolved fast modes are still damped (per baroclinic step, `r = 0.5`: amplitude factor 0.34 with `N = 2` against 0.56 with one step), and the response to a forcing that alternates every baroclinic step is smaller than with one step (0.6 against 3 times the quasi-static response at `r = 0.5`). Waves of a few hours' period are damped less than with one step, so a configuration that relies on that damping can behave differently.
+
+Because `rufrc` is held over the step, the forcing times move with `N`: the tidal potential (`fs_pot_time = 'af'`) and the shifted surface stress (`fs_stress_time = 'af'`) are taken at `n + s dt` with `s = (alpha_f + (N - 1)/2) / N`, the mean of the sub-steps' own forcing times (`r = 0`, `N = 2`: `s = 0.75`; `r = 0.5`, `N = 2`: `s = 0.583`). The boundary data are likewise held over the step: the boundary tidal harmonics, which the single step takes at `n+1` (the end of the step), are evaluated at `n + (N + 1)/(2N) dt`, the mean of the sub-steps' end times (0.75 for `N = 2`); held at `n+1` they would make the boundary-forced tide lead by about `dt/4`. Other boundary data (from the boundary files) stay at `n+1`, i.e. they are applied `(N - 1)/(2N) dt` early (`dt/4` for `N = 2`), which is negligible against the interval of the boundary files. `N = 1` gives `s = alpha_f` and the harmonics at `n+1`, and is bit-for-bit the single step.
+
+Cost: one elliptic solve per sub-step, so the barotropic step costs about `N` times as much (the multigrid coarse operators are rebuilt every `fs_mg_lag` solves). Where the 3-D step dominates, as in realistic domains, the total cost rises by a few percent.
+
 ## 3. Elliptic solver
 
 The free-surface increment `delta = zeta^{n+1} - zeta^n` satisfies a symmetric positive-definite five-point Helmholtz equation on the active cells. It is solved by preconditioned conjugate gradients (one halo exchange and two global reductions per iteration), started from the previous step's increment (`fs_warm = 1`) and stopped when the area-weighted residual has fallen by `fs_tol` relative to the right-hand side, or after `fs_maxit` iterations (counted, the run continues). The momentum and the free surface are then updated from the solution; the free surface uses the exact divergence of the final fluxes, so the volume budget does not depend on `fs_tol`.
@@ -53,7 +72,7 @@ Preconditioners (`fs_precond`):
 - **Open edges** (`OBC_WEST`, ... with `M2_FRC_BRY` and `Z_FRC_BRY`, which the implicit step requires): with `OBC_M2FLATHER` the normal transport is a Flather condition on the flux that advances the free surface, `U_b = D dn ubar_ext + s c_b (zeta_int - zeta_ext)` with `c_b = D dn sqrt(g/h)`, treated implicitly (a Robin term of the elliptic equation). `OBC_M2ORLANSKI` and open edges without an `OBC_M2` type use the same Flather form (a note is printed). `OBC_M2SPECIFIED` prescribes the transport. The boundary transport carries the generalized-alpha memory, so the external data enter at the scheme's forcing time.
 - **Free surface on open edges**: backward-Euler upwind radiation (the implicit form of `zetabc`).
 - **Tangential velocities on open edges**: the backward-Euler form of the split mode's condition (upwind advection by the normal flow, nudging to the external data on inflow, rate scaled by `fs_tang_nudge`).
-- **Tides at the boundary**: with the implicit free surface the boundary tidal harmonics are evaluated at `n+1` (the split loop uses `n+1/2`, the centre of its fast-step interval).
+- **Tides at the boundary**: with the implicit free surface the boundary tidal harmonics are evaluated at `n+1` (the split loop uses `n+1/2`, the centre of its fast-step interval); with `fs_nsub > 1` at the mean of the sub-steps' end times (section 2).
 
 ## 5. Volume sources
 
@@ -63,19 +82,19 @@ With `fs_verbose >= 2` the `FS_VOL` line reports each step's global volume budge
 
 ## 6. Restarts
 
-With `fs_mode = 'implicit'` the restart file also holds the generalized-alpha rates (`fs_udu`, `fs_udv`, `fs_gru`, `fs_grv`, `fs_qd`), the last increment (`fs_delta`, the solver's warm start), a set of scalars (`fs_rst_scal`) and, with `fs_mg_lag > 1`, the fine operator of the last coarse-operator build (`fs_mge0`, `fs_mgcu`, `fs_mgcv`). A restarted run then reproduces the continuous run bit for bit. Split-mode restart files are unchanged.
+With `fs_mode = 'implicit'` the restart file also holds the generalized-alpha rates (`fs_udu`, `fs_udv`, `fs_gru`, `fs_grv`, `fs_qd`), the last increment (`fs_delta`, the solver's warm start), a set of scalars (`fs_rst_scal`, including `fs_nsub`) and, with `fs_mg_lag > 1`, the fine operator of the last coarse-operator build (`fs_mge0`, `fs_mgcu`, `fs_mgcv`). A restarted run then reproduces the continuous run bit for bit. Split-mode restart files are unchanged.
 
-A run can start from a restart file without these variables (a split-mode run's file, or an initial file): the first implicit step then starts the memory with `beta1 = 1`. A change of `fs_mg_lag` across a restart is allowed and is logged; the restart is then not exact. A restart file written by a development version with another momentum memory (`fs_mom_mem = 'all'` or `'pg'`, recorded in `fs_rst_scal`) is read as such a cold start of the memory, with a log line.
+A run can start from a restart file without these variables (a split-mode run's file, or an initial file): the first implicit step then starts the memory with `beta1 = 1`. A change of `fs_mg_lag` or of `fs_nsub` across a restart is allowed and is logged; the restart is then not exact. A restart file written by a development version with another momentum memory (`fs_mom_mem = 'all'` or `'pg'`, recorded in `fs_rst_scal`) is read as such a cold start of the memory, with a log line.
 
 ## 7. Diagnostics
 
 | Line | When | Content |
 |------|------|---------|
 | `IMPLICIT_FS ...` | startup | settings, scheme coefficients, multigrid layout |
-| `FS_SOLVE` | `fs_verbose >= 1`, every step | iterations, relative residual, max `abs(delta)` |
-| `FS_VOL` | `fs_verbose >= 2`, every step | volume change, `dt` x (sources + inflow), relative error, volume |
+| `FS_SOLVE` | `fs_verbose >= 1`, every step | iterations, relative residual, max `abs(delta)` (with `fs_nsub > 1`: iterations summed over the sub-steps, the worst residual, the largest sub-step increment, and the most iterations of one sub-step) |
+| `FS_VOL` | `fs_verbose >= 2`, every step | volume change, `dt` x (sources + inflow), relative error, volume (of the whole baroclinic step) |
 | `FS_SRC`, `FS_WALL` | `fs_verbose >= 2`, every step | source volumes; largest velocity on closed and masked faces |
-| `FS_STAT`, `FS_COST`, `FS_MGLEV` | end of run | solves, mean iterations, unconverged solves; cost by piece and by multigrid level (ms per step, slowest rank) |
+| `FS_STAT`, `FS_COST`, `FS_MGLEV` | end of run | solves, mean iterations per solve, unconverged solves; cost by piece and by multigrid level (ms per baroclinic step, slowest rank) |
 
 `fs_selftest = 1` solves a manufactured problem with the first step's operator and a point volume source at startup (`FS_TEST` lines).
 

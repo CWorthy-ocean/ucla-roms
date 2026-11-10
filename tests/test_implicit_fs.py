@@ -57,14 +57,16 @@ def test_implicit_fs_real(implicit_fs_configuration, input_dir, tmp_path, refere
     assert_output_matches_reference(reference_results, "implicit_fs_real", {"physics": pv})
 
 
-def test_implicit_fs_exact_restart(implicit_fs_configuration, input_dir, tmp_path):
+@pytest.mark.parametrize("fs_nsub, fs_mg_lag", [(1, 4), (2, 3)], ids=["single_step", "two_sub_steps"])
+def test_implicit_fs_exact_restart(implicit_fs_configuration, input_dir, tmp_path, fs_nsub, fs_mg_lag):
     """A restart reproduces the continuous run bit for bit with the implicit free surface.
 
-    The restart after step 10 falls inside a period of the coarse-operator
-    rebuild (fs_mg_lag = 4), so the restart file's multigrid operator is used.
+    The restart after step 10 (10 or 20 solves) falls inside a period of the
+    coarse-operator rebuild (fs_mg_lag = 4 or 3), so the restart file's
+    multigrid operator is used. fs_nsub = 2: two implicit sub-steps per step.
     """
     conf = implicit_fs_configuration
-    nml = implicit_fs_namelist(input_dir, fs_mg_lag=4)
+    nml = implicit_fs_namelist(input_dir, fs_mg_lag=fs_mg_lag, fs_nsub=fs_nsub)
     nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
     nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})
 
