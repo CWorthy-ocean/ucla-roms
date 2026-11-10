@@ -9,7 +9,8 @@ module sponge_tune
   use namelist_open_mod, only: open_namelist_file
   use netcdf, only:&
   &nf90_noerr, nf90_write, nf90_inq_varid,&
-  &nf90_open, nf90_put_att, nf90_close
+  &nf90_open, nf90_put_att, nf90_close,&
+  &nf90_redef, nf90_enddef
   use nc_read_write, only: nccreate, ncread, ncwrite
   use scalars, only: iic, tdays, time, dt
   use dimensions, only: nx, ny, xi_rho, npx, npy
@@ -365,8 +366,10 @@ contains
     navg = navg +1
 
     coef = 1._8/navg
+    ! without sponge_avg the output holds the values of the output step
+    if (.not.sponge_avg) coef = 1._8
 
-    if (sponge_avg) then
+    if (wrt_sponge) then
       if (obc_south.and.jnode.eq.0) then
         cflx_south_avg = cflx_south_avg*(1-coef) + cflx_south*coef
         pflx_south_avg = pflx_south_avg*(1-coef) + pflx_south*coef
@@ -498,6 +501,7 @@ contains
     call create_file('_spn',fname,nonode=.true.)
 
     ierr=nf90_open(fname,nf90_write,ncid)
+    ierr=nf90_redef(ncid)   ! classic CDF-5 under PARALLEL_IO enforces define mode
 
     varid = nccreate(ncid,'cf_south',(/dn_xr,dn_tm/),(/ds_xr,0/))
     ierr = nf90_put_att(ncid,varid,'long_name'&
@@ -529,12 +533,14 @@ contains
     &,'West boundary binding velocity')
     ierr = nf90_put_att(ncid,varid,'units','m/s' )
 
+    ierr = nf90_enddef(ncid)
     ierr = nf90_close(ncid)
     endif
 #else
     call create_file('_spn',fname)
 
     ierr=nf90_open(fname,nf90_write,ncid)
+    ierr=nf90_redef(ncid)   ! as above (netCDF-4 would also switch on its own)
 
     varid = nccreate(ncid,'cf_south',(/dn_xr,dn_tm/),(/xi_rho,0/))
     ierr = nf90_put_att(ncid,varid,'long_name'&
@@ -566,6 +572,7 @@ contains
     &,'West boundary binding velocity')
     ierr = nf90_put_att(ncid,varid,'units','m/s' )
 
+    ierr = nf90_enddef(ncid)
     ierr = nf90_close(ncid)
 #endif ! PARALLEL_IO
 
