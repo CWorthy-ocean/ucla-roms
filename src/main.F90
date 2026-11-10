@@ -708,13 +708,13 @@ contains
     call diag  ! log file output of global norms
     call reg_toc(rg_avg_diag)
 
+    call reg_tic(rg_output)
 #ifdef SPONGE_TUNE
     ! Before the outputs, so that a restart holds the coefficients that
     ! the next step uses and a restarted run continues exactly
     if (ub_tune)    call adjust_orlanski
 #endif
 
-    call reg_tic(rg_output)
     call wrt_his_ocean_vars
     call wrt_rst_ocean_vars
     call wrt_avg_ocean_vars
