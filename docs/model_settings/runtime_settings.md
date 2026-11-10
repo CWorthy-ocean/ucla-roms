@@ -353,7 +353,7 @@ These settings control the carbonate sensitivities (beta = dDIC/dCO2, eta = dDIC
 | Setting | Description |
 |--------|-------------|
 | `cdr_online_carbonate_sensitivity` | If `.true.`, compute the sensitivities every step from the model's ALT_CO2 (no-CDR) surface state; this needs MARBL, and with `PCO2AIR_FORCING` the forcing files' `xco2_air_alt` must equal `xco2_air`. If `.false.` (default), read `ddic_dco2` and `ddic_dalk` from `frcfiles` (for example a `CDR_GAS_EXCH_OUTPUT_SETTINGS` file from another run). |
-| `cdr_carbonate_sensitivity_time_interpolation` | For sensitivities read from `frcfiles`: interpolate linearly in time between records if `.true.` (default), or hold each record until the next one starts if `.false.` |
+| `cdr_carbonate_sensitivity_time_interpolation` | For sensitivities read from `frcfiles`: interpolate linearly in time between records if `.true.` (default), or hold each record until the next one starts if `.false.`. A record with `ddic_dco2` <= 0 at a cell (the 0 that `CDR_GAS_EXCH_OUTPUT_SETTINGS` files hold where the carbonate solve failed) means no gas exchange there; next to such a record the flux coefficients 1/beta and eta/beta are interpolated with 0 for it (beta = beta/w and eta of the other record, w its weight), so the gas flux ramps linearly to zero |
 
 The surface-flux variables `CDR_OAE_DIC<n>_flx` and `CDR_DOR_DIC<n>_flx` in the forcing files are optional: without them, a tracer's only surface flux is the air-sea gas exchange.
 

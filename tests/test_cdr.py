@@ -609,6 +609,133 @@ class TestCdrLite:
         # The switch acts: holding and interpolating the same records differ
         assert not np.array_equal(hold["FG_CDR_OAE_DIC1"], interp["FG_CDR_OAE_DIC1"])
 
+    def test_missing_sensitivity_record(
+        self, tmp_path, cdr_lite_conf, input_dir, cdrgas_run
+    ):
+        """Next to a missing ``ddic_*`` record (0), the gas flux ramps to zero.
+
+        ``cdr_gas_exch_output`` writes 0 where the carbonate solve failed, and
+        the gas flux -(k/beta)*(DIC' - eta*ALK') treats beta <= 0 as no gas
+        exchange. Interpolating beta itself toward such a record would shrink
+        it to w*beta (w = the valid record's weight) and blow k/beta up by
+        1/w; the reader interpolates the flux coefficients 1/beta and
+        eta/beta instead, so the flux scales with w.
+
+        The release puts DIC as well as ALK into the paired tracers, so
+        DIC' - eta*ALK' is not small against DIC' and the flux shows both
+        coefficients (with ALK alone, DIC' ~ 0 and the two errors of
+        interpolating beta and eta cancel). The ``_cdrgas`` records are retimed to 0, 120, 320, 520, 720 and 800 s
+        and the 120, 320 and 520 s records all get the 120 s values (run
+        ``valid``); run ``missing`` has 0 at 320 s everywhere. Before 120 s
+        the two runs are bit-identical; from 120 to 520 s the ratio of their
+        fluxes is the valid record's weight at the flux time (n + 1/2), up to
+        the small change of the tracers that the flux difference causes. The
+        ``missing`` run restarted at 320 s, on the missing record, must
+        reproduce its last 12 records bit for bit. Checked directly, so the
+        test needs no reference.
+        """
+        pieces = sorted(cdrgas_run.glob("roms_cdrgas.20100101000000.?.nc"))
+        assert len(pieces) == 4
+        rec_s = np.array([0, 120, 320, 520, 720, 800])
+
+        with xr.open_dataset(input_dir / "cdr_forcing_parm_cdr_lite.nc") as ds:
+            ds = ds.load()
+        flx = ds["cdr_trcflx"]
+        assert (flx.isel(nt=3) == 0).all() and (flx.isel(nt=2) > 0).all()
+        flx[{"nt": 3}] = flx.isel(nt=2)  # DIC1 as ALK1 (rows: T, S, ALK1, DIC1)
+        cdr_file = tmp_path / "cdr_forcing_parm_alk_dic.nc"
+        ds.to_netcdf(cdr_file)
+
+        def write_pieces(run_dir, missing):
+            run_dir.mkdir()
+            for piece in pieces:
+                with xr.open_dataset(
+                    piece, decode_times=False, decode_timedelta=False
+                ) as ds:
+                    ds = ds.load()
+                t0 = ds["ocean_time"].values[0]
+                for var in ("ddic_dco2", "ddic_dalk"):
+                    tdim = ds[var].dims[0]
+                    assert ds.sizes[tdim] == rec_s.size
+                    ds[f"{var}_time"].values[:] = (t0 + rec_s) * (1 / 86400)
+                    first = ds[var].isel({tdim: 1}).values
+                    for k in (1, 2, 3):
+                        ds[var].values[k] = first
+                    if missing:
+                        ds[var].values[2] = 0
+                ds.to_netcdf(run_dir / piece.name)
+
+        def nml_for(restart):
+            nml = _cdr_lite_parm_nml(input_dir)
+            nml["CDR_FRC_SETTINGS"]["cdr_file"] = str(cdr_file)
+            nml["CDR_LITE_OUTPUT_SETTINGS"].update({
+                "output_period_cdr_lite": 40,
+                "nrpf_cdr_lite": 8,
+            })
+            if restart:
+                # every output file must end at a restart (precheck)
+                nml["BASIC_OUTPUT_SETTINGS"].update({
+                    "wrt_file_rst": True,
+                    "output_period_rst": 320,
+                    "output_period_his": 320,
+                    "nrpf_his": 1,
+                })
+                nml["SPONGE_TUNE_SETTINGS"].update({
+                    "output_period_sponge": 320,
+                    "nrpf_sponge": 1,
+                })
+            return nml
+
+        def fluxes(run_dir):
+            ds = _joined_records(run_dir, "cdrtrc")
+            return ds["ocean_time"].values, ds["FG_CDR_OAE_DIC1"].values
+
+        valid = tmp_path / "valid"
+        write_pieces(valid, missing=False)
+        cdr_lite_conf.run(nml_for(restart=False), cwd=valid)
+        missing = tmp_path / "missing"
+        write_pieces(missing, missing=True)
+        cdr_lite_conf.run(nml_for(restart=True), cwd=missing)
+
+        t_out, fg_valid = fluxes(valid)
+        t_miss, fg_missing = fluxes(missing)
+        np.testing.assert_array_equal(t_out, t_miss)
+        step_end = t_out - t_out[0] + 40  # 40, 80, ... 800 s
+        np.testing.assert_array_equal(step_end, 40 * np.arange(1, 21))
+        assert np.isfinite(fg_missing).all()
+
+        before = step_end <= 120
+        np.testing.assert_array_equal(fg_missing[before], fg_valid[before])
+
+        # valid record's weight at the flux time, 20 s before each record
+        t_flx = step_end - 20
+        weight = np.where(t_flx < 320, (320 - t_flx) / 200, (t_flx - 320) / 200)
+        ramp = (t_flx > 120) & (t_flx < 520)
+        strong = np.abs(fg_valid) > 1e-3 * np.abs(fg_valid).max()
+        checked = 0
+        for n in np.flatnonzero(ramp):
+            cells = strong[n]
+            ratio = fg_missing[n][cells] / fg_valid[n][cells]
+            np.testing.assert_allclose(
+                ratio, weight[n], atol=0.01, err_msg=f"at {step_end[n]} s"
+            )
+            checked += cells.sum()
+        assert checked >= 30
+
+        # restart on the missing record
+        restarted = tmp_path / "restarted"
+        write_pieces(restarted, missing=True)
+        assert (missing / "roms_rst.20100101000520.0.nc").exists()
+        nml = nml_for(restart=True)
+        nml["INITIAL_CONDITIONS"]["inifile"] = str(
+            missing / "roms_rst.20100101000520.nc"
+        )
+        nml["TIME_STEPPING"]["ntimes"] = 12
+        cdr_lite_conf.run(nml, cwd=restarted)
+        t_rst, fg_rst = fluxes(restarted)
+        np.testing.assert_array_equal(t_rst, t_miss[-12:])
+        np.testing.assert_array_equal(fg_rst, fg_missing[-12:])
+
     def test_dp_by_name_conserves_flux(
         self, tmp_path, cdr_lite_conf, input_dir, cdrgas_run
     ):
