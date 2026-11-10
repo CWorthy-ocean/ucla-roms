@@ -119,15 +119,21 @@ else       !--> standard code applies for T,S
     enddo           !--> discard curv,grad, keep FX
   enddo
 
-! Inflow faces of open boundaries: first-order upwind with the ghost
-! (boundary-data) value.  The edge slope is extrapolated above, so the
-! ghost curvature is zero and on inflow the UP3 (corrector) face value
-! degenerates to the centred 0.5*(g + c_N): every inflow would carry
-! half of the domain's own boundary-cell concentration back in.  Adding
-! 0.5*(g - c_N)*Q on inflow faces (FlxU > 0 west, < 0 east) makes the
-! corrector flux g*Q, and the C4 predictor flux (11/12 g + 1/6 c_N
-! - 1/12 c_N-1)*Q.  Outflow faces keep the scheme's flux.  Open-boundary
-! sides only (as in t3dbc): never at a periodic seam or a wall.
+! Inflow faces of open boundaries: upwind with the ghost-cell value.
+! Below, g is the ghost cell and c1, c2 are the first and second
+! interior cells.  The edge slope is extrapolated above, so the ghost
+! curvature is zero and on inflow the UP3 face value (UPSTREAM_TS, the
+! default corrector) degenerates to the centered 0.5*(g + c1): every
+! inflow would carry half of the domain's own boundary-cell
+! concentration back in.  Adding 0.5*(g - c1)*Q on inflow faces
+! (FlxU > 0 west, < 0 east) makes the UP3 flux g*Q, first-order upwind.
+! The C4 flux (the predictor, and the corrector under ADV_ISONEUTRAL)
+! becomes (11/12 g + 1/6 c1 - 1/12 c2)*Q; AKIMA gives other weights.
+! g is what t3dbc left in the ghost cell: on inflow, OBC_TORLANSKI with
+! T_FRC_BRY relaxes it toward the boundary data by the Courant number
+! each step, and OBC_TSPECIFIED sets it to the data.  Outflow faces
+! keep the scheme's flux.  Open-boundary sides only (as in t3dbc):
+! never at a periodic seam or a wall.
 #ifndef EW_PERIODIC
 # ifdef OBC_WEST
   if (WESTERN_EDGE) then

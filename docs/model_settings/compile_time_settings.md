@@ -77,7 +77,7 @@ These switches control the numerical schemes used by the model for tracer advect
 
 These switches control the configuration of the open boundaries, including which sides are open and which schemes are used to apply forcing and allow waves to exit.
 
-Tracer advection through an open-boundary face is first-order upwind on inflow: the face takes the boundary (ghost-cell) value, so incoming water carries the boundary data rather than a centred average of the boundary data and the first interior cell. Outflow faces use the interior advection scheme. This needs no key and applies to every tracer on every open side.
+Tracer advection through an open-boundary face is upwind on inflow: the corrector step uses the ghost-cell value, which the tracer boundary condition relaxes toward the boundary data while water flows in (`OBC_TORLANSKI` with `T_FRC_BRY`) or sets to the boundary data (`OBC_TSPECIFIED`). Outflow faces use the interior advection scheme. This needs no key and applies to every tracer on every open side.
 
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
