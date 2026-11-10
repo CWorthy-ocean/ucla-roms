@@ -15,10 +15,11 @@ module sponge_tune
   use dimensions, only: nx, ny, xi_rho, npx, npy
   use calc_pflx_mod, only: up, vp
   use roms_read_write, only:&
-  &ncforce, bfx, bfy, dn_tm, dn_xr,&
+  &ncforce, dn_tm, dn_xr,&
   &dn_yr, bc_options, create_file, set_frc_data,&
   &store_string_att
   use dimensions, only: inode, jnode, ds_xr
+  use dimensions, only: i0, i1, j0, j1
   use param, only: max_name_size
   use param, only:&
   &obc_east, obc_north, obc_south, obc_west,&
@@ -129,65 +130,70 @@ contains
 
     ! Allocate on all ranks, not just boundary-adjacent ones: under
     ! PARALLEL_IO every rank participates in the collective boundary
-    ! reads/writes (with zero-count contributions away from the edge)
+    ! reads/writes (with zero-count contributions away from the edge).
+    ! The arrays span the tile's rho points, j0:j1 (west/east) and i0:i1
+    ! (south/north), as the boundary data in the files do: on the first
+    ! and last tile of an edge they include the corner point, which the
+    ! tuning does not use and keeps at 0. PIO's boundary decompositions
+    ! (w1rr, s1rw, ...) and the per-rank files have this extent.
     if (obc_west) then
-      allocate(nc_pflx_w%vdata(ny,1,2))
+      allocate(nc_pflx_w%vdata(j0:j1,1,2))
       nc_pflx_w%vdata = 0
-      allocate(pflx_west(ny))
+      allocate(pflx_west(j0:j1))
       pflx_west = 0
-      allocate(pflx_west_avg(ny))
+      allocate(pflx_west_avg(j0:j1))
       pflx_west_avg = 0
-      allocate(cflx_west(ny))
+      allocate(cflx_west(j0:j1))
       cflx_west = 0
-      allocate(cflx_west_avg(ny))
+      allocate(cflx_west_avg(j0:j1))
       cflx_west_avg = 0
       if (.not.allocated(ub_west)) then
-        allocate(ub_west(ny))
+        allocate(ub_west(j0:j1))
         ub_west = 0._8
       endif
-      allocate(ub_west_avg(ny))
+      allocate(ub_west_avg(j0:j1))
       ub_west_avg = 0._8
     endif
     if (obc_east) then
-      allocate(nc_pflx_e%vdata(ny,1,2))
+      allocate(nc_pflx_e%vdata(j0:j1,1,2))
       nc_pflx_e%vdata = 0
-      allocate(pflx_east(ny))
+      allocate(pflx_east(j0:j1))
       pflx_east = 0
-      allocate(cflx_east(ny))
+      allocate(cflx_east(j0:j1))
       cflx_east = 0
       if (.not.allocated(ub_east)) then
-        allocate(ub_east(ny))
+        allocate(ub_east(j0:j1))
         ub_east = 0._8
       endif
     endif
     if (obc_north) then
-      allocate(nc_pflx_n%vdata(nx,1,2))
+      allocate(nc_pflx_n%vdata(i0:i1,1,2))
       nc_pflx_n%vdata = 0
-      allocate(pflx_north(nx))
+      allocate(pflx_north(i0:i1))
       pflx_north = 0
-      allocate(cflx_north(nx))
+      allocate(cflx_north(i0:i1))
       cflx_north = 0
       if (.not.allocated(ub_north)) then
-        allocate(ub_north(nx))
+        allocate(ub_north(i0:i1))
         ub_north = 0._8
       endif
     endif
     if (obc_south) then
-      allocate(nc_pflx_s%vdata(nx,1,2))
+      allocate(nc_pflx_s%vdata(i0:i1,1,2))
       nc_pflx_s%vdata = 0
-      allocate(pflx_south(nx))
+      allocate(pflx_south(i0:i1))
       pflx_south = 0
-      allocate(pflx_south_avg(nx))
+      allocate(pflx_south_avg(i0:i1))
       pflx_south_avg = 0
-      allocate(cflx_south(nx))
+      allocate(cflx_south(i0:i1))
       cflx_south = 0
-      allocate(cflx_south_avg(nx))
+      allocate(cflx_south_avg(i0:i1))
       cflx_south_avg = 0
       if (.not.allocated(ub_south)) then
-        allocate(ub_south(nx))
+        allocate(ub_south(i0:i1))
         ub_south = 0._8
       endif
-      allocate(ub_south_avg(nx))
+      allocate(ub_south_avg(i0:i1))
       ub_south_avg = 0
     endif
 
@@ -216,6 +222,7 @@ contains
     &) then
       pio_gtype = 'w1rr'
       call set_frc_data(nc_pflx_w,pflx_west)
+      call zero_corners_eta(pflx_west)
       do j=1,ny
         if (abs(pflx_west(j))>100) pflx_west(j) = 0._8
       enddo
@@ -227,6 +234,7 @@ contains
     &) then
       pio_gtype = 'e1rr'
       call set_frc_data(nc_pflx_e,pflx_east)
+      call zero_corners_eta(pflx_east)
       do j=1,ny
         if (abs(pflx_east(j))>100) pflx_east(j) = 0._8
       enddo
@@ -238,6 +246,7 @@ contains
     &) then
       pio_gtype = 's1rr'
       call set_frc_data(nc_pflx_s,pflx_south)
+      call zero_corners_xi(pflx_south)
       do i=1,nx
         if (abs(pflx_south(i))>100) pflx_south(i) = 0._8
       enddo
@@ -249,6 +258,7 @@ contains
     &) then
       pio_gtype = 'n1rr'
       call set_frc_data(nc_pflx_n,pflx_north)
+      call zero_corners_xi(pflx_north)
       do i=1,nx
         if (rmask(i,ny+1)<1) pflx_north(i) = 0._8
         if (abs(pflx_north(i))>100) pflx_north(i) = 0._8
@@ -274,16 +284,16 @@ contains
 
     pos = 2
     if (obc_west.and.inode.eq.0) then
-      cflx_west = up(pos,1:ny)
+      cflx_west(1:ny) = up(pos,1:ny)
     endif
     if (obc_east.and.inode.eq.npx-1) then
-      cflx_east = up(nx-pos+1,1:ny)
+      cflx_east(1:ny) = up(nx-pos+1,1:ny)
     endif
     if (obc_south.and.jnode.eq.0) then
-      cflx_south = vp(1:nx,pos)
+      cflx_south(1:nx) = vp(1:nx,pos)
     endif
     if (obc_north.and.jnode.eq.npy-1) then
-      cflx_north = vp(1:nx,ny-pos+1)
+      cflx_north(1:nx) = vp(1:nx,ny-pos+1)
     endif
 
   end subroutine comp_cflx !]
@@ -406,24 +416,24 @@ contains
 
     call pio_open_or_abort(trim(fname), module_name//"/"//sr_name, PIO_write)
 
-    ! fluxes and ub coefficients are defined as nx, ny sized arrays
-    ! so use method 2 for output (see roms_read_write)
+    ! the arrays span the tile's rho points (i0:i1 / j0:j1), as the file's
+    ! xi_rho / eta_rho do, so they are written from the tile's first point
     ! All ranks must call ncwrite: PIO_write_darray is collective and
     ! off-edge ranks participate with zero-count decompositions
     pio_gtype = 's1rw'
     if (obc_south) then
-      call ncwrite(ncid,'cf_south',cflx_south_avg,(/bfx,record /),.true.)
-      call ncwrite(ncid,'pf_south',pflx_south_avg,(/bfx,record /),.true.)
-      call ncwrite(ncid,'ub_south',  ub_south_avg,(/bfx,record /),.true.)
+      call ncwrite(ncid,'cf_south',cflx_south_avg,(/1,record/),.true.)
+      call ncwrite(ncid,'pf_south',pflx_south_avg,(/1,record/),.true.)
+      call ncwrite(ncid,'ub_south',  ub_south_avg,(/1,record/),.true.)
     endif
     if (obc_east.and.(inode==np_xi-1)) then
 !       call ncwrite(ncid,'ub_east',ub_east(j0:j1),(/1,record /))
     endif
     pio_gtype = 'w1rw'
     if (obc_west) then
-      call ncwrite(ncid,'cf_west',cflx_west_avg,(/ bfy,record /),.true.)
-      call ncwrite(ncid,'pf_west',pflx_west_avg,(/ bfy,record /),.true.)
-      call ncwrite(ncid,'ub_west',  ub_west_avg,(/ bfy,record /),.true.)
+      call ncwrite(ncid,'cf_west',cflx_west_avg,(/1,record/),.true.)
+      call ncwrite(ncid,'pf_west',pflx_west_avg,(/1,record/),.true.)
+      call ncwrite(ncid,'ub_west',  ub_west_avg,(/1,record/),.true.)
     endif
 
     call PIO_closefile(pio_FileDesc)
@@ -445,20 +455,20 @@ contains
     call error_log%abort_check()
     call ncwrite(ncid,'ocean_time',(/time/),(/record/))
 
-    ! fluxes and ub coefficients are defined as nx, ny sized arrays
-    ! so use method 2 for output (see roms_read_write)
+    ! the arrays span the tile's rho points (i0:i1 / j0:j1), as the file's
+    ! xi_rho / eta_rho do, so they are written from the tile's first point
     if (obc_south.and.(jnode==0)) then
-      call ncwrite(ncid,'cf_south',cflx_south_avg,(/bfx,record /))
-      call ncwrite(ncid,'pf_south',pflx_south_avg,(/bfx,record /))
-      call ncwrite(ncid,'ub_south',  ub_south_avg,(/bfx,record /))
+      call ncwrite(ncid,'cf_south',cflx_south_avg,(/1,record/))
+      call ncwrite(ncid,'pf_south',pflx_south_avg,(/1,record/))
+      call ncwrite(ncid,'ub_south',  ub_south_avg,(/1,record/))
     endif
     if (obc_east.and.(inode==np_xi-1)) then
 !       call ncwrite(ncid,'ub_east',ub_east(j0:j1),(/1,record /))
     endif
     if (obc_west.and.(inode==0)) then
-      call ncwrite(ncid,'cf_west',cflx_west_avg,(/ bfy,record /))
-      call ncwrite(ncid,'pf_west',pflx_west_avg,(/ bfy,record /))
-      call ncwrite(ncid,'ub_west',  ub_west_avg,(/ bfy,record /))
+      call ncwrite(ncid,'cf_west',cflx_west_avg,(/1,record/))
+      call ncwrite(ncid,'pf_west',pflx_west_avg,(/1,record/))
+      call ncwrite(ncid,'ub_west',  ub_west_avg,(/1,record/))
     endif
 
     ierr=nf90_close(ncid)
@@ -577,32 +587,32 @@ contains
     ! off-edge ranks participate with zero-count decompositions
     pio_gtype = 's1rw'
     if (obc_south) then
-      call ncwrite(ncid,'ub_south',ub_south,(/bfx,record/),.true.)
+      call ncwrite(ncid,'ub_south',ub_south,(/1,record/),.true.)
     endif
     pio_gtype = 'n1rw'
     if (obc_north) then
-      call ncwrite(ncid,'ub_north',ub_north,(/bfx,record/),.true.)
+      call ncwrite(ncid,'ub_north',ub_north,(/1,record/),.true.)
     endif
     pio_gtype = 'e1rw'
     if (obc_east) then
-      call ncwrite(ncid,'ub_east' ,ub_east ,(/bfy,record/),.true.)
+      call ncwrite(ncid,'ub_east' ,ub_east ,(/1,record/),.true.)
     endif
     pio_gtype = 'w1rw'
     if (obc_west) then
-      call ncwrite(ncid,'ub_west' ,ub_west ,(/bfy,record/),.true.)
+      call ncwrite(ncid,'ub_west' ,ub_west ,(/1,record/),.true.)
     endif
 #else
     if (obc_south.and.(jnode==0)) then
-      call ncwrite(ncid,'ub_south',ub_south,(/bfx,record/))
+      call ncwrite(ncid,'ub_south',ub_south,(/1,record/))
     endif
     if (obc_north.and.(jnode==np_eta-1)) then
-      call ncwrite(ncid,'ub_north',ub_north,(/bfx,record/))
+      call ncwrite(ncid,'ub_north',ub_north,(/1,record/))
     endif
     if (obc_east.and.(inode==np_xi-1)) then
-      call ncwrite(ncid,'ub_east' ,ub_east ,(/bfy,record/))
+      call ncwrite(ncid,'ub_east' ,ub_east ,(/1,record/))
     endif
     if (obc_west.and.(inode==0)) then
-      call ncwrite(ncid,'ub_west' ,ub_west ,(/bfy,record/))
+      call ncwrite(ncid,'ub_west' ,ub_west ,(/1,record/))
     endif
 #endif
 
@@ -627,11 +637,13 @@ contains
     &.and.(jnode==0)&
 #endif
     &) then
-      if (.not. allocated(ub_south)) allocate(ub_south(nx))
+      if (.not. allocated(ub_south)) allocate(ub_south(i0:i1))
+      ub_south = 0._8
       ierr=nf90_inq_varid (ncid, 'ub_south', varid)
       if (ierr == nf90_noerr) then
         pio_gtype = 's1rr'
-        call ncread(ncid,'ub_south', ub_south,(/bfx,record/))
+        call ncread(ncid,'ub_south', ub_south,(/1,record/))
+        call zero_corners_xi(ub_south)   ! unused; not written by older versions
       else
         if (mynode==0) print *,'--WARNING: ub_south'&
         &,' not in initial file, setting to zero.'
@@ -643,11 +655,13 @@ contains
     &.and.(jnode==np_eta-1)&
 #endif
     &) then
-      if (.not. allocated(ub_north)) allocate(ub_north(nx))
+      if (.not. allocated(ub_north)) allocate(ub_north(i0:i1))
+      ub_north = 0._8
       ierr=nf90_inq_varid (ncid, 'ub_north', varid)
       if (ierr == nf90_noerr) then
         pio_gtype = 'n1rr'
-        call ncread(ncid,'ub_north', ub_north,(/bfx,record/))
+        call ncread(ncid,'ub_north', ub_north,(/1,record/))
+        call zero_corners_xi(ub_north)   ! unused; not written by older versions
       else
         if (mynode==0) print *,'--WARNING: ub_north'&
         &,' not in initial file, setting to zero.'
@@ -660,11 +674,13 @@ contains
     &.and.(inode==np_xi-1)&
 #endif
     &) then
-      if (.not. allocated(ub_east)) allocate(ub_east(ny))
+      if (.not. allocated(ub_east)) allocate(ub_east(j0:j1))
+      ub_east = 0._8
       ierr=nf90_inq_varid (ncid, 'ub_east', varid)
       if (ierr == nf90_noerr) then
         pio_gtype = 'e1rr'
-        call ncread(ncid,'ub_east', ub_east,(/bfy,record/))
+        call ncread(ncid,'ub_east', ub_east,(/1,record/))
+        call zero_corners_eta(ub_east)   ! unused; not written by older versions
       else
         if (mynode==0) print *,'--WARNING: ub_east'&
         &,' not in initial file, setting to zero.'
@@ -677,11 +693,13 @@ contains
     &.and.(inode==0)&
 #endif
     &) then
-      if (.not. allocated(ub_west)) allocate(ub_west(ny))
+      if (.not. allocated(ub_west)) allocate(ub_west(j0:j1))
+      ub_west = 0._8
       ierr=nf90_inq_varid (ncid, 'ub_west', varid)
       if (ierr == nf90_noerr) then
         pio_gtype = 'w1rr'
-        call ncread(ncid,'ub_west', ub_west,(/bfy,record/))
+        call ncread(ncid,'ub_west', ub_west,(/1,record/))
+        call zero_corners_eta(ub_west)   ! unused; not written by older versions
       else
         if (mynode==0) print *,'--WARNING: ub_west'&
         &,' not in initial file, setting to zero.'
@@ -691,5 +709,24 @@ contains
     endif
 
   end subroutine get_init_ub  !]
+
+! ----------------------------------------------------------------------
+  subroutine zero_corners_xi(a)  ![
+    ! Zero the corner points (i = 0, nx+1) of a south/north boundary array:
+    ! the tuning only uses i = 1:nx
+    implicit none
+    real(kind=8),intent(inout) :: a(i0:i1)
+    a(i0:0) = 0._8
+    a(nx+1:i1) = 0._8
+  end subroutine zero_corners_xi  !]
+! ----------------------------------------------------------------------
+  subroutine zero_corners_eta(a)  ![
+    ! Zero the corner points (j = 0, ny+1) of a west/east boundary array:
+    ! the tuning only uses j = 1:ny
+    implicit none
+    real(kind=8),intent(inout) :: a(j0:j1)
+    a(j0:0) = 0._8
+    a(ny+1:j1) = 0._8
+  end subroutine zero_corners_eta  !]
 
 end module sponge_tune
