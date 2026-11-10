@@ -119,19 +119,38 @@ else       !--> standard code applies for T,S
     enddo           !--> discard curv,grad, keep FX
   enddo
 
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
-  if (inode==0) then ! (.not. west_exchng)
+! Inflow faces of open boundaries: upwind with the ghost-cell value.
+! Below, g is the ghost cell and c1, c2 are the first and second
+! interior cells.  The edge slope is extrapolated above, so the ghost
+! curvature is zero and on inflow the UP3 face value (UPSTREAM_TS, the
+! default corrector) degenerates to the centered 0.5*(g + c1): every
+! inflow would carry half of the domain's own boundary-cell
+! concentration back in.  Adding 0.5*(g - c1)*Q on inflow faces
+! (FlxU > 0 west, < 0 east) makes the UP3 flux g*Q, first-order upwind.
+! The C4 flux (the predictor, and the corrector under ADV_ISONEUTRAL)
+! becomes (11/12 g + 1/6 c1 - 1/12 c2)*Q; AKIMA gives other weights.
+! g is what t3dbc left in the ghost cell: on inflow, OBC_TORLANSKI with
+! T_FRC_BRY relaxes it toward the boundary data by the Courant number
+! each step, and OBC_TSPECIFIED sets it to the data.  Outflow faces
+! keep the scheme's flux.  Open-boundary sides only (as in t3dbc):
+! never at a periodic seam or a wall.
+#ifndef EW_PERIODIC
+# ifdef OBC_WEST
+  if (WESTERN_EDGE) then
     do j=jstr,jend
       FX(istr,j) = FX(istr,j) + 0.5_8*(t(istr-1,j,k,nrhs,itrc)-t(istr,j,k,nrhs,itrc))&
       &* max(FlxU(istr,j,k),0.0_8)
     enddo
   endif
-  if (inode==npx-1) then ! (.not. east_exchng)
+# endif
+# ifdef OBC_EAST
+  if (EASTERN_EDGE) then
     do j=jstr,jend
       FX(iend+1,j) = FX(iend+1,j) + 0.5_8*(t(iend+1,j,k,nrhs,itrc)-t(iend,j,k,nrhs,itrc))&
       &* min(FlxU(iend+1,j,k),0.0_8)
     enddo
   endif
+# endif
 #endif
 
 #ifndef NS_PERIODIC
@@ -204,19 +223,24 @@ else       !--> standard code applies for T,S
     enddo
   enddo             !--> discard curv,grad, keep FE
 
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
-  if (jnode==0) then ! (.not. south_west)
+! Inflow faces of southern/northern open boundaries: see FX above.
+#ifndef NS_PERIODIC
+# ifdef OBC_SOUTH
+  if (SOUTHERN_EDGE) then
     do i=istr,iend
       FE(i,jstr) = FE(i,jstr) + 0.5_8*(t(i,jstr-1,k,nrhs,itrc)-t(i,jstr,k,nrhs,itrc))&
       &* max(FlxV(i,jstr,k),0.0_8)
     enddo
   endif
-  if (jnode==npy-1) then ! (.not. north_exchng)
+# endif
+# ifdef OBC_NORTH
+  if (NORTHERN_EDGE) then
     do i=istr,iend
       FE(i,jend+1) = FE(i,jend+1) + 0.5_8*(t(i,jend+1,k,nrhs,itrc)-t(i,jend,k,nrhs,itrc))&
       &* min(FlxV(i,jend+1,k),0.0_8)
     enddo
   endif
+# endif
 #endif
 
 #ifdef BIO_1ST_USTREAM_TEST
