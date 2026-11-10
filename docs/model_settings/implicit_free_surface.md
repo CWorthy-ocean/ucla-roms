@@ -36,6 +36,10 @@ Coriolis is explicit (through `rufrc`). To keep the generalized-alpha memory fro
 
 The predictor's barotropic transport (`set_HUV1` through `DU_avg_bak`) is the extrapolation `1.5 U^n - 0.5 U^{n-1}`.
 
+### Density weighting of the pressure gradient (`fs_pg_rho`)
+
+The 3-D pressure gradient that the barotropic step receives (in `rufrc`) is evaluated at `zeta^n`; the step adds the gradient of the increment implicitly. The depth integral of the 3-D pressure gradient responds to the sea level with the density-weighted gravity `g (1 + rhoS)` (plus terms proportional to the bottom slope and to `rhoS - rhoA`), where `rhoS` and `rhoA` are the column measures of the density anomaly that the split loop uses (`VAR_RHO_2D`). With `fs_pg_rho = .false.` (default) the implicit operator uses `g` alone, so a fraction `rhoS` of the barotropic pressure gradient (about 0.027 for `rho0 = 1000`) is explicit. With `fs_pg_rho = .true.` each face coefficient of the operator is multiplied by the corresponding factor, in every sub-step. The operator stays symmetric and positive definite; the cost, the solver and the restart file are unchanged. The part of the response that multiplies the mean of the increment across a face (not symmetric; smaller by the bottom slope) remains explicit.
+
 ### Sub-steps (`fs_nsub`)
 
 With `fs_nsub = N` (1 to 4, default 1) the barotropic mode takes `N` implicit steps of length `dt/N` per baroclinic step instead of one. Each sub-step is the step described above, started from the previous sub-step's free surface and transports; the 3-D forcing `rufrc`, `rvfrc` is held over the baroclinic step (as the split loop holds it over its fast steps), and sub-steps after the first add the pressure gradient of their own free-surface change since `n` (`rufrc` contains the pressure gradient of `zeta^n`). The generalized-alpha rates are carried from sub-step to sub-step. The 3-D step receives `DU_avg1` = the transport of the last sub-step and `DU_avg2` = the mean flux of the sub-steps, so the free surface still changes by exactly `dt` times the divergence of `DU_avg2` plus the sources.

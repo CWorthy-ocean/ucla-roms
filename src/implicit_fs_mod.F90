@@ -106,11 +106,14 @@ module implicit_fs_mod
   integer(kind=4) :: fs_nsub = 1               ! implicit barotropic sub-steps of dt/fs_nsub per 3-D step (1..4);
                                                ! rufrc is held over the step, the forcing times move to
                                                ! s = (alpha_f + (fs_nsub-1)/2)/fs_nsub of the step
+  logical :: fs_pg_rho = .false.               ! .true.: the implicit pressure-gradient operator carries the density
+                                               ! weighting of the depth-integrated 3-D pressure gradient (rhoS, rhoA
+                                               ! of rho_eos, as step2d's rubar does); needs VAR_RHO_2D
   namelist /IMPLICIT_FS/ fs_mode, fs_rho_inf, fs_theta, fs_theta_div, fs_tol, fs_maxit, fs_precond,&
   &  fs_mg_levels, fs_mg_nu, fs_mg_smoother, fs_mg_lag, fs_mg_gather, fs_mg_global_on, fs_mg_faces,&
   &  fs_exch_thin, fs_drag_implicit,&
   &  fs_warm, fs_verbose, fs_selftest, fs_tang_nudge,&
-  &  fs_cor_metric, fs_pot_time, fs_stress_time, fs_nsub
+  &  fs_cor_metric, fs_pot_time, fs_stress_time, fs_nsub, fs_pg_rho
 
   logical, public, protected :: fs_on = .false.   ! fs_mode = 'implicit'
   logical, public, protected :: fs_srcdiag = .false.  ! fs_verbose >= 2: FS_SRC line per step (both modes)
@@ -265,6 +268,10 @@ contains
     &  info="fs_theta and fs_theta_div must lie in [0.5, 1]")
     if (fs_rho_inf < 0._8 .or. fs_rho_inf > 1._8) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_rho_inf must lie in [0, 1]")
+#ifndef VAR_RHO_2D
+    if (fs_pg_rho) call error_log%raise_global(&
+    &  context=trim(module_name)//"/"//sr_name, info="fs_pg_rho needs VAR_RHO_2D")
+#endif
     if (fs_nsub < 1 .or. fs_nsub > 4) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_nsub must lie in [1, 4]")
     call fs_scheme_coef
@@ -319,6 +326,7 @@ contains
       write(*,'(1x,A,F8.3,A,L1)') 'IMPLICIT_FS: fs_tang_nudge =', fs_tang_nudge, ' fs_cor_metric = ', fs_cor_metric
       write(*,'(1x,A,I2,A,F7.4,A,F7.4,A)') 'IMPLICIT_FS: fs_nsub =', fs_nsub, ' (implicit sub-steps of dt/fs_nsub;'&
       &//' explicit forcing at time +', sft, ' dt, boundary tidal harmonics at time +', fs_bry_phase, ' dt)'
+      write(*,'(1x,A,L1)') 'IMPLICIT_FS: fs_pg_rho = ', fs_pg_rho
       if (mg_on) write(*,'(1x,A,I7,A,A,A,A,A,I3,A,L1)') 'IMPLICIT_FS: fs_mg_gather =', fs_mg_gather,&
       &  ' fs_mg_global_on = ', trim(fs_mg_global_on), ' fs_mg_faces = ', trim(fs_mg_faces),&
       &  ' fs_mg_lag =', fs_mg_lag, ' fs_exch_thin = ', fs_exch_thin
@@ -574,6 +582,22 @@ contains
   end subroutine fs_scheme_coef
 
   !----------------------------------------------------------------------
+  pure function fs_rho_fac(h1, h2, z1, z2, s1, s2, a1, a2) result(fac)
+    ! fs_pg_rho: density factor of a face coefficient of the implicit pressure-gradient operator. The depth
+    ! integral of the 3-D pressure gradient (prsgrd, density fixed on the sigma layers) responds to the sea level
+    ! as step2d's rubar (VAR_RHO_2D), not as -g D grad zeta. Its derivative with respect to the difference of
+    ! zeta across the face, divided by g D_face (cells 1, 2 on either side; s = rhoS, a = rhoA of rho_eos):
+    !   1 + [ (h1+h2) (s1+s2)/2 + s1 z1 + s2 z2 + (h1-h2) ((s1-a1 - s2+a2)/2 + (a1-a2)/3) ] / (h1+h2+z1+z2)
+    ! The part of the derivative that multiplies the mean of the increment across the face (not symmetric,
+    ! smaller by the bottom slope times rhoS - rhoA) stays explicit.
+    implicit none
+    real(kind=8), intent(in) :: h1, h2, z1, z2, s1, s2, a1, a2
+    real(kind=8) :: fac
+    fac = 1._8 + ( 0.5_8*(h1+h2)*(s1+s2) + s1*z1 + s2*z2&
+    &            + (h1-h2)*(0.5_8*((s1-a1)-(s2-a2)) + (a1-a2)/3._8) )/(h1+h2+z1+z2)
+  end function fs_rho_fac
+
+  !----------------------------------------------------------------------
   subroutine fs_step
     ! The implicit barotropic step (replaces the fast loop).
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
@@ -690,6 +714,9 @@ contains
     use dimensions, only: inode, jnode
     use scalars, only: dt, g, iic, knew, kstp, ntstart, ntimes
     use ocean_vars, only: zeta, ubar, vbar
+#ifdef VAR_RHO_2D
+    use coupling, only: rhoS, rhoA
+#endif
     use coupling, only: rufrc, rvfrc, du_avg1, du_avg2, dv_avg1, dv_avg2, du_avg_bak, dv_avg_bak,&
     &                   zt_avg1, r_d
     use grid, only: h, pm, pn, dn_u, dm_v, fomn
@@ -823,6 +850,10 @@ contains
         m = umask(i,j)
 #endif
         au(i,j) = th*dts*g*dn_u(i,j)*dn_u(i,j)*df*ainv*m/(1._8+gam)
+#ifdef VAR_RHO_2D
+        if (fs_pg_rho) au(i,j) = au(i,j)*fs_rho_fac(h(i-1,j), h(i,j), zeta(i-1,j,ks), zeta(i,j,ks),&
+        &                                           rhoS(i-1,j), rhoS(i,j), rhoA(i-1,j), rhoA(i,j))
+#endif
         ! memory on all but the Coriolis estimate c (ROMS rhs3d form, U^n)
         d = dts*dn_u(i,j)*ainv*rufrc(i,j)
         hf = dts*dn_u(i,j)*ainv*0.25_8*( fcr(i,j)*(cov(i,j)+cov(i,j+1)) + fcr(i-1,j)*(cov(i-1,j)+cov(i-1,j+1)) )
@@ -848,6 +879,10 @@ contains
         m = vmask(i,j)
 #endif
         av(i,j) = th*dts*g*dm_v(i,j)*dm_v(i,j)*df*ainv*m/(1._8+gam)
+#ifdef VAR_RHO_2D
+        if (fs_pg_rho) av(i,j) = av(i,j)*fs_rho_fac(h(i,j-1), h(i,j), zeta(i,j-1,ks), zeta(i,j,ks),&
+        &                                           rhoS(i,j-1), rhoS(i,j), rhoA(i,j-1), rhoA(i,j))
+#endif
         d = dts*dm_v(i,j)*ainv*rvfrc(i,j)
         hf = -dts*dm_v(i,j)*ainv*0.25_8*( fcr(i,j)*(cou(i,j)+cou(i+1,j)) + fcr(i,j-1)*(cou(i,j-1)+cou(i+1,j-1)) )
         usv(i,j) = m*(unv(i,j) + (hf + b1*(d - hf) + (1._8-b1)*dts*udv(i,j))/(1._8+gam))
