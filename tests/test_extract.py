@@ -13,10 +13,13 @@ its run alone bit for bit: with PARALLEL_IO each child's joined
 ``<extract_root_name>_bry`` file, without it every variable of the per-rank
 ``_ext`` files (which extract_data_join would split by prefix). The
 PARALLEL_IO two-child output is also checked against the reference hashes;
-the interpolation and remapping are the same code in both builds. Child A
-is also run with the pressure fluxes up and vp, which must be written. The
-settings extract_data rejects for several children stop ROMS at startup
-with a message.
+the interpolation and remapping are the same code in both builds. Both
+builds define DIAGNOSTICS, so that calc_pflx computes the pressure fluxes;
+the runs that do not ask for them leave calc_pflx off. Child A is also run
+with the pressure fluxes up and vp, which must be written, non-zero, equal
+to the reference hashes in both builds, and with PARALLEL_IO independent of
+the tiling. The settings extract_data rejects for several children stop
+ROMS at startup with a message.
 """
 import hashlib
 from pathlib import Path
@@ -35,6 +38,7 @@ from ._helpers import (
     assert_run_rejected,
     create_test_namelist_dict,
     summarize_output,
+    summarize_values,
 )
 from ._roms_input_file_generation import create_roms_grid
 
@@ -99,9 +103,11 @@ def pio_input_dir(input_dir, tmp_path_factory) -> Path:
 
 @pytest.fixture(scope="module", params=[False, True], ids=["per_rank", "parallel_io"])
 def extract_conf(request, tmp_path_factory) -> ROMSConfiguration:
-    """Physics-only realistic build, without and with PARALLEL_IO."""
+    """Physics-only realistic build, without and with PARALLEL_IO. DIAGNOSTICS
+    lets calc_pflx compute up and vp (test_pressure_fluxes); with calc_pflx off,
+    as in the other tests, it does not change the model."""
     pio = request.param
-    cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
+    cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS + ["DIAGNOSTICS"]
     if pio:
         cpp_keys = cpp_keys + ["PARALLEL_IO"]
     build_dir = tmp_path_factory.mktemp("extract_build_pio" if pio else "extract_build")
@@ -194,20 +200,11 @@ def test_two_children(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_
     assert_output_matches_reference(reference_results, "extract_two_children_pio", summaries)
 
 
-def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files):
-    """The pressure fluxes up and vp (roms-tools include_pressure_fluxes) are
-    written for every boundary, in both builds (PARALLEL_IO used to abort on
-    up). They are zero here: calc_pressure_flux only runs in DIAGNOSTICS
-    builds."""
-    conf = extract_conf
-    child = dict(_child(conf, nesting_files, "A"), file=nesting_files["A_pflx"])
-    nml = _nml(conf, input_dir, pio_input_dir, [child])
-    nml["CALC_PFLX_SETTINGS"].update(calc_pflx=True, pflx_timescale=3600)
-    conf.run(nml, cwd=tmp_path)
-
+def _pflx_values(conf, run_dir: Path) -> dict[str, np.ndarray]:
+    """``{"<var>_<bnd>": values}`` of child A's up and vp in ``run_dir``."""
     names = [f"{v}_{bnd}" for v in ("up", "vp") for bnd in ("south", "north", "east", "west")]
     if conf.pio:
-        (path,) = tmp_path.glob("childA_bry.*.nc")
+        (path,) = run_dir.glob("childA_bry.*.nc")
         with xr.open_dataset(path, decode_cf=False) as ds:
             nx, ny = CHILDREN["A"]["nx"] + 2, CHILDREN["A"]["ny"] + 2
             nrec = 800 // OUTPUT_PERIOD
@@ -218,14 +215,56 @@ def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesti
     else:
         # per-rank files hold <prefix>_<var>_<bnd> where the rank has points
         values = {}
-        for path in sorted(tmp_path.glob("roms_ext.*.nc")):
+        for path in sorted(run_dir.glob("roms_ext.*.nc")):
             with xr.open_dataset(path, decode_cf=False) as ds:
                 for n in names:
                     if f"child_{n}" in ds:
                         values.setdefault(n, []).append(ds[f"child_{n}"].values.ravel())
         values = {n: np.concatenate(v) for n, v in values.items()}
     assert sorted(values) == sorted(names)
+    return values
+
+
+def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files,
+                         reference_results):
+    """The pressure fluxes up and vp (roms-tools include_pressure_fluxes) are
+    written for every boundary, in both builds (PARALLEL_IO used to abort on
+    up), and are non-zero at every point of child A, which lies in open water
+    (they are all zero when calc_pressure_flux does not run, as without
+    DIAGNOSTICS). With PARALLEL_IO, which reads the joined inputs, the 2x2
+    run gives the same values as a run on one rank. The values are checked
+    against the reference hashes in both builds, so that a change to
+    calc_pressure_flux or to how extract_data copies up and vp into its buffer
+    (it used to shift them by two cells, with zeros next to the tile edges)
+    shows up in either build."""
+    conf = extract_conf
+    child = dict(_child(conf, nesting_files, "A"), file=nesting_files["A_pflx"])
+    nml = _nml(conf, input_dir, pio_input_dir, [child])
+    nml["CALC_PFLX_SETTINGS"].update(calc_pflx=True, pflx_timescale=3600)
+    conf.run(nml, cwd=tmp_path)
+    values = _pflx_values(conf, tmp_path)
     assert all(np.isfinite(v).all() for v in values.values())
+    assert [n for n, v in values.items() if (v == 0).any()] == []
+
+    if conf.pio:
+        one = tmp_path / "one_rank"
+        one.mkdir()
+        nml["PARAM_SETTINGS"].update(NP_XI=1, NP_ETA=1)
+        conf.run(nml, cwd=one)
+        single = _pflx_values(conf, one)
+        for n, v in values.items():
+            scale = np.abs(single[n]).max()
+            assert np.abs(v - single[n]).max() <= 1e-10 * scale, n
+
+    # Last: a mismatch ends the test. The per-rank values come from the
+    # files of the 2x2 tiling, in rank order.
+    if conf.pio:
+        key, (source,) = "extract_pressure_fluxes_pio", tmp_path.glob("childA_bry.*.nc")
+    else:
+        key, source = "extract_pressure_fluxes", tmp_path
+    assert_output_matches_reference(
+        reference_results, key, {"childA": summarize_values(source, values)}
+    )
 
 
 def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files):
