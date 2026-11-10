@@ -5,10 +5,15 @@ module calc_pflx_mod
   use error_handling_mod, only: error_log
   use netcdf, only: nf90_noerr, nf90_inq_varid
   use dimensions, only: nx, ny, nz, i0, i1, j0, j1,x_,x0,x1,y_,y0,y1
-  use scalars, only: dt, knew, nrhs
+  use scalars, only: dt, knew, nrhs, g, rho0
   use param, only: lm, mm, mynode
   use grid, only: pn, pm, umask, vmask, rmask
-  use ocean_vars, only: flxu, flxv, u, v, z_w, hz
+  use ocean_vars, only: flxu, flxv, u, v, z_r, z_w, hz
+#ifdef SPLIT_EOS
+  use eos_vars, only: rho1, qp1, qp2
+#else
+  use eos_vars, only: rho
+#endif
   use nc_read_write, only: ncwrite, ncread
   use diagnostics, only: dxdyi
   use roms_mpi, only: exchange_xxx
@@ -20,7 +25,7 @@ module calc_pflx_mod
   ! Pressure flux terms
 ! --------------
   character(len=14) :: module_name = "calc_pflx_mod"
-  real(kind=8),public,allocatable,dimension(:,:,:) :: p_slow        ! filtered pressure
+  real(kind=8),public,allocatable,dimension(:,:,:) :: p_slow        ! filtered pressure (see calc_pressure_flux)
   real(kind=8),public,allocatable,dimension(:,:,:) :: u_slow,v_slow
 
   real(kind=8),public,allocatable,dimension(:,:) :: p_fast,u_fast,v_fast
@@ -29,6 +34,17 @@ module calc_pflx_mod
 
   real(kind=8),public,allocatable,dimension(:,:)  :: dzt ! dzeta/dt
   real(kind=8),public,allocatable,dimension(:,:)  :: Uflx,Vflx
+
+  ! work arrays of calc_pressure_flux
+  real(kind=8),allocatable,dimension(:,:) :: zscl      ! h/(h+zeta)
+  real(kind=8),allocatable,dimension(:,:) :: p_lev     ! pressure at the current level
+  real(kind=8),allocatable,dimension(:,:) :: r_lev     ! density at the level above
+  real(kind=8),allocatable,dimension(:,:) :: p_int     ! int p' dz, then its depth mean
+  real(kind=8),allocatable,dimension(:,:) :: u_int,v_int ! int u' dz, int v' dz
+#if defined NONLIN_EOS && !defined SPLIT_EOS
+  ! d(rho)/d(depth) of sea water at fixed T, S [kg/m^4], (rho0+rho) g/c^2 for c ~ 1490 m/s
+  real(kind=8),parameter :: drho_ddepth = 4.5e-3_8
+#endif
 
   real(kind=8) :: alpha, beta       ! filtering constants (needed for child bry)
 
@@ -115,25 +131,49 @@ contains
       ! strictly speaking for barotropic/baroclinic balance only
 !        allocate( dzt(nx,ny) )
       allocate(dzt(GLOBAL_2D_ARRAY))
+
+      allocate(zscl(GLOBAL_2D_ARRAY)); zscl = 0
+      allocate(p_lev(GLOBAL_2D_ARRAY)); p_lev = 0
+      allocate(r_lev(GLOBAL_2D_ARRAY)); r_lev = 0
+      allocate(p_int(GLOBAL_2D_ARRAY)); p_int = 0
+      allocate(u_int(GLOBAL_2D_ARRAY)); u_int = 0
+      allocate(v_int(GLOBAL_2D_ARRAY)); v_int = 0
     endif
 
   end subroutine init_pflx !]
 ! ----------------------------------------------------------------------
-  subroutine calc_pressure_flux(p) ![
-    implicit none
-    !! W => kg m2 s-3
-    !!  p dz => m3 s-2, u*p*dz => m4 s-3, rho0*u*p*dz=> kg m s-3 = W/m
-    !! rho u p dz
+  subroutine calc_pressure_flux ![
+    ! Depth-integrated baroclinic energy flux divided by rho0 [m^4/s^3]:
+    !   up = int u' p' dz at u-points, vp = int v' p' dz at v-points
+    ! (multiply by rho0 for W/m).
+    !
+    ! u', v': velocity on the s-levels minus its depth mean, minus its
+    !   running mean (e-folding time pflx_timescale).
+    ! p': hydrostatic pressure of the density on the s-levels, integrated
+    !   over the levels' rest positions z0 = (z - zeta) h/(h + zeta) (their
+    !   depths at zeta = 0) with the in-situ density evaluated at z0,
+    !       p(k) = g/rho0 int_{z0(k)}^0 rho dz0,
+    !   minus its running mean (p_slow), minus its depth mean.
+    !
+    ! The s-levels move with the free surface by zeta (1 + z0/h), which is
+    ! also the vertical displacement by the barotropic tide, so density on
+    ! the s-levels carries no isopycnal heave of the surface tide, and p'
+    ! is the internal-tide pressure (Kelly, Nash and Kunze 2010, JGR 115,
+    ! C06014: total pressure minus its depth mean and minus the pressure
+    ! of the surface tide's isopycnal heave). The pressure at the moving
+    ! levels themselves (the prsgrd pressure, used here before) contains
+    ! g/rho0 int rho1 dz over thicknesses that scale with (h + zeta)/h,
+    ! rho1 = density - rho0, i.e. a term g/rho0 rho1 zeta (1 + z0/h)
+    ! besides. For rho0 = 1000 (rho1 ~ 27 kg/m^3) its depth-varying part
+    ! reaches ~0.25 m^2/s^2 per metre of tide, far above internal-tide
+    ! pressures, and it is coherent with the tidal baroclinic velocity, so
+    ! it dominated the flux wherever the barotropic tide is strong.
 
-    !import/export
-    real(kind=8),dimension(GLOBAL_2D_ARRAY,nz) :: p
+    implicit none
 
     !local
     integer(kind=4) :: i,j,k
-    real(kind=8)  :: uint,vint
-    real(kind=8)  :: huint,hvint
-    real(kind=8)  :: gHzx,gHzy,gHTx,gHty
-    real(kind=8)  :: tst
+    real(kind=8)  :: grho, z0, rho_z0, hzu, hzv
 
 # if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
     integer(kind=4) :: kbak
@@ -165,14 +205,39 @@ contains
         enddo
       enddo
 
+      grho = g/rho0
+      do j=0,ny
+        do i=0,nx
+          zscl(i,j) = -z_w(i,j,0)/(z_w(i,j,nz)-z_w(i,j,0))   ! h/(h+zeta)
+        enddo
+      enddo
+
       up = 0
       vp = 0
-      tst = 0
-      do k=1,nz
+      p_int = 0
+      u_int = 0
+      v_int = 0
+      do k=nz,1,-1                 ! top down: p is integrated from the surface
         do j=0,ny
           do i=0,nx
-            p_slow(i,j,k) = (beta*p_slow(i,j,k) + alpha*p(i,j,k))*rmask(i,j)
-            p_fast(i,j)   = (p(i,j,k) - p_slow(i,j,k))*rmask(i,j)
+            z0 = (z_r(i,j,k)-z_w(i,j,nz))*zscl(i,j)
+# ifdef SPLIT_EOS
+            rho_z0 = rho1(i,j,k) - qp1(i,j,k)*z0*(1._8+qp2*z0)
+# elif defined NONLIN_EOS
+            rho_z0 = rho(i,j,k) + drho_ddepth*(z_r(i,j,k)-z0)
+# else
+            rho_z0 = rho(i,j,k)
+# endif
+            if (k == nz) then
+              p_lev(i,j) = -grho*rho_z0*z0
+            else
+              p_lev(i,j) = p_lev(i,j) + 0.5_8*grho*(rho_z0+r_lev(i,j))&
+              &*(z_r(i,j,k+1)-z_r(i,j,k))*zscl(i,j)
+            endif
+            r_lev(i,j) = rho_z0
+            p_slow(i,j,k) = (beta*p_slow(i,j,k) + alpha*p_lev(i,j))*rmask(i,j)
+            p_fast(i,j)   = (p_lev(i,j) - p_slow(i,j,k))*rmask(i,j)
+            p_int(i,j)    = p_int(i,j) + p_fast(i,j)*Hz(i,j,k)
           enddo
         enddo
         ! u_slow, and u_fast are baroclinic velocities
@@ -194,11 +259,29 @@ contains
 
         do j=1,ny
           do i=1,nx
+            hzu = 0.5_8*( Hz(i-1,j,k)+Hz(i,j,k) )
+            hzv = 0.5_8*( Hz(i,j-1,k)+Hz(i,j,k) )
             up(i,j) = up(i,j) + u_fast(i,j)&
-            &* 0.25_8*( p_fast(i-1,j)+p_fast(i,j) )*( Hz(i-1,j,k)+Hz(i,j,k) )
+            &* 0.5_8*( p_fast(i-1,j)+p_fast(i,j) )*hzu
             vp(i,j) = vp(i,j) + v_fast(i,j)&
-            &* 0.25_8*( p_fast(i,j-1)+p_fast(i,j) )*( Hz(i,j-1,k)+Hz(i,j,k) )
+            &* 0.5_8*( p_fast(i,j-1)+p_fast(i,j) )*hzv
+            u_int(i,j) = u_int(i,j) + u_fast(i,j)*hzu
+            v_int(i,j) = v_int(i,j) + v_fast(i,j)*hzv
           enddo
+        enddo
+      enddo
+
+      ! Remove the depth mean of p': int u' (p' - <p'>) dz
+      ! = int u' p' dz - <p'> int u' dz
+      do j=0,ny
+        do i=0,nx
+          p_int(i,j) = p_int(i,j)/(z_w(i,j,nz)-z_w(i,j,0))
+        enddo
+      enddo
+      do j=1,ny
+        do i=1,nx
+          up(i,j) = up(i,j) - 0.5_8*( p_int(i-1,j)+p_int(i,j) )*u_int(i,j)
+          vp(i,j) = vp(i,j) - 0.5_8*( p_int(i,j-1)+p_int(i,j) )*v_int(i,j)
         enddo
       enddo
     endif  ! if pflux
