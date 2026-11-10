@@ -23,8 +23,12 @@ module eos_vars
 #endif
   &Tcoef, T0
 
+# else
+  ! Secant bulk modulus of pure water at 0 C and the surface [bar] (K00 in
+  ! rho_eos). rho_eos stores density minus the depth-only profile
+  ! rho0/(1 - 0.1|z|/K00), so code that moves a density in depth needs it.
+  real(kind=8), parameter :: K00=19092.56_8
 # endif
-
 
 
 # ifdef SPLIT_EOS

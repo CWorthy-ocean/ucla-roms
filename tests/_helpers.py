@@ -260,14 +260,22 @@ def summarize_output(path: Path, vars_to_exclude: list = []) -> OutputSummary:
     comparison with a reference stays on the hash.
     """
     ds = xr.open_dataset(path)
+    return summarize_values(
+        path, {name: ds[name].values for name in ds.data_vars if name not in vars_to_exclude}
+    )
 
+
+def summarize_values(path: Path, values: "dict[str, np.ndarray]") -> OutputSummary:
+    """Summarize arrays read from ``path`` as :func:`summarize_output` does a
+    file's data variables: the SHA-256 and statistics of each, sorted by name.
+
+    ``path`` only labels the output in a mismatch report, and
+    ``compare_outputs.py`` can compare it with the base run only when it is
+    a single file."""
     variables = {}
-    for name in sorted(ds.data_vars):  # sort for determinism
-        if name in vars_to_exclude:
-            continue
-        values = ds[name].values
+    for name in sorted(values):  # sort for determinism
         variables[name] = {
-            "sha256": hashlib.sha256(values.tobytes()).hexdigest(),
-            **_statistics(values),
+            "sha256": hashlib.sha256(values[name].tobytes()).hexdigest(),
+            **_statistics(values[name]),
         }
     return OutputSummary(path=path, variables=variables)

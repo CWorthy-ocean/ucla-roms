@@ -16,9 +16,10 @@ PARALLEL_IO two-child output is also checked against the reference hashes;
 the interpolation and remapping are the same code in both builds. Both
 builds define DIAGNOSTICS, so that calc_pflx computes the pressure fluxes;
 the runs that do not ask for them leave calc_pflx off. Child A is also run
-with the pressure fluxes up and vp, which must be written, non-zero, and
-independent of the tiling. The settings extract_data rejects for several
-children stop ROMS at startup with a message.
+with the pressure fluxes up and vp, which must be written, non-zero, equal
+to the reference hashes in both builds, and with PARALLEL_IO independent of
+the tiling. The settings extract_data rejects for several children stop
+ROMS at startup with a message.
 """
 import hashlib
 from pathlib import Path
@@ -37,6 +38,7 @@ from ._helpers import (
     assert_run_rejected,
     create_test_namelist_dict,
     summarize_output,
+    summarize_values,
 )
 from ._roms_input_file_generation import create_roms_grid
 
@@ -223,14 +225,18 @@ def _pflx_values(conf, run_dir: Path) -> dict[str, np.ndarray]:
     return values
 
 
-def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files):
+def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files,
+                         reference_results):
     """The pressure fluxes up and vp (roms-tools include_pressure_fluxes) are
     written for every boundary, in both builds (PARALLEL_IO used to abort on
-    up). Child A lies in open water and crosses a tile boundary, so they are
-    non-zero at every point (extract_data used to copy up and vp into its
-    buffer shifted by two cells, with zeros next to the tile edges), and with
-    PARALLEL_IO, which reads the joined inputs, the 2x2 run gives the same
-    values as a run on one rank."""
+    up), and are non-zero at every point of child A, which lies in open water
+    (they are all zero when calc_pressure_flux does not run, as without
+    DIAGNOSTICS). With PARALLEL_IO, which reads the joined inputs, the 2x2
+    run gives the same values as a run on one rank. The values are checked
+    against the reference hashes in both builds, so that a change to
+    calc_pressure_flux or to how extract_data copies up and vp into its buffer
+    (it used to shift them by two cells, with zeros next to the tile edges)
+    shows up in either build."""
     conf = extract_conf
     child = dict(_child(conf, nesting_files, "A"), file=nesting_files["A_pflx"])
     nml = _nml(conf, input_dir, pio_input_dir, [child])
@@ -249,6 +255,16 @@ def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesti
         for n, v in values.items():
             scale = np.abs(single[n]).max()
             assert np.abs(v - single[n]).max() <= 1e-10 * scale, n
+
+    # Last: a mismatch ends the test. The per-rank values come from the
+    # files of the 2x2 tiling, in rank order.
+    if conf.pio:
+        key, (source,) = "extract_pressure_fluxes_pio", tmp_path.glob("childA_bry.*.nc")
+    else:
+        key, source = "extract_pressure_fluxes", tmp_path
+    assert_output_matches_reference(
+        reference_results, key, {"childA": summarize_values(source, values)}
+    )
 
 
 def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files):
