@@ -13,13 +13,13 @@ module sponge_tune
   &nf90_redef, nf90_enddef
   use nc_read_write, only: nccreate, ncread, ncwrite
   use scalars, only: iic, tdays, time, dt
-  use dimensions, only: nx, ny, xi_rho, npx, npy
+  use dimensions, only: nx, ny, npx, npy
   use calc_pflx_mod, only: up, vp
   use roms_read_write, only:&
   &ncforce, dn_tm, dn_xr,&
   &dn_yr, bc_options, create_file, set_frc_data,&
   &store_string_att
-  use dimensions, only: inode, jnode, ds_xr
+  use dimensions, only: inode, jnode
   use dimensions, only: i0, i1, j0, j1
   use param, only: max_name_size
   use param, only:&
@@ -73,6 +73,14 @@ module sponge_tune
   real(kind=8),allocatable,dimension(:) :: cflx_west_avg
   real(kind=8),allocatable,dimension(:) :: pflx_west_avg
   real(kind=8),allocatable,dimension(:) ::   ub_west_avg
+
+  real(kind=8),allocatable,dimension(:) :: cflx_east_avg
+  real(kind=8),allocatable,dimension(:) :: pflx_east_avg
+  real(kind=8),allocatable,dimension(:) ::   ub_east_avg
+
+  real(kind=8),allocatable,dimension(:) :: cflx_north_avg
+  real(kind=8),allocatable,dimension(:) :: pflx_north_avg
+  real(kind=8),allocatable,dimension(:) ::   ub_north_avg
 
 
   public adjust_orlanski
@@ -160,24 +168,36 @@ contains
       nc_pflx_e%vdata = 0
       allocate(pflx_east(j0:j1))
       pflx_east = 0
+      allocate(pflx_east_avg(j0:j1))
+      pflx_east_avg = 0
       allocate(cflx_east(j0:j1))
       cflx_east = 0
+      allocate(cflx_east_avg(j0:j1))
+      cflx_east_avg = 0
       if (.not.allocated(ub_east)) then
         allocate(ub_east(j0:j1))
         ub_east = 0._8
       endif
+      allocate(ub_east_avg(j0:j1))
+      ub_east_avg = 0._8
     endif
     if (obc_north) then
       allocate(nc_pflx_n%vdata(i0:i1,1,2))
       nc_pflx_n%vdata = 0
       allocate(pflx_north(i0:i1))
       pflx_north = 0
+      allocate(pflx_north_avg(i0:i1))
+      pflx_north_avg = 0
       allocate(cflx_north(i0:i1))
       cflx_north = 0
+      allocate(cflx_north_avg(i0:i1))
+      cflx_north_avg = 0
       if (.not.allocated(ub_north)) then
         allocate(ub_north(i0:i1))
         ub_north = 0._8
       endif
+      allocate(ub_north_avg(i0:i1))
+      ub_north_avg = 0._8
     endif
     if (obc_south) then
       allocate(nc_pflx_s%vdata(i0:i1,1,2))
@@ -381,6 +401,18 @@ contains
         pflx_west_avg = pflx_west_avg*(1-coef) + pflx_west*coef
         ub_west_avg   =   ub_west_avg*(1-coef) +   ub_west*coef
       endif
+
+      if (obc_north.and.jnode.eq.npy-1) then
+        cflx_north_avg = cflx_north_avg*(1-coef) + cflx_north*coef
+        pflx_north_avg = pflx_north_avg*(1-coef) + pflx_north*coef
+        ub_north_avg   =   ub_north_avg*(1-coef) +   ub_north*coef
+      endif
+
+      if (obc_east.and.inode.eq.npx-1) then
+        cflx_east_avg = cflx_east_avg*(1-coef) + cflx_east*coef
+        pflx_east_avg = pflx_east_avg*(1-coef) + pflx_east*coef
+        ub_east_avg   =   ub_east_avg*(1-coef) +   ub_east*coef
+      endif
     endif
 
   end subroutine calc_spn_avg !]
@@ -424,20 +456,17 @@ contains
     ! All ranks must call ncwrite: PIO_write_darray is collective and
     ! off-edge ranks participate with zero-count decompositions
     pio_gtype = 's1rw'
-    if (obc_south) then
-      call ncwrite(ncid,'cf_south',cflx_south_avg,(/1,record/),.true.)
-      call ncwrite(ncid,'pf_south',pflx_south_avg,(/1,record/),.true.)
-      call ncwrite(ncid,'ub_south',  ub_south_avg,(/1,record/),.true.)
-    endif
-    if (obc_east.and.(inode==np_xi-1)) then
-!       call ncwrite(ncid,'ub_east',ub_east(j0:j1),(/1,record /))
-    endif
+    if (obc_south) call wrt_spn_side(ncid,'south',cflx_south_avg,&
+    &pflx_south_avg,ub_south_avg)
+    pio_gtype = 'n1rw'
+    if (obc_north) call wrt_spn_side(ncid,'north',cflx_north_avg,&
+    &pflx_north_avg,ub_north_avg)
+    pio_gtype = 'e1rw'
+    if (obc_east) call wrt_spn_side(ncid,'east',cflx_east_avg,&
+    &pflx_east_avg,ub_east_avg)
     pio_gtype = 'w1rw'
-    if (obc_west) then
-      call ncwrite(ncid,'cf_west',cflx_west_avg,(/1,record/),.true.)
-      call ncwrite(ncid,'pf_west',pflx_west_avg,(/1,record/),.true.)
-      call ncwrite(ncid,'ub_west',  ub_west_avg,(/1,record/),.true.)
-    endif
+    if (obc_west) call wrt_spn_side(ncid,'west',cflx_west_avg,&
+    &pflx_west_avg,ub_west_avg)
 
     call PIO_closefile(pio_FileDesc)
 
@@ -460,19 +489,14 @@ contains
 
     ! the arrays span the tile's rho points (i0:i1 / j0:j1), as the file's
     ! xi_rho / eta_rho do, so they are written from the tile's first point
-    if (obc_south.and.(jnode==0)) then
-      call ncwrite(ncid,'cf_south',cflx_south_avg,(/1,record/))
-      call ncwrite(ncid,'pf_south',pflx_south_avg,(/1,record/))
-      call ncwrite(ncid,'ub_south',  ub_south_avg,(/1,record/))
-    endif
-    if (obc_east.and.(inode==np_xi-1)) then
-!       call ncwrite(ncid,'ub_east',ub_east(j0:j1),(/1,record /))
-    endif
-    if (obc_west.and.(inode==0)) then
-      call ncwrite(ncid,'cf_west',cflx_west_avg,(/1,record/))
-      call ncwrite(ncid,'pf_west',pflx_west_avg,(/1,record/))
-      call ncwrite(ncid,'ub_west',  ub_west_avg,(/1,record/))
-    endif
+    if (obc_south.and.(jnode==0)) call wrt_spn_side(ncid,'south',&
+    &cflx_south_avg,pflx_south_avg,ub_south_avg)
+    if (obc_north.and.(jnode==np_eta-1)) call wrt_spn_side(ncid,'north',&
+    &cflx_north_avg,pflx_north_avg,ub_north_avg)
+    if (obc_east.and.(inode==np_xi-1)) call wrt_spn_side(ncid,'east',&
+    &cflx_east_avg,pflx_east_avg,ub_east_avg)
+    if (obc_west.and.(inode==0)) call wrt_spn_side(ncid,'west',&
+    &cflx_west_avg,pflx_west_avg,ub_west_avg)
 
     ierr=nf90_close(ncid)
 #endif
@@ -487,6 +511,19 @@ contains
 
   end subroutine write_sp_tune !]
 ! ----------------------------------------------------------------------
+  subroutine wrt_spn_side(ncid,side,cf,pf,ub)  ![
+    ! Write one side's fluxes and coefficients to record 'record' of the
+    ! _spn file (under PARALLEL_IO with the pio_gtype set by the caller)
+    implicit none
+    integer(kind=4),intent(in) :: ncid
+    character(len=*),intent(in) :: side
+    real(kind=8),dimension(:),intent(inout) :: cf,pf,ub
+
+    call ncwrite(ncid,'cf_'//side,cf,(/1,record/),.true.)
+    call ncwrite(ncid,'pf_'//side,pf,(/1,record/),.true.)
+    call ncwrite(ncid,'ub_'//side,ub,(/1,record/),.true.)
+  end subroutine wrt_spn_side  !]
+! ----------------------------------------------------------------------
   subroutine create_sp_tune_file(fname) ![
     implicit none
 
@@ -494,89 +531,56 @@ contains
     character(len=*),intent(out) :: fname
 
     !local
-    integer(kind=4) :: ncid,ierr,varid
+    integer(kind=4) :: ncid,ierr
 
 #ifdef PARALLEL_IO
     if (mynode == 0) then
     call create_file('_spn',fname,nonode=.true.)
-
-    ierr=nf90_open(fname,nf90_write,ncid)
-    ierr=nf90_redef(ncid)   ! classic CDF-5 under PARALLEL_IO enforces define mode
-
-    varid = nccreate(ncid,'cf_south',(/dn_xr,dn_tm/),(/ds_xr,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'South boundary child flux')
-    ierr = nf90_put_att(ncid,varid,'units','W/m' )
-
-    varid = nccreate(ncid,'pf_south',(/dn_xr,dn_tm/),(/ds_xr,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'South boundary parent flux')
-    ierr = nf90_put_att(ncid,varid,'units','W/m' )
-
-    varid = nccreate(ncid,'ub_south',(/dn_xr,dn_tm/),(/ds_xr,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'South boundary binding velocity')
-    ierr = nf90_put_att(ncid,varid,'units','m/s' )
-
-    varid = nccreate(ncid,'cf_west',(/dn_yr,dn_tm/),(/ds_xr,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'West boundary child flux')
-    ierr = nf90_put_att(ncid,varid,'units','W/m' )
-
-    varid = nccreate(ncid,'pf_west',(/dn_yr,dn_tm/),(/ds_xr,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'West boundary parent flux')
-    ierr = nf90_put_att(ncid,varid,'units','W/m' )
-
-    varid = nccreate(ncid,'ub_west',(/dn_yr,dn_tm/),(/ds_xr,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'West boundary binding velocity')
-    ierr = nf90_put_att(ncid,varid,'units','m/s' )
-
-    ierr = nf90_enddef(ncid)
-    ierr = nf90_close(ncid)
-    endif
 #else
     call create_file('_spn',fname)
+#endif
 
     ierr=nf90_open(fname,nf90_write,ncid)
-    ierr=nf90_redef(ncid)   ! as above (netCDF-4 would also switch on its own)
+    ! classic CDF-5 under PARALLEL_IO enforces define mode (netCDF-4 would
+    ! switch on its own)
+    ierr=nf90_redef(ncid)
 
-    varid = nccreate(ncid,'cf_south',(/dn_xr,dn_tm/),(/xi_rho,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'South boundary child flux')
-    ierr = nf90_put_att(ncid,varid,'units','W/m' )
-
-    varid = nccreate(ncid,'pf_south',(/dn_xr,dn_tm/),(/xi_rho,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'South boundary parent flux')
-    ierr = nf90_put_att(ncid,varid,'units','W/m' )
-
-    varid = nccreate(ncid,'ub_south',(/dn_xr,dn_tm/),(/xi_rho,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'South boundary binding velocity')
-    ierr = nf90_put_att(ncid,varid,'units','m/s' )
-
-    varid = nccreate(ncid,'cf_west',(/dn_yr,dn_tm/),(/xi_rho,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'West boundary child flux')
-    ierr = nf90_put_att(ncid,varid,'units','W/m' )
-
-    varid = nccreate(ncid,'pf_west',(/dn_yr,dn_tm/),(/xi_rho,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'West boundary parent flux')
-    ierr = nf90_put_att(ncid,varid,'units','W/m' )
-
-    varid = nccreate(ncid,'ub_west',(/dn_yr,dn_tm/),(/xi_rho,0/))
-    ierr = nf90_put_att(ncid,varid,'long_name'&
-    &,'West boundary binding velocity')
-    ierr = nf90_put_att(ncid,varid,'units','m/s' )
+    ! create_file has defined xi_rho and eta_rho
+    if (obc_south) call def_spn_side(ncid,'south','South',dn_xr)
+    if (obc_north) call def_spn_side(ncid,'north','North',dn_xr)
+    if (obc_east)  call def_spn_side(ncid,'east','East',dn_yr)
+    if (obc_west)  call def_spn_side(ncid,'west','West',dn_yr)
 
     ierr = nf90_enddef(ncid)
     ierr = nf90_close(ncid)
-#endif ! PARALLEL_IO
+#ifdef PARALLEL_IO
+    endif
+#endif
 
   end subroutine create_sp_tune_file !]
+! ----------------------------------------------------------------------
+  subroutine def_spn_side(ncid,side,label,dname)  ![
+    ! Define one side's fluxes and coefficients in the _spn file
+    implicit none
+    integer(kind=4),intent(in) :: ncid
+    character(len=*),intent(in) :: side,label,dname
+    integer(kind=4) :: varid,ierr
+
+    varid = nccreate(ncid,'cf_'//side,(/dname,dn_tm/))
+    ierr = nf90_put_att(ncid,varid,'long_name'&
+    &,label//' boundary child flux')
+    ierr = nf90_put_att(ncid,varid,'units','W/m' )
+
+    varid = nccreate(ncid,'pf_'//side,(/dname,dn_tm/))
+    ierr = nf90_put_att(ncid,varid,'long_name'&
+    &,label//' boundary parent flux')
+    ierr = nf90_put_att(ncid,varid,'units','W/m' )
+
+    varid = nccreate(ncid,'ub_'//side,(/dname,dn_tm/))
+    ierr = nf90_put_att(ncid,varid,'long_name'&
+    &,label//' boundary binding velocity')
+    ierr = nf90_put_att(ncid,varid,'units','m/s' )
+  end subroutine def_spn_side  !]
 ! ----------------------------------------------------------------------
   subroutine wrt_rst_ub(ncid,record)  ![
     ! Write the bc tuning coefficients to the restart file
