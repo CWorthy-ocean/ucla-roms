@@ -11,6 +11,8 @@ module calc_pflx_mod
   use ocean_vars, only: flxu, flxv, u, v, z_r, z_w, hz
 #ifdef SPLIT_EOS
   use eos_vars, only: rho1, qp1, qp2
+#elif defined NONLIN_EOS
+  use eos_vars, only: rho, K00
 #else
   use eos_vars, only: rho
 #endif
@@ -42,8 +44,9 @@ module calc_pflx_mod
   real(kind=8),allocatable,dimension(:,:) :: p_int     ! int p' dz, then its depth mean
   real(kind=8),allocatable,dimension(:,:) :: u_int,v_int ! int u' dz, int v' dz
 #if defined NONLIN_EOS && !defined SPLIT_EOS
-  ! d(rho)/d(depth) of sea water at fixed T, S [kg/m^4], (rho0+rho) g/c^2 for c ~ 1490 m/s
-  real(kind=8),parameter :: drho_ddepth = 4.5e-3_8
+  ! A typical sound speed of sea water [m/s]; the local one differs by a few
+  ! percent, which sets the error of drho_ddepth in calc_pressure_flux
+  real(kind=8),parameter :: c_sound = 1490._8
 #endif
 
   real(kind=8) :: alpha, beta       ! filtering constants (needed for child bry)
@@ -174,6 +177,9 @@ contains
     !local
     integer(kind=4) :: i,j,k
     real(kind=8)  :: grho, z0, rho_z0, hzu, hzv
+# if defined NONLIN_EOS && !defined SPLIT_EOS
+    real(kind=8)  :: drho_ddepth
+# endif
 
 # if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
     integer(kind=4) :: kbak
@@ -224,6 +230,11 @@ contains
 # ifdef SPLIT_EOS
             rho_z0 = rho1(i,j,k) - qp1(i,j,k)*z0*(1._8+qp2*z0)
 # elif defined NONLIN_EOS
+            ! d(rho)/d(depth) at fixed T, S [kg/m^4]: the compressibility of
+            ! sea water, (rho0+rho) g/c^2, minus that of the depth-only
+            ! profile rho0/(1 - 0.1|z|/K00), which rho_eos removes from rho
+            drho_ddepth = (rho0+rho(i,j,k))*g/c_sound**2&
+            &- 0.1_8*rho0*K00/(K00+0.1_8*z_r(i,j,k))**2
             rho_z0 = rho(i,j,k) + drho_ddepth*(z_r(i,j,k)-z0)
 # else
             rho_z0 = rho(i,j,k)
