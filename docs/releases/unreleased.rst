@@ -53,6 +53,12 @@ Bug Fixes
   - No namelist or cppdefs change is needed.
 
 - The inflow correction in UPSCALING builds no longer acts at a periodic seam, where it broke tracer conservation. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
+- Pressure fluxes up/vp in the child boundary and extraction files were shifted by two parent cells and zero next to every tile edge; they now sit on the correct points. (`#416 <https://github.com/CWorthy-ocean/ucla-roms/pull/416>`_)
+- ``calc_pflx`` now gives the internal-tide energy flux (Kelly, Nash & Kunze 2010) instead of one dominated by the surface tide's motion of the terrain-following levels. (`#416 <https://github.com/CWorthy-ocean/ucla-roms/pull/416>`_)
+
+  - The old error scaled with the difference between the mean density and ``rho0``, so it was large in every setup with ``rho0 = 1000`` and strong tides.
+  - The result no longer depends on ``rho0``; outputs, units, namelist keys and restart variable names are unchanged.
+
 
 Improvements
 ~~~~~~~~~~~~
@@ -68,3 +74,4 @@ Miscellaneous
 - ``test_rivers_real`` and ``test_pipes_real`` now carry a river and a pipe: ``partit`` garbled the generated forcing files (int64 and string variables), leaving zero volumes, so both tests ran source-free. The files are written numeric-only, the river sits on coastal land cells, and a check after partitioning fails if the per-rank files lose the forcing again. (`#414 <https://github.com/CWorthy-ocean/ucla-roms/pull/414>`_)
 - The boundary-conditions documentation describes the inflow treatment at open boundaries. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
 - References of the open-boundary regression tests are updated. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
+- The extraction tests now build with ``DIAGNOSTICS`` and check that up/vp are non-zero on every boundary point and independent of the tiling. (`#416 <https://github.com/CWorthy-ocean/ucla-roms/pull/416>`_)
