@@ -8,7 +8,9 @@ boundary file gets synthetic fluxes: smooth along each edge, varying in time.
 
 Each build, with and without PARALLEL_IO, runs the case on 2x2 ranks with
 restarts and the sponge-tuning output (``wrt_sponge``), on one rank, and again
-on 2x2 ranks restarted from the first restart. The checks:
+on 2x2 ranks restarted from the first restart; and twice more on 2x2 ranks
+without restarts, with averaged output (``sponge_avg``) and with output every
+step. The checks:
 
 - the corner points of the boundary data line up with the tiles: one rank gives
   the same coefficients and state as 2x2 (both builds read the boundary data
@@ -20,6 +22,8 @@ on 2x2 ranks restarted from the first restart. The checks:
   without ``sponge_avg``, holds the coefficients of the restart at the same
   time, the parent flux of the boundary file at the right points, and the child
   flux, for every side;
+- with ``sponge_avg`` each record is the mean, over the steps since the last
+  record, of what a run writing every step holds;
 - both builds give the same result.
 """
 import subprocess
@@ -89,7 +93,7 @@ def sponge_inputs(input_dir, tmp_path_factory) -> dict[str, Path]:
 @pytest.fixture(scope="module")
 def sponge_runs(tmp_path_factory, sponge_inputs):
     """``runs(build)``: compile the build and do its three runs, once; returns
-    ``{"tiled"|"one_rank"|"restart": run directory}``."""
+    ``{"tiled"|"one_rank"|"restart"|"averaged"|"every_step": run directory}``."""
     done = {}
 
     def runs(build: str) -> dict[str, Path]:
@@ -113,7 +117,8 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
         conf.compile()
 
         dirs = {}
-        for run, tiles in (("tiled", "2x2"), ("one_rank", "1x1"), ("restart", "2x2")):
+        for run, tiles in (("tiled", "2x2"), ("one_rank", "1x1"), ("restart", "2x2"),
+                           ("averaged", "2x2"), ("every_step", "2x2")):
             nml = create_test_namelist_dict(sponge_inputs["joined" if pio else tiles])
             nml["TIME_STEPPING"].update(dt=DT, ntimes=NTIMES)
             nml["PARAM_SETTINGS"].update(NP_XI=int(tiles[0]), NP_ETA=int(tiles[2]))
@@ -123,6 +128,13 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
             nml["SPONGE_TUNE_SETTINGS"].update(
                 ub_tune=True, sponge_timescale=SPONGE_TIMESCALE, wrt_sponge=True,
                 sponge_avg=False, nrpf_sponge=2, output_period_sponge=SPN_PERIOD)
+            if run in ("averaged", "every_step"):
+                # no restarts (their output-period check would need nrpf_sponge = 10 here)
+                nml["BASIC_OUTPUT_SETTINGS"]["wrt_file_rst"] = False
+                if run == "averaged":
+                    nml["SPONGE_TUNE_SETTINGS"].update(sponge_avg=True, nrpf_sponge=NTIMES * DT // SPN_PERIOD)
+                else:
+                    nml["SPONGE_TUNE_SETTINGS"].update(output_period_sponge=DT, nrpf_sponge=NTIMES)
             if run == "restart":
                 first = _joined(dirs["tiled"], "roms_rst", pio, join=False)[0]
                 nml["INITIAL_CONDITIONS"]["inifile"] = str(first)
@@ -236,6 +248,31 @@ def test_sponge_output(sponge_runs, sponge_inputs, build):
                                        err_msg=f"pf_{side} t={t}")
             # the corner points are not used and stay 0
             assert rec[f"pf_{side}"][0] == 0 and rec[f"pf_{side}"][-1] == 0, f"pf_{side} t={t}"
+
+
+@pytest.mark.parametrize("build", BUILDS)
+def test_sponge_averages(sponge_runs, build):
+    """With ``sponge_avg`` each ``_spn`` record is the mean over the steps since
+    the previous record (the record's own step included) of the values that a
+    run writing every step (without ``sponge_avg``) holds, for every variable
+    and side. Both files are single precision, so the tolerance is a few
+    float32 roundings of the largest value."""
+    pio = build == "parallel_io"
+    runs = sponge_runs(build)
+    averaged = _records(_joined(runs["averaged"], "roms_spn", pio))
+    steps = _records(_joined(runs["every_step"], "roms_spn", pio))
+    n = SPN_PERIOD // DT
+    t_steps = sorted(steps)
+    assert len(t_steps) == NTIMES and sorted(averaged) == t_steps[n - 1::n]
+    for k, t in enumerate(sorted(averaged)):
+        window = t_steps[k * n:(k + 1) * n]
+        assert window[-1] == t
+        for name, values in averaged[t].items():
+            mean = np.mean([steps[ts][name].astype(np.float64) for ts in window], axis=0)
+            scale = np.abs(mean).max()
+            assert scale > 0, f"{name} t={t}"
+            err = np.abs(values.astype(np.float64) - mean).max()
+            assert err <= 5e-7 * scale, f"{name} t={t}: {err / scale:.1e} of its largest value"
 
 
 def test_parallel_io_matches_per_rank(sponge_runs):
