@@ -45,8 +45,9 @@ module implicit_fs_mod
 
   ! Namelist IMPLICIT_FS (docs/model_settings/runtime_settings.md)
   character(len=8) :: fs_mode = 'split'        ! 'split' (step2d fast loop) | 'implicit'
-  real(kind=8)    :: fs_rho_inf = 0._8         ! generalized-alpha spectral radius at infinite
-                                               ! omega dt (0: L-stable; 1: Crank-Nicolson, no memory)
+  real(kind=8)    :: fs_rho_inf = 0.5_8        ! generalized-alpha spectral radius at infinite
+                                               ! omega dt (0: L-stable; 1: Crank-Nicolson, no memory);
+                                               ! default 0.5 with fs_nsub = 2, fs_pg_rho, fs_flather_zghost
   real(kind=8)    :: fs_theta = 0.5_8          ! PG off-centring: th_p = th*(rho_inf) + fs_theta - 0.5
   real(kind=8)    :: fs_theta_div = 0.5_8      ! divergence off-centring: th_d = th* + fs_theta_div - 0.5
   real(kind=8)    :: fs_tol = 1.e-8_8          ! relative area-weighted residual
@@ -103,16 +104,16 @@ module implicit_fs_mod
                                                ! (FS_SRC also in fs_mode = 'split')
   integer(kind=4) :: fs_selftest = 0           ! 1: at the first step, a manufactured solution of
                                                ! A (FS_TEST lines), then the step as usual
-  integer(kind=4) :: fs_nsub = 1               ! implicit barotropic sub-steps of dt/fs_nsub per 3-D step (1..4);
+  integer(kind=4) :: fs_nsub = 2               ! implicit barotropic sub-steps of dt/fs_nsub per 3-D step (1..4);
                                                ! rufrc is held over the step, the forcing times move to
                                                ! s = (alpha_f + (fs_nsub-1)/2)/fs_nsub of the step
-  logical :: fs_pg_rho = .false.               ! .true.: the implicit pressure-gradient operator carries the density
-                                               ! weighting of the depth-integrated 3-D pressure gradient (rhoS, rhoA
-                                               ! of rho_eos, as step2d's rubar does); without VAR_RHO_2D it is
-                                               ! set to .false. (with a log line)
-  logical :: fs_flather_zghost = .false.       ! open (Flather) faces: .true.: the sea level of the condition is the
-                                               ! mean of the first interior and of the boundary rho point, as the
-                                               ! split's u2dbc uses it (zx), so that the implicit step tends to the
+  logical :: fs_pg_rho = .true.                ! .true. (default): the implicit pressure-gradient operator carries
+                                               ! the density weighting of the depth-integrated 3-D pressure
+                                               ! gradient (rhoS, rhoA of rho_eos, as step2d's rubar does); without
+                                               ! VAR_RHO_2D it is set to .false. (with a log line)
+  logical :: fs_flather_zghost = .true.        ! open (Flather) faces: .true. (default): the sea level of the condition
+                                               ! is the mean of the first interior and of the boundary rho point, as
+                                               ! the split's u2dbc uses it (zx), so that the implicit step tends to the
                                                ! split's boundary solution as dt -> 0; the boundary value follows the
                                                ! radiation condition of fs_zeta_bc and is eliminated (a diagonal Robin
                                                ! term, see fs_step_tile). .false.: the first interior value alone, which

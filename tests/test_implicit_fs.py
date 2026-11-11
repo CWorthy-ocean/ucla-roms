@@ -63,7 +63,9 @@ def test_implicit_fs_exact_restart(implicit_fs_configuration, input_dir, tmp_pat
 
     The restart after step 10 (10 or 20 solves) falls inside a period of the
     coarse-operator rebuild (fs_mg_lag = 4 or 3), so the restart file's
-    multigrid operator is used. fs_nsub = 2: two implicit sub-steps per step.
+    multigrid operator is used. fs_nsub = 2: two implicit sub-steps per step
+    (the default); the other keys are at their defaults (fs_rho_inf = 0.5,
+    fs_pg_rho and fs_flather_zghost on).
     """
     conf = implicit_fs_configuration
     nml = implicit_fs_namelist(input_dir, fs_mg_lag=fs_mg_lag, fs_nsub=fs_nsub)
