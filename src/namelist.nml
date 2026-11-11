@@ -617,6 +617,9 @@ fs_nsub = 1                          ! Implicit sub-steps of dt/fs_nsub per baro
                                      ! accurate tides (phase error / ~4 with 2), one solve per sub-step
 fs_pg_rho = .false.                  ! Implicit pressure-gradient operator with the density weighting of the
                                      ! 3-D pressure gradient (as the split loop's); allows fs_rho_inf > 0.6
+fs_flather_zghost = .false.          ! Open (Flather) faces: sea level of the condition = mean of the first
+                                     ! interior and the boundary point (as the split loop's); .false.: the
+                                     ! first interior value (boundary-forced tide later by ~dx/(2 sqrt(g h)))
 fs_tol = 1.0e-8                      ! Relative residual of the elliptic solve (volume is exact regardless)
 fs_maxit = 1000                      ! Iteration cap of the solve (counted, no abort)
 fs_precond = 'mg'                    ! Preconditioner: 'mg' multigrid V-cycle | 'jacobi'

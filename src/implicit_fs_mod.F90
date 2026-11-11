@@ -109,11 +109,19 @@ module implicit_fs_mod
   logical :: fs_pg_rho = .false.               ! .true.: the implicit pressure-gradient operator carries the density
                                                ! weighting of the depth-integrated 3-D pressure gradient (rhoS, rhoA
                                                ! of rho_eos, as step2d's rubar does); needs VAR_RHO_2D
+  logical :: fs_flather_zghost = .false.       ! open (Flather) faces: .true.: the sea level of the condition is the
+                                               ! mean of the first interior and of the boundary rho point, as the
+                                               ! split's u2dbc uses it (zx), so that the implicit step tends to the
+                                               ! split's boundary solution as dt -> 0; the boundary value follows the
+                                               ! radiation condition of fs_zeta_bc and is eliminated (a diagonal Robin
+                                               ! term, see fs_step_tile). .false.: the first interior value alone, which
+                                               ! makes the boundary-forced tide later than the split's by about
+                                               ! dx/(2 sqrt(g h)) on the open edges
   namelist /IMPLICIT_FS/ fs_mode, fs_rho_inf, fs_theta, fs_theta_div, fs_tol, fs_maxit, fs_precond,&
   &  fs_mg_levels, fs_mg_nu, fs_mg_smoother, fs_mg_lag, fs_mg_gather, fs_mg_global_on, fs_mg_faces,&
   &  fs_exch_thin, fs_drag_implicit,&
   &  fs_warm, fs_verbose, fs_selftest, fs_tang_nudge,&
-  &  fs_cor_metric, fs_pot_time, fs_stress_time, fs_nsub, fs_pg_rho
+  &  fs_cor_metric, fs_pot_time, fs_stress_time, fs_nsub, fs_pg_rho, fs_flather_zghost
 
   logical, public, protected :: fs_on = .false.   ! fs_mode = 'implicit'
   logical, public, protected :: fs_srcdiag = .false.  ! fs_verbose >= 2: FS_SRC line per step (both modes)
@@ -327,6 +335,7 @@ contains
       write(*,'(1x,A,I2,A,F7.4,A,F7.4,A)') 'IMPLICIT_FS: fs_nsub =', fs_nsub, ' (implicit sub-steps of dt/fs_nsub;'&
       &//' explicit forcing at time +', sft, ' dt, boundary tidal harmonics at time +', fs_bry_phase, ' dt)'
       write(*,'(1x,A,L1)') 'IMPLICIT_FS: fs_pg_rho = ', fs_pg_rho
+      write(*,'(1x,A,L1)') 'IMPLICIT_FS: fs_flather_zghost = ', fs_flather_zghost
       if (mg_on) write(*,'(1x,A,I7,A,A,A,A,A,I3,A,L1)') 'IMPLICIT_FS: fs_mg_gather =', fs_mg_gather,&
       &  ' fs_mg_global_on = ', trim(fs_mg_global_on), ' fs_mg_faces = ', trim(fs_mg_faces),&
       &  ' fs_mg_lag =', fs_mg_lag, ' fs_exch_thin = ', fs_exch_thin
@@ -757,6 +766,7 @@ contains
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     integer(kind=4) :: i, j, iface, iriv, its, ierr, icdr, cidx, k, ks, kn, l, nl, lsc(2)
     real(kind=8) :: th, b1, df, ainv, gam, m, d, hf, cb, cx, resid, rf, t0, c, rn
+    real(kind=8) :: w1, w0                  ! fs_flather_zghost: weights of zeta_int^n+1 and of the old boundary value
     real(kind=8) :: vloc(4), vglob(4)
     logical :: conv, ga0
 
@@ -932,6 +942,15 @@ contains
       enddo
     endif
     ! open normal boundary faces: Flather on the th_d-level flux (or specified)
+    ! fs_flather_zghost: the Flather sea level is the mean of the first interior value zeta_1 and of the boundary
+    ! value zeta_b, (zeta_1^n+1 + zeta_b^n+1)/2, as the split's u2dbc takes it (zx). With the radiation condition of
+    ! fs_zeta_bc, zeta_b^n+1 = (zeta_b^n + cx zeta_1^n+1)/(1 + cx), cx = dts pm sqrt(g h) at the first interior
+    ! point, this is w1 zeta_1^n+1 + w0 zeta_b^n with w1 = (1 + 2 cx)/(2 (1 + cx)), w0 = 1/(2 (1 + cx)): the Robin
+    ! coefficient becomes cb w1 (1/2 <= w1 < 1: the operator stays symmetric positive definite) and w0 zeta_b^n
+    ! joins the explicit part. For resolved signals zeta_b follows zeta_1 with the delay dx/c, so the condition
+    ! sees the first interior sea level of dx/(2c) earlier, as the split's does. The key-off statements stay
+    ! unconditional and the key overrides them afterwards: moved into an else branch they gave key-off results
+    ! that differed at rounding level (ifx -O3 code shape).
 #ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
 # if defined OBC_WEST && defined M2_FRC_BRY && defined Z_FRC_BRY
@@ -950,6 +969,12 @@ contains
         ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
         &           - cb*(zeta(istr,j,ks) - zeta_west(j)) - unu(istr,j)))
         rb(istr,j) = rb(istr,j) + dts*thd*cb ; cbu(istr,j) = cb
+        if (fs_flather_zghost) then
+          cx = dts*pm(istr,j)*sqrt(g*h(istr,j)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
+          ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
+          &           - cb*(w1*zeta(istr,j,ks) + w0*zeta(istr-1,j,ks) - zeta_west(j)) - unu(istr,j)))
+          rb(istr,j) = rb(istr,j) + dts*thd*cb*(w1-1._8) ; cbu(istr,j) = cb*w1
+        end if
 #  endif
       enddo
 # endif
@@ -971,6 +996,12 @@ contains
         ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
         &             + cb*(zeta(iend,j,ks) - zeta_east(j)) - unu(iend+1,j)))
         rb(iend,j) = rb(iend,j) + dts*thd*cb ; cbu(iend+1,j) = cb
+        if (fs_flather_zghost) then
+          cx = dts*pm(iend,j)*sqrt(g*h(iend,j)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
+          ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
+          &             + cb*(w1*zeta(iend,j,ks) + w0*zeta(iend+1,j,ks) - zeta_east(j)) - unu(iend+1,j)))
+          rb(iend,j) = rb(iend,j) + dts*thd*cb*(w1-1._8) ; cbu(iend+1,j) = cb*w1
+        end if
 #  endif
       enddo
 # endif
@@ -994,6 +1025,12 @@ contains
         ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
         &           - cb*(zeta(i,jstr,ks) - zeta_south(i)) - unv(i,jstr)))
         rb(i,jstr) = rb(i,jstr) + dts*thd*cb ; cbv(i,jstr) = cb
+        if (fs_flather_zghost) then
+          cx = dts*pn(i,jstr)*sqrt(g*h(i,jstr)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
+          ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
+          &           - cb*(w1*zeta(i,jstr,ks) + w0*zeta(i,jstr-1,ks) - zeta_south(i)) - unv(i,jstr)))
+          rb(i,jstr) = rb(i,jstr) + dts*thd*cb*(w1-1._8) ; cbv(i,jstr) = cb*w1
+        end if
 #  endif
       enddo
 # endif
@@ -1015,6 +1052,12 @@ contains
         ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
         &             + cb*(zeta(i,jend,ks) - zeta_north(i)) - unv(i,jend+1)))
         rb(i,jend) = rb(i,jend) + dts*thd*cb ; cbv(i,jend+1) = cb
+        if (fs_flather_zghost) then
+          cx = dts*pn(i,jend)*sqrt(g*h(i,jend)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
+          ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
+          &             + cb*(w1*zeta(i,jend,ks) + w0*zeta(i,jend+1,ks) - zeta_north(i)) - unv(i,jend+1)))
+          rb(i,jend) = rb(i,jend) + dts*thd*cb*(w1-1._8) ; cbv(i,jend+1) = cb*w1
+        end if
 #  endif
       enddo
 # endif
@@ -1770,7 +1813,8 @@ contains
     ! Normal boundary faces of ubar/vbar(kn) (before fs_tang_bc, which sets the
     ! tangential faces). Open edges: Flather U_b^n+1 = Ue(n+1) + s cb (zeta_int^n+1 - ze(n+1)),
     ! ubar = U_b/(Df^n+1 dn_u); specified: ubar = ubar_ext(n+1). wd holds D^n+1. ks, kn: the
-    ! (sub-)step's source and new levels.
+    ! (sub-)step's source and new levels. fs_flather_zghost: zeta_int^n+1 is replaced by
+    ! w1 zeta_int^n+1 + w0 zeta_b(ks), zeta_b the boundary value (see the Flather faces of fs_step_tile).
     ! Closed physical edges (no OBC_<edge>, not periodic): ubar/vbar(kn) = 0 on the normal
     ! faces every step, as u2dbc/v2dbc's closed-edge branch (no-flux). The solve treats these
     ! faces as closed (a = c = Ftil = 0, Fbar = 0) but sets no velocity there, so without this
@@ -1779,7 +1823,8 @@ contains
     use param, only: np_xi, np_eta
     use dimensions, only: inode, jnode
     use ocean_vars, only: zeta, ubar, vbar
-    use grid, only: h, dn_u, dm_v
+    use grid, only: h, dn_u, dm_v, pm, pn
+    use scalars, only: g
 #ifdef MASKING
     use grid, only: umask, vmask
 #endif
@@ -1802,7 +1847,7 @@ contains
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend, ks, kn
     integer(kind=4) :: i, j
-    real(kind=8) :: m, dfn, ub
+    real(kind=8) :: m, dfn, ub, cx, w1, w0
 #include "compute_auxiliary_bounds.h"
 #ifndef EW_PERIODIC
 # ifndef OBC_WEST
@@ -1849,7 +1894,13 @@ contains
         ubar(istr,j,kn) = m*ubar_west(j)
 #   else
         dfn = 0.5_8*(h(istr-1,j)+zeta(istr-1,j,ks)+h(istr,j)+zeta(istr,j,ks))
+        if (fs_flather_zghost) then          ! cbu = cb w1
+          cx = dts*pm(istr,j)*sqrt(g*h(istr,j)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
+          ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,kn)&
+          &        + (w0*zeta(istr-1,j,ks) - zeta_west(j))/w1) )
+        else
         ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,kn) - zeta_west(j)) )
+        end if
         ubar(istr,j,kn) = 2._8*ub/((wd(istr-1,j)+wd(istr,j))*dn_u(istr,j))
 #   endif
       enddo
@@ -1866,7 +1917,13 @@ contains
         ubar(iend+1,j,kn) = m*ubar_east(j)
 #   else
         dfn = 0.5_8*(h(iend,j)+zeta(iend,j,ks)+h(iend+1,j)+zeta(iend+1,j,ks))
+        if (fs_flather_zghost) then
+          cx = dts*pm(iend,j)*sqrt(g*h(iend,j)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
+          ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,kn)&
+          &        + (w0*zeta(iend+1,j,ks) - zeta_east(j))/w1) )
+        else
         ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,kn) - zeta_east(j)) )
+        end if
         ubar(iend+1,j,kn) = 2._8*ub/((wd(iend,j)+wd(iend+1,j))*dn_u(iend+1,j))
 #   endif
       enddo
@@ -1885,7 +1942,13 @@ contains
         vbar(i,jstr,kn) = m*vbar_south(i)
 #   else
         dfn = 0.5_8*(h(i,jstr-1)+zeta(i,jstr-1,ks)+h(i,jstr)+zeta(i,jstr,ks))
+        if (fs_flather_zghost) then
+          cx = dts*pn(i,jstr)*sqrt(g*h(i,jstr)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
+          ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,kn)&
+          &        + (w0*zeta(i,jstr-1,ks) - zeta_south(i))/w1) )
+        else
         ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,kn) - zeta_south(i)) )
+        end if
         vbar(i,jstr,kn) = 2._8*ub/((wd(i,jstr-1)+wd(i,jstr))*dm_v(i,jstr))
 #   endif
       enddo
@@ -1902,7 +1965,13 @@ contains
         vbar(i,jend+1,kn) = m*vbar_north(i)
 #   else
         dfn = 0.5_8*(h(i,jend)+zeta(i,jend,ks)+h(i,jend+1)+zeta(i,jend+1,ks))
+        if (fs_flather_zghost) then
+          cx = dts*pn(i,jend)*sqrt(g*h(i,jend)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
+          ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,kn)&
+          &        + (w0*zeta(i,jend+1,ks) - zeta_north(i))/w1) )
+        else
         ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,kn) - zeta_north(i)) )
+        end if
         vbar(i,jend+1,kn) = 2._8*ub/((wd(i,jend)+wd(i,jend+1))*dm_v(i,jend+1))
 #   endif
       enddo

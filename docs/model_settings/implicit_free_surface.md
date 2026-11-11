@@ -73,10 +73,19 @@ Preconditioners (`fs_precond`):
 ## 4. Boundary conditions
 
 - **Closed edges and land**: no flux through the face; the normal barotropic velocity on a closed physical edge is set to zero each step.
-- **Open edges** (`OBC_WEST`, ... with `M2_FRC_BRY` and `Z_FRC_BRY`, which the implicit step requires): with `OBC_M2FLATHER` the normal transport is a Flather condition on the flux that advances the free surface, `U_b = D dn ubar_ext + s c_b (zeta_int - zeta_ext)` with `c_b = D dn sqrt(g/h)`, treated implicitly (a Robin term of the elliptic equation). `OBC_M2ORLANSKI` and open edges without an `OBC_M2` type use the same Flather form (a note is printed). `OBC_M2SPECIFIED` prescribes the transport. The boundary transport carries the generalized-alpha memory, so the external data enter at the scheme's forcing time.
+- **Open edges** (`OBC_WEST`, ... with `M2_FRC_BRY` and `Z_FRC_BRY`, which the implicit step requires): with `OBC_M2FLATHER` the normal transport is a Flather condition on the flux that advances the free surface, `U_b = D dn ubar_ext + s c_b (zeta_int - zeta_ext)` with `c_b = D dn sqrt(g/h)`, treated implicitly (a Robin term of the elliptic equation). `OBC_M2ORLANSKI` and open edges without an `OBC_M2` type use the same Flather form (a note is printed). `OBC_M2SPECIFIED` prescribes the transport. The boundary transport carries the generalized-alpha memory, so the external data enter at the scheme's forcing time. `zeta_int` is the first interior sea level, or with `fs_flather_zghost = .true.` the mean of the first interior and the boundary value (below).
 - **Free surface on open edges**: backward-Euler upwind radiation (the implicit form of `zetabc`).
 - **Tangential velocities on open edges**: the backward-Euler form of the split mode's condition (upwind advection by the normal flow, nudging to the external data on inflow, rate scaled by `fs_tang_nudge`).
 - **Tides at the boundary**: with the implicit free surface the boundary tidal harmonics are evaluated at `n+1` (the split loop uses `n+1/2`, the centre of its fast-step interval); with `fs_nsub > 1` at the mean of the sub-steps' end times (section 2).
+
+### Sea level of the Flather condition (`fs_flather_zghost`)
+
+The split loop's Flather condition (`u2dbc`) compares the external sea level with the mean of the first interior and the boundary rho point, and the boundary point follows the first interior point through the radiation condition (`zetabc`), with the delay `dx/c`, `c = sqrt(g h)`. That condition therefore sees the first interior sea level of about `dx/(2c)` earlier.
+
+- `fs_flather_zghost = .false.` (default): the implicit condition uses the current first interior sea level. A tide forced through the open boundaries is then later than the split loop's by about `dx/(2c)` at the edges, at any `dt` (6-7 s for M2, 0.05 deg, on a 2.5 km grid with 1100-2500 m of water at the edges).
+- `fs_flather_zghost = .true.`: the implicit condition uses the same mean as the split loop. The boundary value is eliminated with the radiation condition of the implicit step, `zeta_b^n+1 = (zeta_b^n + cx zeta_int^n+1)/(1 + cx)`, `cx = dt c/dx`, which leaves a diagonal Robin term with the coefficient `c_b (1 + 2 cx)/(2 (1 + cx))` and an explicit term with the old boundary value. The operator stays symmetric and positive definite; the cost, the solver and the restart file are unchanged. The implicit step then tends to the split loop's boundary solution as `dt` goes to zero.
+
+Both forms approximate the condition at the boundary face to first order in `dx`; the option selects agreement with the split loop, not a higher order. It has no effect on closed domains and with `OBC_M2SPECIFIED`.
 
 ## 5. Volume sources
 
