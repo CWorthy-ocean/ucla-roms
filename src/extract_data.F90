@@ -1088,8 +1088,10 @@ contains
           endif
 #endif
 
-          if (obj(i)%passive) then
-            do indt=iTandS+1,iTandS+nt_passive
+          ! The tracers after temp and salt: passive, CDR OAE, CDR DOR and
+          ! BGC, each as its group's output_vars name requests
+          do indt=iTandS+1,nt
+            if (.not. tracer_requested(obj(i),indt)) cycle
 #ifdef PARALLEL_IO
               oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
               pio_gtype = pio_bnd // '2rc'
@@ -1111,108 +1113,7 @@ contains
           else
             call ncwrite(ncid,oname,dummy2d,start2D,.true.)
           endif
-            enddo ! indt
-          endif  ! passive
-
-          if (obj(i)%cdr_oae) then
-            do indt=iTandS+nt_passive+1,iTandS+nt_passive+2*nt_cdr_oae,2
-#ifdef PARALLEL_IO
-              oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
-              pio_gtype = pio_bnd // '2rc'
-#else
-              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
-#endif
-          if (obj(i)%np > 0) then
-              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (remap) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), nzc,&
-                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
-              endif
-          else
-            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
-          endif
-
-#ifdef PARALLEL_IO
-              oname = trim(t_vname(indt+1)) // trim(obj(i)%bnd)
-              pio_gtype = pio_bnd // '2rc'
-#else
-              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt+1))//trim(obj(i)%bnd)
-#endif
-          if (obj(i)%np > 0) then
-              call interpolate(t(:,:,:,nstp,indt+1),obj(i)%vari,coef,ip,jp)
-              if (remap) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), nzc,&
-                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
-              endif
-          else
-            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
-          endif
-            enddo ! indt
-          endif  ! cdr_oae
-
-          if (obj(i)%cdr_dor) then
-            do indt=iTandS+nt_passive+2*nt_cdr_oae+1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
-#ifdef PARALLEL_IO
-              oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
-              pio_gtype = pio_bnd // '2rc'
-#else
-              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
-#endif
-          if (obj(i)%np > 0) then
-              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (remap) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), nzc,&
-                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
-              endif
-          else
-            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
-          endif
-            enddo ! indt
-          endif  ! cdr_dor
-
-          if (obj(i)%bgc) then
-            do indt=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
-#ifdef PARALLEL_IO
-              oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
-              pio_gtype = pio_bnd // '2rc'
-#else
-              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
-#endif
-          if (obj(i)%np > 0) then
-              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (remap) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), nzc,&
-                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
-              endif
-          else
-            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
-          endif
-            enddo ! indt
-          endif  ! bgc
+          enddo ! indt
 
 !     w variables --------------------------------------------------------
 
@@ -1440,8 +1341,7 @@ contains
     integer(kind=4),dimension(4) :: child_dimnums_u
     integer(kind=4),dimension(4) :: child_dimnums_v
 #ifdef PARALLEL_IO
-    logical, dimension(nt) :: want_t   ! tracers written for a boundary
-    integer(kind=4) :: it0
+    integer(kind=4) :: iobj
 
     do ic = 1,nchd
     if (mynode == 0) then
@@ -1494,21 +1394,8 @@ contains
         ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
         endif
 
-        want_t = .false.
-        want_t(itemp) = wants(ic,bnd,obj%temp)
-#ifdef SALINITY
-        want_t(isalt) = wants(ic,bnd,obj%salt)
-#endif
-        it0 = iTandS
-        want_t(it0+1:it0+nt_passive) = wants(ic,bnd,obj%passive)
-        it0 = it0+nt_passive
-        want_t(it0+1:it0+2*nt_cdr_oae) = wants(ic,bnd,obj%cdr_oae)
-        it0 = it0+2*nt_cdr_oae
-        want_t(it0+1:it0+nt_cdr_dor) = wants(ic,bnd,obj%cdr_dor)
-        it0 = it0+nt_cdr_dor
-        want_t(it0+1:nt) = wants(ic,bnd,obj%bgc)
         do indt=1,nt
-        if (want_t(indt)) then
+        if (wants(ic,bnd,[(tracer_requested(obj(iobj),indt), iobj=1,nobj)])) then
         dimid3d = (/child_dimnums_t(bnd), dimid5, dimid0/)
         ierr=nf90_def_var(ncid,trim(t_vname(indt)) // '_' // trim(child_bnd_name(bnd)),nf90_double,dimid3d,varid)
         ierr = nf90_put_att(ncid,varid,'long_name',trim(t_lname(indt)))
@@ -1618,30 +1505,10 @@ contains
         if (obj(i)%up)   call create_var(ncid,obj(i),'up',dname,dsize)
         if (obj(i)%vp)   call create_var(ncid,obj(i),'vp',dname,dsize)
 
-        if (obj(i)%passive) then
-          do indt=iTandS+1,iTandS+nt_passive
-            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
-          enddo
-        endif
-
-        if (obj(i)%cdr_oae) then
-          do indt=iTandS+nt_passive+1,iTandS+nt_passive+2*nt_cdr_oae,2
-            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
-            call create_var(ncid,obj(i),t_vname(indt+1),dname3,dsize3,-99)
-          enddo
-        endif
-
-        if (obj(i)%cdr_dor) then
-          do indt=iTandS+nt_passive+2*nt_cdr_oae+1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
-            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
-          enddo
-        endif
-
-        if (obj(i)%bgc) then
-          do indt=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
-            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
-          enddo
-        endif
+        do indt=iTandS+1,nt   ! passive, CDR and BGC tracers
+          if (tracer_requested(obj(i),indt))&
+          &call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
+        enddo
 
       endif
     enddo
@@ -1702,6 +1569,32 @@ contains
     &obj%bnd == '_'//trim(child_bnd_name(bnd)))
 
   end function wants !]
+! ----------------------------------------------------------------------
+  logical function tracer_requested(o,indt) ![
+    ! Does object o request tracer indt? Every tracer group has its own
+    ! output_vars name. The tracers are temp, salt, then the passive,
+    ! CDR OAE (two per release), CDR DOR and BGC groups, in that order.
+    implicit none
+    type(extract_object), intent(in) :: o
+    integer(kind=4),      intent(in) :: indt
+
+    if (indt == itemp) then
+      tracer_requested = o%temp
+#ifdef SALINITY
+    else if (indt == isalt) then
+      tracer_requested = o%salt
+#endif
+    else if (indt <= iTandS+nt_passive) then
+      tracer_requested = o%passive
+    else if (indt <= iTandS+nt_passive+2*nt_cdr_oae) then
+      tracer_requested = o%cdr_oae
+    else if (indt <= iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor) then
+      tracer_requested = o%cdr_dor
+    else
+      tracer_requested = o%bgc
+    endif
+
+  end function tracer_requested !]
 ! ----------------------------------------------------------------------
   logical function in_list(list,name) ![
     ! Is name one of the comma- or blank-separated entries of list
