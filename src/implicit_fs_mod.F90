@@ -108,7 +108,8 @@ module implicit_fs_mod
                                                ! s = (alpha_f + (fs_nsub-1)/2)/fs_nsub of the step
   logical :: fs_pg_rho = .false.               ! .true.: the implicit pressure-gradient operator carries the density
                                                ! weighting of the depth-integrated 3-D pressure gradient (rhoS, rhoA
-                                               ! of rho_eos, as step2d's rubar does); needs VAR_RHO_2D
+                                               ! of rho_eos, as step2d's rubar does); without VAR_RHO_2D it is
+                                               ! set to .false. (with a log line)
   logical :: fs_flather_zghost = .false.       ! open (Flather) faces: .true.: the sea level of the condition is the
                                                ! mean of the first interior and of the boundary rho point, as the
                                                ! split's u2dbc uses it (zx), so that the implicit step tends to the
@@ -277,8 +278,11 @@ contains
     if (fs_rho_inf < 0._8 .or. fs_rho_inf > 1._8) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_rho_inf must lie in [0, 1]")
 #ifndef VAR_RHO_2D
-    if (fs_pg_rho) call error_log%raise_global(&
-    &  context=trim(module_name)//"/"//sr_name, info="fs_pg_rho needs VAR_RHO_2D")
+    if (fs_pg_rho) then                     ! no rhoS, rhoA without VAR_RHO_2D: the operator keeps plain g
+      fs_pg_rho = .false.
+      if (mynode == 0) write(*,'(1x,A)') 'IMPLICIT_FS: fs_pg_rho needs VAR_RHO_2D, which is not defined:'&
+      &//' fs_pg_rho = .false.'
+    end if
 #endif
     if (fs_nsub < 1 .or. fs_nsub > 4) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_nsub must lie in [1, 4]")
