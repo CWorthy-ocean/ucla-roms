@@ -234,10 +234,10 @@ Sponge tuning tunes the sponge values near the boundaries to attempt to match th
 
 | Setting | Description |
 |--------|-------------|
-| `ub_tune` | Tune boundary sponge layer if `.true.` |
+| `ub_tune` | Tune boundary sponge layer if `.true.` (default `.false.`) |
 | `sponge_timescale` | Filtering timescale (s) |
-| `wrt_sponge` | Output sponge tuning fields if `.true`. |
-| `sponge_avg` | Sponge tuning output averaged if `.true.` or instantaneous if `.false`   |
+| `wrt_sponge` | Output sponge tuning fields if `.true.` (default `.false.`) |
+| `sponge_avg` | Sponge tuning output averaged if `.true.` or instantaneous if `.false.` (default `.true.`) |
 | `nrpf_sponge` | Number of records per sponge file |
 | `output_period_sponge` | Output frequency of sponge tuning file (s) |
 
