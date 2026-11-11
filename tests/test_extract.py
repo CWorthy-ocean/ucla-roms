@@ -370,6 +370,32 @@ def test_all_variables_written(tmp_path, extract_conf, input_dir, pio_input_dir,
         assert np.abs(tracer - temp).max() <= 1e-2 * np.abs(temp).max(), n
 
 
+def test_children_request_different_variables(tmp_path, extract_conf, input_dir,
+                                              pio_input_dir, nesting_files):
+    """Two children whose nesting files request different variables: child
+    A's rho points request 'passive', child B's do not. Each child's
+    boundary file holds exactly its own requests, all written. (Defining a
+    variable in a child's file because another child requests it would
+    leave it at the fill value, as for a MARBL parent nesting one child
+    with bgc and one without.)"""
+    conf = extract_conf
+    if not conf.pio:
+        pytest.skip("only PARALLEL_IO writes one boundary file per child")
+    ini = _passive_ini(conf, input_dir, pio_input_dir, tmp_path)
+    a = dict(_child(conf, nesting_files, "A"), file=nesting_files["A_passive"])
+    b = _child(conf, nesting_files, "B")
+    nml = _nml(conf, input_dir, pio_input_dir, [a, b])
+    nml["PARAM_SETTINGS"]["nt_passive"] = 1
+    nml["INITIAL_CONDITIONS"]["inifile"] = str(ini)
+    conf.run(nml, cwd=tmp_path)
+    values = {c: _boundary_values(conf, tmp_path, f"child{c}") for c in "AB"}
+    passive = {f"passive_tracer1_{bnd}" for bnd in ("south", "north", "east", "west")}
+    assert passive <= set(values["A"])
+    assert passive & set(values["B"]) == set()
+    _assert_all_written(values["A"])
+    _assert_all_written(values["B"])
+
+
 def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files):
     """Settings that cannot work (for several children, or with PARALLEL_IO)
     stop ROMS at startup."""
