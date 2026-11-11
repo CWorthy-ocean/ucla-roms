@@ -1047,8 +1047,9 @@ contains
 #endif
     call tq(1)                              ! Qbar = Q (the volume the 3-D step adds: omega, step3d_t)
 
-    ! ---- (C) halos of the face coefficients and explicit fluxes (E1)
-    call exchange_xxx(cu, cv, ftu, ftv)
+    ! ---- (C) halos of the face coefficients and explicit fluxes (E1): read only on the tile's eastern and
+    ! northern faces (D, fs_apply, the multigrid coarsening), so one cell without corners
+    call exchange_xxx(cu, cv, ftu, ftv, exch_bf=1, do_corn=.false.)
     call tq(2)
 
     ! ---- (D) operator diagonal, rhs
@@ -1101,7 +1102,7 @@ contains
     end if
 
     ! ---- (F) momentum and fluxes on owned faces
-    call exchange_xxx(xx)                                    ! E2
+    call exchange_xxx(xx, exch_bf=1, do_corn=.false.)        ! E2: read by (F) and the next solve's fs_apply
     call tq(10)
     fbu = 0._8 ; fbv = 0._8 ; u1u = 0._8 ; u1v = 0._8
     do j=jstr,jend
@@ -1195,7 +1196,7 @@ contains
     end if
     ga_first = .false.
     call tq(9)
-    call exchange_xxx(fbu, fbv)                              ! E3
+    call exchange_xxx(fbu, fbv, exch_bf=1, do_corn=.false.)  ! E3: read on the eastern and northern faces
     call tq(10)
 
     ! ---- (G) zeta^n+1 from the exact divergence; boundary rho points
@@ -1216,7 +1217,11 @@ contains
     enddo
     call fs_zeta_bc(istr,iend,jstr,jend, .false., ks, kn)
     call tq(9)
-    call exchange_xxx(zeta(:,:,kn))                          ! E4a
+    if (k < fs_nsub) then                   ! E4a of a sub-step: read one cell wide with corners (B, H)
+      call exchange_xxx(zeta(:,:,kn), exch_bf=1)             ! E4a
+    else                                    ! the last: set_depth and the 3-D step read the full halo
+      call exchange_xxx(zeta(:,:,kn))                        ! E4a
+    end if
     call fs_zeta_bc(istr,iend,jstr,jend, .true., ks, kn)   ! boundary rho points in the halo rows
     call tq(10)
 
@@ -1338,7 +1343,7 @@ contains
     end if
     if (k < fs_nsub) then
       call tq(9)
-      call exchange_xxx(ubar(:,:,kn),vbar(:,:,kn))           ! E4b of the sub-step
+      call exchange_xxx(ubar(:,:,kn),vbar(:,:,kn), exch_bf=1)   ! E4b of the sub-step (one cell, corners)
       call tq(10)
     end if
     enddo                                   ! sub-steps
@@ -2060,7 +2065,8 @@ contains
 
   !----------------------------------------------------------------------
   subroutine fs_pcg(its, resid, conv)
-    ! PCG for A delta = b (section 3): x = xx (warm start: last delta), b = bb.
+    ! PCG for A delta = b (section 3): x = xx (warm start: last delta), b = bb. The halo of xx is current: the
+    ! exchange E2 of the last solve, fs_rst_get, or xx = 0 everywhere (fs_warm = 0, the self-tests).
     ! One halo exchange of p and two MPI_Allreduce per iteration. Stops when
     ! sqrt(sum r^2/ar) <= fs_tol sqrt(sum b^2/ar). resid: the final relative residual.
     ! Multigrid: the reduction of <p,q> also carries <r,q> and <q,q> (area-weighted), which give the new
@@ -2070,7 +2076,6 @@ contains
     ! used. The stopping test uses the directly computed norm as before: same iterates, same iteration count.
     use param, only: ocean_grid_comm
     use grid, only: pm, pn
-    use roms_mpi, only: exchange_xxx
     use mpi_f08, only: mpi_wtime, mpi_allreduce, mpi_double_precision, mpi_sum
     implicit none
     integer(kind=4), intent(out) :: its
@@ -2080,8 +2085,6 @@ contains
     real(kind=8) :: loc(4), glob(4), rz, rznew, alpha, beta, pq, tol2, bn2, zq
     real(kind=8) :: lpq(3), gpq(3), rn2, w, rloc(1), rglob(1)
     conv = .true. ; its = 0 ; resid = 0._8
-    call exchange_xxx(xx)
-    call tq(6)
     call fs_apply(xx, qq)
     call tq(4)
     loc = 0._8
