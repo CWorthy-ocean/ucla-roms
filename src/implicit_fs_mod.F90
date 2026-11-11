@@ -2063,6 +2063,11 @@ contains
     ! PCG for A delta = b (section 3): x = xx (warm start: last delta), b = bb.
     ! One halo exchange of p and two MPI_Allreduce per iteration. Stops when
     ! sqrt(sum r^2/ar) <= fs_tol sqrt(sum b^2/ar). resid: the final relative residual.
+    ! Multigrid: the reduction of <p,q> also carries <r,q> and <q,q> (area-weighted), which give the new
+    ! residual norm |r - alpha q|^2 = |r|^2 - 2 alpha <r,q> + alpha^2 <q,q> before the preconditioner. When that
+    ! estimate is near the tolerance, the norm is computed directly (one more MPI_Allreduce, about once per
+    ! solve) and, if converged, the solve ends without the V-cycle of the final residual, which would not be
+    ! used. The stopping test uses the directly computed norm as before: same iterates, same iteration count.
     use param, only: ocean_grid_comm
     use grid, only: pm, pn
     use roms_mpi, only: exchange_xxx
@@ -2073,6 +2078,7 @@ contains
     logical, intent(out) :: conv
     integer(kind=4) :: i, j, ierr
     real(kind=8) :: loc(4), glob(4), rz, rznew, alpha, beta, pq, tol2, bn2, zq
+    real(kind=8) :: lpq(3), gpq(3), rn2, w, rloc(1), rglob(1)
     conv = .true. ; its = 0 ; resid = 0._8
     call exchange_xxx(xx)
     call tq(6)
@@ -2099,6 +2105,7 @@ contains
     tol2 = fs_tol*fs_tol*bn2
     resid = sqrt(glob(2)/bn2)
     if (glob(2) <= tol2) return
+    rn2 = glob(2)
     conv = .false.
     do its=1,fs_maxit
       call fs_exch1(pp)
@@ -2111,8 +2118,22 @@ contains
           loc(1) = loc(1) + pp(i,j)*qq(i,j)
         enddo
       enddo
-      call tq(8)
+      if (mg_on) then
+        lpq(1) = loc(1) ; lpq(2) = 0._8 ; lpq(3) = 0._8
+        do j=jb0,jb1
+          do i=ib0,ib1
+            w = act(i,j)*pm(i,j)*pn(i,j)
+            lpq(2) = lpq(2) + w*rr(i,j)*qq(i,j)
+            lpq(3) = lpq(3) + w*qq(i,j)*qq(i,j)
+          enddo
+        enddo
+        call tq(8)
+        call mpi_allreduce(lpq, gpq, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+        pq = gpq(1)
+      else
+        call tq(8)
         call mpi_allreduce(loc(1), pq, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+      end if
       call tq(7)
       alpha = rz/pq
       do j=jb0,jb1
@@ -2122,11 +2143,29 @@ contains
         enddo
       enddo
       call tq(8)
+      if (mg_on) then
+        if (rn2 - 2._8*alpha*gpq(2) + alpha*alpha*gpq(3) <= 4._8*tol2) then
+          rloc(1) = 0._8                   ! the sum of fs_precond_apply's rr
+          do j=jb0,jb1
+            do i=ib0,ib1
+              rloc(1) = rloc(1) + act(i,j)*rr(i,j)*rr(i,j)*pm(i,j)*pn(i,j)
+            enddo
+          enddo
+          call tq(8)
+          call mpi_allreduce(rloc, rglob, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+          call tq(7)
+          if (rglob(1) <= tol2) then
+            resid = sqrt(rglob(1)/bn2)
+            conv = .true. ; exit
+          end if
+        end if
+      end if
       call fs_precond_apply(rr, zz, loc(1), loc(2), loc(3))
       call tq(5)
         call mpi_allreduce(loc, glob, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
       call tq(7)
       rznew = glob(1)
+      rn2 = glob(2)
       resid = sqrt(glob(2)/bn2)
       if (glob(2) <= tol2) then
         conv = .true. ; exit
