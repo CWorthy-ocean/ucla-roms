@@ -3260,8 +3260,8 @@ contains
     implicit none
     integer(kind=4), intent(in) :: nx, ny
     real(kind=8), dimension(0:nx+1,0:ny+1), intent(in) :: e, cw, cs
-    integer(kind=4) :: i, j, k, kk, n, b, c, r, m
-    real(kind=8) :: s
+    integer(kind=4) :: i, j, k, kk, n, b, c, r, m, c2
+    real(kind=8) :: d, l
     n = mg_nc ; b = mg_bw
     mg_ab = 0._8
     do j=1,ny
@@ -3297,19 +3297,22 @@ contains
       i = mod(k-1, nx) + 1 ; j = (k-1)/nx + 1
       if (e(i,j) <= 0._8) mg_ab(1:min(b,n-k),k) = 0._8
     enddo
-    ! factor in place: L(r,c) in mg_ab(r-c, c)
+    ! factor in place: L(r,c) in mg_ab(r-c, c). Column form: column c is scaled by its pivot, then its
+    ! contributions L(r,c) L(c2,c) are subtracted from the columns c2 = c+1..c+b (unit stride, independent
+    ! updates). Each element A(r,c2) receives the same subtractions in the same order (c increasing) as in
+    ! the inner-product form, A(r,c2) - sum_c L(r,c) L(c2,c), so without reassociation the factor is the same.
     do c=1,n
-      s = mg_ab(0,c)
-      do kk=max(1,c-b),c-1
-        s = s - mg_ab(c-kk,kk)**2
+      d = sqrt(mg_ab(0,c))
+      mg_ab(0,c) = d
+      m = min(b, n-c)
+      do r=1,m
+        mg_ab(r,c) = mg_ab(r,c)/d
       enddo
-      mg_ab(0,c) = sqrt(s)
-      do r=c+1,min(n,c+b)
-        s = mg_ab(r-c,c)
-        do kk=max(1,r-b),c-1
-          s = s - mg_ab(r-kk,kk)*mg_ab(c-kk,kk)
+      do c2=1,m
+        l = mg_ab(c2,c)
+        do r=c2,m
+          mg_ab(r-c2,c+c2) = mg_ab(r-c2,c+c2) - mg_ab(r,c)*l
         enddo
-        mg_ab(r-c,c) = s/mg_ab(0,c)
       enddo
     enddo
   contains
@@ -3328,20 +3331,21 @@ contains
     integer(kind=4), intent(in) :: nx, ny
     real(kind=8), dimension(0:nx+1,0:ny+1), intent(in) :: b
     real(kind=8), dimension(0:nx+1,0:ny+1), intent(inout) :: x
-    integer(kind=4) :: i, j, k, kk, n, bw
-    real(kind=8) :: s
+    integer(kind=4) :: i, j, k, kk, n, bw, r, m
+    real(kind=8) :: s, y
     n = mg_nc ; bw = mg_bw
     do j=1,ny
       do i=1,nx
         mg_sol(i + nx*(j-1)) = b(i,j)
       enddo
     enddo
-    do k=1,n                                  ! L y = b
-      s = mg_sol(k)
-      do kk=max(1,k-bw),k-1
-        s = s - mg_ab(k-kk,kk)*mg_sol(kk)
+    do k=1,n                                  ! L y = b, column form: y(k), then its updates of rows k+1..k+bw
+      y = mg_sol(k)/mg_ab(0,k)                ! (the same subtractions per row in the same order)
+      mg_sol(k) = y
+      m = min(bw, n-k)
+      do r=1,m
+        mg_sol(k+r) = mg_sol(k+r) - mg_ab(r,k)*y
       enddo
-      mg_sol(k) = s/mg_ab(0,k)
     enddo
     do k=n,1,-1                               ! L^T x = y
       s = mg_sol(k)
