@@ -775,8 +775,33 @@ contains
         wd(i,j) = h(i,j) + zeta(i,j,ks)
       enddo
     enddo
-    au = 0._8 ; av = 0._8 ; cu = 0._8 ; cv = 0._8 ; ftu = 0._8 ; ftv = 0._8 ; usu = 0._8 ; usv = 0._8
-    rb = 0._8 ; cbu = 0._8 ; cbv = 0._8
+    ! au, av, cu, cv, ftu, ftv, usu, usv, cbu, cbv are set below on every face they are read on (elsewhere they
+    ! keep the zeros of fs_alloc; the halo faces read come from the exchange E1); rb accumulates the Robin terms
+    ! of the open edges on the edge cells (zero elsewhere), so only those are cleared
+#ifndef EW_PERIODIC
+    if (WESTERN_EDGE) then
+      do j=jstr,jend
+        rb(istr,j) = 0._8
+      enddo
+    endif
+    if (EASTERN_EDGE) then
+      do j=jstr,jend
+        rb(iend,j) = 0._8
+      enddo
+    endif
+#endif
+#ifndef NS_PERIODIC
+    if (SOUTHERN_EDGE) then
+      do i=istr,iend
+        rb(i,jstr) = 0._8
+      enddo
+    endif
+    if (NORTHERN_EDGE) then
+      do i=istr,iend
+        rb(i,jend) = 0._8
+      enddo
+    endif
+#endif
     do j=jstrR,jendR
       do i=istr,iend+1
         unu(i,j) = 0.5_8*(wd(i-1,j)+wd(i,j))*dn_u(i,j)*ubar(i,j,ks)
@@ -1104,7 +1129,15 @@ contains
     ! ---- (F) momentum and fluxes on owned faces
     call exchange_xxx(xx, exch_bf=1, do_corn=.false.)        ! E2: read by (F) and the next solve's fs_apply
     call tq(10)
-    fbu = 0._8 ; fbv = 0._8 ; u1u = 0._8 ; u1v = 0._8
+    ! u1u, u1v, fbu, fbv are set on the owned faces (u1u, u1v elsewhere keep the zeros of fs_alloc); the rates
+    ! below also run over the tile's eastern and northern face, whose fbu, fbv hold the last E3's halo values:
+    ! zero them (the edge code sets them on an open eastern or northern edge)
+    do j=jstr,jend
+      fbu(iend+1,j) = 0._8
+    enddo
+    do i=istr,iend
+      fbv(i,jend+1) = 0._8
+    enddo
     do j=jstr,jend
       do i=istrU,iend
         d = xx(i-1,j) - xx(i,j)
@@ -1325,11 +1358,30 @@ contains
         vbar(i,j,kn) = 2._8*u1v(i,j)/(dm_v(i,j)*(wd(i,j-1)+wd(i,j)))
       enddo
     endif
-    if (fs_nsub > 1) then                   ! sums over the sub-steps of Fbar and of DU_avg2 (all the faces it is set on)
+    if (fs_nsub > 1) then                   ! sums over the sub-steps of Fbar (the faces read after the step: the
+      ! tile's faces and its eastern / northern face) and of DU_avg2 (all the faces it is set on)
       if (k == 1) then
-        fsu = fbu ; fsv = fbv
+        do j=jstr,jend
+          do i=istr,iend+1
+            fsu(i,j) = fbu(i,j)
+          enddo
+        enddo
+        do j=jstr,jend+1
+          do i=istr,iend
+            fsv(i,j) = fbv(i,j)
+          enddo
+        enddo
       else
-        fsu = fsu + fbu ; fsv = fsv + fbv
+        do j=jstr,jend
+          do i=istr,iend+1
+            fsu(i,j) = fsu(i,j) + fbu(i,j)
+          enddo
+        enddo
+        do j=jstr,jend+1
+          do i=istr,iend
+            fsv(i,j) = fsv(i,j) + fbv(i,j)
+          enddo
+        enddo
       end if
       do j=jstrR,jendR
         do i=istrR,iendR
@@ -1352,7 +1404,16 @@ contains
       ! DU_avg2 = the mean flux of the sub-steps: zeta^n+1 = zeta^n - dt pm pn Div(DU_avg2) + dt Q (to rounding);
       ! fbu, fbv likewise for the step's volume check
       rn = 1._8/real(fs_nsub,8)
-      fbu = rn*fsu ; fbv = rn*fsv
+      do j=jstr,jend
+        do i=istr,iend+1
+          fbu(i,j) = rn*fsu(i,j)
+        enddo
+      enddo
+      do j=jstr,jend+1
+        do i=istr,iend
+          fbv(i,j) = rn*fsv(i,j)
+        enddo
+      enddo
       do j=jstrR,jendR
         do i=istrR,iendR
           DU_avg2(i,j) = rn*asu(i,j) ; DV_avg2(i,j) = rn*asv(i,j)
@@ -2097,7 +2158,11 @@ contains
     enddo
     call tq(3)
     call fs_precond_apply(rr, zz, loc(1), loc(2), zq)
-    pp = zz
+    do j=jb0,jb1                           ! (the halo of p is exchanged before it is read)
+      do i=ib0,ib1
+        pp(i,j) = zz(i,j)
+      enddo
+    enddo
     call tq(3)
     call mpi_allreduce(loc, glob, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     call tq(7)
