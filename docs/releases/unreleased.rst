@@ -59,11 +59,23 @@ Bug Fixes
   - The old error scaled with the difference between the mean density and ``rho0``, so it was large in every setup with ``rho0 = 1000`` and strong tides.
   - The result no longer depends on ``rho0``; outputs, units, namelist keys and restart variable names are unchanged.
 
+- The parent pressure fluxes ``up_*``/``vp_*`` are now read at the right boundary points, so ``ub_tune`` results no longer depend on the tiling. (`#417 <https://github.com/CWorthy-ocean/ucla-roms/pull/417>`_)
+
+  - Before, the first tile of each boundary read them one point off, in both builds.
+  - With ``PARALLEL_IO``, the corner tiles also read them into arrays one point too short, and writing the tuning coefficients ``ub_*`` to a restart aborted the run.
+
+- Runs restarted with ``ub_tune`` now continue exactly; before, the restart held the coefficients of the step before. (`#417 <https://github.com/CWorthy-ocean/ucla-roms/pull/417>`_)
+- ``wrt_sponge`` now works under ``PARALLEL_IO``; before, ROMS stopped at its first output ("Operation not allowed in data mode"). (`#417 <https://github.com/CWorthy-ocean/ucla-roms/pull/417>`_)
+
+  - With ``sponge_avg = .false.`` the ``_spn`` file now holds the output step's values instead of zeros.
+
+
 
 Improvements
 ~~~~~~~~~~~~
 
-- N/A
+
+- The ``_spn`` file now holds every open side; before, it had the south and west sides only. (`#417 <https://github.com/CWorthy-ocean/ucla-roms/pull/417>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -75,3 +87,4 @@ Miscellaneous
 - The boundary-conditions documentation describes the inflow treatment at open boundaries. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
 - References of the open-boundary regression tests are updated. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
 - The extraction tests now build with ``DIAGNOSTICS`` and check that up/vp are non-zero on every boundary point and independent of the tiling. (`#416 <https://github.com/CWorthy-ocean/ucla-roms/pull/416>`_)
+- New test ``tests/test_sponge_tune.py`` runs ``ub_tune`` with restarts and ``wrt_sponge``, with and without ``PARALLEL_IO``, on one and four ranks. (`#417 <https://github.com/CWorthy-ocean/ucla-roms/pull/417>`_)
