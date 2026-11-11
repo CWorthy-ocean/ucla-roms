@@ -484,7 +484,7 @@ contains
         enddo
       endif
       if (calc_pflx) then
-        call calc_pressure_flux(p)
+        call calc_pressure_flux
       endif
     endif
 # endif

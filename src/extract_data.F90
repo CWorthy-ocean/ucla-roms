@@ -930,8 +930,8 @@ contains
       endif
 
       if (calc_pflx) then
-        upe(1:nx,1:ny) = up
-        vpe(1:nx,1:ny) = vp
+        upe(1:nx,1:ny) = up(1:nx,1:ny)
+        vpe(1:nx,1:ny) = vp(1:nx,1:ny)
 # ifdef EXCHANGE
         call exchange_xxx(upe,vpe)
 # endif
