@@ -2170,6 +2170,7 @@ contains
     if (bn2 <= 0._8) then
       xx = 0._8 ; return
     end if
+    if (.not. fs_finite(glob(2))) call fs_nan_stop('residual norm', 0)
     tol2 = fs_tol*fs_tol*bn2
     resid = sqrt(glob(2)/bn2)
     if (glob(2) <= tol2) return
@@ -2203,6 +2204,7 @@ contains
         call mpi_allreduce(loc(1), pq, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
       end if
       call tq(7)
+      if (.not. fs_finite(pq)) call fs_nan_stop('<p,q>', its)
       alpha = rz/pq
       do j=jb0,jb1
         do i=ib0,ib1
@@ -2222,6 +2224,7 @@ contains
           call tq(8)
           call mpi_allreduce(rloc, rglob, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
           call tq(7)
+          if (.not. fs_finite(rglob(1))) call fs_nan_stop('residual norm', its)
           if (rglob(1) <= tol2) then
             resid = sqrt(rglob(1)/bn2)
             conv = .true. ; exit
@@ -2233,6 +2236,7 @@ contains
         call mpi_allreduce(loc, glob, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
       call tq(7)
       rznew = glob(1)
+      if (.not. fs_finite(glob(2))) call fs_nan_stop('residual norm', its)
       rn2 = glob(2)
       resid = sqrt(glob(2)/bn2)
       if (glob(2) <= tol2) then
@@ -2253,6 +2257,32 @@ contains
     enddo
     its = min(its, fs_maxit)
   end subroutine fs_pcg
+
+  logical function fs_finite(x)
+    ! x is neither NaN nor +-Inf (exponent bits, not a comparison, so that no optimization that
+    ! assumes finite values can remove the test)
+    implicit none
+    real(kind=8), intent(in) :: x
+    fs_finite = (ibits(transfer(x, 0_8), 52, 11) /= 2047)
+  end function fs_finite
+
+  subroutine fs_nan_stop(what, it)
+    ! A non-finite <p,q> or residual norm in fs_pcg: the run is unstable. Stop it instead of
+    ! iterating to fs_maxit with NaNs, through the error log as diag's BLOWUP does (the error is
+    ! raised on rank 0, every rank calls abort_check; the reduced values are the same on every rank,
+    ! so every rank comes here). The GPU code's fs_pcg has the same test.
+    use error_handling_mod, only: error_log
+    use param, only: mynode
+    use scalars, only: iic
+    implicit none
+    character(len=*), intent(in) :: what
+    integer(kind=4), intent(in) :: it
+    character(len=200) :: msg
+    write(msg, '(A,A,A,I0,A,I0,A)') 'IMPLICIT_FS: the free-surface solve met a non-finite ', what, ' (step ',&
+    &  iic, ', iteration ', it, '): the run is unstable'
+    if (mynode == 0) call error_log%raise_global(context=trim(module_name)//"/fs_pcg", info=trim(msg))
+    call error_log%abort_check()
+  end subroutine fs_nan_stop
 
   !----------------------------------------------------------------------
   subroutine fs_selftest_run
