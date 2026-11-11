@@ -84,6 +84,9 @@ module roms_read_write
     ! Honoured by set_frc_data_1d/2d/surf; ncforce3d has no equivalent.
     logical                           :: allow_missing = .false.
     logical                           :: missing = .false.  ! set once var is confirmed absent
+    ! Appended to the error when a required (not allow_missing) var is
+    ! absent; unallocated (no hint) unless set
+    character(len=:), allocatable     :: missing_hint
   end type ncforce
 
   type,public  :: ncforce3d
@@ -990,7 +993,8 @@ contains
 
   end subroutine set_frc_data_surf  !]
 ! ----------------------------------------------------------------------
-  subroutine find_new_record(vname,tname,time,ifile,irec,vtime,ungridded_filename,allow_missing,var_absent,first_fill) ![
+  subroutine find_new_record(vname,tname,time,ifile,irec,vtime,ungridded_filename,allow_missing,var_absent,first_fill,&
+  &hint) ![
     ! Finds the index for the filename and record number of the first record
     ! with a time that is larger than the model time. It will stores
     ! the corresponding time of the record in vtime.
@@ -1013,6 +1017,7 @@ contains
     logical, optional             ,intent(in)   :: allow_missing ! if .true., absent var is not fatal
     logical, optional             ,intent(out)  :: var_absent    ! .true. if var was not in any file
     logical, optional             ,intent(in)   :: first_fill    ! set_frc_data is filling both slots for the first time
+    character(len=*), optional    ,intent(in)   :: hint          ! appended to the error if the var is in no file
     integer(kind=4), dimension(1) :: dimids     ! time dimension ID
     real(kind=8)    :: time_old
     logical :: found_var                ! is variable in file
@@ -1164,7 +1169,10 @@ contains
         return
       endif
       write(error_info, *)&
-      &'Could not find var: ', vname, 'in forcing files.'
+      &'Could not find var: ', trim(vname), ' in forcing files.'
+      if (present(hint)) then
+        if (len_trim(hint) > 0) error_info = trim(error_info)//' '//trim(hint)
+      endif
       call error_log%raise_from_rank(&
       &context=module_name//"/"//sr_name,&
       &info=error_info)
@@ -1342,7 +1350,8 @@ contains
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it), nc%ungridded_forcing_file,&
-        &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill)
+        &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill,&
+        &hint=nc%missing_hint)
 
         if (.not. var_absent) then
           ierr=nf90_open(nc%ungridded_forcing_file,nf90_nowrite, ncid)
@@ -1377,7 +1386,8 @@ contains
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it),&
-        &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill)
+        &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill,&
+        &hint=nc%missing_hint)
       endif
       call MPI_Bcast(var_absent,1,MPI_LOGICAL,0,ocean_grid_comm,ierr)
       if (var_absent) then
@@ -1393,7 +1403,8 @@ contains
 #else
       call find_new_record(vname,tname,modtime,ifile,irec,&
       &nc%times(it),&
-      &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill)
+      &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill,&
+      &hint=nc%missing_hint)
       if (var_absent) then
         call mark_ncforce_missing(nc, bry)
         return
@@ -1769,7 +1780,8 @@ contains
     if (mynode == 0) then
       call find_new_record(vname,tname,modtime,ifile,irec,&
       &nc%times(it),&
-      &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill)
+      &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill,&
+      &hint=nc%missing_hint)
     endif
     call MPI_Bcast(var_absent,1,MPI_LOGICAL,0,ocean_grid_comm,ierr)
     if (var_absent) then
@@ -1785,7 +1797,8 @@ contains
 #else
     call find_new_record(vname,tname,modtime,ifile,irec,&
     &nc%times(it),&
-    &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill)
+    &allow_missing=nc%allow_missing, var_absent=var_absent, first_fill=first_fill,&
+    &hint=nc%missing_hint)
     if (var_absent) then
       call mark_ncforce_missing(nc, 0)
       return

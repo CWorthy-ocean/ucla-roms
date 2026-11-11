@@ -94,7 +94,7 @@ contains
 
 !----------------------------------------------------------------------
   subroutine init_arrays_boundary  ![
-    use tracers, only: t_vname, iTandS
+    use tracers, only: t_vname
     implicit none
 
     ! local
@@ -154,7 +154,7 @@ contains
     allocate( t_west(0:Mm+1,nz,NT) ); t_west=0._8
     do itrc=1,nt
       nc_t_w(itrc)%vname = trim(t_vname(itrc)) // '_west'
-      nc_t_w(itrc)%allow_missing = (itrc > iTandS)
+      call set_tracer_bry_rule(nc_t_w(itrc), itrc)
       allocate( nc_t_w(itrc)%vdata(j0:j1,nz,2) )
       nc_t_w(itrc)%vdata=0._8
     enddo
@@ -185,7 +185,7 @@ contains
     allocate( t_east(0:Mm+1,nz,NT) ); t_east=0._8
     do itrc=1,nt
       nc_t_e(itrc)%vname = trim(t_vname(itrc)) // '_east'
-      nc_t_e(itrc)%allow_missing = (itrc > iTandS)
+      call set_tracer_bry_rule(nc_t_e(itrc), itrc)
       allocate( nc_t_e(itrc)%vdata(j0:j1,nz,2) )
       nc_t_e(itrc)%vdata=0._8
     enddo
@@ -216,7 +216,7 @@ contains
     allocate( t_south(0:Lm+1,nz,NT) ); t_south=0._8
     do itrc=1,nt
       nc_t_s(itrc)%vname = trim(t_vname(itrc)) // '_south'
-      nc_t_s(itrc)%allow_missing = (itrc > iTandS)
+      call set_tracer_bry_rule(nc_t_s(itrc), itrc)
       allocate( nc_t_s(itrc)%vdata(i0:i1,nz,2) )
       nc_t_s(itrc)%vdata=0._8
     enddo
@@ -247,7 +247,7 @@ contains
     allocate( t_north(0:Lm+1,nz,NT) ); t_north=0._8
     do itrc=1,nt
       nc_t_n(itrc)%vname = trim(t_vname(itrc)) // '_north'
-      nc_t_n(itrc)%allow_missing = (itrc > iTandS)
+      call set_tracer_bry_rule(nc_t_n(itrc), itrc)
       allocate( nc_t_n(itrc)%vdata(i0:i1,nz,2) )
       nc_t_n(itrc)%vdata=0._8
     enddo
@@ -256,6 +256,25 @@ contains
 # endif
 
   end subroutine init_arrays_boundary !]
+!----------------------------------------------------------------------
+  subroutine set_tracer_bry_rule(nc, itrc)  ![
+    ! Whether tracer itrc may be absent from the boundary files (see
+    ! tracer_required), and what to tell the user if a BGC tracer is: a zero
+    ! BGC boundary would let a run go on with no nutrients or carbon flowing in.
+    use tracers, only: ibgc0, tracer_required
+    implicit none
+    type(ncforce),   intent(inout) :: nc
+    integer(kind=4), intent(in)    :: itrc
+
+    nc%allow_missing = .not. tracer_required(itrc)
+    if (itrc > ibgc0) then
+      nc%missing_hint = "A BGC run needs every BGC tracer at each open "//&
+      &"boundary: make the boundary forcing with BGC (roms-tools "//&
+      &"BoundaryForcing type='bgc'), or, for a nested child, the parent's "//&
+      &"nesting file with make_nesting_info(include_bgc=True)."
+    endif
+
+  end subroutine set_tracer_bry_rule !]
 !----------------------------------------------------------------------
   subroutine set_bry_all  ![
 !      use param, only: east_exchng, north_exchng, south_exchng
