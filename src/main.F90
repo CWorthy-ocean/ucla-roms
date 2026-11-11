@@ -709,14 +709,16 @@ contains
     call reg_toc(rg_avg_diag)
 
     call reg_tic(rg_output)
+#ifdef SPONGE_TUNE
+    ! Before the outputs, so that a restart holds the coefficients that
+    ! the next step uses and a restarted run continues exactly
+    if (ub_tune)    call adjust_orlanski
+#endif
+
     call wrt_his_ocean_vars
     call wrt_rst_ocean_vars
     call wrt_avg_ocean_vars
     if (do_extract) call do_extract_data
-
-#ifdef SPONGE_TUNE
-    if (ub_tune)    call adjust_orlanski
-#endif
 
     if (floats)     call do_particles
 
