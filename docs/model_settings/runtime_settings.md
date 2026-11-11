@@ -591,7 +591,7 @@ Main settings:
 | Setting | Default | Description |
 |--------|---------|-------------|
 | `fs_mode` | `'split'` | `'split'`: split-explicit fast loop (`step2d`); `'implicit'`: implicit free surface |
-| `fs_rho_inf` | `0.0` | Spectral radius of the generalized-alpha step at infinite frequency, 0 to 1. 0 damps fast barotropic modes most (L-stable); 1 is Crank-Nicolson (no damping). Keep 0 where the configuration runs near its internal-wave stability limit |
+| `fs_rho_inf` | `0.0` | Spectral radius of the generalized-alpha step at infinite frequency, 0 to 1. 0 damps fast barotropic modes most (L-stable); 1 is Crank-Nicolson (no damping). Values below 1 are stable; 1 must not be used (resonant with a 2 dt forcing). Where the configuration runs at its internal-wave stability limit any value fails eventually and larger values fail sooner: shorten dt |
 | `fs_theta`, `fs_theta_div` | `0.5`, `0.5` | Extra off-centring (0.5 to 1) of the free-surface pressure gradient and of the divergence; 0.5 = none |
 | `fs_tol` | `1.0e-8` | Relative residual at which the elliptic solve stops (the volume budget is exact regardless) |
 | `fs_maxit` | `1000` | Iteration cap of the solve (exceeding it is counted in `FS_STAT`; the run continues) |
