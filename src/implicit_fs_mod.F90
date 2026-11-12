@@ -189,8 +189,8 @@ module implicit_fs_mod
   real(kind=8), allocatable, dimension(:,:) :: udu, udv, gru, grv, qd
   real(kind=8), allocatable, dimension(:,:) :: du1o, dv1o   ! DU_avg1, DV_avg1 at entry (U^n; AB2 predictor)
   logical :: rst_rates = .false.            ! the rates and delta were read from the restart file
-  integer(kind=4), parameter :: mem_kind = 3  ! restart scalar 4: the memory kind of the rates (3: all but the
-                                              ! Coriolis estimate; 1 and 2 were removed development options)
+  integer(kind=4), parameter :: rst_format = 3  ! restart scalar 4: format version of the stored state (rates,
+                                                ! delta, operators); a record of another version starts cold
   logical :: stress_af = .false.            ! fs_stress_time = 'af' (and sft /= 1/2)
   real(kind=8) :: alf = 1._8                ! alpha_f
   real(kind=8) :: sft = 1._8                ! the time (fraction of dt) of the step's explicit forcing (tidal
@@ -257,9 +257,7 @@ contains
       fs_mode = 'split'
     else if (ios /= 0) then
       call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
-      &info="could not read the IMPLICIT_FS section of the namelist file ("//trim(msg)//"). Note: the"&
-      &//" development keys fs_mom_mem, fs_src_mem, fs_tang, fs_obc_flux, fs_pred_ext, fs_ga_start,"&
-      &//" fs_cor_est, fs_coriolis_implicit and fs_cost_sync are not read; delete them from the namelist")
+      &info="could not read the IMPLICIT_FS section of the namelist file ("//trim(msg)//")")
       return
     end if
     fs_on = (trim(fs_mode) == 'implicit')
@@ -398,10 +396,9 @@ contains
     ierr = nf90_put_att(ncid, varid, 'long_name', 'implicit_fs generalized-alpha volume source rate')
     varid = nccreate(ncid,'fs_delta',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),nf90_double)
     ierr = nf90_put_att(ncid, varid, 'long_name', 'implicit_fs last zeta increment (PCG warm start)')
-    ! scalars (fs_rst_wrt_scal): 1 version (1), 2 fs_mg_lag, 3 phase of the coarse-operator rebuild
-    ! counter for the next step, 4 the memory kind of the rates (3; 1 and 2 were the development
-    ! options fs_mom_mem 'all' and 'pg'), 5 the fine operator of the last build is in fs_mge0,
-    ! fs_mgcu, fs_mgcv (1/0), 6 fs_nsub (0 in files written before the key existed)
+    ! scalars (fs_rst_wrt_scal): 1 the scalars are set (1), 2 fs_mg_lag, 3 phase of the coarse-operator
+    ! rebuild counter for the next step, 4 format version of the stored state (rst_format), 5 the fine
+    ! operator of the last build is in fs_mge0, fs_mgcu, fs_mgcv (1/0), 6 fs_nsub of the run
     varid = nccreate(ncid,'fs_rst_scal',[character(len=8) :: 'fs_nscal', dn_tm],(/fs_nsc,0/),nf90_double)
     ierr = nf90_put_att(ncid, varid, 'long_name', 'implicit_fs restart scalars (implicit_fs_mod.F90 fs_rst_def)')
     if (mg_on .and. fs_mg_lag > 1) then
@@ -475,7 +472,7 @@ contains
     if (.not. fs_on) return
     sc = 0._8
     sc(1) = 1._8 ; sc(2) = dble(fs_mg_lag) ; sc(3) = dble(mod(n_solve + mg_ph0, fs_mg_lag))
-    sc(4) = dble(mem_kind)
+    sc(4) = dble(rst_format)
     if (mg_built > 0 .and. allocated(mg_se0)) sc(5) = 1._8
     sc(6) = dble(fs_nsub)
     ierr = nf90_inq_varid(ncid, 'fs_rst_scal', varid)
@@ -498,20 +495,18 @@ contains
     integer(kind=4) :: ierr, varid, start(3)
     real(kind=8) :: qm(1), gqm(1), sc(fs_nsc)
     character(len=len(pio_gtype)) :: gsv
-    character(len=4), parameter :: mem_name(2) = ['all ', 'pg  ']
     if (.not. fs_on) return
-    ! scalars (files written before them: rates as they are, coarse operators built at the first step)
+    ! scalars (a file without them: the rates are used, the coarse operators are built at the first step)
     sc = 0._8
     ierr = nf90_inq_varid(ncid, 'fs_rst_scal', varid)
     if (ierr == nf90_noerr) ierr = nf90_get_var(ncid, varid, sc, start=(/1,record/), count=(/fs_nsc,1/))
     if (ierr /= nf90_noerr) sc = 0._8
-    if (nint(sc(1)) == 1 .and. nint(sc(4)) /= mem_kind) then
-      ! rates of another memory kind (the development options fs_mom_mem 'all' or 'pg'): not usable
-      ! with this scheme, so the generalized-alpha memory starts cold (as for a file without rates);
-      ! the model state is read as usual, the continuation is not bit-exact
-      if (mynode == 0) write(*,'(1x,A)') 'IMPLICIT_FS: the restart record''s rates were made with the removed'&
-      &//' option fs_mom_mem = '''//trim(mem_name(max(1,min(2,nint(sc(4))))))//''': cold start of the'&
-      &//' generalized-alpha memory (not an exact restart)'
+    if (nint(sc(1)) == 1 .and. nint(sc(4)) /= rst_format) then
+      ! a stored state of another format version is not read: the generalized-alpha memory starts cold
+      ! (as for a file without rates); the model state is read as usual, the continuation is not exact
+      if (mynode == 0) write(*,'(1x,A,I0,A,I0,A)') 'IMPLICIT_FS: the restart record''s implicit free-surface'&
+      &//' state has format version ', nint(sc(4)), ', this model reads version ', rst_format, ': cold start'&
+      &//' of the generalized-alpha memory (not an exact restart)'
       return
     end if
     if (nint(sc(6)) > 0 .and. nint(sc(6)) /= fs_nsub .and. mynode == 0) write(*,'(1x,A,I2,A,I2,A)')&

@@ -626,8 +626,6 @@ Scheme options (the defaults are the recommended settings):
 | `fs_drag_implicit` | `.false.` | Treat the linear bottom-drag increment implicitly |
 | `fs_selftest` | `0` | 1: solver test with the first step's operator at startup (`FS_TEST` lines) |
 
-The keys `fs_mom_mem`, `fs_src_mem`, `fs_tang`, `fs_obc_flux`, `fs_pred_ext`, `fs_ga_start`, `fs_cor_est`, `fs_coriolis_implicit` and `fs_cost_sync` of the development versions are not read: a namelist that sets one of them stops ROMS at the `IMPLICIT_FS` read (see [the implicit free surface](implicit_free_surface.md)).
-
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)
 

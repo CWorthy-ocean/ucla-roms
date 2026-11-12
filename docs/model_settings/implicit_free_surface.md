@@ -108,7 +108,7 @@ With `fs_verbose >= 2` the `FS_VOL` line reports each step's global volume budge
 
 With `fs_mode = 'implicit'` the restart file also holds the generalized-alpha rates (`fs_udu`, `fs_udv`, `fs_gru`, `fs_grv`, `fs_qd`), the last increment (`fs_delta`, the solver's warm start), a set of scalars (`fs_rst_scal`, including `fs_nsub`) and, with `fs_mg_lag > 1`, the fine operator of the last coarse-operator build (`fs_mge0`, `fs_mgcu`, `fs_mgcv`). A restarted run then reproduces the continuous run bit for bit. Split-mode restart files are unchanged.
 
-A run can start from a restart file without these variables (a split-mode run's file, or an initial file): the first implicit step then starts the memory with `beta1 = 1`. A change of `fs_mg_lag` or of `fs_nsub` across a restart is allowed and is logged; the restart is then not exact. A restart file written by a development version with another momentum memory (`fs_mom_mem = 'all'` or `'pg'`, recorded in `fs_rst_scal`) is read as such a cold start of the memory, with a log line.
+A run can start from a restart file without these variables (a split-mode run's file, or an initial file): the first implicit step then starts the memory with `beta1 = 1`. A change of `fs_mg_lag` or of `fs_nsub` across a restart is allowed and is logged; the restart is then not exact. `fs_rst_scal` also records the format version of the stored state; a record of another version is read as such a cold start of the memory, with a log line.
 
 ## 7. Diagnostics
 
@@ -134,5 +134,3 @@ A run can start from a restart file without these variables (a split-mode run's 
 - Not tested with `NHMG`.
 
 Settings: see [`IMPLICIT_FS`](runtime_settings.md#implicit_fs) in the runtime settings.
-
-The development keys `fs_mom_mem`, `fs_src_mem`, `fs_tang`, `fs_obc_flux`, `fs_pred_ext`, `fs_ga_start`, `fs_cor_est`, `fs_coriolis_implicit` and `fs_cost_sync` are not read: a namelist that still sets one of them stops ROMS at the `IMPLICIT_FS` read, with the compiler's message and this list. Delete them; the behaviour they selected by default is the one described above.
