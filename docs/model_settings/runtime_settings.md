@@ -584,7 +584,7 @@ These settings control "pipe forcing", i.e. the input of water and tracers at a 
 ### `IMPLICIT_FS`
 (read by module `implicit_fs_mod.F90`)
 
-Optional: if the group is absent, `fs_mode = 'split'`. Selects the time stepping of the barotropic mode: the split-explicit fast loop (`'split'`, the default, `ndtfast` fast steps per `dt`) or implicit steps (`'implicit'`; two sub-steps per `dt` by default), each of which solves an elliptic equation for the free surface. The other settings are read only with `fs_mode = 'implicit'`, except `fs_verbose` (its `FS_SRC` line is also written in split mode). The defaults of the other settings are the recommended ones (see [the defaults](implicit_free_surface.md#defaults)). The scheme, its options and its limitations are described in [Implicit free surface](implicit_free_surface.md).
+Optional: if the group is absent, `fs_mode = 'split'`. Selects the time stepping of the barotropic mode: the split-explicit fast loop (`'split'`, the default, `ndtfast` fast steps per `dt`) or implicit steps (`'implicit'`; two sub-steps per `dt` by default), each of which solves an elliptic equation for the free surface. The other settings are read only with `fs_mode = 'implicit'`, except `fs_verbose` (its `FS_SRC` line is also written in split mode). The defaults of the other settings are the recommended ones (see [the defaults](implicit_free_surface.md#defaults)). The scheme, its options and its limitations are described in [Implicit free surface](implicit_free_surface.md). The namelist template lists only `fs_mode`, `fs_nsub`, `fs_rho_inf`, `fs_tol` and `fs_verbose`; any other setting below can be added to the group and keeps its default when omitted.
 
 Main settings:
 
