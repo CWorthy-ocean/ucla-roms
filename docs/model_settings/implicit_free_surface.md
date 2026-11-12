@@ -134,7 +134,7 @@ The output files record the barotropic scheme in the global attribute `fs_mode` 
 - Requires `SOLVE3D`. With open boundaries, `M2_FRC_BRY` and `Z_FRC_BRY` are required; `OBC_M2ORLANSKI`, `OBC_Z2ORLANSKI`, `LEGACY_ORLANSKI` and edges without an `OBC_M2` type have no implicit form (section 4).
 - Coriolis is explicit.
 - The surface stress and the baroclinic pressure gradient in `rufrc` stay at `n+1/2`, a lag of `(alpha_f - 1/2) dt` behind the time at which the scheme takes its forcing.
-- Results depend on the solver tolerance, so runs on different tilings or rank counts differ at about the level of `fs_tol` (the split mode is not tiling-invariant either, at rounding level).
+- Results depend on the tiling: the solve converges to `fs_tol`, and its iterates depend on the decomposition, so runs on different tilings or rank counts differ at about that level (2e-7 to 3e-6 relative in sea level after 20 steps on a 384 x 384 domain). The split mode gives bitwise identical results on any tiling in a strict build; an optimised build can differ in the last bits between tilings in either mode.
 - `fs_rho_inf > 0` shortens the survival of a configuration that already has a `2 dt` computational mode of its 3-D step (section 2); the cure is a shorter `dt`. `fs_rho_inf = 1` is rejected.
 - Reflecting closed basins excited by an unbalanced start show more energy in their basin seiches than the split loop, growing with `fs_rho_inf`; use `fs_rho_inf = 0` there.
 - Not tested with `NHMG`.
