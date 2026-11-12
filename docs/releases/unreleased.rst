@@ -12,6 +12,11 @@ Breaking Changes
 
 - Model results change for every configuration with an open boundary and flow through it: tracers in the cells next to an inflow boundary first, then the rest of the domain. Closed and periodic configurations, and ``UPSCALING`` builds with open boundaries, are bit-identical. There is no switch to restore the previous flux; the previous release reproduces the previous answers. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
 - Test references change for 11 of the 14 keys in ``tests/results/results_github_{gnu,ifx}.json`` (updated in this PR); ``filament``, ``pipes_ana`` and ``rivers_ana`` do not. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
+- A MARBL or BEC2 run now stops when a BGC tracer is missing from the boundary or initial files; since 0.8.0 (#360) it was set to zero with only a warning. (`#421 <https://github.com/CWorthy-ocean/ucla-roms/pull/421>`_)
+
+  - The message names the missing variable and how to make the file: BGC boundary forcing, ``include_bgc=True`` on a parent's nesting file, or BGC initial conditions.
+  - Passive and CDR tracers may still be missing from either file and start, or stay, at zero.
+
 
 New Features
 ~~~~~~~~~~~~
@@ -75,6 +80,7 @@ Bug Fixes
 
 - Names in a nesting file's ``output_vars`` are now matched whole; before, asking for ``passive`` also asked for ``v``, which stopped a build without ``PARALLEL_IO`` at its first boundary output. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
 - ``ub_tune``, ``wrt_sponge`` and ``sponge_avg`` now default to ``.false.``, ``.false.`` and ``.true.``; before, a ``SPONGE_TUNE_SETTINGS`` group that omitted one left it undefined. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
+- A temperature or salinity variable missing from the initial file now stops ROMS with a message naming it; before, the run crashed with "Fortran runtime error: End of file". (`#421 <https://github.com/CWorthy-ocean/ucla-roms/pull/421>`_)
 
 
 
@@ -97,3 +103,4 @@ Miscellaneous
 - The extraction tests now build with ``DIAGNOSTICS`` and check that up/vp are non-zero on every boundary point and independent of the tiling. (`#416 <https://github.com/CWorthy-ocean/ucla-roms/pull/416>`_)
 - New test ``tests/test_sponge_tune.py`` runs ``ub_tune`` with restarts and ``wrt_sponge``, with and without ``PARALLEL_IO``, on one and four ranks. (`#417 <https://github.com/CWorthy-ocean/ucla-roms/pull/417>`_)
 - New extraction tests check that every boundary variable is finite and never the fill value in both builds, including a child with a passive tracer and two children that ask for different variables; a sponge-tuning test checks the ``sponge_avg`` default; the runtime-settings docs list the three defaults. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
+- New tests check that a MARBL run missing ``DIC`` at its open boundaries, or in its initial file, is rejected with the new message. (`#421 <https://github.com/CWorthy-ocean/ucla-roms/pull/421>`_)
