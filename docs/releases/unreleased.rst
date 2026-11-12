@@ -69,6 +69,13 @@ Bug Fixes
 
   - With ``sponge_avg = .false.`` the ``_spn`` file now holds the output step's values instead of zeros.
 
+- With ``PARALLEL_IO``, the child boundary file now holds only the variables the nesting file asks for; before, passive and CDR_LITE tracers were declared but never written, and a child read their fill value (9.97e36) as boundary data. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
+
+  - The file now has the same variables and values as the per-rank files of a build without ``PARALLEL_IO``.
+
+- Names in a nesting file's ``output_vars`` are now matched whole; before, asking for ``passive`` also asked for ``v``, which stopped a build without ``PARALLEL_IO`` at its first boundary output. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
+- ``ub_tune``, ``wrt_sponge`` and ``sponge_avg`` now default to ``.false.``, ``.false.`` and ``.true.``; before, a ``SPONGE_TUNE_SETTINGS`` group that omitted one left it undefined. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
+
 
 
 Improvements
@@ -76,6 +83,7 @@ Improvements
 
 
 - The ``_spn`` file now holds every open side; before, it had the south and west sides only. (`#417 <https://github.com/CWorthy-ocean/ucla-roms/pull/417>`_)
+- Asking for ``w`` in a nesting file with ``PARALLEL_IO`` now stops ROMS at startup with a message; before, the run continued and left ``w_<side>`` at the fill value. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -88,3 +96,4 @@ Miscellaneous
 - References of the open-boundary regression tests are updated. (`#415 <https://github.com/CWorthy-ocean/ucla-roms/pull/415>`_)
 - The extraction tests now build with ``DIAGNOSTICS`` and check that up/vp are non-zero on every boundary point and independent of the tiling. (`#416 <https://github.com/CWorthy-ocean/ucla-roms/pull/416>`_)
 - New test ``tests/test_sponge_tune.py`` runs ``ub_tune`` with restarts and ``wrt_sponge``, with and without ``PARALLEL_IO``, on one and four ranks. (`#417 <https://github.com/CWorthy-ocean/ucla-roms/pull/417>`_)
+- New extraction tests check that every boundary variable is finite and never the fill value in both builds, including a child with a passive tracer and two children that ask for different variables; a sponge-tuning test checks the ``sponge_avg`` default; the runtime-settings docs list the three defaults. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
