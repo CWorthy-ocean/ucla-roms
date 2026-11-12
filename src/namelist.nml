@@ -606,8 +606,8 @@ pmin = 200               ! Minimum of allocated space for particle array
 ! loop (step2d); each solves a 2-D elliptic problem for the free-surface
 ! increment (PCG with a multigrid preconditioner). ndtfast is then not used for
 ! the barotropic mode. The values below are the defaults and the recommended
-! settings. Only the main settings are listed; the others (solver, multigrid
-! and diagnostic options) keep their defaults when omitted and are described in
+! settings. Only these settings are listed; the solver and development settings
+! keep their defaults when omitted and are described in
 ! docs/model_settings/runtime_settings.md (IMPLICIT_FS). See also
 ! docs/model_settings/implicit_free_surface.md.
 !================================================================================

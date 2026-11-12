@@ -584,24 +584,35 @@ These settings control "pipe forcing", i.e. the input of water and tracers at a 
 ### `IMPLICIT_FS`
 (read by module `implicit_fs_mod.F90`)
 
-Optional: if the group is absent, `fs_mode = 'split'`. Selects the time stepping of the barotropic mode: the split-explicit fast loop (`'split'`, the default, `ndtfast` fast steps per `dt`) or implicit steps (`'implicit'`; two sub-steps per `dt` by default), each of which solves an elliptic equation for the free surface. The other settings are read only with `fs_mode = 'implicit'`, except `fs_verbose` (its `FS_SRC` line is also written in split mode). The defaults of the other settings are the recommended ones (see [the defaults](implicit_free_surface.md#defaults)). The scheme, its options and its limitations are described in [Implicit free surface](implicit_free_surface.md). The namelist template lists only `fs_mode`, `fs_nsub`, `fs_rho_inf`, `fs_tol` and `fs_verbose`; any other setting below can be added to the group and keeps its default when omitted.
+Optional: if the group is absent, `fs_mode = 'split'`. Selects the time stepping of the barotropic mode: the split-explicit fast loop (`'split'`, the default, `ndtfast` fast steps per `dt`) or implicit steps (`'implicit'`; two sub-steps per `dt` by default), each of which solves an elliptic equation for the free surface. The other settings are read only with `fs_mode = 'implicit'`, except `fs_verbose` (its `FS_SRC` line is also written in split mode). The scheme, its options and its limitations are described in [Implicit free surface](implicit_free_surface.md).
 
-Main settings:
+Settings (the keys of the namelist template):
 
 | Setting | Default | Description |
 |--------|---------|-------------|
 | `fs_mode` | `'split'` | `'split'`: split-explicit fast loop (`step2d`); `'implicit'`: implicit free surface |
-| `fs_rho_inf` | `0.5` | Spectral radius of the generalized-alpha step at infinite frequency, `0 <= fs_rho_inf < 1`. 0 damps fast barotropic modes most (L-stable). 0.5 with the default sub-steps and `fs_pg_rho` gives the most accurate tides; above 0.6 the gain is small and the stability margin shrinks. Values below 1 are stable; 1 (Crank-Nicolson, no damping) is resonant with a 2 dt forcing and stops ROMS at the namelist read. Where the configuration runs at its internal-wave stability limit any value fails eventually and larger values fail sooner: shorten dt |
-| `fs_theta`, `fs_theta_div` | `0.5`, `0.5` | Extra off-centring (0.5 to 1) of the free-surface pressure gradient and of the divergence; 0.5 = none |
 | `fs_nsub` | `2` | Implicit sub-steps of `dt/fs_nsub` per baroclinic step (1 to 4). More accurate tides (phase and amplitude errors about `1/fs_nsub^2`) for one elliptic solve per sub-step; moves the time of the tidal potential (`fs_pot_time = 'af'`) and of the boundary tidal harmonics (see [sub-steps](implicit_free_surface.md#sub-steps-fs_nsub)) |
-| `fs_pg_rho` | `.true.` | `.true.`: the implicit pressure-gradient operator carries the density weighting of the depth-integrated 3-D pressure gradient (`rhoS`, `rhoA`, as the split loop's 2-D pressure gradient does). Without it a fraction `rhoS` (about 0.027 with `rho0 = 1000`) of the barotropic pressure gradient stays explicit, which amplifies tides slightly and makes `fs_rho_inf > 0.6` (or sub-steps with `fs_rho_inf > 0.3`) unstable on large basins. No extra cost. Needs `VAR_RHO_2D` (defined by default); without it the key is set to `.false.` with a log line |
-| `fs_flather_zghost` | `.true.` | Open (Flather) boundary faces: `.true.`: the sea level of the condition is the mean of the first interior and the boundary point, as in the split loop, so that tides forced through the open boundaries agree with the split loop's as `dt` goes to zero; `.false.`: the first interior value (the boundary-forced tide is then later by about `dx/(2 sqrt(g h))`, see [the Flather sea level](implicit_free_surface.md#sea-level-of-the-flather-condition-fs_flather_zghost)). No extra cost |
+| `fs_rho_inf` | `0.5` | Spectral radius of the generalized-alpha step at infinite frequency, `0 <= fs_rho_inf < 1`. 0 damps fast barotropic modes most (L-stable). 0.5 with the default sub-steps and `fs_pg_rho` gives the most accurate tides; above 0.6 the gain is small and the stability margin shrinks. Values below 1 are stable; 1 (Crank-Nicolson, no damping) is resonant with a 2 dt forcing and stops ROMS at the namelist read. Where the configuration runs at its internal-wave stability limit any value fails eventually and larger values fail sooner: shorten dt |
 | `fs_tol` | `1.0e-8` | Relative residual at which the elliptic solve stops (the volume budget is exact regardless) |
-| `fs_maxit` | `1000` | Iteration cap of the solve. A solve that reaches it without meeting `fs_tol` stops the run with an error naming the step, the sub-step, the iterations and the relative residual (the run is unstable, or `fs_tol` is below what rounding allows) |
-| `fs_precond` | `'mg'` | Preconditioner: `'mg'` multigrid V-cycle, `'jacobi'` diagonal |
 | `fs_verbose` | `0` | 1: `FS_SOLVE` line per step and the `FS_COST`, `FS_MGLEV` cost tables at the end of the run; 2: also `FS_VOL` (volume budget), `FS_SRC` (source volumes) and `FS_WALL` lines |
 
-Multigrid settings (`fs_precond = 'mg'`):
+Solver and development settings. They can be added to the group and keep their defaults when omitted; the defaults are the recommended settings (see [the defaults](implicit_free_surface.md#defaults)). These keys may change between versions, and C-Star and Forge do not expose them.
+
+| Setting | Default | Description |
+|--------|---------|-------------|
+| `fs_pg_rho` | `.true.` | `.true.`: the implicit pressure-gradient operator carries the density weighting of the depth-integrated 3-D pressure gradient (`rhoS`, `rhoA`, as the split loop's 2-D pressure gradient does). Without it a fraction `rhoS` (about 0.027 with `rho0 = 1000`) of the barotropic pressure gradient stays explicit, which amplifies tides slightly and makes `fs_rho_inf > 0.6` (or sub-steps with `fs_rho_inf > 0.3`) unstable on large basins. No extra cost. Needs `VAR_RHO_2D` (defined by default); without it the key is set to `.false.` with a log line |
+| `fs_flather_zghost` | `.true.` | Open (Flather) boundary faces: `.true.`: the sea level of the condition is the mean of the first interior and the boundary point, as in the split loop, so that tides forced through the open boundaries agree with the split loop's as `dt` goes to zero; `.false.`: the first interior value (the boundary-forced tide is then later by about `dx/(2 sqrt(g h))`, see [the Flather sea level](implicit_free_surface.md#sea-level-of-the-flather-condition-fs_flather_zghost)). No extra cost |
+| `fs_theta`, `fs_theta_div` | `0.5`, `0.5` | Extra off-centring (0.5 to 1) of the free-surface pressure gradient and of the divergence; 0.5 = none |
+| `fs_maxit` | `1000` | Iteration cap of the solve. A solve that reaches it without meeting `fs_tol` stops the run with an error naming the step, the sub-step, the iterations and the relative residual (the run is unstable, or `fs_tol` is below what rounding allows) |
+| `fs_precond` | `'mg'` | Preconditioner: `'mg'` multigrid V-cycle, `'jacobi'` diagonal |
+| `fs_warm` | `1` | Start of the solve: 1 the previous step's increment, 0 zero |
+| `fs_pot_time` | `'af'` | Tidal potential at `n+alpha_f` (`'af'`, where the scheme takes its forcing; with `fs_nsub > 1` the mean of the sub-steps' forcing times) or at `n+1/2` (`'mid'`) |
+| `fs_cor_metric` | `.true.` | Include the curvilinear metric terms in the Coriolis estimate that is kept out of the generalized-alpha memory (`CURVGRID` and `UV_ADV` only) |
+| `fs_tang_nudge` | `1.0` | Factor on the inflow nudging rate of the tangential barotropic velocity on open edges |
+| `fs_drag_implicit` | `.false.` | Treat the linear bottom-drag increment implicitly |
+| `fs_selftest` | `0` | 1: solver test with the first step's operator at startup (`FS_TEST` lines) |
+
+Multigrid settings (`fs_precond = 'mg'`; solver settings as above):
 
 | Setting | Default | Description |
 |--------|---------|-------------|
@@ -613,17 +624,6 @@ Multigrid settings (`fs_precond = 'mg'`):
 | `fs_mg_global_on` | `'node'` | Ranks that solve the global levels: `'node'` one per node, `'all'` every rank, `'one'` rank 0 (same results) |
 | `fs_mg_faces` | `'width'` | Coarse face coefficients scaled by the aggregates' widths (`'width'`) or by 0.5 (`'half'`) |
 | `fs_exch_thin` | `.true.` | One-cell halo exchanges without corners in the solver (same results) |
-
-Scheme options (the defaults are the recommended settings):
-
-| Setting | Default | Description |
-|--------|---------|-------------|
-| `fs_warm` | `1` | Start of the solve: 1 the previous step's increment, 0 zero |
-| `fs_pot_time` | `'af'` | Tidal potential at `n+alpha_f` (`'af'`, where the scheme takes its forcing; with `fs_nsub > 1` the mean of the sub-steps' forcing times) or at `n+1/2` (`'mid'`) |
-| `fs_cor_metric` | `.true.` | Include the curvilinear metric terms in the Coriolis estimate that is kept out of the generalized-alpha memory (`CURVGRID` and `UV_ADV` only) |
-| `fs_tang_nudge` | `1.0` | Factor on the inflow nudging rate of the tangential barotropic velocity on open edges |
-| `fs_drag_implicit` | `.false.` | Treat the linear bottom-drag increment implicitly |
-| `fs_selftest` | `0` | 1: solver test with the first step's operator at startup (`FS_TEST` lines) |
 
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)
