@@ -475,7 +475,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: wrt_upscale, do_upscale
 #endif
-    use implicit_fs_mod, only: fs_on, fs_step, fs_srcdiag, fs_src_diag, fs_bry_phase
+    use implicit_fs_mod, only: fs_on, fs_step, fs_srcdiag, fs_src_diag, fs_bry_phase, fs_pot_phase
 #ifdef DIAGNOSTICS
     use diagnostics, only: do_diagnostics, diag_uv, diag_trc
 #endif
@@ -531,7 +531,7 @@ contains
     call reg_tic(rg_set_bry)
     call set_bry_all
 
-    if (bry_tides.or.pot_tides) call set_tides(0)
+    if (bry_tides.or.pot_tides) call set_tides(0, pot_phase=fs_pot_phase)
     call reg_toc(rg_set_bry)
 
 #ifdef SOLVE3D
@@ -608,7 +608,7 @@ contains
     ! fixed, so they are evaluated at the centre of that interval, n+1/2;
     ! at n+1 the boundary-forced tide leads by about omega*dt/2. The
     ! potential is at n+1/2 as well, where prsgrd uses it (the implicit
-    ! free surface moves it, see pot_phase). With the implicit free surface
+    ! free surface moves it, see fs_pot_phase). With the implicit free surface
     ! (fs_on) the same arrays are read by the implicit step, whose boundary
     ! face takes data at n+alpha_f, so fs_on keeps the harmonics at n+1
     ! (fs_bry_phase = 1; with fs_nsub sub-steps, which hold these values,
@@ -624,9 +624,9 @@ contains
     call set_bry_all  ! get for time n+1
     if (bry_tides.or.pot_tides) then
       if (fs_on) then
-        call set_tides(0, bry_phase=fs_bry_phase)
+        call set_tides(0, bry_phase=fs_bry_phase, pot_phase=fs_pot_phase)
       else
-        call set_tides(0, bry_phase=0.5_8)
+        call set_tides(0, bry_phase=0.5_8, pot_phase=fs_pot_phase)
       end if
     end if
     call reg_toc(rg_set_bry)

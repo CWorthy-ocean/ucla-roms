@@ -126,6 +126,9 @@ module implicit_fs_mod
                                                        ! (main.F90 set_tides): n+1, the end of the step; with
                                                        ! fs_nsub > 1, which hold the boundary data over the step, the
                                                        ! mean of the sub-steps' end times (fs_nsub+1)/(2 fs_nsub)
+  real(kind=8), public, protected :: fs_pot_phase = 0.5_8  ! time (units of dt after n) of the tidal potential
+                                                       ! (main.F90 set_tides): n+1/2 (split, fs_pot_time = 'mid');
+                                                       ! fs_pot_time = 'af' n+sft
 
 #ifdef SOLVE3D
   ! tile interior and physical edges (set at the first step)
@@ -233,7 +236,6 @@ contains
     use namelist_open_mod, only: open_namelist_file
     use error_handling_mod, only: error_log
     use param, only: mynode
-    use tides, only: pot_phase
     use roms_read_write, only: set_fs_global_atts
     implicit none
     integer(kind=4) :: namelist_unit, ios
@@ -287,11 +289,11 @@ contains
     if (fs_nsub > 1) sft = (alf + 0.5_8*real(fs_nsub-1,8))/real(fs_nsub,8)
     fs_bry_phase = 1._8
     if (fs_nsub > 1) fs_bry_phase = 0.5_8*real(fs_nsub+1,8)/real(fs_nsub,8)
-    select case (trim(fs_pot_time))         ! the tidal potential at n+sft (tides: pot_phase)
+    select case (trim(fs_pot_time))         ! the tidal potential at n+sft
     case ('af')
-      pot_phase = 1._8/(1._8+fs_rho_inf)
-      if (fs_nsub > 1) pot_phase = sft
-    case ('mid') ; pot_phase = 0.5_8
+      fs_pot_phase = 1._8/(1._8+fs_rho_inf)
+      if (fs_nsub > 1) fs_pot_phase = sft
+    case ('mid') ; fs_pot_phase = 0.5_8
     case default
       call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
       &  info="fs_pot_time must be 'af' or 'mid'")
@@ -335,7 +337,7 @@ contains
       &  ' fs_mg_global_on = ', trim(fs_mg_global_on), ' fs_mg_faces = ', trim(fs_mg_faces),&
       &  ' fs_mg_lag =', fs_mg_lag, ' fs_exch_thin = ', fs_exch_thin
       write(*,'(1x,A,A,A,F7.4,A)') 'IMPLICIT_FS: fs_pot_time = ', trim(fs_pot_time), ' (tidal potential at time +',&
-      &  pot_phase, ' dt)'
+      &  fs_pot_phase, ' dt)'
       ! boundary options of the split loop (u2dbc, v2dbc, zetabc) that the implicit step does not follow
       ! (section 4). M2NUDGING needs no note: the implicit step requires M2_FRC_BRY, under which it changes
       ! nothing, and the inflow nudging of the tangential faces is kept.
