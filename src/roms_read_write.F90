@@ -205,6 +205,13 @@ module roms_read_write
   namelist /FORCING_FILES/ frcfiles
   namelist /REFERENCE_DATE_SETTINGS/ reference_date
 
+  ! barotropic scheme of the run (namelist IMPLICIT_FS) for the global attributes of the output files; set
+  ! by read_nml_implicit_fs through set_fs_global_atts (implicit_fs_mod uses this module, so it cannot be
+  ! read from there)
+  character(len=8) :: gatt_fs_mode = 'split'
+  real(kind=8) :: gatt_fs_rho_inf = 0._8
+  integer(kind=4) :: gatt_fs_nsub = 0
+
   public :: insert_nodes
   public :: findstr,append_date_node
   public :: set_frc_data
@@ -214,6 +221,7 @@ module roms_read_write
   public :: get_frc_dim_len
   public :: nc_check_units
   public :: put_global_atts
+  public :: set_fs_global_atts
   public :: refdatestr
   public :: store_string_att
   public :: create_file
@@ -2309,6 +2317,17 @@ contains
     ierr = nf90_close(ncid)
   end subroutine nc_check_units  !]
 ! ---------------------------------------------------------------------
+  subroutine set_fs_global_atts(fs_mode, fs_rho_inf, fs_nsub)
+    ! the barotropic scheme that put_global_atts records (read_nml_implicit_fs)
+    implicit none
+    character(len=*), intent(in) :: fs_mode
+    real(kind=8), intent(in) :: fs_rho_inf
+    integer(kind=4), intent(in) :: fs_nsub
+    gatt_fs_mode = fs_mode
+    gatt_fs_rho_inf = fs_rho_inf
+    gatt_fs_nsub = fs_nsub
+  end subroutine set_fs_global_atts
+! ---------------------------------------------------------------------
   subroutine put_global_atts (ncid, ierr)  ![
 
     use scalars, only:&
@@ -2399,6 +2418,11 @@ contains
     ierr=nf90_put_att(ncid, nf90_global, 'ndtfast',ndtfast)
     ierr=nf90_put_att(ncid, nf90_global, 'dt', dt)
     ierr=nf90_put_att(ncid, nf90_global, 'dtfast', dtfast)
+    ierr=nf90_put_att(ncid, nf90_global, 'fs_mode', trim(gatt_fs_mode))  ! barotropic scheme (IMPLICIT_FS)
+    if (trim(gatt_fs_mode) == 'implicit') then
+      ierr=nf90_put_att(ncid, nf90_global, 'fs_rho_inf', gatt_fs_rho_inf)
+      ierr=nf90_put_att(ncid, nf90_global, 'fs_nsub', gatt_fs_nsub)
+    endif
 
 ! Vertical coordinate type, control parameters "theta_s", "theta_b",
 ! "hc", and stretching curves "Cs_w", "Cs_r" at W- and RHO-points.

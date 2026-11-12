@@ -243,6 +243,7 @@ contains
     use error_handling_mod, only: error_log
     use param, only: mynode
     use tides, only: pot_phase
+    use roms_read_write, only: set_fs_global_atts
     implicit none
     integer(kind=4) :: namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_implicit_fs"
@@ -267,6 +268,7 @@ contains
       &info="fs_mode must be 'split' or 'implicit'")
       return
     end if
+    call set_fs_global_atts(fs_mode, fs_rho_inf, fs_nsub)   ! global attributes of the output files
     if (.not. fs_on) return
 #ifndef SOLVE3D
     call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&

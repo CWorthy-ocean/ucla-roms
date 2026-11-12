@@ -130,6 +130,8 @@ A run can start from a restart file without these variables (a split-mode run's 
 | `FS_STAT` | end of run | solves, mean iterations per solve, unconverged solves (0: an unconverged solve stops the run, section 3) |
 | `FS_COST`, `FS_MGLEV` | `fs_verbose >= 1`, end of run | cost by piece and by multigrid level (ms per baroclinic step, slowest rank) |
 
+The output files record the barotropic scheme in the global attribute `fs_mode` (`'split'` or `'implicit'`), with `fs_mode = 'implicit'` also `fs_rho_inf` and `fs_nsub` (`ndtfast` and `dtfast` are written as before and are not used by the implicit step).
+
 `fs_selftest = 1` solves a manufactured problem with the first step's operator and a point volume source at startup (`FS_TEST` lines).
 
 ## 8. Limitations
