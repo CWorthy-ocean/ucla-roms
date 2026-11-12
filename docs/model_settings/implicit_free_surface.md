@@ -118,7 +118,8 @@ A run can start from a restart file without these variables (a split-mode run's 
 | `FS_SOLVE` | `fs_verbose >= 1`, every step | iterations, relative residual, max `abs(delta)` (with `fs_nsub > 1`: iterations summed over the sub-steps, the worst residual, the largest sub-step increment, and the most iterations of one sub-step) |
 | `FS_VOL` | `fs_verbose >= 2`, every step | volume change, `dt` x (sources + inflow), relative error, volume (of the whole baroclinic step) |
 | `FS_SRC`, `FS_WALL` | `fs_verbose >= 2`, every step | source volumes; largest velocity on closed and masked faces |
-| `FS_STAT`, `FS_COST`, `FS_MGLEV` | end of run | solves, mean iterations per solve, unconverged solves (0: an unconverged solve stops the run, section 3); cost by piece and by multigrid level (ms per baroclinic step, slowest rank) |
+| `FS_STAT` | end of run | solves, mean iterations per solve, unconverged solves (0: an unconverged solve stops the run, section 3) |
+| `FS_COST`, `FS_MGLEV` | `fs_verbose >= 1`, end of run | cost by piece and by multigrid level (ms per baroclinic step, slowest rank) |
 
 `fs_selftest = 1` solves a manufactured problem with the first step's operator and a point volume source at startup (`FS_TEST` lines).
 

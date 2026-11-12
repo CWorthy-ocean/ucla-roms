@@ -618,6 +618,6 @@ fs_nsub = 2                          ! Implicit sub-steps of dt/fs_nsub per baro
 fs_rho_inf = 0.5                     ! Spectral radius at infinite omega dt, 0..1: 0 damps the fastest
                                      ! modes most (L-stable); 1 = Crank-Nicolson (no damping, not usable)
 fs_tol = 1.0e-8                      ! Relative residual of the elliptic solve (volume is exact regardless)
-fs_verbose = 0                       ! 1 FS_SOLVE line per step; 2 + FS_VOL volume budget and FS_SRC
-                                     ! source volumes (FS_SRC also with fs_mode = 'split')
+fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost table at the end; 2 + FS_VOL
+                                     ! volume budget and FS_SRC source volumes (FS_SRC also with fs_mode = 'split')
 /

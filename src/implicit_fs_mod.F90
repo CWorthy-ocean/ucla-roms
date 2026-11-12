@@ -100,7 +100,8 @@ module implicit_fs_mod
                                                ! n+sft; the stress data
                                                ! re-interpolated to it; the 3-D step keeps n+1/2); 'mid' n+1/2 as
                                                ! set_forces (the forced response then lags by (alpha_f - 1/2) dt)
-  integer(kind=4) :: fs_verbose = 0            ! 1 FS_SOLVE line per step, 2 + FS_VOL and FS_SRC lines
+  integer(kind=4) :: fs_verbose = 0            ! 1 FS_SOLVE line per step and FS_COST, FS_MGLEV at the end;
+                                               ! 2 + FS_VOL and FS_SRC lines
                                                ! (FS_SRC also in fs_mode = 'split')
   integer(kind=4) :: fs_selftest = 0           ! 1: at the first step, a manufactured solution of
                                                ! A (FS_TEST lines), then the step as usual
@@ -2509,20 +2510,23 @@ contains
 
   !----------------------------------------------------------------------
   subroutine fs_cost_print
-    ! end of the run: FS_COST pieces (ms per step, max over ranks), SUM (of the maxima), TOTAL (the slowest
-    ! rank's step), FS_STAT, and the FS_MGLEV pieces per multigrid level
+    ! end of the run: FS_STAT; with fs_verbose >= 1 also the FS_COST pieces (ms per step, max over ranks),
+    ! SUM (of the maxima), TOTAL (the slowest rank's step), and the FS_MGLEV pieces per multigrid level
     use param, only: mynode, ocean_grid_comm
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max
     implicit none
     real(kind=8) :: g(ntm), gl(0:mg_maxl,3), tt(1), gt(1)
     integer(kind=4) :: ierr, i
-    call mpi_allreduce(tm, g, ntm, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
-    tt(1) = sum(tm)
-    call mpi_allreduce(tt, gt, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
     if (mynode == 0) then
       write(*,'(1x,A,I7,A,F9.2,A,I6)') 'FS_STAT solves', n_solve, ' mean its', real(n_its,8)/max(n_solve,1),&
       &  ' unconverged', n_unconv
       if (fs_nsub > 1) write(*,'(1x,A,I7,A,I2,A)') 'FS_STAT steps', n_step, ' (', fs_nsub, ' sub-steps each)'
+    end if
+    if (fs_verbose < 1) return
+    call mpi_allreduce(tm, g, ntm, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    tt(1) = sum(tm)
+    call mpi_allreduce(tt, gt, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    if (mynode == 0) then
       write(*,'(1x,A,I6,A)') 'FS_COST [ms per step, max rank over', n_step, ' steps]:'
       do i=1,ntm
         write(*,'(1x,A,1x,A12,F9.3)') 'FS_COST', tm_name(i), 1.e3_8*g(i)/max(n_step,1)

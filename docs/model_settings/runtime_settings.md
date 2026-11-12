@@ -599,7 +599,7 @@ Main settings:
 | `fs_tol` | `1.0e-8` | Relative residual at which the elliptic solve stops (the volume budget is exact regardless) |
 | `fs_maxit` | `1000` | Iteration cap of the solve. A solve that reaches it without meeting `fs_tol` stops the run with an error naming the step, the sub-step, the iterations and the relative residual (the run is unstable, or `fs_tol` is below what rounding allows) |
 | `fs_precond` | `'mg'` | Preconditioner: `'mg'` multigrid V-cycle, `'jacobi'` diagonal |
-| `fs_verbose` | `0` | 1: `FS_SOLVE` line per step; 2: also `FS_VOL` (volume budget), `FS_SRC` (source volumes) and `FS_WALL` lines |
+| `fs_verbose` | `0` | 1: `FS_SOLVE` line per step and the `FS_COST`, `FS_MGLEV` cost tables at the end of the run; 2: also `FS_VOL` (volume budget), `FS_SRC` (source volumes) and `FS_WALL` lines |
 
 Multigrid settings (`fs_precond = 'mg'`):
 
