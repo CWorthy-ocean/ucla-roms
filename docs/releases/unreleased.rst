@@ -81,6 +81,11 @@ Bug Fixes
 - Names in a nesting file's ``output_vars`` are now matched whole; before, asking for ``passive`` also asked for ``v``, which stopped a build without ``PARALLEL_IO`` at its first boundary output. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
 - ``ub_tune``, ``wrt_sponge`` and ``sponge_avg`` now default to ``.false.``, ``.false.`` and ``.true.``; before, a ``SPONGE_TUNE_SETTINGS`` group that omitted one left it undefined. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
 - A temperature or salinity variable missing from the initial file now stops ROMS with a message naming it; before, the run crashed with "Fortran runtime error: End of file". (`#421 <https://github.com/CWorthy-ocean/ucla-roms/pull/421>`_)
+- Next to a missing ``ddic_dco2``/``ddic_dalk`` record, the ``CDR_LITE`` gas flux was too strong, up to N times its value for N steps per record interval. (`#418 <https://github.com/CWorthy-ocean/ucla-roms/pull/418>`_)
+
+  - Time interpolation blended the 0 as a number, which inflated the exchange rate and shrank its alkalinity target.
+  - Results are unchanged wherever both bracketing records are valid, and when records are held (``cdr_carbonate_sensitivity_time_interpolation = .false.``).
+
 
 
 
@@ -104,3 +109,4 @@ Miscellaneous
 - New test ``tests/test_sponge_tune.py`` runs ``ub_tune`` with restarts and ``wrt_sponge``, with and without ``PARALLEL_IO``, on one and four ranks. (`#417 <https://github.com/CWorthy-ocean/ucla-roms/pull/417>`_)
 - New extraction tests check that every boundary variable is finite and never the fill value in both builds, including a child with a passive tracer and two children that ask for different variables; a sponge-tuning test checks the ``sponge_avg`` default; the runtime-settings docs list the three defaults. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
 - New tests check that a MARBL run missing ``DIC`` at its open boundaries, or in its initial file, is rejected with the new message. (`#421 <https://github.com/CWorthy-ocean/ucla-roms/pull/421>`_)
+- New test ``TestCdrLite.test_missing_sensitivity_record``; the namelist template and the runtime-settings docs describe how a missing record is treated. (`#418 <https://github.com/CWorthy-ocean/ucla-roms/pull/418>`_)
