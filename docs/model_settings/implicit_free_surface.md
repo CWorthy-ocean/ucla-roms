@@ -138,5 +138,6 @@ The output files record the barotropic scheme in the global attribute `fs_mode` 
 - `fs_rho_inf > 0` shortens the survival of a configuration that already has a `2 dt` computational mode of its 3-D step (section 2); the cure is a shorter `dt`. `fs_rho_inf = 1` is rejected.
 - Reflecting closed basins excited by an unbalanced start show more energy in their basin seiches than the split loop, growing with `fs_rho_inf`; use `fs_rho_inf = 0` there.
 - Not tested with `NHMG`.
+- Tested in CI (`tests/test_implicit_fs.py`, the suite's small open-boundary grid on 4 ranks): flux and bulk (`BULK_FRC`) surface forcing, the tidal potential, `PARALLEL_IO`, exact restarts, and river, pipe and CDR volume sources. Not tested in CI: closed and periodic domains, and `MPI_MASKING`. Outside CI the implicit mode has run on a closed basin with a river, a pipe and a CDR volume release, and on a Bay of Bengal domain with `MPI_MASKING`; it has not been run on a periodic domain.
 
 Settings: see [`IMPLICIT_FS`](runtime_settings.md#implicit_fs) in the runtime settings.
