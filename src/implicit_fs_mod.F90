@@ -1133,6 +1133,7 @@ contains
     call fs_pcg(its, resid, conv)
     n_solve = n_solve + 1 ; n_its = n_its + its ; its_last = its ; res_last = resid
     if (.not. conv) n_unconv = n_unconv + 1
+    if (.not. conv) call fs_unconv_stop(k, its, resid)
     if (fs_nsub > 1) then                   ! the step's FS_SOLVE statistics
       if (k == 1) then
         its_sum = 0 ; its_max = 0 ; res_max = 0._8 ; dz_max = 0._8
@@ -1421,6 +1422,26 @@ contains
     if (fs_verbose >= 1) call fs_solve_line
     if (iic == ntstart+ntimes-1) call fs_cost_print
   end subroutine fs_step_tile
+
+  !----------------------------------------------------------------------
+  subroutine fs_unconv_stop(k, its, resid)
+    ! The solve of sub-step k reached fs_maxit without meeting fs_tol: stop the run through the
+    ! error log, as diag's BLOWUP does (the error is raised on rank 0, every rank calls abort_check;
+    ! conv comes from global reductions, so every rank comes here).
+    use error_handling_mod, only: error_log
+    use param, only: mynode
+    use scalars, only: iic
+    implicit none
+    integer(kind=4), intent(in) :: k, its
+    real(kind=8), intent(in) :: resid
+    character(len=320) :: msg
+    write(msg, '(A,I0,A,I0,A,I0,A,I0,A,ES9.2,A,ES9.2,A,I0,A)') 'IMPLICIT_FS: the free-surface solve did not'&
+    &//' converge (step ', iic, ', sub-step ', k, ' of ', fs_nsub, ': ', its, ' iterations, relative residual',&
+    &  resid, ', fs_tol =', fs_tol, ', fs_maxit = ', fs_maxit, '): the run is unstable, or fs_tol is below what'&
+    &//' rounding allows'
+    if (mynode == 0) call error_log%raise_global(context=trim(module_name)//"/fs_step", info=trim(msg))
+    call error_log%abort_check()
+  end subroutine fs_unconv_stop
 
   !----------------------------------------------------------------------
   subroutine fs_zeta_bc(istr,iend,jstr,jend, halo, ks, kn, dts)

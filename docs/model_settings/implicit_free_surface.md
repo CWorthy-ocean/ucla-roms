@@ -72,7 +72,7 @@ Each piece has its own role: the sub-steps reduce the phase error of resolved ti
 
 ## 3. Elliptic solver
 
-The free-surface increment `delta = zeta^{n+1} - zeta^n` satisfies a symmetric positive-definite five-point Helmholtz equation on the active cells. It is solved by preconditioned conjugate gradients (one halo exchange and two global reductions per iteration), started from the previous step's increment (`fs_warm = 1`) and stopped when the area-weighted residual has fallen by `fs_tol` relative to the right-hand side, or after `fs_maxit` iterations (counted, the run continues). The momentum and the free surface are then updated from the solution; the free surface uses the exact divergence of the final fluxes, so the volume budget does not depend on `fs_tol`.
+The free-surface increment `delta = zeta^{n+1} - zeta^n` satisfies a symmetric positive-definite five-point Helmholtz equation on the active cells. It is solved by preconditioned conjugate gradients (one halo exchange and two global reductions per iteration), started from the previous step's increment (`fs_warm = 1`) and stopped when the area-weighted residual has fallen by `fs_tol` relative to the right-hand side. A solve that reaches `fs_maxit` iterations without meeting `fs_tol` stops the run with an error that names the step, the sub-step, the iterations and the relative residual: the run is unstable, or `fs_tol` is below what rounding allows. The momentum and the free surface are then updated from the solution; the free surface uses the exact divergence of the final fluxes, so the volume budget does not depend on `fs_tol`.
 
 Preconditioners (`fs_precond`):
 
@@ -118,7 +118,7 @@ A run can start from a restart file without these variables (a split-mode run's 
 | `FS_SOLVE` | `fs_verbose >= 1`, every step | iterations, relative residual, max `abs(delta)` (with `fs_nsub > 1`: iterations summed over the sub-steps, the worst residual, the largest sub-step increment, and the most iterations of one sub-step) |
 | `FS_VOL` | `fs_verbose >= 2`, every step | volume change, `dt` x (sources + inflow), relative error, volume (of the whole baroclinic step) |
 | `FS_SRC`, `FS_WALL` | `fs_verbose >= 2`, every step | source volumes; largest velocity on closed and masked faces |
-| `FS_STAT`, `FS_COST`, `FS_MGLEV` | end of run | solves, mean iterations per solve, unconverged solves; cost by piece and by multigrid level (ms per baroclinic step, slowest rank) |
+| `FS_STAT`, `FS_COST`, `FS_MGLEV` | end of run | solves, mean iterations per solve, unconverged solves (0: an unconverged solve stops the run, section 3); cost by piece and by multigrid level (ms per baroclinic step, slowest rank) |
 
 `fs_selftest = 1` solves a manufactured problem with the first step's operator and a point volume source at startup (`FS_TEST` lines).
 

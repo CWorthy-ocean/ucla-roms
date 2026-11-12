@@ -9,6 +9,7 @@ from ._helpers import (
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
+    assert_run_rejected,
     create_test_namelist_dict,
     get_summary_value,
     squeezed,
@@ -87,3 +88,23 @@ def test_implicit_fs_exact_restart(implicit_fs_configuration, input_dir, tmp_pat
     run2_val = get_summary_value(run2, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
     assert "fs_udu" in run1_val.variables
     assert run1_val.variables == run2_val.variables
+
+
+STOPS = {
+    # the first solve reaches fs_maxit without meeting fs_tol
+    "unconverged": (
+        {"fs_maxit": 1},
+        ["the free-surface solve did not converge (step", "fs_maxit = 1",
+         "the run is unstable, or fs_tol is below what rounding allows"],
+    ),
+}
+
+
+@pytest.mark.parametrize("case", STOPS)
+def test_implicit_fs_stops(implicit_fs_configuration, input_dir, tmp_path, case):
+    """Settings and solves that cannot give a valid step stop ROMS with a message."""
+    implicit_fs, messages = STOPS[case]
+    nml = implicit_fs_namelist(input_dir, **implicit_fs)
+    assert_run_rejected(
+        implicit_fs_configuration, nml, tmp_path, messages, label=case, absent=["FS_STAT"]
+    )
