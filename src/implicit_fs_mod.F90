@@ -138,9 +138,12 @@ module implicit_fs_mod
   ! per-face fields (u: faces i between cells i-1 and i; v: j between j-1 and j)
   !   unu, unv  U^n;  usu, usv  Ustar (explicit momentum);  au, av  U response to the
   !   delta difference;  cu, cv  operator face coefficients th_d dt a;  ftu, ftv  the
-  !   explicit continuity flux Ftil;  fbu, fbv  Fbar (= DU_avg2);  u1u, u1v  U^n+1
+  !   explicit continuity flux Ftil;  fbu, fbv  Fbar (= DU_avg2);  u1u, u1v  U^n+1;  cbu, cbv  the Robin
+  !   coefficient of the open (Flather) faces;  cxu, cxv, w1u, w1v, w0u, w0v  their radiation and
+  !   fs_flather_zghost weights (fs_flather_wts)
   real(kind=8), allocatable, dimension(:,:) :: unu, unv, usu, usv, au, av, cu, cv,&
-  &                                            ftu, ftv, fbu, fbv, u1u, u1v, cbu, cbv
+  &                                            ftu, ftv, fbu, fbv, u1u, u1v, cbu, cbv,&
+  &                                            cxu, cxv, w1u, w1v, w0u, w0v
   ! per-cell fields: wd (D^n, later D^n+1), ar (active area), rb (Robin diagonal),
   ! dinv (act/diag A), qs (volume source Q [m/s]), zn (zeta^n+1), act (1 active, 0 not)
   real(kind=8), allocatable, dimension(:,:) :: wd, ar, rb, dinv, qs, zn, act
@@ -649,12 +652,15 @@ contains
     &         au(GLOBAL_2D_ARRAY), av(GLOBAL_2D_ARRAY), cu(GLOBAL_2D_ARRAY), cv(GLOBAL_2D_ARRAY),&
     &         ftu(GLOBAL_2D_ARRAY), ftv(GLOBAL_2D_ARRAY), fbu(GLOBAL_2D_ARRAY), fbv(GLOBAL_2D_ARRAY),&
     &         u1u(GLOBAL_2D_ARRAY), u1v(GLOBAL_2D_ARRAY), cbu(GLOBAL_2D_ARRAY), cbv(GLOBAL_2D_ARRAY),&
+    &         cxu(GLOBAL_2D_ARRAY), cxv(GLOBAL_2D_ARRAY), w1u(GLOBAL_2D_ARRAY), w1v(GLOBAL_2D_ARRAY),&
+    &         w0u(GLOBAL_2D_ARRAY), w0v(GLOBAL_2D_ARRAY),&
     &         wd(GLOBAL_2D_ARRAY), ar(GLOBAL_2D_ARRAY), rb(GLOBAL_2D_ARRAY), dinv(GLOBAL_2D_ARRAY),&
     &         qs(GLOBAL_2D_ARRAY), zn(GLOBAL_2D_ARRAY), act(GLOBAL_2D_ARRAY),&
     &         xx(GLOBAL_2D_ARRAY), bb(GLOBAL_2D_ARRAY), rr(GLOBAL_2D_ARRAY), zz(GLOBAL_2D_ARRAY),&
     &         pp(GLOBAL_2D_ARRAY), qq(GLOBAL_2D_ARRAY), wk(GLOBAL_2D_ARRAY), wk2(GLOBAL_2D_ARRAY) )
     unu = 0._8 ; unv = 0._8 ; usu = 0._8 ; usv = 0._8 ; au = 0._8 ; av = 0._8 ; cu = 0._8 ; cv = 0._8
     ftu = 0._8 ; ftv = 0._8 ; fbu = 0._8 ; fbv = 0._8 ; u1u = 0._8 ; u1v = 0._8 ; cbu = 0._8 ; cbv = 0._8
+    cxu = 0._8 ; cxv = 0._8 ; w1u = 0._8 ; w1v = 0._8 ; w0u = 0._8 ; w0v = 0._8
     wd = 0._8 ; ar = 0._8 ; rb = 0._8 ; dinv = 0._8 ; qs = 0._8 ; zn = 0._8 ; act = 0._8
     xx = 0._8 ; bb = 0._8 ; rr = 0._8 ; zz = 0._8 ; pp = 0._8 ; qq = 0._8 ; wk = 0._8 ; wk2 = 0._8
     allocate( udu(GLOBAL_2D_ARRAY), udv(GLOBAL_2D_ARRAY), gru(GLOBAL_2D_ARRAY), grv(GLOBAL_2D_ARRAY),&
@@ -694,8 +700,7 @@ contains
     use river_frc, only: river_source, nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j,&
     &                    riv_uflx, riv_vflx, riv_vol
 #ifdef CDR_FORCING
-    use cdr_frc, only: cdr_source, cdr_volume, cdr_prf, cdr_nprf, cdr_icdr, cdr_iloc, cdr_jloc, cdr_vol
-    use param, only: itemp
+    use cdr_frc, only: cdr_source, cdr_volume, cdr_zsrc
 #endif
 #if defined M2_FRC_BRY && defined Z_FRC_BRY
     use boundary, only:&
@@ -718,10 +723,9 @@ contains
     use mpi_f08, only: mpi_wtime, mpi_allreduce, mpi_double_precision, mpi_sum, mpi_max
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
-    integer(kind=4) :: i, j, iface, iriv, its, ierr, icdr, cidx, k, ks, kn, l, nl, lsc(2)
-    real(kind=8) :: th, b1, df, ainv, gam, m, d, hf, cb, cx, resid, rf, t0, c, rn
+    integer(kind=4) :: i, j, iface, iriv, its, ierr, k, ks, kn, l, nl, lsc(2)
+    real(kind=8) :: th, b1, df, ainv, gam, m, d, hf, cb, resid, rf, t0, c, rn
     real(kind=8) :: dts                     ! length of the barotropic (sub-)step, dt/fs_nsub
-    real(kind=8) :: w1, w0                  ! fs_flather_zghost: weights of zeta_int^n+1 and of the old boundary value
     real(kind=8) :: vloc(4), vglob(4)
     logical :: conv, ga0
 
@@ -749,6 +753,7 @@ contains
     ! in implicit mode (set_HUV1's KEEP_CORIOLIS write to knew-1 precedes this step and is not read).
     dts = dt
     if (fs_nsub > 1) dts = dt/real(fs_nsub,8)
+    call fs_flather_wts(istr,iend,jstr,jend, dts)
     nl = 0
     do l=1,4
       if (l /= kstp .and. l /= knew .and. nl < 2) then
@@ -903,7 +908,8 @@ contains
     ! point, this is w1 zeta_1^n+1 + w0 zeta_b^n with w1 = (1 + 2 cx)/(2 (1 + cx)), w0 = 1/(2 (1 + cx)): the Robin
     ! coefficient becomes cb w1 (1/2 <= w1 < 1: the operator stays symmetric positive definite) and w0 zeta_b^n
     ! joins the explicit part. For resolved signals zeta_b follows zeta_1 with the delay dx/c, so the condition
-    ! sees the first interior sea level of dx/(2c) earlier, as the split's does.
+    ! sees the first interior sea level of dx/(2c) earlier, as the split's does. cx, w1, w0 are stored per face
+    ! (cxu, w1u, w0u, cxv, w1v, w0v; fs_flather_wts).
 #ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
 # if defined OBC_WEST && defined M2_FRC_BRY && defined Z_FRC_BRY
@@ -921,10 +927,9 @@ contains
         cb = m*dn_u(istr,j)*df*sqrt(g/hf)
         rb(istr,j) = rb(istr,j) + dts*thd*cb
         if (fs_flather_zghost) then
-          cx = dts*pm(istr,j)*sqrt(g*h(istr,j)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
-          &           - cb*(w1*zeta(istr,j,ks) + w0*zeta(istr-1,j,ks) - zeta_west(j)) - unu(istr,j)))
-          rb(istr,j) = rb(istr,j) + dts*thd*cb*(w1-1._8) ; cbu(istr,j) = cb*w1
+          &           - cb*(w1u(istr,j)*zeta(istr,j,ks) + w0u(istr,j)*zeta(istr-1,j,ks) - zeta_west(j)) - unu(istr,j)))
+          rb(istr,j) = rb(istr,j) + dts*thd*cb*(w1u(istr,j)-1._8) ; cbu(istr,j) = cb*w1u(istr,j)
         else
           ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
           &           - cb*(zeta(istr,j,ks) - zeta_west(j)) - unu(istr,j)))
@@ -950,10 +955,9 @@ contains
         cb = m*dn_u(iend+1,j)*df*sqrt(g/hf)
         rb(iend,j) = rb(iend,j) + dts*thd*cb
         if (fs_flather_zghost) then
-          cx = dts*pm(iend,j)*sqrt(g*h(iend,j)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
-          &             + cb*(w1*zeta(iend,j,ks) + w0*zeta(iend+1,j,ks) - zeta_east(j)) - unu(iend+1,j)))
-          rb(iend,j) = rb(iend,j) + dts*thd*cb*(w1-1._8) ; cbu(iend+1,j) = cb*w1
+          &             + cb*(w1u(iend+1,j)*zeta(iend,j,ks) + w0u(iend+1,j)*zeta(iend+1,j,ks) - zeta_east(j)) - unu(iend+1,j)))
+          rb(iend,j) = rb(iend,j) + dts*thd*cb*(w1u(iend+1,j)-1._8) ; cbu(iend+1,j) = cb*w1u(iend+1,j)
         else
           ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
           &             + cb*(zeta(iend,j,ks) - zeta_east(j)) - unu(iend+1,j)))
@@ -981,10 +985,9 @@ contains
         cb = m*dm_v(i,jstr)*df*sqrt(g/hf)
         rb(i,jstr) = rb(i,jstr) + dts*thd*cb
         if (fs_flather_zghost) then
-          cx = dts*pn(i,jstr)*sqrt(g*h(i,jstr)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
-          &           - cb*(w1*zeta(i,jstr,ks) + w0*zeta(i,jstr-1,ks) - zeta_south(i)) - unv(i,jstr)))
-          rb(i,jstr) = rb(i,jstr) + dts*thd*cb*(w1-1._8) ; cbv(i,jstr) = cb*w1
+          &           - cb*(w1v(i,jstr)*zeta(i,jstr,ks) + w0v(i,jstr)*zeta(i,jstr-1,ks) - zeta_south(i)) - unv(i,jstr)))
+          rb(i,jstr) = rb(i,jstr) + dts*thd*cb*(w1v(i,jstr)-1._8) ; cbv(i,jstr) = cb*w1v(i,jstr)
         else
           ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
           &           - cb*(zeta(i,jstr,ks) - zeta_south(i)) - unv(i,jstr)))
@@ -1010,10 +1013,9 @@ contains
         cb = m*dm_v(i,jend+1)*df*sqrt(g/hf)
         rb(i,jend) = rb(i,jend) + dts*thd*cb
         if (fs_flather_zghost) then
-          cx = dts*pn(i,jend)*sqrt(g*h(i,jend)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
-          &             + cb*(w1*zeta(i,jend,ks) + w0*zeta(i,jend+1,ks) - zeta_north(i)) - unv(i,jend+1)))
-          rb(i,jend) = rb(i,jend) + dts*thd*cb*(w1-1._8) ; cbv(i,jend+1) = cb*w1
+          &             + cb*(w1v(i,jend+1)*zeta(i,jend,ks) + w0v(i,jend+1)*zeta(i,jend+1,ks) - zeta_north(i)) - unv(i,jend+1)))
+          rb(i,jend) = rb(i,jend) + dts*thd*cb*(w1v(i,jend+1)-1._8) ; cbv(i,jend+1) = cb*w1v(i,jend+1)
         else
           ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
           &             + cb*(zeta(i,jend,ks) - zeta_north(i)) - unv(i,jend+1)))
@@ -1035,11 +1037,11 @@ contains
       enddo
     enddo
 #ifdef CDR_FORCING
-    if (cdr_source .and. cdr_volume) then
-      do cidx=1,cdr_nprf
-        icdr = cdr_icdr(cidx) ; i = cdr_iloc(cidx) ; j = cdr_jloc(cidx)
-        if (i < istr .or. i > iend .or. j < jstr .or. j > jend) cycle
-        qs(i,j) = qs(i,j) + pm(i,j)*pn(i,j)*cdr_vol(icdr)*sum(cdr_prf(cidx,itemp,:))
+    if (cdr_source .and. cdr_volume) then   ! CDR volume releases (cdr_frc's cdr_zsrc, as step2d adds them)
+      do j=jstr,jend
+        do i=istr,iend
+          qs(i,j) = qs(i,j) + cdr_zsrc(i,j)
+        enddo
       enddo
     endif
 #endif
@@ -1212,10 +1214,10 @@ contains
         zeta(i,j,kn) = zn(i,j)
       enddo
     enddo
-    call fs_zeta_bc(istr,iend,jstr,jend, .false., ks, kn, dts)
+    call fs_zeta_bc(istr,iend,jstr,jend, .false., ks, kn)
     call tq(9)
     call exchange_xxx(zeta(:,:,kn))                          ! E4a
-    call fs_zeta_bc(istr,iend,jstr,jend, .true., ks, kn, dts)   ! boundary rho points in the halo rows
+    call fs_zeta_bc(istr,iend,jstr,jend, .true., ks, kn)   ! boundary rho points in the halo rows
     call tq(10)
 
     ! ---- (H) ubar, vbar(kn) on owned faces; normal and tangential boundary faces
@@ -1234,7 +1236,7 @@ contains
         vbar(i,j,kn) = 2._8*u1v(i,j)/((wd(i,j)+wd(i,j-1))*dm_v(i,j))
       enddo
     enddo
-    call fs_normal_bc(istr,iend,jstr,jend, ks, kn, dts)
+    call fs_normal_bc(istr,iend,jstr,jend, ks, kn)
     call fs_tang_bc(istr,iend,jstr,jend, ks, kn, dts)
     call tq(11)
 
@@ -1400,19 +1402,72 @@ contains
   end subroutine fs_unconv_stop
 
   !----------------------------------------------------------------------
-  subroutine fs_zeta_bc(istr,iend,jstr,jend, halo, ks, kn, dts)
+  subroutine fs_flather_wts(istr,iend,jstr,jend, dts)
+    ! Weights of the open normal boundary faces (section 4) for the (sub-)step length dts, per face next to
+    ! cbu, cbv (u: west face istr, east face iend+1; v: south face jstr, north face jend+1): cx = dts pm sqrt(g h)
+    ! at the first interior rho point, the rate of the boundary sea level's radiation condition (fs_zeta_bc,
+    ! zeta_b^n+1 = (zeta_b^n + cx zeta_int^n+1)/(1 + cx)), and the weights w1 = (1 + 2 cx)/(2 (1 + cx)),
+    ! w0 = 1/(2 (1 + cx)) of zeta_int^n+1 and zeta_b^n in the Flather condition's sea level with fs_flather_zghost
+    ! (the Flather faces of fs_step_tile, fs_normal_bc). Rows jstr-1..jend+1 (columns istr-1..iend+1), for the
+    ! boundary points of fs_zeta_bc in the halo rows; open edges other than OBC_M2SPECIFIED.
+    use param, only: np_xi, np_eta
+    use dimensions, only: inode, jnode
+    use scalars, only: g
+    use grid, only: h, pm, pn
+    implicit none
+    integer(kind=4), intent(in) :: istr, iend, jstr, jend
+    real(kind=8), intent(in) :: dts
+    integer(kind=4) :: i, j
+#ifndef EW_PERIODIC
+# if defined OBC_WEST && !defined OBC_M2SPECIFIED
+    if (WESTERN_EDGE) then
+      do j=jstr-1,jend+1
+        cxu(istr,j) = dts*pm(istr,j)*sqrt(g*h(istr,j))
+        w1u(istr,j) = 0.5_8*(1._8+2._8*cxu(istr,j))/(1._8+cxu(istr,j)) ; w0u(istr,j) = 0.5_8/(1._8+cxu(istr,j))
+      enddo
+    endif
+# endif
+# if defined OBC_EAST && !defined OBC_M2SPECIFIED
+    if (EASTERN_EDGE) then
+      do j=jstr-1,jend+1
+        cxu(iend+1,j) = dts*pm(iend,j)*sqrt(g*h(iend,j))
+        w1u(iend+1,j) = 0.5_8*(1._8+2._8*cxu(iend+1,j))/(1._8+cxu(iend+1,j)) ; w0u(iend+1,j) = 0.5_8/(1._8+cxu(iend+1,j))
+      enddo
+    endif
+# endif
+#endif
+#ifndef NS_PERIODIC
+# if defined OBC_SOUTH && !defined OBC_M2SPECIFIED
+    if (SOUTHERN_EDGE) then
+      do i=istr-1,iend+1
+        cxv(i,jstr) = dts*pn(i,jstr)*sqrt(g*h(i,jstr))
+        w1v(i,jstr) = 0.5_8*(1._8+2._8*cxv(i,jstr))/(1._8+cxv(i,jstr)) ; w0v(i,jstr) = 0.5_8/(1._8+cxv(i,jstr))
+      enddo
+    endif
+# endif
+# if defined OBC_NORTH && !defined OBC_M2SPECIFIED
+    if (NORTHERN_EDGE) then
+      do i=istr-1,iend+1
+        cxv(i,jend+1) = dts*pn(i,jend)*sqrt(g*h(i,jend))
+        w1v(i,jend+1) = 0.5_8*(1._8+2._8*cxv(i,jend+1))/(1._8+cxv(i,jend+1)) ; w0v(i,jend+1) = 0.5_8/(1._8+cxv(i,jend+1))
+      enddo
+    endif
+# endif
+#endif
+  end subroutine fs_flather_wts
+
+  !----------------------------------------------------------------------
+  subroutine fs_zeta_bc(istr,iend,jstr,jend, halo, ks, kn)
     ! Boundary rho points of zeta(kn) (section 4; kn the level the (sub-)step writes, ks its
-    ! source level, dts its length): on open edges other than
+    ! source level): on open edges other than
     ! OBC_M2SPECIFIED the backward-Euler form of zetabc's upwind radiation,
-    ! zeta_b = (zeta_b^n + cx zeta_int^n+1)/(1+cx), cx = dts pm(int) sqrt(g h(int));
+    ! zeta_b = (zeta_b^n + cx zeta_int^n+1)/(1+cx), cx = dts pm(int) sqrt(g h(int)) (cxu, cxv of fs_flather_wts);
     ! else zero gradient. halo = .false.: the tile's own rows/columns and the
     ! physical corners; .true. (after the exchange of zeta(kn)): the boundary
     ! points in the halo rows/columns next to a tile seam.
     use param, only: np_xi, np_eta
     use dimensions, only: inode, jnode
-    use scalars, only: g
     use ocean_vars, only: zeta
-    use grid, only: h, pm, pn
 #ifdef MASKING
     use grid, only: rmask
 #endif
@@ -1420,10 +1475,9 @@ contains
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     logical, intent(in) :: halo
     integer(kind=4), intent(in) :: ks, kn
-    real(kind=8), intent(in) :: dts
     integer(kind=4) :: i, j, j0, j1, i0, i1, k
     integer(kind=4) :: jl(2), il(2), nl
-    real(kind=8) :: cx, m
+    real(kind=8) :: m
 #include "compute_auxiliary_bounds.h"
 #ifndef EW_PERIODIC
     ! rows handled on the western/eastern edges
@@ -1520,8 +1574,7 @@ contains
       m = rmask(istr-1,jj)
 #endif
 #if defined OBC_WEST && !defined OBC_M2SPECIFIED
-      cx = dts*pm(istr,jj)*sqrt(g*h(istr,jj))
-      zeta(istr-1,jj,kn) = m*(zeta(istr-1,jj,ks) + cx*zeta(istr,jj,kn))/(1._8+cx)
+      zeta(istr-1,jj,kn) = m*(zeta(istr-1,jj,ks) + cxu(istr,jj)*zeta(istr,jj,kn))/(1._8+cxu(istr,jj))
 #else
       zeta(istr-1,jj,kn) = m*zeta(istr,jj,kn)
 #endif
@@ -1533,8 +1586,7 @@ contains
       m = rmask(iend+1,jj)
 #endif
 #if defined OBC_EAST && !defined OBC_M2SPECIFIED
-      cx = dts*pm(iend,jj)*sqrt(g*h(iend,jj))
-      zeta(iend+1,jj,kn) = m*(zeta(iend+1,jj,ks) + cx*zeta(iend,jj,kn))/(1._8+cx)
+      zeta(iend+1,jj,kn) = m*(zeta(iend+1,jj,ks) + cxu(iend+1,jj)*zeta(iend,jj,kn))/(1._8+cxu(iend+1,jj))
 #else
       zeta(iend+1,jj,kn) = m*zeta(iend,jj,kn)
 #endif
@@ -1546,8 +1598,7 @@ contains
       m = rmask(ii,jstr-1)
 #endif
 #if defined OBC_SOUTH && !defined OBC_M2SPECIFIED
-      cx = dts*pn(ii,jstr)*sqrt(g*h(ii,jstr))
-      zeta(ii,jstr-1,kn) = m*(zeta(ii,jstr-1,ks) + cx*zeta(ii,jstr,kn))/(1._8+cx)
+      zeta(ii,jstr-1,kn) = m*(zeta(ii,jstr-1,ks) + cxv(ii,jstr)*zeta(ii,jstr,kn))/(1._8+cxv(ii,jstr))
 #else
       zeta(ii,jstr-1,kn) = m*zeta(ii,jstr,kn)
 #endif
@@ -1559,8 +1610,7 @@ contains
       m = rmask(ii,jend+1)
 #endif
 #if defined OBC_NORTH && !defined OBC_M2SPECIFIED
-      cx = dts*pn(ii,jend)*sqrt(g*h(ii,jend))
-      zeta(ii,jend+1,kn) = m*(zeta(ii,jend+1,ks) + cx*zeta(ii,jend,kn))/(1._8+cx)
+      zeta(ii,jend+1,kn) = m*(zeta(ii,jend+1,ks) + cxv(ii,jend+1)*zeta(ii,jend,kn))/(1._8+cxv(ii,jend+1))
 #else
       zeta(ii,jend+1,kn) = m*zeta(ii,jend,kn)
 #endif
@@ -1791,12 +1841,13 @@ contains
   end subroutine fs_tang_bc
 
   !----------------------------------------------------------------------
-  subroutine fs_normal_bc(istr,iend,jstr,jend, ks, kn, dts)
+  subroutine fs_normal_bc(istr,iend,jstr,jend, ks, kn)
     ! Normal boundary faces of ubar/vbar(kn) (before fs_tang_bc, which sets the
     ! tangential faces). Open edges: Flather U_b^n+1 = Ue(n+1) + s cb (zeta_int^n+1 - ze(n+1)),
-    ! ubar = U_b/(Df^n+1 dn_u); specified: ubar = ubar_ext(n+1). wd holds D^n+1. ks, kn, dts: the
-    ! (sub-)step's source and new levels and its length. fs_flather_zghost: zeta_int^n+1 is replaced by
-    ! w1 zeta_int^n+1 + w0 zeta_b(ks), zeta_b the boundary value (see the Flather faces of fs_step_tile).
+    ! ubar = U_b/(Df^n+1 dn_u); specified: ubar = ubar_ext(n+1). wd holds D^n+1. ks, kn: the
+    ! (sub-)step's source and new levels. fs_flather_zghost: zeta_int^n+1 is replaced by
+    ! w1 zeta_int^n+1 + w0 zeta_b(ks), zeta_b the boundary value (see the Flather faces of fs_step_tile;
+    ! the weights of fs_flather_wts).
     ! Closed physical edges (no OBC_<edge>, not periodic): ubar/vbar(kn) = 0 on the normal
     ! faces every step, as u2dbc/v2dbc's closed-edge branch (no-flux). The solve treats these
     ! faces as closed (a = c = Ftil = 0, Fbar = 0) but sets no velocity there, so without this
@@ -1805,8 +1856,7 @@ contains
     use param, only: np_xi, np_eta
     use dimensions, only: inode, jnode
     use ocean_vars, only: zeta, ubar, vbar
-    use grid, only: h, dn_u, dm_v, pm, pn
-    use scalars, only: g
+    use grid, only: h, dn_u, dm_v
 #ifdef MASKING
     use grid, only: umask, vmask
 #endif
@@ -1828,9 +1878,8 @@ contains
 #endif
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend, ks, kn
-    real(kind=8), intent(in) :: dts
     integer(kind=4) :: i, j
-    real(kind=8) :: m, dfn, ub, cx, w1, w0
+    real(kind=8) :: m, dfn, ub
 #include "compute_auxiliary_bounds.h"
 #ifndef EW_PERIODIC
 # ifndef OBC_WEST
@@ -1877,12 +1926,11 @@ contains
         ubar(istr,j,kn) = m*ubar_west(j)
 #   else
         dfn = 0.5_8*(h(istr-1,j)+zeta(istr-1,j,ks)+h(istr,j)+zeta(istr,j,ks))
-        if (fs_flather_zghost) then          ! cbu = cb w1
-          cx = dts*pm(istr,j)*sqrt(g*h(istr,j)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
+        if (fs_flather_zghost) then          ! cbu = cb w1u
           ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,kn)&
-          &        + (w0*zeta(istr-1,j,ks) - zeta_west(j))/w1) )
+          &        + (w0u(istr,j)*zeta(istr-1,j,ks) - zeta_west(j))/w1u(istr,j)) )
         else
-        ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,kn) - zeta_west(j)) )
+          ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,kn) - zeta_west(j)) )
         end if
         ubar(istr,j,kn) = 2._8*ub/((wd(istr-1,j)+wd(istr,j))*dn_u(istr,j))
 #   endif
@@ -1901,11 +1949,10 @@ contains
 #   else
         dfn = 0.5_8*(h(iend,j)+zeta(iend,j,ks)+h(iend+1,j)+zeta(iend+1,j,ks))
         if (fs_flather_zghost) then
-          cx = dts*pm(iend,j)*sqrt(g*h(iend,j)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,kn)&
-          &        + (w0*zeta(iend+1,j,ks) - zeta_east(j))/w1) )
+          &        + (w0u(iend+1,j)*zeta(iend+1,j,ks) - zeta_east(j))/w1u(iend+1,j)) )
         else
-        ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,kn) - zeta_east(j)) )
+          ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,kn) - zeta_east(j)) )
         end if
         ubar(iend+1,j,kn) = 2._8*ub/((wd(iend,j)+wd(iend+1,j))*dn_u(iend+1,j))
 #   endif
@@ -1926,11 +1973,10 @@ contains
 #   else
         dfn = 0.5_8*(h(i,jstr-1)+zeta(i,jstr-1,ks)+h(i,jstr)+zeta(i,jstr,ks))
         if (fs_flather_zghost) then
-          cx = dts*pn(i,jstr)*sqrt(g*h(i,jstr)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,kn)&
-          &        + (w0*zeta(i,jstr-1,ks) - zeta_south(i))/w1) )
+          &        + (w0v(i,jstr)*zeta(i,jstr-1,ks) - zeta_south(i))/w1v(i,jstr)) )
         else
-        ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,kn) - zeta_south(i)) )
+          ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,kn) - zeta_south(i)) )
         end if
         vbar(i,jstr,kn) = 2._8*ub/((wd(i,jstr-1)+wd(i,jstr))*dm_v(i,jstr))
 #   endif
@@ -1949,11 +1995,10 @@ contains
 #   else
         dfn = 0.5_8*(h(i,jend)+zeta(i,jend,ks)+h(i,jend+1)+zeta(i,jend+1,ks))
         if (fs_flather_zghost) then
-          cx = dts*pn(i,jend)*sqrt(g*h(i,jend)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,kn)&
-          &        + (w0*zeta(i,jend+1,ks) - zeta_north(i))/w1) )
+          &        + (w0v(i,jend+1)*zeta(i,jend+1,ks) - zeta_north(i))/w1v(i,jend+1)) )
         else
-        ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,kn) - zeta_north(i)) )
+          ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,kn) - zeta_north(i)) )
         end if
         vbar(i,jend+1,kn) = 2._8*ub/((wd(i,jend)+wd(i,jend+1))*dm_v(i,jend+1))
 #   endif
@@ -2322,8 +2367,7 @@ contains
     use river_frc, only: river_source, nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j,&
     &                    riv_uflx, riv_vflx, riv_vol
 #ifdef CDR_FORCING
-    use cdr_frc, only: cdr_source, cdr_volume, cdr_prf, cdr_nprf, cdr_icdr, cdr_iloc, cdr_jloc, cdr_vol
-    use param, only: itemp
+    use cdr_frc, only: cdr_source, cdr_volume, cdr_zsrc
 #endif
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_sum, mpi_max
     use scalars, only: knew
@@ -2334,7 +2378,7 @@ contains
 #endif
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
-    integer(kind=4) :: i, j, iface, iriv, ierr, icdr, cidx
+    integer(kind=4) :: i, j, iface, iriv, ierr
     real(kind=8) :: loc(5), glob(5), rf, m, wl(6), wg(6)
 #include "compute_auxiliary_bounds.h"
     loc = 0._8
@@ -2371,10 +2415,10 @@ contains
     enddo
 #ifdef CDR_FORCING
     if (cdr_source .and. cdr_volume) then
-      do cidx=1,cdr_nprf
-        icdr = cdr_icdr(cidx) ; i = cdr_iloc(cidx) ; j = cdr_jloc(cidx)
-        if (i < istr .or. i > iend .or. j < jstr .or. j > jend) cycle
-        loc(3) = loc(3) + cdr_vol(icdr)*sum(cdr_prf(cidx,itemp,:))
+      do j=jstr,jend
+        do i=istr,iend
+          loc(3) = loc(3) + cdr_zsrc(i,j)/(pm(i,j)*pn(i,j))
+        enddo
       enddo
     endif
 #endif
