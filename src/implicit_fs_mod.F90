@@ -356,14 +356,35 @@ contains
         write(*,'(1x,A,A,A)') 'IMPLICIT_FS: fs_stress_time = ', trim(fs_stress_time),&
         &  ' (surface stress of the 2-D step at n+1/2 as set_forces)'
       end if
+      ! boundary options of the split loop (u2dbc, v2dbc, zetabc) that the implicit step does not follow
+      ! (section 4). M2NUDGING needs no note: the implicit step requires M2_FRC_BRY, under which it changes
+      ! nothing, and the inflow nudging of the tangential faces is kept.
 #if defined OBC_M2ORLANSKI
       write(*,'(1x,A)') 'IMPLICIT_FS: note: OBC_M2ORLANSKI has no implicit form; the normal barotropic'&
-      &//' faces use the implicit Flather condition instead'
+      &//' faces use the implicit Flather condition and the boundary sea level the implicit upwind radiation'&
+      &//' instead'
 #endif
 #if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
  && !defined OBC_M2FLATHER && !defined OBC_M2ORLANSKI && !defined OBC_M2SPECIFIED
-      write(*,'(1x,A)') 'IMPLICIT_FS: note: no OBC_M2 type defined (zero-gradient ubar); the normal'&
-      &//' barotropic faces use the implicit Flather condition instead'
+      write(*,'(1x,A)') 'IMPLICIT_FS: note: no OBC_M2 type defined (zero-gradient ubar, vbar); the normal'&
+      &//' barotropic faces use the implicit Flather condition, the tangential ones the upwind condition of'&
+      &//' OBC_M2FLATHER and the boundary sea level the implicit upwind radiation instead'
+#endif
+#if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
+ && defined OBC_Z2ORLANSKI && !defined OBC_M2FLATHER
+      write(*,'(1x,A)') 'IMPLICIT_FS: note: OBC_Z2ORLANSKI has no implicit form; the boundary sea level uses'&
+      &//' the implicit upwind radiation instead (zero gradient with OBC_M2SPECIFIED)'
+#endif
+#if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
+ && defined LEGACY_ORLANSKI && (defined OBC_M2FLATHER || defined OBC_M2ORLANSKI)
+      write(*,'(1x,A)') 'IMPLICIT_FS: note: LEGACY_ORLANSKI has no implicit form; the tangential barotropic'&
+      &//' faces use the implicit upwind condition instead'
+#endif
+#if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
+ && (defined OBC_RAD_NORMAL || defined OBC_RAD_NPO) \
+ && (defined OBC_M2ORLANSKI || (defined LEGACY_ORLANSKI && defined OBC_M2FLATHER))
+      write(*,'(1x,A)') 'IMPLICIT_FS: note: OBC_RAD_NORMAL and OBC_RAD_NPO act on the 3-D boundary velocities'&
+      &//' only; the barotropic radiation they modify is replaced (note above)'
 #endif
     end if
   end subroutine read_nml_implicit_fs

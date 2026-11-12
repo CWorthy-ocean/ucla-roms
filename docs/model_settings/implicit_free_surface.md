@@ -84,10 +84,19 @@ Preconditioners (`fs_precond`):
 ## 4. Boundary conditions
 
 - **Closed edges and land**: no flux through the face; the normal barotropic velocity on a closed physical edge is set to zero each step.
-- **Open edges** (`OBC_WEST`, ... with `M2_FRC_BRY` and `Z_FRC_BRY`, which the implicit step requires): with `OBC_M2FLATHER` the normal transport is a Flather condition on the flux that advances the free surface, `U_b = D dn ubar_ext + s c_b (zeta_int - zeta_ext)` with `c_b = D dn sqrt(g/h)`, treated implicitly (a Robin term of the elliptic equation). `OBC_M2ORLANSKI` and open edges without an `OBC_M2` type use the same Flather form (a note is printed). `OBC_M2SPECIFIED` prescribes the transport. The boundary transport carries the generalized-alpha memory, so the external data enter at the scheme's forcing time. `zeta_int` is the mean of the first interior and the boundary sea level (`fs_flather_zghost = .true.`, the default) or the first interior value alone (below).
+- **Open edges** (`OBC_WEST`, ... with `M2_FRC_BRY` and `Z_FRC_BRY`, which the implicit step requires): with `OBC_M2FLATHER` the normal transport is a Flather condition on the flux that advances the free surface, `U_b = D dn ubar_ext + s c_b (zeta_int - zeta_ext)` with `c_b = D dn sqrt(g/h)`, treated implicitly (a Robin term of the elliptic equation). `OBC_M2ORLANSKI` and open edges without an `OBC_M2` type use the same Flather form (a note is printed; see below). `OBC_M2SPECIFIED` prescribes the transport. The boundary transport carries the generalized-alpha memory, so the external data enter at the scheme's forcing time. `zeta_int` is the mean of the first interior and the boundary sea level (`fs_flather_zghost = .true.`, the default) or the first interior value alone (below).
 - **Free surface on open edges**: backward-Euler upwind radiation (the implicit form of `zetabc`).
 - **Tangential velocities on open edges**: the backward-Euler form of the split mode's condition (upwind advection by the normal flow, nudging to the external data on inflow, rate scaled by `fs_tang_nudge`).
 - **Tides at the boundary**: with the implicit free surface the boundary tidal harmonics are evaluated at `n+1` (the split loop uses `n+1/2`, the centre of its fast-step interval); with `fs_nsub > 1` at the mean of the sub-steps' end times (section 2).
+
+The implicit step implements the split loop's boundary conditions for `OBC_M2FLATHER` and `OBC_M2SPECIFIED`. Other options of the split loop's barotropic boundary conditions (`u2dbc`, `v2dbc`, `zetabc`) have no implicit form; when one is defined a note is printed at startup and the implicit step uses the conditions above instead:
+
+- `OBC_M2ORLANSKI`, or open edges without an `OBC_M2` type: the Flather condition on the normal faces and the upwind radiation of the boundary sea level (the split loop: zero gradient of the sea level unless `OBC_Z2ORLANSKI`); without an `OBC_M2` type also the upwind tangential condition (the split loop: zero gradient).
+- `OBC_Z2ORLANSKI` (without `OBC_M2FLATHER`, which the split loop's `zetabc` gives precedence): the upwind radiation of the boundary sea level, or zero gradient with `OBC_M2SPECIFIED`.
+- `LEGACY_ORLANSKI`: the upwind tangential condition.
+- `OBC_RAD_NORMAL`, `OBC_RAD_NPO`: they act on the 3-D boundary velocities as usual; the barotropic radiation they modify (with `OBC_M2ORLANSKI`, or `LEGACY_ORLANSKI`) is replaced as above.
+
+`M2NUDGING` is followed: the implicit step requires `M2_FRC_BRY`, under which `M2NUDGING` changes nothing in the split loop's conditions, and the inflow nudging of the tangential velocities is part of the condition above.
 
 ### Sea level of the Flather condition (`fs_flather_zghost`)
 
@@ -125,7 +134,7 @@ A run can start from a restart file without these variables (a split-mode run's 
 
 ## 8. Limitations
 
-- Requires `SOLVE3D`. With open boundaries, `M2_FRC_BRY` and `Z_FRC_BRY` are required; `OBC_M2ORLANSKI` has no implicit form (Flather is used).
+- Requires `SOLVE3D`. With open boundaries, `M2_FRC_BRY` and `Z_FRC_BRY` are required; `OBC_M2ORLANSKI`, `OBC_Z2ORLANSKI`, `LEGACY_ORLANSKI` and edges without an `OBC_M2` type have no implicit form (section 4).
 - Coriolis is explicit.
 - The baroclinic pressure gradient in `rufrc` stays at `n+1/2`, a lag of `(alpha_f - 1/2) dt` behind the time at which the scheme takes its forcing.
 - Results depend on the solver tolerance, so runs on different tilings or rank counts differ at about the level of `fs_tol` (the split mode is not tiling-invariant either, at rounding level).
