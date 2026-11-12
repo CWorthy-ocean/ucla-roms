@@ -19,7 +19,10 @@ the runs that do not ask for them leave calc_pflx off. Child A is also run
 with the pressure fluxes up and vp, which must be written, non-zero, equal
 to the reference hashes in both builds, and with PARALLEL_IO independent of
 the tiling. The settings extract_data rejects for several children stop
-ROMS at startup with a message.
+ROMS at startup with a message. Every variable of the boundary files must
+hold data: with PARALLEL_IO the joined file used to define every tracer on
+every boundary and leave the ones output_vars does not request (passive,
+CDR_LITE, bgc) at the netCDF fill value.
 """
 import hashlib
 from pathlib import Path
@@ -41,6 +44,9 @@ from ._helpers import (
     summarize_values,
 )
 from ._roms_input_file_generation import create_roms_grid
+
+# netCDF's default fill value for doubles: a variable defined but never written
+NC_FILL_DOUBLE = 9.969209968386869e36
 
 # The inputs of create_test_namelist_dict, copied to classic netCDF for the
 # PARALLEL_IO build: PIO reads them joined, through PnetCDF.
@@ -66,8 +72,9 @@ OUTPUT_PERIOD = 200  # s: 4 records over the 800 s run, all in one file
 @pytest.fixture(scope="module")
 def nesting_files(tmp_path_factory) -> dict[str, Path]:
     """Nesting files of the two children, made against the test parent grid,
-    plus child A's with the pressure fluxes up and vp ("A_pflx") and with a
-    prefix ROMS cannot read ("A_underscore")."""
+    plus child A's with the pressure fluxes up and vp ("A_pflx"), with a
+    prefix ROMS cannot read ("A_underscore"), and with the passive tracers
+    ("A_passive") or w ("A_w") requested at its rho points."""
     out = tmp_path_factory.mktemp("nesting")
     parent = create_roms_grid()
     lon, lat = parent.ds.lon_rho.values, parent.ds.lat_rho.values
@@ -88,6 +95,15 @@ def nesting_files(tmp_path_factory) -> dict[str, Path]:
             prefix=prefix or c["prefix"], period=float(OUTPUT_PERIOD), include_bgc=False,
             include_pressure_fluxes=pflx, verbose=False, format="NETCDF3_64BIT_OFFSET",
         )
+    # Child A whose rho-point objects also request the passive tracers, or w
+    for key, extra in (("A_passive", "passive"), ("A_w", "w")):
+        with xr.open_dataset(files["A"], decode_cf=False) as ds:
+            ds = ds.load()
+        for name in ds.data_vars:
+            if name.endswith("_r"):
+                ds[name].attrs["output_vars"] += f", {extra}"
+        files[key] = out / f"nesting_{key}.nc"
+        ds.to_netcdf(files[key], format="NETCDF3_64BIT")
     return files
 
 
@@ -164,6 +180,32 @@ def _per_rank_hashes(run_dir: Path) -> dict[str, str]:
     return hashes
 
 
+def _boundary_values(conf, run_dir: Path, root: str = "childA") -> dict[str, np.ndarray]:
+    """``{"<var>_<bnd>": values}`` of every data variable in the boundary
+    output of ``run_dir``: the joined ``<root>_bry`` file with PARALLEL_IO,
+    else the per-rank ``_ext`` files (``<prefix>_<var>_<bnd>``, each rank's
+    points in rank order). The time variables are left out."""
+    if conf.pio:
+        (path,) = run_dir.glob(f"{root}_bry.*.nc")
+        with xr.open_dataset(path, decode_cf=False) as ds:
+            return {n: ds[n].values for n in ds.data_vars if n != "bry_time"}
+    values = {}
+    for path in sorted(run_dir.glob("roms_ext.*.nc")):
+        with xr.open_dataset(path, decode_cf=False) as ds:
+            for n in ds.data_vars:
+                if not n.endswith("_time"):
+                    values.setdefault(n.split("_", 1)[1], []).append(ds[n].values)
+    assert values, f"no roms_ext files in {run_dir}"
+    return {n: np.concatenate([v.ravel() for v in vs]) for n, vs in values.items()}
+
+
+def _assert_all_written(values: dict[str, np.ndarray]) -> None:
+    """Every value is finite and none is the fill value of a variable that
+    was defined but never written."""
+    assert [n for n, v in values.items() if not np.isfinite(v).all()] == []
+    assert [n for n, v in values.items() if (v == NC_FILL_DOUBLE).any()] == []
+
+
 def test_two_children(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files,
                       reference_results):
     """Each child's data from the two-child run equal its run alone, bit for bit."""
@@ -174,6 +216,11 @@ def test_two_children(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_
         run_dir.mkdir()
         children = [_child(conf, nesting_files, n) for n in names]
         conf.run(_nml(conf, input_dir, pio_input_dir, children), cwd=run_dir)
+        if conf.pio:
+            for name in names:
+                _assert_all_written(_boundary_values(conf, run_dir, f"child{name}"))
+        else:
+            _assert_all_written(_boundary_values(conf, run_dir))
 
     if not conf.pio:
         # Variables are named <prefix>_<var>_<bnd> (plus ocean_time), so the
@@ -267,8 +314,91 @@ def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesti
     )
 
 
+def _passive_ini(conf, input_dir, pio_input_dir, out: Path) -> Path:
+    """The test initial conditions with passive_tracer1 = temp, joined (for
+    PARALLEL_IO) or as the four per-rank pieces; returns the namelist name."""
+    name = "example_input_bgc_initial_conditions"
+    if conf.pio:
+        pieces = [(pio_input_dir / f"{name}.nc", out / "ini_passive.nc")]
+    else:
+        pieces = [(input_dir / f"{name}.{r}.nc", out / f"ini_passive.{r}.nc") for r in range(4)]
+    for source, target in pieces:
+        with xr.open_dataset(source, decode_cf=False) as ds:
+            ds = ds.load()
+        ds["passive_tracer1"] = ds["temp"]
+        ds.to_netcdf(target, format="NETCDF3_64BIT")
+    return out / "ini_passive.nc"
+
+
+def test_all_variables_written(tmp_path, extract_conf, input_dir, pio_input_dir,
+                               nesting_files):
+    """With a passive tracer in the run, the boundary output holds exactly
+    the variables output_vars requests, every one written (finite, never the
+    fill value): the roms-tools default (zeta, temp, salt; ubar, u; vbar, v)
+    without the tracer, and with it once the rho points request 'passive'.
+    PARALLEL_IO used to define every tracer on every boundary, so without
+    the request passive_tracer1_<bnd> held the fill value (with CDR_LITE the
+    same happened to CDR_OAE_*/CDR_DOR_*, and to every bgc tracer without
+    'bgc'). The request must not change the other variables (the substring
+    match of output_vars used to read 'passive' as a request for v too).
+    The passive tracer starts as a copy of temp."""
+    conf = extract_conf
+    ini = _passive_ini(conf, input_dir, pio_input_dir, tmp_path)
+    expected = {f"{v}_{bnd}" for v in ("zeta", "temp", "salt", "ubar", "u", "vbar", "v")
+                for bnd in ("south", "north", "east", "west")}
+    values = {}
+    for run in ("A", "A_passive"):
+        run_dir = tmp_path / run
+        run_dir.mkdir()
+        child = dict(_child(conf, nesting_files, "A"), file=nesting_files[run])
+        nml = _nml(conf, input_dir, pio_input_dir, [child])
+        nml["PARAM_SETTINGS"]["nt_passive"] = 1
+        nml["INITIAL_CONDITIONS"]["inifile"] = str(ini)
+        conf.run(nml, cwd=run_dir)
+        values[run] = _boundary_values(conf, run_dir)
+        _assert_all_written(values[run])
+
+    passive = {f"passive_tracer1_{bnd}" for bnd in ("south", "north", "east", "west")}
+    assert sorted(values["A"]) == sorted(expected)
+    assert sorted(values["A_passive"]) == sorted(expected | passive)
+    changed = [n for n in expected
+               if not np.array_equal(values["A"][n], values["A_passive"][n])]
+    assert changed == []
+    for n in passive:
+        tracer, temp = values["A_passive"][n], values["A"][n.replace("passive_tracer1", "temp")]
+        assert (tracer != 0).all(), n
+        assert np.abs(tracer - temp).max() <= 1e-2 * np.abs(temp).max(), n
+
+
+def test_children_request_different_variables(tmp_path, extract_conf, input_dir,
+                                              pio_input_dir, nesting_files):
+    """Two children whose nesting files request different variables: child
+    A's rho points request 'passive', child B's do not. Each child's
+    boundary file holds exactly its own requests, all written. (Defining a
+    variable in a child's file because another child requests it would
+    leave it at the fill value, as for a MARBL parent nesting one child
+    with bgc and one without.)"""
+    conf = extract_conf
+    if not conf.pio:
+        pytest.skip("only PARALLEL_IO writes one boundary file per child")
+    ini = _passive_ini(conf, input_dir, pio_input_dir, tmp_path)
+    a = dict(_child(conf, nesting_files, "A"), file=nesting_files["A_passive"])
+    b = _child(conf, nesting_files, "B")
+    nml = _nml(conf, input_dir, pio_input_dir, [a, b])
+    nml["PARAM_SETTINGS"]["nt_passive"] = 1
+    nml["INITIAL_CONDITIONS"]["inifile"] = str(ini)
+    conf.run(nml, cwd=tmp_path)
+    values = {c: _boundary_values(conf, tmp_path, f"child{c}") for c in "AB"}
+    passive = {f"passive_tracer1_{bnd}" for bnd in ("south", "north", "east", "west")}
+    assert passive <= set(values["A"])
+    assert passive & set(values["B"]) == set()
+    _assert_all_written(values["A"])
+    _assert_all_written(values["B"])
+
+
 def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files):
-    """Settings that cannot work for several children stop ROMS at startup."""
+    """Settings that cannot work (for several children, or with PARALLEL_IO)
+    stop ROMS at startup."""
     conf = extract_conf
     a, b = _child(conf, nesting_files, "A"), _child(conf, nesting_files, "B")
     # a scalar sets child 1 only, and child 2 has no stretching defaults
@@ -284,6 +414,8 @@ def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nes
     if conf.pio:
         # each child's file is named from its extract_root_name
         cases["shared_root"] = ([a, dict(b, root=a["root"])], (), "share extract_root_name")
+        # do_extract_data has no PARALLEL_IO write for w
+        cases["w"] = ([dict(a, file=nesting_files["A_w"])], (), "is not supported with PARALLEL_IO")
     else:
         # all children share the per-rank files: one prefix and one N_chd each
         cases["shared_prefix"] = ([a, dict(a, root="childA2")], (), "share the prefix child")

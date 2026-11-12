@@ -50,8 +50,9 @@ module sponge_tune
 
   integer(kind=4), public :: nrpf_sponge = 7              ! Number of records per file
   real(kind=8), public    :: output_period_sponge = 24*3600 ! time between outputs in seconds
-  logical, public ::&
-  &ub_tune, wrt_sponge, sponge_avg
+  logical, public :: ub_tune    = .false. ! tune the boundary coefficients ub
+  logical, public :: wrt_sponge = .false. ! write the _spn file
+  logical, public :: sponge_avg = .true.  ! _spn holds averages (else instantaneous values)
   namelist /SPONGE_TUNE_SETTINGS/ sponge_timescale, nrpf_sponge, output_period_sponge,&
   &ub_tune, wrt_sponge, sponge_avg
 
