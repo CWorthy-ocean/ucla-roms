@@ -215,9 +215,6 @@ module implicit_fs_mod
   ! iteration sum and maximum, worst residual and max |delta| of its sub-steps (FS_SOLVE line)
   real(kind=8), allocatable, dimension(:,:) :: fsu, fsv, asu, asv
   integer(kind=4) :: its_sum = 0, its_max = 0
-  real(kind=8) :: dts = 0._8                ! length of the barotropic (sub-)step, dt/fs_nsub. A module variable only
-                                            ! for code shape: as a local, ifx -O3 reassociates the dts products and
-                                            ! divisions differently (rounding-level change of fs_nsub = 1 results)
   real(kind=8) :: res_max = 0._8, dz_max = 0._8
   integer(kind=4), parameter :: ntm = 21
   real(kind=8) :: tm(ntm) = 0._8, tm_t0 = 0._8
@@ -723,6 +720,7 @@ contains
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     integer(kind=4) :: i, j, iface, iriv, its, ierr, icdr, cidx, k, ks, kn, l, nl, lsc(2)
     real(kind=8) :: th, b1, df, ainv, gam, m, d, hf, cb, cx, resid, rf, t0, c, rn
+    real(kind=8) :: dts                     ! length of the barotropic (sub-)step, dt/fs_nsub
     real(kind=8) :: w1, w0                  ! fs_flather_zghost: weights of zeta_int^n+1 and of the old boundary value
     real(kind=8) :: vloc(4), vglob(4)
     logical :: conv, ga0
@@ -905,9 +903,7 @@ contains
     ! point, this is w1 zeta_1^n+1 + w0 zeta_b^n with w1 = (1 + 2 cx)/(2 (1 + cx)), w0 = 1/(2 (1 + cx)): the Robin
     ! coefficient becomes cb w1 (1/2 <= w1 < 1: the operator stays symmetric positive definite) and w0 zeta_b^n
     ! joins the explicit part. For resolved signals zeta_b follows zeta_1 with the delay dx/c, so the condition
-    ! sees the first interior sea level of dx/(2c) earlier, as the split's does. The key-off statements stay
-    ! unconditional and the key overrides them afterwards: moved into an else branch they gave key-off results
-    ! that differed at rounding level (ifx -O3 code shape).
+    ! sees the first interior sea level of dx/(2c) earlier, as the split's does.
 #ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
 # if defined OBC_WEST && defined M2_FRC_BRY && defined Z_FRC_BRY
@@ -923,14 +919,16 @@ contains
 #  else
         hf = 0.5_8*(h(istr-1,j)+h(istr,j))
         cb = m*dn_u(istr,j)*df*sqrt(g/hf)
-        ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
-        &           - cb*(zeta(istr,j,ks) - zeta_west(j)) - unu(istr,j)))
-        rb(istr,j) = rb(istr,j) + dts*thd*cb ; cbu(istr,j) = cb
+        rb(istr,j) = rb(istr,j) + dts*thd*cb
         if (fs_flather_zghost) then
           cx = dts*pm(istr,j)*sqrt(g*h(istr,j)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
           &           - cb*(w1*zeta(istr,j,ks) + w0*zeta(istr-1,j,ks) - zeta_west(j)) - unu(istr,j)))
           rb(istr,j) = rb(istr,j) + dts*thd*cb*(w1-1._8) ; cbu(istr,j) = cb*w1
+        else
+          ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
+          &           - cb*(zeta(istr,j,ks) - zeta_west(j)) - unu(istr,j)))
+          cbu(istr,j) = cb
         end if
 #  endif
       enddo
@@ -950,14 +948,16 @@ contains
 #  else
         hf = 0.5_8*(h(iend,j)+h(iend+1,j))
         cb = m*dn_u(iend+1,j)*df*sqrt(g/hf)
-        ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
-        &             + cb*(zeta(iend,j,ks) - zeta_east(j)) - unu(iend+1,j)))
-        rb(iend,j) = rb(iend,j) + dts*thd*cb ; cbu(iend+1,j) = cb
+        rb(iend,j) = rb(iend,j) + dts*thd*cb
         if (fs_flather_zghost) then
           cx = dts*pm(iend,j)*sqrt(g*h(iend,j)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
           &             + cb*(w1*zeta(iend,j,ks) + w0*zeta(iend+1,j,ks) - zeta_east(j)) - unu(iend+1,j)))
           rb(iend,j) = rb(iend,j) + dts*thd*cb*(w1-1._8) ; cbu(iend+1,j) = cb*w1
+        else
+          ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
+          &             + cb*(zeta(iend,j,ks) - zeta_east(j)) - unu(iend+1,j)))
+          cbu(iend+1,j) = cb
         end if
 #  endif
       enddo
@@ -979,14 +979,16 @@ contains
 #  else
         hf = 0.5_8*(h(i,jstr-1)+h(i,jstr))
         cb = m*dm_v(i,jstr)*df*sqrt(g/hf)
-        ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
-        &           - cb*(zeta(i,jstr,ks) - zeta_south(i)) - unv(i,jstr)))
-        rb(i,jstr) = rb(i,jstr) + dts*thd*cb ; cbv(i,jstr) = cb
+        rb(i,jstr) = rb(i,jstr) + dts*thd*cb
         if (fs_flather_zghost) then
           cx = dts*pn(i,jstr)*sqrt(g*h(i,jstr)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
           &           - cb*(w1*zeta(i,jstr,ks) + w0*zeta(i,jstr-1,ks) - zeta_south(i)) - unv(i,jstr)))
           rb(i,jstr) = rb(i,jstr) + dts*thd*cb*(w1-1._8) ; cbv(i,jstr) = cb*w1
+        else
+          ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
+          &           - cb*(zeta(i,jstr,ks) - zeta_south(i)) - unv(i,jstr)))
+          cbv(i,jstr) = cb
         end if
 #  endif
       enddo
@@ -1006,14 +1008,16 @@ contains
 #  else
         hf = 0.5_8*(h(i,jend)+h(i,jend+1))
         cb = m*dm_v(i,jend+1)*df*sqrt(g/hf)
-        ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
-        &             + cb*(zeta(i,jend,ks) - zeta_north(i)) - unv(i,jend+1)))
-        rb(i,jend) = rb(i,jend) + dts*thd*cb ; cbv(i,jend+1) = cb
+        rb(i,jend) = rb(i,jend) + dts*thd*cb
         if (fs_flather_zghost) then
           cx = dts*pn(i,jend)*sqrt(g*h(i,jend)) ; w1 = 0.5_8*(1._8+2._8*cx)/(1._8+cx) ; w0 = 0.5_8/(1._8+cx)
           ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
           &             + cb*(w1*zeta(i,jend,ks) + w0*zeta(i,jend+1,ks) - zeta_north(i)) - unv(i,jend+1)))
           rb(i,jend) = rb(i,jend) + dts*thd*cb*(w1-1._8) ; cbv(i,jend+1) = cb*w1
+        else
+          ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
+          &             + cb*(zeta(i,jend,ks) - zeta_north(i)) - unv(i,jend+1)))
+          cbv(i,jend+1) = cb
         end if
 #  endif
       enddo
@@ -1230,7 +1234,7 @@ contains
         vbar(i,j,kn) = 2._8*u1v(i,j)/((wd(i,j)+wd(i,j-1))*dm_v(i,j))
       enddo
     enddo
-    call fs_normal_bc(istr,iend,jstr,jend, ks, kn)
+    call fs_normal_bc(istr,iend,jstr,jend, ks, kn, dts)
     call fs_tang_bc(istr,iend,jstr,jend, ks, kn, dts)
     call tq(11)
 
@@ -1787,11 +1791,11 @@ contains
   end subroutine fs_tang_bc
 
   !----------------------------------------------------------------------
-  subroutine fs_normal_bc(istr,iend,jstr,jend, ks, kn)
+  subroutine fs_normal_bc(istr,iend,jstr,jend, ks, kn, dts)
     ! Normal boundary faces of ubar/vbar(kn) (before fs_tang_bc, which sets the
     ! tangential faces). Open edges: Flather U_b^n+1 = Ue(n+1) + s cb (zeta_int^n+1 - ze(n+1)),
-    ! ubar = U_b/(Df^n+1 dn_u); specified: ubar = ubar_ext(n+1). wd holds D^n+1. ks, kn: the
-    ! (sub-)step's source and new levels. fs_flather_zghost: zeta_int^n+1 is replaced by
+    ! ubar = U_b/(Df^n+1 dn_u); specified: ubar = ubar_ext(n+1). wd holds D^n+1. ks, kn, dts: the
+    ! (sub-)step's source and new levels and its length. fs_flather_zghost: zeta_int^n+1 is replaced by
     ! w1 zeta_int^n+1 + w0 zeta_b(ks), zeta_b the boundary value (see the Flather faces of fs_step_tile).
     ! Closed physical edges (no OBC_<edge>, not periodic): ubar/vbar(kn) = 0 on the normal
     ! faces every step, as u2dbc/v2dbc's closed-edge branch (no-flux). The solve treats these
@@ -1824,6 +1828,7 @@ contains
 #endif
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend, ks, kn
+    real(kind=8), intent(in) :: dts
     integer(kind=4) :: i, j
     real(kind=8) :: m, dfn, ub, cx, w1, w0
 #include "compute_auxiliary_bounds.h"
