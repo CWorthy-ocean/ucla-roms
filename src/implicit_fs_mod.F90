@@ -94,12 +94,6 @@ module implicit_fs_mod
                                                ! fs_nsub > 1 n+sft, see sft); 'mid'
                                                ! n+1/2 as the split (a phase lag of the potential-forced tide of
                                                ! (alpha_f - 1/2) omega dt)
-  character(len=8) :: fs_stress_time = 'af'   ! time of the surface stress in the 2-D step's rufrc: 'af' (default)
-                                               ! t_{n+alpha_f}, alpha_f = 1/(1+fs_rho_inf), the time at which the
-                                               ! generalized-alpha step takes its explicit forcing (fs_nsub > 1:
-                                               ! n+sft; the stress data
-                                               ! re-interpolated to it; the 3-D step keeps n+1/2); 'mid' n+1/2 as
-                                               ! set_forces (the forced response then lags by (alpha_f - 1/2) dt)
   integer(kind=4) :: fs_verbose = 0            ! 1 FS_SOLVE line per step and FS_COST, FS_MGLEV at the end;
                                                ! 2 + FS_VOL and FS_SRC lines
                                                ! (FS_SRC also in fs_mode = 'split')
@@ -124,7 +118,7 @@ module implicit_fs_mod
   &  fs_mg_levels, fs_mg_nu, fs_mg_smoother, fs_mg_lag, fs_mg_gather, fs_mg_global_on, fs_mg_faces,&
   &  fs_exch_thin, fs_drag_implicit,&
   &  fs_warm, fs_verbose, fs_selftest, fs_tang_nudge,&
-  &  fs_cor_metric, fs_pot_time, fs_stress_time, fs_nsub, fs_pg_rho, fs_flather_zghost
+  &  fs_cor_metric, fs_pot_time, fs_nsub, fs_pg_rho, fs_flather_zghost
 
   logical, public, protected :: fs_on = .false.   ! fs_mode = 'implicit'
   logical, public, protected :: fs_srcdiag = .false.  ! fs_verbose >= 2: FS_SRC line per step (both modes)
@@ -191,13 +185,10 @@ module implicit_fs_mod
   logical :: rst_rates = .false.            ! the rates and delta were read from the restart file
   integer(kind=4), parameter :: rst_format = 3  ! restart scalar 4: format version of the stored state (rates,
                                                 ! delta, operators); a record of another version starts cold
-  logical :: stress_af = .false.            ! fs_stress_time = 'af' (and sft /= 1/2)
   real(kind=8) :: alf = 1._8                ! alpha_f
-  real(kind=8) :: sft = 1._8                ! the time (fraction of dt) of the step's explicit forcing (tidal
-                                            ! potential, stress shift): alpha_f, with sub-steps the mean of the
-                                            ! sub-steps' n + (k-1+alpha_f)/fs_nsub, (alpha_f + (fs_nsub-1)/2)/fs_nsub
-  ! fs_stress_time = 'af': the change of the kinematic surface stress [m2/s2] from n+1/2 to n+alpha_f (u, v faces)
-  real(kind=8), allocatable, dimension(:,:) :: dsu, dsv
+  real(kind=8) :: sft = 1._8                ! the time (fraction of dt) of the step's explicit forcing (the tidal
+                                            ! potential): alpha_f, with sub-steps the mean of the sub-steps'
+                                            ! n + (k-1+alpha_f)/fs_nsub, (alpha_f + (fs_nsub-1)/2)/fs_nsub
   ! Coriolis estimate: depth-mean velocities U^n (ubx, vbx) and the Coriolis + metric factor per cell (fcr; = fomn
   ! without metric terms)
   real(kind=8), allocatable, dimension(:,:) :: ubx, vbx, fcr
@@ -305,9 +296,6 @@ contains
       call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
       &  info="fs_pot_time must be 'af' or 'mid'")
     end select
-    if (trim(fs_stress_time) /= 'af' .and. trim(fs_stress_time) /= 'mid') call error_log%raise_global(&
-    &  context=trim(module_name)//"/"//sr_name, info="fs_stress_time must be 'af' or 'mid'")
-    stress_af = (trim(fs_stress_time) == 'af' .and. abs(sft - 0.5_8) > 1.e-12_8)
     if (fs_tang_nudge < 0._8) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_tang_nudge must be >= 0")
     if (fs_tol <= 0._8 .or. fs_maxit < 1) call error_log%raise_global(&
@@ -348,16 +336,6 @@ contains
       &  ' fs_mg_lag =', fs_mg_lag, ' fs_exch_thin = ', fs_exch_thin
       write(*,'(1x,A,A,A,F7.4,A)') 'IMPLICIT_FS: fs_pot_time = ', trim(fs_pot_time), ' (tidal potential at time +',&
       &  pot_phase, ' dt)'
-      if (stress_af) then
-        write(*,'(1x,A,A,A,F7.4,A)') 'IMPLICIT_FS: fs_stress_time = ', trim(fs_stress_time),&
-        &  ' (surface stress of the 2-D step at time +', sft, ' dt; the 3-D step keeps n+1/2)'
-#if !defined BULK_FRC && defined ANA_SMFLUX
-        write(*,'(1x,A)') 'IMPLICIT_FS: note: ANA_SMFLUX: the analytical stress is not shifted'
-#endif
-      else
-        write(*,'(1x,A,A,A)') 'IMPLICIT_FS: fs_stress_time = ', trim(fs_stress_time),&
-        &  ' (surface stress of the 2-D step at n+1/2 as set_forces)'
-      end if
       ! boundary options of the split loop (u2dbc, v2dbc, zetabc) that the implicit step does not follow
       ! (section 4). M2NUDGING needs no note: the implicit step requires M2_FRC_BRY, under which it changes
       ! nothing, and the inflow nudging of the tangential faces is kept.
@@ -638,10 +616,6 @@ contains
     implicit none
     integer(kind=4), save :: tile=0
 #include "compute_tile_bounds.h"
-    if (stress_af) then                    ! surface stress of rufrc at t_{n+alpha_f}
-      if (.not. ready) call fs_init(istr,iend,jstr,jend)
-      call fs_stress_af(istr,iend,jstr,jend)
-    end if
     call fs_step_tile(istr,iend,jstr,jend)
   end subroutine fs_step
 
@@ -692,55 +666,11 @@ contains
     xru = 0._8 ; xrv = 0._8 ; cou = 0._8 ; cov = 0._8
     allocate( ubx(GLOBAL_2D_ARRAY), vbx(GLOBAL_2D_ARRAY), fcr(GLOBAL_2D_ARRAY) )
     ubx = 0._8 ; vbx = 0._8 ; fcr = 0._8
-    allocate( dsu(GLOBAL_2D_ARRAY), dsv(GLOBAL_2D_ARRAY) ) ; dsu = 0._8 ; dsv = 0._8
     if (fs_nsub > 1) then
       allocate( fsu(GLOBAL_2D_ARRAY), fsv(GLOBAL_2D_ARRAY), asu(GLOBAL_2D_ARRAY), asv(GLOBAL_2D_ARRAY) )
       fsu = 0._8 ; fsv = 0._8 ; asu = 0._8 ; asv = 0._8
     end if
   end subroutine fs_alloc
-
-  !----------------------------------------------------------------------
-  subroutine fs_stress_af(istr,iend,jstr,jend)
-    ! fs_stress_time = 'af' (section 2): the surface stress in rufrc, rvfrc (step3d_uv1: dm dn sustr at n+1/2)
-    ! moved to t_{n+alpha_f} for the 2-D step: rufrc += dm_u dn_u (sustr(n+alpha_f) - sustr(n+1/2)) on the owned
-    ! u-faces (v likewise). The stress data are re-interpolated from the forcing slots (BULK_FRC: the bulk wind
-    ! stress with the step's drag coefficient, bulk_stress_shift; else the sustr/svstr data, flux_stress_shift;
-    ! ANA_SMFLUX without BULK_FRC: unchanged). rufrc is not read after the barotropic step; the 3-D step keeps
-    ! its n+1/2 stress. No state: nothing for the restart file.
-    use param, only: np_xi, np_eta
-    use dimensions, only: inode, jnode
-    use scalars, only: dt, time, sec2day
-    use coupling, only: rufrc, rvfrc
-    use grid, only: dm_u, dn_u, dm_v, dn_v
-#ifdef BULK_FRC
-    use bulk_frc, only: bulk_stress_shift
-#elif !defined ANA_SMFLUX
-    use flux_frc, only: flux_stress_shift
-#endif
-    implicit none
-    integer(kind=4), intent(in) :: istr, iend, jstr, jend
-    integer(kind=4) :: i, j
-    real(kind=8) :: tsh
-#include "compute_auxiliary_bounds.h"
-    tsh = (time + sft*dt)*sec2day          ! time is t_n during the step (main.F90); sft = alpha_f (fs_nsub = 1)
-#ifdef BULK_FRC
-    call bulk_stress_shift(tsh, dsu, dsv, istr-1, iend, jstr-1, jend)
-#elif !defined ANA_SMFLUX
-    call flux_stress_shift(tsh, dsu, dsv, istr-1, iend, jstr-1, jend)
-#else
-    return
-#endif
-    do j=jstr,jend
-      do i=istrU,iend
-        rufrc(i,j) = rufrc(i,j) + dm_u(i,j)*dn_u(i,j)*dsu(i,j)
-      enddo
-    enddo
-    do j=jstrV,jend
-      do i=istr,iend
-        rvfrc(i,j) = rvfrc(i,j) + dm_v(i,j)*dn_v(i,j)*dsv(i,j)
-      enddo
-    enddo
-  end subroutine fs_stress_af
 
   !----------------------------------------------------------------------
   subroutine fs_step_tile(istr,iend,jstr,jend)

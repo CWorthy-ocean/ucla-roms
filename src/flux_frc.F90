@@ -12,7 +12,7 @@ module flux_frc
   use surf_flux, only: sustr, svstr, stflx, srflx, sss, sst, swflx
   use scalars, only: cp, rho0, day2sec, nz, nrhs, cmday2ms
   use roms_read_write, only: ncforce, flux_frc_opt, set_frc_data,&
-  &store_string_att, frc_data_at
+  &store_string_att
   use dimensions, only: i0, i1, j0, j1
   use param, only: lm, mm, isalt, itemp
   use grid, only: nz
@@ -43,7 +43,6 @@ module flux_frc
 
   logical, public :: interp_flux_frc   ! read via SURF_FRC_SETTINGS in bulk_frc::read_nml_surf_frc
   public set_flux_frc
-  public flux_stress_shift
   public init_arrays_flux_frc
 contains
 
@@ -140,32 +139,6 @@ contains
 #endif
 
   end subroutine set_flux_frc  !]
-! ----------------------------------------------------------------------
-  subroutine flux_stress_shift(modtime, dsu, dsv, ia, ib, ja, jb)  ![
-    ! Implicit free surface (fs_stress_time = 'af'): the change of the kinematic surface stress
-    ! [m2/s2] at u-faces (ia+1..ib, ja..jb) and v-faces (ia..ib, ja+1..jb) when the stress data are taken at
-    ! modtime [days] (t_{n+alpha_f}) instead of the step's set_forces time (n+1/2). From the forcing slots
-    ! (frc_data_at; no read); dsu, dsv are set on these faces only.
-    implicit none
-    real(kind=8), intent(in) :: modtime
-    real(kind=8), dimension(GLOBAL_2D_ARRAY), intent(inout) :: dsu, dsv
-    integer(kind=4), intent(in) :: ia, ib, ja, jb
-    real(kind=8), allocatable, dimension(:,:), save :: s1
-    integer(kind=4) :: i, j
-    if (.not. allocated(s1)) allocate(s1(GLOBAL_2D_ARRAY))
-    call frc_data_at(nc_sustr, s1, modtime)
-    do j=ja,jb
-      do i=ia+1,ib
-        dsu(i,j) = s1(i,j)/rho0 - sustr(i,j)
-      enddo
-    enddo
-    call frc_data_at(nc_svstr, s1, modtime)
-    do j=ja+1,jb
-      do i=ia,ib
-        dsv(i,j) = s1(i,j)/rho0 - svstr(i,j)
-      enddo
-    enddo
-  end subroutine flux_stress_shift  !]
 ! ----------------------------------------------------------------------
 !      subroutine set_swflux  ![
 !      ! set surface freshwater flux: stflx(isalt)

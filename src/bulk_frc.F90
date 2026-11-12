@@ -4,7 +4,7 @@ module bulk_frc
   use param, only: mynode, lm, mm
   use roms_read_write, only:&
   &ncforce, bulk_frc_opt, frcfiles,&
-  &nc_check_units, set_frc_data, store_string_att, frc_data_at
+  &nc_check_units, set_frc_data, store_string_att
   use dimensions, only: inode, jnode, npx, npy
   use error_handling_mod, only: error_log
 #ifdef PARALLEL_IO
@@ -59,7 +59,6 @@ module bulk_frc
 
   public init_arrays_bulk_frc
   public set_bulk_frc
-  public bulk_stress_shift
   public read_nml_surf_frc
 contains
 
@@ -1073,85 +1072,6 @@ contains
     enddo
 
   end subroutine calc_all_bulk_forces  !]
-! ----------------------------------------------------------------------
-  subroutine bulk_stress_shift(modtime, dsu, dsv, i0, i1, j0, j1)  ![
-    ! Implicit free surface (fs_stress_time = 'af'): the change of the kinematic surface stress
-    ! [m2/s2] at u-faces (i0+1..i1, j0..j1) and v-faces (i0..i1, j0+1..j1) when the wind is taken at modtime [days]
-    ! (t_{n+alpha_f}) instead of the step's set_forces time (n+1/2). calc_all_bulk_forces is not touched (the split
-    ! path stays bit-identical): its wind part aer cer W (aer = rhoAir |W_g|/rho0, cer = Cd, |W_g|^2 = |W|^2 + Wgus^2)
-    ! is recovered from sustr_r, svstr_r by removing the current-feedback term (same formula, u, v of nrhs, still the
-    ! n+1/2 predictor during the barotropic step) and, with TAU_CORRECTION, taux/rho0; k = aer cer is its projection on
-    ! W. The stress at the new wind W' is k |W'_g|/|W_g| W' with the drag coefficient and air density held and
-    ! Wgus^2 = sh_gus2 (the gustiness is not kept by calc_all_bulk_forces; it matters only where |W| ~ Wgus).
-    ! Winds from the forcing slots (frc_data_at; no read). Rho points i0..i1 x j0..j1 within istrR..iend+1 (the
-    ! current-feedback loop's range). dsu, dsv are set on these faces only.
-    use surf_flux, only: uwnd, vwnd, sustr_r, svstr_r
-    use ocean_vars, only: u, v
-    use scalars, only: rho0, nz, nrhs
-#ifdef MASKING
-    use grid, only: umask, vmask
-#endif
-    implicit none
-    real(kind=8), intent(in) :: modtime
-    real(kind=8), dimension(GLOBAL_2D_ARRAY), intent(inout) :: dsu, dsv
-    integer(kind=4), intent(in) :: i0, i1, j0, j1
-    real(kind=8), parameter :: sh_slope=-0.0029_8, sh_offset=0.008_8, sh_wmin=3._8, sh_sref=-0.0027_8  ! = the CFB constants
-    real(kind=8), parameter :: sh_gus2=0.25_8      ! Wgus^2 [m2/s2] assumed (calc_all_bulk_forces starts its iteration at 0.5 m/s)
-    real(kind=8), allocatable, dimension(:,:), save :: u1, v1, dsr, dsrv
-    real(kind=8) :: cf, wx, wy, w2, k, rat
-    integer(kind=4) :: i, j
-    if (.not. allocated(u1)) then
-      allocate(u1(GLOBAL_2D_ARRAY), v1(GLOBAL_2D_ARRAY), dsr(GLOBAL_2D_ARRAY), dsrv(GLOBAL_2D_ARRAY))
-    end if
-    call frc_data_at(nc_uwnd, u1, modtime)
-    call frc_data_at(nc_vwnd, v1, modtime)
-    do j=j0,j1
-      do i=i0,i1
-        if (wspd_used(i,j) > sh_wmin) then
-          cf = sh_slope*wspd_used(i,j) + sh_offset
-        else
-          cf = sh_sref
-        endif
-        wx = sustr_r(i,j) - cf*0.5_8*(u(i,j,nz,nrhs)+u(i+1,j,nz,nrhs))/rho0
-        wy = svstr_r(i,j) - cf*0.5_8*(v(i,j,nz,nrhs)+v(i,j+1,nz,nrhs))/rho0
-#ifdef TAU_CORRECTION
-        wx = wx - taux(i,j)/rho0 ; wy = wy - tauy(i,j)/rho0
-#endif
-        w2 = uwnd(i,j)**2 + vwnd(i,j)**2
-        k = 0._8
-        if (w2 > 1.e-8_8) k = (wx*uwnd(i,j) + wy*vwnd(i,j))/w2      ! aer cer (rmask included)
-        rat = sqrt((u1(i,j)**2 + v1(i,j)**2 + sh_gus2)/(w2 + sh_gus2))
-        dsr(i,j)  = k*(rat*u1(i,j) - uwnd(i,j))
-        dsrv(i,j) = k*(rat*v1(i,j) - vwnd(i,j))
-      enddo
-    enddo
-#ifdef TAU_CORRECTION
-    call frc_data_at(nc_taux, u1, modtime)
-    call frc_data_at(nc_tauy, v1, modtime)
-    do j=j0,j1
-      do i=i0,i1
-        dsr(i,j)  = dsr(i,j)  + (u1(i,j) - taux(i,j))/rho0
-        dsrv(i,j) = dsrv(i,j) + (v1(i,j) - tauy(i,j))/rho0
-      enddo
-    enddo
-#endif
-    do j=j0,j1
-      do i=i0+1,i1
-        dsu(i,j) = 0.5_8*(dsr(i-1,j)+dsr(i,j))
-#ifdef MASKING
-        dsu(i,j) = dsu(i,j)*umask(i,j)
-#endif
-      enddo
-    enddo
-    do j=j0+1,j1
-      do i=i0,i1
-        dsv(i,j) = 0.5_8*(dsrv(i,j-1)+dsrv(i,j))
-#ifdef MASKING
-        dsv(i,j) = dsv(i,j)*vmask(i,j)
-#endif
-      enddo
-    enddo
-  end subroutine bulk_stress_shift  !]
 !-----------------------------------------------------------------------
   function bulk_psiu (ZoL, pi)  ![
 !
