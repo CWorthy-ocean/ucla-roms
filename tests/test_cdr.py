@@ -478,6 +478,37 @@ def _cdr_lite_parm_nml(input_dir) -> dict:
     return nml
 
 
+def _write_sensitivity_pieces(pieces, run_dir, missing, eta_shift_s=0):
+    """Copy the per-rank ``_cdrgas`` ``pieces`` into ``run_dir``, retimed.
+
+    The six records are retimed to 0, 120, 320, 520, 720 and 800 s after the
+    first, and the 120, 320 and 520 s records all get the 120 s values. With
+    ``missing``, the 320 s record is 0 everywhere. ``eta_shift_s`` moves the
+    120 to 720 s records of ``ddic_dalk`` (only) by that many seconds.
+    """
+    rec_s = np.array([0, 120, 320, 520, 720, 800])
+    run_dir.mkdir()
+    for piece in pieces:
+        with xr.open_dataset(
+            piece, decode_times=False, decode_timedelta=False
+        ) as ds:
+            ds = ds.load()
+        t0 = ds["ocean_time"].values[0]
+        for var in ("ddic_dco2", "ddic_dalk"):
+            tdim = ds[var].dims[0]
+            assert ds.sizes[tdim] == rec_s.size
+            rec_t = rec_s.astype(float)
+            if var == "ddic_dalk":
+                rec_t[1:5] += eta_shift_s
+            ds[f"{var}_time"].values[:] = (t0 + rec_t) * (1 / 86400)
+            first = ds[var].isel({tdim: 1}).values
+            for k in (1, 2, 3):
+                ds[var].values[k] = first
+            if missing:
+                ds[var].values[2] = 0
+        ds.to_netcdf(run_dir / piece.name)
+
+
 class TestCdrLite:
     """CDR_LITE tracers (no MARBL) forced by a ROMS-MARBL run's ``_cdrgas`` files."""
 
@@ -636,7 +667,6 @@ class TestCdrLite:
         """
         pieces = sorted(cdrgas_run.glob("roms_cdrgas.20100101000000.?.nc"))
         assert len(pieces) == 4
-        rec_s = np.array([0, 120, 320, 520, 720, 800])
 
         with xr.open_dataset(input_dir / "cdr_forcing_parm_cdr_lite.nc") as ds:
             ds = ds.load()
@@ -645,25 +675,6 @@ class TestCdrLite:
         flx[{"nt": 3}] = flx.isel(nt=2)  # DIC1 as ALK1 (rows: T, S, ALK1, DIC1)
         cdr_file = tmp_path / "cdr_forcing_parm_alk_dic.nc"
         ds.to_netcdf(cdr_file)
-
-        def write_pieces(run_dir, missing):
-            run_dir.mkdir()
-            for piece in pieces:
-                with xr.open_dataset(
-                    piece, decode_times=False, decode_timedelta=False
-                ) as ds:
-                    ds = ds.load()
-                t0 = ds["ocean_time"].values[0]
-                for var in ("ddic_dco2", "ddic_dalk"):
-                    tdim = ds[var].dims[0]
-                    assert ds.sizes[tdim] == rec_s.size
-                    ds[f"{var}_time"].values[:] = (t0 + rec_s) * (1 / 86400)
-                    first = ds[var].isel({tdim: 1}).values
-                    for k in (1, 2, 3):
-                        ds[var].values[k] = first
-                    if missing:
-                        ds[var].values[2] = 0
-                ds.to_netcdf(run_dir / piece.name)
 
         def nml_for(restart):
             nml = _cdr_lite_parm_nml(input_dir)
@@ -691,10 +702,10 @@ class TestCdrLite:
             return ds["ocean_time"].values, ds["FG_CDR_OAE_DIC1"].values
 
         valid = tmp_path / "valid"
-        write_pieces(valid, missing=False)
+        _write_sensitivity_pieces(pieces, valid, missing=False)
         cdr_lite_conf.run(nml_for(restart=False), cwd=valid)
         missing = tmp_path / "missing"
-        write_pieces(missing, missing=True)
+        _write_sensitivity_pieces(pieces, missing, missing=True)
         cdr_lite_conf.run(nml_for(restart=True), cwd=missing)
 
         t_out, fg_valid = fluxes(valid)
@@ -724,7 +735,7 @@ class TestCdrLite:
 
         # restart on the missing record
         restarted = tmp_path / "restarted"
-        write_pieces(restarted, missing=True)
+        _write_sensitivity_pieces(pieces, restarted, missing=True)
         assert (missing / "roms_rst.20100101000520.0.nc").exists()
         nml = nml_for(restart=True)
         nml["INITIAL_CONDITIONS"]["inifile"] = str(
@@ -735,6 +746,33 @@ class TestCdrLite:
         t_rst, fg_rst = fluxes(restarted)
         np.testing.assert_array_equal(t_rst, t_miss[-12:])
         np.testing.assert_array_equal(fg_rst, fg_missing[-12:])
+
+    def test_missing_sensitivity_record_needs_matching_eta_times(
+        self, tmp_path, cdr_lite_conf, input_dir, cdrgas_run
+    ):
+        """Next to a missing record, ``ddic_dalk`` must have ``ddic_dco2``'s times.
+
+        The ramp takes eta from the valid record, matched to beta's by time.
+        With ``ddic_dalk``'s inner records 1 s earlier there is no match, and
+        the interpolated eta would shrink toward the missing record's 0, so a
+        run with a missing record stops. Without one, the same shifted times
+        run as before.
+        """
+        pieces = sorted(cdrgas_run.glob("roms_cdrgas.20100101000000.?.nc"))
+        assert len(pieces) == 4
+        nml = _cdr_lite_parm_nml(input_dir)
+
+        missing = tmp_path / "missing"
+        _write_sensitivity_pieces(pieces, missing, missing=True, eta_shift_s=-1)
+        assert_run_rejected(
+            cdr_lite_conf, nml, missing,
+            ["ddic_dalk and ddic_dco2 records have different times"],
+            label="ddic_dalk shifted, record missing",
+        )
+
+        valid = tmp_path / "valid"
+        _write_sensitivity_pieces(pieces, valid, missing=False, eta_shift_s=-1)
+        cdr_lite_conf.run(nml, cwd=valid)
 
     def test_dp_by_name_conserves_flux(
         self, tmp_path, cdr_lite_conf, input_dir, cdrgas_run

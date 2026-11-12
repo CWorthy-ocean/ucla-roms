@@ -969,6 +969,8 @@ contains
     endif
 
     ! Temporal interpolation
+    ! surf_flux's interp_missing_sensitivity recomputes modtime and cff1/cff2
+    ! for ddic_dco2: keep its copy in step with any change here
     if (nc%time_interpolation) then
       vtimes  = nc%times
       cff1=( vtimes(it2)-modtime )/( vtimes(it2)-vtimes(it1) )
