@@ -152,9 +152,6 @@ module extract_data
 
   ! Per (boundary, child); boundaries ordered north, south, east, west
   logical, dimension(4,max_extract_chd) :: child_bnds = .false.
-  logical, dimension(4,max_extract_chd) :: child_w    = .false.
-  logical, dimension(4,max_extract_chd) :: child_up   = .false.
-  logical, dimension(4,max_extract_chd) :: child_vp   = .false.
   integer, dimension(4,max_extract_chd) :: child_dimsize_t
   integer, dimension(4,max_extract_chd) :: child_dimsize_u
   integer, dimension(4,max_extract_chd) :: child_dimsize_v
@@ -665,40 +662,32 @@ contains
         &info="error getting `output_vars` attribute",&
         &context=module_name//"/"//sr_name)
 
-        if (findstr(variables,'zeta') ) obj(iobj)%zeta = .True.
-        if (findstr(variables,'temp') ) obj(iobj)%temp = .True.
-        if (findstr(variables,'salt') ) obj(iobj)%salt = .True.
-        if (findstr(variables,'passive') ) obj(iobj)%passive = .True.
-        if (findstr(variables,'cdr_oae') ) obj(iobj)%cdr_oae = .True.
-        if (findstr(variables,'cdr_dor') ) obj(iobj)%cdr_dor = .True.
-        if (findstr(variables,'ubar') ) obj(iobj)%ubar = .True.
-        if (findstr(variables,'vbar') ) obj(iobj)%vbar = .True.
-        if (findstr(variables,'u'   ) ) obj(iobj)%u    = .True.
-        if (findstr(variables,'v'   ) ) obj(iobj)%v    = .True.
-        if (findstr(variables,'w'   ) ) obj(iobj)%w    = .True.
-        if (findstr(variables,'up'  ) ) obj(iobj)%up   = .True.
-        if (findstr(variables,'vp'  ) ) obj(iobj)%vp   = .True.
-        if (findstr(variables,'bgc'    ) ) obj(iobj)%bgc     = .True.
+        ! Whole names only: 'passive' must not request v, 'ubar' not u
+        obj(iobj)%zeta    = in_list(variables,'zeta')
+        obj(iobj)%temp    = in_list(variables,'temp')
+        obj(iobj)%salt    = in_list(variables,'salt')
+        obj(iobj)%passive = in_list(variables,'passive')
+        obj(iobj)%cdr_oae = in_list(variables,'cdr_oae')
+        obj(iobj)%cdr_dor = in_list(variables,'cdr_dor')
+        obj(iobj)%ubar    = in_list(variables,'ubar')
+        obj(iobj)%vbar    = in_list(variables,'vbar')
+        obj(iobj)%u       = in_list(variables,'u')
+        obj(iobj)%v       = in_list(variables,'v')
+        obj(iobj)%w       = in_list(variables,'w')
+        obj(iobj)%up      = in_list(variables,'up')
+        obj(iobj)%vp      = in_list(variables,'vp')
+        obj(iobj)%bgc     = in_list(variables,'bgc')
 
-        ! Record which boundaries request w/up/vp, so the PIO define
-        ! (create_edata_file) defines exactly what do_extract_data writes.
-        if (obj(iobj)%bnd == '_north') then
-          if (obj(iobj)%w)  child_w(1,ic)  = .true.
-          if (obj(iobj)%up) child_up(1,ic) = .true.
-          if (obj(iobj)%vp) child_vp(1,ic) = .true.
-        else if (obj(iobj)%bnd == '_south') then
-          if (obj(iobj)%w)  child_w(2,ic)  = .true.
-          if (obj(iobj)%up) child_up(2,ic) = .true.
-          if (obj(iobj)%vp) child_vp(2,ic) = .true.
-        else if (obj(iobj)%bnd == '_east') then
-          if (obj(iobj)%w)  child_w(3,ic)  = .true.
-          if (obj(iobj)%up) child_up(3,ic) = .true.
-          if (obj(iobj)%vp) child_vp(3,ic) = .true.
-        else if (obj(iobj)%bnd == '_west') then
-          if (obj(iobj)%w)  child_w(4,ic)  = .true.
-          if (obj(iobj)%up) child_up(4,ic) = .true.
-          if (obj(iobj)%vp) child_vp(4,ic) = .true.
+#ifdef PARALLEL_IO
+        ! do_extract_data has no PARALLEL_IO write for w (it would define
+        ! w_<bnd> and leave it at the fill value)
+        if (obj(iobj)%w) then
+          call error_log%raise_global(&
+          &context=module_name//"/"//sr_name,&
+          &info="w extraction ("//trim(objname)//") is not supported "//&
+          &"with PARALLEL_IO")
         endif
+#endif
 
         if (obj(iobj)%up.and. .not.calc_pflx) then
           call error_log%raise_global(&
@@ -1099,8 +1088,10 @@ contains
           endif
 #endif
 
-          if (obj(i)%passive) then
-            do indt=iTandS+1,iTandS+nt_passive
+          ! The tracers after temp and salt: passive, CDR OAE, CDR DOR and
+          ! BGC, each as its group's output_vars name requests
+          do indt=iTandS+1,nt
+            if (.not. tracer_requested(obj(i),indt)) cycle
 #ifdef PARALLEL_IO
               oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
               pio_gtype = pio_bnd // '2rc'
@@ -1122,108 +1113,7 @@ contains
           else
             call ncwrite(ncid,oname,dummy2d,start2D,.true.)
           endif
-            enddo ! indt
-          endif  ! passive
-
-          if (obj(i)%cdr_oae) then
-            do indt=iTandS+nt_passive+1,iTandS+nt_passive+2*nt_cdr_oae,2
-#ifdef PARALLEL_IO
-              oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
-              pio_gtype = pio_bnd // '2rc'
-#else
-              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
-#endif
-          if (obj(i)%np > 0) then
-              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (remap) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), nzc,&
-                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
-              endif
-          else
-            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
-          endif
-
-#ifdef PARALLEL_IO
-              oname = trim(t_vname(indt+1)) // trim(obj(i)%bnd)
-              pio_gtype = pio_bnd // '2rc'
-#else
-              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt+1))//trim(obj(i)%bnd)
-#endif
-          if (obj(i)%np > 0) then
-              call interpolate(t(:,:,:,nstp,indt+1),obj(i)%vari,coef,ip,jp)
-              if (remap) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), nzc,&
-                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
-              endif
-          else
-            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
-          endif
-            enddo ! indt
-          endif  ! cdr_oae
-
-          if (obj(i)%cdr_dor) then
-            do indt=iTandS+nt_passive+2*nt_cdr_oae+1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
-#ifdef PARALLEL_IO
-              oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
-              pio_gtype = pio_bnd // '2rc'
-#else
-              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
-#endif
-          if (obj(i)%np > 0) then
-              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (remap) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), nzc,&
-                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
-              endif
-          else
-            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
-          endif
-            enddo ! indt
-          endif  ! cdr_dor
-
-          if (obj(i)%bgc) then
-            do indt=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
-#ifdef PARALLEL_IO
-              oname = trim(t_vname(indt)) // trim(obj(i)%bnd)
-              pio_gtype = pio_bnd // '2rc'
-#else
-              oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
-#endif
-          if (obj(i)%np > 0) then
-              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
-              if (remap) then
-                do j=1,obj(i)%np
-                  call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
-                  &obj(i)%vari(j,:), nzc,&
-                  &obj(i)%Hz_chd(j,:), obj(i)%vari_chd(j,:))
-                enddo
-                call ncwrite(ncid,oname,obj(i)%vari_chd,start2D,.true.)
-              else
-                call ncwrite(ncid,oname,obj(i)%vari,start2D,.true.)
-              endif
-          else
-            call ncwrite(ncid,oname,dummy2d,start2D,.true.)
-          endif
-            enddo ! indt
-          endif  ! bgc
+          enddo ! indt
 
 !     w variables --------------------------------------------------------
 
@@ -1451,6 +1341,8 @@ contains
     integer(kind=4),dimension(4) :: child_dimnums_u
     integer(kind=4),dimension(4) :: child_dimnums_v
 #ifdef PARALLEL_IO
+    integer(kind=4) :: iobj
+
     do ic = 1,nchd
     if (mynode == 0) then
 
@@ -1475,54 +1367,63 @@ contains
       child_dimnums_u = (/dimid2, dimid2, dimid3, dimid3/)
       child_dimnums_v = (/dimid1, dimid1, dimid4, dimid4/)
 
+      ! Define exactly what do_extract_data writes: the variables some
+      ! object of this child and boundary requests (output_vars), with the
+      ! tracer groups in the order of do_extract_data's index ranges.
+      ! Anything else would stay at the fill value in the child's file.
       do bnd=1,4
         if (child_bnds(bnd,ic)) then
+        if (wants(ic,bnd,obj%zeta)) then
         dimid2d = (/child_dimnums_t(bnd), dimid0/)
         ierr=nf90_def_var(ncid,'zeta_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
         ierr = nf90_put_att(ncid,varid,'long_name',"free-surface elevation")
         ierr = nf90_put_att(ncid,varid,'units',"meter")
+        endif
 
+        if (wants(ic,bnd,obj%ubar)) then
         dimid2d = (/child_dimnums_u(bnd), dimid0/)
         ierr=nf90_def_var(ncid,'ubar_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
         ierr = nf90_put_att(ncid,varid,'long_name',"vertically averaged u-momentum component")
         ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
+        endif
 
+        if (wants(ic,bnd,obj%vbar)) then
         dimid2d = (/child_dimnums_v(bnd), dimid0/)
         ierr=nf90_def_var(ncid,'vbar_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
         ierr = nf90_put_att(ncid,varid,'long_name',"vertically averaged v-momentum component")
         ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
+        endif
 
         do indt=1,nt
+        if (wants(ic,bnd,[(tracer_requested(obj(iobj),indt), iobj=1,nobj)])) then
         dimid3d = (/child_dimnums_t(bnd), dimid5, dimid0/)
         ierr=nf90_def_var(ncid,trim(t_vname(indt)) // '_' // trim(child_bnd_name(bnd)),nf90_double,dimid3d,varid)
         ierr = nf90_put_att(ncid,varid,'long_name',trim(t_lname(indt)))
         ierr = nf90_put_att(ncid,varid,'units',trim(t_units(indt)))
+        endif
         enddo
 
+        if (wants(ic,bnd,obj%u)) then
         dimid3d = (/child_dimnums_u(bnd), dimid5, dimid0/)
         ierr=nf90_def_var(ncid,'u_' // trim(child_bnd_name(bnd)),nf90_double,dimid3d,varid)
         ierr = nf90_put_att(ncid,varid,'long_name',"u-momentum component")
         ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
+        endif
 
+        if (wants(ic,bnd,obj%v)) then
         dimid3d = (/child_dimnums_v(bnd), dimid5, dimid0/)
         ierr=nf90_def_var(ncid,'v_' // trim(child_bnd_name(bnd)),nf90_double,dimid3d,varid)
         ierr = nf90_put_att(ncid,varid,'long_name',"v-momentum component")
         ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
-
-
-        if (child_w(bnd,ic)) then
-          dimid3d = (/child_dimnums_t(bnd), dimid5, dimid0/)
-          ierr=nf90_def_var(ncid,'w_' // trim(child_bnd_name(bnd)),nf90_double,dimid3d,varid)
-          ierr = nf90_put_att(ncid,varid,'long_name',"vertical velocity")
-          ierr = nf90_put_att(ncid,varid,'units',"meter second-1")
         endif
-        if (child_up(bnd,ic)) then
+
+        if (wants(ic,bnd,obj%up)) then
           dimid2d = (/child_dimnums_u(bnd), dimid0/)
           ierr=nf90_def_var(ncid,'up_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
           ierr = nf90_put_att(ncid,varid,'long_name',"u-momentum pressure flux")
           ierr = nf90_put_att(ncid,varid,'units',"meter3 second-2")
         endif
-        if (child_vp(bnd,ic)) then
+        if (wants(ic,bnd,obj%vp)) then
           dimid2d = (/child_dimnums_v(bnd), dimid0/)
           ierr=nf90_def_var(ncid,'vp_' // trim(child_bnd_name(bnd)),nf90_double,dimid2d,varid)
           ierr = nf90_put_att(ncid,varid,'long_name',"v-momentum pressure flux")
@@ -1604,30 +1505,10 @@ contains
         if (obj(i)%up)   call create_var(ncid,obj(i),'up',dname,dsize)
         if (obj(i)%vp)   call create_var(ncid,obj(i),'vp',dname,dsize)
 
-        if (obj(i)%passive) then
-          do indt=iTandS+1,iTandS+nt_passive
-            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
-          enddo
-        endif
-
-        if (obj(i)%cdr_oae) then
-          do indt=iTandS+nt_passive+1,iTandS+nt_passive+2*nt_cdr_oae,2
-            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
-            call create_var(ncid,obj(i),t_vname(indt+1),dname3,dsize3,-99)
-          enddo
-        endif
-
-        if (obj(i)%cdr_dor) then
-          do indt=iTandS+nt_passive+2*nt_cdr_oae+1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
-            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
-          enddo
-        endif
-
-        if (obj(i)%bgc) then
-          do indt=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
-            call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
-          enddo
-        endif
+        do indt=iTandS+1,nt   ! passive, CDR and BGC tracers
+          if (tracer_requested(obj(i),indt))&
+          &call create_var(ncid,obj(i),t_vname(indt),dname3,dsize3,-99)
+        enddo
 
       endif
     enddo
@@ -1675,6 +1556,67 @@ contains
     endif
 
   end subroutine create_var  !]
+! ----------------------------------------------------------------------
+  logical function wants(ic,bnd,requested) ![
+    ! Does an object of child domain ic on boundary bnd (index into
+    ! child_bnd_name) request the variable? requested: that variable's
+    ! request flag of every object, e.g. obj%temp
+    implicit none
+    integer(kind=4),       intent(in) :: ic, bnd
+    logical, dimension(:), intent(in) :: requested
+
+    wants = any(requested .and. obj%ichd == ic .and.&
+    &obj%bnd == '_'//trim(child_bnd_name(bnd)))
+
+  end function wants !]
+! ----------------------------------------------------------------------
+  logical function tracer_requested(o,indt) ![
+    ! Does object o request tracer indt? Every tracer group has its own
+    ! output_vars name. The tracers are temp, salt, then the passive,
+    ! CDR OAE (two per release), CDR DOR and BGC groups, in that order.
+    implicit none
+    type(extract_object), intent(in) :: o
+    integer(kind=4),      intent(in) :: indt
+
+    if (indt == itemp) then
+      tracer_requested = o%temp
+#ifdef SALINITY
+    else if (indt == isalt) then
+      tracer_requested = o%salt
+#endif
+    else if (indt <= iTandS+nt_passive) then
+      tracer_requested = o%passive
+    else if (indt <= iTandS+nt_passive+2*nt_cdr_oae) then
+      tracer_requested = o%cdr_oae
+    else if (indt <= iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor) then
+      tracer_requested = o%cdr_dor
+    else
+      tracer_requested = o%bgc
+    endif
+
+  end function tracer_requested !]
+! ----------------------------------------------------------------------
+  logical function in_list(list,name) ![
+    ! Is name one of the comma- or blank-separated entries of list
+    ! (an output_vars attribute)?
+    implicit none
+    character(len=*), intent(in) :: list, name
+    integer(kind=4) :: i, i0, n
+
+    in_list = .false.
+    n = len_trim(list)
+    i0 = 1
+    do i = 1,n+1
+      if (i <= n) then
+        if (list(i:i) /= ',' .and. list(i:i) /= ' ') cycle
+      endif
+      if (i > i0) then
+        if (list(i0:i-1) == name) in_list = .true.
+      endif
+      i0 = i+1
+    enddo
+
+  end function in_list !]
 
 ! ----------------------------------------------------------------------
   subroutine set_chd_scoord(ic)

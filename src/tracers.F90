@@ -85,6 +85,7 @@ module tracers
   ! Surface tracer flux lives in 'stflx' in surf_flux.F module.
   type (ncforce), allocatable    :: nc_t( : )                                   ! array of ncvs for each tracer
   integer(kind=4),public :: iTandS                                       ! combined index of temperature and salinit
+  integer(kind=4),public :: ibgc0 = 0  ! tracers before the BGC ones: BGC (MARBL/BEC2) tracers are ibgc0+1..nt
   ! public as used in set_forces.F. Need to be parame
 !     integer,public :: nt_passive=0                                 ! total number of passive tracers
   integer(kind=4)        :: itot=0                                       ! index counter to count total number of tr
@@ -107,6 +108,7 @@ module tracers
 
   public set_surf_tracer_flx
   public init_tracers
+  public tracer_required
   public exchange_tracers
   public def_his_trc
   public wrt_his_trc
@@ -571,6 +573,8 @@ contains
     iTandS = 2         ! if both temp and salt.
 #endif
     itot=iTandS        ! set up counting for additional tracers
+    ! T/S, then passive, CDR OAE (2 each) and CDR DOR tracers; BGC tracers follow
+    ibgc0 = iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
 
     do itrc=iTandS+1,iTandS+nt_passive
       write(passive_tracer_num, '(I0)') (itrc-iTandS)
@@ -742,6 +746,17 @@ contains
     endif
 # endif
   end subroutine exchange_tracers  !]
+! ----------------------------------------------------------------------
+  pure logical function tracer_required(itrc)  ![
+    ! Must tracer itrc be in the initial and boundary files? Temp, salt and
+    ! the BGC (MARBL/BEC2) tracers must; passive and CDR tracers may be
+    ! absent and then start, or stay, at zero.
+    implicit none
+    integer(kind=4), intent(in) :: itrc
+
+    tracer_required = (itrc <= iTandS .or. itrc > ibgc0)
+
+  end function tracer_required  !]
 ! ----------------------------------------------------------------------
 end module tracers
 

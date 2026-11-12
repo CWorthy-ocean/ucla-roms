@@ -8,9 +8,10 @@ boundary file gets synthetic fluxes: smooth along each edge, varying in time.
 
 Each build, with and without PARALLEL_IO, runs the case on 2x2 ranks with
 restarts and the sponge-tuning output (``wrt_sponge``), on one rank, and again
-on 2x2 ranks restarted from the first restart; and twice more on 2x2 ranks
-without restarts, with averaged output (``sponge_avg``) and with output every
-step. The checks:
+on 2x2 ranks restarted from the first restart; and three times more on 2x2 ranks
+without restarts, with averaged output (``sponge_avg``), with output every
+step, and with averaged output from a namelist group that omits ``sponge_avg``.
+The checks:
 
 - the corner points of the boundary data line up with the tiles: one rank gives
   the same coefficients and state as 2x2 (both builds read the boundary data
@@ -24,6 +25,8 @@ step. The checks:
   flux, for every side;
 - with ``sponge_avg`` each record is the mean, over the steps since the last
   record, of what a run writing every step holds;
+- a group without ``sponge_avg`` gets its default, ``.true.`` (it had no
+  default, and in practice was ``.false.``);
 - both builds give the same result.
 """
 import subprocess
@@ -92,8 +95,8 @@ def sponge_inputs(input_dir, tmp_path_factory) -> dict[str, Path]:
 
 @pytest.fixture(scope="module")
 def sponge_runs(tmp_path_factory, sponge_inputs):
-    """``runs(build)``: compile the build and do its three runs, once; returns
-    ``{"tiled"|"one_rank"|"restart"|"averaged"|"every_step": run directory}``."""
+    """``runs(build)``: compile the build and do its six runs, once; returns
+    ``{"tiled"|"one_rank"|"restart"|"averaged"|"every_step"|"default_avg": run directory}``."""
     done = {}
 
     def runs(build: str) -> dict[str, Path]:
@@ -118,7 +121,7 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
 
         dirs = {}
         for run, tiles in (("tiled", "2x2"), ("one_rank", "1x1"), ("restart", "2x2"),
-                           ("averaged", "2x2"), ("every_step", "2x2")):
+                           ("averaged", "2x2"), ("every_step", "2x2"), ("default_avg", "2x2")):
             nml = create_test_namelist_dict(sponge_inputs["joined" if pio else tiles])
             nml["TIME_STEPPING"].update(dt=DT, ntimes=NTIMES)
             nml["PARAM_SETTINGS"].update(NP_XI=int(tiles[0]), NP_ETA=int(tiles[2]))
@@ -128,13 +131,15 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
             nml["SPONGE_TUNE_SETTINGS"].update(
                 ub_tune=True, sponge_timescale=SPONGE_TIMESCALE, wrt_sponge=True,
                 sponge_avg=False, nrpf_sponge=2, output_period_sponge=SPN_PERIOD)
-            if run in ("averaged", "every_step"):
+            if run in ("averaged", "every_step", "default_avg"):
                 # no restarts (their output-period check would need nrpf_sponge = 10 here)
                 nml["BASIC_OUTPUT_SETTINGS"]["wrt_file_rst"] = False
-                if run == "averaged":
-                    nml["SPONGE_TUNE_SETTINGS"].update(sponge_avg=True, nrpf_sponge=NTIMES * DT // SPN_PERIOD)
-                else:
+                if run == "every_step":
                     nml["SPONGE_TUNE_SETTINGS"].update(output_period_sponge=DT, nrpf_sponge=NTIMES)
+                else:
+                    nml["SPONGE_TUNE_SETTINGS"].update(sponge_avg=True, nrpf_sponge=NTIMES * DT // SPN_PERIOD)
+                if run == "default_avg":  # the group without sponge_avg
+                    del nml["SPONGE_TUNE_SETTINGS"]["sponge_avg"]
             if run == "restart":
                 first = _joined(dirs["tiled"], "roms_rst", pio, join=False)[0]
                 nml["INITIAL_CONDITIONS"]["inifile"] = str(first)
@@ -273,6 +278,20 @@ def test_sponge_averages(sponge_runs, build):
             assert scale > 0, f"{name} t={t}"
             err = np.abs(values.astype(np.float64) - mean).max()
             assert err <= 5e-7 * scale, f"{name} t={t}: {err / scale:.1e} of its largest value"
+
+
+@pytest.mark.parametrize("build", BUILDS)
+def test_sponge_avg_default(sponge_runs, build):
+    """A ``SPONGE_TUNE_SETTINGS`` group without ``sponge_avg`` writes the same
+    averaged ``_spn`` file as one that sets it to ``.true.``."""
+    pio = build == "parallel_io"
+    runs = sponge_runs(build)
+    averaged = _records(_joined(runs["averaged"], "roms_spn", pio))
+    default = _records(_joined(runs["default_avg"], "roms_spn", pio))
+    assert sorted(default) == sorted(averaged)
+    for t in averaged:
+        differ = [n for n in averaged[t] if not np.array_equal(averaged[t][n], default[t][n])]
+        assert differ == [], f"t={t}"
 
 
 def test_parallel_io_matches_per_rank(sponge_runs):

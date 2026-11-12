@@ -15,7 +15,7 @@ contains
     &day2sec, dt, forw_start, iic, ntstart,&
     &sec2day, start_time
     use dimensions, only: inode, jnode
-    use tracers, only: t_vname, t, iTandS
+    use tracers, only: t_vname, t, ibgc0, tracer_required
 #ifdef MARBL
     use marbl_driver, only: marbldrv_read_ss_vars_from_rst
 #endif
@@ -591,16 +591,18 @@ contains
         call exchange_xxx(t(:,:,:,tindx,itrc))
       else
 
-        if (itrc <= iTandS) then ! temperature and salt(s) always require inital condition
-          write(error_info,&
-          &'(/1x,3A,/12x,3A,/12x,A)')&
-          &'Cannot find variable ''',&
-          &trim(t_vname(itrc)),&
-          &'''',&
-          &'in netCDF file ''',&
-          &trim(inifile),&
-          &'''',&
-          &nf90_strerror(ierr)
+        ! temperature, salt(s) and the BGC (MARBL/BEC2) tracers always require
+        ! an initial condition; passive and CDR tracers start at zero
+        if (tracer_required(itrc)) then
+          ! One record: error_info is a scalar internal file, so a '/' in a
+          ! format here stops the run with "End of file" instead
+          error_info = "Cannot find variable '"//trim(t_vname(itrc))//&
+          &"' in netCDF file '"//trim(inifile)//"': "//&
+          &trim(nf90_strerror(ierr))
+          if (itrc > ibgc0) error_info = trim(error_info)//&
+          &' A BGC run needs every BGC tracer in the initial file: make it '//&
+          &'with BGC (roms-tools InitialConditions bgc_source=...), or '//&
+          &'start from a restart of a BGC run.'
           call error_log%check_netcdf_status(&
           &netcdf_status=ierr,&
           &context=sr_name,&

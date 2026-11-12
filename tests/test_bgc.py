@@ -12,6 +12,8 @@ the restoring fluxes alone, and a control without surface-flux output. The
 restoring fluxes must equal the fluxes the model applied, follow their formula,
 and leave the model unchanged.
 """
+from pathlib import Path
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -123,6 +125,52 @@ class TestConstantFe:
         assert_run_rejected(
             marbl_conf, nml, tmp_path, ["constant_Fe_value must be non-negative"],
             label="constant_Fe_value", absent=["MARBL Fe held constant"],
+        )
+
+
+def _pieces_without(input_dir, out, name: str, drop: set[str]) -> Path:
+    """Copy the four per-rank pieces of input ``name`` into ``out`` without
+    the variables in ``drop``; returns the name to put in the namelist."""
+    for r in range(4):
+        with xr.open_dataset(input_dir / f"{name}.{r}.nc", decode_cf=False) as ds:
+            ds = ds.load()
+        ds.drop_vars([v for v in ds.data_vars if v in drop]).to_netcdf(out / f"{name}.{r}.nc")
+    return out / f"{name}.nc"
+
+
+class TestRequiredBGCInputs:
+    """A BGC tracer missing from the boundary or initial files stops ROMS with
+    a message saying how to make the file. (Passive and CDR tracers may be
+    missing and start at zero: test_extract.py and test_cdr.py run without
+    them.)"""
+
+    def test_missing_boundary_tracer_rejected(self, tmp_path, marbl_conf, input_dir):
+        """Without DIC_<side> in the boundary files ROMS stops at the first
+        boundary read; it used to run on with DIC = 0 at every open boundary."""
+        name = "example_input_bgc_boundary_forcing"
+        bry = _pieces_without(
+            input_dir, tmp_path, name, {f"DIC_{s}" for s in ("south", "north", "east", "west")}
+        )
+        nml = _marbl_nml(input_dir)
+        files = nml["FORCING_FILES"]["frcfiles"]
+        files[files.index(str(input_dir / f"{name}.nc"))] = str(bry)
+        assert_run_rejected(
+            marbl_conf, nml, tmp_path,
+            ["Could not find var: DIC_", "A BGC run needs every BGC tracer at each open boundary"],
+            label="missing DIC boundary",
+        )
+
+    def test_missing_initial_tracer_rejected(self, tmp_path, marbl_conf, input_dir):
+        """Without DIC in the initial file ROMS stops at startup; it used to
+        start DIC at 0 everywhere."""
+        nml = _marbl_nml(input_dir)
+        nml["INITIAL_CONDITIONS"]["inifile"] = str(
+            _pieces_without(input_dir, tmp_path, "example_input_bgc_initial_conditions", {"DIC"})
+        )
+        assert_run_rejected(
+            marbl_conf, nml, tmp_path,
+            ["Cannot find variable 'DIC'", "A BGC run needs every BGC tracer in the initial file"],
+            label="missing DIC initial",
         )
 
 
