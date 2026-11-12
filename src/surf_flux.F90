@@ -412,10 +412,101 @@ subroutine set_carbonate_sensitivity ![
         endif
         pio_file_is_open = 0
 #endif
+        if (nc_ddic_dco2%time_interpolation .and. .not. nc_ddic_dco2%missing)&
+        & call interp_missing_sensitivity
       endif
 #endif
 
 end subroutine set_carbonate_sensitivity  !]
+! ----------------------------------------------------------------------
+#ifdef CDR_LITE
+subroutine interp_missing_sensitivity ![
+  ! Time interpolation of beta (ddic_dco2) and eta (ddic_dalk) at cells where
+  ! exactly one of the two bracketing records is missing (beta <= 0 or NaN:
+  ! cdr_gas_exch_output writes 0 where the carbonate solve failed, e.g.
+  ! S < 0.1 PSU or no pH convergence, and tracers.F90 treats beta <= 0 as no
+  ! gas exchange).
+  !
+  ! The CDR_LITE gas flux -(k/beta)*(DIC' - eta*ALK') (tracers.F90) is linear
+  ! in 1/beta and eta/beta, the coefficients cdr_gas_exch_output averages.
+  ! set_frc_data interpolates beta and eta themselves, which next to a missing
+  ! record (0) shrinks beta to w*beta_valid (w = the valid record's weight),
+  ! so k/beta grows up to 1/w times too large, and shrinks eta. Here 1/beta
+  ! and eta/beta are interpolated instead, with 0 for the missing record:
+  ! beta = beta_valid/w, eta = eta_valid, so the flux ramps linearly to zero
+  ! toward the missing record. Where both records are valid (or both missing)
+  ! the values of set_frc_data stand, bit for bit.
+  use roms_read_write, only: frc_time
+  use scalars, only: sec2day
+  implicit none
+
+  character(len=26) :: sr_name = "interp_missing_sensitivity"
+
+  ! local
+  integer(kind=4) :: i, j, m
+  integer(kind=4),dimension(2) :: kb, ke  ! slots it1, it2 of beta and eta
+  real(kind=8),dimension(2) :: wgt        ! their time-interpolation weights
+  real(kind=8) :: modtime
+  logical :: valid1, valid2, eta_slots
+  logical :: eta_mismatch  ! a cell needs eta's valid record, which eta_slots lacks
+
+  kb = [nc_ddic_dco2%it1, nc_ddic_dco2%it2]
+  ! The weights of set_frc_data_surf's interpolation (same model time and
+  ! formula; computed here so that routine, used by every surface field, is
+  ! left as it is)
+  if (frc_time == 'current') then
+    modtime = tdays
+  elseif (frc_time == '1/2 fwd') then
+    modtime = tdays + 0.5_8*dt*sec2day
+  else  ! 'forward'
+    modtime = tdays + dt*sec2day
+  endif
+  wgt(1) = (nc_ddic_dco2%times(kb(2))-modtime)&
+  &       /(nc_ddic_dco2%times(kb(2))-nc_ddic_dco2%times(kb(1)))
+  wgt(2) = (modtime-nc_ddic_dco2%times(kb(1)))&
+  &       /(nc_ddic_dco2%times(kb(2))-nc_ddic_dco2%times(kb(1)))
+  ke = [nc_ddic_dalk%it1, nc_ddic_dalk%it2]
+  ! eta's records are taken by time; cdr_gas_exch_output writes both fields at
+  ! the same times. If they differ next to a missing record, ROMS stops below:
+  ! eta's interpolated value would shrink toward the missing record's 0.
+  eta_slots = nc_ddic_dalk%times(ke(1)) == nc_ddic_dco2%times(kb(1)) .and.&
+  &           nc_ddic_dalk%times(ke(2)) == nc_ddic_dco2%times(kb(2))
+  eta_mismatch = .false.
+
+  do j=lbound(ddic_dco2,2),ubound(ddic_dco2,2)   ! halos too: vdata is exchanged
+    do i=lbound(ddic_dco2,1),ubound(ddic_dco2,1)
+      valid1 = nc_ddic_dco2%vdata(i,j,kb(1)) > 0
+      valid2 = nc_ddic_dco2%vdata(i,j,kb(2)) > 0
+      if (valid1 .eqv. valid2) cycle
+      m = merge(1, 2, valid1)
+      if (wgt(m) > 0) then
+        ddic_dco2(i,j) = nc_ddic_dco2%vdata(i,j,kb(m))/wgt(m)
+        if (eta_slots) then
+          ddic_dalk(i,j) = nc_ddic_dalk%vdata(i,j,ke(m))
+        elseif (i >= i0 .and. i <= i1 .and. j >= j0 .and. j <= j1) then
+          ! only cells this rank read: the outer halo at a physical boundary
+          ! is never filled
+          eta_mismatch = .true.
+        endif
+      else
+        ddic_dco2(i,j) = 0   ! at the missing record itself: no gas exchange
+      endif
+    enddo
+  enddo
+
+  ! eta_slots is the same on every rank (PARALLEL_IO broadcasts the record
+  ! times; without it every rank's forcing piece carries the same times), so
+  ! all ranks take this branch together and reach the collective abort_check
+  if (.not. eta_slots) then
+    if (eta_mismatch) call error_log%raise_from_rank(&
+    &context=module_name//'/'//sr_name,&
+    &info='ddic_dalk and ddic_dco2 records have different times next to '//&
+    &'a missing ddic_dco2 record (<= 0); write both at the same times, as '//&
+    &'the _cdrgas output does')
+    call error_log%abort_check()
+  endif
+end subroutine interp_missing_sensitivity  !]
+#endif
 ! ----------------------------------------------------------------------
 subroutine calc_sflx_avg  ![
   implicit none
