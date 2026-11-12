@@ -46,7 +46,7 @@ module implicit_fs_mod
   ! Namelist IMPLICIT_FS (docs/model_settings/runtime_settings.md)
   character(len=8) :: fs_mode = 'split'        ! 'split' (step2d fast loop) | 'implicit'
   real(kind=8)    :: fs_rho_inf = 0.5_8        ! generalized-alpha spectral radius at infinite
-                                               ! omega dt (0: L-stable; 1: Crank-Nicolson, no memory);
+                                               ! omega dt, in [0, 1) (0: L-stable; 1, Crank-Nicolson, rejected);
                                                ! default 0.5 with fs_nsub = 2, fs_pg_rho, fs_flather_zghost
   real(kind=8)    :: fs_theta = 0.5_8          ! PG off-centring: th_p = th*(rho_inf) + fs_theta - 0.5
   real(kind=8)    :: fs_theta_div = 0.5_8      ! divergence off-centring: th_d = th* + fs_theta_div - 0.5
@@ -277,8 +277,9 @@ contains
     if (fs_theta < 0.5_8 .or. fs_theta > 1._8 .or. fs_theta_div < 0.5_8 .or. fs_theta_div > 1._8)&
     &  call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
     &  info="fs_theta and fs_theta_div must lie in [0.5, 1]")
-    if (fs_rho_inf < 0._8 .or. fs_rho_inf > 1._8) call error_log%raise_global(&
-    &  context=trim(module_name)//"/"//sr_name, info="fs_rho_inf must lie in [0, 1]")
+    if (fs_rho_inf < 0._8 .or. fs_rho_inf >= 1._8) call error_log%raise_global(&
+    &  context=trim(module_name)//"/"//sr_name, info="fs_rho_inf must lie in [0, 1): 1 (Crank-Nicolson) is"&
+    &  //" resonant with the 3-D step's 2 dt mode")
 #ifndef VAR_RHO_2D
     if (fs_pg_rho) then                     ! no rhoS, rhoA without VAR_RHO_2D: the operator keeps plain g
       fs_pg_rho = .false.

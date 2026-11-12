@@ -91,6 +91,8 @@ def test_implicit_fs_exact_restart(implicit_fs_configuration, input_dir, tmp_pat
 
 
 STOPS = {
+    # Crank-Nicolson is resonant with the 3-D step's 2 dt mode
+    "rho_inf_1": ({"fs_rho_inf": 1.0}, ["fs_rho_inf must lie in [0, 1)"]),
     # the first solve reaches fs_maxit without meeting fs_tol
     "unconverged": (
         {"fs_maxit": 1},

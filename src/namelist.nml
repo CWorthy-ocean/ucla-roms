@@ -615,8 +615,8 @@ pmin = 200               ! Minimum of allocated space for particle array
 fs_mode = 'split'                    ! 'split' (step2d fast loop) | 'implicit'
 fs_nsub = 2                          ! Implicit sub-steps of dt/fs_nsub per baroclinic step (1..4): more
                                      ! accurate tides (phase error / ~4 with 2), one solve per sub-step
-fs_rho_inf = 0.5                     ! Spectral radius at infinite omega dt, 0..1: 0 damps the fastest
-                                     ! modes most (L-stable); 1 = Crank-Nicolson (no damping, not usable)
+fs_rho_inf = 0.5                     ! Spectral radius at infinite omega dt, 0 <= fs_rho_inf < 1: 0 damps
+                                     ! the fastest modes most (L-stable); 1 (Crank-Nicolson) is rejected
 fs_tol = 1.0e-8                      ! Relative residual of the elliptic solve (volume is exact regardless)
 fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost table at the end; 2 + FS_VOL
                                      ! volume budget and FS_SRC source volumes (FS_SRC also with fs_mode = 'split')
