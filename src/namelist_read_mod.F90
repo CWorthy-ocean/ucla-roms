@@ -23,12 +23,13 @@ contains
 
     use error_handling_mod, only: error_log
     use param, only: read_nml_param
+#if !defined(MARBL) && !defined(BIOLOGY_BEC2)
+    use param, only: nt_passive, nt_bgc, nt_cdr_oae, nt_cdr_dor
+#endif
 #ifndef ANA_GRID
     use dimensions, only: read_nml_grid           !GRID_SETTINGS
 #endif
-#if defined(MARBL) || defined(BIOLOGY_BEC2)
     use bgc_shared_vars, only: read_nml_bgc       !BGC_SETTINGS
-#endif
 #ifdef CDR_FORCING
     use cdr_frc, only: read_nml_cdr_frc           !CDR_FRC_SETTINGS
 #endif
@@ -86,6 +87,10 @@ contains
 #endif
 #if defined(MARBL) || defined(BIOLOGY_BEC2)
     call read_nml_bgc
+#else
+    ! Without MARBL/BEC2, only runs with tracers beyond T and S read it (BGC
+    ! subcycling of those tracers), and there it is optional
+    if (nt_passive + nt_bgc + nt_cdr_oae + nt_cdr_dor > 0) call read_nml_bgc
 #endif
 #ifdef CDR_FORCING
     call read_nml_cdr_frc

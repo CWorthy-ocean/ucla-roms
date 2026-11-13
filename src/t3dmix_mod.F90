@@ -9,7 +9,7 @@ contains
 
   subroutine t3dmix_s
     use param, only: ieast, iwest, jnorth, jsouth, nt, nsub_e, nsub_x
-    use tracers, only: exchange_tracers
+    use tracers, only: exchange_tracers, nt_step
     use scalars, only: nnew
     use private_scratch, only: a2d
     implicit none
@@ -17,11 +17,11 @@ contains
     integer(kind=4) itrc
 
 # include "compute_tile_bounds.h"
-    do itrc=1,nt
+    do itrc=1,nt_step
       call t3dmix_s_tile (istr,iend,jstr,jend, itrc, A2d(1,1),&
       &A2d(1,2), A2d(1,3))
     enddo
-    call exchange_tracers(nnew)   ! four tracers per MPI exchange
+    call exchange_tracers(nnew, nt_step)   ! four tracers per MPI exchange
   end subroutine t3dmix_s
 
   subroutine t3dmix_s_tile (istr,iend,jstr,jend, itrc, FX,FE,LapT)
@@ -273,7 +273,7 @@ contains
 
   subroutine t3dmix_gp
     use param, only: ieast, iwest, jnorth, jsouth, nt, nsub_e, nsub_x
-    use tracers, only: exchange_tracers
+    use tracers, only: exchange_tracers, nt_step
     use scalars, only: nnew
     use dimensions, only: inode, jnode
     use private_scratch, only: a2d, a3d
@@ -282,12 +282,12 @@ contains
     integer(kind=4) itrc
 
 # include "compute_tile_bounds.h"
-    do itrc=1,nt
+    do itrc=1,nt_step
       call t3dmix_gp_tile (istr,iend,jstr,jend, itrc, A3d(1,1),A2d(1,1),&
       &A2d(1,2), A2d(1,3),A2d(1,5),&
       &A2d(1,7), A2d(1,9), A2d(1,11), A2d(1,13))
     enddo
-    call exchange_tracers(nnew)   ! four tracers per MPI exchange
+    call exchange_tracers(nnew, nt_step)   ! four tracers per MPI exchange
   end subroutine t3dmix_gp
 
   subroutine t3dmix_gp_tile (istr,iend,jstr,jend, itrc, LapT,FX,FE,&

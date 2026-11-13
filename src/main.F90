@@ -193,6 +193,9 @@ contains
 #endif
     use grid, only: get_grid, dm_r, dn_r
     use roms_read_write, only: nrrec, frc_time, inifile
+#ifdef SOLVE3D
+    use bgc_subcycle_mod, only: bgcsub_init
+#endif
     use param, only:&
     &mynode, nsub_e, nsub_x, lm, mm,&
     &nz, np_eta, np_xi, padd_e, padd_x
@@ -356,6 +359,9 @@ contains
     call set_forces
 
     call set_depth(0)
+#ifdef SOLVE3D
+    call bgcsub_init          ! BGC subcycling (no-op unless bgc_physics_subcycle)
+#endif
 
 !----------------------------------------------------------------------
 !  Set NHMG horizontal and vertical grids
@@ -485,6 +491,7 @@ contains
 #endif
     use step2d_mod, only: step2d
     use step3d_t_mod, only: step3d_t
+    use bgc_subcycle_mod, only: bgc_physics_subcycle, bgcsub_accumulate, bgcsub_step
     use step3d_uv_mod, only: step3d_uv1, step3d_uv2
 #  ifdef UV_VIS2
     use visc3d_mod, only: visc3d => visc3d_s
@@ -681,7 +688,9 @@ contains
     call reg_toc(rg_uv2_omega)
 
     call reg_tic(rg_step3d_t)
+    if (bgc_physics_subcycle) call bgcsub_accumulate   ! window sums of the corrector transports
     call step3d_t(0, tstep=iic)
+    if (bgc_physics_subcycle) call bgcsub_step(iic)    ! BGC tracers: window update + MARBL
     call reg_toc(rg_step3d_t)
 #endif
 !GOOD

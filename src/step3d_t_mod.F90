@@ -72,7 +72,8 @@ contains
   &riv_uflx, riv_vol, riv_trc, riv_vflx,&
   &nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
   use surf_flux, only: stflx, srflx
-  use tracers, only: t, itands, wrt_t_dia, exchange_tracers
+  use tracers, only: t, itands, wrt_t_dia, exchange_tracers, nt_step
+  use bgc_subcycle_mod, only: bgc_physics_subcycle
   use advection, only: t_vadv_pre, t_vadv_cor
 #ifdef MARBL
   use marbl_driver, only: marbldrv_column_physics, iALK, iDIC,&
@@ -195,7 +196,7 @@ contains
 !       write(60,*) 't:          ',t(10,10,20,nnew,1)
 !     endif
 
-  do itrc=1,nt
+  do itrc=1,nt_step
 
 # ifdef ADV_ISONEUTRAL
     k2=1
@@ -938,7 +939,7 @@ enddo     !<-- itrc (horizontal advection and sources)
 ! across tracers, and the per-row vertical-advection coefficients and
 ! implicit-solve factors are computed once and reused by later tracers.
   do j=jstr,jend
-  do itrc=1,nt
+  do itrc=1,nt_step
 
 # include "compute_vert_tracer_fluxes.h"
 
@@ -1225,12 +1226,13 @@ enddo     !<-- itrc (horizontal advection and sources)
   enddo     !<-- itrc
   enddo      !<-- j
 
-do itrc=1,nt
+do itrc=1,nt_step
   call t3dbc_tile (istr,iend,jstr,jend, itrc, wrk1)
 enddo     !<-- itrc
 
 # if defined(MARBL)
-if (is_marbl_step(tstep)) then
+! bgc_physics_subcycle: MARBL runs at the window end in bgcsub_step instead
+if (is_marbl_step(tstep) .and. .not. bgc_physics_subcycle) then
   ! use_constant_Fe (no-op otherwise): MARBL computes with the constant iron;
   ! the step's changes to Fe (transport, boundaries, rivers, MARBL, lateral
   ! mixing) are undone after t3dmix in roms_step
@@ -1247,7 +1249,7 @@ call ecosys_bec2_tile(istr,iend,jstr,jend) ! BEC, 2014
   ! With TS_DIF2/TS_DIF4, t3dmix runs next: it reads only the t(nrhs) halo,
   ! updates the t(nnew) interior and exchanges t(nnew) itself, so an
   ! exchange here would be overwritten unused.
-  call exchange_tracers(nnew)
+  call exchange_tracers(nnew, nt_step)
 # endif
 end subroutine step3d_t_iso_tile
 

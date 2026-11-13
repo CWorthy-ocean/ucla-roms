@@ -48,7 +48,7 @@ contains
     use mg_grids, only: mggrid => grid
 #endif
     use surf_flux, only: sustr, svstr
-    use tracers, only: iTandS, t, exchange_tracers
+    use tracers, only: iTandS, t, exchange_tracers, nt_step
     use advection, only: t_vadv_pre, t_vadv_cor
     use coupling, only: r_d
     use roms_mpi, only: exchange_xxx
@@ -170,7 +170,7 @@ contains
 # define FX UFx
 # define FE VFe
       ! Advance tracer fields
-      do itrc=1,nt                         ! starting with applying
+      do itrc=1,nt_step                    ! starting with applying
         ! horizontal fluxes. Also
 # include "compute_horiz_tracer_fluxes.h"
 !! river included in above include file
@@ -218,7 +218,7 @@ contains
 
     do j=jstr,jend  !! Start of the giant j-loop
 
-      do itrc=1,nt
+      do itrc=1,nt_step
 # include "compute_vert_tracer_fluxes.h"
 
         do k=1,nz
@@ -591,10 +591,10 @@ contains
 
 ! Set PHYSICAL lateral boundary conditions for tracer fields.
 
-    do itrc=1,NT
+    do itrc=1,nt_step
       call t3dbc_tile (istr,iend,jstr,jend, itrc, wrk1)
     enddo
-    call exchange_tracers(nnew)   ! four tracers per MPI exchange
+    call exchange_tracers(nnew, nt_step)   ! four tracers per MPI exchange
 
 # ifdef NHMG
 !======================================================================

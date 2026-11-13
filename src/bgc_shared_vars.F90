@@ -4,12 +4,17 @@ module bgc_shared_vars
 ! # TODO marbldrve_configure_diagnostics for pointers example
 
 #include "cppdefs.opt"
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+  ! The namelist group BGC_SETTINGS and its reader are in every build: with
+  ! MARBL or BIOLOGY_BEC2 the group is required; otherwise it is read only
+  ! when there are tracers beyond T and S, and is optional (namelist_read_mod).
   use namelist_open_mod, only: open_namelist_file
   use error_handling_mod, only: error_log
+  use bgc_forces, only: xco2air_default   ! declared in bgc_forces; read here via BGC_SETTINGS
+  use bgc_subcycle_mod, only: bgc_physics_subcycle, bgc_physics_timestep,&
+  &                           bgc_subcycle_pos, bgc_subcycle_diag   ! BGC tracer subcycling
+#if defined(BIOLOGY_BEC2) || defined(MARBL)
   use param, only: mynode, nt_passive, nt_bgc, lm, mm, nz, nt_cdr_oae, nt_cdr_dor
   use roms_read_write, only: ncforce
-  use bgc_forces, only: xco2air_default   ! declared in bgc_forces; read here via BGC_SETTINGS
   use tracers, only: itands, t_vname, wrt_t, t_lname, t
 #if defined(BIOLOGY_BEC2)
   use tracers, only: ialk, idic, ife, io2, ipo4, isio3, idoc,&
@@ -81,9 +86,11 @@ module bgc_shared_vars
 # endif
        marbldrv_configure_saved_state
 #endif
+#endif /* BIOLOGY_BEC2 || MARBL */
 
   implicit none
   character(len=18) :: module_name = "bgc_shared_vars.F"
+#if defined(BIOLOGY_BEC2) || defined(MARBL)
 ! BGC forcing file settings
   type (ncforce) :: nc_dust = ncforce(&
   &vname='dust', tname='dust_time' ) ! dust forcing
@@ -109,6 +116,7 @@ module bgc_shared_vars
   type (ncforce) :: nc_nhy = ncforce(&
   &vname='nhy', tname='nhy_time' )
 #endif
+#endif /* BIOLOGY_BEC2 || MARBL */
 
   ! note: choice of bgc tracers to output is still selected in tracers.opt.
 
@@ -138,7 +146,10 @@ module bgc_shared_vars
   &output_period_bgc_his_dia, nrpf_bgc_his_dia,&
   &output_period_bgc_avg_dia, nrpf_bgc_avg_dia,&
   &nbgc_flx,&
-  &xco2air_default
+  &xco2air_default,&
+  &bgc_physics_subcycle, bgc_physics_timestep,&
+  &bgc_subcycle_pos, bgc_subcycle_diag   ! testing/expert keys, not in the template
+#if defined(BIOLOGY_BEC2) || defined(MARBL)
 #if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
 !
 ! Diagnostic variables appearing in average and history files:
@@ -171,9 +182,13 @@ module bgc_shared_vars
 
 #endif /* BEC2_DIAG  || MARBL_DIAGS */
 
-  public bgc_precheck, read_nml_bgc
+  public bgc_precheck
+#endif /* BIOLOGY_BEC2 || MARBL */
+  public read_nml_bgc
 
 contains
+
+#if defined(BIOLOGY_BEC2) || defined(MARBL)
 
   subroutine bgc_precheck
 
@@ -268,10 +283,13 @@ contains
 
   end subroutine find_write_bgc_diag  !]
 #endif /* BEC2_DIAG || MARBL_DIAGS */
+#endif /* BIOLOGY_BEC2 || MARBL */
 
   subroutine read_nml_bgc
 
-!     Read the "BGC_SETTINGS" section of the namelist file
+!     Read the "BGC_SETTINGS" section of the namelist file: required with
+!     MARBL or BIOLOGY_BEC2, optional otherwise (absent: BGC subcycling off)
+    use, intrinsic :: iso_fortran_env, only: iostat_end
     integer(kind=4) ::  namelist_unit, ios
     character(len=13) :: sr_name = "read_nml_bgc"
     character(len=512) :: msg = ""
@@ -281,13 +299,21 @@ contains
 
     read (unit=namelist_unit, nml=BGC_SETTINGS, iostat=ios, iomsg=msg)
 
+#if defined(BIOLOGY_BEC2) || defined(MARBL)
     if (ios /= 0) then
+#else
+    if (ios /= 0 .and. ios /= iostat_end) then
+#endif
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
       &info='could not read BGC_SETTINGS section of namelist file: '&
       &//trim(msg)&
       &)
     end if
+#ifndef SOLVE3D
+    if (bgc_physics_subcycle) call error_log%raise_global(&
+    &context=module_name//'/'//sr_name, info='bgc_physics_subcycle requires SOLVE3D')
+#endif
     nbgc_flx = 0+ &
 #ifdef PCO2AIR_FORCING
     &+1&
@@ -299,6 +325,7 @@ contains
     close(namelist_unit)
 
   end subroutine read_nml_bgc
+#if defined(BIOLOGY_BEC2) || defined(MARBL)
 
 
   subroutine init_arrays_bgc_shared_vars
