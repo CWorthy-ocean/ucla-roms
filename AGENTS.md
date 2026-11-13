@@ -153,11 +153,17 @@ another user's files without the user's explicit OK, even to start fresh.
 
 ## Release notes
 
-`ci/update_release_notes.py` collects release notes from merged pull request
-descriptions into `docs/releases/unreleased.rst` on the `next_release_notes`
-branch. Write the Breaking Changes, New Features, Bug Fixes, Improvements, and
-Miscellaneous sections of the description for users of the model. Do not edit
-`docs/releases/` on a branch.
+A pull request with a user-visible change adds its release note as a file,
+`changes/+<name>.<type>.rst`, committed with the code (`<name>` is any short
+label). The types are the `[[tool.towncrier.type]]` entries in
+`towncrier.toml`. `breaking` (a setup that worked now fails or needs an edit)
+and `output` (the same setup still builds and runs, but its results or output
+files differ) are separate types. Write each note for users of the model in one
+line of reStructuredText (code in double backticks), optionally followed by
+`- ` sub-bullets, one file per note. At release time the pull request number is
+filled in and towncrier builds `docs/releases/<tag>.rst` from the files, so do
+not edit `docs/releases/` on a branch. The pull request description is for the
+reviewer. `changes/README.md` has the details.
 
 ## Posting on GitHub
 

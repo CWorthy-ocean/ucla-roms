@@ -1,0 +1,1 @@
+Release notes are now assembled by towncrier from one fragment file per pull request in ``changes/``, instead of being collected from pull request descriptions; ``changes/README.md`` explains how to write one.
