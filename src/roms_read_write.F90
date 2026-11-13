@@ -218,11 +218,13 @@ module roms_read_write
   ! Read handles kept open across records by the serial netCDF reads of the
   ! forcing data (every rank without PARALLEL_IO, rank 0 for ungridded data):
   ! up to max_open_frc files, the least recently used one is closed first.
-  ! They are opened with a small HDF5 chunk cache (frc_chunk_cache bytes per
-  ! variable), since each record is read once and an open netCDF-4 file would
-  ! otherwise keep up to netCDF's default cache per variable read.
+  ! Each record is read once, so a chunk cache would only hold memory: with
+  ! netCDF's default (16 MiB per variable) an open netCDF-4 file keeps the
+  ! chunks it has read, up to that size for every variable read.
+  ! frc_chunk_cache (1 byte; netCDF rejects 0) is smaller than any chunk, so
+  ! HDF5 keeps none.
   integer(kind=4), parameter :: max_open_frc = 8
-  integer(kind=4), parameter :: frc_chunk_cache = 1048576
+  integer(kind=4), parameter :: frc_chunk_cache = 1
   character(len=max_name_size) :: open_frc_name(max_open_frc) = ''
   integer(kind=4) :: open_frc_ncid(max_open_frc) = -1
   integer(kind=8) :: open_frc_used(max_open_frc) = 0
