@@ -12,7 +12,7 @@ module roms_read_write
   &nf90_netcdf4, nf90_global, nf90_enotatt, nf90_open,&
   &nf90_inq_varid, nf90_get_att, nf90_close, nf90_create,&
   &nf90_put_att, nf90_inquire_variable, nf90_inquire_dimension,&
-  &nf90_get_var, nf90_clobber, nf90_64bit_data
+  &nf90_get_var, nf90_clobber, nf90_64bit_data, nf90_max_name, nf90_inquire
   use scalars, only: time, dt, sec2day, tdays, akt_bak, akv_bak
   use nc_read_write, only: nccreate, ncread
   use dimensions, only:&
@@ -189,6 +189,31 @@ module roms_read_write
   ! (when an earlier record exists), as the continuous run has.
   logical, public :: frc_restart_exact = .false.
   integer(kind=4), allocatable, public :: ifile_max_recs(:)   ! records in each forcing file
+
+  ! Forcing-file metadata cache of find_new_record. The record search used to
+  ! open the forcing file (nf90_open/nf90_close) and read the time values one
+  ! at a time for every variable at every new record; under PARALLEL_IO rank 0
+  ! does this while all other ranks wait in the broadcast that follows. The
+  ! first search in a file now records the names of its variables, and the
+  ! first search for a time variable reads that variable's values (and its
+  ! cycle_length attribute) once; later searches use the cached copies and do
+  ! not open the file. The values are the ones the element-wise reads returned,
+  ! so the record chosen is the same. Slots 1..max_frc are frcfiles(1..max_frc);
+  ! the ungridded files (named by the caller) follow.
+  type frc_time_axis
+    character(len=nf90_max_name)        :: tname = ''
+    logical                             :: cyclic = .false.  ! has a cycle_length attribute
+    real(kind=8)                        :: cycle_length = -1._8
+    real(kind=8), allocatable           :: t(:)              ! all values of tname
+  end type frc_time_axis
+  type frc_file_meta
+    character(len=max_name_size)        :: fname = ''
+    logical                             :: loaded = .false.  ! vnames holds the file's variables
+    character(len=nf90_max_name), allocatable :: vnames(:)
+    type(frc_time_axis), allocatable    :: tax(:)
+  end type frc_file_meta
+  type(frc_file_meta), allocatable :: frc_meta(:)
+  integer(kind=4) :: n_frc_meta = 0       ! slots in use beyond max_frc (ungridded files)
 
 #if defined MPI && defined PARALLEL_FILES
 !      integer, public ::  xi_rho, xi_u, eta_rho, eta_v
@@ -1028,22 +1053,18 @@ contains
     logical, optional             ,intent(out)  :: var_absent    ! .true. if var was not in any file
     logical, optional             ,intent(in)   :: first_fill    ! set_frc_data is filling both slots for the first time
     character(len=*), optional    ,intent(in)   :: hint          ! appended to the error if the var is in no file
-    integer(kind=4), dimension(1) :: dimids     ! time dimension ID
     real(kind=8)    :: time_old
     logical :: found_var                ! is variable in file
     logical :: found_rec                ! is correct record found of var
     logical :: found_var_ever           ! if variable was found in any previous files
     logical :: allow_miss
-    integer(kind=4) :: ncid, ierr
     integer(kind=4) :: nfiles                   ! total number of forcing files
     integer(kind=4) :: irec_old, ifile_old
     integer(kind=4) :: max_recs                 ! total variable records in file
-    integer(kind=4) :: vid,tid                  ! ID's of variable and its time
+    integer(kind=4) :: islot, itax              ! cache slot of the file and of its time variable
     real(kind=8)    :: cycle_length             ! cyclical data
     logical :: first                    ! first time call for this variable
     logical :: exact_rst                ! initial search of an exact restart (see frc_restart_exact)
-
-    real(kind=8),dimension(1)    :: ltime
 
     allow_miss = .false.
     if (present(allow_missing)) allow_miss = allow_missing
@@ -1071,58 +1092,34 @@ contains
 
       found_var = .false.                                          ! reset for new file
       if (present(ungridded_filename)) then
-        ierr = nf90_open(ungridded_filename, nf90_nowrite, ncid)
-        if (ierr/=nf90_noerr) then
-          call error_log%check_netcdf_status(&
-          &netcdf_status=ierr,&
-          &context=module_name//"/"//sr_name,&
-          &info=("error opening "//ungridded_filename))
-        end if
+        islot = frc_meta_slot(ifile, ungridded_filename)
       else
-        ierr = nf90_open(frcfiles(ifile), nf90_nowrite, ncid)
-        if (ierr/=nf90_noerr) then
-          call error_log%check_netcdf_status(&
-          &netcdf_status=ierr,&
-          &context=module_name//"/"//sr_name,&
-          &info=("error opening "//frcfiles(ifile)))
-        endif
+        islot = frc_meta_slot(ifile)
       end if
-      ierr = nf90_inq_varid(ncid, vname,vid)                       ! check if this file contains the variable
 
-      if (ierr==nf90_noerr) then                                   ! variable found, now check if file times contain m
+      if (frc_file_has_var(islot, vname)) then                     ! variable found, now check if file times contain m
 
         found_var      = .true.
         found_var_ever = .true.
 
-        ierr = nf90_inq_varid(ncid,tname,tid)                      ! get time ID
-        if (ierr/=nf90_noerr) then
-          call error_log%check_netcdf_status(netcdf_status=ierr,&
-          &context=module_name//"/"//sr_name,&
-          &info="error searching for "//tname)
-        end if
+        itax = frc_time_axis_index(islot, tname)                   ! time values and cycle_length, read once
         ! Check if the time has a cycle length
-        ierr=nf90_get_att(ncid, tid, 'cycle_length', cycle_length)
-        if (ierr==nf90_noerr) then
-          call find_new_record_cycle(ncid,tid,time,irec,vtime,cycle_length,first,exact_rst)
+        if (frc_meta(islot)%tax(itax)%cyclic) then
+          cycle_length = frc_meta(islot)%tax(itax)%cycle_length
+          call find_new_record_cycle(frc_meta(islot)%tax(itax)%t,time,irec,vtime,cycle_length,first,exact_rst)
           found_rec = .true.
-        elseif (ierr==nf90_enotatt) then                           ! non-cyclical var won't have attribute
-          cycle_length = -1                                        ! nf90_enotatt = attribute not found
-        else                   ! any other netcdf error is a problem.
-          call error_log%check_netcdf_status(netcdf_status=ierr,&
-          &context=module_name//"/"//sr_name,&
-          &info="error getting cycle_length attribute")
+        else                                                       ! non-cyclical var won't have attribute
+          cycle_length = -1
         endif
 
         ! Number of records in file
-        ierr = nf90_inquire_variable(ncid,tid, dimids = dimids)
-        ierr = nf90_inquire_dimension(ncid, dimids(1), len=max_recs)
+        max_recs = size(frc_meta(islot)%tax(itax)%t)
         ifile_max_recs(ifile) = max_recs
         do while (irec<max_recs .and. .not. found_rec)             ! Search through the records until correct time is
 
           irec_stride = irec_stride+1
-          irec=irec+1                                              ! why not use ncread????
-          ierr=nf90_get_var(ncid,tid,ltime,(/irec/), (/1/))        ! Get vtime (nf90 needs array hence syntax)
-          vtime = ltime(1)
+          irec=irec+1
+          vtime = frc_meta(islot)%tax(itax)%t(irec)
 
           found_rec = vtime>time                                   ! correct time
           if (vtime==time .and. exact_rst) then                   ! see frc_restart_exact
@@ -1151,7 +1148,7 @@ contains
           ! error: stop searching so the found_var_ever check below can return
           ! var_absent. raise_from_rank only logs, so raising here would still
           ! abort the run at the next abort_check(). End the search through the
-          ! loop condition rather than 'exit' so that ncid is still closed below.
+          ! loop condition rather than 'exit'.
           if (allow_miss .and. .not.found_var_ever) then
             ifile = max_frc + 1
           else
@@ -1164,8 +1161,6 @@ contains
           endif
         endif
       endif
-
-      ierr=nf90_close (ncid)
 
     enddo                            ! search through files: while .not. found_rec .and. ifile<=nfiles.
 
@@ -1218,14 +1213,13 @@ contains
     endif
   end subroutine find_new_record  !]
 ! ----------------------------------------------------------------------
-  subroutine find_new_record_cycle(ncid,tid,time,irec,vtime,cycle_length,first,exact_rst) ![
+  subroutine find_new_record_cycle(tim,time,irec,vtime,cycle_length,first,exact_rst) ![
     ! Find the first record that has vtime>time, or if it's
     ! the first time calling, the record preceeding that one.
     implicit none
     character(len=22) :: sr_name = "find_new_record_cycle"
     ! input/output
-    integer(kind=4)                       ,intent(in)  :: ncid ! Handle of open netcdf file
-    integer(kind=4)                       ,intent(in)  :: tid  ! ID of time variable
+    real(kind=8),dimension(:)             ,intent(in)  :: tim  ! all values of the time variable
     real(kind=8)                          ,intent(in)  :: time ! target time
     integer(kind=4)                       ,intent(out) :: irec ! correct record number
     real(kind=8)                          ,intent(out) :: vtime! correct record time
@@ -1234,16 +1228,10 @@ contains
     logical                       ,intent(in)  :: exact_rst   ! see frc_restart_exact
 
     ! local
-    integer(kind=4)                       :: icycle,max_rec,ierr
-    integer(kind=4), dimension(1) :: dimids     ! time dimension ID
-    real(kind=8),allocatable,dimension(:) :: tim
+    integer(kind=4)                       :: icycle,max_rec
 
     ! Number of records in file
-    ierr = nf90_inquire_variable(ncid,tid, dimids = dimids)
-    ierr = nf90_inquire_dimension(ncid, dimids(1), len=max_rec)
-
-    allocate(tim(max_rec))
-    ierr=nf90_get_var(ncid,tid,tim)
+    max_rec = size(tim)
 
     icycle = floor((time - tim(max_rec))/cycle_length) + 1
 
@@ -1264,9 +1252,149 @@ contains
       vtime = tim(irec) + icycle*cycle_length
     endif
 
-    deallocate(tim)
-
   end subroutine find_new_record_cycle !]
+! ----------------------------------------------------------------------
+  function frc_meta_slot(ifile, ungridded_filename) result(islot) ![
+    ! Slot of the metadata cache for frcfiles(ifile), or for the named
+    ! ungridded file when ungridded_filename is present.
+    implicit none
+    integer(kind=4), intent(in)             :: ifile
+    character(len=*), optional, intent(in)  :: ungridded_filename
+    integer(kind=4) :: islot
+    type(frc_file_meta), allocatable :: grown(:)
+    integer(kind=4) :: k
+
+    if (.not. allocated(frc_meta)) then
+      allocate(frc_meta(max_frc + 4))
+      frc_meta(1:max_frc)%fname = frcfiles(1:max_frc)
+      n_frc_meta = 0
+    endif
+
+    if (.not. present(ungridded_filename)) then
+      islot = ifile
+      return
+    endif
+
+    do k = max_frc + 1, max_frc + n_frc_meta
+      if (trim(frc_meta(k)%fname) == trim(ungridded_filename)) then
+        islot = k
+        return
+      endif
+    enddo
+    if (max_frc + n_frc_meta == size(frc_meta)) then
+      allocate(grown(2*size(frc_meta)))
+      grown(1:size(frc_meta)) = frc_meta
+      call move_alloc(grown, frc_meta)
+    endif
+    n_frc_meta = n_frc_meta + 1
+    islot = max_frc + n_frc_meta
+    frc_meta(islot)%fname = ungridded_filename
+
+  end function frc_meta_slot !]
+! ----------------------------------------------------------------------
+  function frc_file_has_var(islot, vname) result(has_var) ![
+    ! Is vname a variable of the file in cache slot islot? The first call for
+    ! a file records the names of all its variables.
+    implicit none
+    character(len=16) :: sr_name = "frc_file_has_var"
+    integer(kind=4), intent(in)  :: islot
+    character(len=*), intent(in) :: vname
+    logical :: has_var
+    integer(kind=4) :: ncid, ierr, nvars, iv
+
+    has_var = .false.
+    if (.not. frc_meta(islot)%loaded) then
+      ierr = nf90_open(frc_meta(islot)%fname, nf90_nowrite, ncid)
+      if (ierr/=nf90_noerr) then
+        call error_log%check_netcdf_status(&
+        &netcdf_status=ierr,&
+        &context=module_name//"/"//sr_name,&
+        &info=("error opening "//trim(frc_meta(islot)%fname)))
+        return                                   ! not cached: the next search reports it again
+      endif
+      ierr = nf90_inquire(ncid, nVariables=nvars)
+      allocate(frc_meta(islot)%vnames(nvars))
+      do iv = 1, nvars
+        ierr = nf90_inquire_variable(ncid, iv, name=frc_meta(islot)%vnames(iv))
+      enddo
+      ierr = nf90_close(ncid)
+      allocate(frc_meta(islot)%tax(0))
+      frc_meta(islot)%loaded = .true.
+    endif
+
+    has_var = any(frc_meta(islot)%vnames == trim(vname))
+
+  end function frc_file_has_var !]
+! ----------------------------------------------------------------------
+  function frc_time_axis_index(islot, tname) result(itax) ![
+    ! Index into frc_meta(islot)%tax of the time variable tname: on the first
+    ! call for this file and tname, read all its values and its cycle_length
+    ! attribute. Errors are raised as the element-wise search raised them; the
+    ! entry then has no records, and the run aborts at the next abort_check.
+    implicit none
+    character(len=19) :: sr_name = "frc_time_axis_index"
+    integer(kind=4), intent(in)  :: islot
+    character(len=*), intent(in) :: tname
+    integer(kind=4) :: itax
+    type(frc_time_axis), allocatable :: grown(:)
+    integer(kind=4) :: ncid, tid, ierr, nrec, n
+    integer(kind=4), dimension(1) :: dimids
+
+    n = size(frc_meta(islot)%tax)
+    do itax = 1, n
+      if (trim(frc_meta(islot)%tax(itax)%tname) == trim(tname)) return
+    enddo
+
+    allocate(grown(n+1))
+    grown(1:n) = frc_meta(islot)%tax
+    call move_alloc(grown, frc_meta(islot)%tax)
+    itax = n + 1
+    frc_meta(islot)%tax(itax)%tname = tname
+
+    ierr = nf90_open(frc_meta(islot)%fname, nf90_nowrite, ncid)
+    if (ierr/=nf90_noerr) then
+      call error_log%check_netcdf_status(&
+      &netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name,&
+      &info=("error opening "//trim(frc_meta(islot)%fname)))
+      allocate(frc_meta(islot)%tax(itax)%t(0))
+      return
+    endif
+    ierr = nf90_inq_varid(ncid,tname,tid)                      ! get time ID
+    if (ierr/=nf90_noerr) then
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name,&
+      &info="error searching for "//tname)
+      allocate(frc_meta(islot)%tax(itax)%t(0))
+      ierr = nf90_close(ncid)
+      return
+    end if
+    ! Check if the time has a cycle length
+    ierr=nf90_get_att(ncid, tid, 'cycle_length', frc_meta(islot)%tax(itax)%cycle_length)
+    if (ierr==nf90_noerr) then
+      frc_meta(islot)%tax(itax)%cyclic = .true.
+    elseif (ierr==nf90_enotatt) then                           ! non-cyclical var won't have attribute
+      frc_meta(islot)%tax(itax)%cyclic = .false.               ! nf90_enotatt = attribute not found
+      frc_meta(islot)%tax(itax)%cycle_length = -1._8
+    else                   ! any other netcdf error is a problem.
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name,&
+      &info="error getting cycle_length attribute")
+    endif
+
+    ! Number of records in file, and all their times
+    ierr = nf90_inquire_variable(ncid,tid, dimids = dimids)
+    ierr = nf90_inquire_dimension(ncid, dimids(1), len=nrec)
+    allocate(frc_meta(islot)%tax(itax)%t(nrec))
+    ierr = nf90_get_var(ncid, tid, frc_meta(islot)%tax(itax)%t)
+    if (ierr/=nf90_noerr) then
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name,&
+      &info="error reading "//trim(tname)//" from "//trim(frc_meta(islot)%fname))
+    end if
+    ierr = nf90_close(ncid)
+
+  end function frc_time_axis_index !]
 ! ----------------------------------------------------------------------
   subroutine abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file) ![
     ! find_new_record only records its failures ("First available forcing
