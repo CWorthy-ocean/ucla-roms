@@ -87,6 +87,8 @@ module marbl_driver
 !     sources and sinks (see marbldrv_impose_constant_fe)
   logical, public :: use_constant_Fe = .false.
   real(kind=8), public :: constant_Fe_value = 3.0e-3_8
+!     Column balancing across ranks (see "Column balancing" below)
+  logical, public :: marbl_balance = .false.
 
   namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
   &marbl_timestep, marbl_tracers_to_write,&
@@ -167,7 +169,7 @@ module marbl_driver
 !     inputs of their excess columns to ranks with fewer, which compute
 !     them and send the outputs back. Static plan from the wet-column
 !     counts (bal_setup); records: col_pack, col_compute, col_unpack.
-  logical, public :: marbl_balance = .false.
+!     The switch marbl_balance is declared with the namelist variables above.
   logical :: bal_ready = .false.
   integer(kind=4) :: nrin, nrout                 ! input / output record lengths
   integer(kind=4) :: o_sf, o_t, o_s, o_zr, o_zw, o_hz, o_tr, o_s2, o_s3   ! input offsets
