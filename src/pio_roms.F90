@@ -45,6 +45,10 @@ module pio_roms
   ! it to decide whether a re-open is needed, and pio_inq_varid_or_abort uses
   ! it to name the file in its error message.
   character(len=max_name_size), public :: pio_current_file = ''
+  ! Files whose format pio_open_or_abort has checked before opening them
+  ! read-only (rank 0 only; see pio_warn_netcdf4_input).
+  character(len=max_name_size), allocatable :: fmt_checked_file(:)
+  integer(kind=4) :: n_fmt_checked = 0
   !> @brief Rank of processor running the code.
   integer(kind=4), public :: pio_myRank
   !> @brief Number of processors participating in MPI communicator.
@@ -1831,6 +1835,8 @@ contains
     ! rather than relying on each caller to remember an abort_check.
     call error_log%abort_check()
 
+    if (.not. present(mode)) call pio_warn_netcdf4_input(fname)
+
     call PIO_seterrorhandling(pio_IoSystem, PIO_BCAST_ERROR, old_method)
     if (present(mode)) then
       ierr = PIO_openfile(pio_IoSystem, pio_FileDesc, pio_type, trim(fname), mode)
@@ -1849,6 +1855,49 @@ contains
     endif
 
   end subroutine pio_open_or_abort !]
+! ----------------------------------------------------------------------
+  subroutine pio_warn_netcdf4_input(fname) ![
+    ! Warn, once per file, that a file about to be opened read-only is
+    ! netCDF-4 (HDF5). PIO opens it with PnetCDF (pio_type), which cannot
+    ! read netCDF-4, so PIO falls back to serial netCDF: I/O rank 0 reads the
+    ! part of every I/O task in turn while the other ranks wait. The values
+    ! are the same, but the read is slow and gets slower as the rank count
+    ! grows. Rank 0 only, with no communication: one open, inquire and close
+    ! per new file name. A file that cannot be opened is left for
+    ! PIO_openfile to report.
+    use netcdf, only: nf90_open, nf90_close, nf90_inquire, nf90_nowrite, nf90_noerr,&
+    &nf90_format_netcdf4, nf90_format_netcdf4_classic
+    implicit none
+    character(len=*), intent(in) :: fname
+    character(len=max_name_size), allocatable :: grown(:)
+    integer(kind=4) :: k, ierr, ncid, fmt
+
+    if (mynode /= 0) return
+    do k = 1, n_fmt_checked
+      if (fmt_checked_file(k) == fname) return
+    enddo
+    if (.not. allocated(fmt_checked_file)) then
+      allocate(fmt_checked_file(16))
+    elseif (n_fmt_checked == size(fmt_checked_file)) then
+      allocate(grown(2*n_fmt_checked))
+      grown(1:n_fmt_checked) = fmt_checked_file
+      call move_alloc(grown, fmt_checked_file)
+    endif
+    n_fmt_checked = n_fmt_checked + 1
+    fmt_checked_file(n_fmt_checked) = fname
+
+    ierr = nf90_open(trim(fname), nf90_nowrite, ncid)
+    if (ierr /= nf90_noerr) return
+    ierr = nf90_inquire(ncid, formatNum=fmt)
+    if (ierr == nf90_noerr .and. (fmt == nf90_format_netcdf4 .or. fmt == nf90_format_netcdf4_classic)) then
+      write(*,'(/1x,3A/3x,A/3x,A/3x,A/)') 'WARNING: input file ''', trim(fname), ''' is netCDF-4.',&
+      &'PnetCDF cannot read netCDF-4, so PIO reads this file serially through one rank,',&
+      &'which is slow and gets slower as the number of ranks grows.',&
+      &'Convert it to CDF5 for parallel reads, e.g. nccopy -k cdf5 in.nc out.nc'
+    endif
+    ierr = nf90_close(ncid)
+
+  end subroutine pio_warn_netcdf4_input !]
 ! ----------------------------------------------------------------------
   subroutine pio_inq_varid_or_abort(varName, varId, context) ![
     ! Look up varName in the currently open pio_FileDesc, aborting with a
