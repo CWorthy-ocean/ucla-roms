@@ -151,6 +151,28 @@ def test_implicit_fs_stops(implicit_fs_configuration, input_dir, tmp_path, case)
     )
 
 
+def test_implicit_fs_non_finite_stop(implicit_fs_configuration, input_dir, tmp_path):
+    """A NaN that reaches the free-surface solve stops ROMS at the first solve, at
+    iteration 0, instead of iterating to fs_maxit and stopping as unconverged.
+
+    One wet interior point of rank 0's initial sea level is set to NaN.
+    """
+    nan_dir = tmp_path / "nan_inputs"
+    nan_dir.mkdir()
+    for path in input_dir.glob("example_input_bgc_initial_conditions.*.nc"):
+        ds = xr.load_dataset(path, decode_cf=False)
+        if path.name.endswith(".0.nc"):
+            ds["zeta"][..., 5, 5] = np.nan
+        ds.to_netcdf(nan_dir / path.name)
+    nml = implicit_fs_namelist(input_dir)
+    nml["INITIAL_CONDITIONS"]["inifile"] = str(nan_dir / "example_input_bgc_initial_conditions.nc")
+    assert_run_rejected(
+        implicit_fs_configuration, nml, tmp_path,
+        ["the free-surface solve met a non-finite residual norm (step 1, iteration 0)"],
+        label="non_finite", absent=["did not converge", "FS_STAT"],
+    )
+
+
 def test_implicit_fs_rivers_and_pipes(implicit_fs_configuration, input_dir, tmp_path):
     """River and pipe volume sources: the river faces carry the river transport,
     the pipe volume reaches the free surface, and the volume budget closes."""
