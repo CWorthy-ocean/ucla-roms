@@ -775,8 +775,33 @@ contains
         wd(i,j) = h(i,j) + zeta(i,j,ks)
       enddo
     enddo
-    au = 0._8 ; av = 0._8 ; cu = 0._8 ; cv = 0._8 ; ftu = 0._8 ; ftv = 0._8 ; usu = 0._8 ; usv = 0._8
-    rb = 0._8 ; cbu = 0._8 ; cbv = 0._8
+    ! au, av, cu, cv, ftu, ftv, usu, usv, cbu, cbv are set below on every face they are read on (elsewhere they
+    ! keep the zeros of fs_alloc; the halo faces read come from the exchange E1); rb accumulates the Robin terms
+    ! of the open edges on the edge cells (zero elsewhere), so only those are cleared
+#ifndef EW_PERIODIC
+    if (WESTERN_EDGE) then
+      do j=jstr,jend
+        rb(istr,j) = 0._8
+      enddo
+    endif
+    if (EASTERN_EDGE) then
+      do j=jstr,jend
+        rb(iend,j) = 0._8
+      enddo
+    endif
+#endif
+#ifndef NS_PERIODIC
+    if (SOUTHERN_EDGE) then
+      do i=istr,iend
+        rb(i,jstr) = 0._8
+      enddo
+    endif
+    if (NORTHERN_EDGE) then
+      do i=istr,iend
+        rb(i,jend) = 0._8
+      enddo
+    endif
+#endif
     do j=jstrR,jendR
       do i=istr,iend+1
         unu(i,j) = 0.5_8*(wd(i-1,j)+wd(i,j))*dn_u(i,j)*ubar(i,j,ks)
@@ -1047,8 +1072,9 @@ contains
 #endif
     call tq(1)                              ! Qbar = Q (the volume the 3-D step adds: omega, step3d_t)
 
-    ! ---- (C) halos of the face coefficients and explicit fluxes (E1)
-    call exchange_xxx(cu, cv, ftu, ftv)
+    ! ---- (C) halos of the face coefficients and explicit fluxes (E1): read only on the tile's eastern and
+    ! northern faces (D, fs_apply, the multigrid coarsening), so one cell without corners
+    call exchange_xxx(cu, cv, ftu, ftv, exch_bf=1, do_corn=.false.)
     call tq(2)
 
     ! ---- (D) operator diagonal, rhs
@@ -1101,9 +1127,17 @@ contains
     end if
 
     ! ---- (F) momentum and fluxes on owned faces
-    call exchange_xxx(xx)                                    ! E2
+    call exchange_xxx(xx, exch_bf=1, do_corn=.false.)        ! E2: read by (F) and the next solve's fs_apply
     call tq(10)
-    fbu = 0._8 ; fbv = 0._8 ; u1u = 0._8 ; u1v = 0._8
+    ! u1u, u1v, fbu, fbv are set on the owned faces (u1u, u1v elsewhere keep the zeros of fs_alloc); the rates
+    ! below also run over the tile's eastern and northern face, whose fbu, fbv hold the last E3's halo values:
+    ! zero them (the edge code sets them on an open eastern or northern edge)
+    do j=jstr,jend
+      fbu(iend+1,j) = 0._8
+    enddo
+    do i=istr,iend
+      fbv(i,jend+1) = 0._8
+    enddo
     do j=jstr,jend
       do i=istrU,iend
         d = xx(i-1,j) - xx(i,j)
@@ -1195,7 +1229,7 @@ contains
     end if
     ga_first = .false.
     call tq(9)
-    call exchange_xxx(fbu, fbv)                              ! E3
+    call exchange_xxx(fbu, fbv, exch_bf=1, do_corn=.false.)  ! E3: read on the eastern and northern faces
     call tq(10)
 
     ! ---- (G) zeta^n+1 from the exact divergence; boundary rho points
@@ -1216,7 +1250,11 @@ contains
     enddo
     call fs_zeta_bc(istr,iend,jstr,jend, .false., ks, kn)
     call tq(9)
-    call exchange_xxx(zeta(:,:,kn))                          ! E4a
+    if (k < fs_nsub) then                   ! E4a of a sub-step: read one cell wide with corners (B, H)
+      call exchange_xxx(zeta(:,:,kn), exch_bf=1)             ! E4a
+    else                                    ! the last: set_depth and the 3-D step read the full halo
+      call exchange_xxx(zeta(:,:,kn))                        ! E4a
+    end if
     call fs_zeta_bc(istr,iend,jstr,jend, .true., ks, kn)   ! boundary rho points in the halo rows
     call tq(10)
 
@@ -1320,11 +1358,30 @@ contains
         vbar(i,j,kn) = 2._8*u1v(i,j)/(dm_v(i,j)*(wd(i,j-1)+wd(i,j)))
       enddo
     endif
-    if (fs_nsub > 1) then                   ! sums over the sub-steps of Fbar and of DU_avg2 (all the faces it is set on)
+    if (fs_nsub > 1) then                   ! sums over the sub-steps of Fbar (the faces read after the step: the
+      ! tile's faces and its eastern / northern face) and of DU_avg2 (all the faces it is set on)
       if (k == 1) then
-        fsu = fbu ; fsv = fbv
+        do j=jstr,jend
+          do i=istr,iend+1
+            fsu(i,j) = fbu(i,j)
+          enddo
+        enddo
+        do j=jstr,jend+1
+          do i=istr,iend
+            fsv(i,j) = fbv(i,j)
+          enddo
+        enddo
       else
-        fsu = fsu + fbu ; fsv = fsv + fbv
+        do j=jstr,jend
+          do i=istr,iend+1
+            fsu(i,j) = fsu(i,j) + fbu(i,j)
+          enddo
+        enddo
+        do j=jstr,jend+1
+          do i=istr,iend
+            fsv(i,j) = fsv(i,j) + fbv(i,j)
+          enddo
+        enddo
       end if
       do j=jstrR,jendR
         do i=istrR,iendR
@@ -1338,7 +1395,7 @@ contains
     end if
     if (k < fs_nsub) then
       call tq(9)
-      call exchange_xxx(ubar(:,:,kn),vbar(:,:,kn))           ! E4b of the sub-step
+      call exchange_xxx(ubar(:,:,kn),vbar(:,:,kn), exch_bf=1)   ! E4b of the sub-step (one cell, corners)
       call tq(10)
     end if
     enddo                                   ! sub-steps
@@ -1347,7 +1404,16 @@ contains
       ! DU_avg2 = the mean flux of the sub-steps: zeta^n+1 = zeta^n - dt pm pn Div(DU_avg2) + dt Q (to rounding);
       ! fbu, fbv likewise for the step's volume check
       rn = 1._8/real(fs_nsub,8)
-      fbu = rn*fsu ; fbv = rn*fsv
+      do j=jstr,jend
+        do i=istr,iend+1
+          fbu(i,j) = rn*fsu(i,j)
+        enddo
+      enddo
+      do j=jstr,jend+1
+        do i=istr,iend
+          fbv(i,j) = rn*fsv(i,j)
+        enddo
+      enddo
       do j=jstrR,jendR
         do i=istrR,iendR
           DU_avg2(i,j) = rn*asu(i,j) ; DV_avg2(i,j) = rn*asv(i,j)
@@ -2060,12 +2126,17 @@ contains
 
   !----------------------------------------------------------------------
   subroutine fs_pcg(its, resid, conv)
-    ! PCG for A delta = b (section 3): x = xx (warm start: last delta), b = bb.
+    ! PCG for A delta = b (section 3): x = xx (warm start: last delta), b = bb. The halo of xx is current: the
+    ! exchange E2 of the last solve, fs_rst_get, or xx = 0 everywhere (fs_warm = 0, the self-tests).
     ! One halo exchange of p and two MPI_Allreduce per iteration. Stops when
     ! sqrt(sum r^2/ar) <= fs_tol sqrt(sum b^2/ar). resid: the final relative residual.
+    ! Multigrid: the reduction of <p,q> also carries <r,q> and <q,q> (area-weighted), which give the new
+    ! residual norm |r - alpha q|^2 = |r|^2 - 2 alpha <r,q> + alpha^2 <q,q> before the preconditioner. When that
+    ! estimate is near the tolerance, the norm is computed directly (one more MPI_Allreduce, about once per
+    ! solve) and, if converged, the solve ends without the V-cycle of the final residual, which would not be
+    ! used. The stopping test uses the directly computed norm as before: same iterates, same iteration count.
     use param, only: ocean_grid_comm
     use grid, only: pm, pn
-    use roms_mpi, only: exchange_xxx
     use mpi_f08, only: mpi_wtime, mpi_allreduce, mpi_double_precision, mpi_sum
     implicit none
     integer(kind=4), intent(out) :: its
@@ -2073,9 +2144,8 @@ contains
     logical, intent(out) :: conv
     integer(kind=4) :: i, j, ierr
     real(kind=8) :: loc(4), glob(4), rz, rznew, alpha, beta, pq, tol2, bn2, zq
+    real(kind=8) :: lpq(3), gpq(3), rn2, w, rloc(1), rglob(1)
     conv = .true. ; its = 0 ; resid = 0._8
-    call exchange_xxx(xx)
-    call tq(6)
     call fs_apply(xx, qq)
     call tq(4)
     loc = 0._8
@@ -2088,7 +2158,11 @@ contains
     enddo
     call tq(3)
     call fs_precond_apply(rr, zz, loc(1), loc(2), zq)
-    pp = zz
+    do j=jb0,jb1                           ! (the halo of p is exchanged before it is read)
+      do i=ib0,ib1
+        pp(i,j) = zz(i,j)
+      enddo
+    enddo
     call tq(3)
     call mpi_allreduce(loc, glob, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     call tq(7)
@@ -2096,9 +2170,11 @@ contains
     if (bn2 <= 0._8) then
       xx = 0._8 ; return
     end if
+    if (.not. fs_finite(glob(2))) call fs_nan_stop('residual norm', 0)
     tol2 = fs_tol*fs_tol*bn2
     resid = sqrt(glob(2)/bn2)
     if (glob(2) <= tol2) return
+    rn2 = glob(2)
     conv = .false.
     do its=1,fs_maxit
       call fs_exch1(pp)
@@ -2111,9 +2187,24 @@ contains
           loc(1) = loc(1) + pp(i,j)*qq(i,j)
         enddo
       enddo
-      call tq(8)
+      if (mg_on) then
+        lpq(1) = loc(1) ; lpq(2) = 0._8 ; lpq(3) = 0._8
+        do j=jb0,jb1
+          do i=ib0,ib1
+            w = act(i,j)*pm(i,j)*pn(i,j)
+            lpq(2) = lpq(2) + w*rr(i,j)*qq(i,j)
+            lpq(3) = lpq(3) + w*qq(i,j)*qq(i,j)
+          enddo
+        enddo
+        call tq(8)
+        call mpi_allreduce(lpq, gpq, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+        pq = gpq(1)
+      else
+        call tq(8)
         call mpi_allreduce(loc(1), pq, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+      end if
       call tq(7)
+      if (.not. fs_finite(pq)) call fs_nan_stop('<p,q>', its)
       alpha = rz/pq
       do j=jb0,jb1
         do i=ib0,ib1
@@ -2122,11 +2213,31 @@ contains
         enddo
       enddo
       call tq(8)
+      if (mg_on) then
+        if (rn2 - 2._8*alpha*gpq(2) + alpha*alpha*gpq(3) <= 4._8*tol2) then
+          rloc(1) = 0._8                   ! the sum of fs_precond_apply's rr
+          do j=jb0,jb1
+            do i=ib0,ib1
+              rloc(1) = rloc(1) + act(i,j)*rr(i,j)*rr(i,j)*pm(i,j)*pn(i,j)
+            enddo
+          enddo
+          call tq(8)
+          call mpi_allreduce(rloc, rglob, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+          call tq(7)
+          if (.not. fs_finite(rglob(1))) call fs_nan_stop('residual norm', its)
+          if (rglob(1) <= tol2) then
+            resid = sqrt(rglob(1)/bn2)
+            conv = .true. ; exit
+          end if
+        end if
+      end if
       call fs_precond_apply(rr, zz, loc(1), loc(2), loc(3))
       call tq(5)
         call mpi_allreduce(loc, glob, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
       call tq(7)
       rznew = glob(1)
+      if (.not. fs_finite(glob(2))) call fs_nan_stop('residual norm', its)
+      rn2 = glob(2)
       resid = sqrt(glob(2)/bn2)
       if (glob(2) <= tol2) then
         conv = .true. ; exit
@@ -2146,6 +2257,32 @@ contains
     enddo
     its = min(its, fs_maxit)
   end subroutine fs_pcg
+
+  logical function fs_finite(x)
+    ! x is neither NaN nor +-Inf (exponent bits, not a comparison, so that no optimization that
+    ! assumes finite values can remove the test)
+    implicit none
+    real(kind=8), intent(in) :: x
+    fs_finite = (ibits(transfer(x, 0_8), 52, 11) /= 2047)
+  end function fs_finite
+
+  subroutine fs_nan_stop(what, it)
+    ! A non-finite <p,q> or residual norm in fs_pcg: the run is unstable. Stop it instead of
+    ! iterating to fs_maxit with NaNs, through the error log as diag's BLOWUP does (the error is
+    ! raised on rank 0, every rank calls abort_check; the reduced values are the same on every rank,
+    ! so every rank comes here). The GPU code's fs_pcg has the same test.
+    use error_handling_mod, only: error_log
+    use param, only: mynode
+    use scalars, only: iic
+    implicit none
+    character(len=*), intent(in) :: what
+    integer(kind=4), intent(in) :: it
+    character(len=200) :: msg
+    write(msg, '(A,A,A,I0,A,I0,A)') 'IMPLICIT_FS: the free-surface solve met a non-finite ', what, ' (step ',&
+    &  iic, ', iteration ', it, '): the run is unstable'
+    if (mynode == 0) call error_log%raise_global(context=trim(module_name)//"/fs_pcg", info=trim(msg))
+    call error_log%abort_check()
+  end subroutine fs_nan_stop
 
   !----------------------------------------------------------------------
   subroutine fs_selftest_run
@@ -3123,8 +3260,8 @@ contains
     implicit none
     integer(kind=4), intent(in) :: nx, ny
     real(kind=8), dimension(0:nx+1,0:ny+1), intent(in) :: e, cw, cs
-    integer(kind=4) :: i, j, k, kk, n, b, c, r, m
-    real(kind=8) :: s
+    integer(kind=4) :: i, j, k, kk, n, b, c, r, m, c2
+    real(kind=8) :: d, l
     n = mg_nc ; b = mg_bw
     mg_ab = 0._8
     do j=1,ny
@@ -3160,19 +3297,22 @@ contains
       i = mod(k-1, nx) + 1 ; j = (k-1)/nx + 1
       if (e(i,j) <= 0._8) mg_ab(1:min(b,n-k),k) = 0._8
     enddo
-    ! factor in place: L(r,c) in mg_ab(r-c, c)
+    ! factor in place: L(r,c) in mg_ab(r-c, c). Column form: column c is scaled by its pivot, then its
+    ! contributions L(r,c) L(c2,c) are subtracted from the columns c2 = c+1..c+b (unit stride, independent
+    ! updates). Each element A(r,c2) receives the same subtractions in the same order (c increasing) as in
+    ! the inner-product form, A(r,c2) - sum_c L(r,c) L(c2,c), so without reassociation the factor is the same.
     do c=1,n
-      s = mg_ab(0,c)
-      do kk=max(1,c-b),c-1
-        s = s - mg_ab(c-kk,kk)**2
+      d = sqrt(mg_ab(0,c))
+      mg_ab(0,c) = d
+      m = min(b, n-c)
+      do r=1,m
+        mg_ab(r,c) = mg_ab(r,c)/d
       enddo
-      mg_ab(0,c) = sqrt(s)
-      do r=c+1,min(n,c+b)
-        s = mg_ab(r-c,c)
-        do kk=max(1,r-b),c-1
-          s = s - mg_ab(r-kk,kk)*mg_ab(c-kk,kk)
+      do c2=1,m
+        l = mg_ab(c2,c)
+        do r=c2,m
+          mg_ab(r-c2,c+c2) = mg_ab(r-c2,c+c2) - mg_ab(r,c)*l
         enddo
-        mg_ab(r-c,c) = s/mg_ab(0,c)
       enddo
     enddo
   contains
@@ -3191,20 +3331,21 @@ contains
     integer(kind=4), intent(in) :: nx, ny
     real(kind=8), dimension(0:nx+1,0:ny+1), intent(in) :: b
     real(kind=8), dimension(0:nx+1,0:ny+1), intent(inout) :: x
-    integer(kind=4) :: i, j, k, kk, n, bw
-    real(kind=8) :: s
+    integer(kind=4) :: i, j, k, kk, n, bw, r, m
+    real(kind=8) :: s, y
     n = mg_nc ; bw = mg_bw
     do j=1,ny
       do i=1,nx
         mg_sol(i + nx*(j-1)) = b(i,j)
       enddo
     enddo
-    do k=1,n                                  ! L y = b
-      s = mg_sol(k)
-      do kk=max(1,k-bw),k-1
-        s = s - mg_ab(k-kk,kk)*mg_sol(kk)
+    do k=1,n                                  ! L y = b, column form: y(k), then its updates of rows k+1..k+bw
+      y = mg_sol(k)/mg_ab(0,k)                ! (the same subtractions per row in the same order)
+      mg_sol(k) = y
+      m = min(bw, n-k)
+      do r=1,m
+        mg_sol(k+r) = mg_sol(k+r) - mg_ab(r,k)*y
       enddo
-      mg_sol(k) = s/mg_ab(0,k)
     enddo
     do k=n,1,-1                               ! L^T x = y
       s = mg_sol(k)
