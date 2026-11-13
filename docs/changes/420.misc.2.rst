@@ -1,0 +1,1 @@
+New tests in ``test_implicit_fs.py``: a hashed open-boundary run with the tidal potential, exact restarts (flux forcing; bulk forcing with ``PARALLEL_IO``), rivers and pipes, a CDR volume release, per-step volume-budget checks, and two rejected settings.

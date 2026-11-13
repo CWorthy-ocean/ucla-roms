@@ -40,7 +40,8 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = []
+# Release-note fragments (see towncrier.toml) are not pages.
+exclude_patterns = ["changes"]
 
 # Markdown options
 myst_enable_extensions = ["dollarmath", "deflist", "colon_fence"]

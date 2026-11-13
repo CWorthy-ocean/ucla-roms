@@ -1,0 +1,1 @@
+New test: a NaN that reaches the implicit free-surface solve stops the run at the first solve, without iterating to ``fs_maxit``.

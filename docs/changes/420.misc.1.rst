@@ -1,0 +1,1 @@
+New documentation page "Implicit free surface" (scheme, solver, boundary conditions, sources, restarts, diagnostics, defaults, measured cost, limitations) and the ``IMPLICIT_FS`` tables in the runtime settings.

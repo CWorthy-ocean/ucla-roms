@@ -3,10 +3,17 @@ The ci directory houses helper files for the GitHub Actions workflows in $ROMS_R
 - compile_only.sh: compiles ROMS with a given set of CPP keys and no run; containerized_ci.yml uses it to check that CPP-key combinations the pytest suite doesn't run still compile (PARALLEL_IO with and without MPI_MASKING, DIAGNOSTICS, CDR forcing without MARBL)
 - set_environs.sh: sets the ROMS environment variables for a conda environment (e.g. in a GitHub Codespaces session)
 - pre-commit/: scripts for the repository's pre-commit hooks (.pre-commit-config.yaml)
-- update_release_notes.py, finalize_release_notes.py, release_body.py: maintain docs/releases/ and the release text, run by the release-notes and publish workflows; test_*.py are their unit tests
+- number_fragments.py, add_release_to_index.py, towncrier_template.rst, release_body.py: build docs/releases/<tag>.rst and the GitHub release text from the release-note fragments in docs/changes/ (configured in towncrier.toml), run by the release-notes and publish workflows; test_*.py are their unit tests (run them with `pytest ci`; the towncrier ones need towncrier and docutils, and no workflow runs them)
 
 The main workflows:
 - containerized_ci.yml: builds the CI container images when they change and runs the pytest suite (tests/) in them, with gfortran and ifx
 - pre-commit.yaml: runs pre-commit on every pull request and push to main
 - sphinx.yaml: builds the documentation on every pull request
 - automated_testing_workflow_python_mpc.yml: tests the mpc preprocessor (Tools-Roms/mpc_python) when it changes
+- changelog.yaml: checks that a pull request adds a release-note fragment to docs/changes/ (see docs/changes/README.md) and that the notes parse as reStructuredText, unless it is labeled no-changelog
+- finalize_release_notes.yaml, publish_release.yaml: make a release, as described below
+
+Making a release (for maintainers):
+1. Run the "Finalize Release Notes" workflow from the repository's Actions tab with the new version, for example 0.15.0. It renames each docs/changes/+<name> file after the pull request that added it, stopping with an error if it can't find one. It then adds the release to the index docs/releases.rst, writes the notes in docs/changes/ to docs/releases/0.15.0.rst, deletes the fragments, and opens a "Finalize release notes for 0.15.0" pull request from the next_release_notes branch.
+2. Edit the notes on that pull request if they need it: merge overlapping notes, reorder, fix wording.
+3. Merge it. This creates the tagged GitHub release with those notes and deletes next_release_notes.
