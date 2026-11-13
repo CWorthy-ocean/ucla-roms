@@ -215,6 +215,19 @@ module roms_read_write
   type(frc_file_meta), allocatable :: frc_meta(:)
   integer(kind=4) :: n_frc_meta = 0       ! slots in use beyond max_frc (ungridded files)
 
+  ! Read handles kept open across records by the serial netCDF reads of the
+  ! forcing data (every rank without PARALLEL_IO, rank 0 for ungridded data):
+  ! up to max_open_frc files, the least recently used one is closed first.
+  ! They are opened with a small HDF5 chunk cache (frc_chunk_cache bytes per
+  ! variable), since each record is read once and an open netCDF-4 file would
+  ! otherwise keep up to netCDF's default cache per variable read.
+  integer(kind=4), parameter :: max_open_frc = 8
+  integer(kind=4), parameter :: frc_chunk_cache = 1048576
+  character(len=max_name_size) :: open_frc_name(max_open_frc) = ''
+  integer(kind=4) :: open_frc_ncid(max_open_frc) = -1
+  integer(kind=8) :: open_frc_used(max_open_frc) = 0
+  integer(kind=8) :: open_frc_clock = 0
+
 #if defined MPI && defined PARALLEL_FILES
 !      integer, public ::  xi_rho, xi_u, eta_rho, eta_v
 #else
@@ -1396,6 +1409,46 @@ contains
 
   end function frc_time_axis_index !]
 ! ----------------------------------------------------------------------
+  function frc_read_ncid(fname) result(ncid) ![
+    ! netCDF id of fname, opened read-only and kept open across records (see
+    ! open_frc_name). A file that cannot be opened is reported, not kept,
+    ! and -1 is returned.
+    implicit none
+    character(len=13) :: sr_name = "frc_read_ncid"
+    character(len=*), intent(in) :: fname
+    integer(kind=4) :: ncid
+    integer(kind=4) :: k, kfree, ierr
+
+    open_frc_clock = open_frc_clock + 1
+    do k = 1, max_open_frc
+      if (open_frc_ncid(k) >= 0 .and. trim(open_frc_name(k)) == trim(fname)) then
+        open_frc_used(k) = open_frc_clock
+        ncid = open_frc_ncid(k)
+        return
+      endif
+    enddo
+
+    kfree = minloc(open_frc_used, dim=1)        ! an unused slot (0) or the least recently used
+    if (open_frc_ncid(kfree) >= 0) ierr = nf90_close(open_frc_ncid(kfree))
+    open_frc_ncid(kfree) = -1
+    open_frc_used(kfree) = 0
+    open_frc_name(kfree) = ''
+
+    ierr = nf90_open(fname, nf90_nowrite, ncid, cache_size=frc_chunk_cache)
+    if (ierr /= nf90_noerr) then
+      call error_log%check_netcdf_status(&
+      &netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name,&
+      &info=("error opening "//trim(fname)))
+      ncid = -1
+      return
+    endif
+    open_frc_name(kfree) = fname
+    open_frc_ncid(kfree) = ncid
+    open_frc_used(kfree) = open_frc_clock
+
+  end function frc_read_ncid !]
+! ----------------------------------------------------------------------
   subroutine abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file) ![
     ! find_new_record only records its failures ("First available forcing
     ! record is past current time", "Ran out of time records", "Could not
@@ -1492,13 +1545,12 @@ contains
         &hint=nc%missing_hint)
 
         if (.not. var_absent) then
-          ierr=nf90_open(nc%ungridded_forcing_file,nf90_nowrite, ncid)
+          ncid = frc_read_ncid(nc%ungridded_forcing_file)
           if (d1) then
             call ncread(ncid,vname,nc%vdata(:,1,it),(/1,irec/))
           else
             call ncread(ncid,vname,nc%vdata(:,:,it),(/1,1,irec/))
           endif
-          ierr = nf90_close(ncid)
         endif
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
@@ -1573,7 +1625,7 @@ contains
         ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
       endif
 #else
-      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
+      ncid = frc_read_ncid(frcfiles(ifile))
 #endif
       ! The size of vdata must match the size of the data in the
       ! file. Ensure this in the allocation of vdata
@@ -1605,7 +1657,6 @@ contains
           endif
         endif
       endif
-      ierr = nf90_close(ncid)
 #endif
     endif ! ungridded
 
@@ -1774,9 +1825,8 @@ contains
       if (mynode == 0) then
         call find_new_record(vname,tname,modtime,ifile,irec,&
         &nc%times(it), nc%ungridded_forcing_file, first_fill=first_fill)
-        ierr=nf90_open(nc%ungridded_forcing_file,nf90_nowrite, ncid)
+        ncid = frc_read_ncid(nc%ungridded_forcing_file)
         call ncread(ncid,vname,nc%vdata(:,:,:,it),(/1,1,1,irec/))
-        ierr = nf90_close(ncid)
       endif
       call MPI_Barrier(ocean_grid_comm, ierr)
       msg_size = size(nc%vdata(:,:,:,it))
@@ -1830,7 +1880,7 @@ contains
         ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
       endif
 #else
-      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
+      ncid = frc_read_ncid(frcfiles(ifile))
 #endif
       ! x0:x1,y0:y1 is the range the PIO decompositions read (as for the 2D
       ! gridded reads below); without PARALLEL_IO it equals i0:i1,j0:j1.
@@ -1857,7 +1907,6 @@ contains
           endif
         endif
       endif
-      ierr = nf90_close(ncid)
 #endif
     endif ! ungridded
 
@@ -1961,7 +2010,7 @@ contains
       endif
     endif
 #else
-    ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
+    ncid = frc_read_ncid(frcfiles(ifile))
 #endif
     if (nc%coarse>0) then
       if (.not.allocated(cdata)) then
@@ -2007,7 +2056,6 @@ contains
       endif
     endif
 !      endif
-    ierr = nf90_close(ncid)
 #endif
     call exchange_xxx(nc%vdata(:,:,it))
 
