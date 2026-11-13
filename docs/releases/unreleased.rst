@@ -105,6 +105,13 @@ Improvements
 
 - The ``_spn`` file now holds every open side; before, it had the south and west sides only. (`#417 <https://github.com/CWorthy-ocean/ucla-roms/pull/417>`_)
 - Asking for ``w`` in a nesting file with ``PARALLEL_IO`` now stops ROMS at startup with a message; before, the run continued and left ``w_<side>`` at the fill value. (`#419 <https://github.com/CWorthy-ocean/ucla-roms/pull/419>`_)
+- The implicit free-surface solve takes 12-14 % less time per step (Pacific basin on 512 ranks, Iceland domain on 256 ranks), with unchanged iteration counts. (`#422 <https://github.com/CWorthy-ocean/ucla-roms/pull/422>`_)
+
+  - The V-cycle that was applied to the converged residual and then discarded is skipped.
+  - Halo exchanges that refreshed values never read are thinned or dropped, and whole-array clears and copies are removed.
+  - The coarsest multigrid level is factored in column form, which is faster on the ranks that solve it.
+
+- A free-surface solve that meets a NaN or Inf now stops the run at that step with a message, instead of iterating to ``fs_maxit`` first. (`#422 <https://github.com/CWorthy-ocean/ucla-roms/pull/422>`_)
 
 Miscellaneous
 ~~~~~~~~~~~~~
