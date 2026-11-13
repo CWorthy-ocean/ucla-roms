@@ -260,6 +260,7 @@ module roms_read_write
   public :: set_frc_data
   public :: init_output_indices
   public :: find_new_record
+  public :: close_frc_read_files
   public :: get_frc_dim_len
   public :: nc_check_units
   public :: put_global_atts
@@ -1450,6 +1451,21 @@ contains
     open_frc_used(kfree) = open_frc_clock
 
   end function frc_read_ncid !]
+! ----------------------------------------------------------------------
+  subroutine close_frc_read_files ![
+    ! Close the files kept open by frc_read_ncid (at the end of the run).
+    ! Nothing to do when none is open (e.g. on ranks > 0 under PARALLEL_IO).
+    implicit none
+    integer(kind=4) :: k, ierr
+
+    do k = 1, max_open_frc
+      if (open_frc_ncid(k) >= 0) ierr = nf90_close(open_frc_ncid(k))
+      open_frc_ncid(k) = -1
+      open_frc_used(k) = 0
+      open_frc_name(k) = ''
+    enddo
+
+  end subroutine close_frc_read_files !]
 ! ----------------------------------------------------------------------
   subroutine abort_if_no_frc_record(ifile,irec,vname,sr_name,check_file) ![
     ! find_new_record only records its failures ("First available forcing
