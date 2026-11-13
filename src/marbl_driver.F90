@@ -58,6 +58,7 @@ module marbl_driver
   use bgc_forces                  , only: nhy
 #endif
   use ocean_vars                  , only: Hz, z_r, z_w
+  use mpi_f08                     , only: mpi_wtime
   use error_handling_mod          , only: error_log
 
 !     ----------------------------------------------------------------------
@@ -86,10 +87,12 @@ module marbl_driver
 !     sources and sinks (see marbldrv_impose_constant_fe)
   logical, public :: use_constant_Fe = .false.
   real(kind=8), public :: constant_Fe_value = 3.0e-3_8
+!     Column balancing across ranks (see "Column balancing" below)
+  logical, public :: marbl_balance = .false.
 
   namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
   &marbl_timestep, marbl_tracers_to_write,&
-  &use_constant_Fe, constant_Fe_value&
+  &use_constant_Fe, constant_Fe_value, marbl_balance&
 #ifdef MARBL_DIAGS
   &, marbl_diagnostics_to_write
 #endif
@@ -157,6 +160,37 @@ module marbl_driver
 !     Index of MARBL's dissolved iron (Fe) in the ROMS tracer array
   integer(kind=4) :: iFe = 0
   character(len=1024) :: error_info
+!     Load-balance record of marbldrv_column_physics (marbldrv_print_load):
+!     wet columns of this rank's tile and the wall time of every call
+  integer(kind=4) :: ld_ncol = -1, ld_ncall = 0
+  real(kind=8), allocatable :: ld_t(:)
+!     Column balancing (marbl_balance, marbldrv_column_physics): MARBL is
+!     column-local, so ranks with more wet columns than the mean send the
+!     inputs of their excess columns to ranks with fewer, which compute
+!     them and send the outputs back. Static plan from the wet-column
+!     counts (bal_setup); records: col_pack, col_compute, col_unpack.
+!     The switch marbl_balance is declared with the namelist variables above.
+  logical :: bal_ready = .false.
+  integer(kind=4) :: nrin, nrout                 ! input / output record lengths
+  integer(kind=4) :: o_sf, o_t, o_s, o_zr, o_zw, o_hz, o_tr, o_s2, o_s3   ! input offsets
+  integer(kind=4) :: q_tr, q_s2, q_s3, q_d2, q_d3                         ! output offsets
+  integer(kind=4) :: n_ss2, n_ss3
+  integer(kind=4) :: bal_ncol, bal_nkeep         ! own wet columns, of which computed here
+  integer(kind=4), allocatable :: bal_ci(:), bal_cj(:)   ! own wet columns, loop order
+  integer(kind=4) :: bal_nsp, bal_nrp            ! ranks this rank ships to / computes for
+  integer(kind=4), allocatable :: bal_sp(:), bal_sn(:), bal_so(:)   ! rank, columns, offset
+  integer(kind=4), allocatable :: bal_rp(:), bal_rn(:), bal_ro(:)
+  real(kind=8), allocatable, asynchronous :: bal_sin(:,:), bal_sout(:,:), bal_rin(:,:), bal_rout(:,:)
+  real(kind=8) :: bal_tsetup = 0._8              ! wall time of bal_setup (one-off)
+#ifdef MARBL_DIAGS
+!     MARBL's particulate fluxes at its reference depth (POC_FLUX_100m etc.,
+!     marbldrv_configure_diagnostics): MARBL sets them only in a column with
+!     a layer containing that depth; elsewhere they would keep the previous
+!     column's values, so ROMS sets them to 0 there (reset_flux_at_ref_depth)
+  integer(kind=4) :: nref_diag = 0
+  integer(kind=4) :: iref_diag(5)
+  real(kind=8) :: flux_ref_depth = 0._8
+#endif
 ! ----------------------------------------------------------------------
 
   public :: marbldrv_configure_tracers
@@ -174,6 +208,7 @@ module marbl_driver
 
   public :: read_nml_marbl
   public :: is_marbl_step
+  public :: marbldrv_print_load
 contains
 
   logical function is_marbl_step(istep)
@@ -1147,7 +1182,90 @@ contains
                          .eq. "none"
     end do
 
+    call find_flux_at_ref_depth_diags
+
   end subroutine marbldrv_configure_diagnostics
+
+!-----------------------------------------------------------------------
+  subroutine find_flux_at_ref_depth_diags
+!-----------------------------------------------------------------------
+!     Find MARBL's five particulate fluxes at its reference depth among
+!     the interior tendency diagnostics, from MARBL's metadata: the 2D
+!     diagnostics with a reference depth (ref_depth > 0) named
+!     <particle>_FLUX_<depth>m, as MARBL names them (POC_FLUX_100m with the
+!     default particulate_flux_ref_depth = 100 m; ROMS runs MARBL in mks).
+!     reset_flux_at_ref_depth sets them to 0 in columns without a layer
+!     containing that depth. Any other diagnostic with a reference depth,
+!     a missing one or unequal depths abort: MARBL has changed and the
+!     reset must be revisited.
+!-----------------------------------------------------------------------
+    character(len=28) :: sr_name = "find_flux_at_ref_depth_diags"
+    character(len=6), parameter :: pname(5) = [character(len=6) ::&
+    &  'POC', 'POP', 'CaCO3', 'SiO2', 'P_iron']
+    character(len=32) :: dstr
+    integer(kind=4) :: m, n, nfound
+    logical :: ok
+
+    nref_diag = 0 ; nfound = 0 ; ok = .true.
+    do m = 1, size(MARBL_instance%interior_tendency_diags%diags)
+      associate(dg => MARBL_instance%interior_tendency_diags%diags(m))
+        if (dg%ref_depth <= 0._8) cycle
+        nfound = nfound + 1
+        if (nfound == 1) flux_ref_depth = dg%ref_depth
+        write(dstr,'(I0,A)') int(dg%ref_depth), 'm'
+        do n = 1, 5
+          if (trim(dg%short_name) == trim(pname(n))//'_FLUX_'//trim(dstr)) exit
+        end do
+        if (n > 5 .or. .not. interior_tendency_diag_is_2d(m) .or.&
+        &   dg%ref_depth /= flux_ref_depth .or. nref_diag == 5) then
+          ok = .false.
+          write(error_info,*) 'unexpected MARBL diagnostic with a reference depth: ',&
+          &  trim(dg%short_name)
+        else
+          nref_diag = nref_diag + 1 ; iref_diag(nref_diag) = m
+        end if
+      end associate
+    end do
+    if (ok .and. nref_diag /= 5) then
+      ok = .false.
+      write(error_info,'(A,I0,A)') 'found ', nref_diag,&
+      &  ' of MARBL''s five particulate fluxes at the reference depth (*_FLUX_100m)'
+    end if
+    if (.not. ok) then
+      nref_diag = 0
+      call error_log%raise_global(context=module_name//"/"//sr_name, info=error_info)
+      call error_log%abort_check()
+    end if
+  end subroutine find_flux_at_ref_depth_diags
+
+!-----------------------------------------------------------------------
+  subroutine reset_flux_at_ref_depth
+!-----------------------------------------------------------------------
+!     Right after MARBL's interior_tendency_compute for one column: if no
+!     layer of the column contains MARBL's reference depth, MARBL has not
+!     set its particulate fluxes at that depth in this column, and its five
+!     *_FLUX_100m diagnostics hold the values of the column it computed
+!     before (which depends on the tiling and, with marbl_balance, on the
+!     order in which columns are computed). Set them to 0, the value MARBL
+!     itself gives a column whose reference depth lies below the sea floor.
+!     The test is MARBL's (compute_particulate_terms: levels k = 1..km from
+!     the surface, top of level 1 at depth 0) on the geometry MARBL just
+!     used. Diagnostics only: nothing in MARBL or ROMS reads them back.
+!-----------------------------------------------------------------------
+    integer(kind=4) :: k, n
+    real(kind=8) :: ztop
+    if (nref_diag == 0) return
+    associate(zw => MARBL_instance%domain%zw)
+      ztop = 0._8
+      do k = 1, MARBL_instance%domain%km
+        if (k > 1) ztop = zw(k-1)
+        if (ztop <= flux_ref_depth .and. flux_ref_depth < zw(k)) return
+      end do
+    end associate
+    do n = 1, nref_diag
+      MARBL_instance%interior_tendency_diags%diags(iref_diag(n))%field_2d(1) = 0._8
+    end do
+  end subroutine reset_flux_at_ref_depth
 
 !-----------------------------------------------------------------------
   subroutine marbldrv_parse_diagnostic_output_list(&
@@ -1341,7 +1459,16 @@ contains
     integer(kind=4)                                       :: diagidx2d,diagidx3d ! indices for stepping through diagno
 #endif
     integer(kind=4)                                       :: i,j,k,m
+    real(kind=8) :: tcall0
 
+    tcall0 = mpi_wtime()
+    if (ld_ncol < 0) ld_ncol = count(rmask(istr:iend,jstr:jend) /= 0._8)
+    if (marbl_balance) then
+      call col_physics_balanced(istr,iend,jstr,jend,tracer_array)
+      call ld_record(mpi_wtime() - tcall0)
+      call error_log%abort_check()
+      return
+    end if
 
 !     1. Populate MARBL instance surface flux forcing values:
 !     ----------------------------------------------------------------------
@@ -1398,8 +1525,562 @@ contains
 
       end do                 !j=jstr,jend
     end do                    ! i=istr,iend
+    call ld_record(mpi_wtime() - tcall0)
     call error_log%abort_check()
   end subroutine marbldrv_column_physics
+!-----------------------------------------------------------------------
+
+  subroutine col_physics_balanced(istr,iend,jstr,jend,tracer_array)
+!-----------------------------------------------------------------------
+!     marbldrv_column_physics with marbl_balance: the last wet columns of
+!     a rank above the mean are computed by ranks below it (bal_setup).
+!     A shipped column goes through col_pack, col_compute and col_unpack,
+!     an own column through col_direct; both do the same arithmetic, so
+!     the answer does not depend on where a column is computed.
+!     Ranks that ship pack and send first, then compute their own columns
+!     and store the shipped ones' outputs as they come back. Ranks that
+!     take columns compute their own columns until a sender's inputs have
+!     arrived, then that sender's columns, which go back at once. Both
+!     test their messages every few columns, so that large messages
+!     progress while MARBL runs.
+!-----------------------------------------------------------------------
+    use mpi_f08, only: mpi_irecv, mpi_isend, mpi_test, mpi_testall, mpi_waitany, mpi_waitall,&
+    &                  mpi_request, mpi_double_precision, mpi_statuses_ignore,&
+    &                  mpi_status_ignore, mpi_undefined, mpi_request_null
+    integer(kind=4), intent(in) :: istr,iend,jstr,jend
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt), intent(inout) :: tracer_array
+    integer(kind=4), parameter :: nchunk = 16      ! columns between message tests
+    type(mpi_request), allocatable :: rqri(:), rqro(:), rqsi(:), rqso(:)
+    logical, allocatable :: sdone(:), rdone(:)   ! outputs stored / columns computed, per partner
+    logical :: flag
+    integer(kind=4) :: p, c, c0, ierr, nleft
+    real(kind=8) :: ts0
+
+    if (.not. bal_ready) then
+      ts0 = mpi_wtime()
+      call bal_setup(istr,iend,jstr,jend)
+      bal_tsetup = mpi_wtime() - ts0
+    end if
+    allocate(rqri(bal_nrp), rqro(bal_nrp), rqsi(bal_nsp), rqso(bal_nsp))
+    allocate(sdone(max(bal_nsp, 1)), rdone(max(bal_nrp, 1)))
+    rqro = mpi_request_null
+    do p = 1, bal_nrp            ! inputs of the columns computed for others
+      call mpi_irecv(bal_rin(:,bal_ro(p)+1:bal_ro(p)+bal_rn(p)), bal_rn(p)*nrin,&
+      &              mpi_double_precision, bal_rp(p), 31, ocean_grid_comm, rqri(p), ierr)
+    end do
+    do p = 1, bal_nsp            ! shipped columns: outputs back, inputs out
+      call mpi_irecv(bal_sout(:,bal_so(p)+1:bal_so(p)+bal_sn(p)), bal_sn(p)*nrout,&
+      &              mpi_double_precision, bal_sp(p), 32, ocean_grid_comm, rqso(p), ierr)
+    end do
+    do p = 1, bal_nsp
+      do c = bal_so(p)+1, bal_so(p)+bal_sn(p)
+        call col_pack(bal_ci(bal_nkeep+c), bal_cj(bal_nkeep+c), tracer_array, bal_sin(:,c))
+      end do
+      call mpi_isend(bal_sin(:,bal_so(p)+1:bal_so(p)+bal_sn(p)), bal_sn(p)*nrin,&
+      &              mpi_double_precision, bal_sp(p), 31, ocean_grid_comm, rqsi(p), ierr)
+    end do
+    sdone = .false. ; rdone = .false.
+    nleft = bal_nrp
+    do c0 = 1, bal_nkeep, nchunk ! own columns in chunks
+      do c = c0, min(c0+nchunk-1, bal_nkeep)
+        call col_direct(bal_ci(c), bal_cj(c), tracer_array)
+      end do
+      if (bal_nsp > 0) then      ! outputs of shipped columns back yet?
+        call mpi_testall(bal_nsp, rqsi, flag, mpi_statuses_ignore, ierr)
+        do p = 1, bal_nsp
+          if (sdone(p)) cycle
+          call mpi_test(rqso(p), flag, mpi_status_ignore, ierr)
+          if (flag) then
+            call unpack_from(p)
+            sdone(p) = .true.
+          end if
+        end do
+      end if
+      do p = 1, bal_nrp          ! a sender's inputs arrived: its columns now
+        if (rdone(p)) cycle
+        call mpi_test(rqri(p), flag, mpi_status_ignore, ierr)
+        if (flag) then
+          call compute_for(p)
+          rdone(p) = .true. ; nleft = nleft - 1
+        end if
+      end do
+      if (bal_nrp > 0) call mpi_testall(bal_nrp, rqro, flag, mpi_statuses_ignore, ierr)
+    end do
+    do while (nleft > 0)         ! remaining senders, in order of arrival
+      call mpi_waitany(bal_nrp, rqri, p, mpi_status_ignore, ierr)
+      if (p == mpi_undefined) exit
+      if (rdone(p)) cycle
+      call compute_for(p)
+      rdone(p) = .true. ; nleft = nleft - 1
+    end do
+    do p = 1, bal_nsp            ! remaining outputs of shipped columns
+      if (sdone(p)) cycle
+      call mpi_waitall(1, rqso(p:p), mpi_statuses_ignore, ierr)
+      call unpack_from(p)
+    end do
+    if (bal_nsp > 0) call mpi_waitall(bal_nsp, rqsi, mpi_statuses_ignore, ierr)
+    if (bal_nrp > 0) call mpi_waitall(bal_nrp, rqro, mpi_statuses_ignore, ierr)
+
+  contains
+
+    subroutine compute_for(pp)
+      ! the columns of sender pp; their outputs go back at once
+      integer(kind=4), intent(in) :: pp
+      integer(kind=4) :: cc
+      do cc = bal_ro(pp)+1, bal_ro(pp)+bal_rn(pp)
+        call col_compute(bal_rin(:,cc), bal_rout(:,cc))
+      end do
+      call mpi_isend(bal_rout(:,bal_ro(pp)+1:bal_ro(pp)+bal_rn(pp)), bal_rn(pp)*nrout,&
+      &              mpi_double_precision, bal_rp(pp), 32, ocean_grid_comm, rqro(pp), ierr)
+    end subroutine compute_for
+
+    subroutine unpack_from(pp)
+      ! store the outputs of the columns shipped to rank pp
+      integer(kind=4), intent(in) :: pp
+      integer(kind=4) :: cc
+      do cc = bal_so(pp)+1, bal_so(pp)+bal_sn(pp)
+        call col_unpack(bal_ci(bal_nkeep+cc), bal_cj(bal_nkeep+cc), tracer_array, bal_sout(:,cc))
+      end do
+    end subroutine unpack_from
+
+  end subroutine col_physics_balanced
+!-----------------------------------------------------------------------
+
+  subroutine col_direct(i,j,tracer_array)
+!     MARBL for an own column in place: the per-column calls of
+!     marbldrv_column_physics (same arithmetic as col_compute)
+    integer(kind=4), intent(in) :: i,j
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt), intent(inout) :: tracer_array
+    call marbldrv_set_marbl_surface_flux_forcing_values(i,j,tracer_array)
+    call marbldrv_set_marbl_surface_tracer_values(i,j,tracer_array)
+    call marbldrv_set_marbl_surface_flux_saved_state_values(i,j)
+    call marbldrv_compute_surface_fluxes(i,j)
+    call marbldrv_update_roms_saved_state_values_surf(i,j)
+    call marbldrv_update_roms_tracers_surf(i,j,tracer_array)
+    call marbldrv_set_marbl_column_geometry(i,j)
+    call marbldrv_set_marbl_interior_tendency_forcing_values(i,j,tracer_array)
+    call marbldrv_set_marbl_interior_tracer_values(i,j,tracer_array)
+    call marbldrv_set_marbl_interior_saved_state_values(i,j)
+    call marbldrv_set_marbl_bottom_fluxes
+    call marbldrv_compute_interior_tendency(i,j)
+    call marbldrv_update_roms_tracers_interior(i,j,tracer_array)
+    call marbldrv_update_roms_saved_state_values_interior(i,j)
+#ifdef MARBL_DIAGS
+    call marbldrv_update_roms_diagnostics(i,j)
+#endif
+  end subroutine col_direct
+!-----------------------------------------------------------------------
+
+  subroutine bal_setup(istr,iend,jstr,jend)
+!-----------------------------------------------------------------------
+!     Static balancing plan, identical on every rank: share of rank r =
+!     total wet columns / ranks (+1 for the first remainder ranks); ranks
+!     above their share ship the excess, ranks below take the deficit,
+!     matched in rank order. A rank ships the last columns of its loop.
+!-----------------------------------------------------------------------
+    use mpi_f08, only: mpi_allgather, mpi_integer, mpi_comm_size
+    integer(kind=4), intent(in) :: istr,iend,jstr,jend
+    integer(kind=4), allocatable :: cnt(:), ex(:), df(:)
+    integer(kind=4) :: nr, ierr, i, j, r, tot, d, q, t, nmsg, me
+    integer(kind=4) :: n2w, n3w, m
+
+    call mpi_comm_size(ocean_grid_comm, nr, ierr)
+    me = mynode
+    bal_ncol = count(rmask(istr:iend,jstr:jend) /= 0._8)
+    allocate(bal_ci(max(bal_ncol,1)), bal_cj(max(bal_ncol,1)))
+    bal_ncol = 0
+    do j = jstr, jend
+      do i = istr, iend
+        if (rmask(i,j) == 0._8) cycle
+        bal_ncol = bal_ncol + 1 ; bal_ci(bal_ncol) = i ; bal_cj(bal_ncol) = j
+      end do
+    end do
+    allocate(cnt(0:nr-1), ex(0:nr-1), df(0:nr-1))
+    call mpi_allgather(bal_ncol, 1, mpi_integer, cnt, 1, mpi_integer, ocean_grid_comm, ierr)
+    tot = sum(cnt)
+    do r = 0, nr-1
+      q = tot/nr ; if (r < mod(tot, nr)) q = q + 1
+      ex(r) = max(cnt(r) - q, 0) ; df(r) = max(q - cnt(r), 0)
+    end do
+    ! matching in rank order (two pointers); count this rank's partners first
+    bal_nkeep = bal_ncol - ex(me)
+    allocate(bal_sp(nr), bal_sn(nr), bal_so(nr), bal_rp(nr), bal_rn(nr), bal_ro(nr))
+    bal_nsp = 0 ; bal_nrp = 0 ; nmsg = 0
+    d = 0 ; r = 0
+    do while (d < nr .and. r < nr)
+      if (ex(d) == 0) then
+        d = d + 1 ; cycle
+      end if
+      if (df(r) == 0) then
+        r = r + 1 ; cycle
+      end if
+      t = min(ex(d), df(r))
+      nmsg = nmsg + 1
+      if (d == me) then
+        bal_nsp = bal_nsp + 1 ; bal_sp(bal_nsp) = r ; bal_sn(bal_nsp) = t
+      end if
+      if (r == me) then
+        bal_nrp = bal_nrp + 1 ; bal_rp(bal_nrp) = d ; bal_rn(bal_nrp) = t
+      end if
+      ex(d) = ex(d) - t ; df(r) = df(r) - t
+    end do
+    bal_so(1) = 0 ; bal_ro(1) = 0
+    do i = 2, bal_nsp
+      bal_so(i) = bal_so(i-1) + bal_sn(i-1)
+    end do
+    do i = 2, bal_nrp
+      bal_ro(i) = bal_ro(i-1) + bal_rn(i-1)
+    end do
+    ! record layout
+    n_ss2 = MARBL_instance%surface_flux_saved_state%saved_state_cnt
+    n_ss3 = MARBL_instance%interior_tendency_saved_state%saved_state_cnt
+    o_sf = 0 ; o_t = o_sf + 12 ; o_s = o_t + nz ; o_zr = o_s + nz ; o_zw = o_zr + nz
+    o_hz = o_zw + nz + 1 ; o_tr = o_hz + nz ; o_s2 = o_tr + nt_marbl*nz ; o_s3 = o_s2 + n_ss2
+    nrin = o_s3 + n_ss3*nz
+    n2w = 0 ; n3w = 0
+#ifdef MARBL_DIAGS
+    do m = 1, diag_cnt_2d_tot
+      if (wrt_marbl_diag_2d(m)) n2w = n2w + 1
+    end do
+    do m = 1, diag_cnt_3d_tot
+      if (wrt_marbl_diag_3d(m)) n3w = n3w + 1
+    end do
+#endif
+    q_tr = 0 ; q_s2 = q_tr + nt_marbl*nz ; q_s3 = q_s2 + n_ss2 ; q_d2 = q_s3 + n_ss3*nz
+    q_d3 = q_d2 + n2w ; nrout = q_d3 + n3w*nz
+    allocate(bal_sin(nrin, max(bal_ncol-bal_nkeep,1)), bal_sout(nrout, max(bal_ncol-bal_nkeep,1)))
+    allocate(bal_rin(nrin, max(sum(bal_rn(1:bal_nrp)),1)), bal_rout(nrout, max(sum(bal_rn(1:bal_nrp)),1)))
+    bal_ready = .true.
+    if (mynode == 0) then
+      write(*,'(1x,A,I9,A,I7,A,I7,A,I5,A,I6,A,I6,A)') 'marbl_balance: ', tot, ' wet columns, share',&
+      &  tot/nr, ', max per rank', maxval(cnt), ';', nmsg, ' transfers,',&
+      &  sum(max(cnt - tot/nr, 0)), ' columns shipped per call (record', (nrin+nrout)*8/1024, ' KB)'
+    end if
+  end subroutine bal_setup
+!-----------------------------------------------------------------------
+
+  subroutine col_pack(i,j,tracer_array,r)
+!     input record of wet column (i,j) for col_compute
+    integer(kind=4), intent(in) :: i,j
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt), intent(in) :: tracer_array
+    real(kind=8), intent(out) :: r(nrin)
+    integer(kind=4) :: m
+    r(o_sf+1) = uwnd(i,j) ; r(o_sf+2) = vwnd(i,j) ; r(o_sf+3) = dust(i,j) ; r(o_sf+4) = iron(i,j)
+#ifdef PCO2AIR_FORCING
+    r(o_sf+5) = xco2air(i,j) ; r(o_sf+6) = xco2air_alt(i,j)
+#else
+    r(o_sf+5) = xco2air_default ; r(o_sf+6) = xco2air_default
+#endif
+#ifdef NOX_FORCING
+    r(o_sf+7) = nox(i,j)
+#else
+    r(o_sf+7) = 0._8
+#endif
+#ifdef NHY_FORCING
+    r(o_sf+8) = nhy(i,j)
+#else
+    r(o_sf+8) = 0._8
+#endif
+    r(o_sf+9) = srflx(i,j)
+    r(o_sf+10) = dble(mynode) ; r(o_sf+11) = dble(i) ; r(o_sf+12) = dble(j)
+    r(o_t+1:o_t+nz) = tracer_array(i,j,1:nz,nnew,itemp)
+    r(o_s+1:o_s+nz) = tracer_array(i,j,1:nz,nnew,isalt)
+    r(o_zr+1:o_zr+nz) = z_r(i,j,1:nz)
+    r(o_zw+1:o_zw+nz+1) = z_w(i,j,0:nz)
+    r(o_hz+1:o_hz+nz) = Hz(i,j,1:nz)
+    do m = 1, nt_marbl
+      r(o_tr+(m-1)*nz+1:o_tr+m*nz) = tracer_array(i,j,1:nz,nnew,m+(NT-nt_marbl))
+    end do
+    do m = 1, n_ss2
+      r(o_s2+m) = marbl_saved_state_2d(i,j,m)
+    end do
+    do m = 1, n_ss3
+      r(o_s3+(m-1)*nz+1:o_s3+m*nz) = marbl_saved_state_3d(i,j,1:nz,m)
+    end do
+  end subroutine col_pack
+!-----------------------------------------------------------------------
+
+  subroutine col_unpack(i,j,tracer_array,q)
+!     store the output record of column (i,j) (col_compute)
+    integer(kind=4), intent(in) :: i,j
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt), intent(inout) :: tracer_array
+    real(kind=8), intent(in) :: q(nrout)
+    integer(kind=4) :: m, c2, c3
+    do m = 1, nt_marbl
+      tracer_array(i,j,1:nz,nnew,m+(NT-nt_marbl)) = q(q_tr+(m-1)*nz+1:q_tr+m*nz)
+    end do
+    do m = 1, n_ss2
+      marbl_saved_state_2d(i,j,m) = q(q_s2+m)
+    end do
+    do m = 1, n_ss3
+      marbl_saved_state_3d(i,j,1:nz,m) = q(q_s3+(m-1)*nz+1:q_s3+m*nz)
+    end do
+#ifdef MARBL_DIAGS
+    c2 = 0 ; c3 = 0
+    do m = 1, diag_cnt_2d_tot
+      if (wrt_marbl_diag_2d(m)) then
+        c2 = c2 + 1 ; marbl_diag_2d(i,j,idx_marbl_diag_2d(m)) = q(q_d2+c2)
+      end if
+    end do
+    do m = 1, diag_cnt_3d_tot
+      if (wrt_marbl_diag_3d(m)) then
+        marbl_diag_3d(i,j,1:nz,idx_marbl_diag_3d(m)) = q(q_d3+c3*nz+1:q_d3+(c3+1)*nz)
+        c3 = c3 + 1
+      end if
+    end do
+#endif
+  end subroutine col_unpack
+!-----------------------------------------------------------------------
+
+  subroutine col_compute(r,q)
+!-----------------------------------------------------------------------
+!     MARBL for one column from its input record r into the output record
+!     q: the steps and arithmetic of marbldrv_column_physics (surface
+!     fluxes, surface update, interior tendencies, saved state, written
+!     diagnostics), on the record instead of the ROMS arrays.
+!-----------------------------------------------------------------------
+    real(kind=8), intent(in) :: r(nrin)
+    real(kind=8), intent(out) :: q(nrout)
+    integer(kind=4) :: m, ks, diagidx2d, diagidx3d, c2, c3, iown, li, lj
+
+    iown = nint(r(o_sf+10)) ; li = nint(r(o_sf+11)) ; lj = nint(r(o_sf+12))
+    q(q_tr+1:q_tr+nt_marbl*nz) = r(o_tr+1:o_tr+nt_marbl*nz)
+!     surface flux forcing (marbldrv_set_marbl_surface_flux_forcing_values)
+    if (sss_ind > 0) marbl_instance%surface_flux_forcings(sss_ind)%field_0d(1) = r(o_s+nz)
+    if (sst_ind > 0) marbl_instance%surface_flux_forcings(sst_ind)%field_0d(1) = r(o_t+nz)
+    if (ifrac_ind > 0) marbl_instance%surface_flux_forcings(ifrac_ind)%field_0d(1) = 0
+    if (u10_sqr_ind > 0) marbl_instance%surface_flux_forcings(u10_sqr_ind)%field_0d(1) =&
+    &  (r(o_sf+1)**2) + (r(o_sf+2)**2)
+    if (atmpress_ind > 0) marbl_instance%surface_flux_forcings(atmpress_ind)%field_0d(1) = 1._8
+    if (xco2_ind > 0) marbl_instance%surface_flux_forcings(xco2_ind)%field_0d(1) = r(o_sf+5)
+    if (xco2_alt_ind > 0) marbl_instance%surface_flux_forcings(xco2_alt_ind)%field_0d(1) = r(o_sf+6)
+    if (dust_dep_ind > 0) marbl_instance%surface_flux_forcings(dust_dep_ind)%field_0d(1) = r(o_sf+3)
+    if (fe_dep_ind > 0) marbl_instance%surface_flux_forcings(fe_dep_ind)%field_0d(1) =&
+    &  r(o_sf+4)*0.01_8
+#ifdef NOX_FORCING
+    if (nox_flux_ind > 0) marbl_instance%surface_flux_forcings(nox_flux_ind)%field_0d(1) =&
+    &  r(o_sf+7)*71394.200220751_8
+#endif
+#ifdef NHY_FORCING
+    if (nhy_flux_ind > 0) marbl_instance%surface_flux_forcings(nhy_flux_ind)%field_0d(1) =&
+    &  r(o_sf+8)*71394.200220751_8
+#endif
+    do m = 1, nt_marbl
+      marbl_instance%tracers_at_surface(1,m) = q(q_tr+m*nz)
+    end do
+    do m = 1, n_ss2
+      MARBL_instance%surface_flux_saved_state%state(m)%field_2d(1) = r(o_s2+m)
+    end do
+    call marbl_instance%surface_flux_compute()
+    if (marbl_instance%StatusLog%labort_marbl) then
+      call marbl_instance%StatusLog%log_error_trace(&
+      &"marbl_instance%surface_flux_compute()", "marbl_driver/col_compute")
+      call col_log(iown, li, lj)
+    end if
+    call marbl_instance%StatusLog%erase()
+    do m = 1, n_ss2
+      q(q_s2+m) = MARBL_instance%surface_flux_saved_state%state(m)%field_2d(1)
+    end do
+    do m = 1, nt_marbl
+      if (marbl_instance%surface_fluxes(1,m) .ne. 0) then
+        q(q_tr+m*nz) = q(q_tr+m*nz) +&
+        &  marbl_instance%surface_fluxes(1,m)*(dt*marbl_timestep_ratio)/r(o_hz+nz)
+      end if
+    end do
+!     interior (geometry, forcing, tracers, saved state, bottom fluxes)
+    MARBL_instance%domain%zw(:)      = -r(o_zw+nz:o_zw+1:-1)
+    MARBL_instance%domain%zt(:)      = -r(o_zr+nz:o_zr+1:-1)
+    MARBL_instance%domain%delta_z(:) = r(o_hz+nz:o_hz+1:-1)
+    MARBL_instance%domain%kmt        = nz
+    if (dustflux_ind > 0) MARBL_instance%interior_tendency_forcings(dustflux_ind)%field_0d(1) = r(o_sf+3)
+    if (surf_shortwave_ind > 0) MARBL_instance%interior_tendency_forcings(surf_shortwave_ind)%&
+    &  field_1d(1,1) = r(o_sf+9) * Cp * rho0
+    if (potemp_ind > 0) MARBL_instance%interior_tendency_forcings(potemp_ind)%field_1d(1,:) =&
+    &  r(o_t+nz:o_t+1:-1)
+    if (salinity_ind > 0) MARBL_instance%interior_tendency_forcings(salinity_ind)%field_1d(1,:) =&
+    &  r(o_s+nz:o_s+1:-1)
+    if (pressure_ind > 0) MARBL_instance%interior_tendency_forcings(pressure_ind)%field_1d(1,:) =&
+    &  -r(o_zr+nz:o_zr+1:-1)*0.1_8
+    if (fesedflux_ind > 0) MARBL_instance%interior_tendency_forcings(fesedflux_ind)%field_1d(1,:) = 0._8
+    do m = 1, nt_marbl
+      marbl_instance%tracers(m,:) = q(q_tr+m*nz:q_tr+(m-1)*nz+1:-1)
+    end do
+    do m = 1, n_ss3
+      MARBL_instance%interior_tendency_saved_state%state(m)%field_3d(:,1) =&
+      &  r(o_s3+m*nz:o_s3+(m-1)*nz+1:-1)
+    end do
+    marbl_instance%bot_flux_to_tend(:) = 0._8
+    marbl_instance%bot_flux_to_tend(nz) = 1._8/MARBL_instance%domain%delta_z(nz)
+    call marbl_instance%interior_tendency_compute()
+    if (marbl_instance%StatusLog%labort_marbl) then
+      call marbl_instance%StatusLog%log_error_trace(&
+      &"marbl_instance%interior_tendency_compute()", "marbl_driver/col_compute")
+      call col_log(iown, li, lj)
+    end if
+    call marbl_instance%StatusLog%erase()
+#ifdef MARBL_DIAGS
+    call reset_flux_at_ref_depth
+#endif
+    do m = 1, nt_marbl
+      q(q_tr+(m-1)*nz+1:q_tr+m*nz) = q(q_tr+(m-1)*nz+1:q_tr+m*nz) +&
+      &  marbl_instance%interior_tendencies(m,nz:1:-1)*(dt*marbl_timestep_ratio)
+    end do
+    do m = 1, n_ss3
+      q(q_s3+(m-1)*nz+1:q_s3+m*nz) =&
+      &  MARBL_instance%interior_tendency_saved_state%state(m)%field_3d(nz:1:-1,1)
+    end do
+#ifdef MARBL_DIAGS
+!     written diagnostics, in the order of marbldrv_update_roms_diagnostics
+    diagidx2d = 1 ; diagidx3d = 1 ; c2 = 0 ; c3 = 0
+    do m = 1, size(MARBL_instance%surface_flux_diags%diags)
+      if (surface_flux_diag_is_2d(m)) then
+        if (wrt_marbl_diag_2d(diagidx2d)) then
+          c2 = c2 + 1
+          q(q_d2+c2) = real(MARBL_instance%surface_flux_diags%diags(m)%field_2d(1))
+        end if
+        diagidx2d = diagidx2d + 1
+      else
+        if (wrt_marbl_diag_3d(diagidx3d)) then
+          q(q_d3+c3*nz+1:q_d3+(c3+1)*nz) =&
+          &  real(MARBL_instance%surface_flux_diags%diags(m)%field_3d(nz:1:-1,1))
+          c3 = c3 + 1
+        end if
+        diagidx3d = diagidx3d + 1
+      end if
+    end do
+    diagidx2d = diag_cnt_sf_2d + 1 ; diagidx3d = diag_cnt_sf_3d + 1
+    do m = 1, size(MARBL_instance%interior_tendency_diags%diags)
+      if (interior_tendency_diag_is_2d(m)) then
+        if (wrt_marbl_diag_2d(diagidx2d)) then
+          c2 = c2 + 1
+          q(q_d2+c2) = real(MARBL_instance%interior_tendency_diags%diags(m)%field_2d(1))
+        end if
+        diagidx2d = diagidx2d + 1
+      else
+        if (wrt_marbl_diag_3d(diagidx3d)) then
+          q(q_d3+c3*nz+1:q_d3+(c3+1)*nz) =&
+          &  real(MARBL_instance%interior_tendency_diags%diags(m)%field_3d(nz:1:-1,1))
+          c3 = c3 + 1
+        end if
+        diagidx3d = diagidx3d + 1
+      end if
+    end do
+#endif
+  end subroutine col_compute
+!-----------------------------------------------------------------------
+
+  subroutine col_log(iown, li, lj)
+!     MARBL abort in col_compute: report the column's owner and location
+    integer(kind=4), intent(in) :: iown, li, lj
+    if (iown /= mynode) then
+      write(*,'(1x,A,I6,A,I6,A,2I6,A)') 'marbl_balance: column computed on rank', mynode,&
+      &  ' for rank', iown, ' at its local (i,j) =', li, lj, ' (rank/i/j below are the computing rank''s)'
+    end if
+    call print_marbl_log(marbl_instance%StatusLog, li, lj)
+  end subroutine col_log
+!-----------------------------------------------------------------------
+
+  subroutine ld_record(tc)
+    ! append the wall time of one marbldrv_column_physics call
+    real(kind=8), intent(in) :: tc
+    real(kind=8), allocatable :: tmp(:)
+    if (.not. allocated(ld_t)) allocate(ld_t(64))
+    if (ld_ncall == size(ld_t)) then
+      allocate(tmp(2*size(ld_t))); tmp(1:ld_ncall) = ld_t(1:ld_ncall)
+      call move_alloc(tmp, ld_t)
+    end if
+    ld_ncall = ld_ncall + 1
+    ld_t(ld_ncall) = tc
+  end subroutine ld_record
+!-----------------------------------------------------------------------
+
+  subroutine marbldrv_print_load(detail)
+!-----------------------------------------------------------------------
+!     Load balance of MARBL over the ranks (end of the run, after the
+!     region timers). Prints the wet columns per rank (MARBL computes
+!     every wet column over all nz levels, so wet cells = columns * nz),
+!     the MARBL wall time per call (min/mean/max over ranks, averaged
+!     over the calls), the time per wet column and the correlation of
+!     the ranks' MARBL time with their wet columns; then the first call
+!     (with marbl_balance: the plan, bal_setup, and the first touch of its
+!     buffers) and the later calls separately. With detail, rank 0 also
+!     writes marbl_load.txt (working directory): one line per rank with
+!     its tile position, node, wet columns and cells and the wall time of
+!     every call. Every rank takes the same branches (counts reduced).
+!-----------------------------------------------------------------------
+    use mpi_f08, only: mpi_allreduce, mpi_gather, mpi_double_precision,&
+    &                  mpi_integer, mpi_max, mpi_min, mpi_sum, mpi_character,&
+    &                  mpi_get_processor_name, mpi_max_processor_name, mpi_comm_size
+    use dimensions, only: inode, jnode
+    logical, intent(in) :: detail
+    integer(kind=4) :: nr, nc, ierr, r, ln, iu, nmin, nmax
+    real(kind=8), allocatable :: tmax(:), tsum(:), tmin(:), allt(:,:), rt(:)
+    integer(kind=4), allocatable :: allc(:), allij(:,:)
+    integer(kind=4) :: myij(2), myc
+    real(kind=8) :: mt, mc, sxy, sxx, syy, cr, bal(3), tsu(2)
+    character(len=mpi_max_processor_name) :: host
+    character(len=mpi_max_processor_name), allocatable :: hosts(:)
+    character(len=32) :: fmt
+
+    call mpi_comm_size(ocean_grid_comm, nr, ierr)
+    nc = ld_ncall
+    call mpi_allreduce(ld_ncall, nmin, 1, mpi_integer, mpi_min, ocean_grid_comm, ierr)
+    call mpi_allreduce(ld_ncall, nmax, 1, mpi_integer, mpi_max, ocean_grid_comm, ierr)
+    if (nmin /= nmax .or. nmin == 0) return  ! no MARBL calls, or ranks disagree: all return
+    call mpi_allreduce(bal_tsetup, tsu(1), 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    call mpi_allreduce(bal_tsetup, tsu(2), 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    allocate(tmax(nc), tsum(nc), tmin(nc), rt(nr), allc(nr))
+    call mpi_allreduce(ld_t(1:nc), tmax, nc, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    call mpi_allreduce(ld_t(1:nc), tmin, nc, mpi_double_precision, mpi_min, ocean_grid_comm, ierr)
+    call mpi_allreduce(ld_t(1:nc), tsum, nc, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    myc = max(ld_ncol, 0)
+    call mpi_gather(sum(ld_t(1:nc)), 1, mpi_double_precision, rt, 1, mpi_double_precision,&
+    &               0, ocean_grid_comm, ierr)
+    call mpi_gather(myc, 1, mpi_integer, allc, 1, mpi_integer, 0, ocean_grid_comm, ierr)
+    if (mynode == 0) then
+      rt = rt/dble(nc)
+      mt = sum(rt)/nr ; mc = sum(dble(allc))/nr
+      sxy = sum((rt-mt)*(dble(allc)-mc)) ; sxx = sum((dble(allc)-mc)**2) ; syy = sum((rt-mt)**2)
+      cr = sxy/max(sqrt(sxx*syy), 1.d-300)
+      bal = [sum(tmin)/nc, sum(tsum)/(nr*nc), sum(tmax)/nc]
+      write(*,'(1x,A,I6,A,I4,A)') 'MARBL load balance (', nc, ' calls,', nr, ' ranks):'
+      write(*,'(3x,A,3I9,A,I4)') 'wet columns per rank min/mean/max', minval(allc),&
+      &  nint(mc), maxval(allc), '  x nz =', nz
+      write(*,'(3x,A,3F9.4)') 'wall s per call    min/mean/max', bal
+      write(*,'(3x,A,3ES10.3)') 's per wet column   min/mean/max',&
+      &  minval(rt/max(dble(allc),1._8), allc > 0), sum(rt)/max(sum(dble(allc)),1._8),&
+      &  maxval(rt/max(dble(allc),1._8), allc > 0)
+      write(*,'(3x,A,F7.4,A,F7.4)') 'corr(rank time, wet columns)', cr,&
+      &  '   max/mean per call', bal(3)/max(bal(2),1.d-300)
+      write(*,'(3x,A,3F9.4)') 'first call s       min/mean/max', tmin(1), tsum(1)/nr, tmax(1)
+      if (nc > 1) write(*,'(3x,A,3F9.4)') 'later calls s      min/mean/max',&
+      &  sum(tmin(2:nc))/(nc-1), sum(tsum(2:nc))/(nr*(nc-1)), sum(tmax(2:nc))/(nc-1)
+      if (marbl_balance) write(*,'(3x,A,2F9.4)') 'marbl_balance plan (bal_setup) s mean/max',&
+      &  tsu(2)/nr, tsu(1)
+      write(*,*)
+    end if
+    if (detail) then
+      allocate(allt(nc, merge(nr, 1, mynode == 0)), allij(2, merge(nr, 1, mynode == 0)))
+      allocate(hosts(merge(nr, 1, mynode == 0)))
+      myij = [inode, jnode]
+      call mpi_get_processor_name(host, ln, ierr)
+      call mpi_gather(ld_t(1:nc), nc, mpi_double_precision, allt, nc, mpi_double_precision,&
+      &               0, ocean_grid_comm, ierr)
+      call mpi_gather(myij, 2, mpi_integer, allij, 2, mpi_integer, 0, ocean_grid_comm, ierr)
+      call mpi_gather(host, mpi_max_processor_name, mpi_character, hosts,&
+      &               mpi_max_processor_name, mpi_character, 0, ocean_grid_comm, ierr)
+      if (mynode == 0) then
+        open(newunit=iu, file='marbl_load.txt', status='replace', action='write')
+        write(iu,'(A,I6,A,I4)') '# rank inode jnode host wet_columns wet_cells then wall s of each MARBL call; nz =',&
+        &nz, ' calls =', nc
+        write(fmt,'(A,I6,A)') '(I6,2I5,1x,A,2I10,', nc, 'ES11.4)'
+        do r = 1, nr
+          write(iu,fmt) r-1, allij(1,r), allij(2,r), trim(hosts(r)), allc(r), allc(r)*nz, allt(:,r)
+        end do
+        close(iu)
+      end if
+    end if
+  end subroutine marbldrv_print_load
 !-----------------------------------------------------------------------
 
   subroutine marbldrv_impose_constant_fe(istr,iend,jstr,jend,tracer_array,itime)
@@ -1938,6 +2619,9 @@ contains
     end if
 !     call print_marbl_log(marbl_instance%StatusLog,i,j)
     call marbl_instance%StatusLog%erase()
+#ifdef MARBL_DIAGS
+    call reset_flux_at_ref_depth
+#endif
   end subroutine marbldrv_compute_interior_tendency
 !-----------------------------------------------------------------------
 

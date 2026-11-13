@@ -27,8 +27,11 @@ module bgc_subcycle_mod
   ! from BGC_SETTINGS like the two above but left out of the namelist
   ! template and the key tables (described in section 6 of the docs page).
   !
-  ! The BGC state is kept identical in the three time levels of t between
-  ! window ends; the stock tracer code loops over itrc = 1, nt_step
+  ! Between window ends the BGC state is held in time levels 1 and 2 of t,
+  ! and at the surface of level 3, the predictor level (the only part of
+  ! level 3 read between windows; see the copy at the window end, which
+  ! with bgc_subcycle_diag > 0 fills the rest with a signalling NaN); the
+  ! stock tracer code loops over itrc = 1, nt_step
   ! (tracers module; nt_step = iTandS here, nt when bgc_physics_subcycle is off).
 
 #include "cppdefs.opt"
@@ -435,6 +438,7 @@ contains
     &                       is_marbl_step
 #endif
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_sum, mpi_min
+    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_signaling_nan
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend, tstep
     ! 2-D work over the tile with its 2-point halo
@@ -454,7 +458,7 @@ contains
     integer(kind=4) :: ib0, isub, msub, mk(nz), klo, khi, ig, ng, islot
     real(kind=8) :: lck(5,nz), gck(5,nz), fmk(nz), crit, ccell, cfc
     real(kind=8) :: dtw, cff, cout, smax, wmax, a, cl, p, rr, fm, cface, c1d, rv, dvx, dvy, v1min
-    real(kind=8) :: lmax(6), gmax(6)
+    real(kind=8) :: lmax(6), gmax(6), snan
     ! diagnostics: content before/after, sources, boundary fluxes (per tracer + shadow)
     real(kind=8), allocatable, dimension(:,:) :: bud, gbud
     real(kind=8) :: shdev, lmin(2), gmin(2), cres, sbuf2(2), rbuf2(2)
@@ -921,11 +925,30 @@ contains
         call exchange_xxx(t(:,:,:,nnew,itrc))
       end select
     end do
+    ! Copy to the other time levels. bgcsub_step runs after the corrector
+    ! (main.F90), so nnew = 3 - nstp is 1 or 2, and until the next window
+    ! end only the other of the two is read in full. Level 3, the predictor
+    ! level, is read between windows only at the surface (CFLX_CORR
+    ! restoring in bulk_frc, the CDR_LITE gas flux and the surface-flux
+    ! exchange in tracers.F90); the window itself uses it as scratch, and
+    ! the stock tracer code touches it only for T and S, so it gets the
+    ! surface layer only (halving the copy).
+    l = 3 - nnew
     do itrc = it0+1, nt
-      do l = 1, 3
-        if (l /= nnew) t(:,:,:,l,itrc) = t(:,:,:,nnew,itrc)
-      end do
+      t(:,:,:,l,itrc) = t(:,:,:,nnew,itrc)
+      t(:,:,nz,3,itrc) = t(:,:,nz,nnew,itrc)
     end do
+    ! Test runs (bgc_subcycle_diag > 0): fill the rest of level 3 with a
+    ! signalling NaN, so that any reader of it between windows fails
+    ! loudly, as NaN in the BGC state and output (or as a trap at its first
+    ! arithmetic use where floating-point traps can be enabled; an -fpe0
+    ! build on Derecho traps earlier, in the HDF5 library's start-up).
+    if (bgc_subcycle_diag > 0) then
+      snan = ieee_value(1._8, ieee_signaling_nan)
+      do itrc = it0+1, nt
+        t(:,:,1:nz-1,3,itrc) = snan
+      end do
+    end if
     call reg_toc(rg_bgcsub_bc)
 
     ! ======================= next window ====================================

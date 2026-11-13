@@ -314,11 +314,12 @@ bgc_physics_timestep = 0.0      ! How often the BGC/passive tracers are transpor
 !------------------------------
 marbl_config_file = "marbl_in"  ! MARBL configuration file ("" runs MARBL with its default settings)
 marbl_tracers_to_write = ""     ! MARBL tracers to include in BGC output
-marbl_diagnostics_to_write = "FG_CO2", "FG_ALT_CO2" ! MARBL diagnostics to include in BGC output ("" writes all)
+marbl_diagnostics_to_write = "FG_CO2", "FG_ALT_CO2" ! MARBL diagnostics to include in BGC output ("" writes all, and copying all costs ~18 % more MARBL time)
 marbl_timestep = 3600.0           ! How often MARBL's reactions run (s); rounded to a whole multiple of dt (max 10800).
                                   ! Transport of the BGC tracers: bgc_physics_timestep in BGC_SETTINGS
 use_constant_Fe = .false.         ! Hold MARBL's dissolved iron (Fe) at constant_Fe_value everywhere, overriding MARBL, transport and inputs
 constant_Fe_value = 3.0e-3        ! Fe imposed when use_constant_Fe (mmol/m^3, Fe's units; 1 nM = 1e-3)
+marbl_balance = .false.           ! Ship MARBL columns from ranks with more wet columns than average to ranks with fewer (same results, less waiting)
 /
 
 !================================================================================

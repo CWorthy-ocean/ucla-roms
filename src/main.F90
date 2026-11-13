@@ -13,6 +13,10 @@ program main              ! Open MP version of ROMS driver
   use roms_mpi, only: mpi_setup
   use init_scalars_mod, only: init_scalars
   use namelist_read_mod, only: read_namelists
+#ifdef MARBL
+  use marbl_driver, only: marbldrv_print_load
+  use bgc_subcycle_mod, only: bgc_subcycle_diag
+#endif
 #ifdef MPI_MASKING
   use mpi_masking_mod, only: find_optimal_tiling
 ! Coarse-resolution forcing flags: only the flag belonging to the active
@@ -99,6 +103,9 @@ program main              ! Open MP version of ROMS driver
   tend=MPI_Wtime()
   mpi_master_only write(*,*) 'MPI_run_time =', tend-tstart
   call print_region_timers(tend-tstart)
+#ifdef MARBL
+  call marbldrv_print_load(bgc_subcycle_diag > 0)
+#endif
   call MPI_Finalize (ierr)
 # endif
 
