@@ -535,3 +535,58 @@ class TestBgcSubcycling:
         assert_run_rejected(marbl_conf, nml, tmp_path, [
             "restarts must fall on window boundaries",
         ], label="output_period_rst")
+
+
+class TestBgcSubcycleShortWindow:
+    """Windows shorter than MARBL's interval: ``bgc_subcycle_steps = 2`` with
+    ``marbl_timestep = 4 dt`` transports the BGC tracers every 2 steps and runs
+    MARBL at every second window end."""
+
+    def test_windows_and_marbl_calls(self, tmp_path, marbl_conf, input_dir, reference_results):
+        """Windows end every 2 steps and conserve as in ``TestBgcSubcycling``;
+        MARBL runs every 4 steps, at the end of every second window."""
+        nml = _subcycle_nml(input_dir, 4, bgc_subcycle_steps=2)
+        stdout = marbl_conf.run(nml, cwd=tmp_path, capture_output=True)
+
+        windows = _bgcsub_lines(stdout)
+        assert [w["step"] for w in windows] == list(range(2, 13, 2))
+        assert all(w["nwin"] == 2 for w in windows)
+        for w in windows:
+            assert w["budget"] < 1e-12, w
+            assert w["cont"] < 1e-11, w
+            assert w["shadow"] < w["cont"] + 1e-11, w
+        assert "MARBL at the end of every 2 window(s)" in stdout
+
+        pv = get_summary_value(tmp_path, prefix="roms_his.20100101000000")
+        bv = get_summary_value(tmp_path, prefix="roms_bgc.20100101000000")
+        assert_output_matches_reference(reference_results, "bgc_subcycle_k2_m4",
+                                        {"physics": pv, "bgc": bv})
+
+    def test_exact_restart_between_marbl_steps(self, tmp_path, marbl_conf, input_dir):
+        """A restart at a window end that is not a MARBL step (step 6)
+        reproduces the continuous run bit for bit."""
+        nml = _subcycle_nml(input_dir, 4, bgc_subcycle_steps=2)
+        _with_restarts(nml, 6 * nml["TIME_STEPPING"]["dt"])
+        run1 = tmp_path / "run_1"
+        run1.mkdir()
+        marbl_conf.run(nml, cwd=run1)
+
+        run2 = tmp_path / "run_2"
+        run2.mkdir()
+        nml["INITIAL_CONDITIONS"]["inifile"] = str(run1 / "roms_rst.20100101000200.nc")
+        nml["TIME_STEPPING"]["ntimes"] = 6
+        marbl_conf.run(nml, cwd=run2)
+
+        prefix = "roms_rst.20100101000400"
+        run1_val = get_summary_value(run1, prefix=prefix, vars_to_exclude=["time_step"])
+        run2_val = get_summary_value(run2, prefix=prefix, vars_to_exclude=["time_step"])
+        assert "DIC" in run1_val.variables
+        assert run1_val.variables == run2_val.variables
+
+    def test_window_not_dividing_marbl_rejected(self, tmp_path, marbl_conf, input_dir):
+        """A window length that does not divide marbl_timestep/dt stops ROMS
+        at startup."""
+        nml = _subcycle_nml(input_dir, 4, bgc_subcycle_steps=3)
+        assert_run_rejected(marbl_conf, nml, tmp_path, [
+            "must be 0 or divide marbl_timestep/dt",
+        ], label="bgc_subcycle_steps")

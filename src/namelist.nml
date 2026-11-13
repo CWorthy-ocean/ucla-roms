@@ -631,12 +631,13 @@ fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost ta
 ! Optional (absent: bgc_subcycle = .false.). Transport, mix and force the
 ! tracers beyond T and S (passive, CDR_LITE, MARBL) once per window of k steps
 ! with the window's accumulated transports, and run MARBL at the window end;
-! T, S and the dynamics still step every dt. With MARBL, k = marbl_timestep/dt.
+! T, S and the dynamics still step every dt. With MARBL, k = marbl_timestep/dt
+! by default, or a divisor of it (MARBL then runs at every m-th window end).
 ! Restarts must fall on window boundaries (output_period_rst a multiple of
 ! k*dt, no monthly_restarts). See docs/model_settings/bgc_subcycling.md.
 !--------------------------
 bgc_subcycle = .false.               ! Subcycle the tracers beyond T and S
-bgc_subcycle_steps = 0               ! k without MARBL (>= 1); with MARBL 0 or marbl_timestep/dt
+bgc_subcycle_steps = 0               ! k without MARBL (>= 1); with MARBL 0 (marbl_timestep/dt) or a divisor of it
 bgc_subcycle_pos = .false.           ! Flux-corrected positivity limiter on the advective fluxes
 bgc_subcycle_diag = 0                ! 1: BGCSUB/BGCSUBNEG lines per window (Courant numbers, continuity,
                                      ! constancy, budget residual, new negatives; for testing);

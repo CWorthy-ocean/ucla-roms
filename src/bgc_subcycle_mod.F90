@@ -2,10 +2,11 @@ module bgc_subcycle_mod
   ! BGC tracer subcycling (namelist group BGC_SUBCYCLE_SETTINGS, optional).
   !
   ! The tracers itrc > iTandS (passive, CDR_LITE, MARBL incl. the ALT_CO2
-  ! twins) are transported, mixed, forced and passed to MARBL once per
-  ! window of k dynamics steps (k = marbl_timestep_ratio with MARBL), with
-  ! the transports of the window accumulated every step. T, S and the
-  ! dynamics are unchanged. Documentation: docs/model_settings/bgc_subcycling.md.
+  ! twins) are transported, mixed and forced once per window of k dynamics
+  ! steps (with MARBL, k = bgc_subcycle_steps, a divisor of
+  ! marbl_timestep_ratio, or marbl_timestep_ratio if that is 0), with the
+  ! transports of the window accumulated every step; MARBL runs at the
+  ! window ends that are MARBL steps. T, S and the dynamics are unchanged. Documentation: docs/model_settings/bgc_subcycling.md.
   !
   ! Every step (bgcsub_accumulate, before step3d_t): sum dt*FlxU, dt*FlxV,
   ! dt*(We+Wi), dt*Akt and the source contents (surface fluxes, rivers,
@@ -133,10 +134,15 @@ contains
     if (nb < 1) call error_log%raise_global(context=module_name//"/"//sr_name,&
     &info="bgc_subcycle: there are no tracers beyond temperature/salinity")
 #ifdef MARBL
+    ! k = bgc_subcycle_steps (0: marbl_timestep/dt). MARBL keeps its own
+    ! interval and runs at the end of a window (bgcsub_window_tile), so every
+    ! MARBL step must end one: k must divide marbl_timestep/dt.
     bgcsub_k = marbl_timestep_ratio
-    if (bgc_subcycle_steps > 0 .and. bgc_subcycle_steps /= bgcsub_k) then
+    if (bgc_subcycle_steps > 0) bgcsub_k = bgc_subcycle_steps
+    if (bgc_subcycle_steps < 0 .or. modulo(marbl_timestep_ratio, bgcsub_k) /= 0) then
       write(info,'(A,I0,A,I0,A)') "bgc_subcycle_steps (", bgc_subcycle_steps,&
-      &") must be 0 or equal marbl_timestep/dt (", bgcsub_k, ")"
+      &") must be 0 or divide marbl_timestep/dt (", marbl_timestep_ratio,&
+      &"), so that every MARBL step ends a window"
       call error_log%raise_global(context=module_name//"/"//sr_name, info=info)
     end if
 #else
@@ -145,8 +151,8 @@ contains
     &info="bgc_subcycle without MARBL needs bgc_subcycle_steps >= 1")
 #endif
     ! Restarts only on window boundaries (the window accumulators are not
-    ! in the file). Windows end on steps iic with modulo(iic, k) == 0 (the
-    ! MARBL steps); restart records are written every output_period_rst
+    ! in the file). Windows end on steps iic with modulo(iic, k) == 0 (every
+    ! MARBL step among them); restart records are written every output_period_rst
     ! from the start of the run, so the run must also start on a window
     ! boundary.
     if (wrt_file_rst .and. bgcsub_k > 1) then
@@ -155,7 +161,7 @@ contains
       &   modulo(nrst, bgcsub_k) /= 0 .or. modulo(ntstart-1, bgcsub_k) /= 0) then
         write(info,'(A,I0,A,I0,A)') "bgc_subcycle: restarts must fall on window boundaries:"//&
         &" output_period_rst must be a multiple of ", bgcsub_k,&
-        &" x dt (marbl_timestep), monthly_restarts off, and the run must start"//&
+        &" x dt, monthly_restarts off, and the run must start"//&
         &" on a window boundary (time step ", ntstart-1, " of the initial file"//&
         &" a multiple of k)"
         call error_log%raise_global(context=module_name//"/"//sr_name, info=info)
@@ -211,6 +217,10 @@ contains
       &' every window of ', bgcsub_k*dt, ' s'
       write(*,'(1x,A,I0,A,L1,A,I0)') '  k = ', bgcsub_k, ', positivity limiter ',&
       &bgc_subcycle_pos, ', diagnostics ', bgc_subcycle_diag
+#ifdef MARBL
+      write(*,'(1x,A,I0,A)') '  MARBL at the end of every ', marbl_timestep_ratio/bgcsub_k,&
+      &' window(s)'
+#endif
       if (modulo(ntstart-1, bgcsub_k) /= 0) write(*,'(1x,A)')&
       &'  the run starts inside a window: the first window is shorter'
       if (modulo(ntstart+ntimes-1, bgcsub_k) /= 0) write(*,'(1x,A,I0,A)')&
@@ -525,7 +535,7 @@ contains
       write(info,'(A,I0,A,F8.3,A,F8.3,A,F7.3,A)') "BGC window ending at step ", tstep,&
       &": horizontal Courant ", cff, ", smallest pseudo-thickness ratio ", v1min,&
       &" (must be >= 0.05) or explicit diffusion number ", gmax(4), " (must be <= 1):"//&
-      &" reduce marbl_timestep (bgc_subcycle_steps) or v_sponge/tnu2"
+      &" shorten the window (bgc_subcycle_steps, marbl_timestep) or reduce v_sponge/tnu2"
       call error_log%raise_global(context=module_name//"/bgcsub_window", info=info)
       call error_log%abort_check()
       return
