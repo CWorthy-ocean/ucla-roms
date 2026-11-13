@@ -20,6 +20,9 @@ module basic_output
   &refdatestr, put_global_atts, append_date_node
   use sponge_tune, only:  wrt_rst_ub, ub_tune
   use calc_pflx_mod, only: wrt_rst_diag_slow, calc_pflx
+#ifdef SOLVE3D
+  use implicit_fs_mod, only: fs_rst_def, fs_rst_wrt, fs_rst_wrt_scal
+#endif
   use scalars, only:&
   &NT, iic, knew, nstp, time,&
   &nz, dt, start_time, nnew, tdays
@@ -920,6 +923,9 @@ contains                  !]
       call ncwrite(ncid,'ocean_time',(/time/),(/rec_rst/))
 
       call write_time_step( ncid, rec_rst, total_rec_rst)
+#ifdef SOLVE3D
+      call fs_rst_wrt_scal(ncid, rec_rst)      ! fs_mode = 'implicit': restart scalars
+#endif
       ierr=nf90_close (ncid)
     endif
     call error_log%abort_check()
@@ -971,6 +977,7 @@ contains                  !]
     call ncwrite(ncid,'DU_avg_bak', DU_avg_bak( 1:i1,j0:j1),start,.true.)
     pio_gtype = '2Dvw'
     call ncwrite(ncid,'DV_avg_bak', DV_avg_bak(i0:i1, 1:j1),start,.true.)
+    call fs_rst_wrt(ncid, start)   ! fs_mode = 'implicit': generalized-alpha rates, delta
 
 #  elif defined PRED_COUPLED_MODE
     pio_gtype = '2Duw'
@@ -1041,6 +1048,9 @@ contains                  !]
     call ncwrite(ncid,'ocean_time',(/time/),(/rec_rst/))
 
     call write_time_step( ncid, rec_rst, total_rec_rst )
+#ifdef SOLVE3D
+    call fs_rst_wrt_scal(ncid, rec_rst)      ! fs_mode = 'implicit': restart scalars
+#endif
 
     start=1; start(3)=rec_rst                                    ! back to 2D vars
     call ncwrite(ncid,vname(1,indxZ), zeta(i0:i1,j0:j1,knew),start)
@@ -1075,6 +1085,7 @@ contains                  !]
     call ncwrite(ncid,'DV_avg2',    DV_avg2(i0:i1, 1:j1),start)
     call ncwrite(ncid,'DU_avg_bak', DU_avg_bak( 1:i1,j0:j1),start)
     call ncwrite(ncid,'DV_avg_bak', DV_avg_bak(i0:i1, 1:j1),start)
+    call fs_rst_wrt(ncid, start)   ! fs_mode = 'implicit': generalized-alpha rates, delta
 
 #  elif defined PRED_COUPLED_MODE
     call ncwrite(ncid,'rufrc',rufrc_bak( 1:i1,j0:j1,nstp),start)
@@ -1476,6 +1487,7 @@ contains                  !]
     varid = nccreate(ncid,'DV_avg_bak',(/dn_xr,dn_yv,dn_tm/),(/ds_xr,ds_yv,0/),nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'<back-step mixed fast-time-averaged vbar(:,:,n-1)>')
+    call fs_rst_def(ncid)   ! fs_mode = 'implicit': generalized-alpha rates, delta
 #  elif defined PRED_COUPLED_MODE
     varid = nccreate(ncid,'rufrc_bak',(/dn_xu,dn_yr,dn_tm/),(/ds_xu,ds_yr,0/),nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&

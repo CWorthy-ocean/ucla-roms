@@ -475,6 +475,7 @@ contains
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: wrt_upscale, do_upscale
 #endif
+    use implicit_fs_mod, only: fs_on, fs_step, fs_srcdiag, fs_src_diag, fs_bry_phase, fs_pot_phase
 #ifdef DIAGNOSTICS
     use diagnostics, only: do_diagnostics, diag_uv, diag_trc
 #endif
@@ -530,7 +531,7 @@ contains
     call reg_tic(rg_set_bry)
     call set_bry_all
 
-    if (bry_tides.or.pot_tides) call set_tides(0)
+    if (bry_tides.or.pot_tides) call set_tides(0, pot_phase=fs_pot_phase)
     call reg_toc(rg_set_bry)
 
 #ifdef SOLVE3D
@@ -602,11 +603,16 @@ contains
     ! Boundary data for time n+1 (used by step2d and the 3D corrector).
     ! tdays is n+1/2 here, so '1/2 fwd' reads at n+1; 'forward' read at
     ! n+3/2. The boundary tidal harmonics are added to the 2D boundary
-    ! arrays, which only the fast loop reads (u2dbc, v2dbc). The fast loop
+    ! arrays, which the split fast loop reads (u2dbc, v2dbc). That loop
     ! advances the barotropic mode from n to n+1 with these values held
     ! fixed, so they are evaluated at the centre of that interval, n+1/2;
     ! at n+1 the boundary-forced tide leads by about omega*dt/2. The
-    ! potential is at n+1/2 as well, where prsgrd uses it.
+    ! potential is at n+1/2 as well, where prsgrd uses it (the implicit
+    ! free surface moves it, see fs_pot_phase). With the implicit free surface
+    ! (fs_on) the same arrays are read by the implicit step, whose boundary
+    ! face takes data at n+alpha_f, so fs_on keeps the harmonics at n+1
+    ! (fs_bry_phase = 1; with fs_nsub sub-steps, which hold these values,
+    ! the mean of the sub-steps' end times, (fs_nsub+1)/(2 fs_nsub)).
     ! The non-tidal 2D boundary data (zeta/ubar/vbar_west, ...) the
     ! harmonics are added to stay at n+1: set_bry_all reads them together
     ! with the 3D boundary data the corrector applies at n+1, and at the
@@ -616,7 +622,13 @@ contains
     frc_time = '1/2 fwd'
     call reg_tic(rg_set_bry)
     call set_bry_all  ! get for time n+1
-    if (bry_tides.or.pot_tides) call set_tides(0, bry_phase=0.5_8)
+    if (bry_tides.or.pot_tides) then
+      if (fs_on) then
+        call set_tides(0, bry_phase=fs_bry_phase, pot_phase=fs_pot_phase)
+      else
+        call set_tides(0, bry_phase=0.5_8, pot_phase=fs_pot_phase)
+      end if
+    end if
     call reg_toc(rg_set_bry)
 
     ! All of this seems to happen with Hz's from time n
@@ -639,6 +651,15 @@ contains
 ! Solve the 2D equations for the barotropic mode.
 !------ --- -- --------- --- --- ---------- -----
     call reg_tic(rg_step2d)
+    if (fs_on) then
+      ! implicit free surface (implicit_fs_mod.F90): one implicit step
+      ! replaces the fast loop; kstp then points at the new level (diag)
+      kstp=knew
+      knew=kstp+1
+      if (knew > 4) knew=1
+      call fs_step
+      kstp=knew
+    else
     do iif=1,nfast
 
       kstp=knew
@@ -648,8 +669,10 @@ contains
       call step2d
 
     enddo
+    endif
     call reg_toc(rg_step2d)
 #ifdef SOLVE3D
+    if (fs_srcdiag) call fs_src_diag   ! IMPLICIT_FS fs_verbose >= 2: FS_SRC line (both fs_mode values)
     ! step3d_uv2 re-computes FlxU,FlV but still for n+1/2
     call reg_tic(rg_uv2_omega)
     call step3d_uv2(0)

@@ -118,14 +118,17 @@ contains
 
   end subroutine init_tides  !]
 !-----------------------------------------------------------------------
-  subroutine set_tides(tile, bry_phase)  ![
+  subroutine set_tides(tile, bry_phase, pot_phase)  ![
     ! computes current forcing for boundaries and surface tidal
     ! potential
     ! bry_phase (optional, units of dt): time of the boundary tidal
-    ! harmonics, time + bry_phase*dt. Default 0.5 (n+1/2). The potential is
-    ! always at n+1/2, where prsgrd uses it. Both calls in roms_step use
-    ! n+1/2: the harmonics enter only the 2D boundary conditions of the
-    ! fast loop, which runs from n to n+1 (see the second call there).
+    ! harmonics, time + bry_phase*dt. Default 0.5 (n+1/2).
+    ! pot_phase (optional, units of dt): time of the tidal potential,
+    ! time + pot_phase*dt. Default 0.5 (n+1/2, where prsgrd uses it).
+    ! Both calls in roms_step use n+1/2 for the split fast loop, which
+    ! runs from n to n+1 with the harmonics (2D boundary conditions) held
+    ! fixed; the implicit free surface passes its own times for both
+    ! (implicit_fs_mod: fs_bry_phase, fs_pot_phase; see the calls there).
     ! DevinD created seperate step as can't have compute_tile_bounds
     ! and compute_auxilliary_bounds in the same subroutine as they both
     ! declare and compute. Fortan doesn't allow.
@@ -134,18 +137,20 @@ contains
     implicit none
 
     integer(kind=4) :: tile
-    real(kind=8), intent(in), optional :: bry_phase
-    real(kind=8) :: bphase
+    real(kind=8), intent(in), optional :: bry_phase, pot_phase
+    real(kind=8) :: bphase, pphase
 
 #include "compute_tile_bounds.h"
 
     bphase = 0.5_8
     if (present(bry_phase)) bphase = bry_phase
-    call set_tides_tile(istr,iend,jstr,jend,bphase)
+    pphase = 0.5_8
+    if (present(pot_phase)) pphase = pot_phase
+    call set_tides_tile(istr,iend,jstr,jend,bphase,pphase)
 
   end subroutine set_tides  !]
 !-----------------------------------------------------------------------
-  subroutine set_tides_tile(istr,iend,jstr,jend,bphase)  ![
+  subroutine set_tides_tile(istr,iend,jstr,jend,bphase,pphase)  ![
 
     use boundary, only:&
     &zeta_west, ubar_west, vbar_west, zeta_east,&
@@ -157,6 +162,7 @@ contains
     ! input/outputs
     integer(kind=4),intent(in) :: istr,iend,jstr,jend
     real(kind=8),intent(in) :: bphase   ! boundary harmonics at time+bphase*dt
+    real(kind=8),intent(in) :: pphase   ! tidal potential at time+pphase*dt
     ! local
     integer(kind=4) :: tile, itide, i, j
     real(kind=8) :: omT, omTp
@@ -177,7 +183,7 @@ contains
     do itide=1,ntides
 
       omT  = ftide(itide)*(time+bphase*dt)   ! boundary harmonics
-      omTp = ftide(itide)*(time+0.5_8*dt)    ! tidal potential (n+1/2)
+      omTp = ftide(itide)*(time+pphase*dt)   ! tidal potential
 
       if (bry_tides) then
 

@@ -55,6 +55,9 @@ contains
     use roms_mpi, only: exchange_xxx
     use error_handling_mod, only: error_log
     use calc_pflx_mod, only : get_init_slow, calc_pflx
+#ifdef SOLVE3D
+    use implicit_fs_mod, only: fs_rst_get
+#endif
     use sponge_tune, only: get_init_ub, ub_tune
     use pio_roms, only: use_pio, pio_gtype
 #ifdef PARALLEL_IO
@@ -520,6 +523,7 @@ contains
       &(umask(x_:x1,y0:y1)+riv_umask(x_:x1,y0:y1))
       DV_avg_bak(x0:x1,y_:y1) = DV_avg_bak(x0:x1,y_:y1)*&
       &(vmask(x0:x1,y_:y1)+riv_vmask(x0:x1,y_:y1))
+      call fs_rst_get(ncid, record)   ! fs_mode = 'implicit': generalized-alpha rates, delta
     else
       forw_start=ntstart    !--> cancel exact restart
       iic = 0 ! set back to zero
