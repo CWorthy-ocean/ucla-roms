@@ -37,8 +37,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install towncrier
-        # Same pin as finalize_release_notes.yaml.
-        run: pip install "towncrier==26.9.0"
+        # Same towncrier pin as finalize_release_notes.yaml. docutils parses the
+        # notes in the last step.
+        run: pip install "towncrier==26.9.0" "docutils==0.23"
 
       - name: Check for a release-note fragment
         env:
@@ -46,5 +47,19 @@ jobs:
         run: |
           if ! towncrier check --compare-with "origin/$BASE_REF"; then
             echo "::error::Add a release note as changes/+<name>.<type>.rst (see changes/README.md), or label the PR no-changelog if users have nothing to learn from it."
+            exit 1
+          fi
+
+      - name: Check that the notes are valid reStructuredText
+        # The notes go into the documentation as written, and nothing else
+        # parses them before a release. A name ending in an underscore outside
+        # double backticks, or a sub-bullet followed by unindented text, is an
+        # error here. Line numbers in the message refer to the notes printed
+        # below it, not to the fragment.
+        run: |
+          towncrier build --draft --version Unreleased > "$RUNNER_TEMP/notes.rst"
+          if ! python -m docutils --report=2 --halt=2 "$RUNNER_TEMP/notes.rst" /dev/null; then
+            cat -n "$RUNNER_TEMP/notes.rst"
+            echo "::error::A release note in changes/ is not valid reStructuredText; see the message above and changes/README.md."
             exit 1
           fi

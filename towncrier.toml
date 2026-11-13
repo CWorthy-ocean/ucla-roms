@@ -1,8 +1,8 @@
 # Release notes: fragments in changes/, named +<name>.<type>.rst (or
 # <PR number>.<type>.rst), assembled into docs/releases/<tag>.rst by
 # finalize_release_notes.yaml: ci/number_fragments.py renames each +<name> to
-# the PR that added it, ci/add_release_to_index.py adds the new file to
-# docs/releases.rst, then `towncrier build --version <tag>` writes it.
+# the PR that added it, ci/add_release_to_index.py adds an include of the new
+# file to docs/releases.rst, then `towncrier build --version <tag>` writes it.
 # See changes/README.md.
 [tool.towncrier]
 directory = "changes"

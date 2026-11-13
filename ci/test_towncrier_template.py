@@ -1,15 +1,16 @@
 """
 Tests for the towncrier setup that turns ``changes/`` into ``docs/releases/<tag>.rst``.
 
-Run with ``pytest ci/test_towncrier_template.py``. Needs ``towncrier`` and is
-skipped without it; like the other ``ci/`` tests, CI does not run it.
+Run with ``pytest ci/test_towncrier_template.py``. Needs ``towncrier`` and
+``docutils`` and is skipped without them; like the other ``ci/`` tests, CI does
+not run it.
 
 Each test builds a release from sample fragments with the repository's own
 ``towncrier.toml`` and template, in a scratch git repository, exactly as
 ``finalize_release_notes.yaml`` does (index first, then ``towncrier build``).
 It then checks the result against the style of the releases already in
-``docs/releases/``, parses it as RST when ``docutils`` is installed, and reads
-it back with ``release_body.py``, as ``publish_release.yaml`` does.
+``docs/releases/``, parses it as RST as ``changelog.yaml`` does, and reads it
+back with ``release_body.py``, as ``publish_release.yaml`` does.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from types import ModuleType
 import pytest
 
 pytest.importorskip("towncrier")
+docutils_core = pytest.importorskip("docutils.core")
 
 REPO = Path(__file__).resolve().parent.parent
 URL = "https://github.com/CWorthy-ocean/ucla-roms/pull"
@@ -96,9 +98,8 @@ def _release(repo: Path, version: str = "0.15.0") -> str:
 
 def _assert_clean_rst(text: str) -> None:
     """Fail on anything docutils reports at warning level or above."""
-    core = pytest.importorskip("docutils.core")
     warnings = io.StringIO()
-    core.publish_doctree(
+    docutils_core.publish_doctree(
         text, settings_overrides={"report_level": 2, "warning_stream": warnings}
     )
     assert warnings.getvalue() == ""
@@ -224,3 +225,15 @@ def test_released_tag_is_refused_before_towncrier_overwrites_it(scratch):
         add_release_to_index.add_release(scratch, "0.14.0")
     assert (scratch / "docs" / "releases.rst").read_text() == INDEX
     assert (scratch / "docs" / "releases" / "0.14.0.rst").read_text() == OLD_RELEASE
+
+
+@pytest.mark.parametrize(
+    "note",
+    ["The ub_ coefficients.\n", "Lead.\n- A detail.\nText that is not indented.\n"],
+)
+def test_invalid_rst_in_a_fragment_is_detectable(scratch, note):
+    """What changelog.yaml's last step relies on: such a note builds, but warns."""
+    _add_fragments(scratch, {"12.bugfix.rst": note})
+    text = _release(scratch)
+    with pytest.raises(AssertionError):
+        _assert_clean_rst(text)
