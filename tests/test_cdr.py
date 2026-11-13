@@ -5,7 +5,8 @@ MARBL+CDR_FORCING binary, built once per module, but each runs in its own
 tmp_path so their output files cannot collide. The module-scoped
 ``cdrgas_run`` fixture runs the parameterized case once more with the
 ``_cdrgas`` gas-exchange output on; ``TestCdr`` checks that output and
-``TestCdrLite`` (a no-MARBL CDR_LITE build) reads it back as forcing. The same
+``TestCdrLite`` (a no-MARBL CDR_LITE build) reads it back as forcing, and
+checks that ``BGC_SETTINGS`` is optional there. The same
 binary has no restoring term, so it also checks that ``wrt_rstflx`` is rejected.
 """
 import copy
@@ -574,6 +575,41 @@ class TestCdrLite:
         assert_output_matches_reference(
             reference_results, "cdr_lite_parm", {"physics": pv, "cdrtrc": tv}
         )
+
+    def test_bgc_settings_without_marbl(self, tmp_path, cdr_lite_conf, input_dir, cdrgas_run):
+        """Without MARBL, ``BGC_SETTINGS`` (read for its BGC subcycling keys when
+        there are tracers beyond T and S) is optional: the run without the group
+        equals the run with it, subcycling off, bit for bit. Subcycling on
+        without ``bgc_physics_timestep`` stops ROMS at startup."""
+        pieces = sorted(cdrgas_run.glob("roms_cdrgas.20100101000000.?.nc"))
+        assert len(pieces) == 4
+
+        def run_dir_with_pieces(name):
+            run_dir = tmp_path / name
+            run_dir.mkdir()
+            for piece in pieces:
+                shutil.copy(piece, run_dir / piece.name)
+            return run_dir
+
+        values = {}
+        for group in ("present", "absent"):
+            run_dir = run_dir_with_pieces(group)
+            nml = _cdr_lite_parm_nml(input_dir)
+            if group == "absent":
+                del nml["BGC_SETTINGS"]
+            cdr_lite_conf.run(nml, cwd=run_dir)
+            values[group] = [
+                get_summary_value(run_dir, prefix="roms_his.20100101000000").variables,
+                get_summary_value(run_dir, prefix="roms_cdrtrc.20100101000640",
+                                  vars_to_exclude=["avg_begin_time", "avg_end_time"]).variables,
+            ]
+        assert values["present"] == values["absent"]
+
+        nml = _cdr_lite_parm_nml(input_dir)
+        nml["BGC_SETTINGS"]["bgc_physics_subcycle"] = True
+        assert_run_rejected(cdr_lite_conf, nml, run_dir_with_pieces("on"), [
+            "bgc_physics_subcycle without MARBL needs bgc_physics_timestep > 0",
+        ], label="bgc_physics_timestep")
 
     def test_sensitivity_time_interpolation_switch(
         self, tmp_path, cdr_lite_conf, input_dir, cdrgas_run

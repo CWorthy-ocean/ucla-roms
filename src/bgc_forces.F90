@@ -3,9 +3,16 @@ module bgc_forces
 
 #include "cppdefs.opt"
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
-
   use param, only: lm, mm
+#endif
   implicit none
+
+! Atmospheric xCO2 [ppm] applied when PCO2AIR_FORCING is off (not read from a forcing
+! file). Set via the BGC_SETTINGS namelist; read in bgc_shared_vars::read_nml_bgc.
+! Declared in every build: that group is also read without MARBL/BEC2.
+  real(kind=8) :: xco2air_default = 284.7   ! pre-industrial [micromol/mol]
+
+#if defined(BIOLOGY_BEC2) || defined(MARBL)
 
 #ifdef PCO2AIR_FORCING
 ! xCO2air concentration
@@ -26,10 +33,6 @@ module bgc_forces
   &xco2air_file_id, xco2air_id,  xco2air_tid
 # endif
 #endif /* PCO2AIR_FORCING */
-
-! Atmospheric xCO2 [ppm] applied when PCO2AIR_FORCING is off (not read from a forcing
-! file). Set via the BGC_SETTINGS namelist; read in bgc_shared_vars::read_nml_bgc.
-  real(kind=8) :: xco2air_default = 284.7   ! pre-industrial [micromol/mol]
 
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
 ! daily avg swrad

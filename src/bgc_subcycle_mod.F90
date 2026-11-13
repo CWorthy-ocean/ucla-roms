@@ -1,12 +1,14 @@
 module bgc_subcycle_mod
-  ! BGC tracer subcycling (namelist group BGC_SUBCYCLE_SETTINGS, optional).
+  ! BGC tracer subcycling (keys bgc_physics_subcycle, bgc_physics_timestep
+  ! of the namelist group BGC_SETTINGS, read in bgc_shared_vars).
   !
   ! The tracers itrc > iTandS (passive, CDR_LITE, MARBL incl. the ALT_CO2
-  ! twins) are transported, mixed and forced once per window of k dynamics
-  ! steps (with MARBL, k = bgc_subcycle_steps, a divisor of
-  ! marbl_timestep_ratio, or marbl_timestep_ratio if that is 0), with the
-  ! transports of the window accumulated every step; MARBL runs at the
-  ! window ends that are MARBL steps. T, S and the dynamics are unchanged. Documentation: docs/model_settings/bgc_subcycling.md.
+  ! twins) are transported, mixed and forced once per window of
+  ! k = bgc_physics_timestep/dt dynamics steps (with MARBL, k divides
+  ! marbl_timestep_ratio; bgc_physics_timestep = 0 means k =
+  ! marbl_timestep_ratio), with the transports of the window accumulated
+  ! every step; MARBL runs at the window ends that are MARBL steps.
+  ! T, S and the dynamics are unchanged. Documentation: docs/model_settings/bgc_subcycling.md.
   !
   ! Every step (bgcsub_accumulate, before step3d_t): sum dt*FlxU, dt*FlxV,
   ! dt*(We+Wi), dt*Akt and the source contents (surface fluxes, rivers,
@@ -21,25 +23,25 @@ module bgc_subcycle_mod
   !     implicit vertical mixing with the window-integrated Akt;
   !  4. open boundaries with the window Courant numbers, MARBL, exchange.
   ! Optional flux-corrected positivity limiter (bgc_subcycle_pos) and
-  ! per-window diagnostics (bgc_subcycle_diag).
+  ! per-window diagnostics (bgc_subcycle_diag): testing/expert keys, read
+  ! from BGC_SETTINGS like the two above but left out of the namelist
+  ! template and the key tables (described in section 6 of the docs page).
   !
   ! The BGC state is kept identical in the three time levels of t between
   ! window ends; the stock tracer code loops over itrc = 1, nt_step
-  ! (tracers module; nt_step = iTandS here, nt when bgc_subcycle is off).
+  ! (tracers module; nt_step = iTandS here, nt when bgc_physics_subcycle is off).
 
 #include "cppdefs.opt"
   implicit none
   private
 
-  logical, public :: bgc_subcycle = .false.
+  ! Namelist keys (group BGC_SETTINGS, declared and read in bgc_shared_vars)
+  logical, public :: bgc_physics_subcycle = .false.
+  real(kind=8), public :: bgc_physics_timestep = 0._8   ! [s]; 0: marbl_timestep
+  logical, public :: bgc_subcycle_pos = .false.         ! testing/expert key
+  integer(kind=4), public :: bgc_subcycle_diag = 0      ! testing/expert key
   integer(kind=4), public :: bgcsub_k = 1
-  integer(kind=4) :: bgc_subcycle_steps = 0
-  logical :: bgc_subcycle_pos = .false.
-  integer(kind=4) :: bgc_subcycle_diag = 0
-  namelist /BGC_SUBCYCLE_SETTINGS/ bgc_subcycle, bgc_subcycle_steps,&
-  &                                bgc_subcycle_pos, bgc_subcycle_diag
 
-  public :: read_nml_bgc_subcycle
 #ifdef SOLVE3D
   public :: bgcsub_init, bgcsub_accumulate, bgcsub_step
 
@@ -69,37 +71,9 @@ module bgc_subcycle_mod
   integer(kind=4), allocatable, dimension(:) :: hu_i, hu_j, hv_i, hv_j
   ! positivity limiter work (per tracer of a group of up to four)
   real(kind=8), allocatable, dimension(:,:,:,:) :: FXa, FEa, RRa
-#endif
 
 contains
 
-  subroutine read_nml_bgc_subcycle
-    ! Optional group: absent = off (the stock code paths).
-    use, intrinsic :: iso_fortran_env, only: iostat_end
-    use namelist_open_mod, only: open_namelist_file
-    use error_handling_mod, only: error_log
-    implicit none
-    integer(kind=4) :: namelist_unit, ios
-    character(len=21) :: sr_name = "read_nml_bgc_subcycle"
-    character(len=512) :: msg = ""
-
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=BGC_SUBCYCLE_SETTINGS, iostat=ios, iomsg=msg)
-    close(namelist_unit)
-    if (ios == iostat_end) then
-      bgc_subcycle = .false.
-    else if (ios /= 0) then
-      call error_log%raise_global(context="bgc_subcycle/"//sr_name,&
-      &info="could not read BGC_SUBCYCLE_SETTINGS: "//trim(msg))
-    end if
-#ifndef SOLVE3D
-    if (bgc_subcycle) call error_log%raise_global(context="bgc_subcycle/"//sr_name,&
-    &info="bgc_subcycle requires SOLVE3D")
-#endif
-  end subroutine read_nml_bgc_subcycle
-
-#ifdef SOLVE3D
 ! ----------------------------------------------------------------------
   subroutine bgcsub_init
     ! After the initial state and set_depth: checks, allocation, window
@@ -128,27 +102,29 @@ contains
     character(len=512) :: info
     integer(kind=4) :: itrc, l, nrst
 
-    if (.not. bgc_subcycle) return
+    if (.not. bgc_physics_subcycle) return
     it0 = iTandS
     nb = nt - iTandS
     if (nb < 1) call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_subcycle: there are no tracers beyond temperature/salinity")
+    &info="bgc_physics_subcycle: there are no tracers beyond temperature/salinity")
 #ifdef MARBL
-    ! k = bgc_subcycle_steps (0: marbl_timestep/dt). MARBL keeps its own
-    ! interval and runs at the end of a window (bgcsub_window_tile), so every
-    ! MARBL step must end one: k must divide marbl_timestep/dt.
-    bgcsub_k = marbl_timestep_ratio
-    if (bgc_subcycle_steps > 0) bgcsub_k = bgc_subcycle_steps
-    if (bgc_subcycle_steps < 0 .or. modulo(marbl_timestep_ratio, bgcsub_k) /= 0) then
-      write(info,'(A,I0,A,I0,A)') "bgc_subcycle_steps (", bgc_subcycle_steps,&
-      &") must be 0 or divide marbl_timestep/dt (", marbl_timestep_ratio,&
-      &"), so that every MARBL step ends a window"
-      call error_log%raise_global(context=module_name//"/"//sr_name, info=info)
+    ! k = bgc_physics_timestep/dt (0: marbl_timestep as MARBL rounds it, i.e.
+    ! marbl_timestep_ratio). MARBL keeps its own interval and runs at the end
+    ! of a window (bgcsub_window_tile), so every MARBL step must end one: k
+    ! must divide marbl_timestep/dt.
+    if (bgc_physics_timestep == 0._8) then
+      bgcsub_k = marbl_timestep_ratio
+    else
+      call bgcsub_window_steps(marbl_timestep_ratio)
     end if
 #else
-    bgcsub_k = bgc_subcycle_steps
-    if (bgcsub_k < 1) call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_subcycle without MARBL needs bgc_subcycle_steps >= 1")
+    if (bgc_physics_timestep == 0._8) then
+      call error_log%raise_global(context=module_name//"/"//sr_name,&
+      &info="bgc_physics_subcycle without MARBL needs bgc_physics_timestep > 0"//&
+      &" (the window length in s, a whole multiple of dt = "//secs(dt)//" s)")
+    else
+      call bgcsub_window_steps(0)
+    end if
 #endif
     ! Restarts only on window boundaries (the window accumulators are not
     ! in the file). Windows end on steps iic with modulo(iic, k) == 0 (every
@@ -159,32 +135,32 @@ contains
       nrst = nint(output_period_rst/dt)
       if (monthly_restarts .or. abs(nrst*dt-output_period_rst) > 1.d-6*dt .or.&
       &   modulo(nrst, bgcsub_k) /= 0 .or. modulo(ntstart-1, bgcsub_k) /= 0) then
-        write(info,'(A,I0,A,I0,A)') "bgc_subcycle: restarts must fall on window boundaries:"//&
-        &" output_period_rst must be a multiple of ", bgcsub_k,&
-        &" x dt, monthly_restarts off, and the run must start"//&
-        &" on a window boundary (time step ", ntstart-1, " of the initial file"//&
-        &" a multiple of k)"
+        write(info,'(A,I0,A,I0,A,I0,A)') "bgc_physics_subcycle: restarts must fall on window"//&
+        &" boundaries: output_period_rst must be a multiple of bgc_physics_timestep = "//&
+        &secs(bgcsub_k*dt)//" s (", bgcsub_k, " x dt), monthly_restarts off, and the run"//&
+        &" must start on a window boundary (time step ", ntstart-1, " of the initial file"//&
+        &" a multiple of ", bgcsub_k, ")"
         call error_log%raise_global(context=module_name//"/"//sr_name, info=info)
       end if
     end if
 #if defined ADV_ISONEUTRAL || defined TS_DIF4 || defined BIOLOGY_BEC2 || defined CONST_TRACERS
     call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_subcycle does not support ADV_ISONEUTRAL, TS_DIF4, BIOLOGY_BEC2 or CONST_TRACERS")
+    &info="bgc_physics_subcycle does not support ADV_ISONEUTRAL, TS_DIF4, BIOLOGY_BEC2 or CONST_TRACERS")
 #endif
 #ifdef DIAGNOSTICS
     if (diag_trc) then
       if (any(wrt_t_dia(it0+1:nt))) call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
-      &info="bgc_subcycle: per-step tracer diagnostics of BGC tracers are not available")
+      &info="bgc_physics_subcycle: per-step tracer diagnostics of BGC tracers are not available")
     end if
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     if (do_upscale) call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_subcycle does not support UPSCALING output")
+    &info="bgc_physics_subcycle does not support UPSCALING output")
 #endif
 #ifdef SPONGE_TUNE
     if (ub_tune) call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_subcycle does not support SPONGE_TUNE ub_tune")
+    &info="bgc_physics_subcycle does not support SPONGE_TUNE ub_tune")
 #endif
     call error_log%abort_check()
 
@@ -213,8 +189,8 @@ contains
     nt_step = it0
 
     if (mynode == 0) then
-      write(*,'(/1x,A,I0,A,I0,A,F8.1,A)') 'BGC subcycling: tracers ', it0+1, '-', nt,&
-      &' every window of ', bgcsub_k*dt, ' s'
+      write(*,'(/1x,A,I0,A,I0,A)') 'BGC subcycling: tracers ', it0+1, '-', nt,&
+      &', bgc_physics_timestep = '//secs(bgcsub_k*dt)//' s'
       write(*,'(1x,A,I0,A,L1,A,I0)') '  k = ', bgcsub_k, ', positivity limiter ',&
       &bgc_subcycle_pos, ', diagnostics ', bgc_subcycle_diag
 #ifdef MARBL
@@ -228,6 +204,71 @@ contains
       &modulo(ntstart+ntimes-1, bgcsub_k), ' steps is not applied'
     end if
   end subroutine bgcsub_init
+
+! ----------------------------------------------------------------------
+  subroutine bgcsub_window_steps(nm)
+    ! bgcsub_k = bgc_physics_timestep/dt. It must be a whole multiple of dt
+    ! (relative tolerance as for output_period_rst), at least dt, and with
+    ! MARBL (nm = marbl_timestep/dt > 0) divide marbl_timestep. Otherwise
+    ! stop, naming the nearest valid values: never round silently.
+    use scalars, only: dt
+    use error_handling_mod, only: error_log
+    implicit none
+    integer(kind=4), intent(in) :: nm
+    character(len=512) :: info
+    real(kind=8) :: x
+    integer(kind=4) :: kl, kh
+
+    x = min(bgc_physics_timestep/dt, 1.d8)
+    bgcsub_k = max(1, nint(x))
+    if (x < 1._8 - 1.d-6) then
+      info = "bgc_physics_timestep = "//secs(bgc_physics_timestep)//&
+      &" s is shorter than dt = "//secs(dt)//" s"
+    else if (abs(bgcsub_k*dt - bgc_physics_timestep) > 1.d-6*dt) then
+      info = "bgc_physics_timestep = "//secs(bgc_physics_timestep)//&
+      &" s is not a whole multiple of dt = "//secs(dt)//" s"
+    else if (nm > 0 .and. modulo(nm, bgcsub_k) /= 0) then
+      info = "marbl_timestep = "//secs(nm*dt)//" s (as MARBL rounds it) is not"//&
+      &" a whole multiple of bgc_physics_timestep = "//secs(bgc_physics_timestep)//" s"
+    else
+      return
+    end if
+    ! nearest valid window lengths below and above (with MARBL: divisors of nm)
+    kl = floor(x + 1.d-6)
+    if (nm > 0) kl = min(kl, nm)
+    do while (kl >= 1)
+      if (nm == 0) exit
+      if (modulo(nm, kl) == 0) exit
+      kl = kl - 1
+    end do
+    kh = max(1, ceiling(x - 1.d-6))
+    do while (nm > 0 .and. kh <= nm)
+      if (modulo(nm, kh) == 0) exit
+      kh = kh + 1
+    end do
+    info = trim(info)//"; nearest valid bgc_physics_timestep:"
+    if (kl >= 1) info = trim(info)//" "//secs(kl*dt)//" s"
+    if (kl >= 1 .and. (nm == 0 .or. kh <= nm)) info = trim(info)//" or"
+    if (nm == 0 .or. kh <= nm) info = trim(info)//" "//secs(kh*dt)//" s"
+    if (nm > 0) info = trim(info)//" (0 = marbl_timestep)"
+    call error_log%raise_global(context=module_name//"/bgcsub_window_steps", info=info)
+  end subroutine bgcsub_window_steps
+
+! ----------------------------------------------------------------------
+  function secs(v) result(str)
+    ! A time in s for messages: an integer when it is one.
+    implicit none
+    real(kind=8), intent(in) :: v
+    character(len=:), allocatable :: str
+    character(len=32) :: buf
+
+    if (abs(v) < 1.d9 .and. abs(v - anint(v)) <= 1.d-9*max(1._8, abs(v))) then
+      write(buf,'(I0)') nint(v, kind=8)
+    else
+      write(buf,'(G0.6)') v
+    end if
+    str = trim(adjustl(buf))
+  end function secs
 
 ! ----------------------------------------------------------------------
   subroutine bgcsub_accumulate
@@ -535,7 +576,7 @@ contains
       write(info,'(A,I0,A,F8.3,A,F8.3,A,F7.3,A)') "BGC window ending at step ", tstep,&
       &": horizontal Courant ", cff, ", smallest pseudo-thickness ratio ", v1min,&
       &" (must be >= 0.05) or explicit diffusion number ", gmax(4), " (must be <= 1):"//&
-      &" shorten the window (bgc_subcycle_steps, marbl_timestep) or reduce v_sponge/tnu2"
+      &" shorten the window (bgc_physics_timestep, or marbl_timestep if it is 0) or reduce v_sponge/tnu2"
       call error_log%raise_global(context=module_name//"/bgcsub_window", info=info)
       call error_log%abort_check()
       return

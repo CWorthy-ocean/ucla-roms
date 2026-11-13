@@ -13,7 +13,9 @@ restoring fluxes must equal the fluxes the model applied, follow their formula,
 and leave the model unchanged. ``TestBgcSubcycling`` runs the case with BGC
 tracer subcycling: hashed output at two window lengths and both free-surface
 modes, the per-window budgets, the positivity limiter, an exact restart at a
-window boundary and the rejection of restarts inside a window.
+window boundary and the rejection of restarts inside a window;
+``TestBgcSubcycleShortWindow`` a window shorter than MARBL's interval and the
+rejection of window lengths that ROMS would have to round.
 """
 import re
 from pathlib import Path
@@ -403,19 +405,23 @@ class TestRestoringFluxOutput:
                 )
 
 
-def _subcycle_nml(input_dir, k, **subcycle) -> dict:
-    """``_marbl_nml`` with BGC subcycling over windows of ``k`` steps (MARBL every
-    ``k`` steps), 12 steps, output every 4 steps (window ends for k = 2 and 4)
-    and the per-window diagnostics on."""
+def _subcycle_nml(input_dir, k, window=None, **subcycle) -> dict:
+    """``_marbl_nml`` with BGC subcycling, MARBL every ``k`` steps and windows of
+    ``window`` steps (``bgc_physics_timestep = window * dt``; default 0, i.e.
+    ``marbl_timestep``), 12 steps, output every 4 steps (window ends for k = 2
+    and 4) and the per-window diagnostics (testing key ``bgc_subcycle_diag``) on."""
     nml = _marbl_nml(input_dir)
     dt = nml["TIME_STEPPING"]["dt"]
     nml["TIME_STEPPING"]["ntimes"] = 12
     nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = k * dt
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 4 * dt
     nml["BGC_SETTINGS"]["output_period_bgc_his"] = 4 * dt
-    nml["BGC_SUBCYCLE_SETTINGS"].update(
-        {"bgc_subcycle": True, "bgc_subcycle_diag": 1, **subcycle}
-    )
+    nml["BGC_SETTINGS"].update({
+        "bgc_physics_subcycle": True,
+        "bgc_physics_timestep": 0 if window is None else window * dt,
+        "bgc_subcycle_diag": 1,
+        **subcycle,
+    })
     return nml
 
 
@@ -450,7 +456,8 @@ def _bgcsubneg_min(stdout) -> list[float]:
 
 
 class TestBgcSubcycling:
-    """BGC tracer subcycling (``BGC_SUBCYCLE_SETTINGS``) on the realistic MARBL case."""
+    """BGC tracer subcycling (``bgc_physics_subcycle`` in ``BGC_SETTINGS``) on the
+    realistic MARBL case."""
 
     @pytest.mark.parametrize("k, fs_mode", [(2, "split"), (4, "split"), (4, "implicit")])
     def test_bgc_subcycle_real_marbl(self, tmp_path, marbl_conf, input_dir, reference_results,
@@ -484,7 +491,7 @@ class TestBgcSubcycling:
         stock run's bit for bit (MARBL does not feed back on the physics here)."""
         stock = tmp_path / "stock"
         stock.mkdir()
-        nml = _subcycle_nml(input_dir, 4, bgc_subcycle=False)
+        nml = _subcycle_nml(input_dir, 4, bgc_physics_subcycle=False)
         marbl_conf.run(nml, cwd=stock)
         sub = tmp_path / "subcycled"
         sub.mkdir()
@@ -538,14 +545,14 @@ class TestBgcSubcycling:
 
 
 class TestBgcSubcycleShortWindow:
-    """Windows shorter than MARBL's interval: ``bgc_subcycle_steps = 2`` with
+    """Windows shorter than MARBL's interval: ``bgc_physics_timestep = 2 dt`` with
     ``marbl_timestep = 4 dt`` transports the BGC tracers every 2 steps and runs
     MARBL at every second window end."""
 
     def test_windows_and_marbl_calls(self, tmp_path, marbl_conf, input_dir, reference_results):
         """Windows end every 2 steps and conserve as in ``TestBgcSubcycling``;
         MARBL runs every 4 steps, at the end of every second window."""
-        nml = _subcycle_nml(input_dir, 4, bgc_subcycle_steps=2)
+        nml = _subcycle_nml(input_dir, 4, window=2)
         stdout = marbl_conf.run(nml, cwd=tmp_path, capture_output=True)
 
         windows = _bgcsub_lines(stdout)
@@ -565,7 +572,7 @@ class TestBgcSubcycleShortWindow:
     def test_exact_restart_between_marbl_steps(self, tmp_path, marbl_conf, input_dir):
         """A restart at a window end that is not a MARBL step (step 6)
         reproduces the continuous run bit for bit."""
-        nml = _subcycle_nml(input_dir, 4, bgc_subcycle_steps=2)
+        nml = _subcycle_nml(input_dir, 4, window=2)
         _with_restarts(nml, 6 * nml["TIME_STEPPING"]["dt"])
         run1 = tmp_path / "run_1"
         run1.mkdir()
@@ -583,10 +590,19 @@ class TestBgcSubcycleShortWindow:
         assert "DIC" in run1_val.variables
         assert run1_val.variables == run2_val.variables
 
-    def test_window_not_dividing_marbl_rejected(self, tmp_path, marbl_conf, input_dir):
-        """A window length that does not divide marbl_timestep/dt stops ROMS
-        at startup."""
-        nml = _subcycle_nml(input_dir, 4, bgc_subcycle_steps=3)
-        assert_run_rejected(marbl_conf, nml, tmp_path, [
-            "must be 0 or divide marbl_timestep/dt",
-        ], label="bgc_subcycle_steps")
+    @pytest.mark.parametrize("seconds, messages", [
+        (30, ["bgc_physics_timestep = 30 s is not a whole multiple of dt = 20 s",
+              "nearest valid bgc_physics_timestep: 20 s or 40 s"]),
+        (60, ["marbl_timestep = 80 s (as MARBL rounds it) is not a whole multiple"
+              " of bgc_physics_timestep = 60 s",
+              "nearest valid bgc_physics_timestep: 40 s or 80 s"]),
+        (10, ["bgc_physics_timestep = 10 s is shorter than dt = 20 s",
+              "nearest valid bgc_physics_timestep: 20 s"]),
+    ], ids=["not_multiple_of_dt", "not_dividing_marbl", "shorter_than_dt"])
+    def test_window_length_rejected(self, tmp_path, marbl_conf, input_dir, seconds, messages):
+        """``bgc_physics_timestep`` (dt = 20 s, marbl_timestep = 80 s) that is not
+        a whole multiple of dt, does not divide marbl_timestep or is shorter than
+        dt stops ROMS at startup, naming the nearest valid values."""
+        nml = _subcycle_nml(input_dir, 4)
+        nml["BGC_SETTINGS"]["bgc_physics_timestep"] = seconds
+        assert_run_rejected(marbl_conf, nml, tmp_path, messages, label="bgc_physics_timestep")

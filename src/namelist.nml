@@ -276,7 +276,8 @@ trc2zsc = 1, 2        ! Indices of tracers to include
 !================================================================================
 &BGC_SETTINGS                                                !bgc_shared_vars.F90
 !------------
-! Previously set in `bgc.opt`
+! Previously set in `bgc.opt`. Required with MARBL or BEC2; otherwise read
+! only when there are tracers beyond T and S, and optional.
 !------------
 interp_bgc_frc = .false.    ! Interpolate forcing from coarser input grid if T
 !
@@ -297,6 +298,14 @@ output_period_bgc_avg_dia = 100 ! Frequency/period of averaged diagnostic output
 nrpf_bgc_avg_dia = 10           ! Number of time records per BGC diagnostics file
 !
 xco2air_default = 284.7         ! Atmospheric xCO2 (ppm) when PCO2AIR_FORCING is off
+!
+! BGC tracer subcycling (docs/model_settings/bgc_subcycling.md). Restarts must then
+! fall on its windows (output_period_rst a multiple of bgc_physics_timestep, no monthly_restarts).
+bgc_physics_subcycle = .false.  ! Transport and mix the tracers beyond T and S (passive, CDR_LITE,
+                                ! MARBL) only every bgc_physics_timestep; T, S and dynamics every dt
+bgc_physics_timestep = 0.0      ! How often the BGC/passive tracers are transported and mixed (s):
+                                ! dt <= bgc_physics_timestep <= marbl_timestep, a multiple of dt that
+                                ! divides marbl_timestep; 0 = marbl_timestep (without MARBL: required)
 /
 
 &MARBL_BIOGEOCHEMISTRY_SETTINGS                                 !marbl_driver.F90
@@ -306,7 +315,8 @@ xco2air_default = 284.7         ! Atmospheric xCO2 (ppm) when PCO2AIR_FORCING is
 marbl_config_file = "marbl_in"  ! MARBL configuration file ("" runs MARBL with its default settings)
 marbl_tracers_to_write = ""     ! MARBL tracers to include in BGC output
 marbl_diagnostics_to_write = "FG_CO2", "FG_ALT_CO2" ! MARBL diagnostics to include in BGC output ("" writes all)
-marbl_timestep = 3600.0           ! Desired MARBL timestep (s); rounded to a whole multiple of dt (max 10800)
+marbl_timestep = 3600.0           ! How often MARBL's reactions run (s); rounded to a whole multiple of dt (max 10800).
+                                  ! Transport of the BGC tracers: bgc_physics_timestep in BGC_SETTINGS
 use_constant_Fe = .false.         ! Hold MARBL's dissolved iron (Fe) at constant_Fe_value everywhere, overriding MARBL, transport and inputs
 constant_Fe_value = 3.0e-3        ! Fe imposed when use_constant_Fe (mmol/m^3, Fe's units; 1 nM = 1e-3)
 /
@@ -624,22 +634,4 @@ fs_rho_inf = 0.5                     ! Spectral radius at infinite omega dt, 0 <
 fs_tol = 1.0e-8                      ! Relative residual of the elliptic solve (volume is exact regardless)
 fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost table at the end; 2 + FS_VOL
                                      ! volume budget and FS_SRC source volumes (FS_SRC also with fs_mode = 'split')
-/
-
-&BGC_SUBCYCLE_SETTINGS                                              !bgc_subcycle_mod.F90
-!--------------------------
-! Optional (absent: bgc_subcycle = .false.). Transport, mix and force the
-! tracers beyond T and S (passive, CDR_LITE, MARBL) once per window of k steps
-! with the window's accumulated transports, and run MARBL at the window end;
-! T, S and the dynamics still step every dt. With MARBL, k = marbl_timestep/dt
-! by default, or a divisor of it (MARBL then runs at every m-th window end).
-! Restarts must fall on window boundaries (output_period_rst a multiple of
-! k*dt, no monthly_restarts). See docs/model_settings/bgc_subcycling.md.
-!--------------------------
-bgc_subcycle = .false.               ! Subcycle the tracers beyond T and S
-bgc_subcycle_steps = 0               ! k without MARBL (>= 1); with MARBL 0 (marbl_timestep/dt) or a divisor of it
-bgc_subcycle_pos = .false.           ! Flux-corrected positivity limiter on the advective fluxes
-bgc_subcycle_diag = 0                ! 1: BGCSUB/BGCSUBNEG lines per window (Courant numbers, continuity,
-                                     ! constancy, budget residual, new negatives; for testing);
-                                     ! 2: also clip the window-start state at 0 (changes results)
 /

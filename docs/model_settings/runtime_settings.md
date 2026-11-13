@@ -275,7 +275,7 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 ### `BGC_SETTINGS`
 (read by module `bgc_shared_vars.F90`)
 
-Read only with `MARBL` or `BIOLOGY_BEC2`.
+Required with `MARBL` or `BIOLOGY_BEC2`. Without them it is read only when there are tracers beyond temperature and salinity (passive or CDR_LITE tracers), and is optional there: if it is absent, `bgc_physics_subcycle = .false.`.
 
 | Setting | Description |
 |--------|-------------|
@@ -293,6 +293,8 @@ Read only with `MARBL` or `BIOLOGY_BEC2`.
 | `output_period_bgc_avg_dia` | Frequency/period of averaged diagnostic output (s). Each record averages the model steps of the period ending at its `ocean_time`. With MARBL it must be a whole multiple of the MARBL timestep ROMS uses (`marbl_timestep` rounded down to a multiple of `dt`), or ROMS stops at startup: each window then ends on a MARBL step, averages the diagnostics of the MARBL steps within it, and a restarted run's records match an uninterrupted run's bit for bit |
 | `nrpf_bgc_avg_dia` | Number of time records per BGC diagnostics file |
 | `xco2air_default` | Atmospheric xCO2 (ppm) that MARBL uses when `PCO2AIR_FORCING` is not defined. Default `284.7` (pre-industrial) |
+| `bgc_physics_subcycle` | Transport, mix and force the tracers beyond temperature and salinity (passive, CDR_LITE and MARBL tracers) only every `bgc_physics_timestep`, with the transports accumulated over that window; temperature, salinity and the dynamics still step every `dt`. Restarts must then fall on window boundaries. Default `.false.`. See [BGC tracer subcycling](bgc_subcycling.md) |
+| `bgc_physics_timestep` | How often the tracers beyond temperature and salinity are transported and mixed with `bgc_physics_subcycle` (seconds): a whole multiple of `dt`; with MARBL also a divisor of `marbl_timestep` (as MARBL rounds it), so `dt <= bgc_physics_timestep <= marbl_timestep`, and MARBL runs at the end of every `marbl_timestep / bgc_physics_timestep`-th window. 0 (the default) means `marbl_timestep`; without MARBL a value > 0 is required. Any other value stops ROMS at startup with a message giving the nearest valid values |
 
 ### `MARBL_BIOGEOCHEMISTRY_SETTINGS`
 (read by module `marbl_driver.F90`)
@@ -304,7 +306,7 @@ Read only with `MARBL`.
 | `marbl_config_file` | MARBL configuration file |
 | `marbl_tracers_to_write` | Comma-separated (string) list of MARBL tracers to include in BGC output |
 | `marbl_diagnostics_to_write` | Comma-separated (string) list of MARBL diagnostics to include in BGC diagnostics output |
-| `marbl_timestep` | Desired MARBL timestep (seconds). ROMS solves BGC every `max(1, int(marbl_timestep/dt))` model steps (rounding `marbl_timestep` to that whole multiple of `dt`, max 10800 s); on other steps BGC tracers are advected/diffused but not updated by MARBL. Set `= dt` to update every step. With `bgc_subcycle` (`BGC_SUBCYCLE_SETTINGS`) the BGC tracers are also transported only on these steps, or on a divisor of this interval set by `bgc_subcycle_steps`. |
+| `marbl_timestep` | Desired MARBL timestep (seconds). ROMS solves BGC every `max(1, int(marbl_timestep/dt))` model steps (rounding `marbl_timestep` to that whole multiple of `dt`, max 10800 s); on other steps BGC tracers are advected/diffused but not updated by MARBL. Set `= dt` to update every step. With `bgc_physics_subcycle` (`BGC_SETTINGS`) the BGC tracers are transported and mixed every `bgc_physics_timestep`, which must divide this interval (0: this interval). |
 | `use_constant_Fe` | Hold MARBL's dissolved iron (`Fe`) at `constant_Fe_value` at every wet point, from the initial conditions on. MARBL computes with that value, and each step's changes to Fe (MARBL's sources and sinks, iron deposition, transport, boundary and river inputs) are discarded. Default `.false.` |
 | `constant_Fe_value` | Fe concentration imposed when `use_constant_Fe` is on, in Fe's units (mmol/m^3; 1 nM = 1e-3 mmol/m^3). Must be non-negative. Default `3.0e-3` |
 
@@ -624,18 +626,6 @@ Multigrid settings (`fs_precond = 'mg'`; solver settings as above):
 | `fs_mg_global_on` | `'node'` | Ranks that solve the global levels: `'node'` one per node, `'all'` every rank, `'one'` rank 0 (same results) |
 | `fs_mg_faces` | `'width'` | Coarse face coefficients scaled by the aggregates' widths (`'width'`) or by 0.5 (`'half'`) |
 | `fs_exch_thin` | `.true.` | One-cell halo exchanges without corners in the solver (same results) |
-
-### `BGC_SUBCYCLE_SETTINGS`
-(read by module `bgc_subcycle_mod.F90`)
-
-Optional: if the group is absent, `bgc_subcycle = .false.`. Transports, mixes and forces the tracers beyond temperature and salinity (passive, CDR_LITE and MARBL tracers) once per window of `k` steps with the window's accumulated transports, and runs MARBL at the end of each window; temperature, salinity and the dynamics still step every `dt`. With MARBL, `k = marbl_timestep / dt` unless `bgc_subcycle_steps` sets a divisor of it. Restarts must fall on window boundaries. The scheme, its effect on output and its limitations are described in [BGC tracer subcycling](bgc_subcycling.md).
-
-| Setting | Default | Description |
-|--------|---------|-------------|
-| `bgc_subcycle` | `.false.` | Subcycle the tracers beyond temperature and salinity |
-| `bgc_subcycle_steps` | `0` | Window length `k` in steps: required without MARBL; with MARBL 0 (`k = marbl_timestep / dt`) or a divisor of `marbl_timestep / dt` (MARBL keeps its interval and runs at the end of every `marbl_timestep / (k dt)`-th window) |
-| `bgc_subcycle_pos` | `.false.` | Flux-corrected positivity limiter on the advective fluxes of the window (more cost) |
-| `bgc_subcycle_diag` | `0` | 1: `BGCSUB` and `BGCSUBNEG` lines per window (Courant numbers, sub-passes, continuity, constancy, budget residual, new negatives; global reductions, for testing); 2: also clip the window-start state at 0 (positivity test, changes results) |
 
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)

@@ -88,7 +88,7 @@ module tracers
   integer(kind=4),public :: ibgc0 = 0  ! tracers before the BGC ones: BGC (MARBL/BEC2) tracers are ibgc0+1..nt
   ! Tracers 1..nt_step are transported every step (pre_step3d, step3d_t,
   ! t3dmix, their boundary conditions and exchanges): nt, or iTandS when
-  ! the others (passive, CDR and BGC tracers) are subcycled (bgc_subcycle).
+  ! the others (passive, CDR and BGC tracers) are subcycled (bgc_physics_subcycle).
   integer(kind=4),public :: nt_step = 1
   ! public as used in set_forces.F. Need to be parame
 !     integer,public :: nt_passive=0                                 ! total number of passive tracers

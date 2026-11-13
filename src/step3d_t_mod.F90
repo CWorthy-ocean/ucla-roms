@@ -73,7 +73,7 @@ contains
   &nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
   use surf_flux, only: stflx, srflx
   use tracers, only: t, itands, wrt_t_dia, exchange_tracers, nt_step
-  use bgc_subcycle_mod, only: bgc_subcycle
+  use bgc_subcycle_mod, only: bgc_physics_subcycle
   use advection, only: t_vadv_pre, t_vadv_cor
 #ifdef MARBL
   use marbl_driver, only: marbldrv_column_physics, iALK, iDIC,&
@@ -1231,8 +1231,8 @@ do itrc=1,nt_step
 enddo     !<-- itrc
 
 # if defined(MARBL)
-! bgc_subcycle: MARBL runs at the window end in bgcsub_step instead
-if (is_marbl_step(tstep) .and. .not. bgc_subcycle) then
+! bgc_physics_subcycle: MARBL runs at the window end in bgcsub_step instead
+if (is_marbl_step(tstep) .and. .not. bgc_physics_subcycle) then
   ! use_constant_Fe (no-op otherwise): MARBL computes with the constant iron;
   ! the step's changes to Fe (transport, boundaries, rivers, MARBL, lateral
   ! mixing) are undone after t3dmix in roms_step
