@@ -1,0 +1,1 @@
+The implicit free-surface page gives the free-surface cost of the current solver and says that a NaN or Inf stops the solve at once.

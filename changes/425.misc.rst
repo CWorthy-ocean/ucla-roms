@@ -1,0 +1,1 @@
+Pull request descriptions now carry an ``AI disclosure:`` line, as the organization's AI policy asks.
