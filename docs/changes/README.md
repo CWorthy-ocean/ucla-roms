@@ -14,7 +14,7 @@ The type decides the section the note appears under:
 | `improvement` | Improvements      | better behavior, messages or performance of existing code |
 | `misc`        | Miscellaneous     | documentation, CI, build and test changes worth mentioning |
 
-Write the note for someone reading the release notes, not for the reviewer: what changed for them and anything they need to do, in one line. Details for the reviewer go in the pull request description. If the reader needs more, add `- ` sub-bullets on the following lines. The notes are reStructuredText, so code, namelist keys and file names go in double backticks; outside them a name that ends in an underscore, such as `ub_`, is read as a link and fails the check on the pull request. For example, `changes/+avg-temp-salt.feature.rst`, added by pull request 413:
+Write the note for someone reading the release notes, not for the reviewer: what changed for them and anything they need to do, in one line. Details for the reviewer go in the pull request description. If the reader needs more, add `- ` sub-bullets on the following lines. The notes are reStructuredText, so code, namelist keys and file names go in double backticks; outside them a name that ends in an underscore, such as `ub_`, is read as a link and fails the check on the pull request. For example, `docs/changes/+avg-temp-salt.feature.rst`, added by pull request 413:
 
 ```rst
 ``wrt_avg_temp`` and ``wrt_avg_salt`` in ``TS_OUTPUT_SETTINGS`` add ``temp`` and ``salt`` to the averages file (with ``wrt_file_avg``).

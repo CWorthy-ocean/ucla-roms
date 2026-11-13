@@ -1,11 +1,13 @@
-# Release notes: fragments in changes/, named +<name>.<type>.rst (or
+# Release notes: fragments in docs/changes/, named +<name>.<type>.rst (or
 # <PR number>.<type>.rst), assembled into docs/releases/<tag>.rst by
 # finalize_release_notes.yaml: ci/number_fragments.py renames each +<name> to
 # the PR that added it, ci/add_release_to_index.py adds an include of the new
 # file to docs/releases.rst, then `towncrier build --version <tag>` writes it.
-# See changes/README.md.
+# See docs/changes/README.md.
 [tool.towncrier]
-directory = "changes"
+# ci/number_fragments.py and the ci/ tests read this path from here; docs/conf.py
+# keeps Sphinx from building the fragments as pages.
+directory = "docs/changes"
 # One file per release, as docs/releases/ has always been laid out. towncrier
 # overwrites an existing file here without asking; add_release_to_index.py
 # refuses a tag that already has one.
@@ -19,7 +21,7 @@ underlines = ["-", "~", "^"]
 # Numbered fragments must use a PR number; +<name> fragments are exempt.
 issue_pattern = "\\d+"
 # Any ignore list, even an empty one, makes `towncrier build` fail on a
-# misnamed file in changes/ instead of silently leaving it out of the release.
+# misnamed file in docs/changes/ instead of silently leaving it out of the release.
 # (README.md is always ignored.)
 ignore = []
 issue_format = "`#{issue} <https://github.com/CWorthy-ocean/ucla-roms/pull/{issue}>`_"

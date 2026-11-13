@@ -1,5 +1,5 @@
 """
-Tests for the towncrier setup that turns ``changes/`` into ``docs/releases/<tag>.rst``.
+Tests for the towncrier setup that turns fragments into ``docs/releases/<tag>.rst``.
 
 Run with ``pytest ci/test_towncrier_template.py``. Needs ``towncrier`` and
 ``docutils`` and is skipped without them; like the other ``ci/`` tests, CI does
@@ -20,6 +20,7 @@ import io
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from types import ModuleType
 
@@ -29,6 +30,10 @@ pytest.importorskip("towncrier")
 docutils_core = pytest.importorskip("docutils.core")
 
 REPO = Path(__file__).resolve().parent.parent
+# The fragments folder, relative to the repository root (docs/changes).
+CHANGES = tomllib.loads((REPO / "towncrier.toml").read_text())["tool"]["towncrier"][
+    "directory"
+]
 URL = "https://github.com/CWorthy-ocean/ucla-roms/pull"
 INDEX = "Release notes\n#############\n\n.. include:: releases/0.14.0.rst\n"
 OLD_RELEASE = (
@@ -67,8 +72,8 @@ def scratch(tmp_path: Path, monkeypatch) -> Path:
     (tmp_path / "docs" / "releases").mkdir(parents=True)
     (tmp_path / "docs" / "releases.rst").write_text(INDEX)
     (tmp_path / "docs" / "releases" / "0.14.0.rst").write_text(OLD_RELEASE)
-    (tmp_path / "changes").mkdir()
-    shutil.copy(REPO / "changes" / "README.md", tmp_path / "changes")
+    (tmp_path / CHANGES).mkdir()
+    shutil.copy(REPO / CHANGES / "README.md", tmp_path / CHANGES)
     _run(tmp_path, "git", "init", "-q")
     _run(tmp_path, "git", "add", "-A")
     monkeypatch.setattr(release_body, "RELEASES_DIR", tmp_path / "docs" / "releases")
@@ -78,7 +83,7 @@ def scratch(tmp_path: Path, monkeypatch) -> Path:
 
 def _add_fragments(repo: Path, fragments: dict[str, str]) -> None:
     for name, text in fragments.items():
-        (repo / "changes" / name).write_text(text)
+        (repo / CHANGES / name).write_text(text)
     _run(repo, "git", "add", "-A")
 
 
@@ -149,7 +154,7 @@ def test_build_matches_release_notes_style(scratch):
         f"- One note. {_link(15)}",
     ]
     _assert_clean_rst(text)
-    assert [p.name for p in (scratch / "changes").iterdir()] == ["README.md"]
+    assert [p.name for p in (scratch / CHANGES).iterdir()] == ["README.md"]
 
     # The new file is the top include, and the old release is untouched.
     assert (scratch / "docs" / "releases.rst").read_text() == INDEX.replace(

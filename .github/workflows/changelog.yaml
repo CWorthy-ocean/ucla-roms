@@ -1,7 +1,7 @@
 name: Changelog
 
-# Every pull request carries a release-note fragment in changes/ (see
-# changes/README.md). The `no-changelog` label skips the check for PRs with
+# Every pull request carries a release-note fragment in docs/changes/ (see
+# docs/changes/README.md). The `no-changelog` label skips the check for PRs with
 # nothing to tell users; a skipped job counts as passing for required checks.
 
 on:
@@ -46,7 +46,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           if ! towncrier check --compare-with "origin/$BASE_REF"; then
-            echo "::error::Add a release note as changes/+<name>.<type>.rst (see changes/README.md), or label the PR no-changelog if users have nothing to learn from it."
+            echo "::error::Add a release note as docs/changes/+<name>.<type>.rst (see docs/changes/README.md), or label the PR no-changelog if users have nothing to learn from it."
             exit 1
           fi
 
@@ -60,6 +60,6 @@ jobs:
           towncrier build --draft --version Unreleased > "$RUNNER_TEMP/notes.rst"
           if ! python -m docutils --report=2 --halt=2 "$RUNNER_TEMP/notes.rst" /dev/null; then
             cat -n "$RUNNER_TEMP/notes.rst"
-            echo "::error::A release note in changes/ is not valid reStructuredText; see the message above and changes/README.md."
+            echo "::error::A release note in docs/changes/ is not valid reStructuredText; see the message above and docs/changes/README.md."
             exit 1
           fi

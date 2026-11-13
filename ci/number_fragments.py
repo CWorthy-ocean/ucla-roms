@@ -2,10 +2,11 @@
 """
 Name each unnumbered release-note fragment after the pull request that added it.
 
-Contributors name a fragment ``changes/+<name>.<type>.rst`` because the PR number
+Contributors name a fragment ``docs/changes/+<name>.<type>.rst`` because the PR number
 does not exist until the PR is opened. Before ``towncrier build``,
 ``finalize_release_notes.yaml`` runs this script, which ``git mv``s every such
-file to ``changes/<PR>.<type>.rst`` so the note links to its PR.
+file to ``docs/changes/<PR>.<type>.rst`` so the note links to its PR. The
+folder is the ``directory`` set in ``towncrier.toml``.
 
 The PR is the one that added the file, looking through later renames: the
 trailing ``(#N)`` of the squash-merge commit's subject, or, when the subject has
@@ -38,10 +39,19 @@ ORPHAN_PREFIX = "+"
 _SUBJECT_PR_RE = re.compile(r"\(#(\d+)\)\s*$")
 
 
+def _towncrier_config(config_file: Path) -> dict:
+    """Return the ``[tool.towncrier]`` table of *config_file*."""
+    return tomllib.loads(config_file.read_text())["tool"]["towncrier"]
+
+
 def fragment_types(config_file: Path) -> list[str]:
     """Return the fragment type names (``directory`` keys) from *config_file*."""
-    config = tomllib.loads(config_file.read_text())["tool"]["towncrier"]
-    return [t["directory"] for t in config["type"]]
+    return [t["directory"] for t in _towncrier_config(config_file)["type"]]
+
+
+def fragments_directory(config_file: Path) -> str:
+    """Return the fragments folder (``directory``) from *config_file*."""
+    return _towncrier_config(config_file)["directory"]
 
 
 def fragment_type(name: str, types: list[str]) -> str | None:
@@ -140,18 +150,19 @@ def number_fragments(
     lookup: Callable[[str], int | None] = pr_from_github,
 ) -> dict[str, str]:
     """
-    Rename every ``+<label>.<type>.rst`` in ``changes/`` after its PR.
+    Rename every ``+<label>.<type>.rst`` in the fragments folder after its PR.
 
     Returns ``{old name: new name}``. Exits with an error, before renaming
     anything, listing every ``+`` file whose type or PR could not be found.
 
     Args:
-        repo: Repository root holding ``towncrier.toml`` and ``changes/``.
+        repo: Repository root holding ``towncrier.toml`` and the folder it names.
         dry_run: Report the renames without making them.
         lookup: Commit sha -> PR number, used when the subject has no ``(#N)``.
     """
     types = fragment_types(repo / "towncrier.toml")
-    changes = repo / "changes"
+    directory = fragments_directory(repo / "towncrier.toml")
+    changes = repo / directory
     plan: dict[str, str] = {}
     taken: set[str] = set()
     unresolved: list[str] = []
@@ -163,7 +174,7 @@ def number_fragments(
         if ftype is None:
             untyped.append(path.name)
             continue
-        commit = adding_commit(repo, f"changes/{path.name}")
+        commit = adding_commit(repo, f"{directory}/{path.name}")
         pr = None
         if commit is not None:
             sha, subject = commit
@@ -179,25 +190,25 @@ def number_fragments(
     if untyped:
         problems.append(
             "No fragment type in "
-            + ", ".join(f"changes/{n}" for n in untyped)
+            + ", ".join(f"{directory}/{n}" for n in untyped)
             + f"; the types are {', '.join(types)}."
         )
     if unresolved:
         problems.append(
             "Could not find the pull request that added "
-            + ", ".join(f"changes/{n}" for n in unresolved)
+            + ", ".join(f"{directory}/{n}" for n in unresolved)
             + "."
         )
     if problems:
         sys.exit(
             " ".join(problems)
-            + " Rename each to changes/<PR number>.<type>.rst by hand."
+            + f" Rename each to {directory}/<PR number>.<type>.rst by hand."
         )
     for old, new in plan.items():
-        print(f"changes/{old} -> changes/{new}")
+        print(f"{directory}/{old} -> {directory}/{new}")
         if not dry_run:
             subprocess.run(
-                ["git", "mv", f"changes/{old}", f"changes/{new}"],
+                ["git", "mv", f"{directory}/{old}", f"{directory}/{new}"],
                 cwd=repo,
                 check=True,
             )
