@@ -4,6 +4,14 @@
  anything below this line.
  ------------------------------------------------------------------ */
 
+/* MASKING is required: the land masks are used outside "#ifdef MASKING"
+ in much of the code, so a build without it would fail with unrelated
+ compiler errors. */
+
+#ifndef MASKING
+# error "MASKING is required: add #define MASKING to cppdefs.opt"
+#endif
+
 /* Turn ON/OFF MPI parallelization. If not activated,the code becomes
  shared memory parallel code. The second switch makes each MPI process
  create its own output file (this switch has no effect if MPI is not
