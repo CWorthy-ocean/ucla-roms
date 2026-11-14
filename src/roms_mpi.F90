@@ -78,6 +78,14 @@ module roms_mpi
 
   public :: exchange_xxx
   public :: mpi_setup
+#ifdef IMEX_IGW
+  public :: exchange_3_start, exchange_3_finish
+
+  ! split-phase exchange of one 3D variable (exchange_3_start, exchange_3_finish; used by
+  ! IMEX_IGW): the posted requests; nothing else may use the buffers in between
+  integer(kind=4) :: sp_nreq = 0, sp_req(16)
+  logical :: sp_active = .false.
+#endif
 
 contains
 
@@ -662,6 +670,116 @@ contains
 
   end subroutine exchange_3 !]
 !--------------------------------------------------------
+#ifdef IMEX_IGW
+  subroutine exchange_3_start(A, exch_bf, do_corn) ![
+    ! Split-phase exchange_3: pack A and post the receives and sends; the
+    ! caller may compute on data that does not need the halo, then call
+    ! exchange_3_finish(A). Same messages as exchange_3 (same halo width,
+    ! same corners), so the result is identical. No other exchange may run
+    ! in between (the module's buffers are in use).
+    implicit none
+    real(kind=8),intent(inout),dimension(:,:,:) :: A
+    integer(kind=4),optional :: exch_bf
+    logical,optional :: do_corn
+    integer(kind=4) ierr
+    if (.not.init_buffer_done) call init_mpi_buffers
+    if (sp_active) then
+      error_info = 'exchange_3_start: a split-phase exchange is already active'
+      call error_log%raise_global(context=module_name//"/exchange_3_start", info=trim(error_info))
+      return
+    endif
+    bl = bf
+    hl = bf
+    if (present(exch_bf)) hl = exch_bf
+    do_corners = .true.
+    if (present(do_corn)) do_corners = do_corn
+    call reset_buffer_sizes
+    call pack_3dvar(A)
+    sp_nreq = 0
+    if (p_w>=0) then
+      sp_nreq=sp_nreq+1
+      call MPI_Irecv (recvW, szW, MPI_DOUBLE_PRECISION, p_W, 8, ocean_grid_comm, sp_req(sp_nreq), ierr)
+    endif
+    if (p_e>=0) then
+      sp_nreq=sp_nreq+1
+      call MPI_Irecv (recvE, szE, MPI_DOUBLE_PRECISION, p_E, 7, ocean_grid_comm, sp_req(sp_nreq), ierr)
+    endif
+    if (p_s>=0) then
+      sp_nreq=sp_nreq+1
+      call MPI_Irecv (recvS, szS, MPI_DOUBLE_PRECISION, p_S, 6, ocean_grid_comm, sp_req(sp_nreq), ierr)
+    endif
+    if (p_n>=0) then
+      sp_nreq=sp_nreq+1
+      call MPI_Irecv (recvN, szN, MPI_DOUBLE_PRECISION, p_N, 5, ocean_grid_comm, sp_req(sp_nreq), ierr)
+    endif
+    if (do_corners) then
+      if (p_sw>=0) then
+        sp_nreq=sp_nreq+1
+        call MPI_Irecv (recvSW, szSW, MPI_DOUBLE_PRECISION, p_SW, 2, ocean_grid_comm, sp_req(sp_nreq), ierr)
+      endif
+      if (p_ne>=0) then
+        sp_nreq=sp_nreq+1
+        call MPI_Irecv (recvNE, szNE, MPI_DOUBLE_PRECISION, p_NE, 1, ocean_grid_comm, sp_req(sp_nreq), ierr)
+      endif
+      if (p_se>=0) then
+        sp_nreq=sp_nreq+1
+        call MPI_Irecv (recvSE, szSE, MPI_DOUBLE_PRECISION, p_SE, 4, ocean_grid_comm, sp_req(sp_nreq), ierr)
+      endif
+      if (p_nw>=0) then
+        sp_nreq=sp_nreq+1
+        call MPI_Irecv (recvNW, szNW, MPI_DOUBLE_PRECISION, p_NW, 3, ocean_grid_comm, sp_req(sp_nreq), ierr)
+      endif
+    endif
+    if (p_w>=0) then
+      sp_nreq=sp_nreq+1
+      call MPI_Isend (sendW, szW, MPI_DOUBLE_PRECISION, p_W, 7, ocean_grid_comm, sp_req(sp_nreq), ierr)
+    endif
+    if (p_e>=0) then
+      sp_nreq=sp_nreq+1
+      call MPI_Isend (sendE, szE, MPI_DOUBLE_PRECISION, p_E, 8, ocean_grid_comm, sp_req(sp_nreq), ierr)
+    endif
+    if (p_s>=0) then
+      sp_nreq=sp_nreq+1
+      call MPI_Isend (sendS, szS, MPI_DOUBLE_PRECISION, p_S, 5, ocean_grid_comm, sp_req(sp_nreq), ierr)
+    endif
+    if (p_n>=0) then
+      sp_nreq=sp_nreq+1
+      call MPI_Isend (sendN, szN, MPI_DOUBLE_PRECISION, p_N, 6, ocean_grid_comm, sp_req(sp_nreq), ierr)
+    endif
+    if (do_corners) then
+      if (p_sw>=0) then
+        sp_nreq=sp_nreq+1
+        call MPI_Isend (sendSW, szSW, MPI_DOUBLE_PRECISION, p_SW, 1, ocean_grid_comm, sp_req(sp_nreq), ierr)
+      endif
+      if (p_ne>=0) then
+        sp_nreq=sp_nreq+1
+        call MPI_Isend (sendNE, szNE, MPI_DOUBLE_PRECISION, p_NE, 2, ocean_grid_comm, sp_req(sp_nreq), ierr)
+      endif
+      if (p_se>=0) then
+        sp_nreq=sp_nreq+1
+        call MPI_Isend (sendSE, szSE, MPI_DOUBLE_PRECISION, p_SE, 3, ocean_grid_comm, sp_req(sp_nreq), ierr)
+      endif
+      if (p_nw>=0) then
+        sp_nreq=sp_nreq+1
+        call MPI_Isend (sendNW, szNW, MPI_DOUBLE_PRECISION, p_NW, 4, ocean_grid_comm, sp_req(sp_nreq), ierr)
+      endif
+    endif
+    sp_active = .true.
+  end subroutine exchange_3_start !]
+
+  subroutine exchange_3_finish(A) ![
+    ! Second half of exchange_3_start: wait for the messages, unpack into A.
+    implicit none
+    real(kind=8),intent(inout),dimension(:,:,:) :: A
+    integer(kind=4) ierr, statuses(MPI_STATUS_SIZE,16)
+    if (.not. sp_active) return
+    if (sp_nreq > 0) call MPI_Waitall (sp_nreq, sp_req, statuses, ierr)
+    call reset_buffer_sizes
+    call unpack_3dvar(A)
+    sp_active = .false.
+  end subroutine exchange_3_finish !]
+#endif
+
   subroutine exchange_33(A,B,exch_bf,do_corn,skip) ![
     ! 3D variable, 1 at the time
     ! Can exchange less data than the allocated buffer space

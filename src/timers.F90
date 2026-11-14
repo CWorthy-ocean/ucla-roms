@@ -16,15 +16,17 @@ module timers
   ! summarized at the end (max and mean over ranks). Regions 1-15 partition
   ! roms_step; 16-17 are nested inside them and reported separately; 18-22
   ! belong to BGC subcycling (nested in step3d_t; 20-22 nested in 19) and
-  ! are printed only when used.
-  integer(kind=4), parameter :: nreg = 22
+  ! 23-25 to IMEX_IGW (stage solves nested in pre_step3d and step3d_uv1,
+  ! the startup self-test outside the step); both are printed only when used.
+  integer(kind=4), parameter :: nreg = 25
   integer(kind=4), parameter, public ::&
   &  rg_set_forces=1,  rg_set_bry=2,     rg_rho_eos=3,    rg_huv_omega=4,&
   &  rg_lmd_vmix=5,    rg_prsgrd=6,      rg_pre_step3d=7, rg_huv1_omega=8,&
   &  rg_uv1_visc=9,    rg_step2d=10,     rg_uv2_omega=11, rg_step3d_t=12,&
   &  rg_t3dmix=13,     rg_avg_diag=14,   rg_output=15,&
   &  rg_exchange=16,   rg_marbl=17,&
-  &  rg_bgcsub_acc=18, rg_bgcsub_win=19, rg_bgcsub_h=20, rg_bgcsub_v=21, rg_bgcsub_bc=22
+  &  rg_bgcsub_acc=18, rg_bgcsub_win=19, rg_bgcsub_h=20, rg_bgcsub_v=21, rg_bgcsub_bc=22,&
+  &  rg_imex_solve_pred=23, rg_imex_solve_corr=24, rg_imex_selftest=25
   character(len=22), parameter :: reg_name(nreg) = [character(len=22) ::&
   &  'set_forces (x2)',       'set_bry_all+tides (x2)','rho_eos (x2-3)',&
   &  'set_HUV+omega',         'lmd_vmix (x2)',         'prsgrd (x2)',&
@@ -33,7 +35,8 @@ module timers
   &  't3dmix',                'calc_avg+diag',         'output (wrt_*)',&
   &  '  halo exch comm (nested)','  MARBL (in step3d_t)',&
   &  '  BGC subcycle accum',  '  BGC subcycle window',  '    BGC sub horizontal',&
-  &  '    BGC sub vertical',   '    BGC sub bc+exch']
+  &  '    BGC sub vertical',   '    BGC sub bc+exch',&
+  &  '  IMEX solve pred',     '  IMEX solve corr',     'IMEX selftest (init)']
   real(kind=8) :: reg_t(nreg) = 0._8, reg_t0(nreg) = 0._8
   public :: reg_tic, reg_toc, print_region_timers
 #include "cppdefs.opt"
@@ -91,7 +94,7 @@ contains
       write(*,'(/1x,A)') 'Region timers (wall seconds over the run):'
       write(*,'(1x,A22,2x,A10,2x,A10,2x,A7)') 'region', 'max rank', 'mean rank', '% step'
       do ir = 1, nreg
-        if (ir >= rg_bgcsub_acc .and. tmax(ir) <= 0._8) cycle  ! BGC subcycle rows only when used
+        if (ir >= rg_bgcsub_acc .and. tmax(ir) <= 0._8) cycle  ! BGC subcycle and IMEX_IGW rows only when used
         write(*,'(1x,A22,2x,F10.2,2x,F10.2,2x,F6.1,A)') reg_name(ir), tmax(ir),&
         &  tsum(ir)/dble(nnodes), 100._8*tmax(ir)/max(stepsum,1.d-30), '%'
       enddo

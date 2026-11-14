@@ -79,6 +79,10 @@ contains
     use u3dbc_mod, only: u3dbc_tile
     use v3dbc_mod, only: v3dbc_tile
 #endif
+#ifdef IMEX_IGW
+    use imex_igw, only: imex_am3, imex_solve_stage, imex_stage_pred,&
+    &imex_predictor_transport
+#endif
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k, iface
@@ -101,7 +105,13 @@ contains
 #endif
 
     real(kind=8) dtau, cf_stp,cf_bak,  cff, FlxDiv
+#ifdef IMEX_IGW
+    real(kind=8) AM3_crv                 ! from IMEX_IGW_SETTINGS (imex_am3_crv)
+    real(kind=8), parameter :: epsil=1.D-33
+    integer(kind=4) ipass
+#else
     real(kind=8), parameter :: AM3_crv=1._8/6._8, epsil=1.D-33
+#endif
     real(kind=8), parameter ::  delta=0.1666666666666667_8 !! delta=0.125_8
 # ifdef UPSTREAM_UV
     real(kind=8), parameter :: gamma=0.3333333333333333_8 !! gamma=0.25_8
@@ -142,6 +152,9 @@ contains
 ! The overall time step will be both conservative and constancy
 ! preserving.
 
+#ifdef IMEX_IGW
+    AM3_crv=imex_am3
+#endif
     indx=3-nstp
 
     if (FIRST_TIME_STEP) then       ! Coefficients for alternative-
@@ -153,6 +166,14 @@ contains
       cf_stp=0.5_8 +AM3_crv
       cf_bak=0.5_8 -AM3_crv
     endif                           ! Construct artificial slow-time
+#ifdef IMEX_IGW
+! IMEX_IGW: the code below runs twice. Pass 1 is the momentum predictor
+! from the level-n transport; between the passes the predictor's elliptic
+! correction is applied (imex_solve_stage) and the tracer transport
+! Flx_pred replaces FlxU, FlxV, We, Wi (imex_predictor_transport);
+! pass 2 is the tracer predictor, with Hz_bak, Hz_fwd rebuilt from it.
+    do ipass=1,2
+#endif
     ! continuity equation for pseudo-
     do k=1,nz                        ! compressible predictor substep,
       cff=0.5_8*dtau                  ! Eq. (4.7_8) from SM2005.
@@ -167,6 +188,9 @@ contains
         enddo
       enddo
 
+#ifdef IMEX_IGW
+      if (ipass == 2) then
+#endif
 # define FX UFx
 # define FE VFe
       ! Advance tracer fields
@@ -195,8 +219,14 @@ contains
 
 # undef FE                                /* ! barotropic mode. */
 # undef FX
+#ifdef IMEX_IGW
+      else
+#endif
 
 # include "compute_horiz_rhs_uv_terms.h"
+#ifdef IMEX_IGW
+      endif
+#endif
 
     enddo !<-- k
 
@@ -206,7 +236,13 @@ contains
 ! of the vertical arrays used below.
 
 # define rd wrk1
+#ifdef IMEX_IGW
+    if (ipass == 1) then
+#endif
 # include "compute_rd_bott_drag.h"
+#ifdef IMEX_IGW
+    endif
+#endif
 
 ! ...continue computation of the auxiliary tracer field: compute its
 ! change due to vertical advection.  Vertical advective fluxes require
@@ -217,6 +253,9 @@ contains
 ! but the code is retained for reference].
 
     do j=jstr,jend  !! Start of the giant j-loop
+#ifdef IMEX_IGW
+      if (ipass == 2) then
+#endif
 
       do itrc=1,nt_step
 # include "compute_vert_tracer_fluxes.h"
@@ -325,6 +364,9 @@ contains
         enddo
         endif  ! itrc <= iTandS
       enddo   !<-- itrc  !--> discard DC,CF,FC
+#ifdef IMEX_IGW
+      else
+#endif
 
 
 
@@ -549,10 +591,17 @@ contains
           enddo
         enddo
       endif  !<-- j>=jstrV
+#ifdef IMEX_IGW
+      endif  !<-- ipass
+#endif
     enddo     !<-- j
 # undef rd
     !! velocities are now in m/s
 
+#ifdef IMEX_IGW
+    if (ipass == 1) then
+    call imex_solve_stage(imex_stage_pred, dtau, cf_bak)   ! elliptic correction of u*, v*
+#endif
     if (river_source) then
       do iface=1,nriv_u
         i = riv_u_i(iface); j = riv_u_j(iface)
@@ -582,6 +631,11 @@ contains
 
     call u3dbc_tile (istr,iend,jstr,jend, wrk1)
     call v3dbc_tile (istr,iend,jstr,jend, wrk1)
+#ifdef IMEX_IGW
+    call imex_predictor_transport   ! Flx_pred -> FlxU, FlxV; We, Wi
+    endif  !<-- ipass == 1
+    enddo  !<-- ipass
+#endif
 
 ! WARNING: Preliminary time step for 3D momentum equitions is not
 ! complete after this moment: the computed fields u,v(i,j,k,nnew)
