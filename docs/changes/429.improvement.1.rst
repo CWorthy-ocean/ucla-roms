@@ -1,0 +1,3 @@
+Forcing and boundary input is faster: on a 128-rank nest with CDF5 inputs it drops from about 3 s to 1.5 s per 18 model hours.
+- Finding the next forcing record no longer reopens the file for every variable and record.
+- Without PIO, each rank keeps up to 8 forcing files open across records instead of reopening them; a 128-rank nest without PIO runs 25 % faster.
