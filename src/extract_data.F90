@@ -92,8 +92,8 @@ module extract_data
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_extract, pio_open_or_abort,&
-  &pio_extract_child
-  use pio, only : PIO_closefile, PIO_write
+  &pio_extract_child, pio_keep_output_open, pio_put_time, pio_sync_each_var
+  use pio, only : PIO_closefile, PIO_write, PIO_syncfile, file_desc_t
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
   ! TODO: add averaging
@@ -225,12 +225,17 @@ module extract_data
   end type extract_object
 
   type(extract_object),dimension(:),allocatable :: obj
+#ifdef PARALLEL_IO
+  ! The output file of each child, kept open between records (pio_keep_output_open)
+  type(file_desc_t) :: edata_fd(max_extract_chd)
+  logical :: edata_fd_open(max_extract_chd) = .false.
+#endif
 
   interface interpolate
     module procedure  interpolate_2D, interpolate_3D
   end interface interpolate
 
-  public do_extract_data, read_nml_extract
+  public do_extract_data, read_nml_extract, close_extract_files
 contains
 !     ----------------------------------------------------------------------
   subroutine read_nml_extract
@@ -914,6 +919,7 @@ contains
     if (otime>=output_period_extract) then
 
       if (obj(1)%record==nrpf_extract) then
+        call close_extract_files
         call create_edata_file
         obj(:)%record = 0
       endif
@@ -931,6 +937,19 @@ contains
       ! with its own extract decompositions (pio_extract_child)
       rec_next = obj(1)%record+1
       do ic = 1,nchd
+      if (pio_keep_output_open) then
+        ! Open the file once, add each record's time value through PIO, and
+        ! flush the record once at its end: its variables are small, so a
+        ! collective write for each of them would cost more than the data.
+        if (.not. edata_fd_open(ic)) then
+          call pio_open_or_abort(trim(fname(ic)), module_name//"/do_extract_data", PIO_write)
+          edata_fd(ic) = pio_FileDesc
+          edata_fd_open(ic) = .true.
+        endif
+        pio_FileDesc = edata_fd(ic)
+        call pio_put_time('bry_time', tdays, rec_next)
+        pio_sync_each_var = .false.
+      else
       if (mynode == 0) then
         ierr=nf90_open(fname(ic),nf90_write,ncid)
         call ncwrite(ncid,'bry_time',(/tdays/),(/rec_next/))
@@ -941,6 +960,7 @@ contains
       call error_log%abort_check()
       call MPI_Barrier(ocean_grid_comm, ierr)
       call pio_open_or_abort(trim(fname(ic)), module_name//"/do_extract_data", PIO_write)
+      endif
       pio_extract_child = ic
 #else
       ierr=nf90_open(fname(1),nf90_write,ncid)
@@ -1314,7 +1334,12 @@ contains
       enddo
 
 #ifdef PARALLEL_IO
-      call PIO_closefile(pio_FileDesc)
+      if (pio_keep_output_open) then
+        call PIO_syncfile(pio_FileDesc)        ! the whole record of this child
+        pio_sync_each_var = .true.
+      else
+        call PIO_closefile(pio_FileDesc)
+      endif
       enddo ! ic
 #else
       ierr=nf90_close(ncid)
@@ -1324,6 +1349,22 @@ contains
     endif
 
   end subroutine do_extract_data  !]
+! ----------------------------------------------------------------------
+  subroutine close_extract_files  ![
+    ! Close the output files kept open between records: before the next
+    ! files are created, and at the end of the run (collective).
+    implicit none
+#ifdef PARALLEL_IO
+    integer(kind=4) :: ic
+
+    do ic = 1,max_extract_chd
+      if (edata_fd_open(ic)) then
+        call PIO_closefile(edata_fd(ic))
+        edata_fd_open(ic) = .false.
+      endif
+    enddo
+#endif
+  end subroutine close_extract_files  !]
 ! ----------------------------------------------------------------------
   subroutine create_edata_file ![
     ! Create the output file(s) for the next nrpf_extract records, into

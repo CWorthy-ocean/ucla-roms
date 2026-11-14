@@ -14,6 +14,7 @@ module pio_roms
   use pio, only : PIO_offset_kind
   use pio, only : PIO_setdebuglevel
   use pio, only : PIO_seterrorhandling, PIO_BCAST_ERROR
+  use pio, only : PIO_put_var
   use pio_nf, only : PIO_inq_varid, PIO_inq_dimid, PIO_strerror
   use pionfatt_mod, only : put_att_desc_text
   use mpi_f08, only: mpi_character, mpi_wtime
@@ -71,6 +72,21 @@ module pio_roms
   integer(kind=PIO_OFFSET_KIND) :: frame
   !> Marker to track whether PIO has opened a file
   integer(kind=4),public :: pio_file_is_open
+  !> pio_ncwrite1/2/3 flush each variable as it is written (see
+  !> pio_ncwrite1). A writer of small records may clear this for its record
+  !> and flush the record once with PIO_syncfile (extract_data).
+  logical,public :: pio_sync_each_var = .true.
+#ifdef MPI_MASKING
+  !> All-land tiles have no rank, so no rank writes their points of a
+  !> distributed output variable. They read _FillValue only because rank 0
+  !> adds each new record with serial netCDF in fill mode, so the writers
+  !> that could keep their files open between records reopen them instead.
+  logical,parameter,public :: pio_keep_output_open = .false.
+#else
+  !> The z-slice and extraction writers keep their files open between
+  !> records and write the time value through PIO.
+  logical,parameter,public :: pio_keep_output_open = .true.
+#endif
 
   !> @brief The length of the dimension of the netCDF variable.
   integer(kind=4), dimension(1) :: pio_dimLen_n1r_r
@@ -620,6 +636,7 @@ module pio_roms
   public  :: pio_ncwrite1
   public  :: pio_ncwrite2
   public  :: pio_ncwrite3
+  public  :: pio_put_time
 
   !! Checked wrapper around PIO_openfile: aborts with a ROMS-side message
   !! (file name + calling context) instead of PIO's bare strerror.
@@ -2061,6 +2078,29 @@ contains
 
   end subroutine pio_ncread3
 ! ----------------------------------------------------------------------
+  subroutine pio_put_time(varName, val, irec) ![
+    ! Write the time value val into record irec of the 1-D record variable
+    ! varName of the file open in pio_FileDesc. Collective: PIO's I/O rank
+    ! 0 writes it, buffered until the next PIO_syncfile or PIO_closefile.
+    ! It lets a writer that keeps its file open between records add a
+    ! record without a serial netCDF open of the file on rank 0.
+    implicit none
+    character(len=*), intent(in) :: varName
+    real(kind=8), intent(in) :: val
+    integer(kind=4), intent(in) :: irec
+
+    type(var_desc_t) :: varId
+    integer(kind=4) :: ierr
+
+    call pio_inq_varid_or_abort(trim(varName), varId, "pio_roms/pio_put_time")
+    ierr = PIO_put_var(pio_FileDesc, varId, (/irec/), (/1/), (/val/))
+    if (ierr /= PIO_noerr) then
+      call error_log%raise_global(context=module_name//"/pio_put_time",&
+      &info="could not write "//trim(varName)//" to '"//trim(pio_current_file)//"'")
+    endif
+
+  end subroutine pio_put_time !]
+! ----------------------------------------------------------------------
   subroutine pio_ncwrite1(varName, arr, irec)
 
     implicit none
@@ -2138,7 +2178,7 @@ contains
     ! MARBL, 59 GB record, 256 and 512 ranks), while one-node runs gained
     ! no speed from the buffering. With the sync, the same restart record
     ! takes about 144 s on 256 ranks.
-    call PIO_syncfile(pio_FileDesc)
+    if (pio_sync_each_var) call PIO_syncfile(pio_FileDesc)
 
   end subroutine pio_ncwrite1
 ! ----------------------------------------------------------------------
@@ -2235,7 +2275,7 @@ contains
     else
       call pio_bad_gtype('pio_ncwrite2', varName)   ! see pio_ncwrite1
     endif
-    call PIO_syncfile(pio_FileDesc)   ! per variable, see pio_ncwrite1
+    if (pio_sync_each_var) call PIO_syncfile(pio_FileDesc)   ! per variable, see pio_ncwrite1
 
   end subroutine pio_ncwrite2
 ! ----------------------------------------------------------------------
@@ -2274,7 +2314,7 @@ contains
     else
       call pio_bad_gtype('pio_ncwrite3', varName)   ! see pio_ncwrite1
     endif
-    call PIO_syncfile(pio_FileDesc)   ! per variable, see pio_ncwrite1
+    if (pio_sync_each_var) call PIO_syncfile(pio_FileDesc)   ! per variable, see pio_ncwrite1
 
   end subroutine pio_ncwrite3
 ! ----------------------------------------------------------------------
