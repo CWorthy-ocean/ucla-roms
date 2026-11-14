@@ -2047,6 +2047,7 @@ contains
         call ncread(ncid,vname,cdata(xc0:xc1,yc0:yc1),start=(/1,1,irec/))
       endif
       call exchange_xxx(cdata,array_bf=cbf)
+      call clamp_coarse_edges(cdata)
       call coarse2fine(cdata,nc%vdata(:,:,it),gtype)
     else
       if (gtype=='u') then
@@ -2222,6 +2223,32 @@ contains
     endif
 
   end subroutine coarse2fine !]
+! ----------------------------------------------------------------------
+  subroutine clamp_coarse_edges(cdata) ![
+    ! With an odd LLm (MMm), the last fine rho column i = LLm+1 (row
+    ! j = MMm+1) and the u (v) end face lie beyond the last coarse point in
+    ! the file (global coarse index LLm/2+1), and coarse2fine also takes the
+    ! next coarse point, LLm/2+2, which no file holds. Give that point the
+    ! value of the last coarse point (constant extrapolation), so those fine
+    ! points take the last coarse value instead of mixing it with the zero
+    ! the buffer holds there. With an even LLm (MMm) the point has zero
+    ! weight and is left alone.
+    use param, only: np_eta, np_xi
+    implicit none
+    real(kind=8),dimension(1-cbf:nxc+cbf,1-cbf:nyc+cbf),intent(inout) :: cdata
+
+#ifndef EW_PERIODIC
+    if ((inode == np_xi-1) .and. (mod(gnx,2) == 1)) then
+      cdata(nxc+2,:) = cdata(nxc+1,:)
+    endif
+#endif
+#ifndef NS_PERIODIC
+    if ((jnode == np_eta-1) .and. (mod(gny,2) == 1)) then
+      cdata(:,nyc+2) = cdata(:,nyc+1)
+    endif
+#endif
+
+  end subroutine clamp_coarse_edges !]
 ! ----------------------------------------------------------------------
   logical function findstr(string,pattern,istart) ![
     ! Should be in roms_read_write and then that module should be available to
