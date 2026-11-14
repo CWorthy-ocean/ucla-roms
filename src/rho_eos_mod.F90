@@ -360,7 +360,11 @@ contains
       cff=g/rho0
       do k=1,nz-1
         do i=istrR,iendR
+#   ifdef SPLIT_EOS
+          bvf(i,j,k)=cff*(rho1(i,j,k)-rho1(i,j,k+1))&
+#   else
           bvf(i,j,k)=cff*(rho(i,j,k)-rho(i,j,k+1))&
+#   endif
           &/(z_r(i,j,k+1)-z_r(i,j,k))
         enddo
       enddo
