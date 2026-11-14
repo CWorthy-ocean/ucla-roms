@@ -1,0 +1,2 @@
+``marbl_balance`` in ``MARBL_BIOGEOCHEMISTRY_SETTINGS`` moves MARBL columns from MPI ranks with more ocean to ranks with less, with bit-for-bit identical results.
+- Off by default; meant for tilings that cannot drop land tiles, since with ``MPI_MASKING`` the gain is small.

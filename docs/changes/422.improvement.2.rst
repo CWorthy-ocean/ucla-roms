@@ -1,0 +1,1 @@
+A free-surface solve that meets a NaN or Inf now stops the run at that step with a message, instead of iterating to ``fs_maxit`` first.

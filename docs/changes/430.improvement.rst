@@ -1,0 +1,1 @@
+BGC tracer subcycling copies less data at the end of each window, about 3 % less time per step.

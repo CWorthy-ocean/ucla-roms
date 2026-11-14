@@ -118,6 +118,7 @@ contains
     use scalars, only: ntimes, iic, ntstart, diag_sync
     use timers, only: start_timers, stop_timers
     use error_handling_mod, only: error_log
+    use roms_read_write, only: close_frc_read_files
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: wrt_upscale_final, do_upscale
 #endif
@@ -147,6 +148,7 @@ contains
 #if defined MARBL && defined CDR_FORCING
     if (do_cdr_gas_exch_output) call wrt_cdr_gas_final
 #endif
+    call close_frc_read_files
 
     call stop_timers()
     return

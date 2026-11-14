@@ -1,0 +1,65 @@
+name: Changelog
+
+# Every pull request carries a release-note fragment in docs/changes/ (see
+# docs/changes/README.md). The `no-changelog` label skips the check for PRs with
+# nothing to tell users; a skipped job counts as passing for required checks.
+
+on:
+  pull_request:
+    # labeled/unlabeled re-run the check when `no-changelog` is added or removed.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    # Only PRs into main: a PR into another PR's branch shares that PR's note.
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  towncrier-check:
+    name: towncrier check
+    # The release PR (from next_release_notes) is skipped too: it deletes the
+    # fragments it was built from, which the check would read as a PR with no
+    # note. It only reaches this workflow when someone pushes an edit to it.
+    if: >-
+      !contains(github.event.pull_request.labels.*.name, 'no-changelog') &&
+      github.event.pull_request.head.ref != 'next_release_notes'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # towncrier diffs against the base branch, which needs its history.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install towncrier
+        # Same towncrier pin as finalize_release_notes.yaml. docutils parses the
+        # notes in the last step.
+        run: pip install "towncrier==26.9.0" "docutils==0.23"
+
+      - name: Check for a release-note fragment
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if ! towncrier check --compare-with "origin/$BASE_REF"; then
+            echo "::error::Add a release note as docs/changes/+<name>.<type>.rst (see docs/changes/README.md), or label the PR no-changelog if users have nothing to learn from it."
+            exit 1
+          fi
+
+      - name: Check that the notes are valid reStructuredText
+        # The notes go into the documentation as written, and nothing else
+        # parses them before a release. A name ending in an underscore outside
+        # double backticks, or a sub-bullet followed by unindented text, is an
+        # error here. Line numbers in the message refer to the notes printed
+        # below it, not to the fragment.
+        run: |
+          towncrier build --draft --version Unreleased > "$RUNNER_TEMP/notes.rst"
+          if ! python -m docutils --report=2 --halt=2 "$RUNNER_TEMP/notes.rst" /dev/null; then
+            cat -n "$RUNNER_TEMP/notes.rst"
+            echo "::error::A release note in docs/changes/ is not valid reStructuredText; see the message above and docs/changes/README.md."
+            exit 1
+          fi

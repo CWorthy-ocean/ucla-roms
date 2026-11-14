@@ -1,0 +1,3 @@
+``bgc_physics_subcycle`` and ``bgc_physics_timestep`` in ``BGC_SETTINGS`` transport and mix the tracers beyond temperature and salinity (passive, CDR_LITE and MARBL) only every ``bgc_physics_timestep`` seconds, which makes a CPU step with MARBL 1.6-1.9x cheaper at ``marbl_timestep = 4 dt``.
+- Off by default. ``bgc_physics_timestep`` must be a whole multiple of ``dt`` that divides ``marbl_timestep``; 0 means ``marbl_timestep``, and an invalid value stops the run at startup.
+- With it on, restarts must fall on its windows and ``monthly_restarts`` is not supported; see the BGC subcycling page of the documentation.
