@@ -1,0 +1,1 @@
+The MARBL diagnostics ``POC_FLUX_100m``, ``POP_FLUX_100m``, ``CaCO3_FLUX_100m``, ``SiO2_FLUX_100m`` and ``P_iron_FLUX_100m`` are now 0 in columns shallower than 100 m, where they used to hold another column's values.

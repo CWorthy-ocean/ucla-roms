@@ -1,0 +1,1 @@
+Runs without MARBL or BEC2 that have passive or CDR_LITE tracers now read ``BGC_SETTINGS`` (optional there), so a key ROMS does not know in that group now stops the run instead of being ignored.
