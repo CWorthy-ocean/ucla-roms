@@ -645,7 +645,9 @@ fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost ta
 ! Restarts are exact: the IMEX state is in the restart file (imex_rst_state).
 ! The keys below are the ones a user sets; the solver and development settings
 ! (weights, tolerances, solver variants, self-test) are read
-! too and keep their defaults when absent (see src/imex_igw.F90).
+! too and keep their defaults when absent; they are described in
+! docs/model_settings/runtime_settings.md (IMEX_IGW_SETTINGS). See also
+! docs/model_settings/implicit_internal_waves.md.
 ! Keys removed on 2026-11-13 (their former defaults are fixed) stop the run at
 ! the read; this deletes them, with their comment and value continuation lines:
 ! sed -E -i '/^[[:space:]]*(imex_force_mode|imex_n2_min|imex_bt_mode|imex_bt_passes|imex_s2d_check|imex_rhs_full|imex_probe_steps|imex_pcols|imex_win|imex_precond|imex_pcg_variant|imex_pcg_overlap|imex_adj_fused|imex_bref|imex_bref_floor|imex_bref_every|imex_bref_smooth|imex_n2_reg|imex_obc_rhs|imex_obc_op|imex_obc_zero|imex_obc_diag|imex_pred_btfix|imex_tsmix_n|imex_sponge_eq|imex_trim3d|imex_obc_eig|imex_obc_dcols|imex_obc_scrit|imex_obc_sband|imex_obc_fref|imex_obc_trelax|imex_obc_cslow|imex_obc_supercrit)[[:space:]]*[=(]/I{:a;$!{N;/\n([[:blank:]]*([A-Za-z_][A-Za-z0-9_%]*[[:blank:]]*[=(]|[\/&$])[^\n]*|[[:blank:]]*|![^\n]*)$/!ba};/\n([[:blank:]]*([A-Za-z_][A-Za-z0-9_%]*[[:blank:]]*[=(]|[\/&$])[^\n]*|[[:blank:]]*|![^\n]*)$/!d;s/^.*\n/\n/;D}' namelist.nml
