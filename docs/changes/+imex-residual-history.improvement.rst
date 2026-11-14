@@ -1,0 +1,1 @@
+``imex_verbose = 2`` in ``IMEX_IGW_SETTINGS`` also prints an ``IMEX_RH`` line per IMEX solve: the start residual and the residual after each iteration, relative to the right-hand side. Results are unchanged.
