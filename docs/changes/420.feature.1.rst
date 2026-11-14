@@ -1,0 +1,6 @@
+New namelist group ``IMPLICIT_FS``: ``fs_mode = 'implicit'`` replaces the split-explicit fast loop with an implicit free surface that has no barotropic Courant limit and an exact volume budget.
+- Defaults: two implicit sub-steps per baroclinic step at ``fs_rho_inf = 0.5``, with a density-weighted pressure-gradient operator and the split loop's boundary sea level in the Flather condition.
+- The namelist template lists the five supported settings (``fs_mode``, ``fs_nsub``, ``fs_rho_inf``, ``fs_tol``, ``fs_verbose``); the solver settings are documented separately and keep their defaults when omitted.
+- Restart files written in implicit mode hold the scheme's state, so restarts are exact.
+- A free-surface solve that does not converge stops the run with the step, iterations and residual.
+- Without the group, or with ``fs_mode = 'split'``, results are bit-for-bit unchanged.
