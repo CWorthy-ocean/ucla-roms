@@ -642,6 +642,7 @@ fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost ta
 !================================================================================
 ! Requires IMEX_IGW cppkey (experimental). Each baroclinic stage solves an
 ! elliptic problem for the implicit internal-wave correction (preconditioned CG).
+! Restarts are exact: the IMEX state is in the restart file (imex_rst_state).
 ! The keys below are the ones a user sets; the solver and development settings
 ! (weights, tolerances, solver variants, self-test) are read
 ! too and keep their defaults when absent (see src/imex_igw.F90).
@@ -657,4 +658,6 @@ imex_verbose = 0                     ! 0: quiet; 1: solver statistics (IMEX line
 imex_bref_hours = 24.0               ! Rebuild interval (model hours) of the reference stratification
                                      ! b_ref, the operator and its preconditioner; 12 is the
                                      ! cautious value for strongly evolving stratification
+imex_rst_state = 1                   ! Restart files carry the IMEX state: 1 exact restart; 0 no
+                                     ! IMEX state (much smaller files, inexact restart)
 /

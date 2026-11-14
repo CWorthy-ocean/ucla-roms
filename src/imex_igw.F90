@@ -105,6 +105,7 @@ module imex_igw
   public :: imex_solve_stage
   public :: imex_predictor_transport
   public :: imex_shift_levels
+  public :: imex_rst_def, imex_rst_wrt, imex_rst_wrt_scal, imex_rst_get
 
   character(len=8) :: module_name = "imex_igw"
 
@@ -113,7 +114,7 @@ module imex_igw
   integer(kind=4), parameter, public :: imex_stage_corr = 2  ! prsgrd at *, step3d_uv1
 
   ! Namelist IMEX_IGW_SETTINGS. src/namelist.nml lists the keys a user sets (imex_verbose,
-  ! imex_bref_hours); the others are solver and
+  ! imex_bref_hours, imex_rst_state); the others are solver and
   ! development settings. Defaults: weight set B, the tested solver configuration
   real(kind=8)    :: imex_theta_p = 0.5_8        ! implicit PG weight, predictor
   real(kind=8)    :: imex_phi = 0.25_8           ! weight of level n, predictor
@@ -210,6 +211,9 @@ module imex_igw
                                                  ! count: per-column partial sums (k ascending) added exactly as
                                                  ! fixed-point integers (rd_sum). 1 falls back to 0 (printed)
                                                  ! with imex_pcg_start 0
+  integer(kind=4) :: imex_rst_state = 1          ! EXACT_RESTART files: 1 the IMEX state (imex_* variables, one
+                                                 ! copy per file, exact restart); 0 none (small files: the first
+                                                 ! step after a restart starts the IMEX stores, inexact restart)
 
   ! Former keys, fixed at their former defaults (removed from the namelist 2026-11-13; docs page, 'Removed keys')
   real(kind=8), parameter :: imex_n2_min = 1.e-8_8   ! the self-test's 'state' N2 floor [s-2]
@@ -231,7 +235,7 @@ module imex_igw
   &  imex_verbose, imex_solver_enabled, imex_allow_explicit, imex_selftest,&
   &  imex_n2_ref, imex_n2_taper, imex_warm,&
   &  imex_bref_hours, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec, imex_stage_fused,&
-  &  imex_redu, imex_mix_split
+  &  imex_redu, imex_rst_state, imex_mix_split
 
   ! Derived quantities read by the consumers
   real(kind=8), public, protected :: imex_am3      ! AM3_crv for pre_step3d
@@ -375,6 +379,12 @@ module imex_igw
   real(kind=8) :: op_tapply = 0._8, op_napply = 0._8, pc_tapply = 0._8, pc_napply = 0._8, sv_t(5) = 0._8
   real(kind=8), allocatable, dimension(:,:,:) :: ad_zc, ad_dbar, ad_fu, ad_fv, ad_uf, ad_vf
   real(kind=8), allocatable, dimension(:,:)   :: ad_act
+  ! Exact restart (EXACT_RESTART; imex_rst_def/wrt/wrt_scal/get, imex_rst_replay): the state the next
+  ! step reads, in the restart file. rst_read: read from the initial file (the first
+  ! step is an ordinary step); rst_pend: imex_rst_replay due at the first imex_step_setup; rst_replay:
+  ! imex_adj_setup called by imex_rst_replay (b_ref from bref_sav, no rescale of the memory terms);
+  ! rst_mvalid: the stored M x of a stage's last solve applies to the replayed operator.
+  integer(kind=4), parameter :: rst_nsc = 17
   ! imex_pcg_start = 0 warm-start history (imex_pcg_warm): the last solution (pw_h1) per stage,
   ! with halos, and the number stored (pw_nh)
   real(kind=8), allocatable, dimension(:,:,:,:) :: pw_h1
@@ -386,6 +396,8 @@ module imex_igw
   logical :: redu_on = .false.
   integer(kind=4), parameter :: rd_ms = 3, rd_ni = 6, rd_nbit = 46
   real(kind=8), allocatable, dimension(:,:,:) :: rd_c
+  logical :: rst_read = .false., rst_pend = .false., rst_replay = .false.
+  integer(kind=4) :: rst_mvalid(2) = 0
   ! Startup self-test bookkeeping
   logical :: selftest_done = .false.
   real(kind=8) :: t_step_start = 0._8, t_selftest_solve = 0._8
@@ -575,6 +587,8 @@ contains
     wa_unf = (.not. sf_on) .or. pf_chk .or. (imex_selftest /= 0)
     if (imex_redu < 0 .or. imex_redu > 1) call error_log%raise_global(context=context,&
     &info="imex_redu must be 0 or 1")
+    if (imex_rst_state < 0 .or. imex_rst_state > 1) call error_log%raise_global(context=context,&
+    &info="imex_rst_state must be 0 or 1")
     ! imex_redu = 1 with the stage solves of imex_pcg_start >= 1; otherwise 0 (print_settings)
     redu_on = (imex_redu == 1) .and. pcg_start >= 1
     if (imex_theta_p + imex_phi > 1._8 + tol) then
@@ -664,7 +678,7 @@ contains
     write(*,'(3x,A,I2)') 'imex_stage_fused =', merge(1, 0, sf_on)
     if (imex_stage_fused == 1 .and. .not. sf_on) write(*,'(3x,A)') 'imex_stage_fused = 1 needs imex_pcg_fused = 1'&
     &//' in effect, theta_p, theta_c > 0 and the solver enabled: imex_stage_fused = 0'
-    write(*,'(3x,A,I2)') 'imex_redu =', merge(1, 0, redu_on)
+    write(*,'(3x,A,I2,A,I2)') 'imex_redu =', merge(1, 0, redu_on), '  imex_rst_state =', imex_rst_state
     if (imex_redu == 1 .and. .not. redu_on) write(*,'(3x,A)') 'imex_redu = 1 needs imex_pcg_start >= 1 in'&
     &//' effect: imex_redu = 0'
     if (imex_allow_explicit) write(*,'(3x,A)')&
@@ -773,7 +787,9 @@ contains
     end if
     t_step_start = mpi_wtime()
 
-    first_step = (iic == ntstart) .or. (FIRST_TIME_STEP)
+    ! (exact restart with the IMEX state read, rst_read: an ordinary step; u^n-1 is the restart's
+    ! earlier record, in slot 3-nstp, pg_nm1 and the solver state come from the file)
+    first_step = ((iic == ntstart) .and. .not. rst_read) .or. (FIRST_TIME_STEP)
     if (first_step) then
       wpg_pred = wpg_pred_1st ; wflx_pred = wflx_pred_1st
       wpg_corr = wpg_corr_1st ; wflx_corr = wflx_corr_1st ; wrhs_corr = wrhs_corr_1st
@@ -782,6 +798,10 @@ contains
     else
       wpg_pred = wpg_pred_reg ; wflx_pred = wflx_pred_reg
       wpg_corr = wpg_corr_reg ; wflx_corr = wflx_corr_reg ; wrhs_corr = wrhs_corr_reg
+      if (iic == ntstart) then                ! rst_read
+        u_nm1 = u(:,:,:,3-nstp)
+        v_nm1 = v(:,:,:,3-nstp)
+      end if
     end if
   end subroutine imex_begin_step
 
@@ -1585,6 +1605,458 @@ contains
   end subroutine imex_shift_levels
 
   !======================================================================
+  ! Exact restart (EXACT_RESTART)
+  !======================================================================
+  ! The IMEX state a step reads from earlier steps, written at the end of the step (before
+  ! imex_shift_levels, so pg_n is the next step's pg_nm1) and read by get_init. One copy per file:
+  ! the 3-D variables have no time dimension and are written with the second record of the
+  ! EXACT_RESTART pair (rec 2, the record a restart continues from; the first record of the pair is
+  ! never read as the continue-from record of an exact restart), so they cost one 3-D field each per
+  ! file instead of two. imex_rst_state = 0: no 3-D variables (small files, inexact restart).
+  !   imex_pgu, imex_pgv  PG at level n (Hz-weighted, u/v faces): the next step's pg_nm1
+  !   imex_dpw            the memory term dPw (eta form, interior)
+  !   imex_xp, imex_xc    the last solution of the predictor / corrector solve (warm start; with
+  !                       halos after the read's exchange); imex_pcg_start 0: imex_pcg_warm's
+  !                       history pw_h1 (imex_xp2, imex_xc2 of files written with imex_warm = 2,
+  !                       removed 2026-11-13, are not read)
+  !   imex_mxp, imex_mxc  W M x of each stage's last solve (imex_pcg_start = 3, imex_warm = 1 with the
+  !                       setup lag: reuse; interior)
+  !   imex_bref           b_ref of the last rebuild (bref_sav), imex_n2raw its N2 before the floor
+  !                       (imex_n2_taper > 0; files that lack it, written with the setup lag and
+  !                       before imex-igw-stock, get it recomputed from imex_bref and imex_dza,
+  !                       which is exact only when the restart step rebuilds b_ref)
+  !   imex_hzop, imex_dza Hz and dza of the last b_ref rebuild step (imex_setup_lag = 1: the
+  !                       operator is rebuilt from these by imex_rst_replay), imex_n2o (lag 0: the
+  !                       last step's operator N2, for the rescale of the memory terms)
+  !   imex_rst_scal       per record: 1 state complete in this file (1/0), 2 lag_on, 3 age of b_ref in
+  !                       steps (iic - bref_last), 4 eta_old, 5-6 warm-start history count (ps_nh, or
+  !                       pw_nh with imex_pcg_start 0), 7-8 stored W M x valid for the operator in use,
+  !                       9-10 its c2, 11 imex_warm, 12 imex_pcg_start in effect, 13 the b_ref cadence in
+  !                       steps, 14 imex_solver_prec in effect (pf_prec, 0 without the fused solve),
+  !                       15 layout (2: one time-less copy; 0: files of 43949d66, a copy per record),
+  !                       16 mode (1; options of older files that this version does not have: see
+  !                       rst_mode), 17 0 (files written with the 'modal' open boundary, which this
+  !                       version does not have, hold its reference's update count there, and its
+  !                       reference in imex_obcm, which is not read; files with 16 scalars are read as 16)
+  ! u^n-1 needs no variable: the exact restart's earlier record is u^n-1 (slot 3-nstp).
+  subroutine imex_rst_def(ncid)
+    use nc_read_write, only: nccreate
+    use roms_read_write, only: dn_tm, dn_xr, dn_xu, dn_yr, dn_yv, dn_zr
+    use dimensions, only: ds_xr, ds_xu, ds_yr, ds_yv
+    use param, only: nz
+    use netcdf, only: nf90_double, nf90_put_att
+    implicit none
+    integer(kind=4), intent(in) :: ncid
+    integer(kind=4) :: varid, ierr
+    if (.not. imex_solver_enabled) return
+    varid = nccreate(ncid,'imex_rst_scal',[character(len=10) :: 'imex_nscal', dn_tm],(/rst_nsc,0/),nf90_double)
+    ierr = nf90_put_att(ncid, varid, 'long_name', 'IMEX_IGW restart scalars (imex_igw.F90 imex_rst_def)')
+    if (imex_rst_state == 0) return
+    call d3('imex_pgu', 'u', 'IMEX_IGW PG at level n, Hz-weighted (next pg_nm1), u')
+    call d3('imex_pgv', 'v', 'IMEX_IGW PG at level n, Hz-weighted (next pg_nm1), v')
+    call d3('imex_dpw', 'r', 'IMEX_IGW memory term dPw')
+    if (rst_has_x()) then
+      call d3('imex_xp', 'r', 'IMEX_IGW last predictor solution (warm start)')
+      call d3('imex_xc', 'r', 'IMEX_IGW last corrector solution (warm start)')
+    end if
+    if (rst_has_mx()) then
+      call d3('imex_mxp', 'r', 'IMEX_IGW W M x of the last predictor solve')
+      call d3('imex_mxc', 'r', 'IMEX_IGW W M x of the last corrector solve')
+    end if
+    call d3('imex_bref', 'r', 'IMEX_IGW b_ref of the last rebuild')
+    if (rst_has_n2raw()) call d3('imex_n2raw', 'r', 'IMEX_IGW N2 of b_ref before the floor')
+    if (lag_on) then
+      call d3('imex_hzop', 'r', 'IMEX_IGW Hz of the last b_ref rebuild step')
+      call d3('imex_dza', 'r', 'IMEX_IGW dza of the last b_ref rebuild step')
+    else
+      call d3('imex_n2o', 'r', 'IMEX_IGW operator N2 of the last setup')
+    end if
+  contains
+    subroutine d3(name, g, lname)
+      ! one copy per file: no time dimension
+      character(len=*), intent(in) :: name, g, lname
+      select case (g)
+      case ('u')
+        varid = nccreate(ncid,name,(/dn_xu,dn_yr,dn_zr/),(/ds_xu,ds_yr,nz/),nf90_double)
+      case ('v')
+        varid = nccreate(ncid,name,(/dn_xr,dn_yv,dn_zr/),(/ds_xr,ds_yv,nz/),nf90_double)
+      case default
+        varid = nccreate(ncid,name,(/dn_xr,dn_yr,dn_zr/),(/ds_xr,ds_yr,nz/),nf90_double)
+      end select
+      ierr = nf90_put_att(ncid, varid, 'long_name', lname)
+    end subroutine d3
+  end subroutine imex_rst_def
+
+  !----------------------------------------------------------------------
+  ! which of the optional 3-D restart variables the settings in effect use (imex_rst_def/wrt/get)
+  logical function rst_has_x() result(y)
+    implicit none
+    y = imex_warm > 0       ! (imex_warm = 0: every solve starts from 0)
+  end function rst_has_x
+  logical function rst_has_mx() result(y)
+    implicit none
+    y = pcg_start == 3 .and. imex_warm == 1 .and. lag_on
+  end function rst_has_mx
+  logical function rst_has_n2raw() result(y)
+    ! written whenever the taper uses it; with the setup lag and 'coef' it was recomputed from
+    ! imex_bref and imex_dza instead, which did not reproduce the rebuild's values to the bit
+    ! (restarts off the b_ref cadence were inexact); files without it still use that recompute
+    implicit none
+    y = imex_n2_taper > 0._8
+  end function rst_has_n2raw
+
+  !----------------------------------------------------------------------
+  logical function imex_rst_complete() result(ok)
+    ! the state of the settings in effect is all there (written after an IMEX step)
+    implicit none
+    ok = .true.
+    if (rst_has_x() .and. pcg_start > 0) ok = allocated(ps_h)
+    if (rst_has_x() .and. pcg_start == 0) ok = allocated(pw_h1)
+    if (rst_has_mx()) ok = ok .and. allocated(ps_mx)
+    ok = ok .and. allocated(bref_sav)
+    if (rst_has_n2raw()) ok = ok .and. allocated(ad_n2raw)
+    if (lag_on) ok = ok .and. allocated(hz_op)
+    if (.not. lag_on) ok = ok .and. (allocated(ad_n2o) .or. .not. eta_old)
+  end function imex_rst_complete
+
+  !----------------------------------------------------------------------
+  subroutine imex_rst_wrt(ncid, rec)
+    ! write the state (all ranks; PIO collective with PARALLEL_IO) with the second record of the
+    ! file (rec = 2) only, as the time-less variables of imex_rst_def; arrays not allocated (state
+    ! incomplete, flag 1 = 0 in imex_rst_scal) are written as zeros
+    use nc_read_write, only: ncwrite
+    use dimensions, only: i0, i1, j0, j1
+    use pio_roms, only: pio_gtype
+    use param, only: lm, mm, nz
+    implicit none
+    integer(kind=4), intent(in) :: ncid, rec
+    integer(kind=4) :: sl
+    real(kind=8), allocatable, dimension(:,:,:) :: wz
+    character(len=len(pio_gtype)) :: gsv
+    if (.not. imex_solver_enabled .or. imex_rst_state == 0 .or. rec /= 2) return
+    gsv = pio_gtype
+    allocate( wz(GLOBAL_2D_ARRAY,nz) ) ; wz = 0._8
+    pio_gtype = '3Duw'
+    call ncwrite(ncid,'imex_pgu', pg_n_u( 1:i1,j0:j1,:),PP=.true.)
+    pio_gtype = '3Dvw'
+    call ncwrite(ncid,'imex_pgv', pg_n_v(i0:i1, 1:j1,:),PP=.true.)
+    pio_gtype = '3Drw'
+    call ncwrite(ncid,'imex_dpw', dpw(i0:i1,j0:j1,:),PP=.true.)
+    if (rst_has_x()) then
+      do sl=1,2
+        if (pcg_start > 0 .and. allocated(ps_h)) then
+          call ncwrite(ncid,merge('imex_xp','imex_xc',sl == 1), ps_h(i0:i1,j0:j1,:,ps_cur(sl),sl),PP=.true.)
+        else if (pcg_start == 0 .and. allocated(pw_h1)) then
+          call ncwrite(ncid,merge('imex_xp','imex_xc',sl == 1), pw_h1(i0:i1,j0:j1,:,sl),PP=.true.)
+        else
+          call ncwrite(ncid,merge('imex_xp','imex_xc',sl == 1), wz(i0:i1,j0:j1,:),PP=.true.)
+        end if
+      enddo
+    end if
+    if (rst_has_mx()) then
+      do sl=1,2
+        if (allocated(ps_mx)) then
+          call ncwrite(ncid,merge('imex_mxp','imex_mxc',sl == 1), ps_mx(i0:i1,j0:j1,:,sl),PP=.true.)
+        else
+          call ncwrite(ncid,merge('imex_mxp','imex_mxc',sl == 1), wz(i0:i1,j0:j1,:),PP=.true.)
+        end if
+      enddo
+    end if
+    if (allocated(bref_sav)) then
+      call ncwrite(ncid,'imex_bref', bref_sav(i0:i1,j0:j1,:),PP=.true.)
+    else
+      call ncwrite(ncid,'imex_bref', wz(i0:i1,j0:j1,:),PP=.true.)
+    end if
+    if (rst_has_n2raw()) then
+      if (allocated(ad_n2raw)) then
+        call ncwrite(ncid,'imex_n2raw', ad_n2raw(i0:i1,j0:j1,:),PP=.true.)
+      else
+        call ncwrite(ncid,'imex_n2raw', wz(i0:i1,j0:j1,:),PP=.true.)
+      end if
+    end if
+    if (lag_on) then
+      if (allocated(hz_op)) then
+        call ncwrite(ncid,'imex_hzop', hz_op(i0:i1,j0:j1,:),PP=.true.)
+      else
+        call ncwrite(ncid,'imex_hzop', wz(i0:i1,j0:j1,:),PP=.true.)
+      end if
+      call ncwrite(ncid,'imex_dza', dza(i0:i1,j0:j1,:),PP=.true.)
+    else
+      if (allocated(ad_n2o)) then
+        call ncwrite(ncid,'imex_n2o', ad_n2o(i0:i1,j0:j1,:),PP=.true.)
+      else
+        call ncwrite(ncid,'imex_n2o', wz(i0:i1,j0:j1,:),PP=.true.)
+      end if
+    end if
+    deallocate(wz)
+    pio_gtype = gsv
+  end subroutine imex_rst_wrt
+
+  !----------------------------------------------------------------------
+  subroutine imex_rst_wrt_scal(ncid, rec)
+    ! imex_rst_scal of record rec (plain netCDF: rank 0 with PARALLEL_IO, every rank's own file
+    ! without; the values are the same on every rank)
+    use scalars, only: iic
+    use netcdf, only: nf90_inq_varid, nf90_put_var, nf90_noerr
+    implicit none
+    integer(kind=4), intent(in) :: ncid, rec
+    real(kind=8) :: sc(rst_nsc)
+    integer(kind=4) :: varid, ierr, s
+    if (.not. imex_solver_enabled) return
+    sc = 0._8
+    if (imex_rst_complete() .and. imex_rst_state == 1 .and. rec == 2) sc(1) = 1._8
+    sc(2) = merge(1._8, 0._8, lag_on)
+    if (allocated(bref_sav)) sc(3) = dble(iic - bref_last)
+    sc(4) = merge(1._8, 0._8, eta_old)
+    if (pcg_start > 0) then
+      sc(5:6) = dble(ps_nh)
+    else
+      sc(5:6) = dble(pw_nh)
+    end if
+    do s=1,2
+      if (rst_has_mx() .and. allocated(ps_mx) .and. ps_mver(s) == coef_version) sc(6+s) = 1._8
+    enddo
+    sc(9:10) = ps_mc2
+    sc(11) = dble(imex_warm) ; sc(12) = dble(pcg_start) ; sc(13) = dble(imex_nbref())
+    sc(14) = dble(merge(pf_prec, 0, pf_on))
+    sc(15) = 2._8 ; sc(16) = dble(rst_mode())
+    sc(17) = 0._8                                 ! (the 'modal' reference's update count of older files)
+    ierr = nf90_inq_varid(ncid, 'imex_rst_scal', varid)
+    if (ierr == nf90_noerr) ierr = nf90_put_var(ncid, varid, sc, start=(/1,rec/), count=(/rst_nsc,1/))
+  end subroutine imex_rst_wrt_scal
+
+  !----------------------------------------------------------------------
+  integer(kind=4) function rst_mode() result(md)
+    ! imex_rst_scal(16): 1. Older files may carry options that this version does not have, so that a
+    ! restart from them is refused as inexact (obc_mode_change): written before the key trim of
+    ! 2026-11-13, 2 in place of 1 imex_force_mode 'gradient', + 10 imex_bt_mode 'step2d'; written with
+    ! the 'modal' open boundary, + 100 and its settings in the higher digits
+    implicit none
+    md = 1
+  end function rst_mode
+
+  !----------------------------------------------------------------------
+  function obc_mode_change(mold) result(txt)
+    ! the rst_mode of an older file in words (the inexact-restart note): the options removed on
+    ! 2026-11-13, and the 'modal' open boundary
+    implicit none
+    integer(kind=4), intent(in) :: mold
+    character(len=256) :: txt
+    character(len=128) :: rm
+    rm = ''
+    if (mod(mold, 10) == 2) rm = "imex_force_mode 'gradient'"
+    if (mod(mold/10, 10) == 1) rm = trim(rm)//"  imex_bt_mode 'step2d'"
+    txt = ''
+    if (len_trim(rm) > 0) txt = 'the file was written with options removed on 2026-11-13: '//trim(adjustl(rm))
+    if (mod(mold/100, 10) == 1) then
+      if (len_trim(txt) > 0) txt = trim(txt)//'; '
+      txt = trim(txt)//"the file was written with the 'modal' open boundary, which this version does not have"
+    end if
+    if (len_trim(txt) == 0) txt = 'restart mode'
+  end function obc_mode_change
+
+  !----------------------------------------------------------------------
+  subroutine imex_rst_get(ncid, record, tindx)
+    ! get_init (tindx = 1, the record the run continues from): read the state when the restart is
+    ! exact (forw_start = 1) and the record has a complete state for the settings in effect;
+    ! otherwise the first step starts the IMEX stores as before (first-step weights; an inexact
+    ! restart), with a note. Files of 43949d66 (a copy of the state per record, imex_rst_scal(15) =
+    ! 0) are read from the record.
+    use nc_read_write, only: ncread
+    use dimensions, only: x_, x0, x1, y_, y0, y1
+    use pio_roms, only: pio_gtype
+    use param, only: lm, mm, nz, mynode
+    use scalars, only: forw_start, ntstart
+    use roms_mpi, only: exchange_xxx
+    use netcdf, only: nf90_inq_varid, nf90_get_var, nf90_noerr, nf90_inquire_variable, nf90_inquire_dimension
+    implicit none
+    integer(kind=4), intent(in) :: ncid, record, tindx
+    real(kind=8) :: sc(rst_nsc)
+    integer(kind=4) :: varid, ierr, st(4), md, i, j, k, dids(2), nsc
+    logical :: lay1
+    character(len=512) :: why
+    character(len=len(pio_gtype)) :: gsv
+    if (tindx /= 1 .or. .not. imex_solver_enabled) return
+    why = ''
+    sc = 0._8
+    if (forw_start /= 1) then
+      why = 'not an exact restart'
+    else
+      ierr = nf90_inq_varid(ncid, 'imex_rst_scal', varid)
+      if (ierr /= nf90_noerr) then
+        why = 'no IMEX state in the initial file'
+      else
+        nsc = rst_nsc                             ! (older files have 16 scalars)
+        ierr = nf90_inquire_variable(ncid, varid, dimids=dids)
+        if (ierr == nf90_noerr) ierr = nf90_inquire_dimension(ncid, dids(1), len=nsc)
+        nsc = max(1, min(nsc, rst_nsc))
+        ierr = nf90_get_var(ncid, varid, sc(1:nsc), start=(/1,record/), count=(/nsc,1/))
+        md = nint(sc(16))
+        if (md == 0) md = 1                       ! (files of 43949d66: adjoint, no 'step2d')
+        if (ierr /= nf90_noerr .or. nint(sc(1)) /= 1) then
+          why = 'the record has no IMEX state (written with imex_rst_state = 0, incomplete, or not the'&
+          &//' second record of an exact-restart pair)'
+        else if (nint(sc(2)) /= merge(1, 0, lag_on) .or. nint(sc(11)) /= imex_warm .or.&
+        &        nint(sc(12)) /= pcg_start .or. nint(sc(13)) /= imex_nbref() .or.&
+        &        nint(sc(14)) /= merge(pf_prec, 0, pf_on) .or. md /= rst_mode()) then
+          why = 'IMEX settings differ from the run that wrote it (setup lag, warm start, b_ref cadence,'&
+          &//' solver, mode'
+          if (nint(sc(11)) >= 2) why = trim(why)//'; the file was written with imex_warm = 2 or 3, removed on'&
+          &//' 2026-11-13'
+          if (md /= rst_mode()) why = trim(why)//'; '//trim(obc_mode_change(md))
+          why = trim(why)//')'
+        end if
+      end if
+    end if
+    if (why /= '') then
+      if (mynode == 0) write(*,'(1x,A)') 'IMEX_IGW: '//trim(why)//': the IMEX stores start as on a first'&
+      &//' step (inexact restart)'
+      return
+    end if
+    lay1 = nint(sc(15)) /= 2                      ! a copy per record (43949d66)
+    gsv = pio_gtype
+    st = 1 ; st(4) = record
+    pio_gtype = '3Dur'
+    call rd3('imex_pgu', pg_nm1_u(x_:x1,y0:y1,:))
+    pio_gtype = '3Dvr'
+    call rd3('imex_pgv', pg_nm1_v(x0:x1,y_:y1,:))
+    pio_gtype = '3Drr'
+    call rd3('imex_dpw', dpw(x0:x1,y0:y1,:))
+    if (rst_has_x() .and. pcg_start > 0) then
+      if (.not. allocated(ps_h)) allocate( ps_h(GLOBAL_2D_ARRAY,nz,2,2) )
+      ps_h = 0._8
+      call rd3('imex_xp', ps_h(x0:x1,y0:y1,:,1,1))
+      call rd3('imex_xc', ps_h(x0:x1,y0:y1,:,1,2))
+      call exchange_xxx(ps_h(:,:,:,1,1), ps_h(:,:,:,1,2))
+      ps_cur = 1 ; ps_nh = nint(sc(5:6))
+    else if (rst_has_x()) then                    ! imex_pcg_start 0: imex_pcg_warm's history
+      if (.not. allocated(pw_h1)) allocate( pw_h1(GLOBAL_2D_ARRAY,nz,2) )
+      pw_h1 = 0._8
+      call rd3('imex_xp', pw_h1(x0:x1,y0:y1,:,1))
+      call rd3('imex_xc', pw_h1(x0:x1,y0:y1,:,2))
+      call exchange_xxx(pw_h1(:,:,:,1), pw_h1(:,:,:,2))
+      pw_nh = nint(sc(5:6))
+    end if
+    ps_mver = -1 ; rst_mvalid = 0
+    if (rst_has_mx()) then
+      if (.not. allocated(ps_mx)) allocate( ps_mx(GLOBAL_2D_ARRAY,nz,2) )
+      ps_mx = 0._8
+      call rd3('imex_mxp', ps_mx(x0:x1,y0:y1,:,1))
+      call rd3('imex_mxc', ps_mx(x0:x1,y0:y1,:,2))
+      rst_mvalid = nint(sc(7:8)) ; ps_mc2 = sc(9:10)
+    end if
+    if (.not. allocated(bref_sav)) allocate( bref_sav(GLOBAL_2D_ARRAY,nz) )
+    bref_sav = 0._8
+    call rd3('imex_bref', bref_sav(x0:x1,y0:y1,:))
+    call exchange_xxx(bref_sav)
+    bref_last = ntstart - 1 - nint(sc(3))     ! the same age at the next step
+    if (lag_on) then
+      if (.not. allocated(hz_op)) then
+        allocate( hz_op(GLOBAL_2D_ARRAY,nz), rshu_op(GLOBAL_2D_ARRAY), rshv_op(GLOBAL_2D_ARRAY) )
+      end if
+      hz_op = 0._8 ; rshu_op = 0._8 ; rshv_op = 0._8
+      call rd3('imex_hzop', hz_op(x0:x1,y0:y1,:))
+      call rd3('imex_dza', dza(x0:x1,y0:y1,:))
+      call exchange_xxx(hz_op, dza)
+    else
+      if (.not. allocated(ad_n2o)) allocate( ad_n2o(GLOBAL_2D_ARRAY,nz) )
+      ad_n2o = 1._8
+      call rd3('imex_n2o', ad_n2o(x0:x1,y0:y1,:))
+      eta_old = nint(sc(4)) == 1
+    end if
+    if (imex_n2_taper > 0._8) then
+      if (.not. allocated(ad_n2raw)) allocate( ad_n2raw(GLOBAL_2D_ARRAY,nz) )
+      ad_n2raw = 0._8
+      if (nf90_inq_varid(ncid, 'imex_n2raw', varid) == nf90_noerr) then
+        call rd3('imex_n2raw', ad_n2raw(x0:x1,y0:y1,:))
+        call exchange_xxx(ad_n2raw)
+      else                                        ! older files (setup lag, 'coef'): recomputed
+        if (mynode == 0) write(*,'(1x,A)') 'IMEX_IGW: no imex_n2raw in the initial file: N2 of b_ref'&
+        &//' recomputed (exact only at a b_ref rebuild)'
+        do j=jb0-1,jb1+1
+          do i=ib0-1,ib1+1
+            do k=1,nz
+              ad_n2raw(i,j,k) = dza(i,j,k)*(bref_sav(i,j,min(k+1,nz))-bref_sav(i,j,max(k-1,1)))
+            enddo
+          enddo
+        enddo
+      end if
+    end if
+    pio_gtype = gsv
+    rst_read = .true. ; rst_pend = .true.
+    if (mynode == 0) write(*,'(1x,A,I4,A,2I3)') 'IMEX_IGW: IMEX state read from the initial file (exact'&
+    &//' restart); b_ref age', nint(sc(3)), ' steps, warm-start history', nint(sc(5:6))
+  contains
+    subroutine rd3(name, a)
+      ! one copy per file (time-less), or (43949d66 files) the record's copy
+      character(len=*), intent(in) :: name
+      real(kind=8), dimension(:,:,:), intent(inout) :: a
+      if (lay1) then
+        call ncread(ncid, name, a, start=st)
+      else
+        call ncread(ncid, name, a)
+      end if
+    end subroutine rd3
+  end subroutine imex_rst_get
+
+  !----------------------------------------------------------------------
+  subroutine imex_rst_replay
+    ! imex_setup_lag = 1, first imex_step_setup after imex_rst_get (geometry set up): the
+    ! operator of the last b_ref rebuild step rebuilt from that step's inputs, as that step built
+    ! it: Hz := hz_op for the call, rshu_op, rshv_op from it (imex_step_setup's loop), dza as read,
+    ! imex_adj_setup with b_ref from bref_sav and without the rescale of the memory terms (eta_old
+    ! false: ad_n2o := its n2t, as after the rebuild); then a new coef_version, and the stored
+    ! W M x of a stage valid for it when it was for the operator in use when written.
+    use ocean_vars, only: hz
+    use roms_mpi, only: exchange_xxx
+    use param, only: lm, mm, nz
+    implicit none
+    real(kind=8), allocatable, dimension(:,:,:) :: hsv
+    integer(kind=4) :: i, j, k, s
+    if (.not. act_exchanged) then            ! (as imex_adj_setup's first rebuild)
+      ad_act = act
+      call exchange_xxx(ad_act)
+      act_exchanged = .true.
+    end if
+    allocate( hsv(GLOBAL_2D_ARRAY,nz) ) ; hsv = Hz
+    Hz = hz_op
+    rshu = 0._8 ; rshv = 0._8
+    do k=1,nz
+      do j=jb0,jb1
+        do i=ib0,ib1+1
+          rshu(i,j) = rshu(i,j) + 0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))
+        enddo
+      enddo
+      do j=jb0,jb1+1
+        do i=ib0,ib1
+          rshv(i,j) = rshv(i,j) + 0.5_8*(Hz(i,j,k)+Hz(i,j-1,k))
+        enddo
+      enddo
+    enddo
+    do j=jb0,jb1
+      do i=ib0,ib1+1
+        rshu(i,j) = 1._8/rshu(i,j)
+      enddo
+    enddo
+    do j=jb0,jb1+1
+      do i=ib0,ib1
+        rshv(i,j) = 1._8/rshv(i,j)
+      enddo
+    enddo
+    rshu_op = rshu ; rshv_op = rshv
+    eta_old = .false. ; rst_replay = .true.
+    call imex_adj_setup
+    rst_replay = .false.
+    Hz = hsv
+    deallocate(hsv)
+    coef_version = coef_version + 1
+    do s=1,2
+      if (rst_mvalid(s) == 1) ps_mver(s) = coef_version
+    enddo
+  end subroutine imex_rst_replay
+
+
+  !======================================================================
   ! Elliptic operator and solver
   !======================================================================
   subroutine imex_setup_geometry
@@ -1710,6 +2182,10 @@ contains
     lag_skip = .false.                           ! imex_setup_lag: no rebuild this step
     if (lag_on) lag_skip = .not. imex_bref_due()
     if (.not. geometry_ready) call imex_setup_geometry
+    if (rst_pend) then                           ! exact restart: the operator of the last rebuild
+      if (lag_on) call imex_rst_replay
+      rst_pend = .false.
+    end if
     rshu = 0._8 ; rshv = 0._8
     if (grad_arrays) rsh = 0._8
     do k=1,nz
@@ -2890,8 +3366,8 @@ contains
     ! of the taper) in between; everything derived from it below is refreshed
     ! every step (Hz, z_r change)
     nbref = imex_nbref()
-    if (nbref > 1 .and. allocated(bref_sav) .and. iic - bref_last < nbref&
-    &   .and. iic >= bref_last) then
+    if (rst_replay .or. (nbref > 1 .and. allocated(bref_sav) .and. iic - bref_last < nbref&
+    &   .and. iic >= bref_last)) then              ! (rst_replay: imex_rst_replay, b_ref from the file)
       ad_bb = bref_sav
       call tq_mark(4)
     else

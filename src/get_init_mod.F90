@@ -58,6 +58,9 @@ contains
 #ifdef SOLVE3D
     use implicit_fs_mod, only: fs_rst_get
 #endif
+#ifdef IMEX_IGW
+    use imex_igw, only: imex_rst_get
+#endif
     use sponge_tune, only: get_init_ub, ub_tune
     use pio_roms, only: use_pio, pio_gtype
 #ifdef PARALLEL_IO
@@ -658,6 +661,9 @@ contains
 
     if (calc_pflx) call get_init_slow(ncid,record,tindx)
     if (ub_tune)   call get_init_ub(ncid,record)
+#if defined IMEX_IGW && defined EXACT_RESTART
+    call imex_rst_get(ncid, record, tindx)   ! IMEX_IGW: the state carried across steps (exact restart)
+#endif
 
 ! Close input NetCDF file and  write greeting message depending
 ! on the the type of initial/restart procedure performed above.
