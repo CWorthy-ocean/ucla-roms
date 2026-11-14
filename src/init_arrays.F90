@@ -67,6 +67,9 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
 #endif
   use dimensions, only: npx, npy
   use advection, only: init_advection
+#ifdef IMEX_IGW
+  use imex_igw, only: init_arrays_imex_igw
+#endif
   implicit none
   integer(kind=4), intent(in) :: istr, iend, jstr, jend
   integer(kind=4)             :: i, j, k, itrc, itavg
@@ -166,6 +169,9 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
 #endif
 
   if (pipe_source) call init_arrays_pipes
+#ifdef IMEX_IGW
+  call init_arrays_imex_igw
+#endif
 
 #if defined(BIOLOGY_BEC2) || defined(MARBL)
   call init_arrays_bgc_shared_vars

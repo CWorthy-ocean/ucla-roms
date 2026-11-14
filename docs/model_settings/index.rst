@@ -9,3 +9,4 @@ Most ROMS settings are read at runtime from a namelist file, described :doc:`her
    compile_time_settings
    implicit_free_surface
    bgc_subcycling
+   implicit_internal_waves

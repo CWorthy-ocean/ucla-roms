@@ -189,6 +189,14 @@
 ! Usage notes: Unused; vertical fluxes come from module advection.
 #undef AKIMA_V
 
+! Treat the internal-wave terms (baroclinic pressure gradient and the buoyancy
+! response to the transport divergence) implicitly in both baroclinic stages
+! (IMEX step; one elliptic solve per stage).
+! Usage notes: Experimental. Parameters in namelist group IMEX_IGW_SETTINGS.
+! Iteration counts are printed on an "IMEX" line after the ninfo diagnostics.
+! Incompatible with NHMG. Restarts are exact (the IMEX state is in the restart file).
+#undef IMEX_IGW
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!! BOUNDARY CONDITIONS !!!!!!!!!!!!!!!!!!!!!!!!!
 

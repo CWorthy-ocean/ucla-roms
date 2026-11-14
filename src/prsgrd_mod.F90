@@ -64,6 +64,9 @@ contains
     use roms_mpi, only: exchange_xxx
 #endif
     use calc_pflx_mod, only: calc_pressure_flux, calc_pflx
+#ifdef IMEX_IGW
+    use imex_igw, only: imex_pg_store_combine, imex_stage_pred, imex_stage_corr
+#endif
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k, imin,imax,jmin,jmax
@@ -473,6 +476,17 @@ contains
 
 # ifdef ADV_ISONEUTRAL
     call exchange_xxx(dRdx,dRde)
+# endif
+
+# ifdef IMEX_IGW
+    ! Store this PG as the stage's level (n or *) and replace ru, rv by the
+    ! weighted explicit PG of the IMEX scheme, before the diagnostics and
+    ! before the rhs terms are added (compute_*_rhs_uv_terms.h).
+    if (CORR_STAGE) then
+      call imex_pg_store_combine(imex_stage_corr, istr,iend,jstr,jend, ru,rv)
+    else
+      call imex_pg_store_combine(imex_stage_pred, istr,iend,jstr,jend, ru,rv)
+    endif
 # endif
 
 # ifdef DIAGNOSTICS

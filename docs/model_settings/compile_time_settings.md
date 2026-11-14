@@ -72,6 +72,7 @@ These switches control the numerical schemes used by the model for tracer advect
 | `UPSTREAM_TS_LAND_CURV` | Drop the curvature (third-order) correction of upstream horizontal tracer advection at faces whose stencil touches land, falling back to second-order centered there | disabled | Masked differences are zero, which otherwise inflates the curvature at the first wet point and produces large overshoots. Affects the corrector step, and only with `MASKING` |
 | `PARABOLIC_SPLINES` | Use parabolic splines for vertical tracer advection | disabled | Restores the spline reconstruction that was the default before the thickness-aware U3 scheme |
 | `AKIMA_V` | Unused | disabled | Vertical tracer fluxes come from the `advection` module, which this key does not affect |
+| `IMEX_IGW` | Treat the internal-wave terms (baroclinic pressure gradient and the buoyancy response to the transport divergence) implicitly in both baroclinic stages, with one elliptic solve per stage | disabled | Experimental. The time step is then limited by horizontal advection instead of internal waves. Settings are in the `IMEX_IGW_SETTINGS` namelist group; see [Implicit internal waves (IMEX)](implicit_internal_waves.md). Requires `SOLVE3D`; not compatible with `NHMG` |
 
 ### `BOUNDARY CONDITIONS`
 

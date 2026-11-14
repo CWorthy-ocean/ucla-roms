@@ -636,3 +636,30 @@ fs_tol = 1.0e-8                      ! Relative residual of the elliptic solve (
 fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost table at the end; 2 + FS_VOL
                                      ! volume budget and FS_SRC source volumes (FS_SRC also with fs_mode = 'split')
 /
+
+!================================================================================
+!                IMPLICIT INTERNAL-WAVE (IMEX) BAROCLINIC STEP
+!================================================================================
+! Requires IMEX_IGW cppkey (experimental). Each baroclinic stage solves an
+! elliptic problem for the implicit internal-wave correction (preconditioned CG).
+! Restarts are exact: the IMEX state is in the restart file (imex_rst_state).
+! The keys below are the ones a user sets; the solver and development settings
+! (weights, tolerances, solver variants, self-test) are read
+! too and keep their defaults when absent; they are described in
+! docs/model_settings/runtime_settings.md (IMEX_IGW_SETTINGS). See also
+! docs/model_settings/implicit_internal_waves.md.
+! Keys removed on 2026-11-13 (their former defaults are fixed) stop the run at
+! the read; this deletes them, with their comment and value continuation lines:
+! sed -E -i '/^[[:space:]]*(imex_force_mode|imex_n2_min|imex_bt_mode|imex_bt_passes|imex_s2d_check|imex_rhs_full|imex_probe_steps|imex_pcols|imex_win|imex_precond|imex_pcg_variant|imex_pcg_overlap|imex_adj_fused|imex_bref|imex_bref_floor|imex_bref_every|imex_bref_smooth|imex_n2_reg|imex_obc_rhs|imex_obc_op|imex_obc_zero|imex_obc_diag|imex_pred_btfix|imex_tsmix_n|imex_sponge_eq|imex_trim3d|imex_obc_eig|imex_obc_dcols|imex_obc_scrit|imex_obc_sband|imex_obc_fref|imex_obc_trelax|imex_obc_cslow|imex_obc_supercrit)[[:space:]]*[=(]/I{:a;$!{N;/\n([[:blank:]]*([A-Za-z_][A-Za-z0-9_%]*[[:blank:]]*[=(]|[\/&$])[^\n]*|[[:blank:]]*|![^\n]*)$/!ba};/\n([[:blank:]]*([A-Za-z_][A-Za-z0-9_%]*[[:blank:]]*[=(]|[\/&$])[^\n]*|[[:blank:]]*|![^\n]*)$/!d;s/^.*\n/\n/;D}' namelist.nml
+!================================================================================
+&IMEX_IGW_SETTINGS                                                  !imex_igw.F90
+imex_verbose = 0                     ! 0: quiet; 1: solver statistics (IMEX line: iterations,
+                                     ! max |du|; IMEX_SOLVE, IMEX_TAPER lines); 2: 1 + the true
+                                     ! FP64 residual of every solve (IMEX_PCHK) and max |dp| on the
+                                     ! IMEX line. 0, 1 and 2 give the same results
+imex_bref_hours = 24.0               ! Rebuild interval (model hours) of the reference stratification
+                                     ! b_ref, the operator and its preconditioner; 12 is the
+                                     ! cautious value for strongly evolving stratification
+imex_rst_state = 1                   ! Restart files carry the IMEX state: 1 exact restart; 0 no
+                                     ! IMEX state (much smaller files, inexact restart)
+/

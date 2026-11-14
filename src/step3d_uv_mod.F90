@@ -67,6 +67,9 @@ contains
     use eos_vars, only: drde, drdx
 #endif
     use instant_output, only: wrt_instant
+#ifdef IMEX_IGW
+    use imex_igw, only: imex_solve_stage, imex_stage_corr
+#endif
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,nz) :: ru,rv
@@ -365,6 +368,11 @@ contains
 # endif /* IMPLICIT_BOTTOM_DRAG */
     enddo  !<-- j
     !! velocities are in the form:  u*dz, v*dz, w*dz
+#ifdef IMEX_IGW
+    ! Elliptic correction of u, v(nnew) (Hz-weighted here); rufrc keeps
+    ! the vertical integral of the explicit rhs. visc3d runs after this.
+    call imex_solve_stage(imex_stage_corr)
+#endif
 
 # if defined NHMG
 
@@ -636,6 +644,9 @@ contains
 #ifdef NHMG
     use w3dbc_mod, only: w3dbc_tile
 #endif
+#endif
+#ifdef IMEX_IGW
+    use imex_igw, only: wflx_corr, u_nm1, v_nm1
 #endif
 
     implicit none
@@ -1125,6 +1136,12 @@ do k=nz,1,-1
   u(i,j,k,nnew)=u(i,j,k,nnew)*umask(i,j)
 # endif
 !--# define TR
+#ifdef IMEX_IGW
+  ! Flx_corr = mu Flx* + DC (theta_c u^n+1 + nu u^n + rho u^n-1); the
+  ! weights on (u^n+1, Flx*, u^n, u^n-1) come from imex_igw.
+  CF(i,k)=wflx_corr(2)*FlxU(i,j,k) + DC(i,k)*( wflx_corr(1)*u(i,j,k,nnew)&
+  &+wflx_corr(3)*u(i,j,k,nstp) + wflx_corr(4)*u_nm1(i,j,k) )
+#else
 # ifdef TR
 ! Daniel add, can proably clean this up with & +ust(i,j,k) instead of
 ! double repeated line, but wait for testing
@@ -1143,6 +1160,7 @@ do k=nz,1,-1
   CF(i,k)=DELTA*FlxU(i,j,k) + EPSIL*DC(i,k)&
   &*(u(i,j,k,nstp)+u(i,j,k,nnew))
 # endif
+#endif /* IMEX_IGW */
   CF(i,0)=CF(i,0)+CF(i,k)    !<-- vertical integration
 enddo
 enddo
@@ -1190,12 +1208,17 @@ do k=nz,1,-1
 
 ! Daniel add, mask-1  again, remember to check with Yusuke
 !# endif
+#ifdef IMEX_IGW
+  CF(i,k)=wflx_corr(2)*FlxV(i,j,k) + DC(i,k)*( wflx_corr(1)*v(i,j,k,nnew)&
+  &+wflx_corr(3)*v(i,j,k,nstp) + wflx_corr(4)*v_nm1(i,j,k) )
+#else
 # ifdef TR
   CF(i,k)=0.5_8*DC(i,k)*(v(i,j,k,nstp)+v(i,j,k,nnew))
 # else
   CF(i,k)=DELTA*FlxV(i,j,k) + EPSIL*DC(i,k)&
   &*(v(i,j,k,nstp)+v(i,j,k,nnew))
 # endif
+#endif /* IMEX_IGW */
   CF(i,0)=CF(i,0)+CF(i,k)
 enddo
 enddo

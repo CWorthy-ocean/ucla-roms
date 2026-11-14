@@ -23,6 +23,9 @@ module basic_output
 #ifdef SOLVE3D
   use implicit_fs_mod, only: fs_rst_def, fs_rst_wrt, fs_rst_wrt_scal
 #endif
+#ifdef IMEX_IGW
+  use imex_igw, only: imex_rst_def, imex_rst_wrt, imex_rst_wrt_scal
+#endif
   use scalars, only:&
   &NT, iic, knew, nstp, time,&
   &nz, dt, start_time, nnew, tdays
@@ -926,6 +929,9 @@ contains                  !]
 #ifdef SOLVE3D
       call fs_rst_wrt_scal(ncid, rec_rst)      ! fs_mode = 'implicit': restart scalars
 #endif
+#if defined IMEX_IGW && defined EXACT_RESTART
+      call imex_rst_wrt_scal(ncid, rec_rst)    ! IMEX_IGW: restart scalars
+#endif
       ierr=nf90_close (ncid)
     endif
     call error_log%abort_check()
@@ -985,6 +991,9 @@ contains                  !]
     pio_gtype = '2Dvw'
     call ncwrite(ncid,'rvfrc',rvfrc_bak(i0:i1, 1:j1,nstp),start,.true.)
 #  endif
+# endif
+# if defined IMEX_IGW && defined EXACT_RESTART
+    call imex_rst_wrt(ncid, rec_rst)   ! IMEX_IGW: the state carried across steps (exact restart)
 # endif
 
 
@@ -1051,6 +1060,9 @@ contains                  !]
 #ifdef SOLVE3D
     call fs_rst_wrt_scal(ncid, rec_rst)      ! fs_mode = 'implicit': restart scalars
 #endif
+#if defined IMEX_IGW && defined EXACT_RESTART
+    call imex_rst_wrt_scal(ncid, rec_rst)    ! IMEX_IGW: restart scalars
+#endif
 
     start=1; start(3)=rec_rst                                    ! back to 2D vars
     call ncwrite(ncid,vname(1,indxZ), zeta(i0:i1,j0:j1,knew),start)
@@ -1091,6 +1103,9 @@ contains                  !]
     call ncwrite(ncid,'rufrc',rufrc_bak( 1:i1,j0:j1,nstp),start)
     call ncwrite(ncid,'rvfrc',rvfrc_bak(i0:i1, 1:j1,nstp),start)
 #  endif
+# endif
+# if defined IMEX_IGW && defined EXACT_RESTART
+    call imex_rst_wrt(ncid, rec_rst)   ! IMEX_IGW: the state carried across steps (exact restart)
 # endif
 
 
@@ -1497,6 +1512,9 @@ contains                  !]
     &'3D-to-2D forcing, ETA-component')
 #  endif
 # endif  /* EXACT_RESTART */
+# if defined IMEX_IGW && defined EXACT_RESTART
+    call imex_rst_def(ncid)   ! IMEX_IGW: the state carried across steps (exact restart)
+# endif
 
 # ifdef LMD_KPP
     varid = nccreate(ncid,vname(1,indxHbls),&

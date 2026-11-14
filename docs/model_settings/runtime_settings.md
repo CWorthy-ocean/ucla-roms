@@ -628,6 +628,42 @@ Multigrid settings (`fs_precond = 'mg'`; solver settings as above):
 | `fs_mg_faces` | `'width'` | Coarse face coefficients scaled by the aggregates' widths (`'width'`) or by 0.5 (`'half'`) |
 | `fs_exch_thin` | `.true.` | One-cell halo exchanges without corners in the solver (same results) |
 
+### `IMEX_IGW_SETTINGS`
+(read by module `imex_igw.F90`)
+
+Read only with `IMEX_IGW`, and then required. Settings of the implicit internal-wave (IMEX) baroclinic step: the baroclinic pressure gradient and the buoyancy response to the transport divergence are implicit in both stages, so the time step is limited by horizontal advection instead of internal waves. The scheme, the choice of `dt`, restarts and limitations are described in [Implicit internal waves (IMEX)](implicit_internal_waves.md).
+
+Settings (the keys of the namelist template):
+
+| Setting | Default | Description |
+|--------|---------|-------------|
+| `imex_verbose` | `0` | 1: an `IMEX` line every `ninfo` steps (iterations of each stage's solve, largest velocity correction, unconverged solves), an `IMEX_SOLVE` line per solve, `IMEX_BREF` and `IMEX_TAPER` lines at the rebuilds; 2: also the true FP64 residual of every solve (`IMEX_PCHK`) and the largest pressure correction. 0, 1 and 2 give the same results |
+| `imex_bref_hours` | `24.0` | Rebuild interval (model hours) of the reference stratification `b_ref`, the operator and its preconditioner, which are held in between. 12 is the cautious value where the stratification changes strongly within a day |
+| `imex_rst_state` | `1` | With `EXACT_RESTART`: 1 the restart files carry the IMEX state (about eleven 3-D variables, one copy per file) and restarts are exact; 0 no IMEX state: much smaller files, but the first step after a restart starts the IMEX stores as on the first step of a run (inexact restart) |
+
+Solver and development settings. They can be added to the group and keep their defaults when omitted; the defaults are the tested configuration. These keys may change between versions, and C-Star and Forge do not expose them.
+
+| Setting | Default | Description |
+|--------|---------|-------------|
+| `imex_theta_p`, `imex_phi` | `0.5`, `0.25` | Predictor weights (implicit, level n; weight set B). `imex_theta_p` in [0.5, 1], `imex_theta_p + imex_phi <= 1` |
+| `imex_theta_c`, `imex_mu`, `imex_nu`, `imex_rho` | `0.6`, `0.0`, `0.3`, `0.1` | Corrector weights on levels n+1, *, n and n-1 (set B), checked at startup: `imex_theta_c + imex_mu/2 - imex_rho = 1/2`, sum 1, `imex_theta_c` in [0.5, 1] |
+| `imex_am3_crv` | `1/6` | Curvature of the LF-AM3 predictor, in [0, 1/6] |
+| `imex_tol_pred`, `imex_tol_corr` | `1.0e-2`, `1.0e-3` | Relative residual at which the predictor and the corrector solves stop |
+| `imex_maxit` | `200` | Iteration cap of a solve; a solve that reaches it is counted on the `IMEX` line as unconverged and the run continues |
+| `imex_n2_ref` | `1.0e-6` | N² floor (s⁻²) of the reference stratification, used for the operator's coefficients |
+| `imex_n2_taper` | `1.0e-7` | Coupling taper `s = N2/(N2 + imex_n2_taper)` at weakly stratified cells (0: off) |
+| `imex_mix_split` | `1` | 1: lateral momentum mixing, including the sponge, as a split step from the corrected state; 0: added after the implicit correction (unstable once the sponge's `visc2 dt/dx^2` exceeds about 0.07) |
+| `imex_setup_lag` | `1` | 1: the operator's coefficients are rebuilt with `b_ref` only; 0: every step |
+| `imex_warm` | `1` | Start of each stage's solve: 1 that stage's previous solution, 0 zero |
+| `imex_pcg_start`, `imex_pcg_fused`, `imex_stage_fused` | `3`, `1`, `1` | Solver variants (start-up, fused sweeps); the defaults are the fastest, the others change results at rounding level |
+| `imex_solver_prec` | `4` | Storage of the solver's coefficients and vectors: 4 FP32 (arithmetic, solution and reductions FP64), 8 FP64 |
+| `imex_redu` | `0` | 1: the global sums of the IMEX solves are independent of the tiling and the rank count (exact fixed-point sums) |
+| `imex_selftest` | `0` | 1: test of the elliptic operator and solver at startup |
+| `imex_solver_enabled` | `.true.` | Tests only: `.false.` skips the solves (explicit weighted combination) |
+| `imex_allow_explicit` | `.false.` | Tests only: allow `imex_theta_p`, `imex_theta_c` below 1/2 |
+
+Keys removed on 2026-11-13 stop ROMS at the read with a message that names them; `src/namelist.nml` gives a `sed` line that deletes them (see [removed keys](implicit_internal_waves.md#removed-keys)).
+
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)
 
