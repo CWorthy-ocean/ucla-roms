@@ -3502,7 +3502,7 @@ contains
   ! next to the face, N2 floored at imex_n2_ref, W = the face thickness hf). In a stage:
   ! - explicit part (obm_explicit, before the rhs): u_b^e = u_ext - <u_ext> + s Y P(b_cur - b_ext),
   !   b_cur the stage's current buoyancy (tracers at nrhs: t^n in the predictor, t* in the corrector),
-  !   b_ext that of the bry T/S, both through the model's EOS (obm_rho) on the cell's z_r, P the
+  !   b_ext that of the bry T/S, both through the model's EOS (rho_eos_point) on the cell's z_r, P the
   !   hydrostatic pressure on the cell column; it is the face's value in the stage rhs (predictor:
   !   u(nnew) through imex_obc_faces in imex_obc_pre; corrector: the momentum fix bfix);
   ! - reference m (imex_obc_tref > 0, default 3 d): P(b_cur - b_ext) is replaced by d - m, d its
@@ -4181,71 +4181,6 @@ contains
   end subroutine obm_kd_col
 
   !----------------------------------------------------------------------
-  real(kind=8) function obm_rho(tt, ts, dpth) result(rh)
-    ! the model's density (rho_eos_tile: rho1 + qp1 dpth (1 - qp2 dpth) with SPLIT_EOS, the full
-    ! Jackett-McDougall form without it, the linear EOS) of temperature tt, salinity ts at depth dpth
-#  ifdef NONLIN_EOS
-#   ifdef SPLIT_EOS
-    use eos_vars, only: qp2
-#   endif
-#  else
-    use eos_vars, only: tcoef, t0
-#   ifdef SALINITY
-    use eos_vars, only: scoef, s0
-#   endif
-#  endif
-    use scalars, only: rho0
-    implicit none
-    real(kind=8), intent(in) :: tt, ts, dpth
-#  ifdef NONLIN_EOS
-    real(kind=8), parameter :: r00=999.842594_8, r01=6.793952D-2, r02=-9.095290D-3, r03=1.001685D-4,&
-    &  r04=-1.120083D-6, r05=6.536332D-9, r10=0.824493_8, r11=-4.08990D-3, r12=7.64380D-5,&
-    &  r13=-8.24670D-7, r14=5.38750D-9, rS0=-5.72466D-3, rS1=1.02270D-4, rS2=-1.65460D-6, r20=4.8314D-4,&
-    &  K00=19092.56_8, K01=209.8925_8, K02=-3.041638_8, K03=-1.852732D-3, K04=-1.361629D-5,&
-    &  K10=104.4077_8, K11=-6.500517_8, K12=0.1553190_8, K13=2.326469D-4, KS0=-5.587545_8,&
-    &  KS1=+0.7390729_8, KS2=-1.909078D-2
-#   ifndef SPLIT_EOS
-    real(kind=8), parameter :: B00=0.4721788_8, B01=0.01028859_8, B02=-2.512549D-4, B03=-5.939910D-7,&
-    &  B10=-0.01571896_8, B11=-2.598241D-4, B12=7.267926D-6, BS1=2.042967D-3,&
-    &  E00=+1.045941D-5, E01=-5.782165D-10, E02=+1.296821D-7, E10=-2.595994D-7, E11=-1.248266D-9,&
-    &  E12=-3.508914D-9
-    real(kind=8) :: k1, k2, cff, cff1
-#   endif
-    real(kind=8) :: sq, r1, k0, qp
-#   ifdef DUKO_2001
-    real(kind=8) :: k0d
-#   endif
-    sq = sqrt(max(0._8, ts))
-    r1 = (r00 - rho0) + tt*( r01+tt*( r02+tt*( r03+tt*( r04+tt*r05 ))))&
-    &  + ts*( r10+tt*( r11+tt*( r12+tt*( r13+tt*r14 ))) + sq*(rS0+tt*(rS1+tt*rS2)) + ts*r20 )
-    k0 = tt*( K01+tt*( K02+tt*( K03+tt*K04 ))) + ts*( K10+tt*( K11+tt*( K12+tt*K13 ))&
-    &  + sq*( KS0+tt*( KS1+tt*KS2 )))
-#   ifdef SPLIT_EOS
-#    ifdef DUKO_2001
-    k0d = 3.8_8*( K01+3.8_8*( K02+3.8_8*( K03+3.8_8*K04 ))) + 34.5_8*( K10+3.8_8*( K11+3.8_8*( K12&
-    &   + 3.8_8*K13 )) + sqrt(34.5_8)*( KS0+3.8_8*( KS1+3.8_8*KS2 )))
-    qp = 0.1_8*(rho0 + r1)*(k0d - k0)/((K00 + k0)*(K00 + k0d))
-#    else
-    qp = 0.000649_8 + 0.1_8*(K00*r1 - rho0*k0)/(K00*(K00 + k0))
-#    endif
-    rh = r1 + qp*dpth*(1._8 - qp2*dpth)
-#   else
-    k1 = B00+tt*(B01+tt*(B02+tt*B03)) + ts*( B10+tt*( B11+tt*B12 )+sq*BS1 )
-    k2 = E00+tt*(E01+tt*E02) + ts*(E10+tt*(E11+tt*E12))
-    cff = K00 - 0.1_8*dpth
-    cff1 = k0 + dpth*(k1 + k2*dpth)
-    rh = ( r1*cff*(K00+cff1) - 0.1_8*dpth*rho0*cff1 )/(cff*(cff+cff1))
-#   endif
-#  else
-#   ifdef SALINITY
-    rh = (tcoef*t0 - scoef*s0) - tcoef*tt + scoef*ts
-#   else
-    rh = tcoef*t0 - tcoef*tt + 0._8*(ts + dpth)
-#   endif
-#  endif
-  end function obm_rho
-
-  !----------------------------------------------------------------------
   subroutine obm_explicit(stage)
     ! start of a stage: the explicit face values ob_ub = u_ext - <u_ext> + s Y (P(b_cur - b_ext) - m) (see
     ! the section header); tracers at nrhs (the state the stage's rho_eos used). Reference m (imex_obc_tref
@@ -4267,6 +4202,7 @@ contains
     ! that holds it (first-build NOTE on visc2 dt/dx^2).
     use tracers, only: t
     use scalars, only: nrhs, g, rho0, dt, iic
+    use rho_eos_mod, only: rho_eos_point
     use param, only: nz, itemp
 #  ifdef SALINITY
     use param, only: isalt
@@ -4361,7 +4297,7 @@ contains
 #   endif
           end select
 #  endif
-          db(k) = -g/rho0*( obm_rho(ti, si, -z_r(i,j,k)) - obm_rho(te, se, -z_r(i,j,k)) )
+          db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
         enddo
         acc = 0._8                               ! p = -int_z^0 db, on the cell column
         do k=nz,1,-1
@@ -4531,6 +4467,7 @@ contains
     ! diagnostic copy of obm_explicit's column pressure: p = P(b_cur - b_ext) on the cell column of face (e, l)
     use tracers, only: t
     use scalars, only: nrhs, g, rho0
+    use rho_eos_mod, only: rho_eos_point
     use param, only: nz, itemp
 #  ifdef SALINITY
     use param, only: isalt
@@ -4593,7 +4530,7 @@ contains
 #   endif
       end select
 #  endif
-      db(k) = -g/rho0*( obm_rho(ti, si, -z_r(i,j,k)) - obm_rho(te, se, -z_r(i,j,k)) )
+      db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
     enddo
     acc = 0._8
     do k=nz,1,-1

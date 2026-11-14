@@ -6,6 +6,39 @@ module rho_eos_mod
   private
 
   public :: rho_eos
+#ifdef SOLVE3D
+  public :: rho_eos_point
+# ifdef NONLIN_EOS
+
+! EOS coefficient notation: first index is for salinity, second for
+! temperature powers, "S" for 3/2 power of salinity. Module parameters:
+! rho_eos_tile and rho_eos_point share them.
+
+    real(kind=8), parameter ::   r00=999.842594_8,     r01=6.793952D-2,&
+    &r02=-9.095290D-3,   r03=1.001685D-4,    r04=-1.120083D-6,&
+    &r05=6.536332D-9,&
+    &r10=0.824493_8,       r11=-4.08990D-3,    r12=7.64380D-5,&
+    &r13=-8.24670D-7,    r14=5.38750D-9,&
+    &rS0=-5.72466D-3,    rS1=1.02270D-4,     rS2=-1.65460D-6,&
+    &r20=4.8314D-4,&
+
+    &K01=209.8925_8,       K02=-3.041638_8,&
+    &K03=-1.852732D-3,   K04=-1.361629D-5,&
+    &K10=104.4077_8,       K11=-6.500517_8,      K12=0.1553190_8,&
+    &K13=2.326469D-4,&
+    &KS0=-5.587545_8,      KS1=+0.7390729_8,     KS2=-1.909078D-2
+
+#  ifndef SPLIT_EOS
+    real(kind=8), parameter ::   B00=0.4721788_8,&
+    &B01=0.01028859_8,     B02=-2.512549D-4,   B03=-5.939910D-7,&
+    &B10=-0.01571896_8,    B11=-2.598241D-4,   B12=7.267926D-6,&
+    &BS1=2.042967D-3,&
+
+    &E00=+1.045941D-5,   E01=-5.782165D-10,  E02=+1.296821D-7,&
+    &E10=-2.595994D-7,   E11=-1.248266D-9,   E12=-3.508914D-9
+#  endif
+# endif /* NONLIN_EOS */
+#endif
 
 contains
 
@@ -167,33 +200,6 @@ contains
 #  ifndef SPLIT_EOS
     real(kind=8) K1, K2
     real(kind=8) dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: K_up,K_dw
-#  endif
-
-! EOS coefficient notation: first index is for salinity, second for
-! temperature powers, "S" for 3/2 power of salinity.
-
-    real(kind=8), parameter ::   r00=999.842594_8,     r01=6.793952D-2,&
-    &r02=-9.095290D-3,   r03=1.001685D-4,    r04=-1.120083D-6,&
-    &r05=6.536332D-9,&
-    &r10=0.824493_8,       r11=-4.08990D-3,    r12=7.64380D-5,&
-    &r13=-8.24670D-7,    r14=5.38750D-9,&
-    &rS0=-5.72466D-3,    rS1=1.02270D-4,     rS2=-1.65460D-6,&
-    &r20=4.8314D-4,&
-
-    &K01=209.8925_8,       K02=-3.041638_8,&
-    &K03=-1.852732D-3,   K04=-1.361629D-5,&
-    &K10=104.4077_8,       K11=-6.500517_8,      K12=0.1553190_8,&
-    &K13=2.326469D-4,&
-    &KS0=-5.587545_8,      KS1=+0.7390729_8,     KS2=-1.909078D-2
-
-#  ifndef SPLIT_EOS
-    real(kind=8), parameter ::   B00=0.4721788_8,&
-    &B01=0.01028859_8,     B02=-2.512549D-4,   B03=-5.939910D-7,&
-    &B10=-0.01571896_8,    B11=-2.598241D-4,   B12=7.267926D-6,&
-    &BS1=2.042967D-3,&
-
-    &E00=+1.045941D-5,   E01=-5.782165D-10,  E02=+1.296821D-7,&
-    &E10=-2.595994D-7,   E11=-1.248266D-9,   E12=-3.508914D-9
 #  endif
 #  ifdef DUKO_2001
     real(kind=8) K0_Duk  !, rho1_0
@@ -419,6 +425,66 @@ contains
     enddo    ! <-- j
 
   end subroutine rho_eos_tile
+
+  !----------------------------------------------------------------------
+  real(kind=8) function rho_eos_point(tt, ts, dpth) result(rh)
+    ! The density of rho_eos_tile at one point, unmasked: potential temperature tt, salinity ts
+    ! (34.5 without SALINITY), depth dpth = -z [m]. SPLIT_EOS: rho1 + qp1 dpth (1 - qp2 dpth), the
+    ! in-situ density prsgrd uses; otherwise rho; linear EOS: rho1 (rho). The same coefficients and
+    ! branches (DUKO_2001) as rho_eos_tile, so it equals the model's density to rounding.
+# ifdef NONLIN_EOS
+    use eos_vars, only: K00
+#  ifdef SPLIT_EOS
+    use eos_vars, only: qp2
+#  endif
+# else
+    use eos_vars, only: Tcoef, T0
+#  ifdef SALINITY
+    use eos_vars, only: Scoef, S0
+#  endif
+# endif
+    use scalars, only: rho0
+    implicit none
+    real(kind=8), intent(in) :: tt, ts, dpth
+# ifdef NONLIN_EOS
+    real(kind=8) :: sq, r1, k0
+#  ifdef SPLIT_EOS
+    real(kind=8) :: qp
+#   ifdef DUKO_2001
+    real(kind=8) :: k0d
+#   endif
+#  else
+    real(kind=8) :: k1, k2, cff, cff1
+#  endif
+    sq = sqrt(max(0._8, ts))
+    r1 = (r00 - rho0) + tt*( r01+tt*( r02+tt*( r03+tt*( r04+tt*r05 ))))&
+    &  + ts*( r10+tt*( r11+tt*( r12+tt*( r13+tt*r14 ))) + sq*(rS0+tt*(rS1+tt*rS2)) + ts*r20 )
+    k0 = tt*( K01+tt*( K02+tt*( K03+tt*K04 ))) + ts*( K10+tt*( K11+tt*( K12+tt*K13 ))&
+    &  + sq*( KS0+tt*( KS1+tt*KS2 )))
+#  ifdef SPLIT_EOS
+#   ifdef DUKO_2001
+    k0d = 3.8_8*( K01+3.8_8*( K02+3.8_8*( K03+3.8_8*K04 ))) + 34.5_8*( K10+3.8_8*( K11+3.8_8*( K12&
+    &   + 3.8_8*K13 )) + sqrt(34.5_8)*( KS0+3.8_8*( KS1+3.8_8*KS2 )))
+    qp = 0.1_8*(rho0 + r1)*(k0d - k0)/((K00 + k0)*(K00 + k0d))
+#   else
+    qp = 0.000649_8 + 0.1_8*(K00*r1 - rho0*k0)/(K00*(K00 + k0))
+#   endif
+    rh = r1 + qp*dpth*(1._8 - qp2*dpth)
+#  else
+    k1 = B00+tt*(B01+tt*(B02+tt*B03)) + ts*( B10+tt*( B11+tt*B12 )+sq*BS1 )
+    k2 = E00+tt*(E01+tt*E02) + ts*(E10+tt*(E11+tt*E12))
+    cff = K00 - 0.1_8*dpth
+    cff1 = k0 + dpth*(k1 + k2*dpth)
+    rh = ( r1*cff*(K00+cff1) - 0.1_8*dpth*rho0*cff1 )/(cff*(cff+cff1))
+#  endif
+# else
+#  ifdef SALINITY
+    rh = (Tcoef*T0 - Scoef*S0) - Tcoef*tt + Scoef*ts
+#  else
+    rh = Tcoef*T0 - Tcoef*tt + 0._8*(ts + dpth)
+#  endif
+# endif
+  end function rho_eos_point
 #else
   subroutine rho_eos_empty
   end subroutine rho_eos_empty
