@@ -1,0 +1,1 @@
+Under PIO, ROMS now warns once per netCDF-4 input file, which PIO reads serially through one rank; convert such files to CDF5 (e.g. ``nccopy -k cdf5``).
