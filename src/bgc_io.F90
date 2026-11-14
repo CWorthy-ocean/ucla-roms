@@ -405,6 +405,7 @@ contains
           &'bgc :: wrote average, tdays =', tdays,&
           &'step =', iic, 'rec =', record_avg
         endif
+        ierr=nf90_close(ncid)
       endif
 
     else
@@ -445,11 +446,11 @@ contains
           &'bgc :: wrote history, tdays =', tdays,&
           &'step =', iic-1, 'rec =', record_his
         endif
+        ierr=nf90_close(ncid)
       endif
 
     endif
 
-    ierr=nf90_close(ncid)
 #endif
   end subroutine wrt_bgc_tracers  !]
 ! ----------------------------------------------------------------------
@@ -590,8 +591,8 @@ contains
           &'bgc diag :: wrote average, tdays =', tdays,&
           &'step =', iic, 'rec =', record_dia_avg
         endif
+        ierr=nf90_close(ncid)
       endif
-      ierr=nf90_close(ncid)
 #endif ! PARALLEL_IO
     endif
 
