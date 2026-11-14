@@ -644,7 +644,7 @@ fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost ta
 ! elliptic problem for the implicit internal-wave correction (preconditioned CG).
 ! Restarts are exact: the IMEX state is in the restart file (imex_rst_state).
 ! The keys below are the ones a user sets; the solver and development settings
-! (weights, tolerances, solver variants, self-test) are read
+! (weights, tolerances, solver variants, self-test, 'modal' details) are read
 ! too and keep their defaults when absent; they are described in
 ! docs/model_settings/runtime_settings.md (IMEX_IGW_SETTINGS). See also
 ! docs/model_settings/implicit_internal_waves.md.
@@ -658,8 +658,26 @@ imex_verbose = 0                     ! 0: quiet; 1: solver statistics (IMEX line
                                      ! FP64 residual of every solve (IMEX_PCHK) and max |dp| on the
                                      ! IMEX line. 0, 1 and 2 give the same results
 imex_bref_hours = 24.0               ! Rebuild interval (model hours) of the reference stratification
-                                     ! b_ref, the operator and its preconditioner; 12 is the
-                                     ! cautious value for strongly evolving stratification
+                                     ! b_ref, the operator, its preconditioner and the 'modal'
+                                     ! boundary modes; 12 is the cautious value for strongly
+                                     ! evolving stratification
 imex_rst_state = 1                   ! Restart files carry the IMEX state: 1 exact restart; 0 no
                                      ! IMEX state (much smaller files, inexact restart)
+imex_obc_mode = 'auto'               ! Normal velocity at open faces: 'modal' characteristic (per-mode
+                                     ! Flather) condition, implicit in the stage solves; 'fixed' the OBC's
+                                     ! explicit value (as without IMEX); 'auto' 'modal' where supported
+                                     ! (open edge, M3_FRC_BRY, T_FRC_BRY), else 'fixed' (printed)
+                                     ! With 'modal': a nest whose boundary data carry the internal tide
+                                     ! runs best with a quarter of the v_sponge used with the stock
+                                     ! boundary (an outermost domain keeps the stock value); keep
+                                     ! v_sponge dt/dx^2 <= 0.1; leave ub_tune off. A run that does not
+                                     ! start from the state its boundary data come from should take its
+                                     ! first ~10 days with 'fixed' and switch to 'modal' at a restart.
+                                     ! The step is limited by horizontal advection: keep MAX_ADV_CFL -
+                                     ! MAX_VERT_CFL below about 0.8 over the run
+imex_obc_tref = 259200.0             ! 'modal': time scale (s) of the reference m(z), a low-pass of the
+                                     ! baroclinic mismatch p_int - p_ext that is not radiated (slow
+                                     ! child-parent mismatch stays); 0 none. Choose tref >= ~3 inertial
+                                     ! periods at the open edges' lowest |f| and >= 1 d (the first
+                                     ! build prints the filter's response at that frequency)
 /

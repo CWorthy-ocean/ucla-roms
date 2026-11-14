@@ -646,7 +646,7 @@ contains
 #endif
 #endif
 #ifdef IMEX_IGW
-    use imex_igw, only: wflx_corr, u_nm1, v_nm1
+    use imex_igw, only: wflx_corr, u_nm1, v_nm1, imex_obc_modal, imex_obc_faces
 #endif
 
     implicit none
@@ -1058,6 +1058,9 @@ contains
 
     call u3dbc_tile (istr,iend,jstr,jend, DC)
     call v3dbc_tile (istr,iend,jstr,jend, DC)
+#ifdef IMEX_IGW
+    if (imex_obc_modal) call imex_obc_faces   ! imex_obc_mode 'modal': normal open faces
+#endif
 
 
 ! Coupling 2D and 3D momentum equations:

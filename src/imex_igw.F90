@@ -78,8 +78,11 @@ module imex_igw
   !     the GPU port took different neighbour sets at the top and bottom
   !     levels (b_ref differences up to 1e-6 relative from 1-ulp inputs).
   !
-  !     OPEN BOUNDARY: the open faces are out of D, D^T and carry the OBC's
-  !     explicit value in the stage rhs.
+  !     OPEN BOUNDARY (imex_obc_mode): 'fixed' the open faces are out of
+  !     D, D^T and carry the OBC's explicit value in the stage rhs; 'modal'
+  !     the characteristic condition on the vertical modes of the operator's
+  !     L_z, implicit in the stage solves (section 'modal', obm_*); 'auto'
+  !     (default) selects 'modal' where it is supported, else 'fixed'.
   !
   !     DOCS PAGE: docs/model_settings/implicit_internal_waves.md
   !     (settings, time step, open boundaries, restarts, limitations).
@@ -106,6 +109,7 @@ module imex_igw
   public :: imex_predictor_transport
   public :: imex_shift_levels
   public :: imex_rst_def, imex_rst_wrt, imex_rst_wrt_scal, imex_rst_get
+  public :: imex_obc_faces
 
   character(len=8) :: module_name = "imex_igw"
 
@@ -114,7 +118,7 @@ module imex_igw
   integer(kind=4), parameter, public :: imex_stage_corr = 2  ! prsgrd at *, step3d_uv1
 
   ! Namelist IMEX_IGW_SETTINGS. src/namelist.nml lists the keys a user sets (imex_verbose,
-  ! imex_bref_hours, imex_rst_state); the others are solver and
+  ! imex_bref_hours, imex_rst_state, imex_obc_mode, imex_obc_tref); the others are solver and
   ! development settings. Defaults: weight set B, the tested solver configuration
   real(kind=8)    :: imex_theta_p = 0.5_8        ! implicit PG weight, predictor
   real(kind=8)    :: imex_phi = 0.25_8           ! weight of level n, predictor
@@ -136,8 +140,8 @@ module imex_igw
                                                  ! (robust to rounding of z_r; see the header)
   real(kind=8)    :: imex_bref_hours = 24._8     ! the b_ref cadence in model
                                                  ! hours; b_ref (the reference stratification) is rebuilt
-                                                 ! then, and with it the operator and its preconditioner. 24
-                                                 ! from the stage 4(b) tests (no
+                                                 ! then, and with it the operator, its preconditioner and the
+                                                 ! 'modal' boundary modes. 24 from the stage 4(b) tests (no
                                                  ! change in stability or accuracy against 6 on Pac, N1, N3,
                                                  ! sargasso; ~3 % per model day saved on Pac at 1800 s);
                                                  ! 12 is the cautious alternative (was 6; 1: the cadence
@@ -151,8 +155,8 @@ module imex_igw
                                                  ! it is not supported (see check_settings)
   real(kind=8)    :: imex_n2_taper = 1.e-7_8     ! coupling taper s = N2raw/(N2raw + taper) at weakly
                                                  ! stratified cells (0: off), see imex_eta_setup
-  real(kind=8)    :: imex_n2_ref = 1.e-6_8       ! 'ref': N2 floor of b_ref [s-2] (operator coefficients).
-                                                 ! 1e-6 since 2026-11-10 (was 3e-7): with 3e-7 the
+  real(kind=8)    :: imex_n2_ref = 1.e-6_8       ! 'ref': N2 floor of b_ref [s-2] (operator coefficients, modal
+                                                 ! OBC speeds). 1e-6 since 2026-11-10 (was 3e-7): with 3e-7 the
                                                  ! weakly stratified abyssal cells that imex_n2_taper half-
                                                  ! decouples (N2raw ~ 1e-8..1e-6) kept their weak operator N2,
                                                  ! and a deep internal-wave-like mode of the IMEX step grew
@@ -214,6 +218,64 @@ module imex_igw
   integer(kind=4) :: imex_rst_state = 1          ! EXACT_RESTART files: 1 the IMEX state (imex_* variables, one
                                                  ! copy per file, exact restart); 0 none (small files: the first
                                                  ! step after a restart starts the IMEX stores, inexact restart)
+  character(len=8) :: imex_obc_mode = 'auto'     ! normal velocity at open-boundary faces (docs page, sec. 5):
+                                                 ! 'fixed' the OBC's explicit value, faces out of the operator (as
+                                                 ! before); 'modal' the characteristic (per-mode Flather) condition
+                                                 ! u_b = u_ext + s Y (p_int - p_ext - m) on the baroclinic part,
+                                                 ! implicit in the stage solves (see the OPEN BOUNDARY section of the
+                                                 ! header); 'auto' (default) 'modal' where it is supported (an open
+                                                 ! edge with M3_FRC_BRY and T_FRC_BRY and the settings it needs),
+                                                 ! else 'fixed' (printed)
+  integer(kind=4) :: imex_obc_nmodes = 3         ! 'modal': vertical modes kept; the rest get the admittance of
+                                                 ! the last one (remainder term)
+  real(kind=8)    :: imex_obc_q0 = 0._8          ! 'modal': rotating tuning q0 = sqrt(1 - f^2/omega0^2), f at the
+                                                 ! open edges: every admittance is divided by q0, y_m = 1/(q0 c_m),
+                                                 ! exact at normal incidence for the frequency omega0 (a rotating
+                                                 ! wave has u = p/(c q), q = sqrt(1 - f^2/omega^2); before
+                                                 ! 2026-11-10 the code used q0/c_m, which reflects more than no
+                                                 ! tuning). A wave with another q is reflected by (q0 - q)/(q0 + q)
+                                                 ! in amplitude, so tune only where one near-inertial frequency
+                                                 ! dominates what reaches the edges (M2 at high latitude).
+                                                 ! 0 (default): off (q0 = 1). Otherwise 0.2 <= q0 <= 1 (omega0 >=
+                                                 ! 1.02 f, admittances <= 5/c_m): below 0.2 every wave far from
+                                                 ! omega0 (q ~ 1) is reflected by > 44 % in energy, a slow
+                                                 ! mismatch d - m drives > 5x the untuned face velocity, and the
+                                                 ! group velocity c q0 that the tuning serves is < 0.2 c
+  real(kind=8)    :: imex_obc_tref = 259200._8   ! 'modal': time scale [s] of the reference m(z) (obm_explicit): the
+                                                 ! condition radiates p_int - p_ext - m, m an exponential low-pass of
+                                                 ! (p_int - p_ext) (baroclinic) per face column, so slow child-parent
+                                                 ! mismatch is not exported; 0: no reference (stage-2 behaviour).
+                                                 ! The filter starts from m = d with the e-folding time T0 =
+                                                 ! min(tref, 1 d), continues as the running mean of the mismatch until
+                                                 ! t = tref (weight max(1 - exp(-dt/tref), min(1/n, 1 - exp(-dt/T0))),
+                                                 ! n the updates since m was set), also after a restart without m: the
+                                                 ! filter time never drops below T0 (a reference that follows d within
+                                                 ! hours removes the radiation of edge transients: on a Hawaii
+                                                 ! nest 6 h blew up within a day). Choose tref >= ~3 inertial periods at the open
+                                                 ! edges' lowest |f| (first order; the first build prints |H| at that
+                                                 ! frequency against the rule's 0.053) and not below 1 d (NOTE);
+                                                 ! a value in (0, 3600) s counts as 1 h in the restart check
+  integer(kind=4) :: imex_obc_mprint = 0         ! 'modal' (diagnostic): an OBCM line per open edge every
+                                                 ! imex_obc_mprint steps (0 off; predictor, after the reference
+                                                 ! update; obm_explicit): edge rms of d = P(b_int - b_ext)
+                                                 ! (baroclinic), m, d - m, of Y d, Y m, Y (d - m), of the normal
+                                                 ! baroclinic face velocity u^n, and their mode-1 values at the
+                                                 ! edge's middle column; and an OBCF line per edge (pre_step3d,
+                                                 ! imex_obc_faces): fractions of the (face, level) pairs where the
+                                                 ! predictor's u* is inflow (t3dbc's test), where its barotropic
+                                                 ! part is inflow, and where both agree; rms of both parts
+  real(kind=8)    :: imex_obc_cmin = 0.3_8       ! 'modal': floor [m/s] on the mode speeds in the admittances
+                                                 ! (default 0.3; 0 off): y_m = min(1/(q0 c_m), 1/cmin). In shallow or
+                                                 ! unstratified edge columns the modes are at the N2 floor (c_1 =
+                                                 ! 1-9 cm/s on shelves), the flow exceeds them all the time, and
+                                                 ! the admittance 1/c_m turns pressure mismatches of 0.005-0.01
+                                                 ! m2/s2 into face velocities of 0.2-0.5 m/s rms and vertical
+                                                 ! Courant numbers of 2-10 in the edge cell;
+                                                 ! the cap removes that and leaves the incoming tide unchanged
+                                                 ! (29-day nests). A mode slower than
+                                                 ! cmin is reflected by ((cmin - c)/(cmin + c))^2 at normal
+                                                 ! incidence (measured 2-7 % of mode 3 at deep winter edges with
+                                                 ! c_3 = 0.17-0.27 m/s). The default was 0 before 2026-11-10
 
   ! Former keys, fixed at their former defaults (removed from the namelist 2026-11-13; docs page, 'Removed keys')
   real(kind=8), parameter :: imex_n2_min = 1.e-8_8   ! the self-test's 'state' N2 floor [s-2]
@@ -235,7 +297,9 @@ module imex_igw
   &  imex_verbose, imex_solver_enabled, imex_allow_explicit, imex_selftest,&
   &  imex_n2_ref, imex_n2_taper, imex_warm,&
   &  imex_bref_hours, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec, imex_stage_fused,&
-  &  imex_redu, imex_rst_state, imex_mix_split
+  &  imex_redu, imex_rst_state, imex_mix_split,&
+  &  imex_obc_mode, imex_obc_nmodes, imex_obc_q0, imex_obc_tref,&
+  &  imex_obc_mprint, imex_obc_cmin
 
   ! Derived quantities read by the consumers
   real(kind=8), public, protected :: imex_am3      ! AM3_crv for pre_step3d
@@ -401,6 +465,38 @@ module imex_igw
   ! Startup self-test bookkeeping
   logical :: selftest_done = .false.
   real(kind=8) :: t_step_start = 0._8, t_selftest_solve = 0._8
+  ! imex_obc_mode = 'modal' (imex_obc_modal; obm_* routines). Edges e = 1 W, 2 E, 3 S, 4 N of this tile
+  ! that are open physical edges (ob_edge); per face column l along the edge (j for W, E; i for S, N),
+  ! built with b_ref (obm_build, end of imex_adj_setup): ob_act 1 on active faces, ob_w = hf/H (hf the
+  ! face thickness of the operator, H its sum), ob_hn = dn hf (the face's transport factor), the modes
+  ! ob_phi (sum_k hf phi^2 = H) with speeds ob_c, ob_a = y_m - y_rem and ob_yr = y_rem (the admittance
+  ! Y g = y_rem (g - <g>) + sum_m ob_a phi_m <phi_m, g>, <.> the hf-weighted mean), ob_kd the Jacobi
+  ! diagonal of the boundary term per unit theta dt (cells next to the faces, zero elsewhere), ob_ub the
+  ! stage's face velocity (obm_explicit, obm_correct; written by imex_obc_faces)
+  logical, public, protected :: imex_obc_modal = .false.
+  logical :: obm_supported = .false.               ! the configuration supports 'modal' (check_settings)
+  ! imex_obc_tref > 0: the reference ob_mr(nz, l, e) (baroclinic, cell-column pressure difference units
+  ! m2/s2) and whether it holds a value (ob_mr_ok; else obm_explicit initializes it with the current
+  ! mismatch); ob_rstm: imex_obcm as read from the restart file (at the faces' ghost cells), copied into
+  ! ob_mr at the first obm_explicit
+  ! ob_mn: predictor updates of m since it was set (1 = set to d; the ramped
+  ! weight max(w, 1/ob_mn); imex_rst_scal(17); 0: not set)
+  logical :: ob_mr_ok = .false.
+  real(kind=8), allocatable, dimension(:,:,:) :: ob_mr, ob_rstm
+  integer(kind=4) :: ob_mn = 0
+  real(kind=8), parameter :: obm_tramp = 86400._8   ! floor [s] of the reference filter's time scale in the
+                                                    ! ramped start (obm_explicit)
+  real(kind=8), parameter :: obm_q0min = 0.2_8      ! smallest accepted imex_obc_q0 > 0 (admittances <= 5/c_m;
+                                                    ! see the key description)
+  logical :: ob_edge(4) = .false.
+  integer(kind=4) :: ob_m = 0, ob_l0 = 0, ob_l1 = -1, ob_nbuild = 0
+  real(kind=8), parameter :: ob_sgn(4) = [-1._8, 1._8, -1._8, 1._8]
+  real(kind=8), allocatable, dimension(:,:)     :: ob_act, ob_yr
+  real(kind=8), allocatable, dimension(:,:,:)   :: ob_w, ob_hn, ob_a, ob_c, ob_ub, ob_kd
+  real(kind=8), allocatable, dimension(:,:,:,:) :: ob_phi
+  ! obm_modes: shifts per bracket and pass of the multisection (a device thread per
+  ! column may take 1: fewer divisions, more passes)
+  integer(kind=4), parameter :: obm_nsec = 3
 #endif /* IMEX_IGW */
 
 contains
@@ -591,6 +687,32 @@ contains
     &info="imex_rst_state must be 0 or 1")
     ! imex_redu = 1 with the stage solves of imex_pcg_start >= 1; otherwise 0 (print_settings)
     redu_on = (imex_redu == 1) .and. pcg_start >= 1
+    if (trim(imex_obc_mode) /= 'fixed' .and. trim(imex_obc_mode) /= 'modal' .and. trim(imex_obc_mode) /= 'auto')&
+    &  call error_log%raise_global(context=context, info="imex_obc_mode = '"//trim(imex_obc_mode)//"' must be"&
+    &//" 'fixed', 'modal' or 'auto'")
+    ! what 'modal' needs: the solves (the faces live in the operator's fused kernels and the Jacobi
+    ! diagonal), a stage-solve start other than 1, an open edge and the external velocity and density
+    ! (M3_FRC_BRY, T_FRC_BRY)
+    obm_supported = imex_solver_enabled .and. imex_pcg_start /= 1
+#  if !defined M3_FRC_BRY || !defined T_FRC_BRY
+    obm_supported = .false.
+#  endif
+#  if !defined OBC_WEST && !defined OBC_EAST && !defined OBC_SOUTH && !defined OBC_NORTH
+    obm_supported = .false.
+#  endif
+    if (trim(imex_obc_mode) == 'auto') then
+      imex_obc_modal = obm_supported
+    else
+      imex_obc_modal = (trim(imex_obc_mode) == 'modal')
+    end if
+    if (trim(imex_obc_mode) == 'modal' .and. .not. obm_supported) call error_log%raise_global(context=context,&
+    &info="imex_obc_mode = 'modal' needs the solver enabled, imex_pcg_start /= 1, an open edge, M3_FRC_BRY"&
+    &//" and T_FRC_BRY")
+    if (imex_obc_modal .and. (imex_obc_nmodes < 1 .or. imex_obc_nmodes > 20 .or. (imex_obc_q0 /= 0._8 .and.&
+    &   (imex_obc_q0 < obm_q0min .or. imex_obc_q0 > 1._8)) .or. imex_obc_tref < 0._8 .or. imex_obc_mprint < 0))&
+    &   call error_log%raise_global(context=context, info="imex_obc_nmodes must be in 1..20, imex_obc_q0 0 (off)"&
+    &//" or in [0.2, 1] (the admittances are divided by q0), imex_obc_tref >= 0 and imex_obc_mprint >= 0")
+    if (imex_obc_cmin < 0._8) call error_log%raise_global(context=context, info="imex_obc_cmin must be >= 0")
     if (imex_theta_p + imex_phi > 1._8 + tol) then
       write(info,'(A,ES22.14,A)') 'imex_theta_p + imex_phi = ',&
       &imex_theta_p + imex_phi, ' must be <= 1'
@@ -664,6 +786,15 @@ contains
     write(*,'(3x,A,I2,A,I2,A,I2)') 'imex_verbose =', imex_verbose, '  imex_warm =', imex_warm,&
     &'  imex_mix_split =', imex_mix_split
     write(*,'(3x,A,ES10.2)') "unknown eta = db/N2, operator N2 + c D_b D_b^T;  imex_n2_taper =", imex_n2_taper
+    if (imex_obc_modal) write(*,'(3x,A,A,A,I3,A,F7.4,A,F10.1,A)') "imex_obc_mode = '",&
+    &trim(imex_obc_mode), "' -> 'modal': imex_obc_nmodes =", imex_obc_nmodes, '  imex_obc_q0 =', imex_obc_q0,&
+    &'  imex_obc_tref =', imex_obc_tref, ' s'
+    if (imex_obc_modal .and. imex_obc_q0 > 0._8) write(*,'(3x,A,F7.4,A,F7.4,A)') 'imex_obc_q0: admittances'&
+    &//' 1/(q0 c_m), factor', 1._8/imex_obc_q0, ', exact at normal incidence for omega0/f =',&
+    &1._8/sqrt(1._8 - min(imex_obc_q0, 0.9999_8)**2), ' (q0 = 1: any frequency far above f)'
+    if (imex_obc_modal .and. imex_obc_cmin > 0._8) write(*,'(3x,A,F8.4,A)') 'imex_obc_cmin =',&
+    &imex_obc_cmin, ' m/s (cap on the admittances, 1/cmin)'
+    if (.not. imex_obc_modal) write(*,'(3x,A,A,A)') "imex_obc_mode = '", trim(imex_obc_mode), "' -> 'fixed'"
     write(*,'(3x,A,I3,A,ES10.2,A)') "b_ref: smoothing passes", imex_bref_smooth, '  imex_n2_ref =', imex_n2_ref,&
     &" (floor on the operator's vertical coefficients)"
     write(*,'(3x,A,F7.3,A,I2)') 'imex_bref_hours =', imex_bref_hours, '  imex_setup_lag =', merge(1, 0, lag_on)
@@ -953,12 +1084,14 @@ contains
         if (present(dtau)) dts = dtau
         if (present(cfbak)) cb = cfbak
         theta = imex_theta_p ; tol = imex_tol_pred
+        if (imex_obc_modal) call obm_explicit(stage)      ! 'modal': explicit face values (imex_obc_pre)
         call imex_obc_pre   ! OBC values of the explicit u*
         call tq_mark(27)
       else
         is = 2
         dts = dt ; cb = 1._8
         theta = imex_theta_c ; tol = imex_tol_corr
+        if (imex_obc_modal) call obm_explicit(stage)      ! 'modal': explicit face values (rhs bfix)
         call tq_mark(19)
       end if
       call exchange_xxx(u(:,:,:,nnew), v(:,:,:,nnew), 1, .false.)   ! faces iend+1, jend+1 only
@@ -967,6 +1100,7 @@ contains
       c2 = (theta*dts)**2
       tsv = mpi_wtime() ; sv_t = [op_tapply, op_napply, pc_tapply, pc_napply, cb_tbuild]
       call imex_stage_sf(is, dts, cb, c2, theta*dts, tol, iters, resid)
+      if (imex_obc_modal) call obm_correct(ps_h(:,:,:,ps_cur(is),is))   ! 'modal': face increments
       if (imex_verbose >= 1) call imex_solve_line(is, iters, resid, mpi_wtime() - tsv)
       call imex_tlap(5)
       st_n(is) = st_n(is) + 1
@@ -995,6 +1129,7 @@ contains
       if (present(dtau)) dts = dtau
       if (present(cfbak)) cb = cfbak
       theta = imex_theta_p ; tol = imex_tol_pred
+      if (imex_obc_modal) call obm_explicit(stage)      ! 'modal': explicit face values (imex_obc_pre)
       call imex_obc_pre   ! OBC values of the explicit u*
       call tq_mark(27)
       call exchange_xxx(u(:,:,:,nnew), v(:,:,:,nnew), 1, .false.)   ! faces iend+1, jend+1 only
@@ -1014,6 +1149,7 @@ contains
       is = 2
       dts = dt
       theta = imex_theta_c ; tol = imex_tol_corr
+      if (imex_obc_modal) call obm_explicit(stage)      ! 'modal': explicit face values (rhs bfix)
       call tq_mark(19)
       call exchange_xxx(u(:,:,:,nnew), v(:,:,:,nnew), 1, .false.)   ! faces iend+1, jend+1 only
       call tq_mark(12)
@@ -1058,6 +1194,7 @@ contains
         call imex_tlap(6)
         call tq_mark(16)
         call imex_correct_fused(stage, theta*dts)
+        if (imex_obc_modal) call obm_correct(wk_dp)       ! 'modal': face increments
         call tq_mark(18)
         call imex_tlap(5)
       else
@@ -1191,15 +1328,26 @@ contains
     enddo
   contains
     subroutine bfix_u(ii, jj, kk)
+      ! ('modal': the face's explicit value obm_explicit instead of u*)
       integer(kind=4), intent(in) :: ii, jj, kk
       real(kind=8) :: d
-      d = wmom*dn_u(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii-1,jj,kk))*ua(ii,jj,kk) - um(ii,jj,kk) )
+      if (imex_obc_modal) then
+        d = wmom*dn_u(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii-1,jj,kk))*obm_face_val(ii, jj, kk, 1, ua(ii,jj,kk))&
+        &  - um(ii,jj,kk) )
+      else
+        d = wmom*dn_u(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii-1,jj,kk))*ua(ii,jj,kk) - um(ii,jj,kk) )
+      end if
       wk_fu(ii,jj,kk) = wk_fu(ii,jj,kk) + d ; sf(ii,jj) = sf(ii,jj) + d
     end subroutine bfix_u
     subroutine bfix_v(ii, jj, kk)
       integer(kind=4), intent(in) :: ii, jj, kk
       real(kind=8) :: d
-      d = wmom*dm_v(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii,jj-1,kk))*va(ii,jj,kk) - vm(ii,jj,kk) )
+      if (imex_obc_modal) then
+        d = wmom*dm_v(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii,jj-1,kk))*obm_face_val(ii, jj, kk, 2, va(ii,jj,kk))&
+        &  - vm(ii,jj,kk) )
+      else
+        d = wmom*dm_v(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii,jj-1,kk))*va(ii,jj,kk) - vm(ii,jj,kk) )
+      end if
       wk_fv(ii,jj,kk) = wk_fv(ii,jj,kk) + d ; sf(ii,jj) = sf(ii,jj) + d
     end subroutine bfix_v
   end subroutine imex_rhs_transport
@@ -1634,10 +1782,12 @@ contains
   !                       9-10 its c2, 11 imex_warm, 12 imex_pcg_start in effect, 13 the b_ref cadence in
   !                       steps, 14 imex_solver_prec in effect (pf_prec, 0 without the fused solve),
   !                       15 layout (2: one time-less copy; 0: files of 43949d66, a copy per record),
-  !                       16 mode (1; options of older files that this version does not have: see
-  !                       rst_mode), 17 0 (files written with the 'modal' open boundary, which this
-  !                       version does not have, hold its reference's update count there, and its
-  !                       reference in imex_obcm, which is not read; files with 16 scalars are read as 16)
+  !                       16 mode (1, 'modal' settings; removed options of older files: see
+  !                       rst_mode), 17 'modal'
+  !                       reference: predictor updates of m since it was set (ob_mn, the ramped weight;
+  !                       files with 16 scalars are read as 16, and their m counts as past the ramp)
+  !   imex_obcm           'modal' reference m at the ghost cell beyond each open face (imex_obc_tref > 0;
+  !                       imex_obcm2 of older files, a second filter stage, is not read)
   ! u^n-1 needs no variable: the exact restart's earlier record is u^n-1 (slot 3-nstp).
   subroutine imex_rst_def(ncid)
     use nc_read_write, only: nccreate
@@ -1671,6 +1821,8 @@ contains
     else
       call d3('imex_n2o', 'r', 'IMEX_IGW operator N2 of the last setup')
     end if
+    if (rst_has_obcm()) call d3('imex_obcm', 'r', "IMEX_IGW 'modal' OBC reference m (imex_obc_tref) at the"&
+    &//" ghost cell beyond each open face")
   contains
     subroutine d3(name, g, lname)
       ! one copy per file: no time dimension
@@ -1697,6 +1849,11 @@ contains
     implicit none
     y = pcg_start == 3 .and. imex_warm == 1 .and. lag_on
   end function rst_has_mx
+  logical function rst_has_obcm() result(y)
+    ! 'modal' with the reference: m (obm_explicit)
+    implicit none
+    y = imex_obc_modal .and. imex_obc_tref > 0._8
+  end function rst_has_obcm
   logical function rst_has_n2raw() result(y)
     ! written whenever the taper uses it; with the setup lag and 'coef' it was recomputed from
     ! imex_bref and imex_dza instead, which did not reproduce the rebuild's values to the bit
@@ -1788,6 +1945,11 @@ contains
         call ncwrite(ncid,'imex_n2o', wz(i0:i1,j0:j1,:),PP=.true.)
       end if
     end if
+    if (rst_has_obcm()) then                      ! 'modal': m at the faces' ghost cells
+      wz = 0._8
+      if (allocated(ob_mr)) call obm_m_to3(wz)
+      call ncwrite(ncid,'imex_obcm', wz(i0:i1,j0:j1,:),PP=.true.)
+    end if
     deallocate(wz)
     pio_gtype = gsv
   end subroutine imex_rst_wrt
@@ -1820,39 +1982,52 @@ contains
     sc(11) = dble(imex_warm) ; sc(12) = dble(pcg_start) ; sc(13) = dble(imex_nbref())
     sc(14) = dble(merge(pf_prec, 0, pf_on))
     sc(15) = 2._8 ; sc(16) = dble(rst_mode())
-    sc(17) = 0._8                                 ! (the 'modal' reference's update count of older files)
+    sc(17) = dble(ob_mn)
     ierr = nf90_inq_varid(ncid, 'imex_rst_scal', varid)
     if (ierr == nf90_noerr) ierr = nf90_put_var(ncid, varid, sc, start=(/1,rec/), count=(/rst_nsc,1/))
   end subroutine imex_rst_wrt_scal
 
   !----------------------------------------------------------------------
   integer(kind=4) function rst_mode() result(md)
-    ! imex_rst_scal(16): 1. Older files may carry options that this version does not have, so that a
-    ! restart from them is refused as inexact (obc_mode_change): written before the key trim of
-    ! 2026-11-13, 2 in place of 1 imex_force_mode 'gradient', + 10 imex_bt_mode 'step2d'; written with
-    ! the 'modal' open boundary, + 100 and its settings in the higher digits
+    ! imex_rst_scal(16): 1; 'modal' + 100 + 1000 imex_obc_nmodes + 1000000 imex_obc_tref in hours (at
+    ! least 1 for tref > 0), so that a restart across a change of these is refused as inexact
+    ! (imex_obc_q0 is not encoded: it changes Y, which the replay rebuilds with the new value). Files
+    ! written before the key trim of 2026-11-13 may also carry the removed options: 2 in place of 1
+    ! imex_force_mode 'gradient', + 10 imex_bt_mode 'step2d', + 200000 imex_obc_fref = 2 (obc_mode_change)
     implicit none
     md = 1
+    if (imex_obc_modal) md = md + 100 + 1000*imex_obc_nmodes&
+    &  + 1000000*merge(max(1, nint(imex_obc_tref/3600._8)), 0, imex_obc_tref > 0._8)
   end function rst_mode
 
   !----------------------------------------------------------------------
-  function obc_mode_change(mold) result(txt)
-    ! the rst_mode of an older file in words (the inexact-restart note): the options removed on
-    ! 2026-11-13, and the 'modal' open boundary
+  function obc_mode_change(mold, mnew) result(txt)
+    ! a rst_mode change in words (the inexact-restart note): the removed options of an older file, or
+    ! the open-boundary settings
     implicit none
-    integer(kind=4), intent(in) :: mold
+    integer(kind=4), intent(in) :: mold, mnew
     character(len=256) :: txt
     character(len=128) :: rm
+    logical :: mo, mn
     rm = ''
     if (mod(mold, 10) == 2) rm = "imex_force_mode 'gradient'"
     if (mod(mold/10, 10) == 1) rm = trim(rm)//"  imex_bt_mode 'step2d'"
-    txt = ''
-    if (len_trim(rm) > 0) txt = 'the file was written with options removed on 2026-11-13: '//trim(adjustl(rm))
-    if (mod(mold/100, 10) == 1) then
-      if (len_trim(txt) > 0) txt = trim(txt)//'; '
-      txt = trim(txt)//"the file was written with the 'modal' open boundary, which this version does not have"
+    if (mod(mold/100, 10) == 1 .and. mod(mold/100000, 10) == 2) rm = trim(rm)//"  imex_obc_fref = 2"
+    if (len_trim(rm) > 0) then
+      txt = 'the file was written with options removed on 2026-11-13: '//trim(adjustl(rm))
+      return
     end if
-    if (len_trim(txt) == 0) txt = 'restart mode'
+    mo = mod(mold/100, 10) == 1 ; mn = mod(mnew/100, 10) == 1
+    if (mo .neqv. mn) then
+      txt = "the open-boundary condition changes from imex_obc_mode '"//trim(merge('modal', 'fixed', mo))&
+      &//"' to '"//trim(merge('modal', 'fixed', mn))//"'"
+      if (mn) txt = trim(txt)//" (the default 'auto' selects 'modal')"
+    else if (mn) then
+      txt = "the 'modal' boundary settings differ (imex_obc_nmodes or imex_obc_tref): the reference m"&
+      &//" restarts from the current mismatch"
+    else
+      txt = 'restart mode'
+    end if
   end function obc_mode_change
 
   !----------------------------------------------------------------------
@@ -1886,7 +2061,7 @@ contains
       if (ierr /= nf90_noerr) then
         why = 'no IMEX state in the initial file'
       else
-        nsc = rst_nsc                             ! (older files have 16 scalars)
+        nsc = rst_nsc                             ! (files with 16 scalars: no ob_mn)
         ierr = nf90_inquire_variable(ncid, varid, dimids=dids)
         if (ierr == nf90_noerr) ierr = nf90_inquire_dimension(ncid, dids(1), len=nsc)
         nsc = max(1, min(nsc, rst_nsc))
@@ -1903,7 +2078,7 @@ contains
           &//' solver, mode'
           if (nint(sc(11)) >= 2) why = trim(why)//'; the file was written with imex_warm = 2 or 3, removed on'&
           &//' 2026-11-13'
-          if (md /= rst_mode()) why = trim(why)//'; '//trim(obc_mode_change(md))
+          if (md /= rst_mode()) why = trim(why)//'; '//trim(obc_mode_change(md, rst_mode()))
           why = trim(why)//')'
         end if
       end if
@@ -1980,6 +2155,18 @@ contains
             enddo
           enddo
         enddo
+      end if
+    end if
+    if (rst_has_obcm()) then                      ! 'modal': the reference (obm_explicit takes it over)
+      if (nf90_inq_varid(ncid, 'imex_obcm', varid) == nf90_noerr) then
+        if (.not. allocated(ob_rstm)) allocate( ob_rstm(GLOBAL_2D_ARRAY,nz) )
+        ob_rstm = 0._8
+        call rd3('imex_obcm', ob_rstm(x0:x1,y0:y1,:))
+        ob_mn = nint(sc(17))                      ! the ramp continues (0: a file without it, past the ramp)
+        if (ob_mn <= 0) ob_mn = 1000000000 - 1
+      else if (mynode == 0) then
+        write(*,'(1x,A)') "IMEX_IGW: no imex_obcm in the initial file: the 'modal' reference starts from the"&
+        &//' current mismatch'
       end if
     end if
     pio_gtype = gsv
@@ -2585,13 +2772,24 @@ contains
           enddo
         enddo
       enddo
-      do k=1,nz
-        do j=jb0,jb1
-          do i=ib0,ib1
-            loc(3) = loc(3) + darea(i,j)*Hz(i,j,k)*act(i,j)*b(i,j,k)**2/(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k))
+      if (imex_obc_modal) then                    ! 'modal': the Jacobi with the boundary term
+        do k=1,nz
+          do j=jb0,jb1
+            do i=ib0,ib1
+              loc(3) = loc(3) + darea(i,j)*Hz(i,j,k)*act(i,j)*b(i,j,k)**2/(1._8/ad_n2c(i,j,k)&
+              &      + c2*ad_dd(i,j,k) + sqrt(c2)*ob_kd(i,j,k))
+            enddo
           enddo
         enddo
-      enddo
+      else
+        do k=1,nz
+          do j=jb0,jb1
+            do i=ib0,ib1
+              loc(3) = loc(3) + darea(i,j)*Hz(i,j,k)*act(i,j)*b(i,j,k)**2/(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k))
+            enddo
+          enddo
+        enddo
+      end if
       call imex_adj_precond(wk_r, wk_z, c2, loc(1), loc(2))
       call mpi_allreduce(loc, glob, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
       bnorm = glob(3)
@@ -2755,13 +2953,24 @@ contains
           enddo
         enddo
       enddo
-      do k=1,nz
-        do j=jb0,jb1
-          do i=ib0,ib1
-            loc(3) = loc(3) + darea(i,j)*hz_op(i,j,k)*act(i,j)*b(i,j,k)**2/(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k))
+      if (imex_obc_modal) then                    ! 'modal': the Jacobi with the boundary term
+        do k=1,nz
+          do j=jb0,jb1
+            do i=ib0,ib1
+              loc(3) = loc(3) + darea(i,j)*hz_op(i,j,k)*act(i,j)*b(i,j,k)**2/(1._8/ad_n2c(i,j,k)&
+              &      + c2*ad_dd(i,j,k) + sqrt(c2)*ob_kd(i,j,k))
+            enddo
           enddo
         enddo
-      enddo
+      else
+        do k=1,nz
+          do j=jb0,jb1
+            do i=ib0,ib1
+              loc(3) = loc(3) + darea(i,j)*hz_op(i,j,k)*act(i,j)*b(i,j,k)**2/(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k))
+            enddo
+          enddo
+        enddo
+      end if
       call imex_adj_precond(wk_r, wk_z, c2, loc(1), loc(2))
       call mpi_allreduce(loc, glob, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
       bnorm = glob(3)
@@ -3260,7 +3469,1488 @@ contains
     call u3dbc_tile(ib0, ib1, jb0, jb1, wrk)
     call v3dbc_tile(ib0, ib1, jb0, jb1, wrk)
     deallocate(wrk)
+    if (imex_obc_modal) call imex_obc_faces   ! 'modal': the normal faces take obm_explicit's values
   end subroutine imex_obc_pre
+
+  !======================================================================
+  ! Recommended use of 'modal' (nest and Pacific tests; docs page, sec. 5):
+  ! - defaults: imex_obc_mode 'auto' (selects 'modal'), imex_obc_nmodes 3, imex_obc_cmin 0.3 m/s,
+  !   imex_obc_tref 3 d;
+  ! - imex_obc_q0 is off by default; where the semidiurnal tide is close to inertial it has been set to
+  !   sqrt(1 - f^2/omega_M2^2). It returns part of a Kelvin wave that leaves along a coast (13 % at 0.5);
+  ! - sponge: a nest whose boundary data carry the internal tide runs best with a quarter of the v_sponge
+  !   used with the stock boundary (the sponge damps the tide that comes in); an outermost domain, whose
+  !   boundary data have no internal tide, keeps the stock value. Keep v_sponge dt/dx^2 <= 0.1;
+  ! - SPONGE_TUNE's ub_tune has no effect on the normal velocity under 'modal': leave it off;
+  ! - start: a run that does not begin from the state its boundary data come from (a nest not initialised
+  !   from its parent) should take its first ~10 days with imex_obc_mode = 'fixed' and switch to 'modal'
+  !   at a restart (inexact by design: m restarts from the mismatch of that day); see obm_startnote;
+  ! - step: the limit is explicit horizontal advection, not the boundary. Keep the horizontal part of the
+  !   Courant number (MAX_ADV_CFL - MAX_VERT_CFL in the step lines) below about 0.8 over the whole run
+  !   (five nests: failures at 1.0-1.2, at 0.8-1.0 in the strongest fronts);
+  ! - known limits: a wave that the boundary data do not contain and that leaves at more than about 60
+  !   degrees from the normal returns at the rate of any one-direction condition (36 % at 75 degrees),
+  !   and the sponge does not change that; the child's depths must match the parent's along the open
+  !   edges (the boundary data are otherwise taken from the wrong depth).
+  !
+  ! imex_obc_mode = 'modal': characteristic (per-mode Flather) open-boundary condition for the
+  ! internal modes (docs page, sec. 5). Per open face column:
+  !   u_b = u_ext + s Y (p_int - p_ext),   Y = sum_m y_m phi_m phi_m^T W/H + y_rem (P_bc - sum_m ...),
+  ! y_m = min(1/(q0 c_m), 1/cmin) (q0 = imex_obc_q0, 1 when off; cmin = imex_obc_cmin, the floor on the mode
+  ! speed, default 0.3 m/s; 0: no cap), y_rem = y_M, s = +1 at E/N
+  ! and -1 at W/S faces; phi_m, c_m the generalized eigenpairs of the column's L_z (b_ref of the cell
+  ! next to the face, N2 floored at imex_n2_ref, W = the face thickness hf). In a stage:
+  ! - explicit part (obm_explicit, before the rhs): u_b^e = u_ext - <u_ext> + s Y P(b_cur - b_ext),
+  !   b_cur the stage's current buoyancy (tracers at nrhs: t^n in the predictor, t* in the corrector),
+  !   b_ext that of the bry T/S, both through the model's EOS (rho_eos_point) on the cell's z_r, P the
+  !   hydrostatic pressure on the cell column; it is the face's value in the stage rhs (predictor:
+  !   u(nnew) through imex_obc_faces in imex_obc_pre; corrector: the momentum fix bfix);
+  ! - reference m (imex_obc_tref > 0, default 3 d): P(b_cur - b_ext) is replaced by d - m, d its
+  !   baroclinic part (hf-weighted mean removed, the subspace Y acts on) and m an exponential low-pass of
+  !   d per face column (weight 1 - exp(-dt/tref) once per step in the predictor, m = d at a cold start
+  !   and after a restart without m), so waves (periods << tref) are radiated and slow child-parent
+  !   water-mass mismatch is not exported; m is in the restart file (imex_obcm);
+  ! - implicit part: the face transport F_b = hf dn (Y g)/(theta dt), g = the face column of the
+  !   adjoint's D^T x with the exterior cell at zero (g = -s P(N2 x) to the discretization), enters D
+  !   in every operator kernel (obm_ufx, obm_vfx): M gets
+  !   theta dt D_f hf dn Y D_f^T, symmetric and positive semi-definite in the solver's product; its
+  !   diagonal (ob_kd per unit theta dt) is added to the Jacobi;
+  ! - correction (obm_correct, after the stage solve): u_b = u_b^e - Y g(x), the increment the
+  !   operator assumed (the same g, Y and face);
+  ! - imex_obc_faces writes u_b into u, v(nnew) after u3dbc/v3dbc (imex_obc_pre, pre_step3d,
+  !   step3d_uv2): the Orlanski normal value is replaced, the tangential components stay.
+  ! Y and the Jacobi term are rebuilt with b_ref (obm_build, end of imex_adj_setup), so the setup lag
+  ! freezes them with the operator and imex_rst_replay rebuilds them. Edge ranks only; no exchanges.
+  !======================================================================
+  subroutine obm_cell(e, l, i, j, fi, fj, gi, gj)
+    ! edge e (1 W, 2 E, 3 S, 4 N), face column l: the interior cell (i, j), the face (fi, fj) (u-face
+    ! at W, E; v-face at S, N) and the exterior ghost cell (gi, gj)
+    implicit none
+    integer(kind=4), intent(in) :: e, l
+    integer(kind=4), intent(out) :: i, j, fi, fj, gi, gj
+    select case (e)
+    case (1)
+      i = ib0 ; j = l ; fi = ib0 ; fj = l ; gi = ib0-1 ; gj = l
+    case (2)
+      i = ib1 ; j = l ; fi = ib1+1 ; fj = l ; gi = ib1+1 ; gj = l
+    case (3)
+      i = l ; j = jb0 ; fi = l ; fj = jb0 ; gi = l ; gj = jb0-1
+    case default
+      i = l ; j = jb1 ; fi = l ; fj = jb1+1 ; gi = l ; gj = jb1+1
+    end select
+  end subroutine obm_cell
+
+  subroutine obm_lrange(e, la, lb)
+    ! face columns of edge e on this tile
+    implicit none
+    integer(kind=4), intent(in) :: e
+    integer(kind=4), intent(out) :: la, lb
+    if (e <= 2) then
+      la = jb0 ; lb = jb1
+    else
+      la = ib0 ; lb = ib1
+    end if
+  end subroutine obm_lrange
+
+  !----------------------------------------------------------------------
+  subroutine obm_y(e, l, gc, tc)
+    ! tc = Y gc for face column (e, l): y_rem (gc - <gc>) + sum_m a_m phi_m <phi_m, gc>, <.> the
+    ! hf-weighted mean (Y gc has zero hf-weighted mean)
+    use param, only: nz
+    implicit none
+    integer(kind=4), intent(in) :: e, l
+    real(kind=8), intent(in) :: gc(nz)
+    real(kind=8), intent(out) :: tc(nz)
+    real(kind=8) :: gm, dm
+    integer(kind=4) :: k, m
+    gm = 0._8
+    do k=1,nz
+      gm = gm + ob_w(k,l,e)*gc(k)
+    enddo
+    do k=1,nz
+      tc(k) = ob_yr(l,e)*(gc(k) - gm)
+    enddo
+    do m=1,ob_m
+      if (ob_a(m,l,e) == 0._8) cycle
+      dm = 0._8
+      do k=1,nz
+        dm = dm + ob_w(k,l,e)*ob_phi(k,m,l,e)*gc(k)
+      enddo
+      dm = dm*ob_a(m,l,e)
+      do k=1,nz
+        tc(k) = tc(k) + dm*ob_phi(k,m,l,e)
+      enddo
+    enddo
+  end subroutine obm_y
+
+  !----------------------------------------------------------------------
+  subroutine obm_ufx(j, lo, hi, gr, fu, c2)
+    ! operator kernels, u-faces of row j (gr: the kernel's D^T face values g, before its projection):
+    ! the transports of the open W/E faces, F_b = hf dn (Y g)/sqrt(c2) (theta dt = sqrt(c2))
+    use param, only: nz
+    implicit none
+    integer(kind=4), intent(in) :: j, lo, hi
+    real(kind=8), intent(in) :: gr(lo:hi,nz), c2
+    real(kind=8), intent(inout) :: fu(lo:hi,nz)
+    real(kind=8) :: tc(nz), rtc
+    integer(kind=4) :: k
+    if (c2 <= 0._8) return
+    rtc = 1._8/sqrt(c2)
+    if (ob_edge(1)) then
+      if (ob_act(j,1) > 0._8) then
+        call obm_y(1, j, gr(ib0,:), tc)
+        do k=1,nz
+          fu(ib0,k) = rtc*ob_hn(k,j,1)*tc(k)
+        enddo
+      end if
+    end if
+    if (ob_edge(2)) then
+      if (ob_act(j,2) > 0._8) then
+        call obm_y(2, j, gr(ib1+1,:), tc)
+        do k=1,nz
+          fu(ib1+1,k) = rtc*ob_hn(k,j,2)*tc(k)
+        enddo
+      end if
+    end if
+  end subroutine obm_ufx
+
+  subroutine obm_vfx(jf, lo, hi, gr, f, c2)
+    ! operator kernels, v-faces of face row jf: as obm_ufx for the open S (jf = jb0) and N
+    ! (jf = jb1+1) faces
+    use param, only: nz
+    implicit none
+    integer(kind=4), intent(in) :: jf, lo, hi
+    real(kind=8), intent(in) :: gr(lo:hi,nz), c2
+    real(kind=8), intent(inout) :: f(lo:hi,nz)
+    real(kind=8) :: tc(nz), rtc
+    integer(kind=4) :: i, k, e
+    if (c2 <= 0._8) return
+    e = 0
+    if (ob_edge(3) .and. jf == jb0) e = 3
+    if (ob_edge(4) .and. jf == jb1+1) e = 4
+    if (e == 0) return
+    rtc = 1._8/sqrt(c2)
+    do i=ib0,ib1
+      if (ob_act(i,e) <= 0._8) cycle
+      call obm_y(e, i, gr(i,:), tc)
+      do k=1,nz
+        f(i,k) = rtc*ob_hn(k,i,e)*tc(k)
+      enddo
+    enddo
+  end subroutine obm_vfx
+
+  !----------------------------------------------------------------------
+  subroutine obm_gcol(e, l, x, gc)
+    ! the face column of D^T x at face (e, l) with the exterior cell at zero, from the interior cell's
+    ! column x (FP64 coefficients; the kernels' g before the projection): zc = -act x/n2k, dbar the
+    ! vertical adjoint, g = s (cf zc + dbar), cf the face values of b_ref
+    use param, only: nz
+    implicit none
+    integer(kind=4), intent(in) :: e, l
+    real(kind=8), intent(in) :: x(nz)
+    real(kind=8), intent(out) :: gc(nz)
+    real(kind=8) :: zc(nz), db(nz), acc, cf
+    integer(kind=4) :: i, j, fi, fj, gi, gj, k
+    call obm_cell(e, l, i, j, fi, fj, gi, gj)
+    do k=1,nz
+      zc(k) = -ad_act(i,j)*x(k)/ad_n2k(i,j,k)
+    enddo
+    db(nz) = 0._8 ; acc = 0._8
+    do k=nz-1,1,-1
+      acc = acc + ad_czt(i,j,k)*zc(k) - ad_czb(i,j,k+1)*zc(k+1)
+      db(k) = -acc
+    enddo
+    do k=1,nz
+      if (e <= 2) then
+        cf = ad_cu(fi,fj,k)
+      else
+        cf = ad_cv(fi,fj,k)
+      end if
+      gc(k) = ob_sgn(e)*(cf*zc(k) + db(k))
+    enddo
+  end subroutine obm_gcol
+
+  subroutine obm_col_apply(e, l, x, y)
+    ! the boundary term of face (e, l) on the interior cell's column, per unit theta dt: y = D_f(hf dn
+    ! Y g(x)) in the units of the operator's D D^T x (M x gets act sqrt(c2) y); the kernels' cell
+    ! formula restricted to the one face
+    use param, only: nz
+    implicit none
+    integer(kind=4), intent(in) :: e, l
+    real(kind=8), intent(in) :: x(nz)
+    real(kind=8), intent(out) :: y(nz)
+    real(kind=8) :: gc(nz), tc(nz), fb, w, wm, s, cf, sg
+    integer(kind=4) :: i, j, fi, fj, gi, gj, k
+    call obm_cell(e, l, i, j, fi, fj, gi, gj)
+    call obm_gcol(e, l, x, gc)
+    call obm_y(e, l, gc, tc)
+    sg = ob_sgn(e)
+    wm = 0._8
+    do k=1,nz
+      fb = ob_hn(k,l,e)*tc(k)
+      if (e <= 2) then
+        cf = ad_cu(fi,fj,k)
+      else
+        cf = ad_cv(fi,fj,k)
+      end if
+      w = 0._8
+      if (k < nz) w = wm - sg*fb
+      s = sg*cf*fb + ad_czt(i,j,k)*w - ad_czb(i,j,k)*wm
+      y(k) = -ad_en2(i,j,k)*s
+      wm = w
+    enddo
+  end subroutine obm_col_apply
+
+  !----------------------------------------------------------------------
+  subroutine obm_build
+    ! end of imex_adj_setup (b_ref, Hz of the setup, the coefficients of D): per open face column
+    ! the modes of the cell's L_z (generalized symmetric tridiagonal problem B phi = (1/c^2) W phi, B
+    ! the flux form with 1/(N2w dz), N2w = max(db_ref/dz, imex_n2_ref) at the interfaces, dz = (Hz(k)
+    ! + Hz(k+1))/2, W = diag(hf); dz and hf from Hz only, so imex_rst_replay rebuilds them from
+    ! hz_op), the admittances, and the Jacobi term ob_kd
+    use ocean_vars, only: hz
+    use grid, only: dn_u, dm_v, f, pm, pn
+    use scalars, only: iic, dt
+    use param, only: lm, mm, nz, mynode, ocean_grid_comm
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_min, mpi_integer, mpi_sum
+#  ifdef SPONGE_TUNE
+    use sponge_tune, only: ub_tune
+#  endif
+#  ifdef UV_VIS2
+    use mixing, only: visc2_r
+#  endif
+    implicit none
+    real(kind=8) :: hf(nz), gk(0:nz), y(nz), hh, dz, n2, q, ym, yrem,&
+    &               cmin(20), cmax(20), gmin(20), gmax(20), fmin, gfmin, wt, hres, sdn, gsdn, gmn
+    integer(kind=4) :: e, l, la, lb, i, j, fi, fj, gi, gj, k, m, ierr, nbad, gbad, nps, nrq, nfb
+    logical :: ok
+    if (.not. allocated(ob_act)) then
+      ob_l0 = min(ib0, jb0) ; ob_l1 = max(ib1, jb1) ; ob_m = min(imex_obc_nmodes, nz-1)
+      allocate( ob_act(ob_l0:ob_l1,4), ob_yr(ob_l0:ob_l1,4),&
+      &         ob_w(nz,ob_l0:ob_l1,4), ob_hn(nz,ob_l0:ob_l1,4), ob_ub(nz,ob_l0:ob_l1,4),&
+      &         ob_a(ob_m,ob_l0:ob_l1,4), ob_c(ob_m,ob_l0:ob_l1,4), ob_phi(nz,ob_m,ob_l0:ob_l1,4),&
+      &         ob_kd(GLOBAL_2D_ARRAY,nz), ob_mr(nz,ob_l0:ob_l1,4) )
+      ob_mr = 0._8
+      ob_act = 0._8 ; ob_yr = 0._8 ; ob_w = 0._8 ; ob_hn = 0._8 ; ob_ub = 0._8
+      ob_a = 0._8 ; ob_c = 0._8 ; ob_phi = 0._8 ; ob_kd = 0._8
+      ob_edge = .false.
+#  ifdef OBC_WEST
+      ob_edge(1) = w_edge
+#  endif
+#  ifdef OBC_EAST
+      ob_edge(2) = e_edge
+#  endif
+#  ifdef OBC_SOUTH
+      ob_edge(3) = s_edge
+#  endif
+#  ifdef OBC_NORTH
+      ob_edge(4) = n_edge
+#  endif
+    end if
+    ob_kd = 0._8
+    q = 1._8                                     ! admittance factor 1/q0 (rotating tuning; 1 when off):
+    if (imex_obc_q0 > 0._8) q = 1._8/imex_obc_q0  ! u = p/(c q0) for a rotating wave at omega0
+    cmin = huge(1._8) ; cmax = -huge(1._8) ; nbad = 0 ; fmin = huge(1._8)
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        call obm_cell(e, l, i, j, fi, fj, gi, gj)
+        ob_act(l,e) = 0._8
+        if (act(i,j) <= 0._8) cycle
+        if (e <= 2) then
+          if (cx(fi,fj) <= 0._8) cycle
+        else
+          if (cy(fi,fj) <= 0._8) cycle
+        end if
+        ob_act(l,e) = 1._8
+        fmin = min(fmin, abs(f(i,j)))
+        hh = 0._8
+        do k=1,nz
+          hf(k) = 0.5_8*(Hz(i,j,k) + Hz(gi,gj,k)) ; hh = hh + hf(k)
+        enddo
+        gk(0) = 0._8 ; gk(nz) = 0._8
+        do k=1,nz-1
+          dz = 0.5_8*(Hz(i,j,k) + Hz(i,j,k+1))
+          n2 = max((ad_bb(i,j,k+1) - ad_bb(i,j,k))/dz, imex_n2_ref, imex_n2_reg)
+          gk(k) = 1._8/(n2*dz)
+        enddo
+        call obm_modes(nz, ob_m, obm_nsec, hf, gk, ob_c(:,l,e), ob_phi(:,:,l,e), nps, nrq, nfb, gmn, ok)
+        if (.not. ok) nbad = nbad + 1
+        do m=1,ob_m
+          cmin(m) = min(cmin(m), ob_c(m,l,e)) ; cmax(m) = max(cmax(m), ob_c(m,l,e))
+        enddo
+        do k=1,nz
+          ob_w(k,l,e) = hf(k)/hh
+          if (e <= 2) then
+            ob_hn(k,l,e) = hf(k)*dn_u(fi,fj)
+          else
+            ob_hn(k,l,e) = hf(k)*dm_v(fi,fj)
+          end if
+        enddo
+        yrem = q/ob_c(ob_m,l,e)
+        if (imex_obc_cmin > 0._8) then           ! cap on the admittance itself
+          yrem = min(yrem, 1._8/imex_obc_cmin)
+        end if
+        ob_yr(l,e) = yrem
+        do m=1,ob_m
+          ym = q/ob_c(m,l,e)
+          if (imex_obc_cmin > 0._8) then
+            ym = min(ym, 1._8/imex_obc_cmin)
+          end if
+          ob_a(m,l,e) = ym - yrem
+        enddo
+        call obm_kd_col(e, l, y)                 ! Jacobi in closed form (corners: both faces)
+        do k=1,nz
+          ob_kd(i,j,k) = ob_kd(i,j,k) + y(k)
+        enddo
+      enddo
+    enddo
+    ob_nbuild = ob_nbuild + 1
+    if (ob_nbuild == 1 .or. imex_verbose >= 1) then  ! (collective: imex_adj_setup is)
+      m = ob_m
+      call mpi_allreduce(cmin(1:m), gmin(1:m), m, mpi_double_precision, mpi_min, ocean_grid_comm, ierr)
+      call mpi_allreduce(cmax(1:m), gmax(1:m), m, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+      call mpi_allreduce(nbad, gbad, 1, mpi_integer, mpi_sum, ocean_grid_comm, ierr)
+      if (mynode == 0) then
+        write(*,'(1x,A,I7,A,I3,A,20(F8.4,A,F8.4))') 'IMEX_OBCM', iic, ' modal build', ob_m, ' modes, c_m'&
+        &//' min-max [m/s]:', (gmin(k), '-', gmax(k), k=1,m)
+        if (gbad > 0) write(*,'(1x,A,I6,A)') 'IMEX_IGW WARNING: modal OBC eigen-solver not converged in',&
+        &gbad, ' face columns'
+      end if
+    end if
+    if (ob_nbuild == 1) then                     ! first build: the reference filter against the edges' f
+      call mpi_allreduce(fmin, gfmin, 1, mpi_double_precision, mpi_min, ocean_grid_comm, ierr)
+      ! the explicit (sponge) viscosity's diffusion number visc2 dt / min(dx, dy)^2: with a reference a
+      ! value of 0.17 let an edge mode grow at a rate ~1/tref (Hawaii nest), 0.085 ran
+      sdn = 0._8
+#  ifdef UV_VIS2
+      do j=jb0,jb1
+        do i=ib0,ib1
+          sdn = max(sdn, visc2_r(i,j)*dt*max(pm(i,j), pn(i,j))**2)
+        enddo
+      enddo
+#  endif
+      call mpi_allreduce(sdn, gsdn, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+      if (mynode == 0 .and. imex_obc_tref > 0._8 .and. gsdn > 0.1_8) write(*,'(1x,A,F6.3,A)')&
+      &  'IMEX_IGW NOTE: the explicit viscosity (sponge) reaches visc2 dt/dx^2 =', gsdn, ' (> 0.1): with the'&
+      &//' modal reference an edge mode can grow at a rate ~1/tref (N3 Hawaii nest: 0.17 blew up for tref 6 h'&
+      &//' to 3 d, 0.085 ran 29 d); reduce v_sponge or dt'
+      if (mynode == 0 .and. imex_obc_tref > 0._8) then
+        ! |H| of the filter at the lowest inertial frequency of the open edges; the rule tref >= 3
+        ! inertial periods (first order) is |H| <= 1/sqrt(1 + (6 pi)^2) = 0.053
+        wt = gfmin*imex_obc_tref
+        hres = 1._8/sqrt(1._8 + wt**2)
+        if (gfmin > 0._8) then
+          write(*,'(1x,A,F9.2,A,F9.3,A,I2,A,F7.4,A)') 'IMEX_OBCM reference: longest inertial period on the'&
+          &//' open edges', 2._8*acos(-1._8)/gfmin/86400._8, ' d; tref', imex_obc_tref/86400._8, ' d, order',&
+          &1, ': |H| at that frequency', hres, ' (rule: <= 0.053, tref >= 3 inertial periods)'
+        else
+          write(*,'(1x,A)') 'IMEX_OBCM reference: f = 0 on an open edge (no inertial period)'
+        end if
+        if (imex_obc_tref < obm_tramp) write(*,'(1x,A)') 'IMEX_IGW NOTE: imex_obc_tref is below 1 d: a reference'&
+        &//' that follows the mismatch within hours stops radiating edge transients (N3 Hawaii nest: an edge'&
+        &//' mode grew at ~1/tref, tref 6 h blew up in 0.8 d); see the key description'
+        if (hres > 0.0531_8) write(*,'(1x,A)') 'IMEX_IGW NOTE: the reference filter holds more than 5 % of'&
+        &//' the near-inertial band at the lowest |f| of the open edges: a longer imex_obc_tref'&
+        &//' radiates it; see the key description'
+      end if
+#  ifdef SPONGE_TUNE
+      if (mynode == 0 .and. ub_tune) write(*,'(1x,A)') "IMEX_IGW NOTE: SPONGE_TUNE ub_tune is active with"&
+      &//" imex_obc_mode 'modal': the modal condition sets the normal velocity at the open faces, so the"&
+      &//" tuned nudging acts on the tangential velocity and the tracers only (ub may drift to its clamp);"&
+      &//" ub_tune = .false. is recommended"
+#  endif
+    end if
+  end subroutine obm_build
+
+  !----------------------------------------------------------------------
+  subroutine obm_modes(n, m, nsec, hf, gk, c, phi, nps, nrq, nfb, gmin, ok)
+    ! the m slowest baroclinic modes of a column, i.e. the eigenpairs 2..m+1 of the
+    ! generalized symmetric tridiagonal problem B phi = lam W phi (B = Delta^T G Delta, G = gk(1:n-1) at
+    ! the interfaces, W = diag(hf); lam_1 = 0 is the barotropic mode): c = 1/sqrt(lam), phi with
+    ! sum_k hf phi^2 = sum_k hf and phi(n) >= 0. Column-local, no allocation, bounded
+    ! loops (one device thread per column can run it):
+    ! 1. multisection on Sturm counts of B - s W (obm_sturm, differential form: the counts are exact for
+    !    relatively perturbed hf, gk, so every lam is found to high relative accuracy however large
+    !    max(gk/hf) is): nsec shifts per unresolved bracket and pass, geometric while hi > 2 lo, every
+    !    count tightening every bracket; from [lb/2, 2 ub], lb = 1/(H sum 1/gk) <= lam_2 (c_1^2 <= H
+    !    Delta b) and ub Gershgorin's bound; until each lam_j is alone in its bracket and hi - lo <= 1e-2 hi;
+    ! 2. Rayleigh-quotient iteration on twisted factorizations of B - s W (obm_twist; the vector with
+    !    z_r = 1 at the twist index r of the smallest |gamma_r| solves (B - s W) z = gamma_r e_r, so the
+    !    Rayleigh quotient is s + gamma_r/<z, W z>), all modes in one pass; each factorization's count
+    !    keeps the bracket, a step leaving it is replaced by the bracket's midpoint; converged when the
+    !    correction is <= 16 eps s, at most obm_mrq passes (12; about 4 are typical, 8 were needed on
+    !    sargasso and N3 columns, which was the bound before; an unused pass costs nothing);
+    ! 3. a mode not converged: bisection to the bracket's rounding level and the twisted vector at its
+    !    midpoint (nfb counts these); a mode within 1e-6 (relative) of an earlier one is W-orthogonalized
+    !    to it.
+    ! nps: multisection passes, nrq: twisted passes, gmin: the smallest relative gap between lam_2..lam_m+1
+    ! (1 for m = 1); ok false for a non-finite vector.
+    implicit none
+    integer(kind=4), intent(in) :: n, m, nsec
+    real(kind=8), intent(in) :: hf(n), gk(0:n)
+    real(kind=8), intent(out) :: c(m), phi(n,m), gmin
+    integer(kind=4), intent(out) :: nps, nrq, nfb
+    logical, intent(out) :: ok
+    real(kind=8) :: lo(m), hi(m), sg(m*nsec), s(m), lam(m), gam(m), z(n,m), wp(n,m), wq(n,m), wu(n,m), hh,&
+    &               rs, lb, ub, nw, dl, sn, pr, fr
+    integer(kind=4) :: clo(m), chi(m), cnt(m*nsec), j, jj, k, it, ns, i
+    logical :: act(m), conv(m)
+    real(kind=8), parameter :: tolb = 1.e-2_8, tolg = 1.e-6_8
+    integer(kind=4), parameter :: obm_mbis = 160, obm_mrq = 12
+    ok = .true. ; nps = 0 ; nrq = 0 ; nfb = 0
+    hh = 0._8 ; rs = 0._8 ; ub = 0._8
+    do k=1,n
+      hh = hh + hf(k)
+      ub = max(ub, 2._8*(gk(k-1) + gk(k))/hf(k))
+    enddo
+    do k=1,n-1
+      rs = rs + 1._8/gk(k)
+    enddo
+    lb = 0.5_8/(hh*rs)
+    ub = 2._8*ub
+    do j=1,m                                     ! bracket of lam_(j+1): count(lo) <= j < count(hi)
+      lo(j) = lb ; hi(j) = ub ; clo(j) = 1 ; chi(j) = n
+    enddo
+    do it=1,obm_mbis
+      ns = 0
+      do j=1,m
+        if (clo(j) == j .and. chi(j) == j+1 .and. hi(j) - lo(j) <= tolb*hi(j)) cycle
+        do i=1,nsec
+          fr = real(i, 8)/real(nsec + 1, 8)
+          if (hi(j) > 2._8*lo(j)) then
+            sn = lo(j)*(hi(j)/lo(j))**fr
+          else
+            sn = lo(j) + fr*(hi(j) - lo(j))
+          end if
+          if (sn > lo(j) .and. sn < hi(j)) then    ! else at the rounding level
+            ns = ns + 1 ; sg(ns) = sn
+          end if
+        enddo
+      enddo
+      if (ns == 0) exit
+      nps = nps + 1
+      call obm_sturm(n, hf, gk, ns, sg, cnt)
+      do i=1,ns
+        do jj=1,m
+          if (cnt(i) >= jj+1) then
+            if (sg(i) < hi(jj)) then
+              hi(jj) = sg(i) ; chi(jj) = cnt(i)
+            end if
+          else
+            if (sg(i) > lo(jj)) then
+              lo(jj) = sg(i) ; clo(jj) = cnt(i)
+            end if
+          end if
+        enddo
+      enddo
+    enddo
+    do j=1,m
+      s(j) = 0.5_8*(lo(j) + hi(j)) ; conv(j) = .false. ; gam(j) = 0._8 ; lam(j) = s(j)
+    enddo
+    do it=1,obm_mrq
+      do j=1,m
+        act(j) = .not. conv(j)
+      enddo
+      if (.not. any(act)) exit
+      nrq = nrq + 1
+      call obm_twist(n, m, hf, gk, s, act, cnt, gam, z, wp, wq, wu)
+      do j=1,m
+        if (.not. act(j)) cycle
+        if (cnt(j) >= j+1) then
+          hi(j) = min(hi(j), s(j))
+        else
+          lo(j) = max(lo(j), s(j))
+        end if
+        nw = 0._8
+        do k=1,n
+          nw = nw + hf(k)*z(k,j)*z(k,j)
+        enddo
+        dl = gam(j)/nw
+        if (abs(dl) <= 16._8*epsilon(1._8)*s(j)) then
+          conv(j) = .true. ; lam(j) = s(j) + dl
+        else
+          sn = s(j) + dl
+          if (sn <= lo(j) .or. sn >= hi(j)) sn = 0.5_8*(lo(j) + hi(j))
+          s(j) = sn
+        end if
+      enddo
+    enddo
+    do j=1,m
+      if (conv(j)) cycle                         ! bisection to the rounding level, vector at the midpoint
+      nfb = nfb + 1
+      do it=1,obm_mbis
+        sn = 0.5_8*(lo(j) + hi(j))
+        if (sn <= lo(j) .or. sn >= hi(j)) exit
+        sg(1) = sn
+        call obm_sturm(n, hf, gk, 1, sg(1:1), cnt(1:1))
+        if (cnt(1) >= j+1) then
+          hi(j) = sn
+        else
+          lo(j) = sn
+        end if
+      enddo
+      act = .false. ; act(j) = .true. ; s(j) = 0.5_8*(lo(j) + hi(j))
+      call obm_twist(n, m, hf, gk, s, act, cnt, gam, z, wp, wq, wu)
+      nw = 0._8
+      do k=1,n
+        nw = nw + hf(k)*z(k,j)*z(k,j)
+      enddo
+      lam(j) = s(j) + gam(j)/nw
+    enddo
+    gmin = 1._8
+    do j=1,m
+      nw = 0._8
+      do k=1,n
+        nw = nw + hf(k)*z(k,j)*z(k,j)
+      enddo
+      if (.not. (nw > 0._8 .and. nw <= huge(1._8))) then
+        ok = .false. ; nw = hh
+        do k=1,n
+          z(k,j) = 0._8
+        enddo
+      end if
+      nw = sqrt(hh/nw)
+      do k=1,n
+        phi(k,j) = z(k,j)*nw
+      enddo
+      do jj=1,j-1                                ! nearly equal eigenvalues: W-orthogonal to the earlier
+        gmin = min(gmin, abs(lam(j) - lam(jj))/lam(j))
+        if (abs(lam(j) - lam(jj)) > tolg*lam(j)) cycle
+        pr = 0._8
+        do k=1,n
+          pr = pr + hf(k)*phi(k,j)*phi(k,jj)
+        enddo
+        pr = pr/hh
+        do k=1,n
+          phi(k,j) = phi(k,j) - pr*phi(k,jj)
+        enddo
+        nw = 0._8
+        do k=1,n
+          nw = nw + hf(k)*phi(k,j)**2
+        enddo
+        if (.not. (nw > 0._8)) then
+          ok = .false. ; nw = hh
+        end if
+        nw = sqrt(hh/nw)
+        do k=1,n
+          phi(k,j) = phi(k,j)*nw
+        enddo
+      enddo
+      if (phi(n,j) < 0._8) then
+        do k=1,n
+          phi(k,j) = -phi(k,j)
+        enddo
+      end if
+      c(j) = 1._8/sqrt(max(lam(j), 1.e-30_8))
+    enddo
+  end subroutine obm_modes
+
+  subroutine obm_sturm(n, hf, gk, ns, sg, cnt)
+    ! Sturm counts cnt(i) = the number of generalized eigenvalues below sg(i) (obm_modes), from the
+    ! signs of the pivots of B - s W = L D L^T in differential form: p_k = gk(k) + t_k, t_1 = -s hf(1),
+    ! t_k = -s hf(k) + gk(k-1) t_(k-1)/p_(k-1), p_n = t_n (no difference of large numbers); a zero pivot
+    ! is replaced by -eps gk(k)
+    implicit none
+    integer(kind=4), intent(in) :: n, ns
+    real(kind=8), intent(in) :: hf(n), gk(0:n), sg(ns)
+    integer(kind=4), intent(out) :: cnt(ns)
+    real(kind=8) :: t(ns), p
+    integer(kind=4) :: i, k
+    do i=1,ns
+      t(i) = -sg(i)*hf(1) ; cnt(i) = 0
+    enddo
+    do k=1,n-1
+      do i=1,ns
+        p = gk(k) + t(i)
+        if (p == 0._8) p = -epsilon(1._8)*gk(k)
+        if (p < 0._8) cnt(i) = cnt(i) + 1
+        t(i) = -sg(i)*hf(k+1) + gk(k)*t(i)/p
+      enddo
+    enddo
+    do i=1,ns
+      if (t(i) < 0._8) cnt(i) = cnt(i) + 1
+    enddo
+  end subroutine obm_sturm
+
+  subroutine obm_twist(n, m, hf, gk, s, act, cnt, gam, z, p, q, u)
+    ! obm_modes, for the shifts s(j) with act(j): the top-down (pivots p) and bottom-up (q) differential
+    ! factorizations of B - s W, the twist index r of the smallest |gamma_k| (gamma_k = t_k + u_k + s hf(k),
+    ! the pivot of the twisted factorization at k), gam = gamma_r and the vector z(:,j) with z(r,j) = 1
+    ! and (B - s W) z = gamma_r e_r; cnt the Sturm count of the top-down factorization. Columns j
+    ! without act(j) are not touched in z (the factorizations run for all j: one vector loop).
+    implicit none
+    integer(kind=4), intent(in) :: n, m
+    real(kind=8), intent(in) :: hf(n), gk(0:n), s(m)
+    logical, intent(in) :: act(m)
+    integer(kind=4), intent(out) :: cnt(m)
+    real(kind=8), intent(inout) :: gam(m), z(n,m)
+    real(kind=8), intent(out) :: p(n,m), q(n,m), u(n,m)
+    real(kind=8) :: ga, gb
+    integer(kind=4) :: j, k, kb, r
+    do j=1,m
+      p(1,j) = -s(j)*hf(1) ; u(n,j) = -s(j)*hf(n)
+    enddo
+    do k=1,n-1                                   ! p holds t_k, u holds u_k: both sweeps in one loop
+      kb = n - k
+      do j=1,m
+        ga = p(k,j) + gk(k)
+        if (ga == 0._8) ga = -epsilon(1._8)*gk(k)
+        p(k+1,j) = -s(j)*hf(k+1) + gk(k)*p(k,j)/ga
+        gb = u(kb+1,j) + gk(kb)
+        if (gb == 0._8) gb = -epsilon(1._8)*gk(kb)
+        u(kb,j) = -s(j)*hf(kb) + gk(kb)*u(kb+1,j)/gb
+      enddo
+    enddo
+    do j=1,m
+      if (.not. act(j)) cycle
+      cnt(j) = 0 ; r = 1 ; gam(j) = huge(1._8)
+      do k=1,n
+        ga = p(k,j) + u(k,j) + s(j)*hf(k)
+        if (abs(ga) < abs(gam(j))) then
+          gam(j) = ga ; r = k
+        end if
+        q(k,j) = u(k,j) + gk(k-1)                ! pivots from t_k, u_k
+        if (q(k,j) == 0._8) q(k,j) = -epsilon(1._8)*gk(k-1)
+        ga = p(k,j) + gk(k)
+        if (ga == 0._8) ga = -epsilon(1._8)*gk(k)
+        p(k,j) = ga
+        if (ga < 0._8) cnt(j) = cnt(j) + 1
+      enddo
+      z(r,j) = 1._8
+      do k=r-1,1,-1
+        z(k,j) = gk(k)/p(k,j)*z(k+1,j)
+      enddo
+      do k=r+1,n
+        z(k,j) = gk(k-1)/q(k,j)*z(k-1,j)
+      enddo
+    enddo
+  end subroutine obm_twist
+
+  subroutine obm_kd_col(e, l, kd)
+    ! the Jacobi column of face (e, l), kd(q) = (obm_col_apply(e, l, e_q))(q), in
+    ! closed form, O(nz ob_m) instead of nz applications: for x = e_q, obm_gcol gives g = g1 on k < q,
+    ! g2 at q and 0 above (alpha = -act/n2k(q); ct, cb the coefficients of zc(q) in the vertical
+    ! adjoint), so <g>, <phi_m, g> and the face transport summed below q follow from prefix sums of
+    ! ob_w, ob_hn, ob_w phi_m, ob_hn phi_m (the same terms as obm_col_apply, summed in another order)
+    use param, only: nz
+    implicit none
+    integer(kind=4), intent(in) :: e, l
+    real(kind=8), intent(out) :: kd(nz)
+    real(kind=8) :: sp(ob_m), shp(ob_m), sw, sh, al, ct, cb, cf, g1, g2, gm, tq, fs, dm, fb, wm, w, sg, sv
+    integer(kind=4) :: i, j, fi, fj, gi, gj, q, m
+    call obm_cell(e, l, i, j, fi, fj, gi, gj)
+    sg = ob_sgn(e)
+    sw = 0._8 ; sh = 0._8
+    do m=1,ob_m
+      sp(m) = 0._8 ; shp(m) = 0._8
+    enddo
+    do q=1,nz
+      al = -ad_act(i,j)/ad_n2k(i,j,q)
+      ct = 0._8 ; cb = 0._8
+      if (q < nz) ct = ad_czt(i,j,q)
+      if (q > 1) cb = ad_czb(i,j,q)
+      if (e <= 2) then
+        cf = ad_cu(fi,fj,q)
+      else
+        cf = ad_cv(fi,fj,q)
+      end if
+      g1 = sg*al*(cb - ct)                       ! g below q
+      g2 = sg*al*(cf - ct)                       ! g at q
+      gm = g1*sw + g2*ob_w(q,l,e)                ! <g>
+      tq = ob_yr(l,e)*(g2 - gm)                  ! (Y g)(q)
+      fs = ob_yr(l,e)*(g1 - gm)*sh               ! sum_(k<q) hn (Y g)
+      do m=1,ob_m
+        dm = ob_a(m,l,e)*(g1*sp(m) + g2*ob_w(q,l,e)*ob_phi(q,m,l,e))
+        tq = tq + dm*ob_phi(q,m,l,e)
+        fs = fs + dm*shp(m)
+      enddo
+      fb = ob_hn(q,l,e)*tq
+      wm = -sg*fs
+      w = 0._8
+      if (q < nz) w = wm - sg*fb
+      sv = sg*cf*fb + ad_czt(i,j,q)*w - ad_czb(i,j,q)*wm
+      kd(q) = -ad_en2(i,j,q)*sv
+      sw = sw + ob_w(q,l,e) ; sh = sh + ob_hn(q,l,e)
+      do m=1,ob_m
+        sp(m) = sp(m) + ob_w(q,l,e)*ob_phi(q,m,l,e)
+        shp(m) = shp(m) + ob_hn(q,l,e)*ob_phi(q,m,l,e)
+      enddo
+    enddo
+  end subroutine obm_kd_col
+
+  !----------------------------------------------------------------------
+  subroutine obm_explicit(stage)
+    ! start of a stage: the explicit face values ob_ub = u_ext - <u_ext> + s Y (P(b_cur - b_ext) - m) (see
+    ! the section header); tracers at nrhs (the state the stage's rho_eos used). Reference m (imex_obc_tref
+    ! > 0): per face column, d = P(b_cur - b_ext) less its hf-weighted mean (the baroclinic pressure
+    ! difference, the subspace Y acts on); m := m + w (d^n - m), w = 1 - exp(-dt/tref), once per step in
+    ! the predictor (d^n from t^n), an exponential low-pass of d with e-folding time tref; m := d at the
+    ! first step of a run, and after a restart without m in the file, so nothing is exported at the start;
+    ! the condition radiates d - m in both stages. tref = 0: m = 0 (the code path of the stage-2 condition).
+    ! Ramped start: w_n = max(w, min(1/n, w0)), w0 = 1 - exp(-dt/T0), T0 = min(tref, obm_tramp = 1 d), n the
+    ! predictor updates since m was set (n = 1: m = d): m starts as an exponential filter with time T0, is the
+    ! running mean of d from t ~ T0 until t ~ tref (a wave or tide in d at the start is not frozen into m for
+    ! tref) and the exponential filter with tref afterwards. The floor T0 matters: a pure running mean
+    ! (w_n = max(w, 1/n), c61c8862-201dbb6d) follows d on the time scale of the elapsed time, i.e. within
+    ! minutes to hours at the start, so the condition stops radiating the edge's transients exactly when they
+    ! are largest; on the N3 Hawaii nest (1 km, 600 s, sponge 300 m2/s, visc2 dt/dx^2 = 0.17) that let an edge
+    ! mode at the west-edge corners grow to a blow-up in 10 h. With a constant tref the same mode grows at a
+    ! rate ~1/tref (blow-up after 0.8 d at 6 h, 3.6 d at 1 d, 8-9 d at 3 d), with tref = 0 or the sponge
+    ! halved it does not: its source is the explicit sponge, the reference only removes the radiation damping
+    ! that holds it (first-build NOTE on visc2 dt/dx^2).
+    use tracers, only: t
+    use scalars, only: nrhs, g, rho0, dt, iic
+    use rho_eos_mod, only: rho_eos_point
+    use param, only: nz, itemp
+#  ifdef SALINITY
+    use param, only: isalt
+#  endif
+    use ocean_vars, only: hz, z_r
+#  if defined M3_FRC_BRY && defined T_FRC_BRY
+#   ifdef OBC_WEST
+    use boundary, only: u_west, t_west
+#   endif
+#   ifdef OBC_EAST
+    use boundary, only: u_east, t_east
+#   endif
+#   ifdef OBC_SOUTH
+    use boundary, only: v_south, t_south
+#   endif
+#   ifdef OBC_NORTH
+    use boundary, only: v_north, t_north
+#   endif
+#  endif
+    implicit none
+    integer(kind=4), intent(in) :: stage
+    real(kind=8) :: db(nz), p(nz), tc(nz), ue(nz), te, se, ti, si, acc, um, wr
+    integer(kind=4) :: e, l, la, lb, i, j, fi, fj, gi, gj, k
+    logical :: mref, minit
+    if (.not. allocated(ob_ub)) return
+    mref = imex_obc_tref > 0._8
+    minit = .false.
+    if (mref) then
+      if (.not. ob_mr_ok .and. allocated(ob_rstm)) then   ! restart: m from the file (faces' ghost cells)
+        do e=1,4
+          if (.not. ob_edge(e)) cycle
+          call obm_lrange(e, la, lb)
+          do l=la,lb
+            if (ob_act(l,e) <= 0._8) cycle
+            call obm_cell(e, l, i, j, fi, fj, gi, gj)
+            ob_mr(:,l,e) = ob_rstm(gi,gj,:)
+          enddo
+        enddo
+        deallocate(ob_rstm)
+        ob_mr_ok = .true.
+      end if
+      minit = .not. ob_mr_ok
+      if (stage == imex_stage_pred) then        ! the update count (every rank: imex_rst_scal(17))
+        if (minit) ob_mn = 0
+        ob_mn = min(ob_mn, 1000000000 - 1) + 1
+      end if
+      wr = max(1._8 - exp(-dt/imex_obc_tref), min(1._8/dble(max(ob_mn, 1)),&
+      &        1._8 - exp(-dt/min(imex_obc_tref, obm_tramp))))
+    end if
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        if (ob_act(l,e) <= 0._8) then
+          ob_ub(:,l,e) = 0._8 ; cycle
+        end if
+        call obm_cell(e, l, i, j, fi, fj, gi, gj)
+        do k=1,nz
+          ti = t(i,j,k,nrhs,itemp) ; si = 34.5_8 ; te = ti ; se = si ; ue(k) = 0._8
+#  ifdef SALINITY
+          si = t(i,j,k,nrhs,isalt) ; se = si
+#  endif
+#  if defined M3_FRC_BRY && defined T_FRC_BRY
+          select case (e)
+#   ifdef OBC_WEST
+          case (1)
+            te = t_west(l,k,itemp) ; ue(k) = u_west(l,k)
+#    ifdef SALINITY
+            se = t_west(l,k,isalt)
+#    endif
+#   endif
+#   ifdef OBC_EAST
+          case (2)
+            te = t_east(l,k,itemp) ; ue(k) = u_east(l,k)
+#    ifdef SALINITY
+            se = t_east(l,k,isalt)
+#    endif
+#   endif
+#   ifdef OBC_SOUTH
+          case (3)
+            te = t_south(l,k,itemp) ; ue(k) = v_south(l,k)
+#    ifdef SALINITY
+            se = t_south(l,k,isalt)
+#    endif
+#   endif
+#   ifdef OBC_NORTH
+          case (4)
+            te = t_north(l,k,itemp) ; ue(k) = v_north(l,k)
+#    ifdef SALINITY
+            se = t_north(l,k,isalt)
+#    endif
+#   endif
+          end select
+#  endif
+          db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
+        enddo
+        acc = 0._8                               ! p = -int_z^0 db, on the cell column
+        do k=nz,1,-1
+          p(k) = -(acc + 0.5_8*db(k)*Hz(i,j,k))
+          acc = acc + db(k)*Hz(i,j,k)
+        enddo
+        if (mref) then                           ! reference: radiate d - m (baroclinic)
+          um = 0._8
+          do k=1,nz
+            um = um + ob_w(k,l,e)*p(k)
+          enddo
+          do k=1,nz
+            p(k) = p(k) - um
+          enddo
+          if (minit) then
+            ob_mr(:,l,e) = p
+          else if (stage == imex_stage_pred) then
+            do k=1,nz
+              ob_mr(k,l,e) = ob_mr(k,l,e) + wr*(p(k) - ob_mr(k,l,e))
+            enddo
+          end if
+          do k=1,nz
+            p(k) = p(k) - ob_mr(k,l,e)
+          enddo
+        end if
+        call obm_y(e, l, p, tc)
+        um = 0._8
+        do k=1,nz
+          um = um + ob_w(k,l,e)*ue(k)
+        enddo
+        do k=1,nz
+          ob_ub(k,l,e) = (ue(k) - um) + ob_sgn(e)*tc(k)
+        enddo
+      enddo
+    enddo
+    if (mref) ob_mr_ok = .true.
+    if (mref .and. minit) call obm_startnote      ! m was set to the present mismatch (results unchanged)
+    if (imex_obc_mprint > 0 .and. stage == imex_stage_pred) then   ! diagnostic (OBCM lines; results unchanged)
+      if (mod(iic, imex_obc_mprint) == 0) call obm_mdiag
+    end if
+  end subroutine obm_explicit
+
+  !----------------------------------------------------------------------
+  subroutine obm_startnote
+    ! Once, when the reference m has just been set to the present mismatch d (the first step of a run that
+    ! has no m in its initial file, and after a change of the boundary settings at a restart): per open
+    ! edge the rms over the edge of the held mismatch [m2/s2] and of Y m, the face velocity it would drive
+    ! if it were radiated [m/s]; a note on the start of a run that does not begin from the state its
+    ! boundary data come from; a warning above obm_dwarn (a gross mismatch, as from child depths that
+    ! differ from the parent's along the edge). Diagnostic only; results unchanged
+    use param, only: nz, mynode, ocean_grid_comm
+    use mpi_f08, only: mpi_allreduce, mpi_in_place, mpi_double_precision, mpi_sum
+    implicit none
+    real(kind=8), parameter :: obm_dwarn = 0.7_8   ! [m2/s2]; edges of the five test nests and of the Pacific
+                                                  ! domain start at 0.02-0.44, an edge whose depths differ
+                                                  ! from the parent's (CCS north edge, to 250 %) at 0.95
+    character(len=1), parameter :: en(4) = ['W', 'E', 'S', 'N']
+    real(kind=8) :: yv(nz), sm(3,4), rd, ry
+    integer(kind=4) :: e, l, la, lb, ierr
+    logical :: big
+    sm = 0._8
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        if (ob_act(l,e) <= 0._8) cycle
+        call obm_y(e, l, ob_mr(:,l,e), yv)
+        sm(1,e) = sm(1,e) + 1._8
+        sm(2,e) = sm(2,e) + sum(ob_w(:,l,e)*ob_mr(:,l,e)**2)
+        sm(3,e) = sm(3,e) + sum(ob_w(:,l,e)*yv**2)
+      enddo
+    enddo
+    call mpi_allreduce(mpi_in_place, sm, 12, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    if (mynode /= 0) return
+    big = .false.
+    write(*,'(1x,A)') "IMEX_OBC start: the 'modal' reference is set to the present difference between the"&
+    &//' model and its boundary data (held, not radiated)'
+    do e=1,4
+      if (sm(1,e) <= 0._8) cycle
+      rd = sqrt(sm(2,e)/sm(1,e)) ; ry = sqrt(sm(3,e)/sm(1,e))
+      write(*,'(1x,A,A,A,F9.4,A,F8.4,A)') 'IMEX_OBC start: edge ', en(e), ': held pressure difference, rms',&
+      &rd, ' m2/s2; as a face velocity', ry, ' m/s'
+      big = big .or. rd > obm_dwarn
+    enddo
+    write(*,'(1x,A)') "IMEX_IGW NOTE: a run that does not start from the state its boundary data come from"&
+    &//" (a nest not initialised from its parent) should take its first ~10 days with imex_obc_mode ="&
+    &//" 'fixed' and switch to 'modal' at a restart; otherwise the adjustment of the edge zones is"&
+    &//' carried into the interior as a low-frequency error'
+    if (big) write(*,'(1x,A,F5.1,A)') 'IMEX_IGW WARNING: the held pressure difference exceeds', obm_dwarn,&
+    &' m2/s2 on an open edge: check the boundary data and that the depths of this grid match those of'&
+    &//' the grid the boundary data come from along the open edges'
+  end subroutine obm_startnote
+
+  !----------------------------------------------------------------------
+  subroutine obm_mdiag
+    ! imex_obc_mprint (diagnostic, after obm_explicit's predictor call, so m holds this step's value): an OBCM
+    ! line per open edge on rank 0: edge rms (over the face columns of the hf-weighted column rms) of d =
+    ! P(b_cur - b_ext) less its mean [m2/s2], m, d - m, of Y d, Y m, Y (d - m) [m/s], of the normal baroclinic
+    ! face velocity u^n; edge maxima of the column rms of Y (d - m), u_bc and d; at the edge's middle column
+    ! the mode-1 values <phi_1, x>_w / c_1 of d, m, d - m and <phi_1, u_bc>_w [m/s]. d is recomputed here
+    ! (obm_dcol), so obm_explicit's arithmetic is untouched; results unchanged
+    use scalars, only: iic, nstp, time
+    use param, only: nz, mynode, ocean_grid_comm, iSW_corn, jSW_corn, LLm, MMm
+    use ocean_vars, only: u, v
+    use mpi_f08, only: mpi_allreduce, mpi_in_place, mpi_double_precision, mpi_max, mpi_sum
+    implicit none
+    real(kind=8) :: dd(nz), xm(nz), yv(nz), tc(nz), ds(9,4), dx(3,4), dc(4,4)
+    integer(kind=4) :: e, l, la, lb, i, j, fi, fj, gi, gj, k, ierr, lmid
+    ds = 0._8 ; dx = 0._8 ; dc = 0._8
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        if (ob_act(l,e) <= 0._8) cycle
+        call obm_cell(e, l, i, j, fi, fj, gi, gj)
+        call obm_dcol(e, l, dd)
+        dd = dd - sum(ob_w(:,l,e)*dd)
+        xm = 0._8
+        if (imex_obc_tref > 0._8) xm = ob_mr(:,l,e)
+        ds(1,e) = ds(1,e) + 1._8
+        ds(2,e) = ds(2,e) + sum(ob_w(:,l,e)*dd**2)
+        ds(3,e) = ds(3,e) + sum(ob_w(:,l,e)*xm**2)
+        ds(4,e) = ds(4,e) + sum(ob_w(:,l,e)*(dd - xm)**2)
+        call obm_y(e, l, dd, yv)
+        ds(5,e) = ds(5,e) + sum(ob_w(:,l,e)*yv**2)
+        call obm_y(e, l, xm, yv)
+        ds(6,e) = ds(6,e) + sum(ob_w(:,l,e)*yv**2)
+        call obm_y(e, l, dd - xm, tc)
+        ds(7,e) = ds(7,e) + sum(ob_w(:,l,e)*tc**2)
+        dx(1,e) = max(dx(1,e), sqrt(sum(ob_w(:,l,e)*tc**2)))
+        if (e <= 2) then                         ! normal face velocity u^n, baroclinic part
+          yv = u(fi,fj,:,nstp)
+        else
+          yv = v(fi,fj,:,nstp)
+        end if
+        yv = yv - sum(ob_w(:,l,e)*yv)
+        ds(8,e) = ds(8,e) + sum(ob_w(:,l,e)*yv**2)
+        dx(2,e) = max(dx(2,e), sqrt(sum(ob_w(:,l,e)*yv**2)))
+        dx(3,e) = max(dx(3,e), sqrt(sum(ob_w(:,l,e)*dd**2)))
+        if (e <= 2) then                         ! the edge's middle column (global index)
+          lmid = (MMm + 1)/2 - jSW_corn
+        else
+          lmid = (LLm + 1)/2 - iSW_corn
+        end if
+        if (l == lmid .and. ob_m >= 1) then
+          dc(1,e) = sum(ob_w(:,l,e)*ob_phi(:,1,l,e)*dd)/ob_c(1,l,e)
+          dc(2,e) = sum(ob_w(:,l,e)*ob_phi(:,1,l,e)*xm)/ob_c(1,l,e)
+          dc(3,e) = sum(ob_w(:,l,e)*ob_phi(:,1,l,e)*(dd - xm))/ob_c(1,l,e)
+          dc(4,e) = sum(ob_w(:,l,e)*ob_phi(:,1,l,e)*yv)
+          ds(9,e) = 1._8
+        end if
+      enddo
+    enddo
+    call mpi_allreduce(mpi_in_place, ds, 36, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    call mpi_allreduce(mpi_in_place, dc, 16, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    call mpi_allreduce(mpi_in_place, dx, 12, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    if (mynode == 0) then
+      do e=1,4
+        if (ds(1,e) <= 0._8) cycle
+        write(*,'(A,I8,F11.5,I2,I6,14ES11.3)') 'OBCM', iic, time/86400._8, e, nint(ds(1,e)),&
+        &  (sqrt(ds(k,e)/ds(1,e)), k=2,8), dx(1:3,e), dc(1:4,e)*merge(1._8, 0._8, ds(9,e) > 0._8)
+      enddo
+    end if
+  end subroutine obm_mdiag
+
+  subroutine obm_dcol(e, l, p)
+    ! diagnostic copy of obm_explicit's column pressure: p = P(b_cur - b_ext) on the cell column of face (e, l)
+    use tracers, only: t
+    use scalars, only: nrhs, g, rho0
+    use rho_eos_mod, only: rho_eos_point
+    use param, only: nz, itemp
+#  ifdef SALINITY
+    use param, only: isalt
+#  endif
+    use ocean_vars, only: hz, z_r
+#  if defined M3_FRC_BRY && defined T_FRC_BRY
+#   ifdef OBC_WEST
+    use boundary, only: t_west
+#   endif
+#   ifdef OBC_EAST
+    use boundary, only: t_east
+#   endif
+#   ifdef OBC_SOUTH
+    use boundary, only: t_south
+#   endif
+#   ifdef OBC_NORTH
+    use boundary, only: t_north
+#   endif
+#  endif
+    implicit none
+    integer(kind=4), intent(in) :: e, l
+    real(kind=8), intent(out) :: p(nz)
+    real(kind=8) :: db(nz), te, se, ti, si, acc
+    integer(kind=4) :: i, j, fi, fj, gi, gj, k
+    call obm_cell(e, l, i, j, fi, fj, gi, gj)
+    do k=1,nz
+      ti = t(i,j,k,nrhs,itemp) ; si = 34.5_8 ; te = ti ; se = si
+#  ifdef SALINITY
+      si = t(i,j,k,nrhs,isalt) ; se = si
+#  endif
+#  if defined M3_FRC_BRY && defined T_FRC_BRY
+      select case (e)
+#   ifdef OBC_WEST
+      case (1)
+        te = t_west(l,k,itemp)
+#    ifdef SALINITY
+        se = t_west(l,k,isalt)
+#    endif
+#   endif
+#   ifdef OBC_EAST
+      case (2)
+        te = t_east(l,k,itemp)
+#    ifdef SALINITY
+        se = t_east(l,k,isalt)
+#    endif
+#   endif
+#   ifdef OBC_SOUTH
+      case (3)
+        te = t_south(l,k,itemp)
+#    ifdef SALINITY
+        se = t_south(l,k,isalt)
+#    endif
+#   endif
+#   ifdef OBC_NORTH
+      case (4)
+        te = t_north(l,k,itemp)
+#    ifdef SALINITY
+        se = t_north(l,k,isalt)
+#    endif
+#   endif
+      end select
+#  endif
+      db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
+    enddo
+    acc = 0._8
+    do k=nz,1,-1
+      p(k) = -(acc + 0.5_8*db(k)*Hz(i,j,k))
+      acc = acc + db(k)*Hz(i,j,k)
+    enddo
+  end subroutine obm_dcol
+
+  !----------------------------------------------------------------------
+  subroutine obm_correct(x)
+    ! after a stage solve (x the solution, the cells next to the faces): ob_ub -= Y g(x), the face
+    ! increment s Y P(N2 x) the operator assumed
+    use param, only: lm, mm, nz
+    implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: x
+    real(kind=8) :: gc(nz), tc(nz)
+    integer(kind=4) :: e, l, la, lb, i, j, fi, fj, gi, gj, k
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        if (ob_act(l,e) <= 0._8) cycle
+        call obm_cell(e, l, i, j, fi, fj, gi, gj)
+        call obm_gcol(e, l, x(i,j,:), gc)
+        call obm_y(e, l, gc, tc)
+        do k=1,nz
+          ob_ub(k,l,e) = ob_ub(k,l,e) - tc(k)
+        enddo
+      enddo
+    enddo
+  end subroutine obm_correct
+
+  !----------------------------------------------------------------------
+  subroutine imex_obc_faces(add_mean)
+    ! 'modal': the open faces' normal velocity of the stage, u, v(nnew) := ob_ub [m/s] (after
+    ! u3dbc/v3dbc: imex_obc_pre, pre_step3d, step3d_uv2; the tangential components stay theirs).
+    ! ob_ub is baroclinic. add_mean (pre_step3d, the predictor's final u*): plus the barotropic velocity
+    ! that set_HUV1 imposes on the predictor transport (imex_pred_flx_tile: DU_avg1, or with
+    ! EXTRAP_BAR_FLUXES NOW DU_avg1 - MID DU_avg2 + BAK DU_avg_bak, over the face's current Hz dn), so
+    ! that u* at the face, which the corrector's advection and t3dbc's inflow test read, carries the
+    ! mean flow; step3d_uv2's call is followed by the depth-mean replacement and needs none
+    use ocean_vars, only: u, v, hz
+    use scalars, only: nnew, iic, ntstart, forw_start
+    use param, only: nz
+    use grid, only: dn_u, dm_v
+    use coupling, only: du_avg1, du_avg2, dv_avg1, dv_avg2
+#  ifdef EXTRAP_BAR_FLUXES
+    use coupling, only: du_avg_bak, dv_avg_bak
+#  endif
+#  ifdef MASKING
+    use grid, only: umask, vmask
+#  endif
+    implicit none
+    logical, intent(in), optional :: add_mean
+    integer(kind=4) :: e, l, la, lb, i, j, fi, fj, gi, gj, k
+    real(kind=8) :: ubt, sd, tr
+    logical :: am
+    if (.not. imex_obc_modal .or. .not. allocated(ob_ub)) return
+    am = .false.
+    if (present(add_mean)) am = add_mean
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        if (ob_act(l,e) <= 0._8) cycle
+        call obm_cell(e, l, i, j, fi, fj, gi, gj)
+        ubt = 0._8
+        if (am) then
+          sd = 0._8
+          do k=1,nz
+            sd = sd + 0.5_8*(Hz(i,j,k) + Hz(gi,gj,k))
+          enddo
+          if (e <= 2) then
+            sd = sd*dn_u(fi,fj)
+#  ifdef EXTRAP_BAR_FLUXES
+            if (FIRST_TIME_STEP) then
+              tr = DU_avg1(fi,fj)
+            else
+              tr = 3.63_8*DU_avg1(fi,fj) - 4.47_8*DU_avg2(fi,fj) + 2.05_8*DU_avg_bak(fi,fj)
+            end if
+#  else
+            tr = DU_avg1(fi,fj)
+#  endif
+          else
+            sd = sd*dm_v(fi,fj)
+#  ifdef EXTRAP_BAR_FLUXES
+            if (FIRST_TIME_STEP) then
+              tr = DV_avg1(fi,fj)
+            else
+              tr = 3.63_8*DV_avg1(fi,fj) - 4.47_8*DV_avg2(fi,fj) + 2.05_8*DV_avg_bak(fi,fj)
+            end if
+#  else
+            tr = DV_avg1(fi,fj)
+#  endif
+          end if
+          ubt = tr/sd
+        end if
+        do k=1,nz
+          if (e <= 2) then
+            u(fi,fj,k,nnew) = ob_ub(k,l,e) + ubt
+#  ifdef MASKING
+            u(fi,fj,k,nnew) = u(fi,fj,k,nnew)*umask(fi,fj)
+#  endif
+          else
+            v(fi,fj,k,nnew) = ob_ub(k,l,e) + ubt
+#  ifdef MASKING
+            v(fi,fj,k,nnew) = v(fi,fj,k,nnew)*vmask(fi,fj)
+#  endif
+          end if
+        enddo
+      enddo
+    enddo
+    if (am .and. imex_obc_mprint > 0) then      ! diagnostic (OBCF lines; results unchanged)
+      if (mod(iic, imex_obc_mprint) == 0) call obm_fdiag
+    end if
+  end subroutine imex_obc_faces
+
+  subroutine obm_fdiag
+    ! imex_obc_mprint (diagnostic, after imex_obc_faces in pre_step3d): an OBCF line per open edge on rank 0,
+    ! from the predictor's final u* at the faces (u, v(nnew)), as t3dbc's inflow test reads it: the fractions of
+    ! the (face, level) pairs where u* is inflow, where its barotropic part ubt = <u*>_w (= the depth mean that
+    ! imex_obc_faces added, ob_ub having zero mean) is inflow, and where the two agree; edge rms of ubt and of
+    ! the baroclinic part (column rms)
+    use ocean_vars, only: u, v
+    use scalars, only: nnew, iic, time
+    use param, only: nz, mynode, ocean_grid_comm
+    use mpi_f08, only: mpi_allreduce, mpi_in_place, mpi_double_precision, mpi_sum
+    implicit none
+    real(kind=8) :: fs(7,4), uc(nz), ubt
+    integer(kind=4) :: e, l, la, lb, i, j, fi, fj, gi, gj, k, ierr
+    fs = 0._8
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        if (ob_act(l,e) <= 0._8) cycle
+        call obm_cell(e, l, i, j, fi, fj, gi, gj)
+        if (e <= 2) then
+          uc = u(fi,fj,:,nnew)
+        else
+          uc = v(fi,fj,:,nnew)
+        end if
+        ubt = sum(ob_w(:,l,e)*uc)
+        do k=1,nz
+          fs(1,e) = fs(1,e) + 1._8
+          if (ob_sgn(e)*uc(k) < 0._8) fs(2,e) = fs(2,e) + 1._8
+          if (ob_sgn(e)*ubt < 0._8) fs(3,e) = fs(3,e) + 1._8
+          if ((ob_sgn(e)*uc(k) < 0._8) .eqv. (ob_sgn(e)*ubt < 0._8)) fs(4,e) = fs(4,e) + 1._8
+        enddo
+        fs(5,e) = fs(5,e) + 1._8 ; fs(6,e) = fs(6,e) + ubt**2 ; fs(7,e) = fs(7,e) + sum(ob_w(:,l,e)*(uc - ubt)**2)
+      enddo
+    enddo
+    call mpi_allreduce(mpi_in_place, fs, 28, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    if (mynode == 0) then
+      do e=1,4
+        if (fs(1,e) <= 0._8) cycle
+        write(*,'(A,I8,F11.5,I2,I9,5ES11.3)') 'OBCF', iic, time/86400._8, e, nint(fs(1,e)), fs(2:4,e)/fs(1,e),&
+        &  sqrt(fs(6,e)/fs(5,e)), sqrt(fs(7,e)/fs(5,e))
+      enddo
+    end if
+  end subroutine obm_fdiag
+
+  real(kind=8) function obm_face_val(ii, jj, kk, dir, dflt) result(val)
+    ! the stage's modal face value at u-face (dir 1) or v-face (dir 2) (ii, jj) if it is an active
+    ! open face, else dflt
+    implicit none
+    integer(kind=4), intent(in) :: ii, jj, kk, dir
+    real(kind=8), intent(in) :: dflt
+    val = dflt
+    if (.not. allocated(ob_ub)) return
+    if (dir == 1) then
+      if (ob_edge(1) .and. ii == ib0) then
+        if (ob_act(jj,1) > 0._8) val = ob_ub(kk,jj,1)
+      else if (ob_edge(2) .and. ii == ib1+1) then
+        if (ob_act(jj,2) > 0._8) val = ob_ub(kk,jj,2)
+      end if
+    else
+      if (ob_edge(3) .and. jj == jb0) then
+        if (ob_act(ii,3) > 0._8) val = ob_ub(kk,ii,3)
+      else if (ob_edge(4) .and. jj == jb1+1) then
+        if (ob_act(ii,4) > 0._8) val = ob_ub(kk,ii,4)
+      end if
+    end if
+  end function obm_face_val
+
+  !----------------------------------------------------------------------
+  subroutine obm_m_to3(w3)
+    ! restart: the reference m of face (e, l) at the face's ghost cell (imex_obcm; each ghost cell beyond
+    ! an open face belongs to exactly one face)
+    use param, only: lm, mm, nz
+    implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(inout) :: w3
+    integer(kind=4) :: e, l, la, lb, i, j, fi, fj, gi, gj
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        if (ob_act(l,e) <= 0._8) cycle
+        call obm_cell(e, l, i, j, fi, fj, gi, gj)
+        w3(gi,gj,:) = ob_mr(:,l,e)
+      enddo
+    enddo
+  end subroutine obm_m_to3
+
+  !----------------------------------------------------------------------
+  subroutine obm_selftest
+    ! imex_selftest = 1 with 'modal' (after imex_selftest_adj): per open face column, the boundary
+    ! term's symmetry <x2, K x1>_V - <x1, K x2>_V, its Rayleigh quotient min <x, K x>_V/<x, x>_V
+    ! (>= 0: positive semi-definite), the Jacobi term ob_kd against probing (single-face cells; max
+    ! difference over the column's largest probed element, and per element with that element's size), and
+    ! the consistency of the implicit face increment with the explicit part: g(x) for x = db n2k/n2t
+    ! against -s P(db) (hydrostatic, both less their hf-mean), relative L2 (discretization level);
+    ! one column (east edge, global j = 1; else the first open edge's) written to imex_obc_col.txt
+    use param, only: lm, mm, nz, mynode, ocean_grid_comm, isw_corn, jsw_corn
+    use grid, only: pm, pn
+    use ocean_vars, only: hz, z_r
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_min, mpi_sum, mpi_integer
+    implicit none
+    real(kind=8) :: x1(nz), x2(nz), y1(nz), y2(nz), xb(nz), gc(nz), p(nz), tc(nz), db(nz), kq(nz), loc(6),&
+    &               glob(6), s12, s21, vv, ray, acc, gm, pm_, e1, e2, rmin, gmin, km, de, esz, eszg
+    real(kind=8), parameter :: pi = 3.14159265358979323846_8
+    integer(kind=4) :: e, l, la, lb, i, j, fi, fj, gi, gj, k, k0, nf, ierr, u_, ed, ld
+    logical :: single
+    loc = 0._8 ; rmin = huge(1._8) ; nf = 0 ; esz = 0._8
+    ed = 0 ; ld = 0
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        if (ob_act(l,e) <= 0._8) cycle
+        call obm_cell(e, l, i, j, fi, fj, gi, gj)
+        nf = nf + 1
+        do k=1,nz
+          x1(k) = imex_hash01(isw_corn+i, jsw_corn+j, k, 11) - 0.5_8
+          x2(k) = imex_hash01(isw_corn+i, jsw_corn+j, k, 12) - 0.5_8
+        enddo
+        call obm_col_apply(e, l, x1, y1)
+        call obm_col_apply(e, l, x2, y2)
+        s12 = 0._8 ; s21 = 0._8 ; ray = 0._8 ; vv = 0._8
+        do k=1,nz
+          s12 = s12 + Hz(i,j,k)/(pm(i,j)*pn(i,j))*x2(k)*y1(k)
+          s21 = s21 + Hz(i,j,k)/(pm(i,j)*pn(i,j))*x1(k)*y2(k)
+          ray = ray + Hz(i,j,k)/(pm(i,j)*pn(i,j))*x1(k)*y1(k)
+          vv = vv + Hz(i,j,k)/(pm(i,j)*pn(i,j))*x1(k)*x1(k)
+        enddo
+        loc(1) = max(loc(1), abs(s12 - s21)/max(abs(s12), 1.e-300_8))
+        rmin = min(rmin, ray/max(vv, 1.e-300_8))
+        loc(2) = max(loc(2), ray/max(vv, 1.e-300_8))
+        single = .true.                          ! a corner cell has two faces in ob_kd
+        if (e <= 2) single = .not. ((ob_edge(3) .and. j == jb0) .or. (ob_edge(4) .and. j == jb1))
+        if (e >= 3) single = .not. ((ob_edge(1) .and. i == ib0) .or. (ob_edge(2) .and. i == ib1))
+        if (single) then
+          do k0=1,nz
+            xb = 0._8 ; xb(k0) = 1._8
+            call obm_col_apply(e, l, xb, y1)
+            kq(k0) = y1(k0)
+          enddo
+          km = 0._8                              ! the column's largest probed element
+          do k=1,nz
+            km = max(km, abs(kq(k)))
+          enddo
+          do k=1,nz
+            loc(3) = max(loc(3), abs(kq(k) - ob_kd(i,j,k))/max(km, 1.e-300_8))
+            de = abs(kq(k) - ob_kd(i,j,k))/max(abs(ob_kd(i,j,k)), 1.e-300_8)
+            if (de > loc(6)) then                ! per element, and that element's size
+              loc(6) = de ; esz = abs(ob_kd(i,j,k))/max(km, 1.e-300_8)
+            end if
+          enddo
+        end if
+        do k=1,nz                                ! consistency of g with the hydrostatic pressure
+          db(k) = 1.e-3_8*cos(pi*(k - 0.5_8)/nz)*(1._8 + 0.3_8*sin(2._8*pi*k/nz))
+          xb(k) = db(k)*ad_n2k(i,j,k)/ad_n2t(i,j,k)
+        enddo
+        call obm_gcol(e, l, xb, gc)
+        acc = 0._8
+        do k=nz,1,-1
+          p(k) = -(acc + 0.5_8*db(k)*Hz(i,j,k)) ; acc = acc + db(k)*Hz(i,j,k)
+        enddo
+        gm = 0._8 ; pm_ = 0._8
+        do k=1,nz
+          gm = gm + ob_w(k,l,e)*gc(k) ; pm_ = pm_ + ob_w(k,l,e)*p(k)
+        enddo
+        e1 = 0._8 ; e2 = 0._8
+        do k=1,nz
+          e1 = e1 + ob_w(k,l,e)*((gc(k) - gm) + ob_sgn(e)*(p(k) - pm_))**2
+          e2 = e2 + ob_w(k,l,e)*(p(k) - pm_)**2
+        enddo
+        loc(4) = max(loc(4), sqrt(e1/max(e2, 1.e-300_8)))
+        if (ed == 0 .or. (e == 2 .and. jsw_corn+l == 1 .and. ed /= 2)) then
+          ed = e ; ld = l
+        end if
+      enddo
+    enddo
+    loc(5) = -rmin
+    call mpi_allreduce(loc, glob, 6, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    call mpi_allreduce(nf, k, 1, mpi_integer, mpi_sum, ocean_grid_comm, ierr)
+    if (loc(6) /= glob(6)) esz = -1._8         ! the size of the element with the largest per-element value
+    call mpi_allreduce(esz, eszg, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    if (mynode == 0) then
+      write(*,'(1x,A,I6,A)') 'IMEX_SELFTEST modal OBC:', k, ' open face columns'
+      write(*,'(1x,A,ES12.4)') 'IMEX_SELFTEST modal   symmetry max |<x2,K x1>-<x1,K x2>|/|<x2,K x1>| =', glob(1)
+      write(*,'(1x,A,2ES12.4)') 'IMEX_SELFTEST modal   Rayleigh <x,Kx>/<x,x> min, max (>= 0) =', -glob(5),&
+      &glob(2)
+      write(*,'(1x,A,ES12.4,A,ES9.2,A,ES9.2,A)') 'IMEX_SELFTEST modal   Jacobi term vs probing, max |diff|/column'&
+      &//' max =', glob(3), ' (per element', glob(6), ' at an element of', eszg, ' x the column max)'
+      write(*,'(1x,A,ES12.4)') 'IMEX_SELFTEST modal   g(x) vs -s P(N2 x), max rel L2 =', glob(4)
+    end if
+    ! the production kernels (imex_pf_op8, imex_pf_op4, mode 0) against imex_adj_apply on a random x:
+    ! max |q_pf - W M x| / max |W M x| over all cells and over the cells next to open faces
+    call obm_selftest_pf
+    ! one column to imex_obc_col.txt: the rank with the east edge at global j = 1, else any rank's
+    ! first face when there is no east edge at all (written by every such rank, one line header)
+    if (ed == 2 .and. jsw_corn+ld == 1) then
+      call obm_dump(ed, ld)
+    else if (ed > 0 .and. .not. any(ob_edge(2:2)) .and. ld == jb0 .and. mynode == 0) then
+      call obm_dump(ed, ld)
+    end if
+  end subroutine obm_selftest
+
+  subroutine obm_selftest_pf
+    ! obm_selftest: imex_pf_op8 / imex_pf_op4 (mode 0, the solver's W-scaled operator with the open
+    ! faces' term, FP64 and FP32 coefficient sets) against imex_adj_apply (W M x) on a random x
+    use param, only: lm, mm, nz, mynode, ocean_grid_comm, isw_corn, jsw_corn
+    use scalars, only: dt
+    use ocean_vars, only: hz
+    use roms_mpi, only: exchange_xxx
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max
+    implicit none
+    real(kind=8), allocatable, dimension(:,:,:) :: xa, ma, bnd
+    real(kind=8) :: c2, pq, dum, loc(4), glob(4), wmx, dq
+    integer(kind=4) :: i, j, k, e, l, la, lb, fi, fj, gi, gj, ip, ierr
+    allocate( xa(GLOBAL_2D_ARRAY,nz), ma(GLOBAL_2D_ARRAY,nz), bnd(GLOBAL_2D_ARRAY,1) )
+    xa = 0._8 ; ma = 0._8 ; bnd = 0._8
+    c2 = (imex_theta_c*dt)**2
+    do k=1,nz
+      do j=jb0,jb1
+        do i=ib0,ib1
+          xa(i,j,k) = act(i,j)*(imex_hash01(isw_corn+i, jsw_corn+j, k, 13) - 0.5_8)
+        enddo
+      enddo
+    enddo
+    call exchange_xxx(xa)
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        if (ob_act(l,e) <= 0._8) cycle
+        call obm_cell(e, l, i, j, fi, fj, gi, gj)
+        bnd(i,j,1) = 1._8
+      enddo
+    enddo
+    call imex_adj_apply(xa, ma, c2, dum)
+    do ip=8,4,-4
+      if (ip == 8) then
+        call imex_pf_setup8(1, c2, Hz)
+        call imex_pf_op8(0, 0._8, 0._8, c2, xa, pf_q0, wk_z, wk_p, wk_r, wk_q, pf_rczk8, ad_czt, ad_czb,&
+        &                ad_cu, ad_cv, Hz, pf_wr8, rshu, rshv, pq)
+      else
+        call imex_pf_setup4(1, c2, Hz)
+        call imex_pf_op4(0, 0._8, 0._8, c2, xa, pf_q0, pf_z4, pf_p4, wk_r, pf_q4, pf_rczk4, pf_czt4, pf_czb4,&
+        &                pf_cu4, pf_cv4, pf_hz4, pf_wr4, pf_ru4, pf_rv4, pq)
+      end if
+      loc = 0._8
+      do k=1,nz
+        do j=jb0,jb1
+          do i=ib0,ib1
+            wmx = darea(i,j)*Hz(i,j,k)*ma(i,j,k)
+            dq = abs(pf_q0(i,j,k) - wmx)
+            loc(1) = max(loc(1), dq) ; loc(2) = max(loc(2), abs(wmx))
+            if (bnd(i,j,1) > 0._8) then
+              loc(3) = max(loc(3), dq) ; loc(4) = max(loc(4), abs(wmx))
+            end if
+          enddo
+        enddo
+      enddo
+      call mpi_allreduce(loc, glob, 4, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+      if (mynode == 0) write(*,'(1x,A,I1,A,ES12.4,A,ES12.4)') 'IMEX_SELFTEST modal   imex_pf_op', ip,&
+      &' vs imex_adj_apply: max rel all cells', glob(1)/max(glob(2),1.e-300_8), '  boundary cells',&
+      &glob(3)/max(glob(4),1.e-300_8)
+    enddo
+    deallocate(xa, ma, bnd)
+  end subroutine obm_selftest_pf
+
+  subroutine obm_dump(e, l)
+    ! imex_obc_col.txt: one face column's inputs, modes and admittance (unit test against
+    ! analysis/modal_obc/common.py): nz, M, e, global i j; per k: hf, cell Hz, N2w (interface k),
+    ! z_r, b_ref; c_m; y_rem; Y (row k: the face velocity at k per unit pressure at k'); ob_kd; the
+    ! consistency pair g(x), -s P(db) of obm_selftest
+    use param, only: nz, isw_corn, jsw_corn
+    use ocean_vars, only: hz, z_r
+    implicit none
+    integer(kind=4), intent(in) :: e, l
+    real(kind=8) :: ym(nz,nz), xb(nz), tc(nz), n2, dz
+    integer(kind=4) :: i, j, fi, fj, gi, gj, k, kk, iu
+    call obm_cell(e, l, i, j, fi, fj, gi, gj)
+    do kk=1,nz
+      xb = 0._8 ; xb(kk) = 1._8
+      call obm_y(e, l, xb, tc)
+      ym(:,kk) = tc
+    enddo
+    open(newunit=iu, file='imex_obc_col.txt', status='replace', action='write')
+    write(iu,'(5I8)') nz, ob_m, e, isw_corn+fi, jsw_corn+fj
+    do k=1,nz
+      n2 = 0._8
+      if (k < nz) then
+        dz = 0.5_8*(Hz(i,j,k) + Hz(i,j,k+1))
+        n2 = max((ad_bb(i,j,k+1) - ad_bb(i,j,k))/dz, imex_n2_ref, imex_n2_reg)
+      end if
+      write(iu,'(I4,5ES25.16)') k, 0.5_8*(Hz(i,j,k) + Hz(gi,gj,k)), Hz(i,j,k), n2, z_r(i,j,k),&
+      &ad_bb(i,j,k)
+    enddo
+    write(iu,'(20ES25.16)') ob_c(1:ob_m,l,e)
+    write(iu,'(ES25.16)') ob_yr(l,e)
+    do k=1,nz
+      write(iu,'(*(ES25.16))') ym(k,:)
+    enddo
+    write(iu,'(*(ES25.16))') ob_kd(i,j,:)
+    write(iu,'(*(ES25.16))') ob_w(:,l,e)
+    close(iu)
+  end subroutine obm_dump
 
   !----------------------------------------------------------------------
   subroutine imex_tlap(i)
@@ -3443,6 +5133,7 @@ contains
     call adj_diag
     call tq_mark(10)
     call imex_eta_setup(2)                   ! rhs and diagonal weights
+    if (imex_obc_modal) call obm_build       ! 'modal': modes, admittances and the Jacobi term
     call tq_mark(11)
   contains
     subroutine adj_diag
@@ -3892,6 +5583,7 @@ contains
           fu(i,k) = 0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))*cxo(i,j)*(g(i,k) - sg(i))
         enddo
       enddo
+      if (imex_obc_modal) call obm_ufx(j, ia, ib, g, fu, c2)   ! 'modal': open u-faces
       ! D on the row's cells, and mx
       wm = 0._8
       do k=1,nz
@@ -3950,6 +5642,7 @@ contains
           f(ii,kk) = 0.5_8*(Hz(ii,jf,kk)+Hz(ii,jf-1,kk))*cyo(ii,jf)*(g(ii,kk) - sg(ii))
         enddo
       enddo
+      if (imex_obc_modal) call obm_vfx(jf, ia, ib, g, f, c2)   ! 'modal': open v-faces
     end subroutine vfaces
   end subroutine imex_adj_apply_fused_coef
 
@@ -4011,6 +5704,7 @@ contains
           fu(i,k) = 0.5_8*(hz_op(i,j,k)+hz_op(i-1,j,k))*cxo(i,j)*(g(i,k) - sg(i))
         enddo
       enddo
+      if (imex_obc_modal) call obm_ufx(j, ia, ib, g, fu, c2)   ! 'modal': open u-faces
       ! D on the row's cells, and mx
       wm = 0._8
       do k=1,nz
@@ -4069,6 +5763,7 @@ contains
           f(ii,kk) = 0.5_8*(hz_op(ii,jf,kk)+hz_op(ii,jf-1,kk))*cyo(ii,jf)*(g(ii,kk) - sg(ii))
         enddo
       enddo
+      if (imex_obc_modal) call obm_vfx(jf, ia, ib, g, f, c2)   ! 'modal': open v-faces
     end subroutine vfaces
   end subroutine imex_adj_apply_fused_coef_l
 
@@ -4092,6 +5787,19 @@ contains
       return
     end if
     rz = 0._8 ; rr = 0._8
+    if (imex_obc_modal .and. c2 > 0._8) then        ! 'modal': + theta dt ob_kd (the boundary term)
+      do k=1,nz
+        do j=jb0,jb1
+          do i=ib0,ib1
+            z(i,j,k) = act(i,j)*r(i,j,k)/(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k) + sqrt(c2)*ob_kd(i,j,k))
+            rz = rz + darea(i,j)*Hz(i,j,k)*r(i,j,k)*z(i,j,k)
+            rr = rr + darea(i,j)*Hz(i,j,k)*r(i,j,k)*r(i,j,k)
+          enddo
+        enddo
+      enddo
+      pc_tapply = pc_tapply + (mpi_wtime() - t0) ; pc_napply = pc_napply + 1._8
+      return
+    end if
     do k=1,nz
       do j=jb0,jb1
         do i=ib0,ib1
@@ -4121,6 +5829,19 @@ contains
     real(kind=8) :: t0
     t0 = mpi_wtime()
     rz = 0._8 ; rr = 0._8
+    if (imex_obc_modal .and. c2 > 0._8) then        ! 'modal': + theta dt ob_kd (the boundary term)
+      do k=1,nz
+        do j=jb0,jb1
+          do i=ib0,ib1
+            z(i,j,k) = act(i,j)*r(i,j,k)/(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k) + sqrt(c2)*ob_kd(i,j,k))
+            rz = rz + darea(i,j)*hz_op(i,j,k)*r(i,j,k)*z(i,j,k)
+            rr = rr + darea(i,j)*hz_op(i,j,k)*r(i,j,k)*r(i,j,k)
+          enddo
+        enddo
+      enddo
+      pc_tapply = pc_tapply + (mpi_wtime() - t0) ; pc_napply = pc_napply + 1._8
+      return
+    end if
     do k=1,nz
       do j=jb0,jb1
         do i=ib0,ib1
@@ -4153,6 +5874,16 @@ contains
         enddo
       enddo
     enddo
+    if (imex_obc_modal .and. c2 > 0._8) then        ! 'modal': + theta dt ob_kd on the boundary cells
+      do k=1,nz
+        do j=jb0,jb1
+          do i=ib0,ib1
+            if (ob_kd(i,j,k) > 0._8) dinv(i,j,k) = act(i,j)/(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k)&
+            &                                         + sqrt(c2)*ob_kd(i,j,k))
+          enddo
+        enddo
+      enddo
+    end if
     dinv_version = coef_version ; dinv_c2 = c2
   end subroutine imex_dinv_setup
 
@@ -4373,6 +6104,16 @@ contains
         enddo
       enddo
     enddo
+    if (imex_obc_modal .and. c2 > 0._8) then        ! 'modal': + theta dt ob_kd on the boundary cells
+      do k=1,nz
+        do j=jb0,jb1
+          do i=ib0,ib1
+            if (ob_kd(i,j,k) > 0._8) ps_dinv(i,j,k,stage) = act(i,j)/(1._8/ad_n2c(i,j,k)&
+            &                                         + c2*ad_dd(i,j,k) + sqrt(c2)*ob_kd(i,j,k))
+          enddo
+        enddo
+      enddo
+    end if
     ps_dver(stage) = coef_version ; ps_dc2(stage) = c2
   end subroutine ps_dinv_setup
 
@@ -4693,6 +6434,16 @@ contains
           enddo
         enddo
       enddo
+      if (imex_obc_modal .and. c2 > 0._8) then      ! 'modal': + theta dt ob_kd on the boundary cells
+        do k=1,nz
+          do j=jb0,jb1
+            do i=ib0,ib1
+              if (act(i,j) > 0._8 .and. ob_kd(i,j,k) > 0._8) pf_dinv8(i,j,k,stage) =&
+              &  1._8/(darea(i,j)*hv(i,j,k)*(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k) + sqrt(c2)*ob_kd(i,j,k)))
+            enddo
+          enddo
+        enddo
+      end if
       pf_dver8(stage) = coef_version ; pf_dc28(stage) = c2
     end if
   end subroutine imex_pf_setup8
@@ -4774,6 +6525,16 @@ contains
           enddo
         enddo
       enddo
+      if (imex_obc_modal .and. c2 > 0._8) then      ! 'modal': + theta dt ob_kd on the boundary cells
+        do k=1,nz
+          do j=jb0,jb1
+            do i=ib0,ib1
+              if (act(i,j) > 0._8 .and. ob_kd(i,j,k) > 0._8) pf_dinv4(i,j,k,stage) =&
+              &  real(1._8/(darea(i,j)*hv(i,j,k)*(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k) + sqrt(c2)*ob_kd(i,j,k))), 4)
+            enddo
+          enddo
+        enddo
+      end if
       pf_dver4(stage) = coef_version ; pf_dc24(stage) = c2
     end if
   end subroutine imex_pf_setup4
@@ -5140,6 +6901,7 @@ contains
           fu(i,k) = 0.5_8*(real(hz(i,j,k),8)+real(hz(i-1,j,k),8))*cxo(i,j)*(g(i,k) - sg(i))
         enddo
       enddo
+      if (imex_obc_modal) call obm_ufx(j, ia, ib, g, fu, c2)   ! 'modal': open u-faces
       wm = 0._8
       if (mode == 0) then
         do k=1,nz
@@ -5267,6 +7029,7 @@ contains
           f(ii,kk) = 0.5_8*(real(hz(ii,jf,kk),8)+real(hz(ii,jf-1,kk),8))*cyo(ii,jf)*(g(ii,kk) - sg(ii))
         enddo
       enddo
+      if (imex_obc_modal) call obm_vfx(jf, ia, ib, g, f, c2)   ! 'modal': open v-faces
     end subroutine vfaces
   end subroutine imex_pf_op8
 
@@ -5611,6 +7374,7 @@ contains
           fu(i,k) = 0.5_8*(real(hz(i,j,k),8)+real(hz(i-1,j,k),8))*cxo(i,j)*(g(i,k) - sg(i))
         enddo
       enddo
+      if (imex_obc_modal) call obm_ufx(j, ia, ib, g, fu, c2)   ! 'modal': open u-faces
       wm = 0._8
       if (mode == 0) then
         do k=1,nz
@@ -5738,6 +7502,7 @@ contains
           f(ii,kk) = 0.5_8*(real(hz(ii,jf,kk),8)+real(hz(ii,jf-1,kk),8))*cyo(ii,jf)*(g(ii,kk) - sg(ii))
         enddo
       enddo
+      if (imex_obc_modal) call obm_vfx(jf, ia, ib, g, f, c2)   ! 'modal': open v-faces
     end subroutine vfaces
   end subroutine imex_pf_op4
 
@@ -5907,7 +7672,7 @@ contains
       integer(kind=4), intent(in) :: jf
       real(kind=8), intent(out) :: f(ib0:ib1,nz)
       integer(kind=4) :: ii, kk
-      real(kind=8) :: dd
+      real(kind=8) :: dd, vbv
       sf(ib0:ib1) = 0._8
       do kk=1,nz
         do ii=ib0,ib1
@@ -5925,6 +7690,14 @@ contains
       enddo
       if (bfx .and. ((s_edge .and. jf == jb0) .or. (n_edge .and. jf == jb1+1))) then
         do kk=1,nz
+          if (imex_obc_modal) then                ! ('modal': the explicit value obm_explicit)
+            do ii=ib0,ib1
+              vbv = obm_face_val(ii, jf, kk, 2, va(ii,jf,kk))
+              dd = wmo*dm_v(ii,jf)*( 0.5_8*(Hz(ii,jf,kk)+Hz(ii,jf-1,kk))*vbv - vm(ii,jf,kk) )
+              f(ii,kk) = f(ii,kk) + dd ; sf(ii) = sf(ii) + dd
+            enddo
+            cycle
+          end if
           do ii=ib0,ib1
             dd = wmo*dm_v(ii,jf)*( 0.5_8*(Hz(ii,jf,kk)+Hz(ii,jf-1,kk))*va(ii,jf,kk) - vm(ii,jf,kk) )
             f(ii,kk) = f(ii,kk) + dd ; sf(ii) = sf(ii) + dd
@@ -5942,9 +7715,15 @@ contains
       enddo
     end subroutine vrow
     subroutine bfix_u(ii, jj, kk)
+      ! ('modal': the face's explicit value obm_explicit instead of u*)
       integer(kind=4), intent(in) :: ii, jj, kk
       real(kind=8) :: dd
-      dd = wmo*dn_u(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii-1,jj,kk))*ua(ii,jj,kk) - um(ii,jj,kk) )
+      if (imex_obc_modal) then
+        dd = wmo*dn_u(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii-1,jj,kk))*obm_face_val(ii, jj, kk, 1, ua(ii,jj,kk))&
+        &  - um(ii,jj,kk) )
+      else
+        dd = wmo*dn_u(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii-1,jj,kk))*ua(ii,jj,kk) - um(ii,jj,kk) )
+      end if
       fu(ii,kk) = fu(ii,kk) + dd ; sf(ii) = sf(ii) + dd
     end subroutine bfix_u
   end subroutine imex_sf_rhs8
@@ -6233,7 +8012,7 @@ contains
       integer(kind=4), intent(in) :: jf
       real(kind=8), intent(out) :: f(ib0:ib1,nz)
       integer(kind=4) :: ii, kk
-      real(kind=8) :: dd
+      real(kind=8) :: dd, vbv
       sf(ib0:ib1) = 0._8
       do kk=1,nz
         do ii=ib0,ib1
@@ -6251,6 +8030,14 @@ contains
       enddo
       if (bfx .and. ((s_edge .and. jf == jb0) .or. (n_edge .and. jf == jb1+1))) then
         do kk=1,nz
+          if (imex_obc_modal) then                ! ('modal': the explicit value obm_explicit)
+            do ii=ib0,ib1
+              vbv = obm_face_val(ii, jf, kk, 2, va(ii,jf,kk))
+              dd = wmo*dm_v(ii,jf)*( 0.5_8*(Hz(ii,jf,kk)+Hz(ii,jf-1,kk))*vbv - vm(ii,jf,kk) )
+              f(ii,kk) = f(ii,kk) + dd ; sf(ii) = sf(ii) + dd
+            enddo
+            cycle
+          end if
           do ii=ib0,ib1
             dd = wmo*dm_v(ii,jf)*( 0.5_8*(Hz(ii,jf,kk)+Hz(ii,jf-1,kk))*va(ii,jf,kk) - vm(ii,jf,kk) )
             f(ii,kk) = f(ii,kk) + dd ; sf(ii) = sf(ii) + dd
@@ -6268,9 +8055,15 @@ contains
       enddo
     end subroutine vrow
     subroutine bfix_u(ii, jj, kk)
+      ! ('modal': the face's explicit value obm_explicit instead of u*)
       integer(kind=4), intent(in) :: ii, jj, kk
       real(kind=8) :: dd
-      dd = wmo*dn_u(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii-1,jj,kk))*ua(ii,jj,kk) - um(ii,jj,kk) )
+      if (imex_obc_modal) then
+        dd = wmo*dn_u(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii-1,jj,kk))*obm_face_val(ii, jj, kk, 1, ua(ii,jj,kk))&
+        &  - um(ii,jj,kk) )
+      else
+        dd = wmo*dn_u(ii,jj)*( 0.5_8*(Hz(ii,jj,kk)+Hz(ii-1,jj,kk))*ua(ii,jj,kk) - um(ii,jj,kk) )
+      end if
       fu(ii,kk) = fu(ii,kk) + dd ; sf(ii) = sf(ii) + dd
     end subroutine bfix_u
   end subroutine imex_sf_rhs4
@@ -7045,6 +8838,7 @@ contains
       &erra, ''
       if (mynode == 0) write(*,'(1x,A,F9.4,A)') 'IMEX_SELFTEST adj   solve time', tsolve, ' s'
     enddo
+    if (imex_obc_modal) call obm_selftest
     if (mynode == 0) write(*,*)
     deallocate(xa, xb, ya, ua, va, ub, vb, est)
   contains

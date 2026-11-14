@@ -81,7 +81,7 @@ contains
 #endif
 #ifdef IMEX_IGW
     use imex_igw, only: imex_am3, imex_solve_stage, imex_stage_pred,&
-    &imex_predictor_transport
+    &imex_predictor_transport, imex_obc_modal, imex_obc_faces
 #endif
 
     implicit none
@@ -632,6 +632,7 @@ contains
     call u3dbc_tile (istr,iend,jstr,jend, wrk1)
     call v3dbc_tile (istr,iend,jstr,jend, wrk1)
 #ifdef IMEX_IGW
+    if (imex_obc_modal) call imex_obc_faces(add_mean=.true.)   ! imex_obc_mode 'modal': normal open faces
     call imex_predictor_transport   ! Flx_pred -> FlxU, FlxV; We, Wi
     endif  !<-- ipass == 1
     enddo  !<-- ipass

@@ -1,11 +1,13 @@
 """Implicit internal-wave (IMEX) baroclinic step (CPP key IMEX_IGW, namelist group IMEX_IGW_SETTINGS)
 
 One build: the open-boundary physics of test_implicit_fs.py with IMEX_IGW, run
-with the implicit free surface's defaults (the hashed run, an exact restart,
-and the stop on removed keys with the template's sed line).
+with the implicit free surface's defaults: the hashed runs with the 'fixed' and
+the 'modal' open boundary, exact restarts with both, and the stop on removed
+keys with the template's sed line.
 
 A second build: the realistic MARBL case of test_bgc.py with IMEX_IGW, run with
-BGC tracer subcycling (TestImexBgcSubcycling: equalities only, no reference).
+BGC tracer subcycling and the 'fixed' and the 'modal' open boundary
+(TestImexBgcSubcycling: equalities only, no reference).
 """
 import copy
 import re
@@ -46,19 +48,23 @@ def imex_configuration(tmp_path_factory) -> ROMSConfiguration:
     return conf
 
 
-def imex_namelist(input_dir, **imex):
+def imex_namelist(input_dir, obc_mode="fixed", **imex):
     """The test namelist with the tidal potential, the implicit free surface and IMEX.
 
     imex_bref_hours = 0.14 (13 steps of 40 s) rebuilds the reference
     stratification and the operator at steps 1 and 14, so the restart after
     step 10 falls inside a rebuild period and the continued run rebuilds.
+    The open boundary is 'fixed' unless ``obc_mode`` says otherwise (the
+    template's 'auto' selects 'modal' on this grid).
     """
     nml = create_test_namelist_dict(input_dir)
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["TIDAL_FRC_SETTINGS"].update({"pot_tides": True, "ntides": 2})
     nml["FORCING_FILES"]["frcfiles"].append(str(input_dir / "example_input_tides.nc"))
     nml["IMPLICIT_FS"]["fs_mode"] = "implicit"
-    nml["IMEX_IGW_SETTINGS"].update({"imex_verbose": 1, "imex_bref_hours": 0.14, **imex})
+    nml["IMEX_IGW_SETTINGS"].update(
+        {"imex_verbose": 1, "imex_bref_hours": 0.14, "imex_obc_mode": obc_mode, **imex}
+    )
     return nml
 
 
@@ -69,20 +75,26 @@ def assert_imex_converged(log: str) -> None:
     assert max(unconverged) == 0, f"unconverged IMEX solves: {unconverged}"
 
 
-def test_imex_igw_real(imex_configuration, input_dir, tmp_path, reference_results):
-    """Output of the IMEX step."""
-    log = imex_configuration.run(imex_namelist(input_dir), cwd=tmp_path, capture_output=True)
+@pytest.mark.parametrize(
+    "obc_mode, key", [("fixed", "imex_igw_real"), ("modal", "imex_igw_modal_real")], ids=["fixed", "modal"]
+)
+def test_imex_igw_real(imex_configuration, input_dir, tmp_path, reference_results, obc_mode, key):
+    """Output of the IMEX step with the 'fixed' and the 'modal' open boundary."""
+    log = imex_configuration.run(imex_namelist(input_dir, obc_mode), cwd=tmp_path, capture_output=True)
     assert_imex_converged(log)
+    assert squeezed(f"imex_obc_mode = '{obc_mode}' -> '{obc_mode}'") in squeezed(log)
 
     pv = get_summary_value(tmp_path, prefix="roms_his.20100101000000")
-    assert_output_matches_reference(reference_results, "imex_igw_real", {"physics": pv})
+    assert_output_matches_reference(reference_results, key, {"physics": pv})
 
 
-def test_imex_igw_exact_restart(imex_configuration, input_dir, tmp_path):
+@pytest.mark.parametrize("obc_mode", ["fixed", "modal"])
+def test_imex_igw_exact_restart(imex_configuration, input_dir, tmp_path, obc_mode):
     """A restart reproduces the continuous run bit for bit with the IMEX state in the
-    restart file (imex_rst_state = 1, the default), across a rebuild of the operator."""
+    restart file (imex_rst_state = 1, the default), across a rebuild of the operator;
+    with 'modal' the file also holds the boundary reference (imex_obcm)."""
     conf = imex_configuration
-    nml = imex_namelist(input_dir)
+    nml = imex_namelist(input_dir, obc_mode)
     nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
     nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})
 
@@ -101,6 +113,7 @@ def test_imex_igw_exact_restart(imex_configuration, input_dir, tmp_path):
     run1_val = get_summary_value(run1, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
     run2_val = get_summary_value(run2, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
     assert "imex_pgu" in run1_val.variables
+    assert ("imex_obcm" in run1_val.variables) == (obc_mode == "modal")
     assert run1_val.variables == run2_val.variables
 
 
@@ -160,26 +173,31 @@ def imex_marbl_configuration(tmp_path_factory) -> ROMSConfiguration:
     return conf
 
 
-def imex_subcycle_namelist(input_dir, subcycle=True) -> dict:
+def imex_subcycle_namelist(input_dir, obc_mode="fixed", subcycle=True) -> dict:
     """test_bgc's subcycling case (dt 20 s, MARBL and the window every 4 steps,
     12 steps) with restart, history and BGC records every 4 steps (window ends),
-    the implicit free surface and IMEX. imex_bref_hours = 0.05 (9 steps)
-    rebuilds the operator at steps 1 and 10, so a restart after step 4 falls
-    inside a rebuild period."""
+    the implicit free surface and IMEX with the open boundary ``obc_mode``.
+    imex_bref_hours = 0.05 (9 steps) rebuilds the operator at steps 1 and 10,
+    so a restart after step 4 falls inside a rebuild period."""
     nml = _subcycle_nml(input_dir, 4, bgc_physics_subcycle=subcycle)
     _with_restarts(nml, 4 * nml["TIME_STEPPING"]["dt"])
     nml["IMPLICIT_FS"]["fs_mode"] = "implicit"
-    nml["IMEX_IGW_SETTINGS"].update({"imex_verbose": 1, "imex_bref_hours": 0.05})
+    nml["IMEX_IGW_SETTINGS"].update(
+        {"imex_verbose": 1, "imex_bref_hours": 0.05, "imex_obc_mode": obc_mode}
+    )
     return nml
 
 
-@pytest.fixture(scope="module")
-def imex_subcycle_run(imex_marbl_configuration, input_dir, tmp_path_factory):
-    """The continuous subcycled IMEX run: (run directory, namelist, log)."""
-    run_dir = tmp_path_factory.mktemp("imex_subcycle_run")
-    nml = imex_subcycle_namelist(input_dir)
+@pytest.fixture(scope="module", params=["fixed", "modal"])
+def imex_subcycle_run(imex_marbl_configuration, input_dir, tmp_path_factory, request):
+    """The continuous subcycled IMEX run with the 'fixed' and the 'modal' open
+    boundary: (run directory, namelist, log)."""
+    obc_mode = request.param
+    run_dir = tmp_path_factory.mktemp(f"imex_subcycle_run_{obc_mode}")
+    nml = imex_subcycle_namelist(input_dir, obc_mode)
     log = imex_marbl_configuration.run(nml, cwd=run_dir, capture_output=True)
     assert_imex_converged(log)
+    assert squeezed(f"imex_obc_mode = '{obc_mode}' -> '{obc_mode}'") in squeezed(log)
     return run_dir, nml, log
 
 
@@ -202,7 +220,8 @@ class TestImexBgcSubcycling:
     def test_exact_restart_at_window_boundary(self, imex_marbl_configuration, imex_subcycle_run, tmp_path):
         """A restart at the window boundary after step 4, inside a rebuild period
         of the IMEX operator, reproduces the continuous run's restart, history and
-        BGC output at step 12 bit for bit."""
+        BGC output at step 12 bit for bit; with 'modal' the restart file also
+        holds the boundary reference (imex_obcm)."""
         run1, nml, _ = imex_subcycle_run
         nml = copy.deepcopy(nml)
         nml["INITIAL_CONDITIONS"]["inifile"] = str(run1 / "roms_rst.20100101000120.nc")
@@ -217,13 +236,16 @@ class TestImexBgcSubcycling:
             run2_val = get_summary_value(tmp_path, prefix=prefix, vars_to_exclude=["time_step"])
             if prefix.startswith("roms_rst"):
                 assert {"DIC", "imex_pgu"} <= run1_val.variables.keys()
+                obc_mode = nml["IMEX_IGW_SETTINGS"]["imex_obc_mode"]
+                assert ("imex_obcm" in run1_val.variables) == (obc_mode == "modal")
             assert run1_val.variables == run2_val.variables, prefix
 
     def test_physics_unchanged(self, imex_marbl_configuration, imex_subcycle_run, input_dir, tmp_path):
         """Subcycling changes only the BGC tracers: with IMEX too, the physics
         history equals the run without subcycling bit for bit at every record."""
-        run1, _, _ = imex_subcycle_run
-        log = imex_marbl_configuration.run(imex_subcycle_namelist(input_dir, subcycle=False),
+        run1, nml, _ = imex_subcycle_run
+        obc_mode = nml["IMEX_IGW_SETTINGS"]["imex_obc_mode"]
+        log = imex_marbl_configuration.run(imex_subcycle_namelist(input_dir, obc_mode, subcycle=False),
                                            cwd=tmp_path, capture_output=True)
         assert_imex_converged(log)
         assert _bgcsub_lines(log) == []
