@@ -729,6 +729,7 @@ contains
     call def_vars_bgc( ncid,avg )
 
     ierr = nf90_enddef(ncid)
+    ierr = nf90_close(ncid)
   end subroutine create_bgc_file !]
 !----------------------------------------------------------------------
 #if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
@@ -761,6 +762,7 @@ contains
     call def_bgc_diag(ncid,avg)
 
     ierr = nf90_enddef(ncid)
+    ierr = nf90_close(ncid)
   end subroutine create_bgc_dia_file !]
 #endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
 ! ----------------------------------------------------------------------
