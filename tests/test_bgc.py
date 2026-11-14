@@ -12,6 +12,7 @@ the restoring fluxes alone, and a control without surface-flux output. The
 restoring fluxes must equal the fluxes the model applied, follow their formula,
 and leave the model unchanged.
 """
+import re
 from pathlib import Path
 
 import numpy as np
@@ -136,6 +137,33 @@ def _pieces_without(input_dir, out, name: str, drop: set[str]) -> Path:
             ds = ds.load()
         ds.drop_vars([v for v in ds.data_vars if v in drop]).to_netcdf(out / f"{name}.{r}.nc")
     return out / f"{name}.nc"
+
+
+def test_new_forcing_record(tmp_path, marbl_conf, input_dir):
+    """A run that reads a new boundary record after BGC output runs to its end.
+
+    The per-rank boundary pieces get a copy of their first record 0.002 days
+    (about 9 steps) later, so ROMS reads the third record during the run. The
+    BGC writers used to close their netCDF id again in steps without output.
+    netCDF gives that id to the next file opened, and forcing files stay open
+    across records, so the close could hit a forcing file, and its next record
+    read stopped ROMS with "Not a valid ID".
+    """
+    name = "example_input_boundary_forcing"
+    for r in range(4):
+        with xr.open_dataset(input_dir / f"{name}.{r}.nc", decode_cf=False) as ds:
+            ds = ds.load()
+        t = ds["bry_time"].values
+        ds = ds.isel(bry_time=[0, 0, 1])
+        ds = ds.assign(bry_time=("bry_time", [t[0], t[0] + 0.002, t[1]], ds["bry_time"].attrs))
+        ds.to_netcdf(tmp_path / f"{name}.{r}.nc")
+    nml = _marbl_nml(input_dir)
+    nml["TIME_STEPPING"]["ntimes"] = 20
+    files = nml["FORCING_FILES"]["frcfiles"]
+    files[files.index(str(input_dir / f"{name}.nc"))] = str(tmp_path / f"{name}.nc")
+    stdout = marbl_conf.run(nml, cwd=tmp_path, capture_output=True)
+    # the run read the third record (and did not stop at it)
+    assert re.search(r"set_frc :: zeta_west\s+input time \(days\) =\s+3684\.00\s+rec =\s+3", stdout)
 
 
 class TestRequiredBGCInputs:
