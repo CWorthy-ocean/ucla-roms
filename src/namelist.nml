@@ -667,6 +667,14 @@ imex_obc_mode = 'auto'               ! Normal velocity at open faces: 'modal' ch
                                      ! Flather) condition, implicit in the stage solves; 'fixed' the OBC's
                                      ! explicit value (as without IMEX); 'auto' 'modal' where supported
                                      ! (open edge, M3_FRC_BRY, T_FRC_BRY), else 'fixed' (printed)
+                                     ! With 'modal': a nest whose boundary data carry the internal tide
+                                     ! runs best with a quarter of the v_sponge used with the stock
+                                     ! boundary (an outermost domain keeps the stock value); keep
+                                     ! v_sponge dt/dx^2 <= 0.1; leave ub_tune off. A run that does not
+                                     ! start from the state its boundary data come from should take its
+                                     ! first ~10 days with 'fixed' and switch to 'modal' at a restart.
+                                     ! The step is limited by horizontal advection: keep MAX_ADV_CFL -
+                                     ! MAX_VERT_CFL below about 0.8 over the run
 imex_obc_tref = 259200.0             ! 'modal': time scale (s) of the reference m(z), a low-pass of the
                                      ! baroclinic mismatch p_int - p_ext that is not radiated (slow
                                      ! child-parent mismatch stays); 0 none. Choose tref >= ~3 inertial

@@ -3473,6 +3473,26 @@ contains
   end subroutine imex_obc_pre
 
   !======================================================================
+  ! Recommended use of 'modal' (nest and Pacific tests; docs page, sec. 5):
+  ! - defaults: imex_obc_mode 'auto' (selects 'modal'), imex_obc_nmodes 3, imex_obc_cmin 0.3 m/s,
+  !   imex_obc_tref 3 d;
+  ! - imex_obc_q0 is off by default; where the semidiurnal tide is close to inertial it has been set to
+  !   sqrt(1 - f^2/omega_M2^2). It returns part of a Kelvin wave that leaves along a coast (13 % at 0.5);
+  ! - sponge: a nest whose boundary data carry the internal tide runs best with a quarter of the v_sponge
+  !   used with the stock boundary (the sponge damps the tide that comes in); an outermost domain, whose
+  !   boundary data have no internal tide, keeps the stock value. Keep v_sponge dt/dx^2 <= 0.1;
+  ! - SPONGE_TUNE's ub_tune has no effect on the normal velocity under 'modal': leave it off;
+  ! - start: a run that does not begin from the state its boundary data come from (a nest not initialised
+  !   from its parent) should take its first ~10 days with imex_obc_mode = 'fixed' and switch to 'modal'
+  !   at a restart (inexact by design: m restarts from the mismatch of that day); see obm_startnote;
+  ! - step: the limit is explicit horizontal advection, not the boundary. Keep the horizontal part of the
+  !   Courant number (MAX_ADV_CFL - MAX_VERT_CFL in the step lines) below about 0.8 over the whole run
+  !   (five nests: failures at 1.0-1.2, at 0.8-1.0 in the strongest fronts);
+  ! - known limits: a wave that the boundary data do not contain and that leaves at more than about 60
+  !   degrees from the normal returns at the rate of any one-direction condition (36 % at 75 degrees),
+  !   and the sponge does not change that; the child's depths must match the parent's along the open
+  !   edges (the boundary data are otherwise taken from the wrong depth).
+  !
   ! imex_obc_mode = 'modal': characteristic (per-mode Flather) open-boundary condition for the
   ! internal modes (docs page, sec. 5). Per open face column:
   !   u_b = u_ext + s Y (p_int - p_ext),   Y = sum_m y_m phi_m phi_m^T W/H + y_rem (P_bc - sum_m ...),
@@ -4378,10 +4398,62 @@ contains
       enddo
     enddo
     if (mref) ob_mr_ok = .true.
+    if (mref .and. minit) call obm_startnote      ! m was set to the present mismatch (results unchanged)
     if (imex_obc_mprint > 0 .and. stage == imex_stage_pred) then   ! diagnostic (OBCM lines; results unchanged)
       if (mod(iic, imex_obc_mprint) == 0) call obm_mdiag
     end if
   end subroutine obm_explicit
+
+  !----------------------------------------------------------------------
+  subroutine obm_startnote
+    ! Once, when the reference m has just been set to the present mismatch d (the first step of a run that
+    ! has no m in its initial file, and after a change of the boundary settings at a restart): per open
+    ! edge the rms over the edge of the held mismatch [m2/s2] and of Y m, the face velocity it would drive
+    ! if it were radiated [m/s]; a note on the start of a run that does not begin from the state its
+    ! boundary data come from; a warning above obm_dwarn (a gross mismatch, as from child depths that
+    ! differ from the parent's along the edge). Diagnostic only; results unchanged
+    use param, only: nz, mynode, ocean_grid_comm
+    use mpi_f08, only: mpi_allreduce, mpi_in_place, mpi_double_precision, mpi_sum
+    implicit none
+    real(kind=8), parameter :: obm_dwarn = 0.7_8   ! [m2/s2]; edges of the five test nests and of the Pacific
+                                                  ! domain start at 0.02-0.44, an edge whose depths differ
+                                                  ! from the parent's (CCS north edge, to 250 %) at 0.95
+    character(len=1), parameter :: en(4) = ['W', 'E', 'S', 'N']
+    real(kind=8) :: yv(nz), sm(3,4), rd, ry
+    integer(kind=4) :: e, l, la, lb, ierr
+    logical :: big
+    sm = 0._8
+    do e=1,4
+      if (.not. ob_edge(e)) cycle
+      call obm_lrange(e, la, lb)
+      do l=la,lb
+        if (ob_act(l,e) <= 0._8) cycle
+        call obm_y(e, l, ob_mr(:,l,e), yv)
+        sm(1,e) = sm(1,e) + 1._8
+        sm(2,e) = sm(2,e) + sum(ob_w(:,l,e)*ob_mr(:,l,e)**2)
+        sm(3,e) = sm(3,e) + sum(ob_w(:,l,e)*yv**2)
+      enddo
+    enddo
+    call mpi_allreduce(mpi_in_place, sm, 12, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    if (mynode /= 0) return
+    big = .false.
+    write(*,'(1x,A)') "IMEX_OBC start: the 'modal' reference is set to the present difference between the"&
+    &//' model and its boundary data (held, not radiated)'
+    do e=1,4
+      if (sm(1,e) <= 0._8) cycle
+      rd = sqrt(sm(2,e)/sm(1,e)) ; ry = sqrt(sm(3,e)/sm(1,e))
+      write(*,'(1x,A,A,A,F9.4,A,F8.4,A)') 'IMEX_OBC start: edge ', en(e), ': held pressure difference, rms',&
+      &rd, ' m2/s2; as a face velocity', ry, ' m/s'
+      big = big .or. rd > obm_dwarn
+    enddo
+    write(*,'(1x,A)') "IMEX_IGW NOTE: a run that does not start from the state its boundary data come from"&
+    &//" (a nest not initialised from its parent) should take its first ~10 days with imex_obc_mode ="&
+    &//" 'fixed' and switch to 'modal' at a restart; otherwise the adjustment of the edge zones is"&
+    &//' carried into the interior as a low-frequency error'
+    if (big) write(*,'(1x,A,F5.1,A)') 'IMEX_IGW WARNING: the held pressure difference exceeds', obm_dwarn,&
+    &' m2/s2 on an open edge: check the boundary data and that the depths of this grid match those of'&
+    &//' the grid the boundary data come from along the open edges'
+  end subroutine obm_startnote
 
   !----------------------------------------------------------------------
   subroutine obm_mdiag
