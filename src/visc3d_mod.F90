@@ -11,16 +11,28 @@ contains
 
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
     use private_scratch, only: a2d
+#ifdef IMEX_IGW
+    use imex_igw, only: imex_mix_split, imex_solver_enabled
+    use ocean_vars, only: u, v
+    use scalars, only: nstp
+    use roms_mpi, only: exchange_xxx
+#endif
 
     implicit none
     integer(kind=4),parameter :: tile=0
 
 # include "compute_tile_bounds.h"
+#ifdef IMEX_IGW
+    ! imex_mix_split bit 1: the Laplacian from the corrected momentum u,v(3-nstp), whose
+    ! halo faces (iend+1, jend+1, istr-1, jstr-1 of interior tiles) need the neighbours' values
+    if (iand(imex_mix_split, 1) /= 0 .and. imex_solver_enabled)&
+    &  call exchange_xxx(u(:,:,:,3-nstp), v(:,:,:,3-nstp))
+#endif
     call visc3d_s_tile (istr,iend,jstr,jend, A2d(1,1), A2d(1,2),&
-    &A2d(1,3), A2d(1,4))
+    &A2d(1,3), A2d(1,4), A2d(1,5), A2d(1,6), A2d(1,7), A2d(1,8))
   end subroutine visc3d_s
 
-  subroutine visc3d_s_tile (istr,iend,jstr,jend, UFx,UFe,VFx,VFe)
+  subroutine visc3d_s_tile (istr,iend,jstr,jend, UFx,UFe,VFx,VFe, Uk,Vk, dUb,dVb)
 
 ! Compute harmonic mixing of momentum, along constant S-surfaces as
 ! horizontal divergence of the stress tensor. A transverse isotropy is
@@ -38,18 +50,73 @@ contains
     use mixing, only: visc2_r, visc2_p
     use ocean_vars, only: v, u, hz
     use scalars, only: dt, nz, nstp
+#ifdef IMEX_IGW
+    use imex_igw, only: imex_mix_split, imex_solver_enabled
+    use scalars, only: gamma2
+#  ifdef MASKING
+    use grid, only: umask, vmask
+#  endif
+#endif
 #ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag, vdiag,&
     &dxdyi_u, dxdyi_v, ihmix, diag_uv
 #endif
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k, indx
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: UFx,UFe,VFx,VFe
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: UFx,UFe,VFx,VFe, Uk,Vk, dUb,dVb
     real(kind=8) cff
+    logical spl   ! IMEX_IGW imex_mix_split bit 1: the Laplacian from the corrected momentum
 
 # include "compute_auxiliary_bounds.h"
 
     indx=3-nstp    !--> time index for target arrays;
+    spl = .false.
+#ifdef IMEX_IGW
+    spl = iand(imex_mix_split, 1) /= 0 .and. imex_solver_enabled
+    if (spl) then
+      ! Column mean of the step's explicit + implicitly corrected velocity increment,
+      ! dUb = sum_k (u(indx) - Hz_u u^n) / sum_k Hz_u. The Laplacian below acts on
+      ! u^n + (du - dUb): the baroclinic part of the increment is taken at the
+      ! corrected state (the IMEX correction is baroclinic), the depth mean stays at
+      ! u^n as in stock, because u(indx)'s depth mean is the explicit barotropic
+      ! step that step3d_uv2 replaces by the implicit 2-D solution (with it in, the
+      ! viscous forcing of rufrc carries dt g grad(zeta) at C_bt >> 1: unstable).
+      do j=jstr-1,jend+1
+        do i=istrU-1,iend+1
+          dUb(i,j)=0._8 ; UFx(i,j)=0._8
+        enddo
+      enddo
+      do j=jstrV-1,jend+1
+        do i=istr-1,iend+1
+          dVb(i,j)=0._8 ; VFe(i,j)=0._8
+        enddo
+      enddo
+      do k=1,nz
+        do j=jstr-1,jend+1
+          do i=istrU-1,iend+1
+            cff=0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))
+            dUb(i,j)=dUb(i,j)+u(i,j,k,indx)-cff*u(i,j,k,nstp) ; UFx(i,j)=UFx(i,j)+cff
+          enddo
+        enddo
+        do j=jstrV-1,jend+1
+          do i=istr-1,iend+1
+            cff=0.5_8*(Hz(i,j,k)+Hz(i,j-1,k))
+            dVb(i,j)=dVb(i,j)+v(i,j,k,indx)-cff*v(i,j,k,nstp) ; VFe(i,j)=VFe(i,j)+cff
+          enddo
+        enddo
+      enddo
+      do j=jstr-1,jend+1
+        do i=istrU-1,iend+1
+          dUb(i,j)=dUb(i,j)/UFx(i,j)
+        enddo
+      enddo
+      do j=jstrV-1,jend+1
+        do i=istr-1,iend+1
+          dVb(i,j)=dVb(i,j)/VFe(i,j)
+        enddo
+      enddo
+    end if
+#endif
 
 !  Compute horizontal harmonic viscosity along constant S-surfaces.
 !
@@ -57,16 +124,126 @@ contains
 !  tensor (m5/s2) in XI- and ETA-directions.
 
     do k=1,nz
+      ! Velocity the Laplacian acts on: u, v(nstp) = u^n (stock), or (IMEX_IGW,
+      ! imex_mix_split bit 1) the corrected momentum u, v(indx)/Hz_u of this step
+      ! less the depth mean of its increment (dUb, dVb: the depth mean stays at u^n)
+      ! on the interior faces (split step), with the physical edges as the stock
+      ! field would have them: normal faces u^n (0 at walls, the OBC's value at
+      ! open faces), tangential ghost rows the wall rule gamma2 x interior
+      ! (u3dbc) at closed edges and u^n at open ones.
+#ifdef IMEX_IGW
+#  define UU(i,j) Uk(i,j)
+#  define VV(i,j) Vk(i,j)
+      if (spl) then
+        do j=jstr-1,jend+1
+          do i=istrU-1,iend+1
+            Uk(i,j)=u(i,j,k,indx)/(0.5_8*(Hz(i,j,k)+Hz(i-1,j,k)))-dUb(i,j)
+#  ifdef MASKING
+            ! land faces: u(indx) is not masked before step3d_uv2 and carries the
+            ! explicit rhs there (pressure gradient against the land cell's T = S = 0,
+            ! Coriolis, advection); stock's u(nstp) is masked, so the stress sees 0
+            Uk(i,j)=Uk(i,j)*umask(i,j)
+#  endif
+          enddo
+        enddo
+        do j=jstrV-1,jend+1
+          do i=istr-1,iend+1
+            Vk(i,j)=v(i,j,k,indx)/(0.5_8*(Hz(i,j,k)+Hz(i,j-1,k)))-dVb(i,j)
+#  ifdef MASKING
+            Vk(i,j)=Vk(i,j)*vmask(i,j)
+#  endif
+          enddo
+        enddo
+#  ifndef EW_PERIODIC
+        if (WESTERN_EDGE) then
+          do j=jstr-1,jend+1
+            Uk(istr,j)=u(istr,j,k,nstp)
+          enddo
+          do j=jstrV-1,jend+1
+#  ifdef OBC_WEST
+            Vk(istr-1,j)=v(istr-1,j,k,nstp)
+#  else
+            Vk(istr-1,j)=gamma2*Vk(istr,j)
+#   ifdef MASKING
+            Vk(istr-1,j)=Vk(istr-1,j)*vmask(istr-1,j)
+#   endif
+#  endif
+          enddo
+        endif
+        if (EASTERN_EDGE) then
+          do j=jstr-1,jend+1
+            Uk(iend+1,j)=u(iend+1,j,k,nstp)
+          enddo
+          do j=jstrV-1,jend+1
+#  ifdef OBC_EAST
+            Vk(iend+1,j)=v(iend+1,j,k,nstp)
+#  else
+            Vk(iend+1,j)=gamma2*Vk(iend,j)
+#   ifdef MASKING
+            Vk(iend+1,j)=Vk(iend+1,j)*vmask(iend+1,j)
+#   endif
+#  endif
+          enddo
+        endif
+#  endif
+#  ifndef NS_PERIODIC
+        if (SOUTHERN_EDGE) then
+          do i=istr-1,iend+1
+            Vk(i,jstr)=v(i,jstr,k,nstp)
+          enddo
+          do i=istrU-1,iend+1
+#  ifdef OBC_SOUTH
+            Uk(i,jstr-1)=u(i,jstr-1,k,nstp)
+#  else
+            Uk(i,jstr-1)=gamma2*Uk(i,jstr)
+#   ifdef MASKING
+            Uk(i,jstr-1)=Uk(i,jstr-1)*umask(i,jstr-1)
+#   endif
+#  endif
+          enddo
+        endif
+        if (NORTHERN_EDGE) then
+          do i=istr-1,iend+1
+            Vk(i,jend+1)=v(i,jend+1,k,nstp)
+          enddo
+          do i=istrU-1,iend+1
+#  ifdef OBC_NORTH
+            Uk(i,jend+1)=u(i,jend+1,k,nstp)
+#  else
+            Uk(i,jend+1)=gamma2*Uk(i,jend)
+#   ifdef MASKING
+            Uk(i,jend+1)=Uk(i,jend+1)*umask(i,jend+1)
+#   endif
+#  endif
+          enddo
+        endif
+#  endif
+      else
+        do j=jstr-1,jend+1
+          do i=istrU-1,iend+1
+            Uk(i,j)=u(i,j,k,nstp)
+          enddo
+        enddo
+        do j=jstrV-1,jend+1
+          do i=istr-1,iend+1
+            Vk(i,j)=v(i,j,k,nstp)
+          enddo
+        enddo
+      end if
+#else
+#  define UU(i,j) u(i,j,k,nstp)
+#  define VV(i,j) v(i,j,k,nstp)
+#endif
       do j=jstrV-1,jend
         do i=istrU-1,iend
           cff=0.5_8*Hz(i,j,k)*visc2_r(i,j)*(&
 
-          &dn_r(i,j)*pm(i,j)*( (pn(i  ,j)+pn(i+1,j))*u(i+1,j,k,nstp)&
-          &-(pn(i-1,j)+pn(i  ,j))*u(i  ,j,k,nstp)&
+          &dn_r(i,j)*pm(i,j)*( (pn(i  ,j)+pn(i+1,j))*UU(i+1,j)&
+          &-(pn(i-1,j)+pn(i  ,j))*UU(i  ,j)&
           &)&
 
-          &-dm_r(i,j)*pn(i,j)*( (pm(i,j  )+pm(i,j+1))*v(i,j+1,k,nstp)&
-          &-(pm(i,j-1)+pm(i,j  ))*v(i,j  ,k,nstp)&
+          &-dm_r(i,j)*pn(i,j)*( (pm(i,j  )+pm(i,j+1))*VV(i,j+1)&
+          &-(pm(i,j-1)+pm(i,j  ))*VV(i,j  )&
           &))
           UFx(i,j)=  cff*dn_r(i,j)*dn_r(i,j)
           VFe(i,j)= -cff*dm_r(i,j)*dm_r(i,j)
@@ -78,13 +255,13 @@ contains
           &+Hz(i,j-1,k))*visc2_p(i,j)*(&
 
           &0.25_8*(pm(i-1,j)+pm(i,j)+pm(i-1,j-1)+pm(i,j-1))*dn_p(i,j)&
-          &*( (pn(i  ,j-1)+pn(i  ,j))*v(i  ,j,k,nstp)&
-          &-(pn(i-1,j-1)+pn(i-1,j))*v(i-1,j,k,nstp)&
+          &*( (pn(i  ,j-1)+pn(i  ,j))*VV(i  ,j)&
+          &-(pn(i-1,j-1)+pn(i-1,j))*VV(i-1,j)&
           &)&
 
           &+0.25_8*(pn(i-1,j)+pn(i,j)+pn(i-1,j-1)+pn(i,j-1))*dm_p(i,j)&
-          &*( (pm(i-1,j  )+pm(i,j  ))*u(i,j  ,k,nstp)&
-          &-(pm(i-1,j-1)+pm(i,j-1))*u(i,j-1,k,nstp)&
+          &*( (pm(i-1,j  )+pm(i,j  ))*UU(i,j  )&
+          &-(pm(i-1,j-1)+pm(i,j-1))*UU(i,j-1)&
           &))&
 # ifdef MASKING
           &*pmask(i,j)

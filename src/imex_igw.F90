@@ -161,6 +161,21 @@ module imex_igw
                                                  ! mode-1 Courant number N_ref H dt sqrt(pm2+pn2)/pi of the floor
                                                  ! is printed at startup (sargasso 1440 s: 1.4); the earlier
                                                  ! guide "<~ 0.5" did not bind in any test
+  integer(kind=4), public, protected :: imex_mix_split = 1  ! lateral mixing as a split step from the corrected state
+                                                 ! (see below): 1 visc3d's Laplacian from u^n + the baroclinic part
+                                                 ! of this step's increment, i.e. u,v(nnew)/Hz after the corrector's implicit
+                                                 ! correction less the depth mean of the increment (interior faces; open-boundary
+                                                 ! faces keep u^n, wall ghost rows the wall rule; the depth mean of u(nnew) is the
+                                                 ! explicit barotropic step that step3d_uv2 replaces, so it stays at u^n; land faces
+                                                 ! masked, as u^n is); default 1;
+                                                 ! 0 as before (visc3d from u^n added after the implicit
+                                                 ! correction). With the additive form the implicit step's stiff-limit eigenvalue
+                                                 ! (-0.25 +- 0.32i for set B) plus the explicit Laplacian -4 v dt/dx^2 leaves the
+                                                 ! unit circle at v dt/dx^2 ~ 0.07-0.08 (C_igw 2.4-2.7); the split form multiplies
+                                                 ! it by (1 - 4 v dt/dx^2). Lateral tracer mixing (t3dmix) is always from t^n
+                                                 ! (main.F90): the predictor's implicit correction overshoots and is reversed by the
+                                                 ! corrector's, so mixing the predictor state t^n+1/2 anti-diffuses the step's net
+                                                 ! change
   integer(kind=4) :: imex_warm = 1               ! stage-solve start: 0 zero; 1 the stage's previous solution
   integer(kind=4) :: imex_pcg_start = 3          ! stage solve: 0 imex_pcg_warm/
                                                  ! imex_pcg; 1 imex_pcg_s: rhs scaling, residual of the guess,
@@ -216,7 +231,7 @@ module imex_igw
   &  imex_verbose, imex_solver_enabled, imex_allow_explicit, imex_selftest,&
   &  imex_n2_ref, imex_n2_taper, imex_warm,&
   &  imex_bref_hours, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec, imex_stage_fused,&
-  &  imex_redu
+  &  imex_redu, imex_mix_split
 
   ! Derived quantities read by the consumers
   real(kind=8), public, protected :: imex_am3      ! AM3_crv for pre_step3d
@@ -518,6 +533,10 @@ contains
       write(info,'(A,I0,A)') 'imex_verbose = ', imex_verbose, ' must be 0, 1 or 2'
       call error_log%raise_global(context=context, info=trim(info))
     end if
+    if (imex_mix_split < 0 .or. imex_mix_split > 1) then
+      write(info,'(A,I0,A)') 'imex_mix_split = ', imex_mix_split, ' must be 0 or 1'
+      call error_log%raise_global(context=context, info=trim(info))
+    end if
     if (imex_selftest /= 0 .and. imex_selftest /= 1) then
       write(info,'(A,I0,A)') 'imex_selftest = ', imex_selftest, ' must be 0 (none) or 1 (elliptic solver)'
       call error_log%raise_global(context=context, info=trim(info))
@@ -628,7 +647,8 @@ contains
     &'  imex_maxit =', imex_maxit
     write(*,'(3x,A,L2,A,L2,A,I2)') 'imex_solver_enabled =', imex_solver_enabled,&
     &'  imex_allow_explicit =', imex_allow_explicit, '  imex_selftest =', imex_selftest
-    write(*,'(3x,A,I2,A,I2)') 'imex_verbose =', imex_verbose, '  imex_warm =', imex_warm
+    write(*,'(3x,A,I2,A,I2,A,I2)') 'imex_verbose =', imex_verbose, '  imex_warm =', imex_warm,&
+    &'  imex_mix_split =', imex_mix_split
     write(*,'(3x,A,ES10.2)') "unknown eta = db/N2, operator N2 + c D_b D_b^T;  imex_n2_taper =", imex_n2_taper
     write(*,'(3x,A,I3,A,ES10.2,A)') "b_ref: smoothing passes", imex_bref_smooth, '  imex_n2_ref =', imex_n2_ref,&
     &" (floor on the operator's vertical coefficients)"
