@@ -639,6 +639,8 @@ Settings (the keys of the namelist template):
 |--------|---------|-------------|
 | `imex_verbose` | `0` | 1: an `IMEX` line every `ninfo` steps (iterations of each stage's solve, largest velocity correction, unconverged solves), an `IMEX_SOLVE` line per solve, `IMEX_BREF` and `IMEX_TAPER` lines at the rebuilds; 2: also the true FP64 residual of every solve (`IMEX_PCHK`) and the largest pressure correction. 0, 1 and 2 give the same results |
 | `imex_bref_hours` | `24.0` | Rebuild interval (model hours) of the reference stratification `b_ref`, the operator and its preconditioner, which are held in between. 12 is the cautious value where the stratification changes strongly within a day |
+| `imex_obc_mode` | `'auto'` | Normal velocity at the open-boundary faces: `'modal'` the characteristic (per-mode Flather) condition on the internal modes, implicit in the stage solves; `'fixed'` the explicit value of the boundary conditions, as without IMEX; `'auto'` `'modal'` where supported (an open edge, `M3_FRC_BRY` and `T_FRC_BRY`), else `'fixed'`. A run that does not start from the state its boundary data come from should take its first ~10 days with `'fixed'` (see [open boundaries](implicit_internal_waves.md#5-open-boundaries)) |
+| `imex_obc_tref` | `259200.0` | `'modal'`: time scale (s) of the reference of the baroclinic mismatch that is held instead of radiated; at least about three inertial periods at the lowest `\|f\|` of the open edges and at least 1 day; 0: no reference |
 | `imex_rst_state` | `1` | With `EXACT_RESTART`: 1 the restart files carry the IMEX state (about eleven 3-D variables, one copy per file) and restarts are exact; 0 no IMEX state: much smaller files, but the first step after a restart starts the IMEX stores as on the first step of a run (inexact restart) |
 
 Solver and development settings. They can be added to the group and keep their defaults when omitted; the defaults are the tested configuration. These keys may change between versions, and C-Star and Forge do not expose them.
@@ -661,6 +663,10 @@ Solver and development settings. They can be added to the group and keep their d
 | `imex_selftest` | `0` | 1: test of the elliptic operator and solver at startup |
 | `imex_solver_enabled` | `.true.` | Tests only: `.false.` skips the solves (explicit weighted combination) |
 | `imex_allow_explicit` | `.false.` | Tests only: allow `imex_theta_p`, `imex_theta_c` below 1/2 |
+| `imex_obc_q0` | `0.0` | `'modal'`: rotating tuning of the admittances, `q0 = sqrt(1 - (f/omega0)^2)` with `omega0` usually M2 and `f` at the open edges where the internal tide enters, only where `f/omega0 > 0.6` (poleward of about 35 degrees for M2); 0 (off) or 0.2 to 1. It reflects other frequencies and Kelvin waves (see [open boundaries](implicit_internal_waves.md#5-open-boundaries)) |
+| `imex_obc_nmodes` | `3` | `'modal'`: vertical modes with their own admittance; the rest take the last one's |
+| `imex_obc_cmin` | `0.3` | `'modal'`: floor (m/s) on the mode speeds in the admittances (0: off) |
+| `imex_obc_mprint` | `0` | `'modal'` diagnostic: `OBCM` and `OBCF` lines per open edge every `imex_obc_mprint` steps (0: off) |
 
 Keys removed on 2026-11-13 stop ROMS at the read with a message that names them; `src/namelist.nml` gives a `sed` line that deletes them (see [removed keys](implicit_internal_waves.md#removed-keys)).
 
