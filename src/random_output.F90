@@ -11,7 +11,7 @@ module random_output
   use roms_read_write, only:&
   &dn_tm, dn_xr, dn_xu, dn_yr, dn_yv, dn_zr,&
   &create_file
-  use nc_read_write, only: nccreate, ncwrite
+  use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill
   use netcdf, only:&
   &nf90_noerr, nf90_write, nf90_open,&
   &nf90_put_att, nf90_close, nf90_double,&
@@ -164,6 +164,7 @@ contains
 #ifdef PARALLEL_IO
       if (mynode == 0) then
         ierr=nf90_open(fname,nf90_write,ncid)
+        call nc_set_record_nofill(ncid)
         if (ierr/=nf90_noerr) then
           call error_log%check_netcdf_status(netcdf_status=ierr,&
           &info="error opening "//fname,&

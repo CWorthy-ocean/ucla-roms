@@ -19,7 +19,7 @@ module upscale_output
   use error_handling_mod, only: error_log
   use tracers, only: t_units, t_vname, iTandS
   use grid, only: latr, lonr
-  use nc_read_write, only: nccreate, ncwrite
+  use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill
   use roms_read_write, only: create_file, dn_tm, dn_xr, dn_yr, dn_zr
   use netcdf, only:&
   &nf90_double, nf90_noerr, nf90_write, nf90_put_att,&
@@ -603,6 +603,7 @@ contains
 
       if (mynode == 0) then
         ierr=nf90_open(fname_uscl,nf90_write,ncid)
+        call nc_set_record_nofill(ncid)
         if (ierr/=nf90_noerr) then
           call error_log%check_netcdf_status(netcdf_status=ierr, &
             info="error opening "//trim(fname_uscl), &
