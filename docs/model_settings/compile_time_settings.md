@@ -36,7 +36,7 @@ These switches control the configuration of the model grid, including geometry, 
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
 | `CURVGRID` | Use an orthogonal curvilinear grid | enabled | Makes slight adjustments to the velocity tendencies due to spatial changes in dx and dy |
-| `MASKING` | Use land masks for tracer and velocity points to set values to zero | enabled | It is recommended that this flag is always enabled |
+| `MASKING` | Use land masks for tracer and velocity points to set values to zero | enabled | Required; the model does not compile without it |
 | `SPHERICAL` | Use a spherical geometry in the grid setup | enabled | The model will look for coordinates based on latitude and longitude instead of distance |
 | `SPONGE` | Increase viscosity and diffusivity for momentum and tracers near the lateral boundaries | enabled | The magnitude is `v_sponge` in the `V_SPONGE_SETTINGS` namelist group; `v_sponge_trc` there sets the tracer part separately |
 | `MPI_MASKING` | Choose the MPI tiling at runtime from the land mask, skipping tiles that are entirely land | disabled | Requires `PARALLEL_IO` (a joined grid file). `NP_XI` and `NP_ETA` from the namelist are overwritten. Launch with at least as many ranks as the selected tiling needs; extra ranks exit at startup. No `partit` step is needed. |

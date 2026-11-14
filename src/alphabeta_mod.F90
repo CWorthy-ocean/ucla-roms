@@ -28,9 +28,9 @@ contains
     use scalars, only: nstp, rho0
     use param, only: nz, isalt, itemp
 #ifndef NONLIN_EOS
-    use eos_vars, only: tcoef&
+    use eos_vars, only: tcoef
 #ifdef SALINITY
-    &, scoef
+    use eos_vars, only: scoef
 #endif
 #endif
 
@@ -42,9 +42,9 @@ contains
     real(kind=8) Tt, cff
     real(kind=8), parameter ::      r01=6.793952D-2,&
     &r02=-9.095290D-3,&
-    &r03=+1.001685D-4,  r04=-1.120083D-6, r05=+6.536332D-9,&
+    &r03=+1.001685D-4,  r04=-1.120083D-6, r05=+6.536332D-9
 #  ifdef SALINITY
-    &r10=+0.824493_8,   r11=-4.08990D-3,  r12=+7.64380D-5,&
+    real(kind=8), parameter :: r10=+0.824493_8,   r11=-4.08990D-3,  r12=+7.64380D-5,&
     &r13=-8.24670D-7,  r14=+5.38750D-9,&
     &rS0=-5.72466D-3, rS1=+1.02270D-4,  rS2=-1.65460D-6,&
     &r20=+4.8314D-4

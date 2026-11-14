@@ -99,10 +99,10 @@ contains
 #   if defined OBC_WEST && defined OBC_TSPECIFIED
           t(istr-1,j,k,nnew,itrc)=t_west(j,k,itrc)
 #   else
-          t(istr-1,j,k,nnew,itrc)=t(istr,j,k,nnew,itrc)&
+          t(istr-1,j,k,nnew,itrc)=t(istr,j,k,nnew,itrc)
 #   endif
 #   ifdef MASKING
-          &*rmask(istr-1,j)
+          t(istr-1,j,k,nnew,itrc)=t(istr-1,j,k,nnew,itrc)*rmask(istr-1,j)
 #   endif
         enddo
       enddo
@@ -169,10 +169,10 @@ contains
           t(iend+1,j,k,nnew,itrc)=tclm(iend+1,j,k,itrc)
 #    endif
 #   else
-          t(iend+1,j,k,nnew,itrc)=t(iend,j,k,nnew,itrc)&
+          t(iend+1,j,k,nnew,itrc)=t(iend,j,k,nnew,itrc)
 #   endif
 #   ifdef MASKING
-          &*rmask(iend+1,j)
+          t(iend+1,j,k,nnew,itrc)=t(iend+1,j,k,nnew,itrc)*rmask(iend+1,j)
 #   endif
         enddo
       enddo
@@ -244,10 +244,10 @@ contains
           t(i,jstr-1,k,nnew,itrc)=tclm(i,jstr-1,k,itrc)
 #    endif
 #   else
-          t(i,jstr-1,k,nnew,itrc)=t(i,jstr,k,nnew,itrc)&
+          t(i,jstr-1,k,nnew,itrc)=t(i,jstr,k,nnew,itrc)
 #   endif
 #   ifdef MASKING
-          &*rmask(i,jstr-1)
+          t(i,jstr-1,k,nnew,itrc)=t(i,jstr-1,k,nnew,itrc)*rmask(i,jstr-1)
 #   endif
         enddo
       enddo
@@ -312,10 +312,10 @@ contains
           t(i,jend+1,k,nnew,itrc)=tclm(i,jend+1,k,itrc)
 #    endif
 #   else
-          t(i,jend+1,k,nnew,itrc)=t(i,jend,k,nnew,itrc)&
+          t(i,jend+1,k,nnew,itrc)=t(i,jend,k,nnew,itrc)
 #   endif
 #   ifdef MASKING
-          &*rmask(i,jend+1)
+          t(i,jend+1,k,nnew,itrc)=t(i,jend+1,k,nnew,itrc)*rmask(i,jend+1)
 #   endif
         enddo
       enddo

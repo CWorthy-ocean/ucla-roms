@@ -115,10 +115,10 @@ contains
 #    ifdef OBC_M3SPECIFIED
           u(istr,j,k,nnew)=u_west(j,k)         ! specified
 #    else
-          u(istr,j,k,nnew)=u(istr+1,j,k,nnew)&  ! Gradient: default
+          u(istr,j,k,nnew)=u(istr+1,j,k,nnew)   ! Gradient: default
 #    endif
 #    ifdef MASKING
-          &*umask(istr,j)
+          u(istr,j,k,nnew)=u(istr,j,k,nnew)*umask(istr,j)
 #    endif
         enddo
       enddo
@@ -204,10 +204,10 @@ contains
 #    ifdef OBC_M3SPECIFIED
           u(iend+1,j,k,nnew)=u_east(j,k)       ! specified
 #    else
-          u(iend+1,j,k,nnew)=u(iend,j,k,nnew)&  ! gradient (default)
+          u(iend+1,j,k,nnew)=u(iend,j,k,nnew)   ! gradient (default)
 #    endif
 #    ifdef MASKING
-          &*umask(iend+1,j)
+          u(iend+1,j,k,nnew)=u(iend+1,j,k,nnew)*umask(iend+1,j)
 #    endif
         enddo
       enddo
@@ -276,10 +276,10 @@ contains
 #    ifdef OBC_M3SPECIFIED
           u(i,jstr-1,k,nnew)=u_south(i,k)      ! specified
 #    else
-          u(i,jstr-1,k,nnew)=u(i,jstr,k,nnew)&  ! gradient (default)
+          u(i,jstr-1,k,nnew)=u(i,jstr,k,nnew)   ! gradient (default)
 #    endif
 #    ifdef MASKING
-          &*umask(i,jstr-1)
+          u(i,jstr-1,k,nnew)=u(i,jstr-1,k,nnew)*umask(i,jstr-1)
 #    endif
         enddo
       enddo
@@ -355,10 +355,10 @@ contains
 #    ifdef OBC_M3SPECIFIED
         u(i,jend+1,k,nnew)=u_north(i,k)      ! specified
 #    else
-        u(i,jend+1,k,nnew)=u(i,jend,k,nnew)&  ! gradient (default)
+        u(i,jend+1,k,nnew)=u(i,jend,k,nnew)   ! gradient (default)
 #    endif
 #    ifdef MASKING
-        &*umask(i,jend+1)
+        u(i,jend+1,k,nnew)=u(i,jend+1,k,nnew)*umask(i,jend+1)
 #    endif
       enddo
     enddo

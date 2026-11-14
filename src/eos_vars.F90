@@ -19,7 +19,7 @@ module eos_vars
 
   namelist /LIN_RHO_EOS_SETTINGS/ &
 #ifdef SALINITY
-  & Scoef, S0,
+  & Scoef, S0, &
 #endif
   &Tcoef, T0
 

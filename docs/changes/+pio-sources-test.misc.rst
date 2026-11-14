@@ -1,0 +1,1 @@
+New test ``tests/test_pio_point_sources.py`` runs a closed basin with a river, a pipe and a surface forcing record read mid-run, with and without ``PARALLEL_IO``, and checks that both give the same result.

@@ -117,10 +117,10 @@ contains
 #    ifdef OBC_M3SPECIFIED
           v(i,jstr,k,nnew)=v_south(i,k)        ! specified
 #    else
-          v(i,jstr,k,nnew)=v(i,jstr+1,k,nnew)&  ! gradient (default)
+          v(i,jstr,k,nnew)=v(i,jstr+1,k,nnew)   ! gradient (default)
 #    endif
 #    ifdef MASKING
-          &*vmask(i,jstr)
+          v(i,jstr,k,nnew)=v(i,jstr,k,nnew)*vmask(i,jstr)
 #    endif
         enddo
       enddo
@@ -212,10 +212,10 @@ contains
           v(i,jend+1,k,nnew)=vclm(i,jend+1,k)
 #     endif
 #    else
-          v(i,jend+1,k,nnew)=v(i,jend,k,nnew)&  ! gradient (default)
+          v(i,jend+1,k,nnew)=v(i,jend,k,nnew)   ! gradient (default)
 #    endif
 #    ifdef MASKING
-          &*vmask(i,jend+1)
+          v(i,jend+1,k,nnew)=v(i,jend+1,k,nnew)*vmask(i,jend+1)
 #    endif
         enddo
       enddo
@@ -287,10 +287,10 @@ contains
           v(istr-1,j,k,nnew)=vclm(istr-1,j,k)
 #     endif
 #    else
-          v(istr-1,j,k,nnew)=v(istr,j,k,nnew)&  ! gradient (default)
+          v(istr-1,j,k,nnew)=v(istr,j,k,nnew)   ! gradient (default)
 #    endif
 #    ifdef MASKING
-          &*vmask(istr-1,j)
+          v(istr-1,j,k,nnew)=v(istr-1,j,k,nnew)*vmask(istr-1,j)
 #    endif
         enddo
       enddo
@@ -367,10 +367,10 @@ contains
         v(iend+1,j,k,nnew)=vclm(iend+1,j,k)
 #     endif
 #    else
-        v(iend+1,j,k,nnew)=v(iend,j,k,nnew)&  ! gradient (default)
+        v(iend+1,j,k,nnew)=v(iend,j,k,nnew)   ! gradient (default)
 #    endif
 #    ifdef MASKING
-        &*vmask(iend+1,j)
+        v(iend+1,j,k,nnew)=v(iend+1,j,k,nnew)*vmask(iend+1,j)
 #    endif
       enddo
     enddo

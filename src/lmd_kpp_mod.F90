@@ -31,9 +31,9 @@ contains
 !     flux_frc-> only: sustr, svstr, stflx, srflx
     use roms_mpi, only: exchange_xxx
     use dimensions, only: inode, jnode
-    use param, only: ieast, itemp, iwest, jnorth, jsouth, np_xi, np_eta&
+    use param, only: ieast, itemp, iwest, jnorth, jsouth, np_xi, np_eta
 #ifdef SALINITY
-    &, isalt
+    use param, only: isalt
 #endif
     use mixing, only: akt, akv
 # if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \

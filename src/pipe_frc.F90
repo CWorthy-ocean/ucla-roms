@@ -103,6 +103,8 @@ contains
     else
 
 #ifdef PARALLEL_IO
+      ! per-pipe data is read serially by each rank (as in river_frc)
+      pio_gtype='----'
       pio_file_is_open = 0
 #endif
       call set_frc_data(nc_pvol,pipe_vol)                ! set pipe volume for all pipes at current time
@@ -111,8 +113,10 @@ contains
 
       call set_pipe_vert_prf                             ! set pipe vertical profiles
 #ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
       pio_file_is_open = 0
-      call PIO_closefile(pio_FileDesc)
 #endif
     endif
 

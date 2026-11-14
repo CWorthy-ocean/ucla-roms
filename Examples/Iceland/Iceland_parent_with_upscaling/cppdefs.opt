@@ -84,7 +84,7 @@
 #define CURVGRID
 
 ! Use land masks for tracer and velocity points to set values to zero
-! Usage notes: It is recommended that this flag is always enabled
+! Usage notes: Required; the model does not compile without it
 #define MASKING
 
 ! Use a spherical geometry in the grid setup
