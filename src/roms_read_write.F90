@@ -2014,18 +2014,19 @@ contains
 
 !      ierr=nf90_open(frcfiles(ifile),nf90_nowrite, ncid)
 #ifdef PARALLEL_IO
-    if (pio_gtype /= '----') then
-      ! close and re-open if a different forcing file is currently open
-      ! (e.g. physical and bgc boundary data read in the same pass)
-      if ((pio_file_is_open == 1) .and.&
-      &   (trim(pio_current_file) /= trim(frcfiles(ifile)))) then
-        call PIO_closefile(pio_FileDesc)
-        pio_file_is_open = 0
-      endif
-      if (pio_file_is_open == 0) then
-        call pio_open_or_abort(frcfiles(ifile), module_name//"/"//sr_name)
-        pio_file_is_open = 1
-      endif
+    ! Surface data are always gridded and read through PIO (pio_gtype is set
+    ! below), so open the file whatever pio_gtype the previous reader left:
+    ! after a serial reader ('----', e.g. rivers) it used to stay closed.
+    ! close and re-open if a different forcing file is currently open
+    ! (e.g. physical and bgc boundary data read in the same pass)
+    if ((pio_file_is_open == 1) .and.&
+    &   (trim(pio_current_file) /= trim(frcfiles(ifile)))) then
+      call PIO_closefile(pio_FileDesc)
+      pio_file_is_open = 0
+    endif
+    if (pio_file_is_open == 0) then
+      call pio_open_or_abort(frcfiles(ifile), module_name//"/"//sr_name)
+      pio_file_is_open = 1
     endif
 #else
     ncid = frc_read_ncid(frcfiles(ifile))
