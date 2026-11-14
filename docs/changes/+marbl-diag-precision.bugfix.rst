@@ -1,0 +1,3 @@
+MARBL diagnostics are now kept in double precision. They were rounded to single precision when ROMS copied them from MARBL, so every value in the ``_bgc_dia`` and ``_bgc_dia_avg`` files, and the held MARBL fields of the ``_cdr`` averages (``FG_CO2``, ``FG_ALT_CO2``, ``pCO2SURF``, ``pCO2SURF_ALT_CO2``, ``CO3``, ``CO3_ALT_CO2``, ``co3_sat_arag``, ``co3_sat_calc``, ``zsatarag`` and ``zsatcalc``), was off by up to 6e-8 relative.
+- The CDR uptake signal ``FG_CO2 - FG_ALT_CO2`` in ``_cdr`` is no longer rounded to zero where it is below about 6e-8 of the flux, as it was early in a release and far from it.
+- Only these values change. The ``pH`` fields of the ``_cdr`` averages, the tracers and the rest of the model state are unchanged.
