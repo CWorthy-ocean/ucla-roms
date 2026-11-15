@@ -446,6 +446,13 @@ contains
       enddo
     enddo
     call error_log%abort_check()
+#ifdef EXCHANGE
+    ! The scan above does not reach a river cell at -1 (west or south halo),
+    ! so the halo face 0 it discharges into is still empty, but step2d forms
+    ! the free surface of the halo cell 0 from DUon/DVom on that face. Take
+    ! the halo faces from the rank that owns them.
+    call exchange_xxx(riv_uflx, riv_vflx)
+#endif
 
     ! List the river faces (same test as the loops that use them)
     nriv_u = count(abs(riv_uflx) > 1e-3)
