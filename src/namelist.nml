@@ -655,8 +655,9 @@ fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost ta
 &IMEX_IGW_SETTINGS                                                  !imex_igw.F90
 imex_verbose = 0                     ! 0: quiet; 1: solver statistics (IMEX line: iterations,
                                      ! max |du|; IMEX_SOLVE, IMEX_TAPER lines); 2: 1 + the true
-                                     ! FP64 residual of every solve (IMEX_PCHK) and max |dp| on the
-                                     ! IMEX line. 0, 1 and 2 give the same results
+                                     ! FP64 residual of every solve (IMEX_PCHK), its residual history
+                                     ! (IMEX_RH) and max |dp| on the IMEX line. 0, 1 and 2 give the
+                                     ! same results
 imex_bref_hours = 24.0               ! Rebuild interval (model hours) of the reference stratification
                                      ! b_ref, the operator, its preconditioner and the 'modal'
                                      ! boundary modes; 12 is the cautious value for strongly

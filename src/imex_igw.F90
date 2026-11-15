@@ -131,7 +131,8 @@ module imex_igw
   real(kind=8)    :: imex_tol_corr = 1.e-3_8     ! relative PCG tolerance, corrector
   integer(kind=4) :: imex_maxit = 200            ! PCG iteration cap
   integer(kind=4) :: imex_verbose = 0            ! 0 quiet, 1 solver statistics, 2 + true residual
-                                                 ! (IMEX_PCHK) and max |dp|; 0, 1 and 2 give the same results
+                                                 ! (IMEX_PCHK), residual history (IMEX_RH) and max |dp|;
+                                                 ! 0, 1 and 2 give the same results
   integer(kind=4) :: imex_selftest = 0           ! startup test: 0 none, 1 elliptic solver
   logical, public, protected :: imex_solver_enabled = .true.  ! .false.: skip the elliptic solves (tests)
   logical         :: imex_allow_explicit = .false.  ! tests only: allow theta_p, theta_c < 0.5
@@ -401,6 +402,11 @@ module imex_igw
   ! thicknesses, and the vectors z, p, q; pf_q0 W M x0 (FP64); pf_chk (imex_verbose >= 2): IMEX_PCHK line
   ! (true FP64 residual of each solve)
   logical :: pf_on = .false., pf_chk = .false.
+  ! rh_on (imex_verbose >= 2): IMEX_RH line per stage solve; rh_res(it) the <r,z> of iteration it
+  ! (imex_pcg_sc, imex_pcgf8, imex_pcgf4; rh_n = imex_maxit entries)
+  logical :: rh_on = .false.
+  integer(kind=4) :: rh_n = 0
+  real(kind=8), allocatable :: rh_res(:)
   ! imex_stage_fused = 1 in effect (sf_on); the pending x update handed from imex_pcgf8/4 (pre mode)
   ! to imex_sf_fin8/4, and the start-up sums from imex_sf_rhs8/4
   logical :: sf_on = .false., sf_pend = .false.
@@ -672,6 +678,11 @@ contains
     if (pf_on .and. imex_solver_prec == 4) pf_prec = 4
     pf_chk = pf_on .and. imex_verbose >= 2           ! (one FP64 operator application and a reduction per solve;
                                                      ! a check only: the solution and the step are unchanged)
+    rh_on = imex_verbose >= 2                        ! IMEX_RH (scalars of the solve; the step is unchanged)
+    if (rh_on .and. .not. allocated(rh_res)) then
+      rh_n = imex_maxit
+      allocate( rh_res(rh_n) ) ; rh_res = 0._8
+    end if
     if (imex_stage_fused < 0 .or. imex_stage_fused > 1) call error_log%raise_global(context=context,&
     &info="imex_stage_fused must be 0 or 1")
     ! imex_stage_fused = 1 with the fused solve, theta_p, theta_c > 0 and the solver enabled; otherwise 0
@@ -6275,6 +6286,7 @@ contains
       end if
       call tq_mark(29)
       iters = it
+      if (rh_on) rh_res(min(it, rh_n)) = glob(1)   ! imex_verbose >= 2: residual history (IMEX_RH)
       if (.not. ieee_is_finite(glob(1)) .or. glob(1) < 0._8) then
         call breakdown('<r,M^-1 r>', glob(1), it)
         exit
@@ -6293,6 +6305,7 @@ contains
     enddo
     call tq_mark(32)
     if (broke .or. resid > tole) n_maxit_hits = n_maxit_hits + 1
+    if (rh_on) call imex_rh_line(stage, iters, warm, rho0, bnorm)
     if (warm) resid = resid*sqrt(rho0/max(bnorm,1.e-300_8))   ! relative to the cold solve's norm
     if (pcg_start == 3 .and. imex_warm == 1) then  ! M x = b - r for the next solve of this stage
       if (.not. allocated(ps_mx)) then
@@ -6731,6 +6744,7 @@ contains
       end if
       call tq_mark(29)
       iters = it
+      if (rh_on) rh_res(min(it, rh_n)) = glob(1)   ! imex_verbose >= 2: residual history (IMEX_RH)
       if (.not. ieee_is_finite(glob(1)) .or. glob(1) < 0._8) then
         call breakdown('<r,M^-1 r>', glob(1), it)
         exit
@@ -6752,6 +6766,7 @@ contains
     end if
     call tq_mark(32)
     if (broke .or. resid > tole) n_maxit_hits = n_maxit_hits + 1
+    if (rh_on) call imex_rh_line(stage, iters, warm, rho0, bnorm)
     if (warm) resid = resid*sqrt(rho0/max(bnorm,1.e-300_8))   ! relative to the cold solve's norm
     if (pr) then                                  ! W M x completed by imex_sf_fin
       if (pcg_start == 3 .and. imex_warm == 1) then
@@ -7204,6 +7219,7 @@ contains
       end if
       call tq_mark(29)
       iters = it
+      if (rh_on) rh_res(min(it, rh_n)) = glob(1)   ! imex_verbose >= 2: residual history (IMEX_RH)
       if (.not. ieee_is_finite(glob(1)) .or. glob(1) < 0._8) then
         call breakdown('<r,M^-1 r>', glob(1), it)
         exit
@@ -7225,6 +7241,7 @@ contains
     end if
     call tq_mark(32)
     if (broke .or. resid > tole) n_maxit_hits = n_maxit_hits + 1
+    if (rh_on) call imex_rh_line(stage, iters, warm, rho0, bnorm)
     if (warm) resid = resid*sqrt(rho0/max(bnorm,1.e-300_8))   ! relative to the cold solve's norm
     if (pr) then                                  ! W M x completed by imex_sf_fin
       if (pcg_start == 3 .and. imex_warm == 1) then
@@ -8235,6 +8252,29 @@ contains
       enddo
     end subroutine col_row
   end subroutine imex_sf_fin4
+
+  !----------------------------------------------------------------------
+  subroutine imex_rh_line(stage, iters, warm, rho0, bnorm)
+    ! imex_verbose >= 2: one IMEX_RH line per stage solve (rank 0): step, stage, iterations,
+    ! the start residual and the residual after each iteration, all relative to the right-hand
+    ! side, sqrt(<r,z>/<b,z_b>) in the norm of the stopping test (warm start: rho0 = <r0,z0> and
+    ! bnorm = <b,D^-1 b>; cold start: the start residual is 1). The last value is the IMEX_SOLVE
+    ! resid. The scalars come from the solve's own reductions (rh_res): no extra communication.
+    !DIR$ ATTRIBUTES NOINLINE :: imex_rh_line
+    use param, only: mynode
+    use scalars, only: iic
+    implicit none
+    integer(kind=4), intent(in) :: stage, iters
+    logical, intent(in) :: warm
+    real(kind=8), intent(in) :: rho0, bnorm
+    real(kind=8) :: r0
+    integer(kind=4) :: it
+    if (mynode /= 0) return
+    r0 = 1._8
+    if (warm) r0 = sqrt(rho0/max(bnorm,1.e-300_8))
+    write(*,'(1x,A,I7,I2,I4,*(ES10.3))') 'IMEX_RH', iic, stage, iters, r0,&
+    &  (r0*sqrt(abs(rh_res(it))/max(rho0,1.e-300_8)), it=1,min(iters,rh_n))
+  end subroutine imex_rh_line
 
   !----------------------------------------------------------------------
   subroutine imex_solve_line(stage, iters, resid, tw)
