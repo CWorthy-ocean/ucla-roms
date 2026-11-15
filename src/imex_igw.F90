@@ -182,6 +182,18 @@ module imex_igw
                                                  ! (main.F90): the predictor's implicit correction overshoots and is reversed by the
                                                  ! corrector's, so mixing the predictor state t^n+1/2 anti-diffuses the step's net
                                                  ! change
+  integer(kind=4) :: imex_corr_adv = 0          ! corrector rhs with the step's advective buoyancy change: 0 off
+                                                 ! (default); 1 on. The corrector's implicit-level pressure is
+                                                 ! that of b* + db, and r0 = dt R(F) - dps holds only the
+                                                 ! wave-linearized part of the step's change, so with advection
+                                                 ! b* + db holds the predictor's non-wave change NW = b* - b^n - dps
+                                                 ! (about half a step of advection) instead of the step's. 1 adds
+                                                 ! X = n2c dt [A(b*; F) - A(b_ref; PF)] - NW (imex_advb_rhs), A the
+                                                 ! tracer corrector's advection (UP3 horizontal, U3 vertical) with
+                                                 ! set_HUV1's transport F, PF its projection: the advective change
+                                                 ! of the step less the wave part that R carries (ADVECTIVE_LIMIT_DIAG:
+                                                 ! uniform-current limit 0.5 -> 0.9 in the slice). Cost: one more
+                                                 ! advection pass of one scalar and a halo exchange per step
   integer(kind=4) :: imex_warm = 1               ! stage-solve start: 0 zero; 1 the stage's previous solution
   integer(kind=4) :: imex_pcg_start = 3          ! stage solve: 0 imex_pcg_warm/
                                                  ! imex_pcg; 1 imex_pcg_s: rhs scaling, residual of the guess,
@@ -298,7 +310,7 @@ module imex_igw
   &  imex_verbose, imex_solver_enabled, imex_allow_explicit, imex_selftest,&
   &  imex_n2_ref, imex_n2_taper, imex_warm,&
   &  imex_bref_hours, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec, imex_stage_fused,&
-  &  imex_redu, imex_rst_state, imex_mix_split,&
+  &  imex_redu, imex_rst_state, imex_mix_split, imex_corr_adv,&
   &  imex_obc_mode, imex_obc_nmodes, imex_obc_q0, imex_obc_tref,&
   &  imex_obc_mprint, imex_obc_cmin
 
@@ -348,6 +360,9 @@ module imex_igw
   ! Stage solves: the predictor's solution dps (linearized p* - p^n), the previous step's linearized
   ! pressure increment dpw (p^n - p^n-1), rhs transports, r0, b and dp
   real(kind=8), allocatable, dimension(:,:,:) :: dps, dpw
+  ! imex_corr_adv = 1 (imex_advb_save, imex_advb_rhs; allocated at first use): rho_b at level n (copied at
+  ! the predictor solve), b* with halos, and the corrector's memory term dps - X
+  real(kind=8), allocatable, dimension(:,:,:) :: advb_rn, advb_bs, advb_mem
   real(kind=8), allocatable, dimension(:,:,:) :: wk_fu, wk_fv, wk_r0, wk_b, wk_dp
   ! Statistics since the last diagnostics line: solves, iterations (sum,
   ! max) per stage, unconverged solves, max |dp| (imex_verbose >= 2) and max |du| (this rank)
@@ -435,13 +450,13 @@ module imex_igw
   real(kind=8), allocatable, dimension(:,:,:) :: ad_n2raw   ! N2 of b_ref before its floor (taper)
   real(kind=8) :: tmr(10) = 0._8, tlast = 0._8      ! cost breakdown (imex_tlap, imex_tm_print)
   ! fine cost breakdown (tq_start, tq_mark; IMEX_COST2 line at the end of the run)
-  integer(kind=4), parameter :: ntq = 32
+  integer(kind=4), parameter :: ntq = 33
   real(kind=8) :: tq(ntq) = 0._8, tq_t0 = 0._8
   character(len=14), parameter :: tq_name(ntq) = [character(len=14) :: 'setup_geom', 'adj_mean_rho',&
   &  'adj_bb_exch', 'bref_sort', 'bref_smooth', 'bref_floor', 'adj_n2c_en2', 'eta_setup1', 'bcoef',&
   &  'adj_diag', 'eta_setup2', 'stage_exch_uv', 'rhs_pred', 'rhs_corr', 'scale_b', 'pcg_warm_ovh',&
   &  'pcg_init', 'correct', 'stage_end', 'pg_combine', 'ptr_exch_uv', 'ptr_btfix', 'ptr_build', 'ptr_exch_flx',&
-  &  'ptr_omega', 'shift_levels', 'obc_pre', 'pcg_exch', 'pcg_allred', 'pcg_op', 'pcg_pc', 'pcg_vec']
+  &  'ptr_omega', 'shift_levels', 'obc_pre', 'pcg_exch', 'pcg_allred', 'pcg_op', 'pcg_pc', 'pcg_vec', 'corr_advb']
   ! Timing of the operator and preconditioner applications (imex_solve_line: per solve, from the
   ! snapshot sv_t); cb_tbuild (the build time of the removed 'column' preconditioner) stays 0 and
   ! keeps the IMEX_SOLVE line's 'col build' field
@@ -651,6 +666,10 @@ contains
       write(info,'(A,I0,A)') 'imex_mix_split = ', imex_mix_split, ' must be 0 or 1'
       call error_log%raise_global(context=context, info=trim(info))
     end if
+    if (imex_corr_adv < 0 .or. imex_corr_adv > 1) then
+      write(info,'(A,I0,A)') 'imex_corr_adv = ', imex_corr_adv, ' must be 0 or 1'
+      call error_log%raise_global(context=context, info=trim(info))
+    end if
     if (imex_selftest /= 0 .and. imex_selftest /= 1) then
       write(info,'(A,I0,A)') 'imex_selftest = ', imex_selftest, ' must be 0 (none) or 1 (elliptic solver)'
       call error_log%raise_global(context=context, info=trim(info))
@@ -797,6 +816,8 @@ contains
     write(*,'(3x,A,I2,A,I2,A,I2)') 'imex_verbose =', imex_verbose, '  imex_warm =', imex_warm,&
     &'  imex_mix_split =', imex_mix_split
     write(*,'(3x,A,ES10.2)') "unknown eta = db/N2, operator N2 + c D_b D_b^T;  imex_n2_taper =", imex_n2_taper
+    if (imex_corr_adv == 1) write(*,'(3x,A)') 'imex_corr_adv = 1: corrector rhs with the step''s advective'&
+    &//' buoyancy change'
     if (imex_obc_modal) write(*,'(3x,A,A,A,I3,A,F7.4,A,F10.1,A)') "imex_obc_mode = '",&
     &trim(imex_obc_mode), "' -> 'modal': imex_obc_nmodes =", imex_obc_nmodes, '  imex_obc_q0 =', imex_obc_q0,&
     &'  imex_obc_tref =', imex_obc_tref, ' s'
@@ -1088,6 +1109,14 @@ contains
     call imex_tlap(0)
     call imex_step_setup                    ! per step: computed by the first solve
     call imex_tlap(2)
+    if (imex_corr_adv == 1) then            ! the step's advective buoyancy change in the corrector rhs
+      if (stage == imex_stage_pred) then
+        call imex_advb_save                 ! rho_b at level n
+      else
+        call imex_advb_rhs(dt)              ! advb_mem = dps - X, the corrector's memory term
+      end if
+      call tq_mark(33)
+    end if
     if (sf_on) then                         ! imex_stage_fused: rhs, solve and correction in imex_stage_sf
       if (stage == imex_stage_pred) then
         is = 1
@@ -1169,13 +1198,23 @@ contains
       &                       v(:,:,:,3), v(:,:,:,nstp), v_nm1,&
       &                       wrhs_corr(1), u(:,:,:,nnew), v(:,:,:,nnew))
       call imex_stage_increment(dts)   ! (closed faces zeroed in imex_rhs_transport)
-      do k=1,nz
-        do j=jb0,jb1
-          do i=ib0,ib1
-            wk_r0(i,j,k) = wk_r0(i,j,k) - dps(i,j,k)
+      if (imex_corr_adv == 1) then     ! memory term dps - X (imex_advb_rhs)
+        do k=1,nz
+          do j=jb0,jb1
+            do i=ib0,ib1
+              wk_r0(i,j,k) = wk_r0(i,j,k) - advb_mem(i,j,k)
+            enddo
           enddo
         enddo
-      enddo
+      else
+        do k=1,nz
+          do j=jb0,jb1
+            do i=ib0,ib1
+              wk_r0(i,j,k) = wk_r0(i,j,k) - dps(i,j,k)
+            enddo
+          enddo
+        enddo
+      end if
       call tq_mark(14)
     end if
 
@@ -1390,6 +1429,299 @@ contains
       enddo
     enddo
   end subroutine imex_stage_increment
+
+  !----------------------------------------------------------------------
+  subroutine imex_advb_save
+    ! imex_corr_adv = 1, predictor solve: advb_rn := rho_b at level n (rho1 under SPLIT_EOS, else rho; main.F90
+    ! overwrites it with rho(nrhs = 3) after set_HUV1), for b* - b^n in imex_advb_rhs. Interior only.
+#  ifdef SPLIT_EOS
+    use eos_vars, only: rhob => rho1
+#  else
+    use eos_vars, only: rhob => rho
+#  endif
+    use param, only: lm, mm, nz
+    implicit none
+    integer(kind=4) :: i, j, k
+    if (.not. allocated(advb_rn)) then
+      allocate( advb_rn(GLOBAL_2D_ARRAY,nz), advb_bs(GLOBAL_2D_ARRAY,nz), advb_mem(GLOBAL_2D_ARRAY,nz) )
+      advb_rn = 0._8 ; advb_bs = 0._8 ; advb_mem = 0._8
+    end if
+    do k=1,nz
+      do j=jb0,jb1
+        do i=ib0,ib1
+          advb_rn(i,j,k) = rhob(i,j,k)
+        enddo
+      enddo
+    enddo
+  end subroutine imex_advb_save
+
+  !----------------------------------------------------------------------
+  subroutine imex_advb_rhs(dts)
+    ! imex_corr_adv = 1, corrector solve (before its rhs): advb_mem := dps - X, the memory term that replaces
+    ! dps in the corrector rhs (r0 = dt R(F_corr_expl) - advb_mem), with (eta units, eta = db/N2)
+    !   X  = sqrt(s) act [ n2c dts (A(b*; F, W) - A(b_ref; PF, W_PF)) - NW ],   NW = n2c (b* - b^n) - dps.
+    ! b = -g rho_b/rho0 (as b_ref); b* from rho_b(nrhs = 3) (rho_eos after set_HUV1), b^n from imex_advb_save.
+    ! A(q; F, W) = the rate of change of q by the tracer corrector's advection in advective form,
+    !   -pm pn/Hz sum_faces F (q_face - q_cell), q_face the UP3 face value of compute_horiz_tracer_fluxes.h
+    !   (masked differences, edge extrapolation at physical edges, the inflow correction at open edges) and the
+    !   thickness-aware U3 interface value of advection.F90 (t_vadv_up3); a constant q has A = 0.
+    ! F = FlxU, FlxV (set_HUV1, level n+1/2; land and river faces left out through umask, vmask: a volume
+    !   source enters with the cell's own b), W = We + Wi (omega after set_HUV1). Where the vertical Courant
+    !   number dts pm pn |W|/min(Hz) at either interface of a cell exceeds advb_czmax (1), the explicit U3
+    !   estimate overshoots (the tracer steps advect that part implicitly): X = 0 there, so the implicit level
+    !   stays b* + db as without the key (on the Sargasso Sea, an open-edge corner with vertical Courant numbers
+    !   of 3-8 at the start of a run blew up within 4 steps from 2320 s without this).
+    ! PF = F with its column mean removed per face as imex_rhs_transport does (closed faces 0), W_PF its
+    !   column recursion (0 at the bottom and the top): A(b_ref; PF, W_PF) is the UP3 counterpart of the wave
+    !   response R that the rhs carries with the IMEX weights, so X holds the advection of b* - b_ref by the
+    !   whole flow and of b_ref by the depth-mean part of the flow, less the predictor's non-wave change NW.
+    ! sqrt(s) = 1/ad_n2k (imex_n2_taper): a tapered cell gets X scaled as its wave forcing is.
+    ! imex_verbose >= 2: one IMEX_ADVB line per step (rank 0): rms of NW, of X and of dps, max |X|; and where
+    ! (global i, j, k; from the rank that holds it).
+    !DIR$ ATTRIBUTES NOINLINE :: imex_advb_rhs
+#  ifdef SPLIT_EOS
+    use eos_vars, only: rhob => rho1
+#  else
+    use eos_vars, only: rhob => rho
+#  endif
+    use param, only: lm, mm, nz, mynode, ocean_grid_comm, isw_corn, jsw_corn
+    use scalars, only: g, rho0, iic
+    use ocean_vars, only: hz, flxu, flxv, we, wi
+    use grid, only: pm, pn
+#  ifdef MASKING
+    use grid, only: umask, vmask
+#  endif
+    use roms_mpi, only: exchange_xxx
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_sum, mpi_max
+    implicit none
+    real(kind=8), intent(in) :: dts
+    real(kind=8), allocatable, save :: fxs(:,:), fus(:,:), fxr(:,:), fur(:,:), fes(:,:,:), fvs(:,:,:),&
+    &                                  fer(:,:,:), fvr(:,:,:), dd(:), cv(:)
+    integer(kind=4), save :: na0 = 0, na1 = -1
+    real(kind=8), parameter :: c6 = 0.1666666666666666_8
+    real(kind=8), parameter :: advb_czmax = 1._8   ! vertical Courant number above which X = 0
+    real(kind=8) :: ga, sf, hf, mk, rh(nz), cp(nz), cm(nz), qs(nz), qr(nz), ws(0:nz), wr(0:nz), fzs(0:nz),&
+    &               fzr(0:nz), cz(0:nz), as, ar, rt, nw, x, hk, hkp, hkm, hkp2, loc(4), glob(4), xm, xmg
+    integer(kind=4) :: i, j, k, i0, i1, s0, s1, st, ierr, xl(3)
+    if (.not. allocated(fxs) .or. na0 /= ib0 .or. na1 /= ib1) then
+      if (allocated(fxs)) deallocate(fxs, fus, fxr, fur, fes, fvs, fer, fvr, dd, cv)
+      allocate( fxs(ib0:ib1+1,nz), fus(ib0:ib1+1,nz), fxr(ib0:ib1+1,nz), fur(ib0:ib1+1,nz),&
+      &         fes(ib0:ib1,nz,2), fvs(ib0:ib1,nz,2), fer(ib0:ib1,nz,2), fvr(ib0:ib1,nz,2), dd(ib0-2:ib1+3),&
+      &         cv(ib0-2:ib1+2) )
+      na0 = ib0 ; na1 = ib1
+    end if
+    ga = -g/rho0
+    ! b* on the owned cells and the ghost row/column at physical edges (rho_eos fills it from the
+    ! boundary tracers), then the halos
+    i0 = ib0 ; i1 = ib1 ; s0 = jb0 ; s1 = jb1
+    if (w_edge) i0 = ib0-1
+    if (e_edge) i1 = ib1+1
+    if (s_edge) s0 = jb0-1
+    if (n_edge) s1 = jb1+1
+    do k=1,nz
+      do j=s0,s1
+        do i=i0,i1
+          advb_bs(i,j,k) = ga*rhob(i,j,k)
+        enddo
+      enddo
+    enddo
+    call exchange_xxx(advb_bs)
+    loc = 0._8 ; xm = 0._8 ; xl = 0
+    s0 = 1 ; s1 = 2
+    call vrow(jb0, s0)
+    do j=jb0,jb1
+      call vrow(j+1, s1)
+      call urow(j)
+      do i=ib0,ib1
+        ! column: transports W (b*) and W_PF (b_ref), U3 coefficients (advection.F90)
+        ws(0) = 0._8 ; ws(nz) = 0._8 ; wr(0) = 0._8 ; wr(nz) = 0._8
+        do k=1,nz-1
+          wr(k) = wr(k-1) - ( fur(i+1,k)-fur(i,k) + fvr(i,k,s1)-fvr(i,k,s0) )
+          hk = Hz(i,j,k) ; hkp = Hz(i,j,k+1)
+          hkm = hk ; if (k >= 2) hkm = Hz(i,j,k-1)
+          hkp2 = hkp ; if (k <= nz-2) hkp2 = Hz(i,j,k+2)
+          rh(k) = 1._8/max(hk+hkp, 1.d-30)
+          cp(k) = hk*hkp/max(hkm+hk+hkp, 1.d-30)
+          cm(k) = hk*hkp/max(hk+hkp+hkp2, 1.d-30)
+        enddo
+        cz(0) = 0._8 ; cz(nz) = 0._8        ! vertical Courant number at the interfaces
+        do k=1,nz-1
+          ws(k) = We(i,j,k) + Wi(i,j,k)
+          cz(k) = dts*pm(i,j)*pn(i,j)*abs(ws(k))/min(Hz(i,j,k), Hz(i,j,k+1))
+        enddo
+        do k=1,nz
+          qs(k) = advb_bs(i,j,k) ; qr(k) = ad_bb(i,j,k)
+        enddo
+        call u3col(qs, ws, fzs)
+        call u3col(qr, wr, fzr)
+        do k=1,nz
+          as = fxs(i+1,k) - qs(k)*fus(i+1,k) - fxs(i,k) + qs(k)*fus(i,k)&
+          &  + fes(i,k,s1) - qs(k)*fvs(i,k,s1) - fes(i,k,s0) + qs(k)*fvs(i,k,s0)&
+          &  + fzs(k) - qs(k)*ws(k) - fzs(k-1) + qs(k)*ws(k-1)
+          ar = fxr(i+1,k) - qr(k)*fur(i+1,k) - fxr(i,k) + qr(k)*fur(i,k)&
+          &  + fer(i,k,s1) - qr(k)*fvr(i,k,s1) - fer(i,k,s0) + qr(k)*fvr(i,k,s0)&
+          &  + fzr(k) - qr(k)*wr(k) - fzr(k-1) + qr(k)*wr(k-1)
+          rt = -pm(i,j)*pn(i,j)/Hz(i,j,k)*(as - ar)
+          nw = ad_n2c(i,j,k)*ga*(rhob(i,j,k) - advb_rn(i,j,k)) - dps(i,j,k)
+          x = act(i,j)/ad_n2k(i,j,k)*( ad_n2c(i,j,k)*dts*rt - nw )
+          if (max(cz(k-1), cz(k)) > advb_czmax) x = 0._8   ! no explicit estimate (see above)
+          advb_mem(i,j,k) = dps(i,j,k) - x
+          if (imex_verbose >= 2 .and. act(i,j) > 0._8) then
+            loc(1) = loc(1) + nw*nw ; loc(2) = loc(2) + x*x ; loc(3) = loc(3) + dps(i,j,k)**2
+            loc(4) = loc(4) + 1._8
+            if (abs(x) > xm) then
+              xm = abs(x) ; xl = [isw_corn + i, jsw_corn + j, k]
+            end if
+          end if
+        enddo
+      enddo
+      st = s0 ; s0 = s1 ; s1 = st
+    enddo
+    if (imex_verbose >= 2) then
+      call mpi_allreduce(loc, glob, 4, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+      call mpi_allreduce(xm, xmg, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+      glob(4) = max(glob(4), 1._8)
+      if (mynode == 0) write(*,'(1x,A,I8,4ES12.4)') 'IMEX_ADVB step, rms NW, rms X, rms dps, max|X|:', iic,&
+      &  sqrt(glob(1)/glob(4)), sqrt(glob(2)/glob(4)), sqrt(glob(3)/glob(4)), xmg
+      if (xm == xmg .and. xmg > 0._8) write(*,'(1x,A,I8,A,3I5)') 'IMEX_ADVB step', iic, ' max|X| at (i,j,k)', xl
+    end if
+  contains
+    subroutine urow(jj)
+      ! u-faces ib0:ib1+1 of row jj: b* flux fxs with F = FlxU (fus), b_ref flux fxr with PF (fur)
+      integer(kind=4), intent(in) :: jj
+      integer(kind=4) :: ii, kk
+      do ii=ib0,ib1+1                       ! PF: column mean removed (imex_rhs_transport)
+        sf = 0._8
+        do kk=1,nz
+          sf = sf + FlxU(ii,jj,kk)
+        enddo
+        do kk=1,nz
+          mk = 1._8
+#  ifdef MASKING
+          mk = umask(ii,jj)
+#  endif
+          fus(ii,kk) = FlxU(ii,jj,kk)*mk
+          fur(ii,kk) = 0._8
+          if (cx(ii,jj) > 0._8) fur(ii,kk) = FlxU(ii,jj,kk) - 0.5_8*(Hz(ii,jj,kk)+Hz(ii-1,jj,kk))*sf*rshu(ii,jj)
+        enddo
+      enddo
+      do kk=1,nz
+        call uflux(jj, kk, advb_bs, fus(:,kk), fxs(:,kk))
+        call uflux(jj, kk, ad_bb, fur(:,kk), fxr(:,kk))
+      enddo
+    end subroutine urow
+    subroutine uflux(jj, kk, q, f, fx)
+      ! UP3 flux at the u-faces of row jj, level kk (compute_horiz_tracer_fluxes.h, UPSTREAM_TS)
+      integer(kind=4), intent(in) :: jj, kk
+      real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: q
+      real(kind=8), intent(in) :: f(ib0:ib1+1)
+      real(kind=8), intent(out) :: fx(ib0:ib1+1)
+      integer(kind=4) :: ii, ia, ib
+      ia = ib0-1 ; ib = ib1+2
+      if (w_edge) ia = ib0
+      if (e_edge) ib = ib1+1
+      do ii=ia,ib                           ! masked differences at the faces
+        mk = 1._8
+#  ifdef MASKING
+        mk = umask(ii,jj)
+#  endif
+        dd(ii) = (q(ii,jj,kk) - q(ii-1,jj,kk))*mk
+      enddo
+      if (w_edge) dd(ib0-1) = dd(ib0)
+      if (e_edge) dd(ib1+2) = dd(ib1+1)
+      do ii=ib0-1,ib1+1                     ! curvature at the cells
+        cv(ii) = dd(ii+1) - dd(ii)
+#  if defined MASKING && defined UPSTREAM_TS_LAND_CURV
+        cv(ii) = cv(ii)*umask(ii,jj)*umask(ii+1,jj)
+#  endif
+      enddo
+      do ii=ib0,ib1+1
+        fx(ii) = 0.5_8*(q(ii,jj,kk)+q(ii-1,jj,kk))*f(ii) - c6*( cv(ii-1)*max(f(ii),0._8) + cv(ii)*min(f(ii),0._8) )
+      enddo
+#  ifdef OBC_WEST
+      if (w_edge) fx(ib0) = fx(ib0) + 0.5_8*(q(ib0-1,jj,kk)-q(ib0,jj,kk))*max(f(ib0),0._8)
+#  endif
+#  ifdef OBC_EAST
+      if (e_edge) fx(ib1+1) = fx(ib1+1) + 0.5_8*(q(ib1+1,jj,kk)-q(ib1,jj,kk))*min(f(ib1+1),0._8)
+#  endif
+    end subroutine uflux
+    subroutine vrow(jf, sl)
+      ! v-faces of face row jf (cells jf-1, jf), into slot sl: b* flux fes with F = FlxV (fvs), b_ref flux fer
+      ! with PF (fvr)
+      integer(kind=4), intent(in) :: jf, sl
+      integer(kind=4) :: ii, kk, jm, jp
+      do ii=ib0,ib1                         ! PF: column mean removed (imex_rhs_transport)
+        sf = 0._8
+        do kk=1,nz
+          sf = sf + FlxV(ii,jf,kk)
+        enddo
+        do kk=1,nz
+          mk = 1._8
+#  ifdef MASKING
+          mk = vmask(ii,jf)
+#  endif
+          fvs(ii,kk,sl) = FlxV(ii,jf,kk)*mk
+          fvr(ii,kk,sl) = 0._8
+          if (cy(ii,jf) > 0._8) fvr(ii,kk,sl) = FlxV(ii,jf,kk) - 0.5_8*(Hz(ii,jf,kk)+Hz(ii,jf-1,kk))*sf*rshv(ii,jf)
+        enddo
+      enddo
+      ! the differences at the faces jf-1 and jf+1, clamped to [jb0, jb1+1] at physical edges
+      ! (the tracer code's extrapolation FE(jstr-1) = FE(jstr), FE(jend+2) = FE(jend+1))
+      jm = jf-1 ; jp = jf+1
+      if (s_edge) jm = max(jm, jb0)
+      if (n_edge) jp = min(jp, jb1+1)
+      do kk=1,nz
+        do ii=ib0,ib1
+          fes(ii,kk,sl) = vfx(advb_bs, fvs(ii,kk,sl), ii, jf, jm, jp, kk)
+          fer(ii,kk,sl) = vfx(ad_bb, fvr(ii,kk,sl), ii, jf, jm, jp, kk)
+        enddo
+      enddo
+    end subroutine vrow
+    function vfx(q, ff, ii, jf, jm, jp, kk) result(fe)
+      ! UP3 flux of q at v-face (ii, jf), level kk (compute_horiz_tracer_fluxes.h, UPSTREAM_TS)
+      real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: q
+      real(kind=8), intent(in) :: ff
+      integer(kind=4), intent(in) :: ii, jf, jm, jp, kk
+      real(kind=8) :: fe, m0, mmm, mmp, d0, dm, dp, cl, cr
+      m0 = 1._8 ; mmm = 1._8 ; mmp = 1._8
+#  ifdef MASKING
+      m0 = vmask(ii,jf) ; mmm = vmask(ii,jm) ; mmp = vmask(ii,jp)
+#  endif
+      d0 = (q(ii,jf,kk) - q(ii,jf-1,kk))*m0
+      dm = (q(ii,jm,kk) - q(ii,jm-1,kk))*mmm
+      dp = (q(ii,jp,kk) - q(ii,jp-1,kk))*mmp
+      cl = d0 - dm                          ! curvature at cell jf-1
+      cr = dp - d0                          ! curvature at cell jf
+#  if defined MASKING && defined UPSTREAM_TS_LAND_CURV
+      cl = cl*vmask(ii,jf-1)*m0 ; cr = cr*m0*vmask(ii,jf+1)
+#  endif
+      fe = 0.5_8*(q(ii,jf,kk)+q(ii,jf-1,kk))*ff - c6*( cl*max(ff,0._8) + cr*min(ff,0._8) )
+#  ifdef OBC_SOUTH
+      if (s_edge .and. jf == jb0) fe = fe + 0.5_8*(q(ii,jb0-1,kk)-q(ii,jb0,kk))*max(ff,0._8)
+#  endif
+#  ifdef OBC_NORTH
+      if (n_edge .and. jf == jb1+1) fe = fe + 0.5_8*(q(ii,jb1+1,kk)-q(ii,jb1,kk))*min(ff,0._8)
+#  endif
+    end function vfx
+    subroutine u3col(q, w, fz)
+      ! thickness-aware U3 vertical fluxes of one column (advection.F90, t_vadv_up3), rh, cp, cm set
+      real(kind=8), intent(in) :: q(nz), w(0:nz)
+      real(kind=8), intent(out) :: fz(0:nz)
+      real(kind=8) :: dl(0:nz), tl, tpl, tmn
+      integer(kind=4) :: kk
+      dl(0) = 0._8 ; dl(nz) = 0._8
+      do kk=1,nz-1
+        dl(kk) = (q(kk+1) - q(kk))*rh(kk)
+      enddo
+      fz(0) = 0._8 ; fz(nz) = 0._8
+      do kk=1,nz-1
+        tl = (Hz(i,j,kk+1)*q(kk) + Hz(i,j,kk)*q(kk+1))*rh(kk)
+        tpl = tl - cp(kk)*(dl(kk) - dl(kk-1))
+        tmn = tl - cm(kk)*(dl(kk+1) - dl(kk))
+        fz(kk) = tpl*max(w(kk),0._8) + tmn*min(w(kk),0._8)
+      enddo
+    end subroutine u3col
+  end subroutine imex_advb_rhs
 
   !----------------------------------------------------------------------
   subroutine imex_correct_fused(stage, tdt)
@@ -6054,6 +6386,11 @@ contains
           &    v(:,:,:,nstp), v_nm1, mom, bfx, 0._8, u(:,:,:,nnew), v(:,:,:,nnew), dpw, pf_q0, qmode,&
           &    ps_mx(:,:,:,stage), pf_rczk4, pf_wr4, pf_czt4, pf_czb4, pf_cu4, pf_cv4, pf_dinv4(:,:,:,stage),&
           &    pf_z4, sf_loc)
+        else if (imex_corr_adv == 1) then        ! memory term dps - X (imex_advb_rhs)
+          call imex_sf_rhs4(stage, dts, cm, wrhs_corr(2:4), u(:,:,:,3), u(:,:,:,nstp), u_nm1, v(:,:,:,3),&
+          &    v(:,:,:,nstp), v_nm1, mom, bfx, wrhs_corr(1), u(:,:,:,nnew), v(:,:,:,nnew), advb_mem, pf_q0, qmode,&
+          &    ps_mx(:,:,:,stage), pf_rczk4, pf_wr4, pf_czt4, pf_czb4, pf_cu4, pf_cv4, pf_dinv4(:,:,:,stage),&
+          &    pf_z4, sf_loc)
         else
           call imex_sf_rhs4(stage, dts, cm, wrhs_corr(2:4), u(:,:,:,3), u(:,:,:,nstp), u_nm1, v(:,:,:,3),&
           &    v(:,:,:,nstp), v_nm1, mom, bfx, wrhs_corr(1), u(:,:,:,nnew), v(:,:,:,nnew), dps, pf_q0, qmode,&
@@ -6064,6 +6401,11 @@ contains
         if (stage == 1) then
           call imex_sf_rhs8(stage, dts, cm, wflx_pred, u(:,:,:,nnew), u(:,:,:,nstp), u_nm1, v(:,:,:,nnew),&
           &    v(:,:,:,nstp), v_nm1, mom, bfx, 0._8, u(:,:,:,nnew), v(:,:,:,nnew), dpw, pf_q0, qmode,&
+          &    ps_mx(:,:,:,stage), pf_rczk8, pf_wr8, ad_czt, ad_czb, ad_cu, ad_cv, pf_dinv8(:,:,:,stage),&
+          &    wk_z, sf_loc)
+        else if (imex_corr_adv == 1) then        ! memory term dps - X (imex_advb_rhs)
+          call imex_sf_rhs8(stage, dts, cm, wrhs_corr(2:4), u(:,:,:,3), u(:,:,:,nstp), u_nm1, v(:,:,:,3),&
+          &    v(:,:,:,nstp), v_nm1, mom, bfx, wrhs_corr(1), u(:,:,:,nnew), v(:,:,:,nnew), advb_mem, pf_q0, qmode,&
           &    ps_mx(:,:,:,stage), pf_rczk8, pf_wr8, ad_czt, ad_czb, ad_cu, ad_cv, pf_dinv8(:,:,:,stage),&
           &    wk_z, sf_loc)
         else
