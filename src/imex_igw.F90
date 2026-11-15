@@ -182,9 +182,11 @@ module imex_igw
                                                  ! (main.F90): the predictor's implicit correction overshoots and is reversed by the
                                                  ! corrector's, so mixing the predictor state t^n+1/2 anti-diffuses the step's net
                                                  ! change
-  integer(kind=4) :: imex_corr_adv = 0          ! corrector rhs with the step's advective buoyancy change: 0 off
-                                                 ! (default); 1 on. The corrector's implicit-level pressure is
-                                                 ! that of b* + db, and r0 = dt R(F) - dps holds only the
+  integer(kind=4) :: imex_corr_adv = 1          ! corrector rhs with the step's advective buoyancy change: 1 on
+                                                 ! (default since 2026-11, was 0); 0 off (the earlier results:
+                                                 ! about 4 % cheaper, shorter longest stable step on domains
+                                                 ! limited by an interior jet). The corrector's implicit-level
+                                                 ! pressure is that of b* + db, and r0 = dt R(F) - dps holds only the
                                                  ! wave-linearized part of the step's change, so with advection
                                                  ! b* + db holds the predictor's non-wave change NW = b* - b^n - dps
                                                  ! (about half a step of advection) instead of the step's. 1 adds

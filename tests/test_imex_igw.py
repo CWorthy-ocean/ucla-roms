@@ -92,9 +92,13 @@ def test_imex_igw_real(imex_configuration, input_dir, tmp_path, reference_result
 def test_imex_igw_exact_restart(imex_configuration, input_dir, tmp_path, obc_mode):
     """A restart reproduces the continuous run bit for bit with the IMEX state in the
     restart file (imex_rst_state = 1, the default), across a rebuild of the operator;
-    with 'modal' the file also holds the boundary reference (imex_obcm)."""
+    with 'modal' the file also holds the boundary reference (imex_obcm).
+
+    imex_redu = 1 makes the solves' global sums exact: MPI_Allreduce may sum in a
+    different order in the restarted run (conda MPICH did), which changes the solver
+    state in its last bits although each rank's partial sums are identical."""
     conf = imex_configuration
-    nml = imex_namelist(input_dir, obc_mode)
+    nml = imex_namelist(input_dir, obc_mode, imex_redu=1)
     nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
     nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})
 
@@ -178,12 +182,14 @@ def imex_subcycle_namelist(input_dir, obc_mode="fixed", subcycle=True) -> dict:
     12 steps) with restart, history and BGC records every 4 steps (window ends),
     the implicit free surface and IMEX with the open boundary ``obc_mode``.
     imex_bref_hours = 0.05 (9 steps) rebuilds the operator at steps 1 and 10,
-    so a restart after step 4 falls inside a rebuild period."""
+    so a restart after step 4 falls inside a rebuild period. imex_redu = 1 (exact
+    global sums of the solves) keeps the restart comparison independent of the order
+    in which MPI_Allreduce sums (see test_imex_igw_exact_restart)."""
     nml = _subcycle_nml(input_dir, 4, bgc_physics_subcycle=subcycle)
     _with_restarts(nml, 4 * nml["TIME_STEPPING"]["dt"])
     nml["IMPLICIT_FS"]["fs_mode"] = "implicit"
     nml["IMEX_IGW_SETTINGS"].update(
-        {"imex_verbose": 1, "imex_bref_hours": 0.05, "imex_obc_mode": obc_mode}
+        {"imex_verbose": 1, "imex_bref_hours": 0.05, "imex_obc_mode": obc_mode, "imex_redu": 1}
     )
     return nml
 
