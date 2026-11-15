@@ -1466,20 +1466,25 @@ contains
     !   (masked differences, edge extrapolation at physical edges, the inflow correction at open edges) and the
     !   thickness-aware U3 interface value of advection.F90 (t_vadv_up3); a constant q has A = 0.
     ! F = FlxU, FlxV (set_HUV1, level n+1/2; land and river faces left out through umask, vmask: a volume
-    !   source enters with the cell's own b), W = We + Wi (omega after set_HUV1).
+    !   source enters with the cell's own b), W = We + Wi (omega after set_HUV1). Where the vertical Courant
+    !   number dts pm pn |W|/min(Hz) at either interface of a cell exceeds advb_czmax (1), the explicit U3
+    !   estimate overshoots (the tracer steps advect that part implicitly): X = 0 there, so the implicit level
+    !   stays b* + db as without the key (on the Sargasso Sea, an open-edge corner with vertical Courant numbers
+    !   of 3-8 at the start of a run blew up within 4 steps from 2320 s without this).
     ! PF = F with its column mean removed per face as imex_rhs_transport does (closed faces 0), W_PF its
     !   column recursion (0 at the bottom and the top): A(b_ref; PF, W_PF) is the UP3 counterpart of the wave
     !   response R that the rhs carries with the IMEX weights, so X holds the advection of b* - b_ref by the
     !   whole flow and of b_ref by the depth-mean part of the flow, less the predictor's non-wave change NW.
     ! sqrt(s) = 1/ad_n2k (imex_n2_taper): a tapered cell gets X scaled as its wave forcing is.
-    ! imex_verbose >= 2: one IMEX_ADVB line per step (rank 0): rms of NW, of X and of dps, max |X|.
+    ! imex_verbose >= 2: one IMEX_ADVB line per step (rank 0): rms of NW, of X and of dps, max |X|; and where
+    ! (global i, j, k; from the rank that holds it).
     !DIR$ ATTRIBUTES NOINLINE :: imex_advb_rhs
 #  ifdef SPLIT_EOS
     use eos_vars, only: rhob => rho1
 #  else
     use eos_vars, only: rhob => rho
 #  endif
-    use param, only: lm, mm, nz, mynode, ocean_grid_comm
+    use param, only: lm, mm, nz, mynode, ocean_grid_comm, isw_corn, jsw_corn
     use scalars, only: g, rho0, iic
     use ocean_vars, only: hz, flxu, flxv, we, wi
     use grid, only: pm, pn
@@ -1494,9 +1499,10 @@ contains
     &                                  fer(:,:,:), fvr(:,:,:), dd(:), cv(:)
     integer(kind=4), save :: na0 = 0, na1 = -1
     real(kind=8), parameter :: c6 = 0.1666666666666666_8
+    real(kind=8), parameter :: advb_czmax = 1._8   ! vertical Courant number above which X = 0
     real(kind=8) :: ga, sf, hf, mk, rh(nz), cp(nz), cm(nz), qs(nz), qr(nz), ws(0:nz), wr(0:nz), fzs(0:nz),&
-    &               fzr(0:nz), as, ar, rt, nw, x, hk, hkp, hkm, hkp2, loc(4), glob(4), xm, xmg
-    integer(kind=4) :: i, j, k, i0, i1, s0, s1, st, ierr
+    &               fzr(0:nz), cz(0:nz), as, ar, rt, nw, x, hk, hkp, hkm, hkp2, loc(4), glob(4), xm, xmg
+    integer(kind=4) :: i, j, k, i0, i1, s0, s1, st, ierr, xl(3)
     if (.not. allocated(fxs) .or. na0 /= ib0 .or. na1 /= ib1) then
       if (allocated(fxs)) deallocate(fxs, fus, fxr, fur, fes, fvs, fer, fvr, dd, cv)
       allocate( fxs(ib0:ib1+1,nz), fus(ib0:ib1+1,nz), fxr(ib0:ib1+1,nz), fur(ib0:ib1+1,nz),&
@@ -1520,7 +1526,7 @@ contains
       enddo
     enddo
     call exchange_xxx(advb_bs)
-    loc = 0._8 ; xm = 0._8
+    loc = 0._8 ; xm = 0._8 ; xl = 0
     s0 = 1 ; s1 = 2
     call vrow(jb0, s0)
     do j=jb0,jb1
@@ -1530,7 +1536,6 @@ contains
         ! column: transports W (b*) and W_PF (b_ref), U3 coefficients (advection.F90)
         ws(0) = 0._8 ; ws(nz) = 0._8 ; wr(0) = 0._8 ; wr(nz) = 0._8
         do k=1,nz-1
-          ws(k) = We(i,j,k) + Wi(i,j,k)
           wr(k) = wr(k-1) - ( fur(i+1,k)-fur(i,k) + fvr(i,k,s1)-fvr(i,k,s0) )
           hk = Hz(i,j,k) ; hkp = Hz(i,j,k+1)
           hkm = hk ; if (k >= 2) hkm = Hz(i,j,k-1)
@@ -1538,6 +1543,11 @@ contains
           rh(k) = 1._8/max(hk+hkp, 1.d-30)
           cp(k) = hk*hkp/max(hkm+hk+hkp, 1.d-30)
           cm(k) = hk*hkp/max(hk+hkp+hkp2, 1.d-30)
+        enddo
+        cz(0) = 0._8 ; cz(nz) = 0._8        ! vertical Courant number at the interfaces
+        do k=1,nz-1
+          ws(k) = We(i,j,k) + Wi(i,j,k)
+          cz(k) = dts*pm(i,j)*pn(i,j)*abs(ws(k))/min(Hz(i,j,k), Hz(i,j,k+1))
         enddo
         do k=1,nz
           qs(k) = advb_bs(i,j,k) ; qr(k) = ad_bb(i,j,k)
@@ -1554,10 +1564,14 @@ contains
           rt = -pm(i,j)*pn(i,j)/Hz(i,j,k)*(as - ar)
           nw = ad_n2c(i,j,k)*ga*(rhob(i,j,k) - advb_rn(i,j,k)) - dps(i,j,k)
           x = act(i,j)/ad_n2k(i,j,k)*( ad_n2c(i,j,k)*dts*rt - nw )
+          if (max(cz(k-1), cz(k)) > advb_czmax) x = 0._8   ! no explicit estimate (see above)
           advb_mem(i,j,k) = dps(i,j,k) - x
           if (imex_verbose >= 2 .and. act(i,j) > 0._8) then
             loc(1) = loc(1) + nw*nw ; loc(2) = loc(2) + x*x ; loc(3) = loc(3) + dps(i,j,k)**2
-            loc(4) = loc(4) + 1._8 ; xm = max(xm, abs(x))
+            loc(4) = loc(4) + 1._8
+            if (abs(x) > xm) then
+              xm = abs(x) ; xl = [isw_corn + i, jsw_corn + j, k]
+            end if
           end if
         enddo
       enddo
@@ -1569,6 +1583,7 @@ contains
       glob(4) = max(glob(4), 1._8)
       if (mynode == 0) write(*,'(1x,A,I8,4ES12.4)') 'IMEX_ADVB step, rms NW, rms X, rms dps, max|X|:', iic,&
       &  sqrt(glob(1)/glob(4)), sqrt(glob(2)/glob(4)), sqrt(glob(3)/glob(4)), xmg
+      if (xm == xmg .and. xmg > 0._8) write(*,'(1x,A,I8,A,3I5)') 'IMEX_ADVB step', iic, ' max|X| at (i,j,k)', xl
     end if
   contains
     subroutine urow(jj)
