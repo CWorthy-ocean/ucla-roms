@@ -70,6 +70,7 @@ contains
 #ifdef IMEX_IGW
     use imex_igw, only: imex_solve_stage, imex_stage_corr, imex_mix_split
 #endif
+    use sl_adv_mod, only: sl_adv, sl_uv_hflux, sl_uv_vcol, sl_uv_cor
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,nz) :: ru,rv
@@ -131,6 +132,8 @@ contains
 
     do k=1,nz
 # include "compute_horiz_rhs_uv_terms.h"
+      ! swept-volume advection: the hot faces' momentum fluxes
+      if (sl_adv) call sl_uv_hflux(k, ru, rv, UFx, UFe, VFx, VFe, istr, iend, jstr, jend)
     enddo
 
 # ifdef DIAGNOSTICS
@@ -143,6 +146,8 @@ contains
     do j=jstr,jend
 
 # include "compute_vert_rhs_uv_terms.h"
+      ! swept-volume advection: hot columns' vertical fluxes and pointwise terms
+      if (sl_adv) call sl_uv_vcol(j, ru, rv, istr, iend, jstr, jend)
 
 #define IMPLICIT_BOTTOM_DRAG
 # ifdef IMPLICIT_BOTTOM_DRAG
@@ -368,6 +373,8 @@ contains
 # endif /* IMPLICIT_BOTTOM_DRAG */
     enddo  !<-- j
     !! velocities are in the form:  u*dz, v*dz, w*dz
+    ! swept-volume advection: the arrival half of the trajectory Coriolis
+    if (sl_adv) call sl_uv_cor(istr, iend, jstr, jend)
 #ifdef IMEX_IGW
     ! Elliptic correction of u, v(nnew) (Hz-weighted here); rufrc keeps
     ! the vertical integral of the explicit rhs. visc3d runs after this,

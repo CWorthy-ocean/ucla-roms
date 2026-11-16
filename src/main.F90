@@ -508,7 +508,7 @@ contains
     use step3d_t_mod, only: step3d_t
     use bgc_subcycle_mod, only: bgc_physics_subcycle, bgcsub_accumulate, bgcsub_step
 #ifdef SOLVE3D
-    use sl_adv_mod, only: sl_adv, sl_adv_weights, sl_ts_prep
+    use sl_adv_mod, only: sl_adv, sl_adv_weights, sl_ts_prep, sl_uv_carry_in
 #endif
     use step3d_uv_mod, only: step3d_uv1, step3d_uv2
 #  ifdef UV_VIS2
@@ -672,6 +672,7 @@ contains
 
     ! All of this seems to happen with Hz's from time n
     ! Corrector step
+    if (sl_adv) call sl_uv_carry_in   ! swept-volume advection: the carried n-1 momentum increment into pg_nm1
     call reg_tic(rg_prsgrd)
     call prsgrd
     call reg_toc(rg_prsgrd)
