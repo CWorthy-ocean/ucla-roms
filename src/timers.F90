@@ -17,11 +17,11 @@ module timers
   ! roms_step; 16-17 are nested inside them and reported separately; 18-22
   ! belong to BGC subcycling (nested in step3d_t; 20-22 nested in 19) and
   ! 23-25 to IMEX_IGW (stage solves nested in pre_step3d and step3d_uv1,
-  ! the startup self-test outside the step); 26-27 are the swept-volume
-  ! advection's (sl_adv_mod): the weights (nested in set_HUV+omega) and the
-  ! tracer work (nested in step3d_uv1+visc3d and step3d_t); rows 18-27 are
-  ! printed only when used.
-  integer(kind=4), parameter :: nreg = 27
+  ! the startup self-test outside the step); 26-28 are the swept-volume
+  ! advection's (sl_adv_mod): the weights (nested in set_HUV+omega), the
+  ! tracer work (nested in step3d_uv1+visc3d and step3d_t) and the momentum
+  ! work (nested in step3d_uv1+visc3d); rows 18-28 are printed only when used.
+  integer(kind=4), parameter :: nreg = 28
   integer(kind=4), parameter, public ::&
   &  rg_set_forces=1,  rg_set_bry=2,     rg_rho_eos=3,    rg_huv_omega=4,&
   &  rg_lmd_vmix=5,    rg_prsgrd=6,      rg_pre_step3d=7, rg_huv1_omega=8,&
@@ -30,7 +30,7 @@ module timers
   &  rg_exchange=16,   rg_marbl=17,&
   &  rg_bgcsub_acc=18, rg_bgcsub_win=19, rg_bgcsub_h=20, rg_bgcsub_v=21, rg_bgcsub_bc=22,&
   &  rg_imex_solve_pred=23, rg_imex_solve_corr=24, rg_imex_selftest=25,&
-  &  rg_sl_adv=26, rg_sl_trc=27
+  &  rg_sl_adv=26, rg_sl_trc=27, rg_sl_mom=28
   character(len=22), parameter :: reg_name(nreg) = [character(len=22) ::&
   &  'set_forces (x2)',       'set_bry_all+tides (x2)','rho_eos (x2-3)',&
   &  'set_HUV+omega',         'lmd_vmix (x2)',         'prsgrd (x2)',&
@@ -41,7 +41,7 @@ module timers
   &  '  BGC subcycle accum',  '  BGC subcycle window',  '    BGC sub horizontal',&
   &  '    BGC sub vertical',   '    BGC sub bc+exch',&
   &  '  IMEX solve pred',     '  IMEX solve corr',     'IMEX selftest (init)',&
-  &  '  SL weights (nested)',  '  SL tracers (nested)']
+  &  '  SL weights (nested)',  '  SL tracers (nested)',  '  SL momentum (nested)']
   real(kind=8) :: reg_t(nreg) = 0._8, reg_t0(nreg) = 0._8
   public :: reg_tic, reg_toc, print_region_timers
 #include "cppdefs.opt"

@@ -115,6 +115,7 @@ module imex_igw
   public :: imex_rst_def, imex_rst_wrt, imex_rst_wrt_scal, imex_rst_get
   public :: imex_obc_faces
   public :: imex_nbref
+  public :: imex_pg_nm1_add
 
   ! SL_ADV (sl_adv_mod, sl_x_prep): with advb_sl, imex_advb_rhs adds advb_slrt to the advective
   ! buoyancy rate of every cell: the change of the corrector's explicit advective rate of b* that the
@@ -432,6 +433,10 @@ module imex_igw
   real(kind=8), allocatable, dimension(:,:,:) :: pg_nm1_u, pg_nm1_v  ! level n-1
   real(kind=8), allocatable, dimension(:,:,:) :: pg_n_u, pg_n_v      ! level n
   real(kind=8), allocatable, dimension(:,:,:) :: pg_star_u, pg_star_v  ! level *
+  ! SL_ADV (sl_adv_mod) reads the levels n and n-1 for the momentum departure field and adds the swept
+  ! part of the carried n-1 increment to pg_nm1 before the corrector's combination (imex_pg_nm1_add)
+  public :: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v
+  protected :: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v
 
   ! Elliptic solver. Geometry (static, set at the first operator setup):
   ! tile interior bounds, physical edges, face coefficients
@@ -1416,6 +1421,18 @@ contains
     enddo
     call tq_mark(20)
   end subroutine imex_pg_store_combine
+
+  !----------------------------------------------------------------------
+  subroutine imex_pg_nm1_add(eu, ev)
+    ! SL_ADV, before the corrector's prsgrd: pg_nm1 += the swept part of the carried n-1 momentum
+    ! increment (sl_adv_mod's sl_eu, sl_ev, Hz-weighted as pg). pg_nm1 is not read after the
+    ! corrector's combination (imex_shift_levels recycles its storage; the restart writes pg_n).
+    use param, only: nz, lm, mm
+    implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: eu, ev
+    pg_nm1_u = pg_nm1_u + eu
+    pg_nm1_v = pg_nm1_v + ev
+  end subroutine imex_pg_nm1_add
 
   !----------------------------------------------------------------------
   subroutine imex_solve_stage(stage, dtau, cfbak)
