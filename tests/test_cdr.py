@@ -408,9 +408,14 @@ def _check_marbl_diagnostics_are_double(run_dir) -> None:
     them with a kind-less ``real()``, which rounded every value to single
     precision, so all of them were exact float32 numbers. A double-precision
     value is a float32 number by chance only (about 1 in 2**29).
+
+    The variables cover each copy in ``marbldrv_update_roms_diagnostics``
+    that has data: surface-flux 2D (``FG_CO2``, ``pCO2SURF``), interior 2D
+    (``photoC_TOT_zint``) and interior 3D (``CO3``, ``co3_sat_arag``).
+    MARBL has no 3D surface-flux diagnostics.
     """
     his = _joined_records(run_dir, "bgc_dia")
-    for var in ("FG_CO2", "pCO2SURF", "CO3", "co3_sat_arag"):
+    for var in ("FG_CO2", "pCO2SURF", "photoC_TOT_zint", "CO3", "co3_sat_arag"):
         values = his[var].values.ravel()
         values = values[np.isfinite(values) & (values != 0)]
         assert values.size, f"{var}: no nonzero values in _bgc_dia"
