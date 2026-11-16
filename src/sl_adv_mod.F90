@@ -41,6 +41,10 @@ module sl_adv_mod
 
   character(len=10) :: module_name = "sl_adv_mod"
   real(kind=8), parameter :: c6 = 0.1666666666666666_8   ! the UP3 constant of compute_horiz_tracer_fluxes.h
+  ! stock fallback: faces of a cell whose level-n horizontal outflow over the step leaves less than sl_v1min
+  ! of its volume (2-D or either 1-D direction; the Lin-Rood pseudo-volumes), and of its neighbours, are
+  ! not swept (STAGE2.md sec. 9)
+  real(kind=8), parameter :: sl_v1min = 0.5_8
 
   public :: read_nml_sl_adv
 
@@ -74,6 +78,8 @@ module sl_adv_mod
   real(kind=8), allocatable, dimension(:,:,:) :: sl_hz0, sl_sh
   ! river faces (1; land faces with a river transport) with halos: the swept pass carries their volume
   real(kind=8), allocatable, dimension(:,:) :: sl_rfu, sl_rfv
+  ! cells below sl_v1min (1) with halos, per level (the stock fallback)
+  real(kind=8), allocatable, dimension(:,:,:) :: sl_deg
   real(kind=8), allocatable, dimension(:,:,:,:) :: sl_en, sl_et, sl_gdn
   ! hot faces anywhere on the level (all ranks), on any level, at the
   ! previous step (then Gd /= 0), the step's swept work is on
@@ -84,7 +90,7 @@ module sl_adv_mod
   ! IMEX corrector weights of levels n and n-1 for this step
   real(kind=8) :: sl_nu = 0._8, sl_rho = 0._8
   ! sl_diag: shadow tracer error (max), budget residual and scale (per tracer)
-  real(kind=8) :: dg_sh = 0._8, dg_edge = 0._8, dg_czmax = 0._8, dg_czn = 0._8
+  real(kind=8) :: dg_sh = 0._8, dg_edge = 0._8, dg_czmax = 0._8, dg_czn = 0._8, dg_fb = 0._8
   real(kind=8), allocatable, dimension(:,:) :: dg_bud
   character(len=4), parameter :: tsname(2) = [character(len=4) :: 'temp', 'salt']
 #endif
@@ -187,6 +193,7 @@ contains
     &//' levels with more than one'
     if (mynode == 0 .and. sl_diag > 0) write(*,'(1x,A)') 'SL_ADV: SL_DIAG line = step, shadow tracer'&
     &//' max |c - 1| in hot columns after the explicit step, most hot faces within 3 cells of an open edge,'&
+    &//' most faces put back to stock by the near-degenerate-cell fallback,'&
     &//' the key''s largest vertical Courant number in hot cells and their cell-steps at >= 0.9,'&
     &//' then per tracer the budget residual of the'&
     &//' swept-flux changes relative to their sum of magnitudes; SL_TRC line = step, tracer, content'&
@@ -220,6 +227,7 @@ contains
 #endif
     use omega_mod, only: omega_sl, omega_wu, omega_wv
     use grid, only: pm, pn, umask, vmask, rmask
+    use roms_mpi, only: exchange_xxx
     use error_handling_mod, only: error_log
     use swept_flux_mod, only: subpass_crit, subpass_count
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_sum
@@ -231,7 +239,7 @@ contains
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     ! single-direction Courant numbers |u| dt pm_u (u-faces), |v| dt pn_v (v-faces)
     real(kind=8), dimension(istr-1:iend+2,jstr-1:jend+2) :: cu, cv
-    real(kind=8) :: lmx(2+2*nz), gmx(2+2*nz), lsm(7), gsm(7)
+    real(kind=8) :: lmx(2+2*nz), gmx(2+2*nz), lsm(8), gsm(8), v1, v1x, v1y
     real(kind=8) :: c2d, w, s, rv, cfc, dvx, dvy, vx0, vx1, vy0, vy1, ds
     integer(kind=4) :: i, j, k, nu, nv, ierr, ip, jp, nlev
     logical :: prt
@@ -251,6 +259,25 @@ contains
     end if
     nu = 0 ; nv = 0
     hu_off(0) = 0 ; hv_off(0) = 0
+    ! near-degenerate cells (the stock fallback): the level-n transports' net
+    ! horizontal outflow over the step leaves less than sl_v1min of the volume
+    if (.not. allocated(sl_deg)) then
+      allocate(sl_deg(GLOBAL_2D_ARRAY,nz)) ; sl_deg = 0._8
+    end if
+    do k = 1, nz
+      do j = jstr, jend
+        do i = istr, iend
+          sl_deg(i,j,k) = 0._8
+          if (rmask(i,j) < 0.5_8) cycle
+          rv = dt*pm(i,j)*pn(i,j)/Hz(i,j,k)
+          v1x = 1._8 - rv*(FlxU(i+1,j,k)-FlxU(i,j,k))
+          v1y = 1._8 - rv*(FlxV(i,j+1,k)-FlxV(i,j,k))
+          v1 = v1x + v1y - 1._8
+          if (min(v1, v1x, v1y) < sl_v1min) sl_deg(i,j,k) = 1._8
+        end do
+      end do
+    end do
+    call exchange_xxx(sl_deg)
     do k = 1, nz
       do j = jstr-1, jend+1
         do i = istr, iend+1
@@ -273,6 +300,10 @@ contains
             else if (c2d > sl_c_lo) then
               s = (c2d - sl_c_lo)*ds
               w = s*s*(3._8 - 2._8*s)
+            end if
+            if (w > 0._8 .and. (bad(i-1,j) .or. bad(i,j))) then
+              w = 0._8                                 ! stock fallback
+              if (i <= iendR) lsm(8) = lsm(8) + 1._8
             end if
             if (i <= iendR) then                 ! faces of this rank (statistics)
               lsm(1) = lsm(1) + 1._8
@@ -300,6 +331,10 @@ contains
             else if (c2d > sl_c_lo) then
               s = (c2d - sl_c_lo)*ds
               w = s*s*(3._8 - 2._8*s)
+            end if
+            if (w > 0._8 .and. (bad(i,j-1) .or. bad(i,j))) then
+              w = 0._8                                 ! stock fallback
+              if (j <= jendR) lsm(8) = lsm(8) + 1._8
             end if
             if (j <= jendR) then
               lsm(4) = lsm(4) + 1._8
@@ -360,8 +395,8 @@ contains
       sl_tref(:,:,:,1:iTandS) = t(:,:,:,nstp,1:iTandS)
       tref_set = .true.
     end if
-    call mpi_allreduce(lsm, gsm, 7, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
-    dg_edge = max(dg_edge, gsm(7))
+    call mpi_allreduce(lsm, gsm, 8, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    dg_edge = max(dg_edge, gsm(7)) ; dg_fb = max(dg_fb, gsm(8))
     nlev = 0
     do k = 1, nz
       sl_msub(k) = subpass_count(gmx(2+k))
@@ -386,6 +421,11 @@ contains
       &gmx(1), gmx(2), maxval(sl_msub), nlev
     end if
   contains
+    logical function bad(ii, jj)
+      ! the cell or one of its 4 neighbours is near-degenerate at level k
+      integer(kind=4), intent(in) :: ii, jj
+      bad = max(sl_deg(ii,jj,k), sl_deg(ii-1,jj,k), sl_deg(ii+1,jj,k), sl_deg(ii,jj-1,k), sl_deg(ii,jj+1,k)) > 0.5_8
+    end function bad
     logical function near_edge(ii, jj)
       ! (sl_diag) a hot face within 3 cells of an open edge
       integer(kind=4), intent(in) :: ii, jj
@@ -1439,14 +1479,14 @@ contains
     call mpi_allreduce(lmn, gmn, nt_step, mpi_double_precision, mpi_min, ocean_grid_comm, ierr)
     call mpi_allreduce(lmxx, gmxx, nt_step, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
     if (mynode == 0) then
-      write(fmt,'(A,I0,A)') '(1x,A,I8,', 4+nt_step, 'ES11.3)'
-      write(*,fmt) 'SL_DIAG', iic, gsh(1), dg_edge, gsh(2), gcz(1),&
+      write(fmt,'(A,I0,A)') '(1x,A,I8,', 5+nt_step, 'ES11.3)'
+      write(*,fmt) 'SL_DIAG', iic, gsh(1), dg_edge, dg_fb, gsh(2), gcz(1),&
       &            (abs(gb(1,itrc))/max(gb(2,itrc),1.e-300_8), itrc = 1, nt_step)
       do itrc = 1, nt_step
         write(*,'(1x,A,I8,I4,ES24.16,2ES24.16)') 'SL_TRC', iic, itrc, gc(itrc), gmn(itrc), gmxx(itrc)
       end do
     end if
-    dg_sh = 0._8 ; dg_bud = 0._8 ; dg_edge = 0._8 ; dg_czmax = 0._8 ; dg_czn = 0._8
+    dg_sh = 0._8 ; dg_bud = 0._8 ; dg_edge = 0._8 ; dg_fb = 0._8 ; dg_czmax = 0._8 ; dg_czn = 0._8
   end subroutine sl_t_finish
 
 ! ----------------------------------------------------------------------

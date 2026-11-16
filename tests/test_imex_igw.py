@@ -273,7 +273,7 @@ def test_sl_adv_swept_tracers(imex_configuration, input_dir, tmp_path):
     diag = [[float(x) for x in m.split()] for m in SL_DIAG.findall(log)]
     assert len(diag) == 20, "one SL_DIAG line per step"
     assert max(d[0] for d in diag) <= 1.0e-12, "shadow tracer constancy"
-    assert max(max(d[4:]) for d in diag) <= 1.0e-13, "budget of the swept-flux changes"
+    assert max(max(d[5:]) for d in diag) <= 1.0e-13, "budget of the swept-flux changes"
 
     off_val = get_summary_value(off, prefix="roms_his.20100101000000")
     on_val = get_summary_value(on, prefix="roms_his.20100101000000")
