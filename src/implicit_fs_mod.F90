@@ -40,6 +40,11 @@ module implicit_fs_mod
   public :: fs_step
   public :: fs_rst_def, fs_rst_wrt, fs_rst_get, fs_rst_wrt_scal
   public :: fs_src_diag
+#ifdef SOLVE3D
+  ! level kernels of the multigrid (section 3), also used by the IMEX mode-split preconditioner (imex_igw, pcm_*)
+  ! on its own level arrays
+  public :: mg_smooth, mg_resid, mg_restrict, mg_prolong, mg_coarsen, mg_exch, mg_exch_reserve, mg_tmp_reserve
+#endif
 
   character(len=14) :: module_name = "implicit_fs"
 
@@ -2850,7 +2855,7 @@ contains
     mg_x = 0._8 ; mg_b = 0._8 ; mg_r = 0._8 ; mg_e = 0._8 ; mg_cw = 0._8 ; mg_cs = 0._8 ; mg_di = 0._8
     ! gather buffers and the banded factor of the coarsest level
     mg_nbx = max(mg_nx(1), mg_ny(1)) + 2
-    allocate(mg_sb(mg_nbx,4), mg_rb(mg_nbx,4))
+    call mg_exch_reserve(mg_nbx)
     allocate(mg_gsend(3*mg_nx(mg_ld)*mg_ny(mg_ld) + mg_nx(mg_ld) + mg_ny(mg_ld) + 2),&
     &        mg_grecv(3*mg_gtot + 2*np*(1+maxval(mg_gnx)+maxval(mg_gny))))
     call mg_build_gather(np)
@@ -2864,7 +2869,7 @@ contains
 #endif
     mg_bw = min(mg_bw, mg_nc - 1)
     allocate(mg_ab(0:mg_bw, mg_nc), mg_sol(mg_nc))
-    allocate(mg_tmp(maxval(mg_nx(1:mg_lc)), maxval(mg_ny(1:mg_lc))))
+    call mg_tmp_reserve(maxval(mg_nx(1:mg_lc)), maxval(mg_ny(1:mg_lc)))
     mg_ready = .true.
     if (mynode == 0) then
       write(*,'(1x,A,I2,A,I2,A,I5,A,I2,A,A,A,I4,A)') 'IMPLICIT_FS mg: ', mg_lc+1, ' levels (', mg_ld,&
@@ -3583,18 +3588,50 @@ contains
     if (p_s >= 0) x(1:nx,0) = mg_rb(1:nx,4)
   end subroutine mg_exch
 
+  subroutine mg_exch_reserve(n)
+    ! the exchange buffers of mg_exch hold at least n values per side (grown only: the free surface's multigrid
+    ! and the IMEX mode-split preconditioner share them)
+    implicit none
+    integer(kind=4), intent(in) :: n
+    if (allocated(mg_sb)) then
+      if (size(mg_sb, 1) >= n) return
+      deallocate(mg_sb, mg_rb)
+    end if
+    allocate(mg_sb(n,4), mg_rb(n,4))
+  end subroutine mg_exch_reserve
+
+  subroutine mg_tmp_reserve(nx, ny)
+    ! the work array of mg_smooth's damped Jacobi holds at least nx x ny values (grown only; shared as
+    ! mg_exch_reserve's buffers)
+    implicit none
+    integer(kind=4), intent(in) :: nx, ny
+    integer(kind=4) :: mx, my
+    mx = nx ; my = ny
+    if (allocated(mg_tmp)) then
+      if (size(mg_tmp, 1) >= nx .and. size(mg_tmp, 2) >= ny) return
+      mx = max(nx, size(mg_tmp, 1)) ; my = max(ny, size(mg_tmp, 2))
+      deallocate(mg_tmp)
+    end if
+    allocate(mg_tmp(mx, my))
+  end subroutine mg_tmp_reserve
+
   !----------------------------------------------------------------------
-  subroutine mg_smooth(nx, ny, x, b, cw, cs, di, mode)
+  subroutine mg_smooth(nx, ny, x, b, cw, cs, di, mode, smoother)
     ! one smoothing sweep on a coarse level (halo of x current): 'rbgs' red then
     ! black (mode 1, pre) or black then red (mode 2, post); 'jacobi' damped
-    ! Jacobi (omega 0.8). Inactive cells: di = 0 -> x stays 0.
+    ! Jacobi (omega 0.8). Inactive cells: di = 0 -> x stays 0. smoother (optional): 'rbgs' or 'jacobi' instead of
+    ! fs_mg_smoother (the IMEX mode-split preconditioner's own setting)
     implicit none
     integer(kind=4), intent(in) :: nx, ny, mode
+    character(len=*), intent(in), optional :: smoother
     real(kind=8), dimension(0:nx+1,0:ny+1), intent(inout) :: x
     real(kind=8), dimension(0:nx+1,0:ny+1), intent(in) :: b, cw, cs, di
     integer(kind=4) :: i, j, c, col, i0
     real(kind=8), parameter :: om = 0.8_8
-    if (fs_mg_smoother(1:1) == 'j') then
+    character(len=1) :: sm
+    sm = fs_mg_smoother(1:1)
+    if (present(smoother)) sm = smoother(1:1)
+    if (sm == 'j') then
       do j=1,ny
         do i=1,nx
           mg_tmp(i,j) = di(i,j)*( b(i,j) + cw(i,j)*x(i-1,j) + cw(i+1,j)*x(i+1,j)&

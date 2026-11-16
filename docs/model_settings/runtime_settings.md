@@ -660,6 +660,11 @@ Solver and development settings. They can be added to the group and keep their d
 | `imex_pcg_start`, `imex_pcg_fused`, `imex_stage_fused` | `3`, `1`, `1` | Solver variants (start-up, fused sweeps); the defaults are the fastest, the others change results at rounding level |
 | `imex_solver_prec` | `4` | Storage of the solver's coefficients and vectors: 4 FP32 (arithmetic, solution and reductions FP64), 8 FP64 |
 | `imex_redu` | `0` | 1: the global sums of the IMEX solves are independent of the tiling and the rank count (exact fixed-point sums) |
+| `imex_pc` | `'jacobi'` | Preconditioner of the stage solves: `'jacobi'` the exact diagonal; `'modes'` the mode-split preconditioner (the fastest vertical modes of each column solved by a two-dimensional multigrid V-cycle, Jacobi on the rest; see [Implicit internal waves](implicit_internal_waves.md#4-settings)). Results change at the solver tolerance and depend on the tiling at that level |
+| `imex_pc_modes` | `0` | `'modes'`: modes per column, 0 automatic from the mode Courant numbers at every rebuild (0 modes = Jacobi), 1 to 4 fixed |
+| `imex_pc_cou_on`, `imex_pc_cou_k` | `0.5`, `0.3` | `'modes'`, automatic: switch-on threshold of the median mode-1 Courant number; threshold for keeping a mode |
+| `imex_pc_levels`, `imex_pc_ncoarse`, `imex_pc_smoother` | `0`, `2`, `'rbgs'` | `'modes'`: V-cycle levels (0 automatic, 2 or 3), coarsest-level sweeps (1 or 2), smoother (`'rbgs'` or `'jacobi'`) |
+| `imex_pc_dump` | `0` | `'modes'`, unfused solve only (a measurement): the corrector solve of that count writes `pcm_dump.<rank>` |
 | `imex_selftest` | `0` | 1: test of the elliptic operator and solver at startup |
 | `imex_solver_enabled` | `.true.` | Tests only: `.false.` skips the solves (explicit weighted combination) |
 | `imex_allow_explicit` | `.false.` | Tests only: allow `imex_theta_p`, `imex_theta_c` below 1/2 |

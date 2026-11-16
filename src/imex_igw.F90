@@ -279,6 +279,30 @@ module imex_igw
                                                  ! imex_obc_faces): fractions of the (face, level) pairs where the
                                                  ! predictor's u* is inflow (t3dbc's test), where its barotropic
                                                  ! part is inflow, and where both agree; rms of both parts
+  character(len=8) :: imex_pc = 'jacobi'         ! stage-solve preconditioner: 'jacobi' the exact diagonal (default);
+                                                 ! 'modes' the mode-split (prototype, imex_pcg_fused = 0 only): in each
+                                                 ! column the imex_pc_modes fastest vertical modes replace the Jacobi on
+                                                 ! their subspace, each mode's 2-D Helmholtz problem gets one 3-level
+                                                 ! V-cycle (implicit_fs_mod's level kernels, aggregates inside the tile:
+                                                 ! the result depends on the tiling at the tolerance level), and a Jacobi
+                                                 ! with those modes deflated from the diagonal handles the rest; the stop
+                                                 ! is on the deflated diagonal's norm (section 'mode-split', pcm_*)
+  integer(kind=4) :: imex_pc_modes = 0           ! 'modes': modes per column: 0 automatic at each b_ref rebuild (default):
+                                                 ! off (Jacobi) when the median column's mode-1 Courant number
+                                                 ! (theta_c dt c_1 max(pm,pn))^2 is below imex_pc_cou_on, else K = the
+                                                 ! number of the 4 fastest modes whose median is >= imex_pc_cou_k (a
+                                                 ! printed IMEX_PCM line); 1..4: that K always
+  real(kind=8)    :: imex_pc_cou_on = 0.5_8      ! 'modes', automatic: switch-on threshold (PRECOND_SCOPE sec. 6)
+  real(kind=8)    :: imex_pc_cou_k = 0.3_8       ! 'modes', automatic: a mode is kept while its median Courant number
+                                                 ! is at least this (PRECOND_SCOPE sec. 4.3 reading 3)
+  integer(kind=4) :: imex_pc_levels = 0          ! 'modes': V-cycle levels, 0 automatic (2 while the median mode-1
+                                                 ! Courant number is <= 1.5, else 3), 2 or 3
+  integer(kind=4) :: imex_pc_ncoarse = 2         ! 'modes': sweeps before and after on the coarsest level (1 or 2)
+  character(len=8) :: imex_pc_smoother = 'rbgs'  ! 'modes': V-cycle smoother, 'rbgs' red-black Gauss-Seidel (one sweep
+                                                 ! before and after per level) or 'jacobi' (damped, omega 0.8)
+  integer(kind=4) :: imex_pc_dump = 0            ! 'modes' (measurement): the imex_pc_dump-th corrector solve of the run
+                                                 ! (its step of the run, counted from 1 also after a restart) writes
+                                                 ! pcm_dump.<rank> (modes, 2-D operators, b, x, r0 and z0 = P r0); 0 off
   real(kind=8)    :: imex_obc_cmin = 0.3_8       ! 'modal': floor [m/s] on the mode speeds in the admittances
                                                  ! (default 0.3; 0 off): y_m = min(1/(q0 c_m), 1/cmin). In shallow or
                                                  ! unstratified edge columns the modes are at the N2 floor (c_1 =
@@ -314,7 +338,8 @@ module imex_igw
   &  imex_bref_hours, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec, imex_stage_fused,&
   &  imex_redu, imex_rst_state, imex_mix_split, imex_corr_adv,&
   &  imex_obc_mode, imex_obc_nmodes, imex_obc_q0, imex_obc_tref,&
-  &  imex_obc_mprint, imex_obc_cmin
+  &  imex_obc_mprint, imex_obc_cmin, imex_pc, imex_pc_modes, imex_pc_dump, imex_pc_cou_on, imex_pc_cou_k,&
+  &  imex_pc_smoother, imex_pc_levels, imex_pc_ncoarse
 
   ! Derived quantities read by the consumers
   real(kind=8), public, protected :: imex_am3      ! AM3_crv for pre_step3d
@@ -520,6 +545,41 @@ module imex_igw
   ! obm_modes: shifts per bracket and pass of the multisection (a device thread per
   ! column may take 1: fewer divisions, more passes)
   integer(kind=4), parameter :: obm_nsec = 3
+  ! imex_pc = 'modes' (pcm_on; section 'mode-split', pcm_*). Per b_ref rebuild (coef_version pcm_ver): pcm_phi the
+  ! K = pcm_k fastest modes of each column in the solver's unknown (wr-orthonormal, wr = darea hv/n2c, rounded to
+  ! FP32, held in real(8), with halos), pcm_act their activity, pcm_cm/pcm_ci/pcm_cb the 2-D operator Phi_m^T A Phi_m
+  ! (A = W M, W = darea hv) in three parts: mass (centre), interior per unit c2 (centre, east, north; with halos),
+  ! 'modal' faces per unit sqrt(c2) (centre); pcm_cmax the largest mode speeds. Per stage s and c2 (pcm_sver,
+  ! pcm_sc2): pcm_dki = act/d_K (d_K the deflated diagonal of M), pcm_gi = (Phi^T W d_K Phi)^-1 per column, and the
+  ! three V-cycle levels of each mode (pools pcm_e, pcm_cw, pcm_cs, pcm_di at offsets pcm_off(l), each
+  ! (0:nx+1, 0:ny+1), the format of implicit_fs_mod's mg_* kernels); work: pcm_x, pcm_b, pcm_r (pools per mode),
+  ! pcm_rc (rhs per mode), pcm_a (V-cycle result per mode), pcm_v, pcm_y (probe vectors); pcm_ffx/y the coarse face
+  ! factors of levels 1, 2 (implicit_fs_mod's 'width' rule)
+  logical :: pcm_on = .false.
+  integer(kind=4), parameter :: pcm_nl = 3
+  integer(kind=4) :: pcm_k = 0, pcm_ver = -1, pcm_sver(2) = -1, pcm_nbuild = 0, pcm_ntot = 0, pcm_ncorr = 0
+  integer(kind=4) :: pcm_kmax = 0                  ! modes built per column (allocation), pcm_k <= pcm_kmax in use
+  integer(kind=4) :: pcm_lev = 3                   ! V-cycle levels in use (pcm_build): 2 while the median mode-1
+                                                   ! Courant number is <= pcm_cou_l3, else 3 (PRECOND_SCOPE sec. 4.3
+                                                   ! reading 7: two levels are enough up to L^2 of about 3)
+  real(kind=8), parameter :: pcm_cou_l3 = 1.5_8
+  real(kind=4), allocatable, dimension(:,:,:,:) :: pcm_phi4   ! pcm_phi as real(4) (imex_pf_op4, imex_pf_up4)
+  real(kind=8) :: pcm_sc2(2) = -1._8, pcm_tbuild = 0._8
+  integer(kind=4) :: pcm_nx(0:pcm_nl-1) = 0, pcm_ny(0:pcm_nl-1) = 0, pcm_off(0:pcm_nl-1) = 0
+  real(kind=8), allocatable, dimension(:,:,:,:)   :: pcm_phi, pcm_ci, pcm_dki, pcm_y
+  real(kind=8), allocatable, dimension(:,:,:)     :: pcm_act, pcm_cm, pcm_cb, pcm_v, pcm_rc, pcm_a
+  real(kind=8), allocatable, dimension(:,:,:,:,:) :: pcm_gi
+  real(kind=8), allocatable, dimension(:,:,:)     :: pcm_e, pcm_cw, pcm_cs, pcm_di
+  real(kind=8), allocatable, dimension(:)         :: pcm_ffx1, pcm_ffy1, pcm_ffx2, pcm_ffy2
+  real(kind=8), allocatable, dimension(:,:)       :: pcm_x, pcm_b, pcm_r
+  real(kind=8), allocatable, dimension(:)         :: pcm_cmax
+  integer(kind=4) :: pcm_nprev(2) = 1              ! iterations of the stage's last fused 'modes' solve (early test)
+  ! cost of the fused 'modes' application per rank [s] (IMEX_PCMT lines at the end of the run, pcm_tm_print):
+  ! 1 update sweeps, 2 pcm_post, 3 first V-cycle exchanges, 4 other V-cycle exchanges, 5 V-cycles, 6 post loop,
+  ! 7 pcm_zadd, 8 early stopping reductions, 9 V-cycle count, 10 operator sweeps p = z, 11 operator sweeps p = z + bp
+  integer(kind=4), parameter :: pcm_ntm = 11
+  real(kind=8) :: pcm_tm(pcm_ntm) = 0._8
+  logical :: pcm_vfirst = .false.                  ! the next pcm_exchk is the V-cycle's first
 #endif /* IMEX_IGW */
 
 contains
@@ -745,6 +805,21 @@ contains
     &   call error_log%raise_global(context=context, info="imex_obc_nmodes must be in 1..20, imex_obc_q0 0 (off)"&
     &//" or in [0.2, 1] (the admittances are divided by q0), imex_obc_tref >= 0 and imex_obc_mprint >= 0")
     if (imex_obc_cmin < 0._8) call error_log%raise_global(context=context, info="imex_obc_cmin must be >= 0")
+    if (trim(imex_pc) /= 'jacobi' .and. trim(imex_pc) /= 'modes') call error_log%raise_global(context=context,&
+    &  info="imex_pc = '"//trim(imex_pc)//"' must be 'jacobi' or 'modes'")
+    pcm_on = (trim(imex_pc) == 'modes')
+    ! 'modes': the fused stage solve (imex_pcg_fused = 1, both storage kinds, with or without imex_stage_fused;
+    ! imex_redu 0 or 1) or the unfused reference (imex_pcg_fused = 0, imex_redu = 0); imex_pcg_start 2 or 3, no
+    ! self-test
+    if (pcm_on .and. (pcg_start < 2 .or. (redu_on .and. .not. pf_on) .or. imex_selftest /= 0 .or.&
+    &   imex_pc_modes < 0 .or. imex_pc_modes > 4 .or. imex_pc_dump < 0 .or. imex_pc_cou_on < 0._8 .or.&
+    &   imex_pc_cou_k < 0._8 .or. (trim(imex_pc_smoother) /= 'rbgs' .and. trim(imex_pc_smoother) /= 'jacobi') .or.&
+    &   (imex_pc_levels /= 0 .and. imex_pc_levels /= 2 .and. imex_pc_levels /= 3) .or. imex_pc_ncoarse < 1 .or.&
+    &   imex_pc_ncoarse > 2))&
+    &  call error_log%raise_global(context=context,&
+    &  info="imex_pc = 'modes' needs imex_pcg_start 2 or 3, imex_selftest = 0, imex_redu = 0 with imex_pcg_fused = 0,"&
+    &//" imex_pc_modes in 0..4, imex_pc_dump >= 0, imex_pc_cou_on, imex_pc_cou_k >= 0 and imex_pc_smoother 'rbgs'"&
+    &//" or 'jacobi', imex_pc_levels 0, 2 or 3 and imex_pc_ncoarse 1 or 2")
     if (imex_theta_p + imex_phi > 1._8 + tol) then
       write(info,'(A,ES22.14,A)') 'imex_theta_p + imex_phi = ',&
       &imex_theta_p + imex_phi, ' must be <= 1'
@@ -844,6 +919,9 @@ contains
     if (imex_stage_fused == 1 .and. .not. sf_on) write(*,'(3x,A)') 'imex_stage_fused = 1 needs imex_pcg_fused = 1'&
     &//' in effect, theta_p, theta_c > 0 and the solver enabled: imex_stage_fused = 0'
     write(*,'(3x,A,I2,A,I2)') 'imex_redu =', merge(1, 0, redu_on), '  imex_rst_state =', imex_rst_state
+    if (pcm_on) write(*,'(3x,A,I2,A,2F6.2,A,A,A,L2)') "imex_pc = 'modes': mode-split preconditioner, imex_pc_modes =",&
+    &imex_pc_modes, ' (0 automatic; thresholds on/K', imex_pc_cou_on, imex_pc_cou_k, '), smoother ',&
+    &trim(imex_pc_smoother), ', fused', pf_on
     if (imex_redu == 1 .and. .not. redu_on) write(*,'(3x,A)') 'imex_redu = 1 needs imex_pcg_start >= 1 in'&
     &//' effect: imex_redu = 0'
     if (imex_allow_explicit) write(*,'(3x,A)')&
@@ -5347,6 +5425,7 @@ contains
         if (gq(i) > 0._8) write(*,'(1x,A,1x,A14,F9.3)') 'IMEX_COST2', tq_name(i), 1.e3_8*gq(i)/max(ntimes,1)
       enddo
     end if
+    if (pcm_on) call pcm_tm_print
   end subroutine imex_tm_print
 
   !----------------------------------------------------------------------
@@ -6299,6 +6378,13 @@ contains
     call tq_mark(16)
     reuse = pcg_start == 3 .and. warm .and. imex_warm == 1 .and. ps_mver(stage) == coef_version&
     &       .and. ps_mc2(stage) == c2
+    if (pcm_on) then                                 ! imex_pc = 'modes': build / stage set-up (K may be 0: Jacobi)
+      if (lag_on) then
+        call pcm_setup(stage, c2, hz_op, rshu_op, rshv_op)
+      else
+        call pcm_setup(stage, c2, Hz, rshu, rshv)
+      end if
+    end if
     if (pf_on) then                                  ! imex_pcg_fused
       if (lag_on) then
         call imex_pcg_f(r0, ps_h(:,:,:,sl,stage), c2, tol, maxit, iters, resid, warm, stage, hz_op, rshu_op,&
@@ -6306,6 +6392,12 @@ contains
       else
         call imex_pcg_f(r0, ps_h(:,:,:,sl,stage), c2, tol, maxit, iters, resid, warm, stage, Hz, rshu, rshv,&
         &               reuse)
+      end if
+    else if (pcm_on .and. pcm_k > 0) then            ! imex_pc = 'modes', unfused reference
+      if (lag_on) then
+        call imex_pcg_pcm(r0, ps_h(:,:,:,sl,stage), c2, tol, maxit, iters, resid, warm, stage, hz_op, reuse)
+      else
+        call imex_pcg_pcm(r0, ps_h(:,:,:,sl,stage), c2, tol, maxit, iters, resid, warm, stage, Hz, reuse)
       end if
     else if (lag_on) then
       call imex_pcg_sc(r0, ps_h(:,:,:,sl,stage), c2, tol, maxit, iters, resid, warm, stage, hz_op, reuse)
@@ -6362,6 +6454,7 @@ contains
       integer(kind=4) :: qmode
       logical :: mom, bfx
       real(kind=8) :: pq, t0
+      if (pcm_on) call pcm_setup(stage, c2, hv, ru, rv)   ! imex_pc = 'modes' (before the d_K reciprocal)
       if (pf_prec == 8 .or. pf_chk) call imex_pf_setup8(stage, c2, hv)
       if (pf_prec == 4) call imex_pf_setup4(stage, c2, hv)
       qmode = 0
@@ -6720,6 +6813,1156 @@ contains
     end subroutine breakdown
   end subroutine imex_pcg_sc
 
+  !======================================================================
+  ! Mode-split preconditioner (imex_pc = 'modes').
+  ! The stage operator A = W M (W = darea hv) is, in a column, nearly a 2-D Helmholtz operator per vertical mode
+  ! (PRECOND_SCOPE sec. 2), and the Jacobi diagonal averages over the modes, so the fast modes are under-relaxed
+  ! at the grid scale. Per column the K fastest modes Phi (in the unknown x, wr-orthonormal, wr = W/n2c) are taken
+  ! out of the Jacobi step ("one projection" form):
+  !   rc = Phi^T W r                       (K 2-D fields)
+  !   z  = r/d_K + Phi (V(rc) - G^-1 rc)   d_K = diag(M) less the K modes' stiff part, G = Phi^T W d_K Phi
+  ! V = one V-cycle per mode (2 or 3 levels) on the 5-point operator a_m = Phi_m^T A Phi_m (implicit_fs_mod's
+  ! mg_smooth, mg_resid, mg_restrict, mg_prolong, mg_coarsen on the pcm_* level pools; the halo exchanges of the K
+  ! modes in one message per side, pcm_exchk: 2 x 2 aggregates inside the tile, sweeps with tile-local colours and
+  ! one exchange per sweep, no gathered level), so the iterations depend on the tiling at the tolerance level
+  ! (also with imex_redu = 1, which then makes them independent of the rank order on one tiling).
+  ! Build (pcm_build, once per coef_version, i.e. per b_ref rebuild and at the restart replay): K (imex_pc_modes,
+  ! or automatic: a WKB switch on the median mode-1 Courant number, then the median Courant numbers of the 4
+  ! fastest modes; K = 0 is the plain Jacobi path), the modes of each column's L_z by obm_modes (the column's own
+  ! hv as weights, N2 floored at imex_n2_ref), mapped to x by the column part of D, x_m(k) = rczk(k) [(czt - b) w(k)
+  ! + (b - czb) w(k-1)] / wr(k), w = -cumsum(hv phi), Gram-Schmidt in wr, rounded to FP32; a_m's interior part from
+  ! 5 K applications of the fused FP64 operator imex_pf_op8 on a 5-colouring of the columns (colour (i + 2 j) mod 5
+  ! on global indices; the 'modal' faces switched off) and the 'modal' part (column-local, centre only) from 5 K
+  ! more with the faces on. Per stage and c2 (pcm_stage): d_K (floored at 1/n2c), G^-1 per column, the levels per
+  ! mode (level 1 from the clamped row sums and couplings, faces scaled by implicit_fs_mod's 'width' rule).
+  ! Fused solve (default; imex_pcgf8/4): act/(W d_K) replaces the Jacobi reciprocal (imex_pf_setup8/4), the update
+  ! sweep (or imex_sf_rhs8/4 at the start) forms rc, pcm_post the V-cycles and a, pcm_zadd8/4 z = z_J + Phi a; the
+  ! operator sweeps are unchanged. The PCG stops on the norm of d_K, sqrt(<r, d_K^-1 r>) <= tol sqrt(<b, d_K^-1 b>),
+  ! so the tolerances keep their meaning. imex_pcg_pcm below is the unfused reference (imex_pcg_fused = 0).
+  !======================================================================
+  subroutine imex_pcg_pcm(r0, x, c2, tol, maxit, iters, resid, warm, stage, hv, reuse)
+    ! imex_pc = 'modes': imex_pcg_sc with the mode-split preconditioner (pcm_apply) and the d_K stopping norm;
+    ! x holds the guess (warm, with halos) and returns the solution with halos; hv the volume weights' thickness;
+    ! reuse: M x of the guess from ps_mx (imex_pcg_start = 3)
+    !DIR$ ATTRIBUTES NOINLINE :: imex_pcg_pcm
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use param, only: lm, mm, nz, ocean_grid_comm, mynode
+    use scalars, only: iic
+    use roms_mpi, only: exchange_xxx
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_sum
+    implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in)    :: r0, hv
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(inout) :: x
+    real(kind=8), intent(in) :: c2, tol
+    integer(kind=4), intent(in) :: maxit, stage
+    integer(kind=4), intent(out) :: iters
+    real(kind=8), intent(out) :: resid
+    logical, intent(in) :: warm, reuse
+    real(kind=8) :: loc(4), glob(4), rho, s0, pq, alpha, beta, tole, bnorm, dum, b1
+    integer(kind=4) :: i, j, k, it, ierr
+    logical :: broke, dump
+    broke = .false.
+    iters = 0 ; resid = 0._8 ; tole = tol ; bnorm = 0._8
+    if (c2 <= 0._8) return
+    if (stage == imex_stage_corr) pcm_ncorr = pcm_ncorr + 1
+    dump = imex_pc_dump > 0 .and. pcm_ncorr == imex_pc_dump .and. stage == imex_stage_corr
+    loc = 0._8
+    if (warm .and. .not. reuse) call imex_adj_apply(x, wk_q, c2, dum)
+    if (.not. warm) x = 0._8
+    do k=1,nz
+      do j=jb0,jb1
+        do i=ib0,ib1
+          b1 = act(i,j)*r0(i,j,k)/ad_n2c(i,j,k)
+          if (warm) then
+            if (reuse) then
+              wk_r(i,j,k) = act(i,j)*b1 - ps_mx(i,j,k,stage)
+            else
+              wk_r(i,j,k) = act(i,j)*b1 - wk_q(i,j,k)
+            end if
+          else
+            wk_r(i,j,k) = act(i,j)*b1
+          end if
+          loc(4) = loc(4) + darea(i,j)*hv(i,j,k)*b1*b1*pcm_dki(i,j,k,stage)
+        enddo
+      enddo
+    enddo
+    call pcm_apply(stage, wk_r, wk_z, hv, loc(1), loc(2), loc(3))
+    do k=1,nz
+      do j=jb0,jb1
+        do i=ib0,ib1
+          wk_p(i,j,k) = wk_z(i,j,k)
+        enddo
+      enddo
+    enddo
+    if (dump) call pcm_dump(1, stage, c2, hv, r0, x)
+    call mpi_allreduce(loc, glob, 4, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    rho = glob(1) ; s0 = glob(3) ; bnorm = glob(4)
+    if (.not. ieee_is_finite(rho) .or. .not. ieee_is_finite(s0)) then   ! non-finite rhs or coefficients
+      resid = 1._8
+      call breakdown('<r0,P r0>', rho, 0)
+      n_maxit_hits = n_maxit_hits + 1
+      if (warm) call exchange_xxx(x)
+      ps_mver(stage) = -1
+      return
+    end if
+    if (s0 <= 0._8) then                          ! zero residual: x as it is
+      if (warm) call exchange_xxx(x)
+      ps_mver(stage) = -1
+      return
+    end if
+    if (warm) tole = min(0.5_8, tol*sqrt(bnorm/s0))
+    resid = 1._8
+    call tq_mark(17)
+    do it=1,maxit
+      call tq_mark(32)
+      call exchange_xxx(wk_p, 1, .false.)   ! one cell, no corners: all the operator reads
+      call tq_mark(28)
+      call imex_adj_apply(wk_p, wk_q, c2, loc(1))
+      call tq_mark(30)
+      call mpi_allreduce(loc(1), pq, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+      call tq_mark(29)
+      if (.not. ieee_is_finite(pq) .or. pq <= 0._8) then
+        call breakdown('<p,Ap>', pq, it)
+        exit
+      end if
+      alpha = rho/pq
+      do k=1,nz
+        do j=jb0,jb1
+          do i=ib0,ib1
+            x(i,j,k) = x(i,j,k) + alpha*wk_p(i,j,k)
+            wk_r(i,j,k) = wk_r(i,j,k) - alpha*wk_q(i,j,k)
+          enddo
+        enddo
+      enddo
+      call tq_mark(32)
+      call pcm_apply(stage, wk_r, wk_z, hv, loc(1), loc(2), loc(3))
+      call tq_mark(31)
+      call mpi_allreduce(loc(1:3), glob(1:3), 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+      call tq_mark(29)
+      iters = it
+      if (rh_on) rh_res(min(it, rh_n)) = glob(3)   ! imex_verbose >= 2: residual history (d_K norm)
+      if (.not. ieee_is_finite(glob(1)) .or. .not. ieee_is_finite(glob(3)) .or. glob(3) < 0._8) then
+        call breakdown('<r,P r>', glob(1), it)
+        exit
+      end if
+      resid = sqrt(glob(3)/s0)
+      if (resid <= tole) exit
+      beta = glob(1)/rho
+      rho = glob(1)
+      do k=1,nz
+        do j=jb0,jb1
+          do i=ib0,ib1
+            wk_p(i,j,k) = wk_z(i,j,k) + beta*wk_p(i,j,k)
+          enddo
+        enddo
+      enddo
+    enddo
+    call tq_mark(32)
+    if (broke .or. resid > tole) n_maxit_hits = n_maxit_hits + 1
+    if (rh_on) call imex_rh_line(stage, iters, warm, s0, bnorm)
+    if (warm) resid = resid*sqrt(s0/max(bnorm,1.e-300_8))   ! relative to the cold solve's norm
+    if (pcg_start == 3 .and. imex_warm == 1) then  ! M x = b - r for the next solve of this stage
+      if (.not. allocated(ps_mx)) then
+        allocate( ps_mx(GLOBAL_2D_ARRAY,nz,2) ) ; ps_mx = 0._8
+      end if
+      do k=1,nz
+        do j=jb0,jb1
+          do i=ib0,ib1
+            ps_mx(i,j,k,stage) = act(i,j)*(act(i,j)*r0(i,j,k)/ad_n2c(i,j,k)) - wk_r(i,j,k)
+          enddo
+        enddo
+      enddo
+      ps_mver(stage) = coef_version ; ps_mc2(stage) = c2
+    end if
+    call exchange_xxx(x)
+    call tq_mark(28)
+    if (dump) call pcm_dump(2, stage, c2, hv, r0, x)
+
+  contains
+
+    subroutine breakdown(what, val, iter)
+      ! The reduced values are the same on every rank: rank 0 warns.
+      character(len=*), intent(in) :: what
+      real(kind=8), intent(in) :: val
+      integer(kind=4), intent(in) :: iter
+      broke = .true.
+      if (mynode == 0) write(*,'(1x,A,A,A,ES12.4,A,I4,A,ES12.4)') 'IMEX_IGW WARNING: PCG breakdown, ',&
+      &what, ' =', val, ' at iteration', iter, '; stopped with relative residual', resid
+    end subroutine breakdown
+  end subroutine imex_pcg_pcm
+
+  !----------------------------------------------------------------------
+  subroutine pcm_setup(stage, c2, hv, ru, rv)
+    ! the mode-split preconditioner for this stage solve: the build at a new operator (coef_version: modes, the
+    ! automatic K, the 2-D operators), the stage's d_K, G^-1 and V-cycle levels at a new operator or c2
+    use param, only: lm, mm, nz
+    use scalars, only: dt
+    implicit none
+    integer(kind=4), intent(in) :: stage
+    real(kind=8), intent(in) :: c2
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: hv
+    real(kind=8), dimension(GLOBAL_2D_ARRAY), intent(in) :: ru, rv
+    if (pcm_ver /= coef_version) then
+      ! probe with a c2 that does not depend on which solve triggers the build (the first solve after an exact
+      ! restart can be another stage than at the rebuild step): the parts per unit c2 are then bit-reproducible
+      call pcm_build((imex_theta_c*dt)**2, hv, ru, rv)
+      pcm_ver = coef_version ; pcm_sver = -1
+    end if
+    if (pcm_k > 0 .and. (pcm_sver(stage) /= pcm_ver .or. pcm_sc2(stage) /= c2)) then
+      call pcm_stage(stage, c2, hv)
+      pcm_sver(stage) = pcm_ver ; pcm_sc2(stage) = c2
+    end if
+  end subroutine pcm_setup
+
+  !----------------------------------------------------------------------
+  subroutine pcm_alloc
+    ! first use: K max, the level sizes and pool offsets, the coarse face factors, the arrays
+    use param, only: lm, mm, nz
+    use dimensions, only: inode, jnode, npx, npy, gnx, gny
+    use implicit_fs_mod, only: mg_exch_reserve, mg_tmp_reserve
+    implicit none
+    integer(kind=4) :: l, tot
+    pcm_kmax = 4
+    if (imex_pc_modes > 0) pcm_kmax = imex_pc_modes
+    pcm_kmax = min(pcm_kmax, nz-1)
+    pcm_nx(0) = ib1 - ib0 + 1 ; pcm_ny(0) = jb1 - jb0 + 1
+    tot = 0
+    do l=0,pcm_nl-1
+      if (l > 0) then
+        pcm_nx(l) = (pcm_nx(l-1)+1)/2 ; pcm_ny(l) = (pcm_ny(l-1)+1)/2
+      end if
+      pcm_off(l) = tot + 1
+      tot = tot + (pcm_nx(l)+2)*(pcm_ny(l)+2)
+    enddo
+    pcm_ntot = tot
+    allocate( pcm_phi(GLOBAL_2D_ARRAY,nz,pcm_kmax), pcm_ci(GLOBAL_2D_ARRAY,3,pcm_kmax),&
+    &         pcm_dki(GLOBAL_2D_ARRAY,nz,2), pcm_act(GLOBAL_2D_ARRAY,pcm_kmax), pcm_cm(GLOBAL_2D_ARRAY,pcm_kmax),&
+    &         pcm_cb(GLOBAL_2D_ARRAY,pcm_kmax), pcm_v(GLOBAL_2D_ARRAY,nz), pcm_y(GLOBAL_2D_ARRAY,nz,2),&
+    &         pcm_gi(GLOBAL_2D_ARRAY,pcm_kmax,pcm_kmax,2),&
+    &         pcm_rc(0:pcm_nx(0)+1,0:pcm_ny(0)+1,pcm_kmax), pcm_a(0:pcm_nx(0)+1,0:pcm_ny(0)+1,pcm_kmax),&
+    &         pcm_e(tot,pcm_kmax,2), pcm_cw(tot,pcm_kmax,2), pcm_cs(tot,pcm_kmax,2), pcm_di(tot,pcm_kmax,2),&
+    &         pcm_x(tot,pcm_kmax), pcm_b(tot,pcm_kmax), pcm_r(tot,pcm_kmax), pcm_cmax(pcm_kmax) )
+    pcm_phi = 0._8 ; pcm_ci = 0._8 ; pcm_dki = 0._8 ; pcm_act = 0._8 ; pcm_cm = 0._8 ; pcm_cb = 0._8
+    pcm_v = 0._8 ; pcm_y = 0._8 ; pcm_gi = 0._8 ; pcm_rc = 0._8 ; pcm_a = 0._8
+    pcm_e = 0._8 ; pcm_cw = 0._8 ; pcm_cs = 0._8 ; pcm_di = 0._8 ; pcm_x = 0._8 ; pcm_b = 0._8 ; pcm_r = 0._8
+    if (pf_on .and. pf_prec == 4) then
+      allocate( pcm_phi4(GLOBAL_2D_ARRAY,nz,pcm_kmax) ) ; pcm_phi4 = 0._4
+    end if
+    allocate( pcm_ffx1(pcm_nx(1)+1), pcm_ffx2(pcm_nx(2)+1), pcm_ffy1(pcm_ny(1)+1), pcm_ffy2(pcm_ny(2)+1) )
+#  ifdef EW_PERIODIC
+    call pcm_faces_dir(gnx, npx, inode, pcm_nx, .true., pcm_ffx1, pcm_ffx2)
+#  else
+    call pcm_faces_dir(gnx, npx, inode, pcm_nx, .false., pcm_ffx1, pcm_ffx2)
+#  endif
+#  ifdef NS_PERIODIC
+    call pcm_faces_dir(gny, npy, jnode, pcm_ny, .true., pcm_ffy1, pcm_ffy2)
+#  else
+    call pcm_faces_dir(gny, npy, jnode, pcm_ny, .false., pcm_ffy1, pcm_ffy2)
+#  endif
+    call mg_exch_reserve(max(pcm_nx(0), pcm_ny(0)) + 2)
+    call mg_tmp_reserve(pcm_nx(0), pcm_ny(0))
+  end subroutine pcm_alloc
+
+  !----------------------------------------------------------------------
+  subroutine pcm_faces_dir(gn, npn, me, nl, per, ff1, ff2)
+    ! factors of the coarse face coefficients of levels 1 and 2 along one direction: implicit_fs_mod's
+    ! mg_build_faces rule 'width' for aggregation inside each tile: for the coarse face between cells I-1 and I
+    ! (fine face fi = min(2I-1, nf+1)), (w_f(fi-1) + w_f(fi)) / (w_c(I-1) + w_c(I)), widths in fine-grid cells on
+    ! the global index of the level (tile sizes from the roms_mpi rule for all tiles; beyond a physical edge the
+    ! edge cell's width, periodic wrap with per)
+    implicit none
+    integer(kind=4), intent(in) :: gn, npn, me, nl(0:pcm_nl-1)
+    logical, intent(in) :: per
+    real(kind=8), intent(out) :: ff1(nl(1)+1), ff2(nl(2)+1)
+    integer(kind=4) :: c(0:npn-1), cp(0:npn-1), t, ic, k0f, k0c, g0f, g0c, nf, nc, fi, l, n, off
+    real(kind=8), allocatable :: wf(:), wc(:)
+    real(kind=8) :: fv
+    n = (gn + npn - 1)/npn ; off = npn*n - gn              ! the tile-size rule (mg_tile_sizes)
+    c = n
+    c(0) = c(0) - off/2
+    c(npn-1) = c(npn-1) - (off+1)/2
+    allocate(wf(gn)) ; wf = 1._8
+    do l=1,2
+      cp = c ; c = (c+1)/2
+      allocate(wc(sum(c)))
+      k0f = 0 ; k0c = 0
+      do t=0,npn-1
+        do ic=1,c(t)
+          wc(k0c+ic) = wf(k0f+2*ic-1)
+          if (2*ic <= cp(t)) wc(k0c+ic) = wc(k0c+ic) + wf(k0f+2*ic)
+        enddo
+        k0f = k0f + cp(t) ; k0c = k0c + c(t)
+      enddo
+      g0f = sum(cp(0:me-1)) ; g0c = sum(c(0:me-1)) ; nf = cp(me) ; nc = c(me)
+      if (nc /= nl(l)) stop 'pcm_faces_dir: level size'
+      do ic=1,nc+1
+        fi = min(2*ic-1, nf+1)
+        fv = (wget(wf, g0f+fi-1) + wget(wf, g0f+fi))/(wget(wc, g0c+ic-1) + wget(wc, g0c+ic))
+        if (l == 1) then
+          ff1(ic) = fv
+        else
+          ff2(ic) = fv
+        end if
+      enddo
+      call move_alloc(wc, wf)
+    enddo
+    deallocate(wf)
+  contains
+    real(kind=8) function wget(w, k)
+      real(kind=8), intent(in) :: w(:)
+      integer(kind=4), intent(in) :: k
+      integer(kind=4) :: nn
+      nn = size(w)
+      if (k < 1) then
+        wget = w(1)
+        if (per) wget = w(nn)
+      else if (k > nn) then
+        wget = w(nn)
+        if (per) wget = w(1)
+      else
+        wget = w(k)
+      end if
+    end function wget
+  end subroutine pcm_faces_dir
+
+  !----------------------------------------------------------------------
+  subroutine pcm_build(c2p, hv, ru, rv)
+    ! per operator: the modes of every active column (obm_modes, the column's own hv as weights), mapped to x,
+    ! Gram-Schmidt in wr (fastest first), rounded to FP32; K (imex_pc_modes, or automatic from the median mode
+    ! Courant numbers, 0 = Jacobi); the parts of a_m = Phi_m^T A Phi_m by probing with the 5-colouring through the
+    ! fused FP64 operator imex_pf_op8 (mode 0: W M of an FP64 operand): the interior part with the 'modal' faces
+    ! off, the 'modal' part as the difference with them on (c2p any positive value: the parts are formed per unit
+    ! c2 and sqrt(c2))
+    use param, only: lm, mm, nz, mynode, ocean_grid_comm, iSW_corn, jSW_corn
+    use grid, only: pm, pn
+    use scalars, only: iic, dt
+    use roms_mpi, only: exchange_xxx
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_sum, mpi_integer, mpi_wtime
+    implicit none
+    real(kind=8), intent(in) :: c2p
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: hv
+    real(kind=8), dimension(GLOBAL_2D_ARRAY), intent(in) :: ru, rv
+    integer(kind=4), parameter :: nhb = 100                  ! Courant histogram: log10 bins of 0.05 from 1e-3
+    real(kind=8) :: hf(nz), gk(0:nz), cm(4), ph(nz,4), xp(nz,4), xs(nz), w(0:nz), dz, n2, wr, nrm0, nrm, pr,&
+    &               gmn, sc, s1, s2, t0, cmg(4), cou, med(4)
+    real(kind=8), allocatable :: rcz(:,:,:), wrz(:,:,:)
+    integer(kind=4) :: i, j, k, m, n, c, o, nps, nrq, nfb, nbad, ndrop, ierr, cnt(2), gcnt(2), kb, ib,&
+    &                  hist(nhb,4), ghist(nhb,4), ntot, acc, kold
+    logical :: ok, smod
+    t0 = mpi_wtime()
+    if (.not. allocated(pcm_phi)) call pcm_alloc
+    kold = pcm_k
+    pcm_phi = 0._8 ; pcm_act = 0._8 ; pcm_cm = 0._8 ; pcm_ci = 0._8 ; pcm_cb = 0._8
+    pcm_cmax = 0._8 ; nbad = 0 ; ndrop = 0 ; hist = 0
+    kb = pcm_kmax
+    if (imex_pc_modes == 0) then
+      ! automatic: first the switch from the WKB mode-1 speed c_1 ~ sum_k N dz / pi (N2 floored as below; no
+      ! eigen-solve), median over the active columns; below imex_pc_cou_on no modes are built (Jacobi)
+      do j=jb0,jb1
+        do i=ib0,ib1
+          if (act(i,j) <= 0._8) cycle
+          cou = 0._8
+          do k=1,nz-1
+            dz = 0.5_8*(hv(i,j,k) + hv(i,j,k+1))
+            n2 = max((ad_bb(i,j,k+1) - ad_bb(i,j,k))/dz, imex_n2_ref, imex_n2_reg)
+            cou = cou + sqrt(n2)*dz
+          enddo
+          cou = (imex_theta_c*dt*cou/acos(-1._8)*max(pm(i,j), pn(i,j)))**2
+          ib = min(nhb, max(1, 1 + int((log10(max(cou, 1.e-30_8)) + 3._8)/0.05_8)))
+          hist(ib,1) = hist(ib,1) + 1
+        enddo
+      enddo
+      call mpi_allreduce(hist(:,1), ghist(:,1), nhb, mpi_integer, mpi_sum, ocean_grid_comm, ierr)
+      hist = 0
+      ntot = sum(ghist(:,1)) ; acc = 0 ; cou = 0._8
+      do ib=1,nhb
+        acc = acc + ghist(ib,1)
+        if (2*acc >= ntot) then
+          cou = 10._8**(-3._8 + 0.05_8*(real(ib,8) - 0.5_8))
+          exit
+        end if
+      enddo
+      if (cou < imex_pc_cou_on) then
+        pcm_k = 0
+        pcm_nbuild = pcm_nbuild + 1
+        if (mynode == 0) write(*,'(1x,A,I7,A,F8.3,A,F6.2,A)') 'IMEX_PCM', iic, ' K 0: median WKB mode-1'&
+        &//' (theta_c dt c_1/dx)^2', cou, ' <', imex_pc_cou_on, ' -> Jacobi'
+        return
+      end if
+    end if
+    do j=jb0,jb1
+      do i=ib0,ib1
+        if (act(i,j) <= 0._8) cycle
+        do k=1,nz
+          hf(k) = hv(i,j,k)
+        enddo
+        gk(0) = 0._8 ; gk(nz) = 0._8
+        do k=1,nz-1
+          dz = 0.5_8*(hv(i,j,k) + hv(i,j,k+1))
+          n2 = max((ad_bb(i,j,k+1) - ad_bb(i,j,k))/dz, imex_n2_ref, imex_n2_reg)
+          gk(k) = 1._8/(n2*dz)
+        enddo
+        call obm_modes(nz, kb, obm_nsec, hf, gk, cm(1:kb), ph(:,1:kb), nps, nrq, nfb, gmn, ok)
+        if (.not. ok) nbad = nbad + 1
+        do m=1,kb
+          w(0) = 0._8
+          do k=1,nz
+            w(k) = w(k-1) - hf(k)*ph(k,m)
+          enddo
+          w(nz) = 0._8
+          nrm0 = 0._8
+          do k=1,nz
+            wr = darea(i,j)*hv(i,j,k)/ad_n2c(i,j,k)
+            xs(k) = -act(i,j)/ad_n2k(i,j,k)*((ad_czt(i,j,k) - ad_bb(i,j,k))*w(k)&
+            &       + (ad_bb(i,j,k) - ad_czb(i,j,k))*w(k-1))/wr
+            nrm0 = nrm0 + wr*xs(k)**2
+          enddo
+          nrm0 = sqrt(nrm0)
+          do n=1,m-1                               ! wr-orthogonal to the faster modes (FP64)
+            pr = 0._8
+            do k=1,nz
+              pr = pr + darea(i,j)*hv(i,j,k)/ad_n2c(i,j,k)*xp(k,n)*xs(k)
+            enddo
+            do k=1,nz
+              xs(k) = xs(k) - pr*xp(k,n)
+            enddo
+          enddo
+          nrm = 0._8
+          do k=1,nz
+            nrm = nrm + darea(i,j)*hv(i,j,k)/ad_n2c(i,j,k)*xs(k)**2
+          enddo
+          nrm = sqrt(nrm)
+          if (nrm0 > 0._8 .and. nrm > 1.e-6_8*nrm0) then
+            do k=1,nz
+              xs(k) = xs(k)/nrm
+            enddo
+          else
+            xs = 0._8 ; ndrop = ndrop + 1
+          end if
+          do k=1,nz
+            xp(k,m) = xs(k)
+            pcm_phi(i,j,k,m) = real(real(xs(k), 4), 8)   ! modes stored in FP32
+          enddo
+          pcm_cmax(m) = max(pcm_cmax(m), cm(m)*max(pm(i,j), pn(i,j)))
+          cou = (imex_theta_c*dt*cm(m)*max(pm(i,j), pn(i,j)))**2
+          ib = min(nhb, max(1, 1 + int((log10(max(cou, 1.e-30_8)) + 3._8)/0.05_8)))
+          hist(ib,m) = hist(ib,m) + 1
+        enddo
+      enddo
+    enddo
+    ! K: medians of the mode Courant numbers (global histograms)
+    call mpi_allreduce(hist, ghist, nhb*4, mpi_integer, mpi_sum, ocean_grid_comm, ierr)
+    med = 0._8
+    do m=1,kb
+      ntot = sum(ghist(:,m)) ; acc = 0
+      do ib=1,nhb
+        acc = acc + ghist(ib,m)
+        if (2*acc >= ntot) then
+          med(m) = 10._8**(-3._8 + 0.05_8*(real(ib,8) - 0.5_8))
+          exit
+        end if
+      enddo
+    enddo
+    if (imex_pc_modes > 0) then
+      pcm_k = kb
+    else if (med(1) < imex_pc_cou_on) then
+      pcm_k = 0
+    else
+      pcm_k = 1
+      do m=2,kb
+        if (med(m) >= imex_pc_cou_k) pcm_k = m
+      enddo
+    end if
+    pcm_lev = 3
+    if (med(1) <= pcm_cou_l3) pcm_lev = 2
+    if (imex_pc_levels > 0) pcm_lev = imex_pc_levels
+    do m=pcm_k+1,kb                                ! modes not used
+      pcm_phi(:,:,:,m) = 0._8
+    enddo
+    do m=1,pcm_k
+      call exchange_xxx(pcm_phi(:,:,:,m))
+      do j=lbound(pcm_act,2),ubound(pcm_act,2)
+        do i=lbound(pcm_act,1),ubound(pcm_act,1)
+          pcm_act(i,j,m) = 0._8
+          do k=1,nz
+            if (pcm_phi(i,j,k,m) /= 0._8) pcm_act(i,j,m) = 1._8
+          enddo
+          pcm_act(i,j,m) = pcm_act(i,j,m)*ad_act(i,j)
+        enddo
+      enddo
+      do j=jb0,jb1                                 ! mass part: Phi^T diag(wr) Phi (centre)
+        do i=ib0,ib1
+          s1 = 0._8
+          do k=1,nz
+            s1 = s1 + darea(i,j)*hv(i,j,k)/ad_n2c(i,j,k)*pcm_phi(i,j,k,m)**2
+          enddo
+          pcm_cm(i,j,m) = s1
+        enddo
+      enddo
+      if (allocated(pcm_phi4)) pcm_phi4(:,:,:,m) = real(pcm_phi(:,:,:,m), 4)
+    enddo
+    ! probing (imex_pf_op8 mode 0 with its FP64 coefficient set: rczk = -act/n2k with halos, wr = W/n2c): colour
+    ! c's columns of mode m; at a column of colour col the stencil member of colour c is offset o = (c - col) mod 5:
+    ! 0 centre, 1 east (i+1), 2 north (j+1), 3 south, 4 west
+    if (pcm_k > 0) then
+      allocate( rcz(GLOBAL_2D_ARRAY,nz), wrz(GLOBAL_2D_ARRAY,nz) ) ; rcz = 0._8 ; wrz = 0._8
+      do k=1,nz
+        do j=jb0-1,jb1+1
+          do i=ib0-1,ib1+1
+            rcz(i,j,k) = -ad_act(i,j)/ad_n2k(i,j,k)
+          enddo
+        enddo
+        do j=jb0,jb1
+          do i=ib0,ib1
+            wrz(i,j,k) = darea(i,j)*hv(i,j,k)/ad_n2c(i,j,k)
+          enddo
+        enddo
+      enddo
+      sc = sqrt(c2p)
+      smod = imex_obc_modal
+      do m=1,pcm_k
+        do c=0,4
+          do k=1,nz
+            do j=jb0-1,jb1+1
+              do i=ib0-1,ib1+1
+                pcm_v(i,j,k) = 0._8
+                if (modulo(iSW_corn + i + 2*(jSW_corn + j), 5) == c) pcm_v(i,j,k) = pcm_phi(i,j,k,m)
+              enddo
+            enddo
+          enddo
+          imex_obc_modal = .false.                 ! interior part
+          call imex_pf_op8(0, 0._8, 0._8, c2p, pcm_v, pcm_y(:,:,:,1), wk_z, wk_p, wk_r, wk_q, rcz, ad_czt, ad_czb,&
+          &                ad_cu, ad_cv, hv, wrz, ru, rv, s1)
+          imex_obc_modal = smod
+          if (smod) call imex_pf_op8(0, 0._8, 0._8, c2p, pcm_v, pcm_y(:,:,:,2), wk_z, wk_p, wk_r, wk_q, rcz,&
+          &                ad_czt, ad_czb, ad_cu, ad_cv, hv, wrz, ru, rv, s1)   ! + the 'modal' faces
+          do j=jb0,jb1
+            do i=ib0,ib1
+              o = modulo(c - modulo(iSW_corn + i + 2*(jSW_corn + j), 5), 5)
+              if (o > 2) cycle
+              s1 = 0._8 ; s2 = 0._8
+              do k=1,nz
+                s1 = s1 + pcm_phi(i,j,k,m)*(pcm_y(i,j,k,1) - wrz(i,j,k)*pcm_v(i,j,k))
+                if (smod) s2 = s2 + pcm_phi(i,j,k,m)*(pcm_y(i,j,k,2) - pcm_y(i,j,k,1))
+              enddo
+              pcm_ci(i,j,o+1,m) = s1/c2p
+              if (o == 0 .and. smod) pcm_cb(i,j,m) = s2/sc
+            enddo
+          enddo
+        enddo
+        call exchange_xxx(pcm_ci(:,:,2,m), pcm_ci(:,:,3,m))   ! east, north couplings of the halo columns
+      enddo
+      deallocate(rcz, wrz)
+    end if
+    pcm_nbuild = pcm_nbuild + 1
+    pcm_tbuild = mpi_wtime() - t0
+    ! (collective) the build line: K, the median and maximum mode Courant numbers (theta_c dt c_m max(pm, pn))^2
+    call mpi_allreduce(pcm_cmax, cmg(1:kb), kb, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    cnt = [nbad, ndrop]
+    call mpi_allreduce(cnt, gcnt, 2, mpi_integer, mpi_sum, ocean_grid_comm, ierr)
+    call mpi_allreduce(pcm_tbuild, s1, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    if (mynode == 0) write(*,'(1x,A,I7,A,I2,A,I2,A,4F8.3)') 'IMEX_PCM', iic, ' K', pcm_k, ' levels', pcm_lev,&
+    &  '  median (theta_c dt c_m/dx)^2 of modes 1..', (med(m), m=1,kb)
+    if (mynode == 0) write(*,'(1x,A,I7,A,4F8.3)') 'IMEX_PCM', iic, ' max (theta_c dt c_m/dx)^2:',&
+    &  ((imex_theta_c*dt*cmg(m))**2, m=1,kb)
+    if (mynode == 0) write(*,'(1x,A,I7,A,I6,A,I8,A,F9.2,A,A)') 'IMEX_PCM', iic, ' modes not converged',&
+    &  gcnt(1), ', dropped (column, mode)', gcnt(2), ', build', 1.e3_8*s1, ' ms (max rank)',&
+    &  merge(' -> Jacobi (no mode fast enough)', '                                ', pcm_k == 0)
+  end subroutine pcm_build
+
+  !----------------------------------------------------------------------
+  subroutine pcm_stage(stage, c2, hv)
+    ! per stage and c2: d_K = diag(M) - sum_m lam_m W (Phi_m/n2c)^2, lam_m = c2 a_int(centre) + sqrt(c2)
+    ! a_modal(centre), floored at 1/n2c, its reciprocal pcm_dki; G = Phi^T W d_K Phi and G^-1 per column; the
+    ! three V-cycle levels of each mode
+    use param, only: lm, mm, nz
+    use implicit_fs_mod, only: mg_coarsen
+    implicit none
+    integer(kind=4), intent(in) :: stage
+    real(kind=8), intent(in) :: c2
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: hv
+    real(kind=8) :: sc, dm, dk, g(4,4), gi(4,4), lam(4), ww
+    real(kind=8), allocatable, dimension(:,:) :: ec, cwc, csc
+    integer(kind=4) :: i, j, k, m, n, o0, o1, o2, kk
+    logical :: am(4)
+    sc = sqrt(c2)
+    kk = pcm_k
+    do j=jb0,jb1
+      do i=ib0,ib1
+        do m=1,kk
+          lam(m) = c2*pcm_ci(i,j,1,m) + sc*pcm_cb(i,j,m)
+          am(m) = pcm_act(i,j,m) > 0._8
+        enddo
+        g = 0._8
+        do k=1,nz
+          dm = 1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k)
+          if (imex_obc_modal) then
+            if (ob_kd(i,j,k) > 0._8) dm = dm + sc*ob_kd(i,j,k)
+          end if
+          ww = darea(i,j)*hv(i,j,k)
+          dk = dm
+          do m=1,kk
+            dk = dk - lam(m)*ww*(pcm_phi(i,j,k,m)/ad_n2c(i,j,k))**2
+          enddo
+          dk = max(dk, 1._8/ad_n2c(i,j,k))
+          pcm_dki(i,j,k,stage) = act(i,j)/dk
+          do m=1,kk
+            do n=1,kk
+              g(n,m) = g(n,m) + pcm_phi(i,j,k,n)*pcm_phi(i,j,k,m)*ww*dk
+            enddo
+          enddo
+        enddo
+        do m=1,kk                                   ! inactive modes: unit row and column, zero in G^-1
+          if (am(m)) cycle
+          g(m,1:kk) = 0._8 ; g(1:kk,m) = 0._8 ; g(m,m) = 1._8
+        enddo
+        call pcm_inv(kk, g, gi)
+        do m=1,kk
+          do n=1,kk
+            if (.not. (am(m) .and. am(n))) gi(n,m) = 0._8
+            pcm_gi(i,j,n,m,stage) = gi(n,m)
+          enddo
+        enddo
+      enddo
+    enddo
+    o0 = pcm_off(0) ; o1 = pcm_off(1) ; o2 = pcm_off(2)
+    allocate( ec(0:pcm_nx(0)+1,0:pcm_ny(0)+1), cwc(0:pcm_nx(0)+1,0:pcm_ny(0)+1), csc(0:pcm_nx(0)+1,0:pcm_ny(0)+1) )
+    do m=1,kk
+      call pcm_fine(pcm_nx(0), pcm_ny(0), m, c2, pcm_e(o0,m,stage), pcm_cw(o0,m,stage), pcm_cs(o0,m,stage),&
+      &             pcm_di(o0,m,stage), ec, cwc, csc)
+      call mg_coarsen(pcm_nx(0), pcm_ny(0), ec, cwc, csc, pcm_nx(1), pcm_ny(1), pcm_ffx1, pcm_ffy1,&
+      &               pcm_e(o1,m,stage), pcm_cw(o1,m,stage), pcm_cs(o1,m,stage), pcm_di(o1,m,stage))
+      call mg_coarsen(pcm_nx(1), pcm_ny(1), pcm_e(o1,m,stage), pcm_cw(o1,m,stage), pcm_cs(o1,m,stage),&
+      &               pcm_nx(2), pcm_ny(2), pcm_ffx2, pcm_ffy2,&
+      &               pcm_e(o2,m,stage), pcm_cw(o2,m,stage), pcm_cs(o2,m,stage), pcm_di(o2,m,stage))
+    enddo
+    deallocate(ec, cwc, csc)
+  end subroutine pcm_stage
+
+  !----------------------------------------------------------------------
+  subroutine pcm_fine(nx, ny, m, c2, e, cw, cs, di, ec, cwc, csc)
+    ! level 0 of mode m in the format of implicit_fs_mod's kernels: A x = e x + sum_faces c (x - x_nb), c the
+    ! face conductance = minus the coupling (cw west faces 1..nx+1, cs south faces 1..ny+1), e the row sum
+    ! (floored at 1e-12 diag on active cells: positive couplings), di = 1/diag (0 on inactive cells); ec, cwc,
+    ! csc the copies with the row sums and conductances clamped at 0 that level 1 is coarsened from (as the
+    ! Python reference)
+    use param, only: lm, mm, nz
+    implicit none
+    integer(kind=4), intent(in) :: nx, ny, m
+    real(kind=8), intent(in) :: c2
+    real(kind=8), dimension(0:nx+1,0:ny+1), intent(inout) :: e, cw, cs, di, ec, cwc, csc
+    real(kind=8) :: d, rs
+    integer(kind=4) :: i, j, ii, jj
+    e = 0._8 ; cw = 0._8 ; cs = 0._8 ; di = 0._8 ; ec = 0._8 ; cwc = 0._8 ; csc = 0._8
+    do jj=1,ny
+      j = jb0 - 1 + jj
+      do ii=1,nx+1
+        i = ib0 - 1 + ii                            ! face between cells i-1 and i
+        cw(ii,jj) = -c2*pcm_ci(i-1,j,2,m)*pcm_act(i-1,j,m)*pcm_act(i,j,m)
+      enddo
+    enddo
+    do jj=1,ny+1
+      j = jb0 - 1 + jj
+      do ii=1,nx
+        i = ib0 - 1 + ii
+        cs(ii,jj) = -c2*pcm_ci(i,j-1,3,m)*pcm_act(i,j-1,m)*pcm_act(i,j,m)
+      enddo
+    enddo
+    do jj=1,ny
+      j = jb0 - 1 + jj
+      do ii=1,nx
+        i = ib0 - 1 + ii
+        if (pcm_act(i,j,m) <= 0._8) cycle
+        d = pcm_cm(i,j,m) + c2*pcm_ci(i,j,1,m) + sqrt(c2)*pcm_cb(i,j,m)
+        if (d <= 0._8) cycle
+        rs = d - (cw(ii,jj) + cw(ii+1,jj) + cs(ii,jj) + cs(ii,jj+1))
+        ec(ii,jj) = max(rs, 0._8)
+        e(ii,jj) = max(rs, 1.e-12_8*d)
+        di(ii,jj) = 1._8/d
+      enddo
+    enddo
+    do jj=1,ny+1
+      do ii=1,nx+1
+        cwc(ii,jj) = max(cw(ii,jj), 0._8) ; csc(ii,jj) = max(cs(ii,jj), 0._8)
+      enddo
+    enddo
+  end subroutine pcm_fine
+
+  !----------------------------------------------------------------------
+  subroutine pcm_inv(n, a, ai)
+    ! ai = a^-1 for a small symmetric positive definite matrix (Gauss-Jordan, no pivoting)
+    implicit none
+    integer(kind=4), intent(in) :: n
+    real(kind=8), intent(in) :: a(4,4)
+    real(kind=8), intent(out) :: ai(4,4)
+    real(kind=8) :: w(4,8), p
+    integer(kind=4) :: i, j
+    w = 0._8
+    do i=1,n
+      w(i,1:n) = a(i,1:n) ; w(i,n+i) = 1._8
+    enddo
+    do i=1,n
+      p = 1._8/w(i,i)
+      w(i,1:2*n) = w(i,1:2*n)*p
+      do j=1,n
+        if (j == i) cycle
+        w(j,1:2*n) = w(j,1:2*n) - w(j,i)*w(i,1:2*n)
+      enddo
+    enddo
+    ai = 0._8
+    ai(1:n,1:n) = w(1:n,n+1:2*n)
+  end subroutine pcm_inv
+
+  !----------------------------------------------------------------------
+  subroutine pcm_apply(stage, r, z, hv, rz, rr, rk)
+    ! z = P r (the mode-split preconditioner, one projection) and the local <r,z>, <r,r>, <r, d_K^-1 r>
+    ! (volume-weighted)
+    use param, only: lm, mm, nz
+    use mpi_f08, only: mpi_wtime
+    implicit none
+    integer(kind=4), intent(in) :: stage
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in)    :: r, hv
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(inout) :: z
+    real(kind=8), intent(out) :: rz, rr, rk
+    real(kind=8) :: t0, ww, zz, rc(4), av(4)
+    integer(kind=4) :: i, j, k, m, n, ii, jj
+    t0 = mpi_wtime()
+    pcm_rc = 0._8
+    do m=1,pcm_k                                  ! rc = Phi^T W r
+      do k=1,nz
+        do jj=1,pcm_ny(0)
+          j = jb0 - 1 + jj
+          do ii=1,pcm_nx(0)
+            i = ib0 - 1 + ii
+            pcm_rc(ii,jj,m) = pcm_rc(ii,jj,m) + pcm_phi(i,j,k,m)*darea(i,j)*hv(i,j,k)*r(i,j,k)
+          enddo
+        enddo
+      enddo
+    enddo
+    call pcm_vcycle(stage)                        ! one V-cycle per mode: pcm_a = V(rc)
+    do jj=1,pcm_ny(0)                             ! pcm_a = V(rc) - G^-1 rc
+      j = jb0 - 1 + jj
+      do ii=1,pcm_nx(0)
+        i = ib0 - 1 + ii
+        do m=1,pcm_k
+          rc(m) = pcm_rc(ii,jj,m)
+        enddo
+        do n=1,pcm_k
+          av(n) = pcm_a(ii,jj,n)*pcm_act(i,j,n)
+          do m=1,pcm_k
+            av(n) = av(n) - pcm_gi(i,j,n,m,stage)*rc(m)
+          enddo
+        enddo
+        do n=1,pcm_k
+          pcm_a(ii,jj,n) = av(n)
+        enddo
+      enddo
+    enddo
+    rz = 0._8 ; rr = 0._8 ; rk = 0._8
+    do k=1,nz
+      do jj=1,pcm_ny(0)
+        j = jb0 - 1 + jj
+        do ii=1,pcm_nx(0)
+          i = ib0 - 1 + ii
+          zz = r(i,j,k)*pcm_dki(i,j,k,stage)
+          do m=1,pcm_k
+            zz = zz + pcm_phi(i,j,k,m)*pcm_a(ii,jj,m)
+          enddo
+          z(i,j,k) = zz
+          ww = darea(i,j)*hv(i,j,k)
+          rz = rz + ww*r(i,j,k)*zz
+          rr = rr + ww*r(i,j,k)*r(i,j,k)
+          rk = rk + ww*r(i,j,k)*r(i,j,k)*pcm_dki(i,j,k,stage)
+        enddo
+      enddo
+    enddo
+    pc_tapply = pc_tapply + (mpi_wtime() - t0) ; pc_napply = pc_napply + 1._8
+  end subroutine pcm_apply
+
+  !----------------------------------------------------------------------
+  subroutine pcm_vcycle(stage)
+    ! pcm_a(:,:,m) = one V-cycle on mode m's 2-D operator applied to pcm_rc(:,:,m), from zero, for the K modes
+    ! together (the level kernels per mode, the halo exchanges of the K modes in one message each, pcm_exchk): per
+    ! level a pre-sweep from zero (no exchange), exchange, residual, sum restriction; 2 + 2 sweeps on the coarsest
+    ! level (an exchange before each but the first); injection, exchange, a post-sweep (mg_level_down/up of
+    ! implicit_fs_mod with one sweep; smoother imex_pc_smoother)
+    use implicit_fs_mod, only: mg_smooth, mg_resid, mg_restrict, mg_prolong
+    use mpi_f08, only: mpi_wtime
+    implicit none
+    integer(kind=4), intent(in) :: stage
+    integer(kind=4) :: o0, o1, o2, n0x, n0y, n1x, n1y, n2x, n2y, m, s1, s2, k
+    character(len=8) :: sm
+    real(kind=8) :: tv
+    tv = mpi_wtime() ; pcm_vfirst = .true. ; pcm_tm(9) = pcm_tm(9) + 1._8
+    o0 = pcm_off(0) ; o1 = pcm_off(1) ; o2 = pcm_off(2)
+    n0x = pcm_nx(0) ; n0y = pcm_ny(0) ; n1x = pcm_nx(1) ; n1y = pcm_ny(1) ; n2x = pcm_nx(2) ; n2y = pcm_ny(2)
+    s1 = (n1x+2)*(n1y+2) ; s2 = (n2x+2)*(n2y+2)
+    sm = imex_pc_smoother
+    ! level 0: x = pcm_a(:,:,m), b = pcm_rc(:,:,m)
+    do m=1,pcm_k
+      pcm_a(:,:,m) = 0._8
+      call mg_smooth(n0x, n0y, pcm_a(:,:,m), pcm_rc(:,:,m), pcm_cw(o0,m,stage), pcm_cs(o0,m,stage),&
+      &              pcm_di(o0,m,stage), 1, trim(sm))
+    enddo
+    call pcm_exchk(n0x, n0y, (n0x+2)*(n0y+2), 1, pcm_a)
+    do m=1,pcm_k
+      call mg_resid(n0x, n0y, pcm_a(:,:,m), pcm_rc(:,:,m), pcm_e(o0,m,stage), pcm_cw(o0,m,stage),&
+      &             pcm_cs(o0,m,stage), pcm_r(o0,m))
+      call mg_restrict(n0x, n0y, pcm_r(o0,m), n1x, n1y, pcm_b(o1,m))
+      ! level 1
+      pcm_x(o1:o1+s1-1,m) = 0._8
+      call mg_smooth(n1x, n1y, pcm_x(o1,m), pcm_b(o1,m), pcm_cw(o1,m,stage), pcm_cs(o1,m,stage),&
+      &              pcm_di(o1,m,stage), 1, trim(sm))
+    enddo
+    if (pcm_lev == 2) then                        ! level 1 is the coarsest: imex_pc_ncoarse pre- and post-sweeps
+      do k=2,2*imex_pc_ncoarse
+        call pcm_exchk(n1x, n1y, pcm_ntot, o1, pcm_x)
+        do m=1,pcm_k
+          call mg_smooth(n1x, n1y, pcm_x(o1,m), pcm_b(o1,m), pcm_cw(o1,m,stage), pcm_cs(o1,m,stage),&
+          &              pcm_di(o1,m,stage), merge(1, 2, k <= imex_pc_ncoarse), trim(sm))
+        enddo
+      enddo
+      do m=1,pcm_k
+        call mg_prolong(n1x, n1y, pcm_x(o1,m), n0x, n0y, pcm_a(:,:,m), pcm_e(o0,m,stage))
+      enddo
+      call pcm_exchk(n0x, n0y, (n0x+2)*(n0y+2), 1, pcm_a)
+      do m=1,pcm_k
+        call mg_smooth(n0x, n0y, pcm_a(:,:,m), pcm_rc(:,:,m), pcm_cw(o0,m,stage), pcm_cs(o0,m,stage),&
+        &              pcm_di(o0,m,stage), 2, trim(sm))
+      enddo
+      pcm_tm(5) = pcm_tm(5) + (mpi_wtime() - tv)
+      return
+    end if
+    call pcm_exchk(n1x, n1y, pcm_ntot, o1, pcm_x)
+    do m=1,pcm_k
+      call mg_resid(n1x, n1y, pcm_x(o1,m), pcm_b(o1,m), pcm_e(o1,m,stage), pcm_cw(o1,m,stage),&
+      &             pcm_cs(o1,m,stage), pcm_r(o1,m))
+      call mg_restrict(n1x, n1y, pcm_r(o1,m), n2x, n2y, pcm_b(o2,m))
+      ! level 2 (coarsest): 2 pre- and 2 post-sweeps
+      pcm_x(o2:o2+s2-1,m) = 0._8
+      call mg_smooth(n2x, n2y, pcm_x(o2,m), pcm_b(o2,m), pcm_cw(o2,m,stage), pcm_cs(o2,m,stage),&
+      &              pcm_di(o2,m,stage), 1, trim(sm))
+    enddo
+    do k=2,2*imex_pc_ncoarse
+      call pcm_exchk(n2x, n2y, pcm_ntot, o2, pcm_x)
+      do m=1,pcm_k
+        call mg_smooth(n2x, n2y, pcm_x(o2,m), pcm_b(o2,m), pcm_cw(o2,m,stage), pcm_cs(o2,m,stage),&
+        &              pcm_di(o2,m,stage), merge(1, 2, k <= imex_pc_ncoarse), trim(sm))
+      enddo
+    enddo
+    ! up
+    do m=1,pcm_k
+      call mg_prolong(n2x, n2y, pcm_x(o2,m), n1x, n1y, pcm_x(o1,m), pcm_e(o1,m,stage))
+    enddo
+    call pcm_exchk(n1x, n1y, pcm_ntot, o1, pcm_x)
+    do m=1,pcm_k
+      call mg_smooth(n1x, n1y, pcm_x(o1,m), pcm_b(o1,m), pcm_cw(o1,m,stage), pcm_cs(o1,m,stage),&
+      &              pcm_di(o1,m,stage), 2, trim(sm))
+      call mg_prolong(n1x, n1y, pcm_x(o1,m), n0x, n0y, pcm_a(:,:,m), pcm_e(o0,m,stage))
+    enddo
+    call pcm_exchk(n0x, n0y, (n0x+2)*(n0y+2), 1, pcm_a)
+    do m=1,pcm_k
+      call mg_smooth(n0x, n0y, pcm_a(:,:,m), pcm_rc(:,:,m), pcm_cw(o0,m,stage), pcm_cs(o0,m,stage),&
+      &              pcm_di(o0,m,stage), 2, trim(sm))
+    enddo
+    pcm_tm(5) = pcm_tm(5) + (mpi_wtime() - tv)
+  end subroutine pcm_vcycle
+
+  !----------------------------------------------------------------------
+  subroutine pcm_exchk(nx, ny, ld, o, x)
+    ! 1-wide halo exchange of a level vector of the pcm_k modes with the four neighbours, one message per side
+    ! for all modes (implicit_fs_mod's mg_exch for K fields): x(ld, *), mode m's (0:nx+1, 0:ny+1) array starting at
+    ! x(o, m); no neighbour (physical edge, MPI_MASKING): halo 0
+    use param, only: ocean_grid_comm
+    use roms_mpi, only: p_w, p_e, p_s, p_n
+    use mpi_f08, only: mpi_isend, mpi_irecv, mpi_waitall, mpi_request, mpi_double_precision, mpi_statuses_ignore,&
+    &                  mpi_wtime
+    implicit none
+    integer(kind=4), intent(in) :: nx, ny, ld, o
+    real(kind=8), intent(inout) :: x(ld, *)
+    real(kind=8), allocatable, save :: sb(:,:), rb(:,:)
+    type(mpi_request) :: req(8)
+    integer(kind=4) :: nr, ierr, n, i, j, m, kk, nk
+    real(kind=8) :: te
+    te = mpi_wtime()
+    kk = pcm_k
+    n = max(nx, ny)*kk
+    if (.not. allocated(sb)) then
+      allocate(sb((max(pcm_nx(0), pcm_ny(0)))*pcm_kmax, 4), rb((max(pcm_nx(0), pcm_ny(0)))*pcm_kmax, 4))
+    end if
+    nr = 0
+    if (p_e >= 0) then
+      nr = nr + 1 ; call mpi_irecv(rb(1,1), ny*kk, mpi_double_precision, p_e, 21, ocean_grid_comm, req(nr), ierr)
+    end if
+    if (p_w >= 0) then
+      nr = nr + 1 ; call mpi_irecv(rb(1,2), ny*kk, mpi_double_precision, p_w, 22, ocean_grid_comm, req(nr), ierr)
+    end if
+    if (p_n >= 0) then
+      nr = nr + 1 ; call mpi_irecv(rb(1,3), nx*kk, mpi_double_precision, p_n, 23, ocean_grid_comm, req(nr), ierr)
+    end if
+    if (p_s >= 0) then
+      nr = nr + 1 ; call mpi_irecv(rb(1,4), nx*kk, mpi_double_precision, p_s, 24, ocean_grid_comm, req(nr), ierr)
+    end if
+    ! element (i, j) of mode m: x(o + i + j*(nx+2), m)
+    if (p_w >= 0) then
+      do m=1,kk
+        do j=1,ny
+          sb(j+(m-1)*ny,1) = x(o + 1 + j*(nx+2), m)
+        enddo
+      enddo
+      nr = nr + 1 ; call mpi_isend(sb(1,1), ny*kk, mpi_double_precision, p_w, 21, ocean_grid_comm, req(nr), ierr)
+    end if
+    if (p_e >= 0) then
+      do m=1,kk
+        do j=1,ny
+          sb(j+(m-1)*ny,2) = x(o + nx + j*(nx+2), m)
+        enddo
+      enddo
+      nr = nr + 1 ; call mpi_isend(sb(1,2), ny*kk, mpi_double_precision, p_e, 22, ocean_grid_comm, req(nr), ierr)
+    end if
+    if (p_s >= 0) then
+      do m=1,kk
+        do i=1,nx
+          sb(i+(m-1)*nx,3) = x(o + i + 1*(nx+2), m)
+        enddo
+      enddo
+      nr = nr + 1 ; call mpi_isend(sb(1,3), nx*kk, mpi_double_precision, p_s, 23, ocean_grid_comm, req(nr), ierr)
+    end if
+    if (p_n >= 0) then
+      do m=1,kk
+        do i=1,nx
+          sb(i+(m-1)*nx,4) = x(o + i + ny*(nx+2), m)
+        enddo
+      enddo
+      nr = nr + 1 ; call mpi_isend(sb(1,4), nx*kk, mpi_double_precision, p_n, 24, ocean_grid_comm, req(nr), ierr)
+    end if
+    call mpi_waitall(nr, req, mpi_statuses_ignore, ierr)
+    do m=1,kk
+      do j=1,ny
+        x(o + nx + 1 + j*(nx+2), m) = 0._8 ; x(o + j*(nx+2), m) = 0._8
+        if (p_e >= 0) x(o + nx + 1 + j*(nx+2), m) = rb(j+(m-1)*ny,1)
+        if (p_w >= 0) x(o + j*(nx+2), m) = rb(j+(m-1)*ny,2)
+      enddo
+      do i=1,nx
+        x(o + i + (ny+1)*(nx+2), m) = 0._8 ; x(o + i, m) = 0._8
+        if (p_n >= 0) x(o + i + (ny+1)*(nx+2), m) = rb(i+(m-1)*nx,3)
+        if (p_s >= 0) x(o + i, m) = rb(i+(m-1)*nx,4)
+      enddo
+    enddo
+    if (pcm_vfirst) then                          ! (the first absorbs the ranks' imbalance of the sweep before)
+      pcm_tm(3) = pcm_tm(3) + (mpi_wtime() - te)
+    else
+      pcm_tm(4) = pcm_tm(4) + (mpi_wtime() - te)
+    end if
+    pcm_vfirst = .false.
+  end subroutine pcm_exchk
+
+  !----------------------------------------------------------------------
+  subroutine pcm_rcsum(rt)
+    ! fused 'modes' start-up: pcm_rc = Phi^T rt (rt = W r, the W-scaled residual of imex_pcgf8/4)
+    use param, only: lm, mm, nz
+    implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: rt
+    integer(kind=4) :: i, j, k, m, ii, jj
+    pcm_rc = 0._8
+    do m=1,pcm_k
+      do k=1,nz
+        do j=jb0,jb1
+          jj = j - jb0 + 1
+          do i=ib0,ib1
+            ii = i - ib0 + 1
+            pcm_rc(ii,jj,m) = pcm_rc(ii,jj,m) + pcm_phi(i,j,k,m)*rt(i,j,k)
+          enddo
+        enddo
+      enddo
+    enddo
+  end subroutine pcm_rcsum
+
+  !----------------------------------------------------------------------
+  subroutine pcm_post(stage, rca, slot)
+    ! fused 'modes', after pcm_rc = Phi^T rt is formed (start-up: pcm_rcsum; iteration: imex_pf_up8/4): one
+    ! V-cycle per mode, pcm_a = act V(rc) - G^-1 rc and the local sum rca = <rc, a>, so <rt, z> = <rt, z_J> + rca
+    ! (z = z_J + Phi a by pcm_zadd8/4 on the tile; the PCG's z exchange carries it to the halo ring). imex_redu: the
+    ! column partials of <rt, z_J> in rd_c(:,:,1) are copied to rd_c(:,:,slot) (the d_K stopping norm) and the
+    ! column's rc.a is added to rd_c(:,:,1)
+    use param, only: lm, mm, nz
+    use mpi_f08, only: mpi_wtime
+    implicit none
+    integer(kind=4), intent(in) :: stage, slot
+    real(kind=8), intent(out) :: rca
+    real(kind=8) :: t0, t1, rc(4), av(4), cs
+    integer(kind=4) :: i, j, m, n, ii, jj
+    t0 = mpi_wtime()
+    call pcm_vcycle(stage)
+    t1 = mpi_wtime()
+    rca = 0._8
+    do jj=1,pcm_ny(0)
+      j = jb0 - 1 + jj
+      do ii=1,pcm_nx(0)
+        i = ib0 - 1 + ii
+        cs = 0._8
+        do m=1,pcm_k
+          rc(m) = pcm_rc(ii,jj,m)
+        enddo
+        do n=1,pcm_k
+          av(n) = pcm_a(ii,jj,n)*pcm_act(i,j,n)
+          do m=1,pcm_k
+            av(n) = av(n) - pcm_gi(i,j,n,m,stage)*rc(m)
+          enddo
+          cs = cs + rc(n)*av(n)
+        enddo
+        do n=1,pcm_k
+          pcm_a(ii,jj,n) = av(n)
+        enddo
+        rca = rca + cs
+        if (redu_on) then
+          rd_c(i,j,slot) = rd_c(i,j,1)
+          rd_c(i,j,1) = rd_c(i,j,1) + cs
+        end if
+      enddo
+    enddo
+    pc_tapply = pc_tapply + (mpi_wtime() - t0)
+    pcm_tm(2) = pcm_tm(2) + (mpi_wtime() - t0) ; pcm_tm(6) = pcm_tm(6) + (mpi_wtime() - t1)
+  end subroutine pcm_post
+
+  !----------------------------------------------------------------------
+  subroutine pcm_zadd8(z)
+    ! fused 'modes': z = z_J + Phi a on the tile (z_J from the update sweep or the start-up; storage real(8)). Per
+    ! row the modes in turn, each an i-loop of zz = zz + phi a: per element the same chain over m, in the same
+    ! order, as an inner loop over m (the same bits), but vectorized over i
+    use param, only: lm, mm, nz
+    use mpi_f08, only: mpi_wtime
+    implicit none
+    real(8), dimension(GLOBAL_2D_ARRAY,nz), intent(inout) :: z
+    real(kind=8) :: t0
+    integer(kind=4) :: i, j, k, m, jj
+    t0 = mpi_wtime()
+    do k=1,nz
+      do j=jb0,jb1
+        jj = j - jb0 + 1
+        do m=1,pcm_k
+          do i=ib0,ib1
+            z(i,j,k) = z(i,j,k) + pcm_phi(i,j,k,m)*pcm_a(i-ib0+1,jj,m)
+          enddo
+        enddo
+      enddo
+    enddo
+    pcm_tm(7) = pcm_tm(7) + (mpi_wtime() - t0)
+  end subroutine pcm_zadd8
+
+  subroutine pcm_zadd4(z)
+    ! fused 'modes': z = z_J + Phi a on the tile (storage real(4), sum in FP64: the row zr). As pcm_zadd8: the
+    ! modes in turn, each an i-loop (the per-element chain of an inner m loop, vectorized over i)
+    use param, only: lm, mm, nz
+    use mpi_f08, only: mpi_wtime
+    implicit none
+    real(4), dimension(GLOBAL_2D_ARRAY,nz), intent(inout) :: z
+    real(kind=8) :: t0, zr(ib0:ib1)
+    integer(kind=4) :: i, j, k, m, jj
+    t0 = mpi_wtime()
+    do k=1,nz
+      do j=jb0,jb1
+        jj = j - jb0 + 1
+        do i=ib0,ib1
+          zr(i) = real(z(i,j,k),8)
+        enddo
+        do m=1,pcm_k
+          do i=ib0,ib1
+            zr(i) = zr(i) + real(pcm_phi4(i,j,k,m),8)*pcm_a(i-ib0+1,jj,m)
+          enddo
+        enddo
+        do i=ib0,ib1
+          z(i,j,k) = real(zr(i), 4)
+        enddo
+      enddo
+    enddo
+    pcm_tm(7) = pcm_tm(7) + (mpi_wtime() - t0)
+  end subroutine pcm_zadd4
+
+  !----------------------------------------------------------------------
+  subroutine pcm_tm_print
+    ! end of the run: pcm_tm per step, max and mean over the ranks [ms] (V-cycles: count per step)
+    use param, only: mynode, ocean_grid_comm
+    use scalars, only: ntimes
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_sum, mpi_comm_size
+    implicit none
+    real(kind=8) :: gx(pcm_ntm), gs(pcm_ntm), f
+    integer(kind=4) :: ierr, np
+    character(len=8), parameter :: nm(pcm_ntm) = [character(len=8) :: 'up', 'post', 'exch1', 'exchn', 'vcycle',&
+    &  'postloop', 'zadd', 'early', 'n_vc', 'op1', 'op2']
+    call mpi_allreduce(pcm_tm, gx, pcm_ntm, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    call mpi_allreduce(pcm_tm, gs, pcm_ntm, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    call mpi_comm_size(ocean_grid_comm, np, ierr)
+    if (mynode == 0) then
+      f = 1.e3_8/max(ntimes,1)
+      write(*,'(1x,A,11(1x,A8))') 'IMEX_PCMT [ms per step]     ', nm
+      write(*,'(1x,A,11F9.3)') 'IMEX_PCMT max rank           ', gx(1:8)*f, gx(9)/max(ntimes,1), gx(10:11)*f
+      write(*,'(1x,A,11F9.3)') 'IMEX_PCMT mean rank          ', gs(1:8)*f/np, gs(9)/np/max(ntimes,1),&
+      &                         gs(10:11)*f/np
+    end if
+  end subroutine pcm_tm_print
+
+  !----------------------------------------------------------------------
+  subroutine pcm_dump(part, stage, c2, hv, r0, x)
+    ! imex_pc_dump (measurement): file pcm_dump.<rank>, stream, real(8) interior arrays. part 1 (after the
+    ! start-up): header (rank, iSW_corn, jSW_corn, nx, ny, nz, K, stage, iic; c2), W = darea hv, n2c, diag(M),
+    ! act/d_K, per mode Phi, activity, the parts of a_m (mass, interior centre/east/north per unit c2, 'modal'
+    ! centre per unit sqrt(c2)), G^-1, then b, the guess x0, r0 = b - M x0 and z0 = P r0; part 2: the solution x
+    use param, only: lm, mm, nz, mynode, iSW_corn, jSW_corn
+    use scalars, only: iic
+    implicit none
+    integer(kind=4), intent(in) :: part, stage
+    real(kind=8), intent(in) :: c2
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: hv, r0, x
+    character(len=32) :: fn
+    integer(kind=4) :: u, i, j, k, m, n
+    real(kind=8) :: dm
+    write(fn,'(A,I4.4)') 'pcm_dump.', mynode
+    if (part == 1) then
+      open(newunit=u, file=trim(fn), access='stream', form='unformatted', status='replace')
+      write(u) mynode, iSW_corn, jSW_corn, ib1-ib0+1, jb1-jb0+1, nz, pcm_k, stage, iic
+      write(u) c2
+      write(u) (((darea(i,j)*hv(i,j,k), i=ib0,ib1), j=jb0,jb1), k=1,nz)
+      write(u) (((ad_n2c(i,j,k), i=ib0,ib1), j=jb0,jb1), k=1,nz)
+      do k=1,nz
+        do j=jb0,jb1
+          do i=ib0,ib1
+            dm = 1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k)
+            if (imex_obc_modal) then
+              if (ob_kd(i,j,k) > 0._8) dm = dm + sqrt(c2)*ob_kd(i,j,k)
+            end if
+            write(u) dm
+          enddo
+        enddo
+      enddo
+      write(u) (((pcm_dki(i,j,k,stage), i=ib0,ib1), j=jb0,jb1), k=1,nz)
+      do m=1,pcm_k
+        write(u) (((pcm_phi(i,j,k,m), i=ib0,ib1), j=jb0,jb1), k=1,nz)
+        write(u) ((pcm_act(i,j,m), i=ib0,ib1), j=jb0,jb1)
+        write(u) ((pcm_cm(i,j,m), i=ib0,ib1), j=jb0,jb1)
+        write(u) ((pcm_ci(i,j,1,m), i=ib0,ib1), j=jb0,jb1)
+        write(u) ((pcm_ci(i,j,2,m), i=ib0,ib1), j=jb0,jb1)
+        write(u) ((pcm_ci(i,j,3,m), i=ib0,ib1), j=jb0,jb1)
+        write(u) ((pcm_cb(i,j,m), i=ib0,ib1), j=jb0,jb1)
+      enddo
+      do m=1,pcm_k
+        do n=1,pcm_k
+          write(u) ((pcm_gi(i,j,n,m,stage), i=ib0,ib1), j=jb0,jb1)
+        enddo
+      enddo
+      write(u) (((act(i,j)*r0(i,j,k)/ad_n2c(i,j,k), i=ib0,ib1), j=jb0,jb1), k=1,nz)
+      write(u) (((x(i,j,k), i=ib0,ib1), j=jb0,jb1), k=1,nz)
+      write(u) (((wk_r(i,j,k), i=ib0,ib1), j=jb0,jb1), k=1,nz)
+      write(u) (((wk_z(i,j,k), i=ib0,ib1), j=jb0,jb1), k=1,nz)
+      close(u)
+    else
+      open(newunit=u, file=trim(fn), access='stream', form='unformatted', status='old', position='append')
+      write(u) (((x(i,j,k), i=ib0,ib1), j=jb0,jb1), k=1,nz)
+      close(u)
+      if (mynode == 0) write(*,'(1x,A,I7,A)') 'IMEX_PCM', iic, ' dump written (pcm_dump.<rank>)'
+    end if
+  end subroutine pcm_dump
+
 
   !----------------------------------------------------------------------
   subroutine imex_pcg_f(r0, x, c2, tol, maxit, iters, resid, warm, stage, hv, ru, rv, reuse)
@@ -6797,6 +8040,15 @@ contains
             do i=ib0,ib1
               if (act(i,j) > 0._8 .and. ob_kd(i,j,k) > 0._8) pf_dinv8(i,j,k,stage) =&
               &  1._8/(darea(i,j)*hv(i,j,k)*(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k) + sqrt(c2)*ob_kd(i,j,k)))
+            enddo
+          enddo
+        enddo
+      end if
+      if (pcm_on .and. pcm_k > 0) then              ! 'modes': the deflated diagonal act/(W d_K) (pcm_stage)
+        do k=1,nz
+          do j=jb0,jb1
+            do i=ib0,ib1
+              if (act(i,j) > 0._8) pf_dinv8(i,j,k,stage) = pcm_dki(i,j,k,stage)/(darea(i,j)*hv(i,j,k))
             enddo
           enddo
         enddo
@@ -6888,6 +8140,15 @@ contains
             do i=ib0,ib1
               if (act(i,j) > 0._8 .and. ob_kd(i,j,k) > 0._8) pf_dinv4(i,j,k,stage) =&
               &  real(1._8/(darea(i,j)*hv(i,j,k)*(1._8/ad_n2c(i,j,k) + c2*ad_dd(i,j,k) + sqrt(c2)*ob_kd(i,j,k))), 4)
+            enddo
+          enddo
+        enddo
+      end if
+      if (pcm_on .and. pcm_k > 0) then              ! 'modes': the deflated diagonal act/(W d_K) (pcm_stage)
+        do k=1,nz
+          do j=jb0,jb1
+            do i=ib0,ib1
+              if (act(i,j) > 0._8) pf_dinv4(i,j,k,stage) = real(pcm_dki(i,j,k,stage)/(darea(i,j)*hv(i,j,k)), 4)
             enddo
           enddo
         enddo
@@ -7003,15 +8264,19 @@ contains
     logical, intent(in) :: warm, reuse
     logical, intent(in), optional :: pre
     real(kind=8) :: loc(2), glob(2), rho, rho0, pq, pqg, alpha, beta, tole, bnorm, t0, rdg(1)
-    logical :: pr
+    real(kind=8) :: s0, rk, rca, loc3(3), glob3(3), rp1, rp2
+    logical :: pcm                                ! imex_pc = 'modes' with K > 0
+    logical :: pr, etest
     integer(kind=4) :: i, j, k, it, ierr, mode
     logical :: broke, pend
     broke = .false. ; pend = .false.
+    rp1 = 1._8 ; rp2 = 1._8                       ! 'modes': the last two relative residuals (early test)
     pr = .false.
     if (present(pre)) pr = pre
     sf_pend = .false. ; sf_alpha = 0._8
     iters = 0 ; resid = 0._8 ; tole = tol ; bnorm = 0._8 ; alpha = 0._8 ; beta = 0._8
     if (c2 <= 0._8) return
+    pcm = pcm_on .and. pcm_k > 0
     if (warm .and. .not. reuse .and. .not. pr) then   ! W M x0 into pf_q0 (FP64 operand and result)
       t0 = mpi_wtime()
       call imex_pf_op8(0, 0._8, 0._8, c2, x, pf_q0, wk_z, wk_p, wk_r, wk_q, pf_rczk8, ad_czt, ad_czb,&
@@ -7028,15 +8293,29 @@ contains
     else
       call start(pf_q0, 0._8)
     end if
-    if (redu_on) then                             ! imex_redu: partials from imex_sf_rhs or start
+    if (pcm) then                                 ! 'modes': z = z_J + Phi a (z_J = d_K^-1 rt in z), <rt,z> =
+      if (.not. pr) call pcm_rcsum(wk_r)          ! <rt,z_J> + <rc,a>; the stop on <rt,z_J> (the d_K norm);
+                                                  ! (pre: rc formed by imex_sf_rhs)
+      call pcm_post(stage, rca, 3)
+      call pcm_zadd8(wk_z)
+      loc3(1) = loc(1) + rca ; loc3(2) = loc(2) ; loc3(3) = loc(1)
+      if (redu_on) then
+        call rd_sum(3, glob3)
+      else
+        call mpi_allreduce(loc3, glob3, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+      end if
+      glob(1) = glob3(1) ; glob(2) = glob3(2)
+    else if (redu_on) then                        ! imex_redu: partials from imex_sf_rhs or start
       call rd_sum(2, glob)
     else
       call mpi_allreduce(loc, glob, 2, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     end if
     rho = glob(1) ; rho0 = glob(1)
+    s0 = rho0                                     ! norm of the stopping test at the start
+    if (pcm) s0 = glob3(3)
     if (warm) then
       bnorm = glob(2)
-      tole = min(0.5_8, tol*sqrt(bnorm/max(glob(1),1.e-300_8)))
+      tole = min(0.5_8, tol*sqrt(bnorm/max(s0,1.e-300_8)))
     end if
     if (.not. ieee_is_finite(rho0)) then          ! non-finite rhs or coefficients
       resid = 1._8
@@ -7063,6 +8342,7 @@ contains
       call imex_pf_op8(mode, alpha, beta, c2, wk_r, pf_q0, wk_z, wk_p, x, wk_q, pf_rczk8, ad_czt, ad_czb,&
       &                 ad_cu, ad_cv, hv, pf_wr8, ru, rv, pq, pr)
       op_tapply = op_tapply + (mpi_wtime() - t0) ; op_napply = op_napply + 1._8
+      if (pcm) pcm_tm(9+mode) = pcm_tm(9+mode) + (mpi_wtime() - t0)
       pend = .false.                              ! (x += alpha p_old done in the sweep)
       call tq_mark(30)
       if (redu_on) then
@@ -7079,26 +8359,67 @@ contains
       t0 = mpi_wtime()
       call imex_pf_up8(alpha, wk_r, wk_q, pf_dinv8(:,:,:,stage), wk_z, loc(1))
       pc_tapply = pc_tapply + (mpi_wtime() - t0) ; pc_napply = pc_napply + 1._8
+      if (pcm) pcm_tm(1) = pcm_tm(1) + (mpi_wtime() - t0)
+      etest = .false.                             ! 'modes': the stopping norm <rt,z_J> is known before the
+      if (pcm) then                               ! V-cycle; where convergence is expected (the stage's last
+        etest = it >= pcm_nprev(stage)            ! count reached, or the last two residuals predict <= 4 tol)
+        if (it >= 2) etest = etest .or. rp1*rp1 <= 4._8*tole*rp2
+      end if
+      if (etest) then                             ! test it first: the converging iteration has no V-cycle
+        call tq_mark(31)                          ! (the sum the test below uses: the same iterates)
+        t0 = mpi_wtime()
+        if (redu_on) then
+          call rd_sum(1, rdg) ; rk = rdg(1)
+        else
+          call mpi_allreduce(loc(1), rk, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+        end if
+        pcm_tm(8) = pcm_tm(8) + (mpi_wtime() - t0)
+        call tq_mark(29)
+        if (ieee_is_finite(rk) .and. rk >= 0._8) then
+          if (sqrt(rk/s0) <= tole) then
+            pend = .true. ; iters = it
+            if (rh_on) rh_res(min(it, rh_n)) = rk
+            resid = sqrt(rk/s0)
+            exit
+          end if
+        end if
+      end if
+      if (pcm) then                               ! 'modes': V-cycles on rc (formed in the sweep), <rt,z>
+        call pcm_post(stage, rca, 2)
+        call pcm_zadd8(wk_z)
+        loc(2) = loc(1) ; loc(1) = loc(1) + rca
+      end if
       pend = .true.                               ! x += alpha p pending
       call tq_mark(31)
-      if (redu_on) then
+      if (pcm) then
+        if (redu_on) then
+          call rd_sum(2, glob)
+        else
+          call mpi_allreduce(loc, glob, 2, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+        end if
+        rk = glob(2)
+      else if (redu_on) then
         call rd_sum(1, rdg) ; glob(1) = rdg(1)
+        rk = glob(1)
       else
         call mpi_allreduce(loc(1), glob(1), 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+        rk = glob(1)
       end if
       call tq_mark(29)
       iters = it
-      if (rh_on) rh_res(min(it, rh_n)) = glob(1)   ! imex_verbose >= 2: residual history (IMEX_RH)
-      if (.not. ieee_is_finite(glob(1)) .or. glob(1) < 0._8) then
+      if (rh_on) rh_res(min(it, rh_n)) = rk       ! imex_verbose >= 2: residual history (IMEX_RH)
+      if (.not. ieee_is_finite(glob(1)) .or. glob(1) < 0._8 .or. .not. ieee_is_finite(rk)) then
         call breakdown('<r,M^-1 r>', glob(1), it)
         exit
       end if
-      resid = sqrt(glob(1)/rho0)
+      resid = sqrt(rk/s0)
       if (resid <= tole) exit
+      rp2 = rp1 ; rp1 = resid
       beta = glob(1)/rho
       rho = glob(1)
     enddo
     sf_alpha = alpha ; sf_pend = pend
+    if (pcm) pcm_nprev(stage) = max(iters, 1)
     if (pend .and. .not. pr) then                 ! the last x += alpha p
       do k=1,nz
         do j=jb0,jb1
@@ -7110,8 +8431,8 @@ contains
     end if
     call tq_mark(32)
     if (broke .or. resid > tole) n_maxit_hits = n_maxit_hits + 1
-    if (rh_on) call imex_rh_line(stage, iters, warm, rho0, bnorm)
-    if (warm) resid = resid*sqrt(rho0/max(bnorm,1.e-300_8))   ! relative to the cold solve's norm
+    if (rh_on) call imex_rh_line(stage, iters, warm, s0, bnorm)
+    if (warm) resid = resid*sqrt(s0/max(bnorm,1.e-300_8))   ! relative to the cold solve's norm
     if (pr) then                                  ! W M x completed by imex_sf_fin
       if (pcg_start == 3 .and. imex_warm == 1) then
         ps_mver(stage) = coef_version ; ps_mc2(stage) = c2
@@ -7403,10 +8724,44 @@ contains
     real(8), dimension(GLOBAL_2D_ARRAY,nz), intent(in)    :: q, dinv
     real(8), dimension(GLOBAL_2D_ARRAY,nz), intent(inout) :: z
     real(kind=8), intent(out) :: rz
-    integer(kind=4) :: i, j, k
+    integer(kind=4) :: i, j, k, m, jj
     real(kind=8) :: rr
     real(8) :: zs
     rz = 0._8
+    if (pcm_on .and. pcm_k > 0) then         ! 'modes': z holds z_J = d_K^-1 rt; also pcm_rc = Phi^T rt
+      pcm_rc = 0._8
+      if (redu_on) then
+        do j=jb0,jb1
+          do i=ib0,ib1
+            rd_c(i,j,1) = 0._8
+          enddo
+        enddo
+      end if
+      do k=1,nz
+        do j=jb0,jb1
+          jj = j - jb0 + 1
+          do i=ib0,ib1
+            rr = r(i,j,k) - alpha*real(q(i,j,k),8)
+            r(i,j,k) = rr
+            zs = real(rr*real(dinv(i,j,k),8), 8)
+            z(i,j,k) = zs
+            rz = rz + rr*real(zs,8)
+          enddo
+          if (redu_on) then
+            !DIR$ NOVECTOR
+            do i=ib0,ib1
+              rd_c(i,j,1) = rd_c(i,j,1) + r(i,j,k)*real(z(i,j,k),8)
+            enddo
+          end if
+          do m=1,pcm_k
+            do i=ib0,ib1
+              pcm_rc(i-ib0+1,jj,m) = pcm_rc(i-ib0+1,jj,m) + pcm_phi(i,j,k,m)*r(i,j,k)
+            enddo
+          enddo
+        enddo
+      enddo
+      return
+    end if
     if (redu_on) then                        ! imex_redu: column partials of <rt,z> in rd_c(:,:,1)
       do j=jb0,jb1
         do i=ib0,ib1
@@ -7478,15 +8833,19 @@ contains
     logical, intent(in) :: warm, reuse
     logical, intent(in), optional :: pre
     real(kind=8) :: loc(2), glob(2), rho, rho0, pq, pqg, alpha, beta, tole, bnorm, t0, rdg(1)
-    logical :: pr
+    real(kind=8) :: s0, rk, rca, loc3(3), glob3(3), rp1, rp2
+    logical :: pcm                                ! imex_pc = 'modes' with K > 0
+    logical :: pr, etest
     integer(kind=4) :: i, j, k, it, ierr, mode
     logical :: broke, pend
     broke = .false. ; pend = .false.
+    rp1 = 1._8 ; rp2 = 1._8                       ! 'modes': the last two relative residuals (early test)
     pr = .false.
     if (present(pre)) pr = pre
     sf_pend = .false. ; sf_alpha = 0._8
     iters = 0 ; resid = 0._8 ; tole = tol ; bnorm = 0._8 ; alpha = 0._8 ; beta = 0._8
     if (c2 <= 0._8) return
+    pcm = pcm_on .and. pcm_k > 0
     if (warm .and. .not. reuse .and. .not. pr) then   ! W M x0 into pf_q0 (FP64 operand and result)
       t0 = mpi_wtime()
       call imex_pf_op4(0, 0._8, 0._8, c2, x, pf_q0, pf_z4, pf_p4, wk_r, pf_q4, pf_rczk4, pf_czt4, pf_czb4,&
@@ -7503,15 +8862,29 @@ contains
     else
       call start(pf_q0, 0._8)
     end if
-    if (redu_on) then                             ! imex_redu: partials from imex_sf_rhs or start
+    if (pcm) then                                 ! 'modes': z = z_J + Phi a (z_J = d_K^-1 rt in z), <rt,z> =
+      if (.not. pr) call pcm_rcsum(wk_r)          ! <rt,z_J> + <rc,a>; the stop on <rt,z_J> (the d_K norm);
+                                                  ! (pre: rc formed by imex_sf_rhs)
+      call pcm_post(stage, rca, 3)
+      call pcm_zadd4(pf_z4)
+      loc3(1) = loc(1) + rca ; loc3(2) = loc(2) ; loc3(3) = loc(1)
+      if (redu_on) then
+        call rd_sum(3, glob3)
+      else
+        call mpi_allreduce(loc3, glob3, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+      end if
+      glob(1) = glob3(1) ; glob(2) = glob3(2)
+    else if (redu_on) then                        ! imex_redu: partials from imex_sf_rhs or start
       call rd_sum(2, glob)
     else
       call mpi_allreduce(loc, glob, 2, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     end if
     rho = glob(1) ; rho0 = glob(1)
+    s0 = rho0                                     ! norm of the stopping test at the start
+    if (pcm) s0 = glob3(3)
     if (warm) then
       bnorm = glob(2)
-      tole = min(0.5_8, tol*sqrt(bnorm/max(glob(1),1.e-300_8)))
+      tole = min(0.5_8, tol*sqrt(bnorm/max(s0,1.e-300_8)))
     end if
     if (.not. ieee_is_finite(rho0)) then          ! non-finite rhs or coefficients
       resid = 1._8
@@ -7538,6 +8911,7 @@ contains
       call imex_pf_op4(mode, alpha, beta, c2, wk_r, pf_q0, pf_z4, pf_p4, x, pf_q4, pf_rczk4, pf_czt4, pf_czb4,&
       &                 pf_cu4, pf_cv4, pf_hz4, pf_wr4, pf_ru4, pf_rv4, pq, pr)
       op_tapply = op_tapply + (mpi_wtime() - t0) ; op_napply = op_napply + 1._8
+      if (pcm) pcm_tm(9+mode) = pcm_tm(9+mode) + (mpi_wtime() - t0)
       pend = .false.                              ! (x += alpha p_old done in the sweep)
       call tq_mark(30)
       if (redu_on) then
@@ -7554,26 +8928,67 @@ contains
       t0 = mpi_wtime()
       call imex_pf_up4(alpha, wk_r, pf_q4, pf_dinv4(:,:,:,stage), pf_z4, loc(1))
       pc_tapply = pc_tapply + (mpi_wtime() - t0) ; pc_napply = pc_napply + 1._8
+      if (pcm) pcm_tm(1) = pcm_tm(1) + (mpi_wtime() - t0)
+      etest = .false.                             ! 'modes': the stopping norm <rt,z_J> is known before the
+      if (pcm) then                               ! V-cycle; where convergence is expected (the stage's last
+        etest = it >= pcm_nprev(stage)            ! count reached, or the last two residuals predict <= 4 tol)
+        if (it >= 2) etest = etest .or. rp1*rp1 <= 4._8*tole*rp2
+      end if
+      if (etest) then                             ! test it first: the converging iteration has no V-cycle
+        call tq_mark(31)                          ! (the sum the test below uses: the same iterates)
+        t0 = mpi_wtime()
+        if (redu_on) then
+          call rd_sum(1, rdg) ; rk = rdg(1)
+        else
+          call mpi_allreduce(loc(1), rk, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+        end if
+        pcm_tm(8) = pcm_tm(8) + (mpi_wtime() - t0)
+        call tq_mark(29)
+        if (ieee_is_finite(rk) .and. rk >= 0._8) then
+          if (sqrt(rk/s0) <= tole) then
+            pend = .true. ; iters = it
+            if (rh_on) rh_res(min(it, rh_n)) = rk
+            resid = sqrt(rk/s0)
+            exit
+          end if
+        end if
+      end if
+      if (pcm) then                               ! 'modes': V-cycles on rc (formed in the sweep), <rt,z>
+        call pcm_post(stage, rca, 2)
+        call pcm_zadd4(pf_z4)
+        loc(2) = loc(1) ; loc(1) = loc(1) + rca
+      end if
       pend = .true.                               ! x += alpha p pending
       call tq_mark(31)
-      if (redu_on) then
+      if (pcm) then
+        if (redu_on) then
+          call rd_sum(2, glob)
+        else
+          call mpi_allreduce(loc, glob, 2, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+        end if
+        rk = glob(2)
+      else if (redu_on) then
         call rd_sum(1, rdg) ; glob(1) = rdg(1)
+        rk = glob(1)
       else
         call mpi_allreduce(loc(1), glob(1), 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+        rk = glob(1)
       end if
       call tq_mark(29)
       iters = it
-      if (rh_on) rh_res(min(it, rh_n)) = glob(1)   ! imex_verbose >= 2: residual history (IMEX_RH)
-      if (.not. ieee_is_finite(glob(1)) .or. glob(1) < 0._8) then
+      if (rh_on) rh_res(min(it, rh_n)) = rk       ! imex_verbose >= 2: residual history (IMEX_RH)
+      if (.not. ieee_is_finite(glob(1)) .or. glob(1) < 0._8 .or. .not. ieee_is_finite(rk)) then
         call breakdown('<r,M^-1 r>', glob(1), it)
         exit
       end if
-      resid = sqrt(glob(1)/rho0)
+      resid = sqrt(rk/s0)
       if (resid <= tole) exit
+      rp2 = rp1 ; rp1 = resid
       beta = glob(1)/rho
       rho = glob(1)
     enddo
     sf_alpha = alpha ; sf_pend = pend
+    if (pcm) pcm_nprev(stage) = max(iters, 1)
     if (pend .and. .not. pr) then                 ! the last x += alpha p
       do k=1,nz
         do j=jb0,jb1
@@ -7585,8 +9000,8 @@ contains
     end if
     call tq_mark(32)
     if (broke .or. resid > tole) n_maxit_hits = n_maxit_hits + 1
-    if (rh_on) call imex_rh_line(stage, iters, warm, rho0, bnorm)
-    if (warm) resid = resid*sqrt(rho0/max(bnorm,1.e-300_8))   ! relative to the cold solve's norm
+    if (rh_on) call imex_rh_line(stage, iters, warm, s0, bnorm)
+    if (warm) resid = resid*sqrt(s0/max(bnorm,1.e-300_8))   ! relative to the cold solve's norm
     if (pr) then                                  ! W M x completed by imex_sf_fin
       if (pcg_start == 3 .and. imex_warm == 1) then
         ps_mver(stage) = coef_version ; ps_mc2(stage) = c2
@@ -7878,10 +9293,44 @@ contains
     real(4), dimension(GLOBAL_2D_ARRAY,nz), intent(in)    :: q, dinv
     real(4), dimension(GLOBAL_2D_ARRAY,nz), intent(inout) :: z
     real(kind=8), intent(out) :: rz
-    integer(kind=4) :: i, j, k
+    integer(kind=4) :: i, j, k, m, jj
     real(kind=8) :: rr
     real(4) :: zs
     rz = 0._8
+    if (pcm_on .and. pcm_k > 0) then         ! 'modes': z holds z_J = d_K^-1 rt; also pcm_rc = Phi^T rt
+      pcm_rc = 0._8
+      if (redu_on) then
+        do j=jb0,jb1
+          do i=ib0,ib1
+            rd_c(i,j,1) = 0._8
+          enddo
+        enddo
+      end if
+      do k=1,nz
+        do j=jb0,jb1
+          jj = j - jb0 + 1
+          do i=ib0,ib1
+            rr = r(i,j,k) - alpha*real(q(i,j,k),8)
+            r(i,j,k) = rr
+            zs = real(rr*real(dinv(i,j,k),8), 4)
+            z(i,j,k) = zs
+            rz = rz + rr*real(zs,8)
+          enddo
+          if (redu_on) then
+            !DIR$ NOVECTOR
+            do i=ib0,ib1
+              rd_c(i,j,1) = rd_c(i,j,1) + r(i,j,k)*real(z(i,j,k),8)
+            enddo
+          end if
+          do m=1,pcm_k
+            do i=ib0,ib1
+              pcm_rc(i-ib0+1,jj,m) = pcm_rc(i-ib0+1,jj,m) + real(pcm_phi4(i,j,k,m),8)*r(i,j,k)
+            enddo
+          enddo
+        enddo
+      enddo
+      return
+    end if
     if (redu_on) then                        ! imex_redu: column partials of <rt,z> in rd_c(:,:,1)
       do j=jb0,jb1
         do i=ib0,ib1
@@ -7948,7 +9397,7 @@ contains
     real(kind=8), intent(out) :: loc(2)
     real(kind=8), allocatable, save :: fu(:,:), fvs(:,:), fvn(:,:), sf(:), wm(:)
     integer(kind=4), save :: na0 = 0, na1 = -1
-    integer(kind=4) :: i, j, k
+    integer(kind=4) :: i, j, k, m
     real(kind=8) :: d, dv, ww, s, wab, rt, q, l1, l2
     real(kind=8) :: zs
     if (.not. allocated(fu) .or. na0 /= ib0 .or. na1 /= ib1) then
@@ -7957,6 +9406,7 @@ contains
       na0 = ib0 ; na1 = ib1
     end if
     l1 = 0._8 ; l2 = 0._8
+    if (pcm_on .and. pcm_k > 0) pcm_rc = 0._8
     call vrow(jb0, fvs)
     do j=jb0,jb1
       call vrow(j+1, fvn)
@@ -8012,6 +9462,15 @@ contains
           l2 = l2 + wab*wab*real(dinv(i,j,k),8)
         enddo
       enddo
+      if (pcm_on .and. pcm_k > 0) then            ! 'modes': the row's rc = Phi^T rt (pcm_post follows)
+        do m=1,pcm_k
+          do k=1,nz
+            do i=ib0,ib1
+              pcm_rc(i-ib0+1,j-jb0+1,m) = pcm_rc(i-ib0+1,j-jb0+1,m) + pcm_phi(i,j,k,m)*wk_r(i,j,k)
+            enddo
+          enddo
+        enddo
+      end if
       if (redu_on) then                           ! imex_redu: the row's column partials (k ascending)
         do i=ib0,ib1
           rd_c(i,j,1) = 0._8 ; rd_c(i,j,2) = 0._8
@@ -8288,7 +9747,7 @@ contains
     real(kind=8), intent(out) :: loc(2)
     real(kind=8), allocatable, save :: fu(:,:), fvs(:,:), fvn(:,:), sf(:), wm(:)
     integer(kind=4), save :: na0 = 0, na1 = -1
-    integer(kind=4) :: i, j, k
+    integer(kind=4) :: i, j, k, m
     real(kind=8) :: d, dv, ww, s, wab, rt, q, l1, l2
     real(4) :: zs
     if (.not. allocated(fu) .or. na0 /= ib0 .or. na1 /= ib1) then
@@ -8297,6 +9756,7 @@ contains
       na0 = ib0 ; na1 = ib1
     end if
     l1 = 0._8 ; l2 = 0._8
+    if (pcm_on .and. pcm_k > 0) pcm_rc = 0._8
     call vrow(jb0, fvs)
     do j=jb0,jb1
       call vrow(j+1, fvn)
@@ -8352,6 +9812,15 @@ contains
           l2 = l2 + wab*wab*real(dinv(i,j,k),8)
         enddo
       enddo
+      if (pcm_on .and. pcm_k > 0) then            ! 'modes': the row's rc = Phi^T rt (pcm_post follows)
+        do m=1,pcm_k
+          do k=1,nz
+            do i=ib0,ib1
+              pcm_rc(i-ib0+1,j-jb0+1,m) = pcm_rc(i-ib0+1,j-jb0+1,m) + real(pcm_phi4(i,j,k,m),8)*wk_r(i,j,k)
+            enddo
+          enddo
+        enddo
+      end if
       if (redu_on) then                           ! imex_redu: the row's column partials (k ascending)
         do i=ib0,ib1
           rd_c(i,j,1) = 0._8 ; rd_c(i,j,2) = 0._8
