@@ -75,6 +75,7 @@ contains
   use tracers, only: t, itands, wrt_t_dia, exchange_tracers, nt_step
   use bgc_subcycle_mod, only: bgc_physics_subcycle
   use advection, only: t_vadv_pre, t_vadv_cor
+  use sl_adv_mod, only: sl_adv, sl_t_prep, sl_hflux, sl_vflux, sl_t_finish
 #ifdef MARBL
   use marbl_driver, only: marbldrv_column_physics, iALK, iDIC,&
   &is_marbl_step, marbldrv_impose_constant_fe
@@ -196,6 +197,8 @@ contains
 !       write(60,*) 't:          ',t(10,10,20,nnew,1)
 !     endif
 
+  if (sl_adv) call sl_t_prep(istr, iend, jstr, jend)   ! swept-volume advection: sub-passes
+
   do itrc=1,nt_step
 
 # ifdef ADV_ISONEUTRAL
@@ -214,6 +217,8 @@ contains
 ! and already MULTIPLIED by Hz(:,:,:) at "nstp" in "pre_step3d_tile".
 
 # include "compute_horiz_tracer_fluxes.h"
+      ! swept-volume advection: the blend on the hot faces of level k
+      if (sl_adv) call sl_hflux(k, itrc, FX, FE, istr, iend, jstr, jend)
 
 # ifdef DIAGNOSTICS
 #  ifndef ADV_ISONEUTRAL
@@ -942,6 +947,8 @@ enddo     !<-- itrc (horizontal advection and sources)
   do itrc=1,nt_step
 
 # include "compute_vert_tracer_fluxes.h"
+    ! swept-volume advection: hot columns' explicit vertical flux, carry, arrival term
+    if (sl_adv) call sl_vflux(j, itrc, FC, istr, iend)
 
 # ifdef DIAGNOSTICS
     if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
@@ -1225,6 +1232,7 @@ enddo     !<-- itrc (horizontal advection and sources)
 #endif
   enddo     !<-- itrc
   enddo      !<-- j
+  if (sl_adv) call sl_t_finish        ! swept-volume advection: the carry becomes the state
 
 do itrc=1,nt_step
   call t3dbc_tile (istr,iend,jstr,jend, itrc, wrk1)

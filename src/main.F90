@@ -508,7 +508,7 @@ contains
     use step3d_t_mod, only: step3d_t
     use bgc_subcycle_mod, only: bgc_physics_subcycle, bgcsub_accumulate, bgcsub_step
 #ifdef SOLVE3D
-    use sl_adv_mod, only: sl_adv, sl_adv_weights
+    use sl_adv_mod, only: sl_adv, sl_adv_weights, sl_ts_prep
 #endif
     use step3d_uv_mod, only: step3d_uv1, step3d_uv2
 #  ifdef UV_VIS2
@@ -677,6 +677,7 @@ contains
     call reg_toc(rg_prsgrd)
     call reg_tic(rg_uv1_visc)
 #ifdef SOLVE3D
+    if (sl_adv) call sl_ts_prep   ! swept-volume advection: T, S increments, X's swept change
     call step3d_uv1(0)  ! update u/v(nnew) with dt*ru/rv
 #endif
 
