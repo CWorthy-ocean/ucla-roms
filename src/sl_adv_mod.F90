@@ -154,6 +154,9 @@ module sl_adv_mod
   ! (SL_PLAN's predictor check) grid-scale spikes of the predictor-level density rho* and KPP's hbl at
   ! n+1/2: the largest |q - mean of the 4 neighbours| in cells with a hot face / in the other cells
   real(kind=8) :: dm_spk(4) = 0._8
+  ! hot u-, v-columns: the smallest pseudo-volume v1/Hz at levels with a hot face and at all levels, and the largest
+  ! vertical Courant number dt pm pn |We|/v1 at the interfaces of levels with a hot face
+  real(kind=8) :: dm_v1(3) = [huge(1._8), huge(1._8), 0._8]
 #endif
 
 contains
@@ -263,7 +266,8 @@ contains
     &//' and v-cell faces, most momentum sub-passes, most faces put back to stock, budget residual of the'&
     &//' momentum swept-flux changes (u, v), largest u-cell continuity defect against the rho cells'' (stock,'&
     &//' blended transports), largest grid-scale spike of rho* in hot / other cells and of hbl in hot /'&
-    &//' other columns'
+    &//' other columns, the smallest v1/Hz of hot momentum columns at levels with a hot face and at all'&
+    &//' levels, the largest dt pm pn |We|/v1 next to levels with a hot face'
   end subroutine sl_adv_init
 
 ! ----------------------------------------------------------------------
@@ -1105,7 +1109,7 @@ contains
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     real(kind=8), allocatable, dimension(:,:,:), save :: bs, bt, bnum
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: vx, vy, fu, fv, fxs, fys, Fsx, Fsy, dfx, dfy
-    real(kind=8) :: ga, dp, tt, ss, wx, cw, gd, czv, v1(nz), a(nz), bl(nz), qq(nz), hzc(nz), w(0:nz),&
+    real(kind=8) :: ga, dp, tt, ss, wx, cw, gd, czv, v1(nz), wxg(nz), a(nz), bl(nz), qq(nz), hzc(nz), w(0:nz),&
     &               fzb(0:nz), fzs(0:nz)
     integer(kind=4) :: i, j, k, i0, i1, j0, j1, msub(nz)
     logical :: hot
@@ -1195,8 +1199,13 @@ contains
           do k = 1, nz
             v1(k) = sl_hz0(i,j,k) - dt*pm(i,j)*pn(i,j)*(FlxU(i+1,j,k)*umask(i+1,j) - FlxU(i,j,k)*umask(i,j)&
             &     + FlxV(i,j+1,k)*vmask(i,j+1) - FlxV(i,j,k)*vmask(i,j))
-            a(k) = bnum(i,j,k)/v1(k)
             hzc(k) = Hz(i,j,k) ; qq(k) = bs(i,j,k)
+            call sl_cellw(i, j, k, wxg(k), cw)
+            if (wxg(k) > 0._8 .and. v1(k) >= sl_v1min*sl_hz0(i,j,k)) then
+              a(k) = bnum(i,j,k)/v1(k)
+            else                                     ! as sl_vflux: the pseudo-density only where defined
+              a(k) = qq(k) ; v1(k) = hzc(k) ; wxg(k) = 0._8
+            end if
           end do
           w(0) = 0._8 ; w(nz) = 0._8
           do k = 1, nz-1
@@ -1204,8 +1213,7 @@ contains
           end do
           call sl_halfstep(nz, v1, a, w, hzc, dt*pm(i,j)*pn(i,j))
           do k = 1, nz
-            call sl_cellw(i, j, k, wx, cw)
-            bl(k) = (1._8 - wx)*qq(k) + wx*a(k)
+            bl(k) = (1._8 - wxg(k))*qq(k) + wxg(k)*a(k)
           end do
           if (sl_diag > 0) then        ! the key's vertical Courant number in the hot cells
             do k = 1, nz-1
@@ -1424,7 +1432,7 @@ contains
     implicit none
     integer(kind=4), intent(in) :: j, itrc, istr, iend
     real(kind=8), intent(inout) :: FC(istr-2:iend+2,0:nz)
-    real(kind=8) :: wx(nz), cw(nz), v1(nz), a(nz), bl(nz), hzc(nz), w(0:nz), fz(0:nz), dtpp, sh(nz)
+    real(kind=8) :: wx(nz), cw(nz), v1(nz), vg(nz), a(nz), bl(nz), hzc(nz), w(0:nz), fz(0:nz), dtpp, sh(nz)
     integer(kind=4) :: i, k
     logical :: hot
     if (.not. sl_on) return
@@ -1446,11 +1454,15 @@ contains
       do k = 1, nz
         hzc(k) = Hz(i,j,k)
         v1(k) = sl_hz0(i,j,k) - dtpp*(FlxU(i+1,j,k)-FlxU(i,j,k)+FlxV(i,j+1,k)-FlxV(i,j,k))
-        a(k) = t(i,j,k,nnew,itrc)
-        if (itrc <= iTandS) a(k) = a(k) + sl_hz0(i,j,k)*(sl_nu*sl_en(i,j,k,itrc) + sl_rho*sl_et(i,j,k,itrc))
-        a(k) = a(k)/v1(k)
+        if (wx(k) > 0._8 .and. v1(k) >= sl_v1min*sl_hz0(i,j,k)) then
+          a(k) = t(i,j,k,nnew,itrc)
+          if (itrc <= iTandS) a(k) = a(k) + sl_hz0(i,j,k)*(sl_nu*sl_en(i,j,k,itrc) + sl_rho*sl_et(i,j,k,itrc))
+          a(k) = a(k)/v1(k) ; vg(k) = v1(k)
+        else                                         ! the pseudo-density only where it is defined
+          a(k) = t(i,j,k,3,itrc) ; vg(k) = hzc(k) ; wx(k) = 0._8
+        end if
       end do
-      call sl_halfstep(nz, v1, a, w, hzc, dtpp)
+      call sl_halfstep(nz, vg, a, w, hzc, dtpp)
       do k = 1, nz
         bl(k) = (1._8 - wx(k))*t(i,j,k,3,itrc) + wx(k)*a(k)
       end do
@@ -1479,9 +1491,13 @@ contains
         do k = 1, nz
           v1(k) = sl_hz0(i,j,k) - dtpp*(FlxU(i+1,j,k)-FlxU(i,j,k)+FlxV(i,j+1,k)-FlxV(i,j,k))
           sh(k) = sl_sh(i,j,k)
-          a(k) = sh(k)/v1(k)
+          if (wx(k) > 0._8) then
+            a(k) = sh(k)/v1(k) ; vg(k) = v1(k)
+          else
+            a(k) = 1._8 ; vg(k) = hzc(k)
+          end if
         end do
-        call sl_halfstep(nz, v1, a, w, hzc, dtpp)
+        call sl_halfstep(nz, vg, a, w, hzc, dtpp)
         do k = 1, nz
           bl(k) = (1._8 - wx(k)) + wx(k)*a(k)
         end do
@@ -1514,7 +1530,7 @@ contains
     use tracers, only: t, nt_step
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_sum, mpi_min
     implicit none
-    real(kind=8) :: gsh(2), lsh(2), lcz(1), gcz(1), gspk(4)
+    real(kind=8) :: gsh(2), lsh(2), lcz(1), gcz(1), gspk(4), gv1(3)
     real(kind=8), allocatable :: gb(:,:), lc(:), gc(:), lmn(:), gmn(:), lmxx(:), gmxx(:)
     integer(kind=4) :: ierr, ip, jp, itrc, i, j, k
     integer(kind=4), save :: tile = 0
@@ -1568,9 +1584,13 @@ contains
     call mpi_allreduce(dm_bud, gb(:,1:2), 4, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     call mpi_allreduce(dm_def, gsh, 2, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
     call mpi_allreduce(dm_spk, gspk, 4, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
-    if (mynode == 0) write(*,'(1x,A,I8,12ES11.3)') 'SL_MDIAG', iic, dm_hot(1), dm_hot(2), dm_hot(3), dm_fb,&
-    &  abs(gb(1,1))/max(gb(2,1),1.e-300_8), abs(gb(1,2))/max(gb(2,2),1.e-300_8), gsh(1), gsh(2), gspk
+    call mpi_allreduce(dm_v1(1:2), gv1(1:2), 2, mpi_double_precision, mpi_min, ocean_grid_comm, ierr)
+    call mpi_allreduce(dm_v1(3), gv1(3), 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    where (gv1(1:2) > 1.e30_8) gv1(1:2) = 1._8
+    if (mynode == 0) write(*,'(1x,A,I8,15ES11.3)') 'SL_MDIAG', iic, dm_hot(1), dm_hot(2), dm_hot(3), dm_fb,&
+    &  abs(gb(1,1))/max(gb(2,1),1.e-300_8), abs(gb(1,2))/max(gb(2,2),1.e-300_8), gsh(1), gsh(2), gspk, gv1
     dm_hot = 0._8 ; dm_fb = 0._8 ; dm_bud = 0._8 ; dm_def = 0._8 ; dm_spk = 0._8
+    dm_v1 = [huge(1._8), huge(1._8), 0._8]
   end subroutine sl_t_finish
 
 ! ======================================================================
@@ -2724,14 +2744,27 @@ contains
       ! the hot column's explicit vertical fluxes: fzx of X (U3 on hot interfaces, spline elsewhere),
       ! fzs the stock spline of u*
       real(kind=8), intent(in) :: qt(nz), rh(nz), dv(nz)
+      real(kind=8) :: wxg(nz)
       integer(kind=4) :: kk
       do kk = 1, nz
         v1(kk) = hzc(kk) - dtpp*dv(kk)
-        a(kk) = (hzc(kk)*qt(kk) + dtpp*rh(kk))/v1(kk)
+        if (sl_diag > 0) then
+          dm_v1(2) = min(dm_v1(2), v1(kk)/hzc(kk))
+          if (wx(kk) > 0._8) then
+            dm_v1(1) = min(dm_v1(1), v1(kk)/hzc(kk))
+            dm_v1(3) = max(dm_v1(3), dtpp*max(abs(we_(kk-1)), abs(we_(kk)))/max(v1(kk), 1.e-30_8))
+          end if
+        end if
+        ! the pseudo-density only at levels with a hot face whose pseudo-volume is not near zero; u* elsewhere
+        if (wx(kk) > 0._8 .and. v1(kk) >= sl_v1min*hzc(kk)) then
+          a(kk) = (hzc(kk)*qt(kk) + dtpp*rh(kk))/v1(kk) ; wxg(kk) = wx(kk)
+        else
+          a(kk) = us(kk) ; v1(kk) = hzc(kk) ; wxg(kk) = 0._8
+        end if
       end do
       call sl_halfstep(nz, v1, a, we_, hzc, dtpp)
       do kk = 1, nz
-        x(kk) = (1._8 - wx(kk))*us(kk) + wx(kk)*a(kk)
+        x(kk) = (1._8 - wxg(kk))*us(kk) + wxg(kk)*a(kk)
       end do
       call spl_faces(nz, hs, x, fsp)
       call u3col(nz, hzc, x, we_, fz3)
