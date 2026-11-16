@@ -699,7 +699,7 @@ Optional: if the group is absent, `sl_adv = .false.`. Experimental and in develo
 | `sl_adv` | `.false.` | Swept-volume advection on the faces whose 2-D Courant number `c2d` exceeds `sl_c_lo` (so far: tracers) |
 | `sl_c_lo` | `0.6` | `c2d` where the blend of the stock and the swept flux starts (weight 0) |
 | `sl_c_hi` | `0.9` | `c2d` from which a face is fully swept (weight 1); `0 <= sl_c_lo < sl_c_hi` |
-| `sl_cmax` | `3.0` | ROMS stops when the largest `c2d` of a step exceeds it; must exceed `sl_c_hi` |
+| `sl_cmax` | `5.0` | ROMS stops when the largest `c2d` of a step exceeds it; must exceed `sl_c_hi` |
 | `sl_diag` | `0` | 1: the `SL_DIAG` and `SL_TRC` diagnostic lines (constancy, budgets, per-tracer content) |
 
 ### `PARTICLES_SETTINGS`

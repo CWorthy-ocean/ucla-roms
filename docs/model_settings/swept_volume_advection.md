@@ -13,7 +13,7 @@ Namelist group `SL_ADV_SETTINGS` (optional; requires `IMEX_IGW`):
 | `sl_adv` | `.false.` | Swept-volume advection on the faces whose 2-D Courant number `c2d` exceeds `sl_c_lo` |
 | `sl_c_lo` | `0.6` | `c2d` where the blend starts (weight 0) |
 | `sl_c_hi` | `0.9` | `c2d` from which a face is fully swept (weight 1); `0 <= sl_c_lo < sl_c_hi` |
-| `sl_cmax` | `3.0` | ROMS stops when the largest `c2d` of a step exceeds it; must exceed `sl_c_hi` |
+| `sl_cmax` | `5.0` | ROMS stops when the largest `c2d` of a step exceeds it; must exceed `sl_c_hi` |
 | `sl_diag` | `0` | 1: the `SL_DIAG` and `SL_TRC` lines (section 4) |
 
 `sl_adv` needs the default tracer corrector (UP3 horizontally, thickness-aware U3 vertically): it stops with a message under `ADV_ISONEUTRAL` or `PARABOLIC_SPLINES`.

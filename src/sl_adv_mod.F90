@@ -35,7 +35,7 @@ module sl_adv_mod
   logical, public, protected :: sl_adv = .false.     ! swept-volume advection (needs IMEX_IGW)
   real(kind=8), public, protected :: sl_c_lo = 0.6_8   ! c2d where the blend starts (weight 0)
   real(kind=8), public, protected :: sl_c_hi = 0.9_8   ! c2d from which faces are fully swept
-  real(kind=8), public, protected :: sl_cmax = 3._8    ! stop when the largest c2d exceeds it
+  real(kind=8), public, protected :: sl_cmax = 5._8    ! stop when the largest c2d exceeds it
   integer(kind=4), public, protected :: sl_diag = 0    ! 1: SL_DIAG line (shadow tracer constancy, budgets)
   namelist /SL_ADV_SETTINGS/ sl_adv, sl_c_lo, sl_c_hi, sl_cmax, sl_diag
 
