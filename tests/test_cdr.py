@@ -316,7 +316,9 @@ class TestCdr:
         restarted run's records equal the uninterrupted run's.
 
         With ``wrt_bgc_his`` off, the start-up call used to add the start-up
-        state to the first window, so records came one step early.
+        state to the first window, so records came one step early, and the
+        ``_bgc_avg`` writer reset the ``_bgc_dia`` record count on every step,
+        so each ``_bgc_dia`` record after the first went to a new file.
         """
         nml = _restart_nml(input_dir, 200)
         nml["BGC_SETTINGS"].update({
@@ -329,6 +331,9 @@ class TestCdr:
 
         compared = _check_restarted_averages(whole, restarted, "bgc_avg")
         assert "DIC" in compared
+        # _bgc_dia (nrpf_bgc_his_dia 2) at 0, 200, ..., 800 s; restart at 400 s
+        assert _records_per_file(whole, "bgc_dia") == [2, 2, 1]
+        assert _records_per_file(restarted, "bgc_dia") == [2, 1]
 
 
 def _restart_nml(input_dir, marbl_timestep) -> dict:
@@ -422,6 +427,16 @@ def _check_restarted_averages(whole, restarted, stream) -> list[str]:
     for var in compared:
         np.testing.assert_array_equal(new[var].values, ref[var].values, err_msg=var)
     return compared
+
+
+def _records_per_file(run_dir, stream) -> list[int]:
+    """The number of records in each ``roms_<stream>`` file of a run, in time order."""
+    counts = []
+    for path in sorted(run_dir.glob(f"roms_{stream}.*.0.nc")):
+        with xr.open_dataset(path, decode_times=False) as ds:
+            counts.append(ds.sizes["time"])
+    return counts
+
 
 def _joined_records(run_dir, stream) -> xr.Dataset:
     """Join every ``roms_<stream>.<date>`` file set of a run; return all records."""

@@ -1,0 +1,1 @@
+With ``wrt_bgc_his`` off and ``wrt_bgc_avg`` on, ``_bgc_dia`` output goes to one file per ``nrpf_bgc_his_dia`` records instead of one file per record. The values are unchanged, so tools that expect one record per file must read the record dimension.

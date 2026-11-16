@@ -1,0 +1,1 @@
+``_bgc_dia`` files now hold ``nrpf_bgc_his_dia`` records when ``wrt_bgc_his`` is off and ``wrt_bgc_avg`` is on. The ``_bgc_avg`` writer reset the ``_bgc_dia`` record count on every step, so each ``_bgc_dia`` record after the first went to a new file.

@@ -89,9 +89,11 @@ module bgc_io
   ! addition.
   integer(kind=4),save :: nheld_dia = 0
   logical,save         :: dia_first = .true.
-  integer(kind=4) :: record_avg = 0           ! Triggers making of initial file
+  ! Records in the current file of each stream; 0 makes the first write open
+  ! a file. Set only by that stream's own writer.
+  integer(kind=4) :: record_avg = 0
   integer(kind=4) :: record_his = 0
-  integer(kind=4) :: record_dia_avg = 0   ! Triggers making of initial file
+  integer(kind=4) :: record_dia_avg = 0
   integer(kind=4) :: record_dia_his = 0
   real(kind=8),save :: output_time_his = 0
   real(kind=8),save :: output_time_avg = 0
@@ -250,11 +252,6 @@ contains
       &context=module_name//"/"//sr_name,&
       &info=error_info)
     endif
-
-    if (first_step_his) then
-      record_his = nrpf_bgc_his
-      record_dia_his = nrpf_bgc_his_dia
-    end if
 
     call error_log%abort_check()
 
