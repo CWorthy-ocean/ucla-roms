@@ -2063,7 +2063,8 @@ contains
           if (mmyv(i,j) > 0.5_8) mwvy(i,j,k) = max(wtv(i,j-1,k), wtv(i,j,k))
         end do
       end do
-      ! near-degenerate cells: the swept volumes' net outflow leaves less than sl_v1min of the volume
+      ! near-degenerate cells: the swept volumes' net outflow leaves less than sl_v1min of the volume; also the
+      ! cells over a near-degenerate rho cell
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1
           if (umask(i,j) < 0.5_8) cycle
@@ -2072,6 +2073,8 @@ contains
           v1y = 1._8 - rv*(mvuy(i,j+1,k)-mvuy(i,j,k))
           v1 = v1x + v1y - 1._8
           if (min(v1, v1x, v1y) < sl_v1min) degu(i,j,k) = 1._8
+          ! a cell over a near-degenerate rho cell (the tracers' fallback)
+          if (max(sl_deg(i-1,j,k), sl_deg(i,j,k)) > 0.5_8) degu(i,j,k) = 1._8
         end do
       end do
       do j = gv%j0, gv%j1
@@ -2082,6 +2085,7 @@ contains
           v1y = 1._8 - rv*(mvvy(i,j+1,k)-mvvy(i,j,k))
           v1 = v1x + v1y - 1._8
           if (min(v1, v1x, v1y) < sl_v1min) degv(i,j,k) = 1._8
+          if (max(sl_deg(i,j-1,k), sl_deg(i,j,k)) > 0.5_8) degv(i,j,k) = 1._8
         end do
       end do
     end do
