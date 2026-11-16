@@ -435,8 +435,8 @@ module imex_igw
   real(kind=8), allocatable, dimension(:,:,:) :: pg_star_u, pg_star_v  ! level *
   ! SL_ADV (sl_adv_mod) reads the levels n and n-1 for the momentum departure field and adds the swept
   ! part of the carried n-1 increment to pg_nm1 before the corrector's combination (imex_pg_nm1_add)
-  public :: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v
-  protected :: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v
+  public :: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v, pg_star_u, pg_star_v
+  protected :: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v, pg_star_u, pg_star_v
 
   ! Elliptic solver. Geometry (static, set at the first operator setup):
   ! tile interior bounds, physical edges, face coefficients

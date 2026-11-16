@@ -105,7 +105,7 @@ module sl_adv_mod
   ! sub-passes per level for the corrector transport (step3d_t)
   integer(kind=4), allocatable, dimension(:) :: sl_msubc
   ! IMEX corrector weights of levels n and n-1 for this step
-  real(kind=8) :: sl_nu = 0._8, sl_rho = 0._8
+  real(kind=8) :: sl_nu = 0._8, sl_rho = 0._8, sl_wth = 0._8
   ! sl_diag: shadow tracer error (max), budget residual and scale (per tracer)
   real(kind=8) :: dg_sh = 0._8, dg_edge = 0._8, dg_czmax = 0._8, dg_czn = 0._8, dg_fb = 0._8
   real(kind=8), allocatable, dimension(:,:) :: dg_bud
@@ -1047,7 +1047,7 @@ contains
     integer(kind=4), save :: tile = 0
 # include "compute_tile_bounds.h"
     advb_sl = .false.
-    sl_nu = wflx_corr(3) ; sl_rho = wflx_corr(4)
+    sl_nu = wflx_corr(3) ; sl_rho = wflx_corr(4) ; sl_wth = wflx_corr(1) + wflx_corr(2)
     call sl_uv_prep                       ! swept momentum: weights, volumes, departure fields
     if (.not. sl_on) return
     call reg_tic(rg_sl_trc)
@@ -2581,14 +2581,15 @@ contains
     use ocean_vars, only: u, v, hz, we, wi, flxu, flxv
     use grid, only: pm, pn, umask, vmask
 #ifdef IMEX_IGW
-    use imex_igw, only: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v
+    use imex_igw, only: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v, pg_star_u, pg_star_v
 #endif
     use timers, only: reg_tic, reg_toc, rg_sl_mom
     implicit none
     integer(kind=4), intent(in) :: j, istr, iend, jstr, jend
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2,nz), intent(inout) :: ru, rv
     real(kind=8) :: hzc(nz), hs(nz), v1(nz), a(nz), x(nz), us(nz), wx(nz), cw(nz), wmx(nz), we_(0:nz), wi_(0:nz),&
-    &               fzx(0:nz), fzs(0:nz), fz3(0:nz), fsp(0:nz), dtpp, s, pgp, cs, cwv, ce, dn, qr0, qr1, qu
+    &               fzx(0:nz), fzs(0:nz), fz3(0:nz), fsp(0:nz), dtpp, s, pgp, cs, cwv, ce, dn, qr0, qr1, qu,&
+    &               pgr(nz), sps, spc, shz
     integer(kind=4) :: i, k, nrhs3
     logical :: hot
 # include "compute_auxiliary_bounds.h"
@@ -2626,14 +2627,21 @@ contains
       do k = 1, nz
         ru(i,j,k) = ru(i,j,k) - (fzx(k)-fzx(k-1)) + (fzs(k)-fzs(k-1))
       end do
-      ! pointwise terms
+      ! pointwise terms: the whole PG that ru holds (with its depth-mean correction) and the Coriolis term
+      pgr = 0._8
+#ifdef IMEX_IGW
+      sps = 0._8 ; spc = 0._8 ; shz = 0._8
+      do k = 1, nz
+        pgr(k) = sl_wth*pg_star_u(i,j,k) + sl_nu*pg_n_u(i,j,k) + sl_rho*pg_nm1_u(i,j,k)
+        sps = sps + pg_star_u(i,j,k) ; spc = spc + pgr(k) ; shz = shz + hzc(k)
+      end do
+      do k = 1, nz
+        pgr(k) = pgr(k) + hzc(k)*(sps - spc)/shz
+      end do
+#endif
       do k = 1, nz
         s = 1._8 + dtpp*(wi_(k)-wi_(k-1))/hzc(k)
-#ifdef IMEX_IGW
-        pgp = sl_nu*pg_n_u(i,j,k) + sl_rho*pg_nm1_u(i,j,k)
-#else
-        pgp = 0._8
-#endif
+        pgp = pgr(k)
         cs = coru(v(:,:,:,nrhs3), i, j, k)
         cwv = coru(sl_vw, i, j, k)
         ce = coru(sl_vr, i, j, k)
@@ -2686,13 +2694,20 @@ contains
         do k = 1, nz
           rv(i,j,k) = rv(i,j,k) - (fzx(k)-fzx(k-1)) + (fzs(k)-fzs(k-1))
         end do
+        pgr = 0._8
+#ifdef IMEX_IGW
+        sps = 0._8 ; spc = 0._8 ; shz = 0._8
+        do k = 1, nz
+          pgr(k) = sl_wth*pg_star_v(i,j,k) + sl_nu*pg_n_v(i,j,k) + sl_rho*pg_nm1_v(i,j,k)
+          sps = sps + pg_star_v(i,j,k) ; spc = spc + pgr(k) ; shz = shz + hzc(k)
+        end do
+        do k = 1, nz
+          pgr(k) = pgr(k) + hzc(k)*(sps - spc)/shz
+        end do
+#endif
         do k = 1, nz
           s = 1._8 + dtpp*(wi_(k)-wi_(k-1))/hzc(k)
-#ifdef IMEX_IGW
-          pgp = sl_nu*pg_n_v(i,j,k) + sl_rho*pg_nm1_v(i,j,k)
-#else
-          pgp = 0._8
-#endif
+          pgp = pgr(k)
           cs = corv(u(:,:,:,nrhs3), i, j, k)
           cwv = corv(sl_uw, i, j, k)
           ce = corv(sl_ur, i, j, k)
@@ -2767,28 +2782,61 @@ contains
     use coupling, only: rufrc, rvfrc
     use roms_mpi, only: exchange_xxx
     use timers, only: reg_tic, reg_toc, rg_sl_mom
+    use grid, only: umask, vmask
+#ifdef IMEX_IGW
+    use imex_igw, only: pg_star_u, pg_star_v
+#endif
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
-    real(kind=8), allocatable, dimension(:,:,:), save :: tu, tv
+    real(kind=8), allocatable, dimension(:,:,:), save :: tu, tv, pu, pv
     real(kind=8) :: hzc, rvl
     integer(kind=4) :: i, j, k, isw
     if (.not. sl_mon) return
     call reg_tic(rg_sl_mom)
     if (.not. allocated(tu)) then
-      allocate(tu(GLOBAL_2D_ARRAY,nz), tv(GLOBAL_2D_ARRAY,nz)) ; tu = 0._8 ; tv = 0._8
+      allocate(tu(GLOBAL_2D_ARRAY,nz), tv(GLOBAL_2D_ARRAY,nz), pu(GLOBAL_2D_ARRAY,nz), pv(GLOBAL_2D_ARRAY,nz))
+      tu = 0._8 ; tv = 0._8 ; pu = 0._8 ; pv = 0._8
     end if
+    ! p = (theta_c + mu) dt pm pn pg_*/Hz, the implicit-level PG's explicit part that u(nnew) holds: the
+    ! arrival half acts on z - p (the implicit-level PG is applied after the sweeps, as in the frozen scheme)
+    pu = 0._8 ; pv = 0._8
+#ifdef IMEX_IGW
+    do k = 1, nz
+      do j = gu%j0, gu%j1
+        do i = gu%i0, gu%i1
+          pu(i,j,k) = sl_wth*dt*0.25_8*(pm(i,j)+pm(i-1,j))*(pn(i,j)+pn(i-1,j))*pg_star_u(i,j,k)&
+          &         /(0.5_8*(Hz(i,j,k)+Hz(i-1,j,k)))*umask(i,j)
+        end do
+      end do
+      do j = gv%j0, gv%j1
+        do i = gv%i0, gv%i1
+          pv(i,j,k) = sl_wth*dt*0.25_8*(pm(i,j)+pm(i,j-1))*(pn(i,j)+pn(i,j-1))*pg_star_v(i,j,k)&
+          &         /(0.5_8*(Hz(i,j,k)+Hz(i,j-1,k)))*vmask(i,j)
+        end do
+      end do
+    end do
+    call exchange_xxx(pu, pv)
+#endif
     sl_zu = u(:,:,:,nstp) ; sl_zv = v(:,:,:,nstp)
     do k = 1, nz
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1
           sl_zu(i,j,k) = u(i,j,k,nnew)/(0.5_8*(Hz(i,j,k)+Hz(i-1,j,k)))
           sl_r0u(i,j,k) = sl_zu(i,j,k)
+          if (sl_wcu(i,j,k) > 0._8) then
+            rvl = dt*0.25_8*(pm(i,j)+pm(i-1,j))*(pn(i,j)+pn(i-1,j))/(0.5_8*(Hz(i,j,k)+Hz(i-1,j,k)))
+            sl_r0u(i,j,k) = sl_zu(i,j,k) - 0.5_8*sl_wcu(i,j,k)*rvl*coru(pv, i, j, k)
+          end if
         end do
       end do
       do j = gv%j0, gv%j1
         do i = gv%i0, gv%i1
           sl_zv(i,j,k) = v(i,j,k,nnew)/(0.5_8*(Hz(i,j,k)+Hz(i,j-1,k)))
           sl_r0v(i,j,k) = sl_zv(i,j,k)
+          if (sl_wcv(i,j,k) > 0._8) then
+            rvl = dt*0.25_8*(pm(i,j)+pm(i,j-1))*(pn(i,j)+pn(i,j-1))/(0.5_8*(Hz(i,j,k)+Hz(i,j-1,k)))
+            sl_r0v(i,j,k) = sl_zv(i,j,k) - 0.5_8*sl_wcv(i,j,k)*rvl*corv(pu, i, j, k)
+          end if
         end do
       end do
     end do
