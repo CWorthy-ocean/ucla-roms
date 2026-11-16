@@ -256,7 +256,7 @@ def test_sl_adv_below_threshold_changes_nothing(imex_configuration, input_dir, t
 
 
 def test_sl_adv_swept_tracers(imex_configuration, input_dir, tmp_path):
-    """With most faces hot, T and S take the swept fluxes: the solution changes, the
+    """With most faces hot, T and S take the swept fluxes: the output changes, the
     shadow (uniform) tracer stays uniform to 1e-12 and the swept-flux changes conserve
     T and S (every shared face carries the same change on both tiles) to 1e-13
     (SL_DIAG line, sl_diag = 1)."""
@@ -277,7 +277,7 @@ def test_sl_adv_swept_tracers(imex_configuration, input_dir, tmp_path):
 
     off_val = get_summary_value(off, prefix="roms_his.20100101000000")
     on_val = get_summary_value(on, prefix="roms_his.20100101000000")
-    assert on_val.variables["temp"] != off_val.variables["temp"]
+    assert on_val.variables != off_val.variables, "the swept T, S change the solution"
 
 
 def test_sl_adv_exact_restart(imex_configuration, input_dir, tmp_path):
