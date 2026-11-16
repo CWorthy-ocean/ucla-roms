@@ -2,8 +2,9 @@
 
 One build: the open-boundary physics of test_implicit_fs.py with IMEX_IGW, run
 with the implicit free surface's defaults: the hashed runs with the 'fixed' and
-the 'modal' open boundary, exact restarts with both, and the stop on removed
-keys with the template's sed line.
+the 'modal' open boundary, exact restarts with both, the mode-split preconditioner
+(imex_pc = 'modes': convergence and an exact restart, both boundaries), and the stop
+on removed keys with the template's sed line.
 
 A second build: the realistic MARBL case of test_bgc.py with IMEX_IGW, run with
 BGC tracer subcycling and the 'fixed' and the 'modal' open boundary
@@ -118,6 +119,39 @@ def test_imex_igw_exact_restart(imex_configuration, input_dir, tmp_path, obc_mod
     run2_val = get_summary_value(run2, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
     assert "imex_pgu" in run1_val.variables
     assert ("imex_obcm" in run1_val.variables) == (obc_mode == "modal")
+    assert run1_val.variables == run2_val.variables
+
+
+@pytest.mark.parametrize("obc_mode", ["fixed", "modal"])
+def test_imex_igw_modes(imex_configuration, input_dir, tmp_path, obc_mode):
+    """The mode-split preconditioner (imex_pc = 'modes', two modes per column fixed): the run
+    builds the modes at both operator rebuilds, every stage solve converges, and a restart
+    after step 10 reproduces the continuous run bit for bit across the second rebuild (the
+    modes are rebuilt from the replayed operator; no restart variable of their own).
+    imex_redu = 1 as in test_imex_igw_exact_restart."""
+    conf = imex_configuration
+    nml = imex_namelist(input_dir, obc_mode, imex_redu=1, imex_pc="modes", imex_pc_modes=2)
+    nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
+    nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})
+
+    run1 = tmp_path / "run_1"
+    run1.mkdir()
+    log1 = conf.run(nml, cwd=run1, capture_output=True)
+    assert_imex_converged(log1)
+    assert squeezed("imex_pc = 'modes'") in squeezed(log1)
+    builds = re.findall(r"IMEX_PCM\s+\d+\s+K\s+(\d)", log1)
+    assert builds == ["2", "2"], f"mode builds: {builds}"
+
+    run2 = tmp_path / "run_2"
+    run2.mkdir()
+    nml["INITIAL_CONDITIONS"]["inifile"] = str(run1 / "roms_rst.20100101000640.nc")
+    nml["TIME_STEPPING"]["ntimes"] = 10
+    log2 = conf.run(nml, cwd=run2, capture_output=True)
+    assert_imex_converged(log2)
+    assert squeezed("IMEX state read from the initial file (exact restart)") in squeezed(log2)
+
+    run1_val = get_summary_value(run1, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
+    run2_val = get_summary_value(run2, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
     assert run1_val.variables == run2_val.variables
 
 
