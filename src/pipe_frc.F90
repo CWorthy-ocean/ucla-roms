@@ -111,8 +111,10 @@ contains
 
       call set_pipe_vert_prf                             ! set pipe vertical profiles
 #ifdef PARALLEL_IO
+      if (pio_file_is_open == 1) then
+        call PIO_closefile(pio_FileDesc)
+      endif
       pio_file_is_open = 0
-      call PIO_closefile(pio_FileDesc)
 #endif
     endif
 

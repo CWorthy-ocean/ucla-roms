@@ -11,7 +11,7 @@ module frc_output
   &lm, mm, isalt, itemp, mynode, ocean_grid_comm
   use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u,&
   &ds_xr, ds_yr, ds_zr, ds_xu, ds_yv
-  use nc_read_write, only: nccreate, ncwrite
+  use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill, nc_fill_record
   use roms_read_write, only:&
   &dn_tm, dn_xr, dn_xu, dn_yr, dn_yv,&
   &dn_zr, create_file
@@ -242,7 +242,16 @@ contains
       record = record+1
       if (mynode == 0) then
         ierr=nf90_open(fname,nf90_write,ncid)
+        call nc_set_record_nofill(ncid)
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+#if defined BULK_FRC && defined MARBL
+        if (.not. wrt_frc_avg) then          ! defined, but written as averages only
+          call nc_fill_record(ncid,'vflux_ALK',record)
+          call nc_fill_record(ncid,'vflux_DIC',record)
+          call nc_fill_record(ncid,'vflux_ALK_ALT_CO2',record)
+          call nc_fill_record(ncid,'vflux_DIC_ALT_CO2',record)
+        endif
+#endif
         ierr=nf90_close(ncid)
       endif
       call error_log%abort_check()

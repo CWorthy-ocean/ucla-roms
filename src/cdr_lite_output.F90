@@ -17,7 +17,7 @@ module cdr_lite_output
   use roms_read_write, only:&
  &     dn_tm, dn_xr, dn_yr, dn_zr,&
  &     create_file, sec2date
-  use nc_read_write, only: nccreate, ncwrite
+  use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill, nc_fill_record
   use netcdf, only:&
  &     nf90_noerr, nf90_write, nf90_double, nf90_open,&
  &     nf90_put_att, nf90_close, nf90_redef, nf90_enddef
@@ -746,10 +746,14 @@ contains
     record = record+1
     if (mynode == 0) then
       ierr=nf90_open(fname,nf90_write,ncid)
+      call nc_set_record_nofill(ncid)
       call ncwrite(ncid,'ocean_time',(/time/),(/record/))
       if (wrt_cdr_lite_avg) then
         call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record/))
         call ncwrite(ncid,'avg_end_time',(/time/),(/record/))
+      else                                   ! defined, but no averaging period
+        call nc_fill_record(ncid,'avg_begin_time',record)
+        call nc_fill_record(ncid,'avg_end_time',record)
       endif
       ierr=nf90_close(ncid)
     endif

@@ -51,7 +51,7 @@ module bgc_io
        &wrt_bgc_diag_3d, idx_bgc_diag_3d, vname_bgc_diag_3d
 #endif
 ! /bgc_shared_vars
-  use nc_read_write, only: nccreate, ncwrite
+  use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill
   use roms_read_write, only:&
   &dn_tm, dn_xr, dn_yr, dn_zr,&
   &create_file, set_frc_data
@@ -282,6 +282,7 @@ contains
         navg_bgc = 0
         if (mynode == 0) then
           ierr=nf90_open(fname_avg,nf90_write,ncid)
+          call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/time/),(/record_avg/))
           ierr=nf90_close(ncid)
         endif
@@ -336,6 +337,7 @@ contains
         output_time_his=0
         if (mynode == 0) then
           ierr=nf90_open(fname_his,nf90_write,ncid)
+          call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/time/),(/record_his/))
           ierr=nf90_close(ncid)
         endif
@@ -515,6 +517,7 @@ contains
         navg_dia_bgc = 0
         if (mynode == 0) then
           ierr=nf90_open(fname_avg,nf90_write,ncid)
+          call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/time/),(/record_dia_avg/))
           ierr=nf90_close(ncid)
         endif
@@ -615,6 +618,7 @@ contains
         output_time_dia_his = 0
         if (mynode == 0) then
           ierr=nf90_open(fname_his,nf90_write,ncid)
+          call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/time/),(/record_dia_his/))
           ierr=nf90_close(ncid)
         endif
