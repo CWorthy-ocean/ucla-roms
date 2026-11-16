@@ -91,7 +91,7 @@ contains
     &context=module_name//"/"//sr_name, info="sl_adv: need 0 <= sl_c_lo < sl_c_hi")
     if (sl_cmax <= sl_c_hi) call error_log%raise_global(&
     &context=module_name//"/"//sr_name, info="sl_adv: sl_cmax must exceed sl_c_hi")
-    if (mynode == 0) write(*,'(/1x,A,3(A,F7.3))') 'SL_ADV: swept-volume advection on'&
+    if (mynode == 0) write(*,'(/1x,A,3(A,ES10.3))') 'SL_ADV: swept-volume advection on'&
     &//' (infrastructure: weights computed, not used):', ' sl_c_lo =', sl_c_lo, ', sl_c_hi =', sl_c_hi,&
     &', sl_cmax =', sl_cmax
   end subroutine read_nml_sl_adv
