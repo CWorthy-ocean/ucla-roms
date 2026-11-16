@@ -93,8 +93,8 @@ module extract_data
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_extract, pio_open_or_abort,&
   &pio_extract_child, pio_keep_output_open, pio_put_time, pio_begin_record_sync,&
-  &pio_end_record_sync
-  use pio, only : PIO_closefile, PIO_write, file_desc_t
+  &pio_end_record_sync, pio_kept_file_t, pio_use_kept_file, pio_close_kept_file
+  use pio, only : PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
   ! TODO: add averaging
@@ -228,8 +228,7 @@ module extract_data
   type(extract_object),dimension(:),allocatable :: obj
 #ifdef PARALLEL_IO
   ! The output file of each child, kept open between records (pio_keep_output_open)
-  type(file_desc_t) :: edata_fd(max_extract_chd)
-  logical :: edata_fd_open(max_extract_chd) = .false.
+  type(pio_kept_file_t) :: edata_file(max_extract_chd)
 #endif
 
   interface interpolate
@@ -942,12 +941,7 @@ contains
         ! Open the file once, add each record's time value through PIO, and
         ! flush the record once at its end: its variables are small, so a
         ! collective write for each of them would cost more than the data.
-        if (.not. edata_fd_open(ic)) then
-          call pio_open_or_abort(trim(fname(ic)), module_name//"/do_extract_data", PIO_write)
-          edata_fd(ic) = pio_FileDesc
-          edata_fd_open(ic) = .true.
-        endif
-        pio_FileDesc = edata_fd(ic)
+        call pio_use_kept_file(edata_file(ic), fname(ic), module_name//"/do_extract_data")
         call pio_put_time('bry_time', tdays, rec_next)
         call pio_begin_record_sync(module_name//"/do_extract_data")
       else
@@ -1358,10 +1352,7 @@ contains
     integer(kind=4) :: ic
 
     do ic = 1,max_extract_chd
-      if (edata_fd_open(ic)) then
-        call PIO_closefile(edata_fd(ic))
-        edata_fd_open(ic) = .false.
-      endif
+      call pio_close_kept_file(edata_file(ic))
     enddo
 #endif
   end subroutine close_extract_files  !]

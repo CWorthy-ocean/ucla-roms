@@ -23,8 +23,8 @@ module zslice_output
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_z, pio_open_or_abort,&
-  &pio_keep_output_open, pio_put_time
-  use pio, only : PIO_closefile, PIO_write, PIO_syncfile, file_desc_t
+  &pio_keep_output_open, pio_put_time, pio_kept_file_t, pio_use_kept_file, pio_close_kept_file
+  use pio, only : PIO_closefile, PIO_write, PIO_syncfile
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
 
@@ -34,8 +34,7 @@ module zslice_output
   public :: close_zslice_file
 #ifdef PARALLEL_IO
   ! The z-slice file, kept open between records (pio_keep_output_open)
-  type(file_desc_t) :: zslice_file
-  logical :: zslice_file_open = .false.
+  type(pio_kept_file_t) :: zslice_file
 #endif
   character(len=13) :: module_name = "zslice_output"
   integer(kind=4),parameter :: max_ndep = 20
@@ -490,12 +489,7 @@ contains
         ! Open the file once and add each record's time value through PIO,
         ! instead of a serial netCDF open, write and close on rank 0 behind a
         ! barrier and a collective open and close for every record.
-        if (.not. zslice_file_open) then
-          call pio_open_or_abort(trim(fname), module_name//"/"//sr_name, PIO_write)
-          zslice_file = pio_FileDesc
-          zslice_file_open = .true.
-        endif
-        pio_FileDesc = zslice_file
+        call pio_use_kept_file(zslice_file, fname, module_name//"/"//sr_name)
         call pio_put_time('ocean_time', time, record)
       else
         if (mynode == 0) then
@@ -630,10 +624,7 @@ contains
     ! is created, and at the end of the run (collective).
     implicit none
 #ifdef PARALLEL_IO
-    if (zslice_file_open) then
-      call PIO_closefile(zslice_file)
-      zslice_file_open = .false.
-    endif
+    call pio_close_kept_file(zslice_file)
 #endif
   end subroutine close_zslice_file  !]
 !----------------------------------------------------------------------

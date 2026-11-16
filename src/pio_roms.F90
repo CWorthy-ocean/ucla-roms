@@ -14,7 +14,7 @@ module pio_roms
   use pio, only : PIO_offset_kind
   use pio, only : PIO_setdebuglevel
   use pio, only : PIO_seterrorhandling, PIO_BCAST_ERROR
-  use pio, only : PIO_put_var
+  use pio, only : PIO_put_var, PIO_write
   use pio_nf, only : PIO_inq_varid, PIO_inq_dimid, PIO_strerror
   use pionfatt_mod, only : put_att_desc_text
   use mpi_f08, only: mpi_character, mpi_wtime
@@ -42,7 +42,8 @@ module pio_roms
   logical, parameter :: pio_force_nofill = .false.
 #endif
   ! Name of the file currently open in pio_FileDesc (must fit max_name_size
-  ! paths). Set only by pio_open_or_abort; the forcing readers compare against
+  ! paths). Set by pio_open_or_abort, and by pio_use_kept_file when it makes a
+  ! kept-open output file current again; the forcing readers compare against
   ! it to decide whether a re-open is needed, and pio_inq_varid_or_abort uses
   ! it to name the file in its error message.
   character(len=max_name_size), public :: pio_current_file = ''
@@ -79,6 +80,13 @@ module pio_roms
   logical :: record_sync_deferred = .false.
   integer(kind=4) :: record_sync_fh = -1          ! PIO handle of that file
   character(len=max_name_size) :: record_sync_file = ''
+  !> An output file that its writer keeps open between records, with its
+  !> name (pio_use_kept_file, pio_close_kept_file).
+  type, public :: pio_kept_file_t
+    type(file_desc_t) :: fd
+    character(len=max_name_size) :: name = ''
+    logical :: is_open = .false.
+  end type pio_kept_file_t
 #ifdef MPI_MASKING
   !> All-land tiles have no rank, so no rank writes their points of a
   !> distributed output variable. They read _FillValue only because rank 0
@@ -642,6 +650,8 @@ module pio_roms
   public  :: pio_put_time
   public  :: pio_begin_record_sync
   public  :: pio_end_record_sync
+  public  :: pio_use_kept_file
+  public  :: pio_close_kept_file
 
   !! Checked wrapper around PIO_openfile: aborts with a ROMS-side message
   !! (file name + calling context) instead of PIO's bare strerror.
@@ -2181,6 +2191,47 @@ contains
     endif
 
   end subroutine pio_sync_var !]
+! ----------------------------------------------------------------------
+  subroutine pio_use_kept_file(kf, fname, context) ![
+    ! Make the output file fname, kept open between records in kf, the
+    ! file of pio_FileDesc (and pio_current_file), opening it for writing
+    ! first if it is not open yet. Collective.
+    implicit none
+    type(pio_kept_file_t), intent(inout) :: kf
+    character(len=*), intent(in) :: fname, context
+
+    if (.not. kf%is_open) then
+      call pio_open_or_abort(trim(fname), context, PIO_write)
+      kf%fd = pio_FileDesc
+      kf%name = fname
+      kf%is_open = .true.
+    elseif (trim(fname) /= trim(kf%name)) then
+      call error_log%raise_global(context=context, info="writing to '"//trim(fname)//&
+      &"' while '"//trim(kf%name)//"' is still open (pio_close_kept_file first)")
+      call error_log%abort_check()
+    endif
+    pio_FileDesc = kf%fd
+    pio_current_file = kf%name
+
+  end subroutine pio_use_kept_file !]
+! ----------------------------------------------------------------------
+  subroutine pio_close_kept_file(kf) ![
+    ! Close the output file kept open in kf, if it is open. Collective.
+    implicit none
+    type(pio_kept_file_t), intent(inout) :: kf
+
+    if (.not. kf%is_open) return
+    if (record_sync_deferred .and. kf%fd%fh == record_sync_fh) then
+      call error_log%raise_global(context=module_name//'/pio_close_kept_file',&
+      &info="closing '"//trim(kf%name)//"' before pio_end_record_sync")
+      call error_log%abort_check()
+    endif
+    call PIO_closefile(kf%fd)
+    kf%is_open = .false.
+    if (pio_current_file == kf%name) pio_current_file = ''
+    kf%name = ''
+
+  end subroutine pio_close_kept_file !]
 ! ----------------------------------------------------------------------
   subroutine pio_ncwrite1(varName, arr, irec)
 
