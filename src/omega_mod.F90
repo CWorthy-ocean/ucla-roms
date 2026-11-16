@@ -5,6 +5,14 @@ module omega_mod
 
   public :: omega
 
+#ifdef SOLVE3D
+  ! SL_ADV (sl_adv_mod sets them every step): with omega_sl, the corrector
+  ! stage's explicit budget counts only the stock share (1 - w) of each
+  ! face's outflow, w the blend weights omega_wu, omega_wv (SL_PLAN 2.2 F)
+  logical, public :: omega_sl = .false.
+  real(kind=8), pointer, dimension(:,:,:), public :: omega_wu => null(), omega_wv => null()
+#endif
+
 contains
 
 #ifdef SOLVE3D
@@ -102,6 +110,18 @@ contains
           &+max(FlxV(i,j+1,k),0._8)-min(FlxV(i,j,k),0._8)
         enddo
       enddo
+      ! SL_ADV, corrector stage: the explicit budget counts only the stock
+      ! share (1 - w) of the horizontal outflow of faces with blend weight w
+      if (omega_sl .and. CORR_STAGE) then
+        do k=1,nz
+          do i=istr,iend
+            CX(i,k)=max((1._8-omega_wu(i+1,j,k))*FlxU(i+1,j,k),0._8)&
+            &-min((1._8-omega_wu(i,j,k))*FlxU(i,j,k),0._8)&
+            &+max((1._8-omega_wv(i,j+1,k))*FlxV(i,j+1,k),0._8)&
+            &-min((1._8-omega_wv(i,j,k))*FlxV(i,j,k),0._8)
+          enddo
+        enddo
+      endif
 #ifdef CDR_FORCING
       ! CDR volume source: add the volume flux of each release in this row,
       ! accumulated bottom-up like the horizontal divergence above, so Wi

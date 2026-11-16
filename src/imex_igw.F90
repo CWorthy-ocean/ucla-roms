@@ -114,6 +114,14 @@ module imex_igw
   public :: imex_shift_levels
   public :: imex_rst_def, imex_rst_wrt, imex_rst_wrt_scal, imex_rst_get
   public :: imex_obc_faces
+  public :: imex_nbref
+
+  ! SL_ADV (sl_adv_mod, sl_x_prep): with advb_sl, imex_advb_rhs adds advb_slrt to the advective
+  ! buoyancy rate of every cell: the change of the corrector's explicit advective rate of b* that the
+  ! swept-volume fluxes make (hot faces, hot columns and the carried increment), so that X is the
+  ! estimate of the swept step's change. Interior cells; zero elsewhere.
+  logical, public :: advb_sl = .false.
+  real(kind=8), allocatable, dimension(:,:,:), public :: advb_slrt
 
   ! Stage identifiers passed by the consumers
   integer(kind=4), parameter, public :: imex_stage_pred = 1  ! prsgrd at n, pre_step3d
@@ -225,7 +233,7 @@ module imex_igw
                                                  ! (main.F90): the predictor's implicit correction overshoots and is reversed by the
                                                  ! corrector's, so mixing the predictor state t^n+1/2 anti-diffuses the step's net
                                                  ! change
-  integer(kind=4) :: imex_corr_adv = 1          ! corrector rhs with the step's advective buoyancy change: 1 on
+  integer(kind=4), public, protected :: imex_corr_adv = 1  ! corrector rhs with the step's advective buoyancy change: 1 on
                                                  ! (default since 2026-11, was 0); 0 off (the earlier results:
                                                  ! about 4 % cheaper, shorter longest stable step on domains
                                                  ! limited by an interior jet). The corrector's implicit-level
@@ -1921,6 +1929,7 @@ contains
           &  + fer(i,k,s1) - qr(k)*fvr(i,k,s1) - fer(i,k,s0) + qr(k)*fvr(i,k,s0)&
           &  + fzr(k) - qr(k)*wr(k) - fzr(k-1) + qr(k)*wr(k-1)
           rt = -pm(i,j)*pn(i,j)/Hz(i,j,k)*(as - ar)
+          if (advb_sl) rt = rt + advb_slrt(i,j,k)       ! SL_ADV: the swept-volume change
           nw = ad_n2c(i,j,k)*ga*(rhob(i,j,k) - advb_rn(i,j,k)) - dps(i,j,k)
           x = act(i,j)/ad_n2k(i,j,k)*( ad_n2c(i,j,k)*dts*rt - nw )
           if (max(cz(k-1), cz(k)) > advb_czmax) x = 0._8   ! no explicit estimate (see above)
