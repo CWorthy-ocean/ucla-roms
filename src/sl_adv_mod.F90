@@ -72,6 +72,8 @@ module sl_adv_mod
   ! (sl_en) and the carried n-1 increment E (sl_et), concentrations with
   ! halos; the new Gd (sl_gdn); the shadow tracer's content (sl_diag)
   real(kind=8), allocatable, dimension(:,:,:) :: sl_hz0, sl_sh
+  ! river faces (1; land faces with a river transport) with halos: the swept pass carries their volume
+  real(kind=8), allocatable, dimension(:,:) :: sl_rfu, sl_rfv
   real(kind=8), allocatable, dimension(:,:,:,:) :: sl_en, sl_et, sl_gdn
   ! hot faces anywhere on the level (all ranks), on any level, at the
   ! previous step (then Gd /= 0), the step's swept work is on
@@ -593,9 +595,9 @@ contains
 
 ! ----------------------------------------------------------------------
   subroutine sl_facevol(k, vx, vy, istr, iend, jstr, jend)
-    ! face volumes of level k over the step, dt FlxU umask and dt FlxV
-    ! vmask (river faces are land faces: the swept pass leaves them out), on
-    ! the tile and its halo
+    ! face volumes of level k over the step, dt FlxU and dt FlxV on the wet
+    ! faces and the river faces (sl_rfu, sl_rfv), 0 on the other land faces,
+    ! on the tile and its halo
     use scalars, only: dt
     use ocean_vars, only: flxu, flxv
     use grid, only: umask, vmask
@@ -603,13 +605,68 @@ contains
     integer(kind=4), intent(in) :: k, istr, iend, jstr, jend
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: vx, vy
     integer(kind=4) :: i, j
+    call sl_rivmask
     do j = jstr-2, jend+2
       do i = istr-2, iend+2
-        vx(i,j) = dt*FlxU(i,j,k)*umask(i,j)
-        vy(i,j) = dt*FlxV(i,j,k)*vmask(i,j)
+        vx(i,j) = dt*FlxU(i,j,k)*max(umask(i,j), sl_rfu(i,j))
+        vy(i,j) = dt*FlxV(i,j,k)*max(vmask(i,j), sl_rfv(i,j))
       end do
     end do
   end subroutine sl_facevol
+
+! ----------------------------------------------------------------------
+  subroutine sl_rivmask
+    ! the river faces (once): riv_uflx, riv_vflx are set on the halo too
+    use river_frc, only: river_source, riv_uflx, riv_vflx
+    use param, only: lm, mm
+    implicit none
+    if (allocated(sl_rfu)) return
+    allocate(sl_rfu(GLOBAL_2D_ARRAY), sl_rfv(GLOBAL_2D_ARRAY))
+    sl_rfu = 0._8 ; sl_rfv = 0._8
+    if (.not. river_source) return
+    where (abs(riv_uflx) > 1.e-3_8) sl_rfu = 1._8
+    where (abs(riv_vflx) > 1.e-3_8) sl_rfv = 1._8
+  end subroutine sl_rivmask
+
+! ----------------------------------------------------------------------
+  subroutine sl_rivconc(itrc, q, rcu, rcv, istr, iend, jstr, jend)
+    ! concentrations of the river faces in the swept pass: itrc > 0 the
+    ! river's tracer itrc, 0 the departure field's own value in the wet
+    ! cell next to the face (q; X's buoyancy, as the key's volume sources),
+    ! -1 none (an increment), -2 one (the shadow tracer)
+    use river_frc, only: riv_uflx, riv_vflx, riv_trc
+    use grid, only: rmask
+    implicit none
+    integer(kind=4), intent(in) :: itrc, istr, iend, jstr, jend
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in) :: q
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: rcu, rcv
+    integer(kind=4) :: i, j
+    rcu = 0._8 ; rcv = 0._8
+    do j = jstr-2, jend+2
+      do i = istr-1, iend+2
+        if (sl_rfu(i,j) < 0.5_8) cycle
+        if (itrc > 0) then
+          rcu(i,j) = riv_trc(nint(riv_uflx(i,j)/10), itrc)
+        else if (itrc == 0) then
+          rcu(i,j) = q(i,j)*rmask(i,j) + q(i-1,j)*rmask(i-1,j)
+        else if (itrc == -2) then
+          rcu(i,j) = 1._8
+        end if
+      end do
+    end do
+    do j = jstr-1, jend+2
+      do i = istr-2, iend+2
+        if (sl_rfv(i,j) < 0.5_8) cycle
+        if (itrc > 0) then
+          rcv(i,j) = riv_trc(nint(riv_vflx(i,j)/10), itrc)
+        else if (itrc == 0) then
+          rcv(i,j) = q(i,j)*rmask(i,j) + q(i,j-1)*rmask(i,j-1)
+        else if (itrc == -2) then
+          rcv(i,j) = 1._8
+        end if
+      end do
+    end do
+  end subroutine sl_rivconc
 
 ! ----------------------------------------------------------------------
   subroutine sl_subpasses(msub, istr, iend, jstr, jend)
@@ -679,23 +736,25 @@ contains
   end subroutine sl_subpasses
 
 ! ----------------------------------------------------------------------
-  subroutine sl_sweep(k, msub, vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend)
+  subroutine sl_sweep(k, msub, vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, rtrc)
     ! level k: the swept fluxes (volume x concentration over the step) of q
     ! (valid on the 2-point halo or the boundary row) through the x-faces
     ! istr..iend+1 x jstr..jend and the y-faces istr..iend x jstr..jend+1,
     ! as msub Lin-Rood passes of the face volumes vx/msub, vy/msub in the
     ! level-n volumes, each pass from the previous one's concentrations
-    ! (exchanged; the same on all ranks when msub > 1); summed over passes
+    ! (exchanged; the same on all ranks when msub > 1); summed over passes.
+    ! River faces carry the concentrations of sl_rivconc(rtrc).
+    use river_frc, only: river_source
     use dimensions, only: nz
     use grid, only: pm, pn
     use roms_mpi, only: exchange_xxx
     use swept_flux_mod, only: lr_coef, lr_fluxes
     implicit none
-    integer(kind=4), intent(in) :: k, msub, istr, iend, jstr, jend
+    integer(kind=4), intent(in) :: k, msub, istr, iend, jstr, jend, rtrc
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in) :: vx, vy, q
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: Fsx, Fsy
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: vol, cc, vxf, cxf, vyf, cyf, dnx, dny,&
-    &                                                      Fx, Fy, Fxi, Fyi, sx, sy, dx2, dy2
+    &                                                      Fx, Fy, Fxi, Fyi, sx, sy, dx2, dy2, rcu, rcv
     real(kind=8), allocatable, dimension(:,:), save :: qs, vs
     real(kind=8) :: fm
     integer(kind=4) :: i, j, isub, ilo, ihi, jlo, jhi
@@ -718,6 +777,7 @@ contains
       end do
     end do
     Fsx = 0._8 ; Fsy = 0._8
+    if (river_source) call sl_rivconc(rtrc, q, rcu, rcv, istr, iend, jstr, jend)
     do isub = 1, msub
       if (isub > 1) then
         ! pseudo-volumes and concentrations after the previous passes
@@ -736,8 +796,13 @@ contains
         end do
       end if
       call lr_coef(vol, vx, vy, fm, vxf, cxf, vyf, cyf, dnx, dny, istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
-      call lr_fluxes(qs, vol, vxf, cxf, vyf, cyf, dnx, dny, Fx, Fy, Fxi, Fyi, sx, sy, dx2, dy2,&
-      &              istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
+      if (river_source) then
+        call lr_fluxes(qs, vol, vxf, cxf, vyf, cyf, dnx, dny, Fx, Fy, Fxi, Fyi, sx, sy, dx2, dy2,&
+        &              istr, iend, jstr, jend, ilo, ihi, jlo, jhi, sl_rfu, rcu, sl_rfv, rcv)
+      else
+        call lr_fluxes(qs, vol, vxf, cxf, vyf, cyf, dnx, dny, Fx, Fy, Fxi, Fyi, sx, sy, dx2, dy2,&
+        &              istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
+      end if
       do j = jstr, jend
         do i = istr, iend+1
           Fsx(i,j) = Fsx(i,j) + Fx(i,j)
@@ -985,7 +1050,7 @@ contains
         dfx = 0._8 ; dfy = 0._8
         if (sl_levhot(k)) then
           call sl_facevol(k, vx, vy, istr, iend, jstr, jend)
-          call sl_sweep(k, msub(k), vx, vy, bt(:,:,k), Fsx, Fsy, istr, iend, jstr, jend)
+          call sl_sweep(k, msub(k), vx, vy, bt(:,:,k), Fsx, Fsy, istr, iend, jstr, jend, 0)
           do j = jstr, jend
             do i = istr, iend+1
               if (sl_wu(i,j,k) > 0._8) dfx(i,j) = sl_wu(i,j,k)*(Fsx(i,j)/dt - fxs(i,j))
@@ -1140,7 +1205,7 @@ contains
         end do
       end do
     end if
-    call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend)
+    call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, itrc)
     dfx = 0._8 ; dfy = 0._8
     do n = hu_off(k-1)+1, hu_off(k)
       i = hu_i(n) ; j = hu_j(n) ; w = sl_wu(i,j,k)
@@ -1161,7 +1226,7 @@ contains
           q(i,j) = sl_en(i,j,k,itrc)
         end do
       end do
-      call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend)
+      call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, -1)
       do j = jstr, jend
         do i = istr, iend+1
           dfx(i,j) = sl_wu(i,j,k)*Fsx(i,j)
@@ -1182,7 +1247,7 @@ contains
     if (sl_diag > 0 .and. itrc == 1) then
       ! shadow tracer (c = 1, departure field 1): content after the horizontal step
       q = 1._8
-      call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend)
+      call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, -2)
       do j = jstr, jend
         do i = istr, iend+1
           w = sl_wu(i,j,k)

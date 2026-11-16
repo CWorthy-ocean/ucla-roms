@@ -234,22 +234,28 @@ contains
 
 ! ----------------------------------------------------------------------
   subroutine lr_fluxes(qs, vol, vxf, cxf, vyf, cyf, dnx, dny, Fx, Fy, Fxi, Fyi, sx, sy, dx2, dy2,&
-  &                    istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
+  &                    istr, iend, jstr, jend, ilo, ihi, jlo, jhi, rfu, rcu, rfv, rcv)
     ! One Lin-Rood pass (after lr_coef) of the field qs (valid on ilo..ihi x
     ! jlo..jhi): inner swept fluxes, the outer fields (q + Yq)/2, (q + Xq)/2
     ! with the pseudo-density inner operators, and the outer swept fluxes Fx
     ! (x-faces istr..iend+1 of rows jstr..jend) and Fy (y-faces jstr..jend+1
     ! of columns istr..iend), volume x concentration. A cell whose inner
     ! pseudo-volume is not positive keeps q in its outer field (callers keep
-    ! such cells out of reach of the faces they use: subpass_crit).
+    ! such cells out of reach of the faces they use: subpass_crit). Optional
+    ! river faces (rfu, rfv > 0.5, land faces with a transport) carry their
+    ! volume at the concentrations rcu, rcv in every sweep.
     use grid, only: rmask
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend, ilo, ihi, jlo, jhi
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in) :: qs, vol, vxf, cxf, vyf, cyf, dnx, dny
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: Fx, Fy, Fxi, Fyi, sx, sy, dx2, dy2
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in), optional :: rfu, rcu, rfv, rcv
     integer(kind=4) :: ii, jj
+    logical :: riv
+    riv = present(rfu)
     call sweep_y(qs, Fyi, vyf, cyf, dy2, istr, iend, jstr, jend, jlo, jhi, ilo, ihi)
     call sweep_x(qs, Fxi, vxf, cxf, dx2, istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
+    if (riv) call rivers(Fxi, Fyi, ilo, ihi, jlo, jhi)
     do jj = jstr, jend
       do ii = ilo, ihi
         if (rmask(ii,jj) > 0.5_8 .and. dny(ii,jj) > 0._8) then
@@ -270,6 +276,24 @@ contains
     end do
     call sweep_x(sx, Fx, vxf, cxf, dx2, istr, iend, jstr, jend, ilo, ihi, jstr, jend)
     call sweep_y(sy, Fy, vyf, cyf, dy2, istr, iend, jstr, jend, jlo, jhi, istr, iend)
+    if (riv) call rivers(Fx, Fy, istr, iend, jstr, jend)
+  contains
+    subroutine rivers(Gx, Gy, i0, i1, j0, j1)
+      ! river faces: x-faces of rows j0..j1, y-faces of columns i0..i1
+      real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: Gx, Gy
+      integer(kind=4), intent(in) :: i0, i1, j0, j1
+      integer(kind=4) :: i2, j2
+      do j2 = j0, j1
+        do i2 = istr, iend+1
+          if (rfu(i2,j2) > 0.5_8) Gx(i2,j2) = vxf(i2,j2)*rcu(i2,j2)
+        end do
+      end do
+      do j2 = jstr, jend+1
+        do i2 = i0, i1
+          if (rfv(i2,j2) > 0.5_8) Gy(i2,j2) = vyf(i2,j2)*rcv(i2,j2)
+        end do
+      end do
+    end subroutine rivers
   end subroutine lr_fluxes
 
 ! ----------------------------------------------------------------------
