@@ -603,12 +603,12 @@ contains
 
       if (mynode == 0) then
         ierr=nf90_open(fname_uscl,nf90_write,ncid)
-        call nc_set_record_nofill(ncid)
         if (ierr/=nf90_noerr) then
           call error_log%check_netcdf_status(netcdf_status=ierr, &
             info="error opening "//trim(fname_uscl), &
             context=module_name//"/"//sr_name)
         end if
+        call nc_set_record_nofill(ncid)
         call ncwrite(ncid,'ocean_time',(/end_time/),(/record_uscl/))
         call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record_uscl/))
         call ncwrite(ncid,'avg_end_time',(/end_time/),(/record_uscl/))

@@ -164,12 +164,12 @@ contains
 #ifdef PARALLEL_IO
       if (mynode == 0) then
         ierr=nf90_open(fname,nf90_write,ncid)
-        call nc_set_record_nofill(ncid)
         if (ierr/=nf90_noerr) then
           call error_log%check_netcdf_status(netcdf_status=ierr,&
           &info="error opening "//fname,&
           &context=module_name//"/"//sr_name)
         end if
+        call nc_set_record_nofill(ncid)
         ! always add time
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
         ierr=nf90_close (ncid)
