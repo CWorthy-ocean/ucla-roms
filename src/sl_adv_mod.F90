@@ -2319,6 +2319,10 @@ contains
       do jj = max(g%jlo,g%j0-1), min(g%jhi,g%j1+1)
         do ii = max(g%ilo,g%i0-1), min(g%ihi,g%i1+1)
           if (mk(ii,jj) < 0.5_8) cycle
+          ! the boundary row at a physical edge (ilo, ihi, jlo, jhi there; outside the loop elsewhere) is not
+          ! advanced by the passes and supplies inflow at the boundary value: it sets no sub-passes (counted with
+          ! the faces it has in range, a strong inflow cell there asked for over 1000)
+          if (ii == g%ilo .or. ii == g%ihi .or. jj == g%jlo .or. jj == g%jhi) cycle
           if (.not. (hc(ii,jj) .or. hc(max(ii-1,g%i0-1),jj) .or. hc(min(ii+1,g%i1+1),jj) .or.&
           &          hc(ii,max(jj-1,g%j0-1)) .or. hc(ii,min(jj+1,g%j1+1)))) cycle
           rv = 1._8/vol_(ii,jj)
