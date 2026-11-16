@@ -35,9 +35,9 @@ module sl_adv_mod
   ! vertical momentum flux at the half-stepped pseudo-density level with U3
   ! on hot interfaces, and their pointwise increments (PG, Coriolis) scaled
   ! by V1/Hz, V1 the volume after omega's implicit share; the barotropic
-  ! forcing keeps the stock pointwise terms. Momentum cells over a near-
-  ! degenerate rho cell, or next to an interface whose vertical Courant
-  ! number exceeds omega_sl_czmax, keep stock faces around them.
+  ! forcing keeps the stock pointwise terms. Momentum cells next to an
+  ! interface whose vertical Courant number exceeds omega_sl_czmax keep
+  ! stock faces around them.
   !
   ! c2d of a face = |C_normal| + the mean |C_tangential| of the 4 neighbouring
   ! tangential faces, C = |u| dt / dx with the 2-point mean of pm (pn) at the
@@ -2067,7 +2067,7 @@ contains
         end do
       end do
       ! near-degenerate cells: the swept volumes' net outflow leaves less than sl_v1min of the volume; also the
-      ! cells over a near-degenerate rho cell and those next to an interface at a large vertical Courant number
+      ! cells next to an interface at a large vertical Courant number
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1
           if (umask(i,j) < 0.5_8) cycle
@@ -2076,10 +2076,10 @@ contains
           v1y = 1._8 - rv*(mvuy(i,j+1,k)-mvuy(i,j,k))
           v1 = v1x + v1y - 1._8
           if (min(v1, v1x, v1y) < sl_v1min) degu(i,j,k) = 1._8
-          ! a cell over a near-degenerate rho cell (the tracers' fallback), or next to an interface where the
-          ! key's vertical Courant number exceeds omega_sl_czmax (hot momentum columns at large vertical Courant
-          ! numbers are unstable with the trajectory Coriolis, the half step and the carry together)
-          if (max(sl_deg(i-1,j,k), sl_deg(i,j,k)) > 0.5_8) degu(i,j,k) = 1._8
+          ! a cell next to an interface where the key's vertical Courant number exceeds omega_sl_czmax (hot
+          ! momentum columns at large vertical Courant numbers are unstable with the trajectory Coriolis, the
+          ! half step and the carry together). (Inheriting the tracers' near-degenerate flags as well made a
+          ! river-plume nest blow up earlier at lowered thresholds, so they are not inherited.)
           if (max(czr(i-1,j,k), czr(i,j,k)) > omega_sl_czmax) degu(i,j,k) = 1._8
         end do
       end do
@@ -2091,7 +2091,6 @@ contains
           v1y = 1._8 - rv*(mvvy(i,j+1,k)-mvvy(i,j,k))
           v1 = v1x + v1y - 1._8
           if (min(v1, v1x, v1y) < sl_v1min) degv(i,j,k) = 1._8
-          if (max(sl_deg(i,j-1,k), sl_deg(i,j,k)) > 0.5_8) degv(i,j,k) = 1._8
           if (max(czr(i,j-1,k), czr(i,j,k)) > omega_sl_czmax) degv(i,j,k) = 1._8
         end do
       end do
