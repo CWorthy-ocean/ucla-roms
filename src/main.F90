@@ -208,6 +208,7 @@ contains
     use roms_read_write, only: nrrec, frc_time, inifile
 #ifdef SOLVE3D
     use bgc_subcycle_mod, only: bgcsub_init
+    use sl_adv_mod, only: sl_adv_init
 #endif
     use param, only:&
     &mynode, nsub_e, nsub_x, lm, mm,&
@@ -374,6 +375,7 @@ contains
     call set_depth(0)
 #ifdef SOLVE3D
     call bgcsub_init          ! BGC subcycling (no-op unless bgc_physics_subcycle)
+    call sl_adv_init          ! swept-volume advection (no-op unless sl_adv)
 #endif
 
 !----------------------------------------------------------------------
@@ -505,6 +507,9 @@ contains
     use step2d_mod, only: step2d
     use step3d_t_mod, only: step3d_t
     use bgc_subcycle_mod, only: bgc_physics_subcycle, bgcsub_accumulate, bgcsub_step
+#ifdef SOLVE3D
+    use sl_adv_mod, only: sl_adv, sl_adv_weights
+#endif
     use step3d_uv_mod, only: step3d_uv1, step3d_uv2
 #  ifdef UV_VIS2
     use visc3d_mod, only: visc3d => visc3d_s
@@ -584,6 +589,8 @@ contains
     ! Here, omega corresponds to time n
     ! Should be already available from previous time-step
     call omega
+    ! swept-volume advection: blend weights and hot faces from level n
+    if (sl_adv) call sl_adv_weights
     call reg_toc(rg_huv_omega)
 #endif
 

@@ -25,6 +25,7 @@ module basic_output
 #endif
 #ifdef IMEX_IGW
   use imex_igw, only: imex_rst_def, imex_rst_wrt, imex_rst_wrt_scal
+  use sl_adv_mod, only: sl_rst_def, sl_rst_wrt
 #endif
   use scalars, only:&
   &NT, iic, knew, nstp, time,&
@@ -1003,6 +1004,7 @@ contains                  !]
 # endif
 # if defined IMEX_IGW && defined EXACT_RESTART
     call imex_rst_wrt(ncid, rec_rst)   ! IMEX_IGW: the state carried across steps (exact restart)
+    call sl_rst_wrt(ncid, rec_rst)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
 # endif
 
 
@@ -1114,6 +1116,7 @@ contains                  !]
 # endif
 # if defined IMEX_IGW && defined EXACT_RESTART
     call imex_rst_wrt(ncid, rec_rst)   ! IMEX_IGW: the state carried across steps (exact restart)
+    call sl_rst_wrt(ncid, rec_rst)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
 # endif
 
 
@@ -1522,6 +1525,7 @@ contains                  !]
 # endif  /* EXACT_RESTART */
 # if defined IMEX_IGW && defined EXACT_RESTART
     call imex_rst_def(ncid)   ! IMEX_IGW: the state carried across steps (exact restart)
+    call sl_rst_def(ncid)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
 # endif
 
 # ifdef LMD_KPP
