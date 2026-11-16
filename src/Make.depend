@@ -58,7 +58,7 @@ t3dmix_mod.o : t3dmix_mod.F90 cppdefs.opt param.o tracers.o scalars.o private_sc
 mess_buffers.o : mess_buffers.F90 cppdefs.opt param.o scalars.o
 bgc_io.o : bgc_io.F90 cppdefs.opt param.o tracers.o marbl_driver.o bgc_shared_vars.o nc_read_write.o roms_read_write.o scalars.o dimensions.o error_handling_mod.o pio_roms.o bgc_forces.o compute_tile_bounds.h
 implicit_fs_mod.o : implicit_fs_mod.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o param.o boundary.o nc_read_write.o roms_read_write.o dimensions.o pio_roms.o roms_mpi.o compute_tile_bounds.h scalars.o coupling.o grid.o compute_auxiliary_bounds.h ocean_vars.o surf_flux.o pipe_frc.o river_frc.o cdr_frc.o set_depth_mod.o
-bgc_subcycle_mod.o : bgc_subcycle_mod.F90 cppdefs.opt param.o dimensions.o scalars.o tracers.o ocean_vars.o basic_output.o error_handling_mod.o marbl_driver.o diagnostics.o upscale_output.o sponge_tune.o mixing.o surf_flux.o timers.o river_frc.o pipe_frc.o cdr_frc.o grid.o roms_mpi.o boundary.o
+bgc_subcycle_mod.o : bgc_subcycle_mod.F90 cppdefs.opt param.o dimensions.o scalars.o tracers.o ocean_vars.o basic_output.o error_handling_mod.o marbl_driver.o diagnostics.o upscale_output.o sponge_tune.o mixing.o surf_flux.o timers.o river_frc.o pipe_frc.o cdr_frc.o grid.o roms_mpi.o swept_flux_mod.o boundary.o
 river_frc.o : river_frc.F90 cppdefs.opt namelist_open_mod.o roms_read_write.o nc_read_write.o scalars.o grid.o dimensions.o pio_roms.o param.o tracers.o error_handling_mod.o roms_mpi.o ana_frc_river.h
 vertical_remapping.o : vertical_remapping.F90 cppdefs.opt dimensions.o
 flux_frc.o : flux_frc.F90 cppdefs.opt tracers.o surf_flux.o scalars.o roms_read_write.o dimensions.o param.o grid.o error_handling_mod.o instant_output.o pio_roms.o
@@ -105,3 +105,4 @@ ocean_vars.o : ocean_vars.F90 cppdefs.opt param.o scalars.o
 lmd_kpp_mod.o : lmd_kpp_mod.F90 cppdefs.opt alphabeta_mod.o surf_flux.o grid.o roms_mpi.o dimensions.o param.o mixing.o ocean_vars.o scalars.o strings.o error_handling_mod.o utils_mod.o
 grid.o : grid.F90 cppdefs.opt param.o nc_read_write.o dimensions.o roms_read_write.o scalars.o roms_mpi.o pio_roms.o instant_output.o pipe_frc.o ana_grid.h error_handling_mod.o checkdims_mod.o
 imex_igw.o : imex_igw.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o param.o scalars.o ocean_vars.o timers.o dimensions.o compute_auxiliary_bounds.h roms_mpi.o grid.o coupling.o eos_vars.o omega_mod.o river_frc.o compute_tile_bounds.h nc_read_write.o roms_read_write.o pio_roms.o mixing.o u3dbc_mod.o v3dbc_mod.o sponge_tune.o tracers.o rho_eos_mod.o boundary.o implicit_fs_mod.o
+swept_flux_mod.o : swept_flux_mod.F90 cppdefs.opt grid.o dimensions.o param.o
