@@ -11,7 +11,7 @@ module omega_mod
   ! face's outflow, w the blend weights omega_wu, omega_wv (SL_PLAN 2.2 F),
   ! at the interfaces whose vertical Courant number dt pm pn |W| / min(Hz)
   ! is below omega_sl_czmax; above it the stock budget (the larger
-  ! explicit share made the key-on N5 nest blow up, STAGE2.md sec. 9)
+  ! explicit share made a key-on river-plume nest blow up)
   logical, public :: omega_sl = .false.
   real(kind=8), parameter, public :: omega_sl_czmax = 0.5_8
   real(kind=8), pointer, dimension(:,:,:), public :: omega_wu => null(), omega_wv => null()

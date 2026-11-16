@@ -43,7 +43,7 @@ module sl_adv_mod
   real(kind=8), parameter :: c6 = 0.1666666666666666_8   ! the UP3 constant of compute_horiz_tracer_fluxes.h
   ! stock fallback: faces of a cell whose level-n horizontal outflow over the step leaves less than sl_v1min
   ! of its volume (2-D or either 1-D direction; the Lin-Rood pseudo-volumes), and of its neighbours, are
-  ! not swept (STAGE2.md sec. 9)
+  ! not swept
   real(kind=8), parameter :: sl_v1min = 0.5_8
 
   public :: read_nml_sl_adv
