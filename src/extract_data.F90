@@ -71,7 +71,7 @@ module extract_data
   &nf90_def_var, nf90_inq_dimid, nf90_noerr
   use tracers, only: t, t_vname, t_lname, t_units, iTandS  ! need to get names of tracers
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u
-  use scalars, only: dt, knew, nstp, time, tdays
+  use scalars, only: dt, knew, nnew, time, tdays
   use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
   &nt_passive, mynode, lm, mm, nz, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
   &max_extract_chd, max_name_size
@@ -1006,6 +1006,10 @@ contains
 
 !     rho variables --------------------------------------------------------
 
+          ! Called at the end of the step, where time (the record's stamp)
+          ! is n+1: the 2D fields are at knew and the 3D fields (t, u, v) at
+          ! nnew, as in the history file (nstp still holds time n)
+
           ! np > 0: with PARALLEL_IO every rank comes here, and the arrays
           ! below are only allocated where the object has points
           if (remap .and. obj(i)%np > 0) then
@@ -1046,7 +1050,7 @@ contains
             oname = trim(obj(i)%set)//'_temp'//trim(obj(i)%bnd)
 #endif
           if (obj(i)%np > 0) then
-            call interpolate(t(:,:,:,nstp,itemp),obj(i)%vari,coef,ip,jp)
+            call interpolate(t(:,:,:,nnew,itemp),obj(i)%vari,coef,ip,jp)
             if (remap) then
               do j=1,obj(i)%np
                 call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
@@ -1071,7 +1075,7 @@ contains
             oname = trim(obj(i)%set)//'_salt'//trim(obj(i)%bnd)
 #endif
           if (obj(i)%np > 0) then
-            call interpolate(t(:,:,:,nstp,isalt),obj(i)%vari,coef,ip,jp)
+            call interpolate(t(:,:,:,nnew,isalt),obj(i)%vari,coef,ip,jp)
             if (remap) then
               do j=1,obj(i)%np
                 call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
@@ -1099,7 +1103,7 @@ contains
               oname = trim(obj(i)%set)//'_'//trim(t_vname(indt))//trim(obj(i)%bnd)
 #endif
           if (obj(i)%np > 0) then
-              call interpolate(t(:,:,:,nstp,indt),obj(i)%vari,coef,ip,jp)
+              call interpolate(t(:,:,:,nnew,indt),obj(i)%vari,coef,ip,jp)
               if (remap) then
                 do j=1,obj(i)%np
                   call remap_src_to_grid(nz, obj(i)%Hz_par(j,:),&
@@ -1182,8 +1186,8 @@ contains
             oname = trim(obj(i)%set)//'_u'//trim(obj(i)%bnd)
 #endif
           if (obj(i)%np > 0) then
-            call interpolate(u(:,:,:,nstp),ui,cfu,ipu,jpu)
-            call interpolate(v(:,:,:,nstp),vi,cfv,ipv,jpv)
+            call interpolate(u(:,:,:,nnew),ui,cfu,ipu,jpu)
+            call interpolate(v(:,:,:,nnew),vi,cfv,ipv,jpv)
             obj(i)%vari = ui
             do k=1,nz
               obj(i)%vari(:,k) = obj(i)%cosa*ui(:,k) - obj(i)%sina*vi(:,k)
@@ -1269,8 +1273,8 @@ contains
             oname = trim(obj(i)%set)//'_v'//trim(obj(i)%bnd)
 #endif
           if (obj(i)%np > 0) then
-            call interpolate(u(:,:,:,nstp),ui,cfu,ipu,jpu)
-            call interpolate(v(:,:,:,nstp),vi,cfv,ipv,jpv)
+            call interpolate(u(:,:,:,nnew),ui,cfu,ipu,jpu)
+            call interpolate(v(:,:,:,nnew),vi,cfv,ipv,jpv)
             do k=1,nz
               obj(i)%vari(:,k) = obj(i)%sina*ui(:,k) + obj(i)%cosa*vi(:,k)
             enddo

@@ -490,10 +490,9 @@ contains                  !]
         if (wrt_Vb) call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start, .true.)
 
 #ifdef SOLVE3D
-! 3D momentum components in XI- and ETA-directions:
-! 'nstp' index is current timestep 'n', which was computed as the final 'nnew'
-! in the previous timestep (same result).
-! wrt_his called at the middle of next timestep as some variables only calculated there for t=n.
+! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_his runs
+! after initialization and at the end of each step, where 'nnew' holds the
+! time of the record (n+1 at the end of a step) and 'nstp' still holds time n.
 
         start(3)=1; start(4)=rec_his
         pio_gtype = '3Duw'
@@ -576,10 +575,9 @@ contains                  !]
         if (wrt_Vb) call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start)
 
 #ifdef SOLVE3D
-! 3D momentum components in XI- and ETA-directions:
-! 'nstp' index is current timestep 'n', which was computed as the final 'nnew'
-! in the previous timestep (same result).
-! wrt_his called at the middle of next timestep as some variables only calculated there for t=n.
+! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_his runs
+! after initialization and at the end of each step, where 'nnew' holds the
+! time of the record (n+1 at the end of a step) and 'nstp' still holds time n.
 
         start(3)=1; start(4)=rec_his
         if (wrt_U) call ncwrite(ncid,vname(1,indxU),u( 1:i1,j0:j1,:,nnew),start)
@@ -941,10 +939,9 @@ contains                  !]
     pio_gtype = '2Dvw'
     call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start,.true.)
 #ifdef SOLVE3D
-! 3D momentum components in XI- and ETA-directions:
-! 'nstp' index is current timestep 'n', which was computed as the final 'nnew'
-! in the previous timestep (same result).
-! wrt_rst called at the middle of next timestep as some variables only calculated there for t=n.
+! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_rst runs
+! at the end of the step, where 'nnew' holds time n+1 (the time of the
+! record) and 'nstp' still holds time n.
 
     start(3)=1; start(4)=rec_rst
     pio_gtype = '3Duw'
@@ -1057,10 +1054,9 @@ contains                  !]
     call ncwrite(ncid,vname(1,indxUb),ubar( 1:i1,j0:j1,knew),start)
     call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start)
 #ifdef SOLVE3D
-! 3D momentum components in XI- and ETA-directions:
-! 'nstp' index is current timestep 'n', which was computed as the final 'nnew'
-! in the previous timestep (same result).
-! wrt_rst called at the middle of next timestep as some variables only calculated there for t=n.
+! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_rst runs
+! at the end of the step, where 'nnew' holds time n+1 (the time of the
+! record) and 'nstp' still holds time n.
 
     start(3)=1; start(4)=rec_rst
     call ncwrite(ncid,vname(1,indxU),u( 1:i1,j0:j1,:,nnew),start)
