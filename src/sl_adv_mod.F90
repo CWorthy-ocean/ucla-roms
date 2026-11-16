@@ -35,9 +35,10 @@ module sl_adv_mod
   ! vertical momentum flux at the half-stepped pseudo-density level with U3
   ! on hot interfaces, and their pointwise increments (PG, Coriolis) scaled
   ! by V1/Hz, V1 the volume after omega's implicit share; the barotropic
-  ! forcing keeps the stock pointwise terms. Momentum cells next to an
-  ! interface whose vertical Courant number exceeds omega_sl_czmax keep
-  ! stock faces around them.
+  ! forcing keeps the stock pointwise terms. The hot columns' pseudo-density
+  ! is used only at levels with a hot face and a pseudo-volume above
+  ! sl_v1min of the cell (u* elsewhere). The arrival half of the Coriolis
+  ! term acts on u^(n+1) less the implicit-level PG, (theta_c + mu) pg_*.
   !
   ! c2d of a face = |C_normal| + the mean |C_tangential| of the 4 neighbouring
   ! tangential faces, C = |u| dt / dx with the 2-point mean of pm (pn) at the
@@ -61,6 +62,9 @@ module sl_adv_mod
   ! of its volume (2-D or either 1-D direction; the Lin-Rood pseudo-volumes), and of its neighbours, are
   ! not swept
   real(kind=8), parameter :: sl_v1min = 0.5_8
+  ! momentum: u-, v-cells next to an interface whose vertical Courant number (the key's) exceeds sl_czmom count
+  ! as near-degenerate; <= 0 off (the default: with the pseudo-density guard of the hot columns it is not needed)
+  real(kind=8), parameter :: sl_czmom = 0._8
 
   public :: read_nml_sl_adv
 
@@ -2018,7 +2022,6 @@ contains
 #endif
     use swept_flux_mod, only: subpass_crit, subpass_count
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_sum
-    use omega_mod, only: omega_sl_czmax
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     real(kind=8), allocatable, dimension(:,:,:), save :: wtu, wtv, degu, degv
@@ -2086,8 +2089,7 @@ contains
           if (mmyv(i,j) > 0.5_8) mwvy(i,j,k) = max(wtv(i,j-1,k), wtv(i,j,k))
         end do
       end do
-      ! near-degenerate cells: the swept volumes' net outflow leaves less than sl_v1min of the volume; also the
-      ! cells next to an interface at a large vertical Courant number
+      ! near-degenerate cells: the swept volumes' net outflow leaves less than sl_v1min of the volume
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1
           if (umask(i,j) < 0.5_8) cycle
@@ -2096,11 +2098,12 @@ contains
           v1y = 1._8 - rv*(mvuy(i,j+1,k)-mvuy(i,j,k))
           v1 = v1x + v1y - 1._8
           if (min(v1, v1x, v1y) < sl_v1min) degu(i,j,k) = 1._8
-          ! a cell next to an interface where the key's vertical Courant number exceeds omega_sl_czmax (hot
-          ! momentum columns at large vertical Courant numbers are unstable with the trajectory Coriolis, the
-          ! half step and the carry together). (Inheriting the tracers' near-degenerate flags as well made a
-          ! river-plume nest blow up earlier at lowered thresholds, so they are not inherited.)
-          if (max(czr(i-1,j,k), czr(i,j,k)) > omega_sl_czmax) degu(i,j,k) = 1._8
+          ! optionally (sl_czmom > 0) a cell next to an interface where the key's vertical Courant number
+          ! exceeds sl_czmom. (Inheriting the tracers' near-degenerate flags made a river-plume nest blow up
+          ! earlier at lowered thresholds, so they are not inherited.)
+          if (sl_czmom > 0._8) then
+            if (max(czr(i-1,j,k), czr(i,j,k)) > sl_czmom) degu(i,j,k) = 1._8
+          end if
         end do
       end do
       do j = gv%j0, gv%j1
@@ -2111,7 +2114,9 @@ contains
           v1y = 1._8 - rv*(mvvy(i,j+1,k)-mvvy(i,j,k))
           v1 = v1x + v1y - 1._8
           if (min(v1, v1x, v1y) < sl_v1min) degv(i,j,k) = 1._8
-          if (max(czr(i,j-1,k), czr(i,j,k)) > omega_sl_czmax) degv(i,j,k) = 1._8
+          if (sl_czmom > 0._8) then
+            if (max(czr(i,j-1,k), czr(i,j,k)) > sl_czmom) degv(i,j,k) = 1._8
+          end if
         end do
       end do
     end do
