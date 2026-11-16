@@ -1,0 +1,2 @@
+Every MARBL diagnostic in ``_bgc_dia`` and ``_bgc_dia_avg``, and the held MARBL fields of the ``_cdr`` averages (``FG_CO2``, ``FG_ALT_CO2``, ``pCO2SURF``, ``pCO2SURF_ALT_CO2``, ``CO3``, ``CO3_ALT_CO2``, ``co3_sat_arag``, ``co3_sat_calc``, ``zsatarag`` and ``zsatcalc``), changes by up to 6e-8 relative, because it now keeps double precision.
+- The ``pH`` fields of the ``_cdr`` averages, the tracers and the rest of the model state are unchanged.
