@@ -7,6 +7,9 @@ module swept_flux_mod
   !    integrated over the swept part), with the open-boundary inflow rule;
   !  - subpass_crit, subpass_count: the per-cell criterion that splits a
   !    level into sub-passes of V/m, each reaching one cell (2-point halo);
+  !  - lr_coef, lr_fluxes: one Lin-Rood pass of a level (the swept
+  !    fractions and pseudo-volumes of the inner operators, then the outer
+  !    swept fluxes of the inner-advected fields);
   !  - vsweep: the 1-D swept flux through the w-faces of a column (any
   !    Courant number); vfct: its flux-corrected positivity limiter.
   ! Documentation: docs/model_settings/bgc_subcycling.md (sections 2-3).
@@ -20,7 +23,7 @@ module swept_flux_mod
   ! stay inside the upstream cell, whose neighbour is the last halo point)
   real(kind=8), parameter, public :: subpass_cmax = 0.95_8
 
-  public :: sweep_x, sweep_y, subpass_crit, subpass_count, vsweep, vfct
+  public :: sweep_x, sweep_y, subpass_crit, subpass_count, vsweep, vfct, lr_coef, lr_fluxes
 
 contains
 
@@ -175,6 +178,99 @@ contains
 # endif
 #endif
   end subroutine sweep_y
+
+! ----------------------------------------------------------------------
+  subroutine lr_coef(vol, vx, vy, fm, vxf, cxf, vyf, cyf, dnx, dny, istr, iend, jstr, jend,&
+  &                  ilo, ihi, jlo, jhi)
+    ! One Lin-Rood pass of a level with the face volumes fm*vx, fm*vy in the
+    ! cell volumes vol (valid on ilo..ihi x jlo..jhi): the pass's face
+    ! volumes vxf, vyf, the swept fractions cxf, cyf (|V| / volume of the
+    ! upstream cell) of the inner and outer sweeps, and the pseudo-volumes
+    ! dnx, dny of the inner (1-D) operators.
+    implicit none
+    integer(kind=4), intent(in) :: istr, iend, jstr, jend, ilo, ihi, jlo, jhi
+    real(kind=8), intent(in) :: fm
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in) :: vol, vx, vy
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: vxf, cxf, vyf, cyf, dnx, dny
+    integer(kind=4) :: ii, jj
+    real(kind=8) :: vv
+    do jj = jlo, jhi
+      do ii = istr, iend+1
+        vv = fm*vx(ii,jj)
+        vxf(ii,jj) = vv
+        if (vv > 0._8) then
+          cxf(ii,jj) = vv/vol(ii-1,jj)
+        else if (vv < 0._8) then
+          cxf(ii,jj) = -vv/vol(ii,jj)
+        else
+          cxf(ii,jj) = 0._8
+        end if
+      end do
+    end do
+    do jj = jstr, jend+1
+      do ii = ilo, ihi
+        vv = fm*vy(ii,jj)
+        vyf(ii,jj) = vv
+        if (vv > 0._8) then
+          cyf(ii,jj) = vv/vol(ii,jj-1)
+        else if (vv < 0._8) then
+          cyf(ii,jj) = -vv/vol(ii,jj)
+        else
+          cyf(ii,jj) = 0._8
+        end if
+      end do
+    end do
+    do jj = jstr, jend
+      do ii = ilo, ihi
+        dny(ii,jj) = vol(ii,jj) - fm*(vy(ii,jj+1)-vy(ii,jj))
+      end do
+    end do
+    do jj = jlo, jhi
+      do ii = istr, iend
+        dnx(ii,jj) = vol(ii,jj) - fm*(vx(ii+1,jj)-vx(ii,jj))
+      end do
+    end do
+  end subroutine lr_coef
+
+! ----------------------------------------------------------------------
+  subroutine lr_fluxes(qs, vol, vxf, cxf, vyf, cyf, dnx, dny, Fx, Fy, Fxi, Fyi, sx, sy, dx2, dy2,&
+  &                    istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
+    ! One Lin-Rood pass (after lr_coef) of the field qs (valid on ilo..ihi x
+    ! jlo..jhi): inner swept fluxes, the outer fields (q + Yq)/2, (q + Xq)/2
+    ! with the pseudo-density inner operators, and the outer swept fluxes Fx
+    ! (x-faces istr..iend+1 of rows jstr..jend) and Fy (y-faces jstr..jend+1
+    ! of columns istr..iend), volume x concentration. A cell whose inner
+    ! pseudo-volume is not positive keeps q in its outer field (callers keep
+    ! such cells out of reach of the faces they use: subpass_crit).
+    use grid, only: rmask
+    implicit none
+    integer(kind=4), intent(in) :: istr, iend, jstr, jend, ilo, ihi, jlo, jhi
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in) :: qs, vol, vxf, cxf, vyf, cyf, dnx, dny
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: Fx, Fy, Fxi, Fyi, sx, sy, dx2, dy2
+    integer(kind=4) :: ii, jj
+    call sweep_y(qs, Fyi, vyf, cyf, dy2, istr, iend, jstr, jend, jlo, jhi, ilo, ihi)
+    call sweep_x(qs, Fxi, vxf, cxf, dx2, istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
+    do jj = jstr, jend
+      do ii = ilo, ihi
+        if (rmask(ii,jj) > 0.5_8 .and. dny(ii,jj) > 0._8) then
+          sx(ii,jj) = 0.5_8*(qs(ii,jj) + (vol(ii,jj)*qs(ii,jj) - (Fyi(ii,jj+1)-Fyi(ii,jj)))/dny(ii,jj))
+        else
+          sx(ii,jj) = qs(ii,jj)
+        end if
+      end do
+    end do
+    do jj = jlo, jhi
+      do ii = istr, iend
+        if (rmask(ii,jj) > 0.5_8 .and. dnx(ii,jj) > 0._8) then
+          sy(ii,jj) = 0.5_8*(qs(ii,jj) + (vol(ii,jj)*qs(ii,jj) - (Fxi(ii+1,jj)-Fxi(ii,jj)))/dnx(ii,jj))
+        else
+          sy(ii,jj) = qs(ii,jj)
+        end if
+      end do
+    end do
+    call sweep_x(sx, Fx, vxf, cxf, dx2, istr, iend, jstr, jend, ilo, ihi, jstr, jend)
+    call sweep_y(sy, Fy, vyf, cyf, dy2, istr, iend, jstr, jend, jlo, jhi, istr, iend)
+  end subroutine lr_fluxes
 
 ! ----------------------------------------------------------------------
   pure function subpass_crit(cfc, dvx, dvy, cff, rv, pos) result(crit)
