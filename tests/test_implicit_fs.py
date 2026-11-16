@@ -1,8 +1,9 @@
 """Implicit free surface (namelist group IMPLICIT_FS, fs_mode = 'implicit')
 
-Two builds: the open-boundary physics with flux forcing and the tidal potential
-(the hashed run, exact restarts, rejected settings, rivers and pipes), and one
-with BULK_FRC, PARALLEL_IO and CDR_FORCING (exact restart, a CDR volume release).
+Three builds: the open-boundary physics with flux forcing and the tidal potential
+(the hashed run, exact restarts, rejected settings, rivers and pipes), one with
+BULK_FRC, PARALLEL_IO and CDR_FORCING (exact restart, a CDR volume release), and
+the same with MPI_MASKING on a grid with an all-land tile (exact restart).
 """
 import re
 
@@ -246,6 +247,67 @@ def test_implicit_fs_bulk_pio_exact_restart(bulk_pio_configuration, tmp_path):
     run2_val = summarize_output(run2 / rst, vars_to_exclude=["time_step"])
     assert "fs_udu" in run1_val.variables
     assert run1_val.variables == run2_val.variables
+
+
+@pytest.fixture(scope="module")
+def masked_pio_configuration(bulk_pio_configuration, tmp_path_factory) -> ROMSConfiguration:
+    """The BULK_FRC + PARALLEL_IO build with MPI_MASKING; ``conf.inputs`` holds the
+    bulk build's inputs with land in the north-east quadrant and the northern rows.
+
+    Launched on 3 ranks, MPI_MASKING picks NP_XI = NP_ETA = 2 and drops the all-land
+    north-east tile, so the north-west and south-east tiles read their halos from
+    cells no rank writes (the netCDF fill value in the restart file).
+    """
+    conf = ROMSConfiguration(
+        cpp_keys=BULK_PIO_CPP_KEYS + ["MPI_MASKING"],
+        location=tmp_path_factory.mktemp("implicit_fs_masked_pio_build"),
+    )
+    conf.compile()
+    conf.inputs = tmp_path_factory.mktemp("implicit_fs_masked_inputs")
+    for name in BULK_PIO_INPUTS:
+        with xr.open_dataset(bulk_pio_configuration.inputs / name, decode_cf=False) as ds:
+            ds = ds.load()
+        if name == "example_input_grid.nc":
+            mask = ds["mask_rho"].values.copy()
+            ny, nx = mask.shape
+            mask[ny // 2:, nx // 2:] = 0  # the north-east quadrant: one all-land tile of the 2 x 2 tiling
+            mask[ny - 4:, :] = 0  # the northern rows: ocean fraction below 3/4, so 3 ranks take 4 tiles
+            ds["mask_rho"].values = mask
+            ds["mask_u"].values = mask[:, 1:] * mask[:, :-1]
+            ds["mask_v"].values = mask[1:, :] * mask[:-1, :]
+        ds.to_netcdf(conf.inputs / name, format="NETCDF3_64BIT")
+    return conf
+
+
+def test_implicit_fs_masked_exact_restart(masked_pio_configuration, tmp_path):
+    """With MPI_MASKING (an all-land tile without a rank) a restart reproduces the
+    continuous run bit for bit. The restart file holds the netCDF fill value in the
+    dropped tile, which the neighbouring tiles' read halos reach: the generalized-alpha
+    rates must still be read (not taken as missing), and the stored multigrid operator
+    (fs_mg_lag = 3, restart inside a rebuild period) must not take up the fill value.
+    """
+    conf = masked_pio_configuration
+    nml = bulk_pio_namelist(conf, fs_mg_lag=3)
+    nml["PARAM_SETTINGS"].update({"NP_XI": 3, "NP_ETA": 1})  # 3 ranks; MPI_MASKING sets the tiling
+    nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
+    nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})
+
+    run1 = tmp_path / "run_1"
+    run1.mkdir()
+    log = conf.run(nml, cwd=run1, capture_output=True)
+    assert squeezed("selected tiling written to log: NP_XI = 2 NP_ETA = 2 nparts = 3") in squeezed(log)
+
+    run2 = tmp_path / "run_2"
+    run2.mkdir()
+    nml["INITIAL_CONDITIONS"]["inifile"] = str(run1 / "roms_rst.20100101000640.nc")
+    nml["TIME_STEPPING"]["ntimes"] = 10
+    log = conf.run(nml, cwd=run2, capture_output=True)
+    assert squeezed("read from the initial file (exact restart)") in squeezed(log)
+
+    for name in ("roms_rst.20100101001320.nc", "roms_his.20100101001320.nc"):
+        run1_val = summarize_output(run1 / name, vars_to_exclude=["time_step"])
+        run2_val = summarize_output(run2 / name, vars_to_exclude=["time_step"])
+        assert run1_val.variables == run2_val.variables, name
 
 
 @pytest.fixture(scope="module")
