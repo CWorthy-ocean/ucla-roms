@@ -487,7 +487,7 @@ contains
     ! first step uses them (beta1 as every other step) instead of the memory-less start.
     ! Missing variables or the 'no rates' marker: the run starts as a cold start (ga_first).
     use nc_read_write, only: ncread
-    use dimensions, only: x_, x0, x1, y_, y0, y1
+    use dimensions, only: x_, x0, x1, y_, y0, y1, i0, j0
     use pio_roms, only: pio_gtype
     use param, only: mynode, ocean_grid_comm, lm, mm
     use roms_mpi, only: exchange_xxx
@@ -532,6 +532,7 @@ contains
         pio_gtype = '2Dvr'
         call ncread(ncid,'fs_mgcv', mg_scv(x0:x1,y_:y1),start=start)
         pio_gtype = gsv
+        call fs_rst_own(mg_se0, i0, j0) ; call fs_rst_own(mg_scu, 1, j0) ; call fs_rst_own(mg_scv, i0, 1)
         call exchange_xxx(mg_se0, mg_scu, mg_scv)
         mg_ph0 = nint(sc(3)) ; mg_rpend = .true.
       else if (mynode == 0) then
@@ -561,7 +562,10 @@ contains
     call ncread(ncid,'fs_qd', qd(x0:x1,y0:y1),start=start)
     call ncread(ncid,'fs_delta', xx(x0:x1,y0:y1),start=start)
     pio_gtype = gsv
-    qm(1) = maxval(abs(qd(x0:x1,y0:y1)))
+    call fs_rst_own(udu, 1, j0) ; call fs_rst_own(gru, 1, j0)
+    call fs_rst_own(udv, i0, 1) ; call fs_rst_own(grv, i0, 1)
+    call fs_rst_own(qd, i0, j0) ; call fs_rst_own(xx, i0, j0)
+    qm(1) = maxval(abs(qd))                   ! (the 'no rates' marker, on the cells this rank wrote)
     call mpi_allreduce(qm, gqm, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
     if (gqm(1) >= 1.e29_8) then
       udu = 0._8 ; udv = 0._8 ; gru = 0._8 ; grv = 0._8 ; qd = 0._8 ; xx = 0._8
@@ -575,6 +579,26 @@ contains
     if (mynode == 0) write(*,'(1x,A)') 'IMPLICIT_FS: generalized-alpha rates and delta read from the'&
     &//' initial file (exact restart)'
   end subroutine fs_rst_get
+
+  subroutine fs_rst_own(a, ia, ja)
+    ! a field fs_rst_get read with the PIO read halo (x0:x1, y0:y1 reach 2 cells into the
+    ! neighbouring tiles): keep the cells this rank wrote (fs_rst_wrt: ia:i1, ja:j1) and zero the
+    ! rest; exchange_xxx then fills the halo from the neighbours, as in the continuous run. With
+    ! MPI_MASKING the read halo can lie in a dropped all-land tile: no rank writes it (the file
+    ! holds the netCDF fill value, 9.97e36, there) and no exchange reaches it, and the continuous
+    ! run keeps zeros there (fs_alloc, mg_keep_fine).
+    use dimensions, only: i1, j1
+    use param, only: lm, mm
+    implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY), intent(inout) :: a
+    integer(kind=4), intent(in) :: ia, ja
+    integer(kind=4) :: i, j
+    do j = lbound(a,2), ubound(a,2)
+      do i = lbound(a,1), ubound(a,1)
+        if (i < ia .or. i > i1 .or. j < ja .or. j > j1) a(i,j) = 0._8
+      enddo
+    enddo
+  end subroutine fs_rst_own
 
   !----------------------------------------------------------------------
   subroutine fs_scheme_coef

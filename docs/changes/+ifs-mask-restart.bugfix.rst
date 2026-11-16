@@ -1,0 +1,4 @@
+Restarts with the implicit free surface (``fs_mode = 'implicit'``) are now exact under ``MPI_MASKING`` when all-land tiles are dropped.
+- The restart reader read the stored implicit free-surface state with a halo that, next to a dropped tile, lies in cells no rank writes, where the file holds the netCDF fill value. The fill value looked like the "no rates" marker, so every rank cold-started the generalized-alpha memory; with ``fs_mg_lag > 1`` it also entered the stored multigrid operator.
+- Each rank now takes the stored state only from the cells it wrote and fills its halo by the exchange, as the continuous run does. Continuous runs, and restarts without dropped tiles, are bit-for-bit unchanged.
+- New test ``test_implicit_fs_masked_exact_restart`` restarts a run with an all-land tile dropped by ``MPI_MASKING``.
