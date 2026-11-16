@@ -8,8 +8,12 @@ module omega_mod
 #ifdef SOLVE3D
   ! SL_ADV (sl_adv_mod sets them every step): with omega_sl, the corrector
   ! stage's explicit budget counts only the stock share (1 - w) of each
-  ! face's outflow, w the blend weights omega_wu, omega_wv (SL_PLAN 2.2 F)
+  ! face's outflow, w the blend weights omega_wu, omega_wv (SL_PLAN 2.2 F),
+  ! at the interfaces whose vertical Courant number dt pm pn |W| / min(Hz)
+  ! is below omega_sl_czmax; above it the stock budget (the larger
+  ! explicit share made the key-on N5 nest blow up, STAGE2.md sec. 9)
   logical, public :: omega_sl = .false.
+  real(kind=8), parameter, public :: omega_sl_czmax = 0.5_8
   real(kind=8), pointer, dimension(:,:,:), public :: omega_wu => null(), omega_wv => null()
 #endif
 
@@ -71,6 +75,7 @@ contains
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k, icdr, cidx
     real(kind=8) CX(PRIVATE_1D_SCRATCH_ARRAY,0:nz),  dtau, c2d,dh, cw, cff,&
+    &CXs(PRIVATE_1D_SCRATCH_ARRAY,nz),&
     &wrk(PRIVATE_1D_SCRATCH_ARRAY),      cw_min,cw_max,cw_max2
     real(kind=8), parameter :: cu_min=0.6D0, cu_max=1.0D0,&
     &cmnx_ratio=cu_min/cu_max,  cutoff=2.D0-cmnx_ratio,&
@@ -110,12 +115,12 @@ contains
           &+max(FlxV(i,j+1,k),0._8)-min(FlxV(i,j,k),0._8)
         enddo
       enddo
-      ! SL_ADV, corrector stage: the explicit budget counts only the stock
-      ! share (1 - w) of the horizontal outflow of faces with blend weight w
+      ! SL_ADV, corrector stage: the outflow of the stock share (1 - w) of each
+      ! face, for the interfaces where the explicit budget counts only it
       if (omega_sl .and. CORR_STAGE) then
         do k=1,nz
           do i=istr,iend
-            CX(i,k)=max((1._8-omega_wu(i+1,j,k))*FlxU(i+1,j,k),0._8)&
+            CXs(i,k)=max((1._8-omega_wu(i+1,j,k))*FlxU(i+1,j,k),0._8)&
             &-min((1._8-omega_wu(i,j,k))*FlxU(i,j,k),0._8)&
             &+max((1._8-omega_wv(i,j+1,k))*FlxV(i,j+1,k),0._8)&
             &-min((1._8-omega_wv(i,j,k))*FlxV(i,j,k),0._8)
@@ -169,6 +174,11 @@ contains
 
           c2d=max(CX(i,k),  CX(i,k+1))     ! (3) pick the maximum
           dh=min(Hz(i,j,k),Hz(i,j,k+1))    !     of the two.
+          ! SL_ADV, corrector stage: the stock share of the outflow only where
+          ! the interface's vertical Courant number is below omega_sl_czmax
+          if (omega_sl .and. CORR_STAGE) then
+            if (abs(Wi(i,j,k))*CX(i,0) < omega_sl_czmax*dh) c2d=max(CXs(i,k),CXs(i,k+1))
+          endif
 
 
           cw_max=cu_max*dh-c2d*CX(i,0)
