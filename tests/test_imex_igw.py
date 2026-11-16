@@ -8,7 +8,8 @@ stop on a diagnostic setting it does not support), imex_corr_adv_vimp = 1 (read 
 reported; equal to 0 where no cell exceeds vertical Courant number 1, as on this grid),
 the stop on removed keys with the template's sed line, and the stops on a group or an
 imex_igw key that is missing or .false. (the build without IMEX_IGW: test_implicit_fs.py, test_imex_igw_key_*);
-with swept-volume advection (sl_adv, so far weights only) the same output, and exact restarts.
+with swept-volume advection (sl_adv) the same output below the thresholds, constancy and
+budgets of the swept fluxes (tracers and momentum), and exact restarts.
 
 A second build: the realistic MARBL case of test_bgc.py with IMEX_IGW, run with
 BGC tracer subcycling and the 'fixed' and the 'modal' open boundary
@@ -226,6 +227,7 @@ def test_imex_igw_pc_needs_jacobi(imex_configuration, input_dir, tmp_path):
 SL_LINE = re.compile(r"^\s*SL\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\d+)",
                      re.MULTILINE)
 SL_DIAG = re.compile(r"^\s*SL_DIAG\s+\d+\s+(.*)$", re.MULTILINE)
+SL_MDIAG = re.compile(r"^\s*SL_MDIAG\s+\d+\s+(.*)$", re.MULTILINE)
 # thresholds low enough that most wet faces are hot and many fully swept on the test grid
 SL_LOW = {"sl_adv": True, "sl_c_lo": 0.0, "sl_c_hi": 1.0e-5}
 # thresholds above every face's 2-D Courant number on the test grid (sl_cmax must exceed sl_c_hi)
@@ -256,10 +258,10 @@ def test_sl_adv_below_threshold_changes_nothing(imex_configuration, input_dir, t
 
 
 def test_sl_adv_swept_tracers(imex_configuration, input_dir, tmp_path):
-    """With most faces hot, T and S take the swept fluxes: the output changes, the
+    """With most faces hot, T, S, u and v take the swept fluxes: the output changes, the
     shadow (uniform) tracer stays uniform to 1e-12 and the swept-flux changes conserve
-    T and S (every shared face carries the same change on both tiles) to 1e-13
-    (SL_DIAG line, sl_diag = 1)."""
+    T, S and the momentum (every shared face carries the same change on both tiles) to
+    1e-13 (SL_DIAG and SL_MDIAG lines, sl_diag = 1)."""
     conf = imex_configuration
     nml = imex_namelist(input_dir, "modal")
     off = tmp_path / "off"
@@ -274,6 +276,10 @@ def test_sl_adv_swept_tracers(imex_configuration, input_dir, tmp_path):
     assert len(diag) == 20, "one SL_DIAG line per step"
     assert max(d[0] for d in diag) <= 1.0e-12, "shadow tracer constancy"
     assert max(max(d[5:]) for d in diag) <= 1.0e-13, "budget of the swept-flux changes"
+    mdiag = [[float(x) for x in m.split()] for m in SL_MDIAG.findall(log)]
+    assert len(mdiag) == 20, "one SL_MDIAG line per step"
+    assert max(d[0] for d in mdiag) > 0.0, "hot momentum faces"
+    assert max(max(d[4:6]) for d in mdiag) <= 1.0e-13, "budget of the momentum swept-flux changes"
 
     off_val = get_summary_value(off, prefix="roms_his.20100101000000")
     on_val = get_summary_value(on, prefix="roms_his.20100101000000")
