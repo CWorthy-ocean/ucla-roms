@@ -225,38 +225,65 @@ def test_imex_igw_pc_needs_jacobi(imex_configuration, input_dir, tmp_path):
 
 SL_LINE = re.compile(r"^\s*SL\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\d+)",
                      re.MULTILINE)
+SL_DIAG = re.compile(r"^\s*SL_DIAG\s+\d+\s+(.*)$", re.MULTILINE)
 # thresholds low enough that most wet faces are hot and many fully swept on the test grid
 SL_LOW = {"sl_adv": True, "sl_c_lo": 0.0, "sl_c_hi": 1.0e-5}
+# thresholds above every face's 2-D Courant number on the test grid (sl_cmax must exceed sl_c_hi)
+SL_HIGH = {"sl_adv": True, "sl_c_lo": 2.0, "sl_c_hi": 2.5}
 
 
-def test_sl_adv_changes_nothing(imex_configuration, input_dir, tmp_path):
-    """Swept-volume advection (SL_ADV_SETTINGS) so far only computes and reports the
-    blend weights: with most faces hot, the output is that of sl_adv off bit for bit,
-    and an SL line is printed every step (ninfo = 1) with the hot shares."""
+def test_sl_adv_below_threshold_changes_nothing(imex_configuration, input_dir, tmp_path):
+    """Swept-volume advection (SL_ADV_SETTINGS) with thresholds above every face's 2-D
+    Courant number: no face is hot, so the output is that of sl_adv off bit for bit, and
+    an SL line is printed every step (ninfo = 1) with no hot face."""
     conf = imex_configuration
     nml = imex_namelist(input_dir, "modal")
     off = tmp_path / "off"
     off.mkdir()
     conf.run(nml, cwd=off)
 
-    nml["SL_ADV_SETTINGS"].update(SL_LOW)
+    nml["SL_ADV_SETTINGS"].update(SL_HIGH)
     on = tmp_path / "on"
     on.mkdir()
     log = conf.run(nml, cwd=on, capture_output=True)
     lines = SL_LINE.findall(log)
     assert [int(m[0]) for m in lines] == list(range(1, 21)), "one SL line per step"
-    assert min(float(m[1]) for m in lines) > 50.0, "most u-faces hot"
-    assert max(float(m[3]) for m in lines) > 0.0, "some u-faces fully swept"
+    assert max(float(m[1]) for m in lines) == 0.0, "no hot u-face"
 
     off_val = get_summary_value(off, prefix="roms_his.20100101000000")
     on_val = get_summary_value(on, prefix="roms_his.20100101000000")
     assert on_val.variables == off_val.variables
 
 
+def test_sl_adv_swept_tracers(imex_configuration, input_dir, tmp_path):
+    """With most faces hot, T and S take the swept fluxes: the solution changes, the
+    shadow (uniform) tracer stays uniform to 1e-12 and the swept-flux changes conserve
+    T and S (every shared face carries the same change on both tiles) to 1e-13
+    (SL_DIAG line, sl_diag = 1)."""
+    conf = imex_configuration
+    nml = imex_namelist(input_dir, "modal")
+    off = tmp_path / "off"
+    off.mkdir()
+    conf.run(nml, cwd=off)
+
+    nml["SL_ADV_SETTINGS"].update({**SL_LOW, "sl_diag": 1})
+    on = tmp_path / "on"
+    on.mkdir()
+    log = conf.run(nml, cwd=on, capture_output=True)
+    diag = [[float(x) for x in m.split()] for m in SL_DIAG.findall(log)]
+    assert len(diag) == 20, "one SL_DIAG line per step"
+    assert max(d[0] for d in diag) <= 1.0e-12, "shadow tracer constancy"
+    assert max(max(d[4:]) for d in diag) <= 1.0e-13, "budget of the swept-flux changes"
+
+    off_val = get_summary_value(off, prefix="roms_his.20100101000000")
+    on_val = get_summary_value(on, prefix="roms_his.20100101000000")
+    assert on_val.variables["temp"] != off_val.variables["temp"]
+
+
 def test_sl_adv_exact_restart(imex_configuration, input_dir, tmp_path):
-    """With sl_adv on, the restart file carries the swept-volume state (sl_eu, sl_ev,
-    sl_et_*, sl_gd_*), the restarted run reads it, and it reproduces the continuous run
-    bit for bit (imex_redu = 1 as in test_imex_igw_exact_restart)."""
+    """With sl_adv on and most faces hot, the restart file carries the swept-volume state
+    (sl_eu, sl_ev, sl_gd_*, sl_tref_*), the restarted run reads it, and it reproduces
+    the continuous run bit for bit (imex_redu = 1 as in test_imex_igw_exact_restart)."""
     conf = imex_configuration
     nml = imex_namelist(input_dir, "modal", imex_redu=1)
     nml["SL_ADV_SETTINGS"].update(SL_LOW)
@@ -276,7 +303,7 @@ def test_sl_adv_exact_restart(imex_configuration, input_dir, tmp_path):
 
     run1_val = get_summary_value(run1, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
     run2_val = get_summary_value(run2, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
-    for name in ("sl_eu", "sl_ev", "sl_et_temp", "sl_et_salt", "sl_gd_temp", "sl_gd_salt"):
+    for name in ("sl_eu", "sl_ev", "sl_tref_temp", "sl_tref_salt", "sl_gd_temp", "sl_gd_salt"):
         assert name in run1_val.variables
     assert run1_val.variables == run2_val.variables
 
