@@ -35,7 +35,9 @@ module sl_adv_mod
   ! vertical momentum flux at the half-stepped pseudo-density level with U3
   ! on hot interfaces, and their pointwise increments (PG, Coriolis) scaled
   ! by V1/Hz, V1 the volume after omega's implicit share; the barotropic
-  ! forcing keeps the stock pointwise terms.
+  ! forcing keeps the stock pointwise terms. Momentum cells over a near-
+  ! degenerate rho cell, or next to an interface whose vertical Courant
+  ! number exceeds omega_sl_czmax, keep stock faces around them.
   !
   ! c2d of a face = |C_normal| + the mean |C_tangential| of the 4 neighbouring
   ! tangential faces, C = |u| dt / dx with the 2-point mean of pm (pn) at the
@@ -1996,6 +1998,7 @@ contains
 #endif
     use swept_flux_mod, only: subpass_crit, subpass_count
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_sum
+    use omega_mod, only: omega_sl_czmax
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     real(kind=8), allocatable, dimension(:,:,:), save :: wtu, wtv, degu, degv
@@ -2064,7 +2067,7 @@ contains
         end do
       end do
       ! near-degenerate cells: the swept volumes' net outflow leaves less than sl_v1min of the volume; also the
-      ! cells over a near-degenerate rho cell
+      ! cells over a near-degenerate rho cell and those next to an interface at a large vertical Courant number
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1
           if (umask(i,j) < 0.5_8) cycle
@@ -2073,8 +2076,11 @@ contains
           v1y = 1._8 - rv*(mvuy(i,j+1,k)-mvuy(i,j,k))
           v1 = v1x + v1y - 1._8
           if (min(v1, v1x, v1y) < sl_v1min) degu(i,j,k) = 1._8
-          ! a cell over a near-degenerate rho cell (the tracers' fallback)
+          ! a cell over a near-degenerate rho cell (the tracers' fallback), or next to an interface where the
+          ! key's vertical Courant number exceeds omega_sl_czmax (hot momentum columns at large vertical Courant
+          ! numbers are unstable with the trajectory Coriolis, the half step and the carry together)
           if (max(sl_deg(i-1,j,k), sl_deg(i,j,k)) > 0.5_8) degu(i,j,k) = 1._8
+          if (max(czr(i-1,j,k), czr(i,j,k)) > omega_sl_czmax) degu(i,j,k) = 1._8
         end do
       end do
       do j = gv%j0, gv%j1
@@ -2086,6 +2092,7 @@ contains
           v1 = v1x + v1y - 1._8
           if (min(v1, v1x, v1y) < sl_v1min) degv(i,j,k) = 1._8
           if (max(sl_deg(i,j-1,k), sl_deg(i,j,k)) > 0.5_8) degv(i,j,k) = 1._8
+          if (max(czr(i,j-1,k), czr(i,j,k)) > omega_sl_czmax) degv(i,j,k) = 1._8
         end do
       end do
     end do
@@ -2207,6 +2214,17 @@ contains
     end do
     call exchange_xxx(sl_ut, sl_vt, sl_ue, sl_ve)
   contains
+    real(kind=8) function czr(ii, jj, kk)
+      ! the key's vertical Courant number dt pm pn |We + Wi| / min Hz of rho cell (ii,jj,kk): the larger of
+      ! its two interfaces' (the corrector-stage omega of set_HUV1, as omega's SL budget and SL_DIAG use it)
+      use ocean_vars, only: we, wi
+      integer(kind=4), intent(in) :: ii, jj, kk
+      czr = 0._8
+      if (kk > 1) czr = max(czr, dt*pm(ii,jj)*pn(ii,jj)*abs(We(ii,jj,kk-1)+Wi(ii,jj,kk-1))&
+      &                         /min(Hz(ii,jj,kk-1),Hz(ii,jj,kk)))
+      if (kk < nz) czr = max(czr, dt*pm(ii,jj)*pn(ii,jj)*abs(We(ii,jj,kk)+Wi(ii,jj,kk))&
+      &                          /min(Hz(ii,jj,kk),Hz(ii,jj,kk+1)))
+    end function czr
     subroutine spikes
       ! rho* (rho1 with SPLIT_EOS) and hbls at n+1/2 (after rho_eos(nrhs), lmd_vmix(nrhs)): the largest
       ! |q - mean of the 4 neighbours| over wet cells with 4 wet neighbours, cells with a hot face (1, 3) or not
