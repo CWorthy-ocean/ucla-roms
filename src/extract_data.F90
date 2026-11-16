@@ -92,8 +92,9 @@ module extract_data
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_extract, pio_open_or_abort,&
-  &pio_extract_child, pio_keep_output_open, pio_put_time, pio_sync_each_var
-  use pio, only : PIO_closefile, PIO_write, PIO_syncfile, file_desc_t
+  &pio_extract_child, pio_keep_output_open, pio_put_time, pio_begin_record_sync,&
+  &pio_end_record_sync
+  use pio, only : PIO_closefile, PIO_write, file_desc_t
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
   ! TODO: add averaging
@@ -948,7 +949,7 @@ contains
         endif
         pio_FileDesc = edata_fd(ic)
         call pio_put_time('bry_time', tdays, rec_next)
-        pio_sync_each_var = .false.
+        call pio_begin_record_sync(module_name//"/do_extract_data")
       else
       if (mynode == 0) then
         ierr=nf90_open(fname(ic),nf90_write,ncid)
@@ -1335,8 +1336,7 @@ contains
 
 #ifdef PARALLEL_IO
       if (pio_keep_output_open) then
-        call PIO_syncfile(pio_FileDesc)        ! the whole record of this child
-        pio_sync_each_var = .true.
+        call pio_end_record_sync(module_name//"/do_extract_data")   ! the whole record of this child
       else
         call PIO_closefile(pio_FileDesc)
       endif

@@ -73,9 +73,12 @@ module pio_roms
   !> Marker to track whether PIO has opened a file
   integer(kind=4),public :: pio_file_is_open
   !> pio_ncwrite1/2/3 flush each variable as it is written (see
-  !> pio_ncwrite1). A writer of small records may clear this for its record
-  !> and flush the record once with PIO_syncfile (extract_data).
-  logical,public :: pio_sync_each_var = .true.
+  !> pio_ncwrite1), except between pio_begin_record_sync and
+  !> pio_end_record_sync, which flushes the record of that one file at once.
+  !> Set and cleared only there.
+  logical :: record_sync_deferred = .false.
+  integer(kind=4) :: record_sync_fh = -1          ! PIO handle of that file
+  character(len=max_name_size) :: record_sync_file = ''
 #ifdef MPI_MASKING
   !> All-land tiles have no rank, so no rank writes their points of a
   !> distributed output variable. They read _FillValue only because rank 0
@@ -637,6 +640,8 @@ module pio_roms
   public  :: pio_ncwrite2
   public  :: pio_ncwrite3
   public  :: pio_put_time
+  public  :: pio_begin_record_sync
+  public  :: pio_end_record_sync
 
   !! Checked wrapper around PIO_openfile: aborts with a ROMS-side message
   !! (file name + calling context) instead of PIO's bare strerror.
@@ -1851,6 +1856,13 @@ contains
     ! nf90_create/nf90_open of an output file) before the collective open,
     ! rather than relying on each caller to remember an abort_check.
     call error_log%abort_check()
+    if (record_sync_deferred) then
+      ! The writer of the deferred record has not ended it (pio_end_record_sync)
+      call error_log%raise_global(context=context, info="opening '"//trim(fname)//&
+      &"' while the record of '"//trim(record_sync_file)//"' is not flushed yet"//&
+      &" (pio_begin_record_sync without pio_end_record_sync)")
+      call error_log%abort_check()
+    endif
 
     if (.not. present(mode)) call pio_warn_netcdf4_input(fname)
 
@@ -2101,6 +2113,75 @@ contains
 
   end subroutine pio_put_time !]
 ! ----------------------------------------------------------------------
+  subroutine pio_begin_record_sync(context) ![
+    ! Flush the variables that pio_ncwrite1/2/3 write next to the file open
+    ! in pio_FileDesc together, at pio_end_record_sync, instead of one by
+    ! one. For a record of small variables (extract_data), whose one
+    ! collective write each costs more than its data. PIO buffers what is
+    ! written until the end on the compute tasks, so a writer of large
+    ! records must not use it (see pio_ncwrite1). Collective. Aborts if a
+    ! record is already deferred; a write to any other file, or the open of
+    ! a file, before pio_end_record_sync aborts too.
+    implicit none
+    character(len=*), intent(in) :: context
+
+    if (record_sync_deferred) then
+      call error_log%raise_global(context=context, info="pio_begin_record_sync"//&
+      &" for '"//trim(pio_current_file)//"' while the record of '"//&
+      &trim(record_sync_file)//"' is not flushed yet (no pio_end_record_sync)")
+      call error_log%abort_check()
+    endif
+    record_sync_deferred = .true.
+    record_sync_fh = pio_FileDesc%fh
+    record_sync_file = pio_current_file
+
+  end subroutine pio_begin_record_sync !]
+! ----------------------------------------------------------------------
+  subroutine pio_end_record_sync(context) ![
+    ! Flush the record deferred by pio_begin_record_sync (the file must still
+    ! be the one open in pio_FileDesc) and go back to flushing each
+    ! variable as it is written. Collective.
+    implicit none
+    character(len=*), intent(in) :: context
+
+    if (.not. record_sync_deferred) then
+      call error_log%raise_global(context=context,&
+      &info="pio_end_record_sync without pio_begin_record_sync")
+    elseif (pio_FileDesc%fh /= record_sync_fh) then
+      call error_log%raise_global(context=context, info="pio_end_record_sync"//&
+      &" for '"//trim(pio_current_file)//"', but the deferred record is of '"//&
+      &trim(record_sync_file)//"'")
+    endif
+    call error_log%abort_check()
+
+    call PIO_syncfile(pio_FileDesc)
+    record_sync_deferred = .false.
+    record_sync_fh = -1
+    record_sync_file = ''
+
+  end subroutine pio_end_record_sync !]
+! ----------------------------------------------------------------------
+  subroutine pio_sync_var(sr_name, varName) ![
+    ! Flush the variable that pio_ncwrite1/2/3 has just written (see
+    ! pio_ncwrite1), unless its file's record is flushed as a whole
+    ! (pio_begin_record_sync). A write to any other file meanwhile aborts:
+    ! it would be buffered until that file is closed, which stalled
+    ! multi-node restart writes before the per-variable flush.
+    implicit none
+    character(len=*), intent(in) :: sr_name, varName
+
+    if (.not. record_sync_deferred) then
+      call PIO_syncfile(pio_FileDesc)
+    elseif (pio_FileDesc%fh /= record_sync_fh) then
+      call error_log%raise_global(context=module_name//'/'//sr_name,&
+      &info="writing '"//trim(varName)//"' to '"//trim(pio_current_file)//&
+      &"' while the record of '"//trim(record_sync_file)//"' is not flushed"//&
+      &" yet (pio_begin_record_sync without pio_end_record_sync)")
+      call error_log%abort_check()
+    endif
+
+  end subroutine pio_sync_var !]
+! ----------------------------------------------------------------------
   subroutine pio_ncwrite1(varName, arr, irec)
 
     implicit none
@@ -2178,7 +2259,7 @@ contains
     ! MARBL, 59 GB record, 256 and 512 ranks), while one-node runs gained
     ! no speed from the buffering. With the sync, the same restart record
     ! takes about 144 s on 256 ranks.
-    if (pio_sync_each_var) call PIO_syncfile(pio_FileDesc)
+    call pio_sync_var('pio_ncwrite1', varName)
 
   end subroutine pio_ncwrite1
 ! ----------------------------------------------------------------------
@@ -2275,7 +2356,7 @@ contains
     else
       call pio_bad_gtype('pio_ncwrite2', varName)   ! see pio_ncwrite1
     endif
-    if (pio_sync_each_var) call PIO_syncfile(pio_FileDesc)   ! per variable, see pio_ncwrite1
+    call pio_sync_var('pio_ncwrite2', varName)   ! see pio_ncwrite1
 
   end subroutine pio_ncwrite2
 ! ----------------------------------------------------------------------
@@ -2314,7 +2395,7 @@ contains
     else
       call pio_bad_gtype('pio_ncwrite3', varName)   ! see pio_ncwrite1
     endif
-    if (pio_sync_each_var) call PIO_syncfile(pio_FileDesc)   ! per variable, see pio_ncwrite1
+    call pio_sync_var('pio_ncwrite3', varName)   ! see pio_ncwrite1
 
   end subroutine pio_ncwrite3
 ! ----------------------------------------------------------------------
