@@ -709,9 +709,10 @@ imex_obc_tref = 259200.0             ! 'modal': time scale (s) of the reference 
 ! See docs/model_settings/swept_volume_advection.md.
 !================================================================================
 &SL_ADV_SETTINGS                                                  !sl_adv_mod.F90
-sl_adv = .false.                     ! Swept-volume advection of u, v, T, S on faces whose 2-D
-                                     ! Courant number c2d exceeds sl_c_lo
+sl_adv = .false.                     ! Swept-volume advection (so far T, S, passive tracers) on
+                                     ! faces whose 2-D Courant number c2d exceeds sl_c_lo
 sl_c_lo = 0.6                        ! c2d where the blend with the swept flux starts
 sl_c_hi = 0.9                        ! c2d from which a face is fully swept
 sl_cmax = 3.0                        ! Stop when the largest c2d exceeds it
+sl_diag = 0                          ! 1: SL_DIAG / SL_TRC lines (constancy, budgets)
 /
