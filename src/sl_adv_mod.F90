@@ -823,6 +823,7 @@ contains
     use swept_flux_mod, only: subpass_crit, subpass_count
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max
     use error_handling_mod, only: error_log
+    use iso_fortran_env, only: output_unit
     implicit none
     integer(kind=4), intent(in) :: ic, istr, iend, jstr, jend
     integer(kind=4), intent(out) :: msub(nz)
@@ -890,6 +891,7 @@ contains
       &  write(*,'(1x,A,I0,A,I0,A,I0,A,I0,A,I0,A)') 'SL_ADV: step ', iic, ', level ', k, ': ', msub(k),&
       &  ' tracer sub-passes, set by the cell (', lij(1,k)+iSW_corn, ', ', lij(2,k)+jSW_corn, ')'
     end do
+    flush(output_unit)                     ! the line above must reach the log before the abort
     sl_cnt(2*ic-1) = max(sl_cnt(2*ic-1), maxval(msub)) ; sl_cnt(2*ic) = max(sl_cnt(2*ic), nsw)
     if (maxval(msub) > sl_msubmax) then
       write(info,'(A,I0,A,I0,A,I0,A)') 'step ', iic, ': a level needs ', maxval(msub), ' tracer sub-passes (more than ',&
