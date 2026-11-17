@@ -456,7 +456,7 @@ contains
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: rcolu, rcolv
     integer(kind=4) :: ilo, ihi, jlo, jhi, i, j, k, ib, itrc, iface, l, nloop, pid, cidx, ierr
     integer(kind=4) :: ib0, isub, msub, mk(nz), klo, khi, ig, ng, islot
-    real(kind=8) :: lck(5,nz), gck(5,nz), fmk(nz), crit, ccell, cfc
+    real(kind=8) :: lck(5,nz), gck(5,nz), fmk(nz), crit, ccell, cfc, cfx, cfy
     real(kind=8) :: dtw, cff, cout, smax, wmax, a, cl, p, rr, fm, cface, c1d, rv, dvx, dvy, v1min
     real(kind=8) :: lmax(6), gmax(6), snan
     ! diagnostics: content before/after, sources, boundary fluxes (per tracer + shadow)
@@ -505,31 +505,47 @@ contains
         do i = max(ilo,istr-1), min(ihi,iend+1)
           if (rmask(i,j) < 0.5_8) cycle
           rv = pm(i,j)*pn(i,j)/HZS(i,j,k)
-          cff = 0._8 ; dvx = 0._8 ; dvy = 0._8 ; cfc = 0._8
+          cff = 0._8 ; dvx = 0._8 ; dvy = 0._8 ; cfx = 0._8 ; cfy = 0._8
           if (i+1 <= ihi) then
             cff = cff + max(VX(i+1,j,k),0._8) ; dvx = dvx + VX(i+1,j,k)
-            cfc = max(cfc, max(VX(i+1,j,k),0._8)*rv)
+            cfx = max(cfx, max(VX(i+1,j,k),0._8)*rv)
           end if
           if (i > ilo) then
             cff = cff - min(VX(i,j,k),0._8) ; dvx = dvx - VX(i,j,k)
-            cfc = max(cfc, -min(VX(i,j,k),0._8)*rv)
+            cfx = max(cfx, -min(VX(i,j,k),0._8)*rv)
           end if
           if (j+1 <= jhi) then
             cff = cff + max(VY(i,j+1,k),0._8) ; dvy = dvy + VY(i,j+1,k)
-            cfc = max(cfc, max(VY(i,j+1,k),0._8)*rv)
+            cfy = max(cfy, max(VY(i,j+1,k),0._8)*rv)
           end if
           if (j > jlo) then
             cff = cff - min(VY(i,j,k),0._8) ; dvy = dvy - VY(i,j,k)
-            cfc = max(cfc, -min(VY(i,j,k),0._8)*rv)
+            cfy = max(cfy, -min(VY(i,j,k),0._8)*rv)
           end if
+          cfc = max(cfx, cfy)
           cface = max(cface, cfc)
           c1d = max(c1d, dvx*rv, dvy*rv)
           cout = max(cout, cff*rv)
           if (i >= istr .and. i <= iend .and. j >= jstr .and. j <= jend) v1min = min(v1min, 1._8 - (dvx+dvy)*rv)
-          ! this cell's requirement: its sub-pass volumes stay >= min(1, v1) of the start
-          ccell = max(cfc, dvx*rv, dvy*rv)
-          if (bgc_subcycle_pos) ccell = max(ccell, cff*rv)
-          crit = max(crit, ccell/max(min(1._8, 1._8 - (dvx+dvy)*rv), 1.d-3))
+          if (i == ilo .or. i == ihi .or. j == jlo .or. j == jhi) then
+            ! a boundary-row cell at a physical edge (the loop reaches ilo, ihi,
+            ! jlo, jhi only there): the passes do not advance it (its pseudo-
+            ! volume stays HZS, edge_copy) and take open-boundary inflow upwind
+            ! at its value (sweep_x, sweep_y), so only the sweeps along the row
+            ! use its swept fractions and 1-D convergence, without a pseudo-
+            ! volume factor; a corner cell sets nothing. (Counted with its one
+            ! face across the edge, an inflow of window Courant number C asked
+            ! for C/(1-C), about 1000 C at C >= 1.)
+            ccell = 0._8
+            if (i > ilo .and. i < ihi) ccell = max(ccell, cfx, dvx*rv)
+            if (j > jlo .and. j < jhi) ccell = max(ccell, cfy, dvy*rv)
+            crit = max(crit, ccell)
+          else
+            ! this cell's requirement: its sub-pass volumes stay >= min(1, v1) of the start
+            ccell = max(cfc, dvx*rv, dvy*rv)
+            if (bgc_subcycle_pos) ccell = max(ccell, cff*rv)
+            crit = max(crit, ccell/max(min(1._8, 1._8 - (dvx+dvy)*rv), 1.d-3))
+          end if
         end do
       end do
       lck(:,k) = [cface, c1d, cout, -v1min, crit]
