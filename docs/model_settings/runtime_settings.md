@@ -703,6 +703,7 @@ Optional: if the group is absent, `sl_adv = .false.`. Experimental and in develo
 | `sl_diag` | `0` | 1: the `SL_DIAG` and `SL_TRC` diagnostic lines (constancy, budgets, per-tracer content) |
 | `sl_mvol` | `1` | Momentum swept volumes: 1 = the 2-point means of `dt (U^n + U*)/2`, with the closure of the momentum cells' volume budget; 2 = of `dt U*`, the transport the rho cells' volumes are stepped with (no closure) |
 | `sl_defmax` | `0.0` | With `sl_mvol = 1`: the closure defect `def` is clipped to `+-sl_defmax` (0: no limit) |
+| `sl_c2pass` | `0.8` | T, S and the key's X take at least two sub-passes on a level where a face that stays swept has `c2d` above it (0: off): one pass at `c2d` 0.8-1 keeps most of a two-cell pattern, two passes damp it |
 
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)

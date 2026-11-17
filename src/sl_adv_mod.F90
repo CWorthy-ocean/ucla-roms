@@ -59,7 +59,11 @@ module sl_adv_mod
   integer(kind=4), public, protected :: sl_mvol = 1
   ! with sl_mvol = 1: the closure term X def of a hot momentum cell uses def clipped to +-sl_defmax (<= 0: no limit)
   real(kind=8), public, protected :: sl_defmax = 0._8
-  namelist /SL_ADV_SETTINGS/ sl_adv, sl_c_lo, sl_c_hi, sl_cmax, sl_diag, sl_mvol, sl_defmax
+  ! T, S and the key's X take at least two sub-passes on a level where a face that stays swept has c2d above
+  ! sl_c2pass (<= 0: off). A single pass at c2d 0.8-1 keeps most of a 2-dx pattern; two passes damp it
+  ! (STAGE3.md 22: it removed a one-level T checkerboard next to an open edge)
+  real(kind=8), public, protected :: sl_c2pass = 0.8_8
+  namelist /SL_ADV_SETTINGS/ sl_adv, sl_c_lo, sl_c_hi, sl_cmax, sl_diag, sl_mvol, sl_defmax, sl_c2pass
 
   character(len=10) :: module_name = "sl_adv_mod"
   real(kind=8), parameter :: c6 = 0.1666666666666666_8   ! the UP3 constant of compute_horiz_tracer_fluxes.h
@@ -245,6 +249,8 @@ contains
     if (mynode == 0) write(*,'(/1x,A,3(A,ES10.3),A,I2)') 'SL_ADV: swept-volume advection on'&
     &//' (tracers and momentum):', ' sl_c_lo =', sl_c_lo, ', sl_c_hi =', sl_c_hi,&
     &', sl_cmax =', sl_cmax, ', sl_diag =', sl_diag
+    if (mynode == 0) write(*,'(1x,A,ES10.3)') 'SL_ADV: at least two tracer sub-passes on levels with a swept face'&
+    &//' above c2d sl_c2pass =', sl_c2pass
     if (mynode == 0) write(*,'(1x,A,I2,A,ES10.3)') 'SL_ADV: momentum swept volumes sl_mvol =', sl_mvol,&
     &', closure limit sl_defmax =', sl_defmax
   end subroutine read_nml_sl_adv
@@ -1027,6 +1033,7 @@ contains
     real(kind=8) :: lc(nz), gc(nz), rv, cfc, dvx, dvy, cr
     integer(kind=4) :: i, j, k, ilo, ihi, jlo, jhi, ierr, lij(2,nz), nsw
     character(len=160) :: info
+    real(kind=8) :: l2(nz), g2(nz)
     call sl_ranges(istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
     lc = 0._8
     do k = 1, nz
@@ -1078,9 +1085,27 @@ contains
       end do
     end do
     call mpi_allreduce(lc, gc, nz, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    l2 = 0._8                                ! levels with a swept face above c2d sl_c2pass
+    if (sl_c2pass > 0._8) then
+      do k = 1, nz
+        if (.not. sl_lact(k)) cycle
+        do j = jstr, jend
+          do i = istr, iend+1
+            if (sl_wu(i,j,k) > 0._8 .and. sl_c2u(i,j,k) > sl_c2pass) l2(k) = 1._8
+          end do
+        end do
+        do j = jstr, jend+1
+          do i = istr, iend
+            if (sl_wv(i,j,k) > 0._8 .and. sl_c2v(i,j,k) > sl_c2pass) l2(k) = 1._8
+          end do
+        end do
+      end do
+      call mpi_allreduce(l2, g2, nz, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    end if
     nsw = 0
     do k = 1, nz
       msub(k) = subpass_count(gc(k))
+      if (sl_c2pass > 0._8 .and. g2(k) > 0.5_8) msub(k) = max(msub(k), 2)
       if (sl_levhot(k)) nsw = nsw + msub(k)
       if (msub(k) > sl_msubmax .and. lc(k) >= gc(k) .and. lc(k) > 0._8)&
       &  write(*,'(1x,A,I0,A,I0,A,I0,A,I0,A,I0,A)') 'SL_ADV: step ', iic, ', level ', k, ': ', msub(k),&

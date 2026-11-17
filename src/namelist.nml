@@ -718,4 +718,5 @@ sl_diag = 0                          ! 1: SL_DIAG / SL_TRC lines (constancy, bud
 sl_mvol = 1                          ! Momentum swept volumes: 1 = dt (U^n + U*)/2 with the closure
                                      ! of the cells' volume budget, 2 = dt U* (no closure needed)
 sl_defmax = 0.0                      ! sl_mvol = 1: clip the closure defect to +-sl_defmax (0: no limit)
+sl_c2pass = 0.8                      ! At least two T, S (and X) sub-passes on a level with a swept face above this c2d (0: off)
 /
