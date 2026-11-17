@@ -1,0 +1,3 @@
+``IMEX_IGW`` runs with ``imex_corr_adv = 1`` (the default) no longer drive single-level currents of several m/s, or blow up, in cells near the bed or the surface of sloping columns at fronts: the new ``imex_corr_adv_clip`` in ``IMEX_IGW_SETTINGS`` (default 0.1) caps the corrector's advective buoyancy change in each cell so that it cannot push the cell's face velocities above that Courant number.
+- Results change only where a cell is clipped (on a Bay of Bengal nest 1e-5 of the cell-steps; none on a Hawaii nest and the Sargasso Sea, whose results are unchanged bit for bit).
+- Set ``imex_corr_adv_clip = 0`` to reproduce earlier results.
