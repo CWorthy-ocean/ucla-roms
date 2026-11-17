@@ -75,6 +75,13 @@ module sl_adv_mod
   ! within about 2 sl_cmax; a larger one means a cell the criterion should not count (as the open-edge boundary
   ! rows did: over 1000 passes)
   integer(kind=4), parameter :: sl_msubmax = 16
+  ! design (e) of the near-degenerate fallback (STAGE3_FALLBACK.md 5): a flagged cell or neighbour hands a face back
+  ! to stock only where stock is stable (c2d <= sl_cstock) or where the floored passes cannot cover it
+  ! (c2d > sl_ckeep: 0.95 sl_vfloor sl_msubmax = 3.8); on a level with such a kept face the sub-pass criterion and
+  ! the passes floor a cell's pass volume at sl_vfloor of the cell (below it the cell keeps its concentration)
+  real(kind=8), parameter :: sl_cstock = 0.9_8, sl_ckeep = 3.5_8, sl_vfloor = 0.25_8
+  logical, allocatable, dimension(:) :: sl_keept, sl_keepm     ! levels with a kept face: tracer, momentum grids
+  real(kind=8) :: sl_kcf_step = 0._8, sl_kcf_max = 0._8          ! faces kept by the corrector tests
   ! sub-passes since the last SL line: the most of a level and of the sum over the swept levels, for the key's X
   ! (sl_x_prep), for T, S (corrector) and for the momentum
   integer(kind=4) :: sl_cnt(6) = 0
@@ -296,7 +303,9 @@ contains
     &//' for T, S and for u, v; the faces put back to stock by the near-degenerate fallback with the level-n'&
     &//' transports (this step) and with the corrector transports (the most per step since the last line);'&
     &//' the largest c2d of the faces that stay swept after both (since the last line; the sl_cmax guard).'&
-    &//' The largest c2d (6th column) is over all faces, the stock ones included'
+    &//' The largest c2d (6th column) is over all faces, the stock ones included. Last: the faces of flagged'&
+    &//' cells kept swept (sl_cstock < c2d <= sl_ckeep) by the level-n test (this step) and by the corrector'&
+    &//' tests (the most per step since the last line)'
     if (mynode == 0 .and. sl_diag > 0) write(*,'(1x,A)') 'SL_ADV: SL_DIAG line = step, shadow tracer'&
     &//' max |c - 1| in hot columns after the explicit step, most hot faces within 3 cells of an open edge,'&
     &//' most faces put back to stock by the near-degenerate-cell fallback,'&
@@ -351,7 +360,7 @@ contains
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     ! single-direction Courant numbers |u| dt pm_u (u-faces), |v| dt pn_v (v-faces)
     real(kind=8), dimension(istr-1:iend+2,jstr-1:jend+2) :: cu, cv
-    real(kind=8) :: lmx(2+2*nz), gmx(2+2*nz), lsm(8), gsm(8), v1, v1x, v1y
+    real(kind=8) :: lmx(2+2*nz), gmx(2+2*nz), lsm(9), gsm(9), v1, v1x, v1y, lkt(nz), gkt(nz)
     real(kind=8) :: c2d, w, s, rv, cfc, dvx, dvy, vx0, vx1, vy0, vy1, ds
     integer(kind=4) :: i, j, k, nu, nv, ierr, ip, jp, nlev
     logical :: prt
@@ -359,7 +368,7 @@ contains
 # include "compute_auxiliary_bounds.h"
 
     ds = 1._8/(sl_c_hi - sl_c_lo)
-    lmx = 0._8 ; lsm = 0._8
+    lmx = 0._8 ; lsm = 0._8 ; lkt = 0._8
     ! capacity of the hot-face lists: every face of the ranges on every level
     nu = (iend-istr+2)*(jend-jstr+1)*nz
     nv = (iend-istr+1)*(jend-jstr+2)*nz
@@ -418,8 +427,13 @@ contains
               w = s*s*(3._8 - 2._8*s)
             end if
             if (w > 0._8 .and. (bad(i-1,j) .or. bad(i,j))) then
-              w = 0._8                                 ! stock fallback
-              if (i <= iendR) lsm(8) = lsm(8) + 1._8
+              if (c2d <= sl_cstock .or. c2d > sl_ckeep) then
+                w = 0._8                               ! stock fallback
+                if (i <= iendR) lsm(8) = lsm(8) + 1._8
+              else                                     ! (e) kept swept
+                lkt(k) = 1._8
+                if (i <= iendR) lsm(9) = lsm(9) + 1._8
+              end if
             end if
             sl_c2u(i,j,k) = c2d
             if (i <= iendR) then                 ! faces of this rank (statistics)
@@ -450,8 +464,13 @@ contains
               w = s*s*(3._8 - 2._8*s)
             end if
             if (w > 0._8 .and. (bad(i,j-1) .or. bad(i,j))) then
-              w = 0._8                                 ! stock fallback
-              if (j <= jendR) lsm(8) = lsm(8) + 1._8
+              if (c2d <= sl_cstock .or. c2d > sl_ckeep) then
+                w = 0._8                               ! stock fallback
+                if (j <= jendR) lsm(8) = lsm(8) + 1._8
+              else                                     ! (e) kept swept
+                lkt(k) = 1._8
+                if (j <= jendR) lsm(9) = lsm(9) + 1._8
+              end if
             end if
             sl_c2v(i,j,k) = c2d
             if (j <= jendR) then
@@ -488,16 +507,20 @@ contains
             if (sl_wv(i,j+1,k) > 0._8) cfc = max(cfc, max(vy1,0._8)*rv)
             if (sl_wv(i,j,k) > 0._8) cfc = max(cfc, -min(vy0,0._8)*rv)
             dvx = vx1 - vx0 ; dvy = vy1 - vy0
-            lmx(2+k) = max(lmx(2+k), subpass_crit(cfc, dvx, dvy, 0._8, rv, .false.))
+            lmx(2+k) = max(lmx(2+k), sl_crit(cfc, dvx, dvy, rv, lkt(k) > 0.5_8))
           end do
         end do
       end if
     end do
 
     call mpi_allreduce(lmx, gmx, 2+2*nz, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    call mpi_allreduce(lkt, gkt, nz, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    if (.not. allocated(sl_keept)) allocate(sl_keept(nz), sl_keepm(nz))
     do k = 1, nz
       sl_levhot(k) = (gmx(2+nz+k) > 0.5_8)
+      sl_keept(k) = (gkt(k) > 0.5_8)
     end do
+    sl_keepm = .false.
     sl_anyhot = any(sl_levhot)
     if (.not. allocated(sl_lact)) then
       allocate(sl_lact(nz), sl_actf(GLOBAL_2D_ARRAY,nz)) ; sl_lact = .false. ; sl_actf = 0._8
@@ -531,7 +554,7 @@ contains
       sl_tref(:,:,:,1:iTandS) = t(:,:,:,nstp,1:iTandS)
       tref_set = .true.
     end if
-    call mpi_allreduce(lsm, gsm, 8, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    call mpi_allreduce(lsm, gsm, 9, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     dg_edge = max(dg_edge, gsm(7)) ; dg_fb = max(dg_fb, gsm(8))
     nlev = 0
     do k = 1, nz
@@ -540,6 +563,7 @@ contains
     end do
     ! the SL line at the cadence of diag's line
     sl_cfb_max = max(sl_cfb_max, sl_cfb_step) ; sl_cfb_step = 0._8
+    sl_kcf_max = max(sl_kcf_max, sl_kcf_step) ; sl_kcf_step = 0._8
     jp = min(iic, 2*ninfo) - 1
     ip = 1
     do while (ip < jp)
@@ -547,12 +571,13 @@ contains
     end do
     prt = (mod(iic, max(1, min(ip, ninfo))) == 0)
     if (prt .and. mynode == 0) then
-      write(*,'(1x,A,I8,4F9.4,2F8.3,2I4,6I6,2I8,F8.3)') 'SL', iic, 100._8*gsm(2)/max(gsm(1),1._8),&
+      write(*,'(1x,A,I8,4F9.4,2F8.3,2I4,6I6,2I8,F8.3,2I8)') 'SL', iic, 100._8*gsm(2)/max(gsm(1),1._8),&
       &100._8*gsm(5)/max(gsm(4),1._8), 100._8*gsm(3)/max(gsm(1),1._8), 100._8*gsm(6)/max(gsm(4),1._8),&
-      &gmx(1), gmx(2), maxval(sl_msub), nlev, sl_cnt, nint(gsm(8)), nint(sl_cfb_max), sl_c2sw
+      &gmx(1), gmx(2), maxval(sl_msub), nlev, sl_cnt, nint(gsm(8)), nint(sl_cfb_max), sl_c2sw,&
+      &nint(gsm(9)), nint(sl_kcf_max)
     end if
     if (prt) then
-      sl_cnt = 0 ; sl_cfb_max = 0._8 ; sl_c2sw = 0._8
+      sl_cnt = 0 ; sl_cfb_max = 0._8 ; sl_c2sw = 0._8 ; sl_kcf_max = 0._8
     end if
   contains
     logical function bad(ii, jj)
@@ -615,7 +640,7 @@ contains
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     character(len=160) :: info
-    real(kind=8) :: rv, v1, v1x, v1y, lc, gc
+    real(kind=8) :: rv, v1, v1x, v1y, lc, gc, lk, lkk(nz), gkk(nz)
     integer(kind=4) :: i, j, k, ierr
     call reg_tic(rg_sl_adv)
     if (.not. allocated(sl_cdeg)) then
@@ -635,28 +660,44 @@ contains
       end do
     end do
     call exchange_xxx(sl_cdeg)
-    lc = 0._8
+    lc = 0._8 ; lk = 0._8 ; lkk = 0._8
     do k = 1, nz
       if (.not. sl_lact(k)) cycle
       do j = jstr, jend
         do i = istr, iend+1
           if (sl_wu(i,j,k) > 0._8 .and. (cbad(i-1, j) .or. cbad(i, j))) then
-            sl_wu(i,j,k) = 0._8
-            if (i <= iend) lc = lc + 1._8
+            if (sl_c2u(i,j,k) <= sl_cstock .or. sl_c2u(i,j,k) > sl_ckeep) then
+              sl_wu(i,j,k) = 0._8
+              if (i <= iend) lc = lc + 1._8
+            else                                       ! (e) kept swept
+              lkk(k) = 1._8
+              if (i <= iend) lk = lk + 1._8
+            end if
           end if
         end do
       end do
       do j = jstr, jend+1
         do i = istr, iend
           if (sl_wv(i,j,k) > 0._8 .and. (cbad(i, j-1) .or. cbad(i, j))) then
-            sl_wv(i,j,k) = 0._8
-            if (j <= jend) lc = lc + 1._8
+            if (sl_c2v(i,j,k) <= sl_cstock .or. sl_c2v(i,j,k) > sl_ckeep) then
+              sl_wv(i,j,k) = 0._8
+              if (j <= jend) lc = lc + 1._8
+            else                                       ! (e) kept swept
+              lkk(k) = 1._8
+              if (j <= jend) lk = lk + 1._8
+            end if
           end if
         end do
       end do
     end do
     call mpi_allreduce(lc, gc, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     sl_cfb_step = sl_cfb_step + gc
+    call mpi_allreduce(lk, gc, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    sl_kcf_step = sl_kcf_step + gc
+    call mpi_allreduce(lkk, gkk, nz, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    do k = 1, nz
+      sl_keept(k) = sl_keept(k) .or. gkk(k) > 0.5_8
+    end do
     sl_cfb_call = sl_cfb_call + 1
     if (sl_cfb_call == 2) then        ! after step3d_uv2: the sl_cmax guard on the faces that stay swept
       lc = 0._8
@@ -692,6 +733,19 @@ contains
   end subroutine sl_cfallback_tile
 
 ! ----------------------------------------------------------------------
+  pure real(kind=8) function sl_crit(cfc, dvx, dvy, rv, fl)
+    ! swept_flux_mod's subpass_crit (pos false); with fl (a level with a kept face) the pseudo-volume is floored
+    ! at sl_vfloor instead of 1e-3 (subpass_crit itself stays as BGC subcycling uses it)
+    use swept_flux_mod, only: subpass_crit
+    real(kind=8), intent(in) :: cfc, dvx, dvy, rv
+    logical, intent(in) :: fl
+    if (fl) then
+      sl_crit = max(cfc, dvx*rv, dvy*rv)/max(min(1._8, 1._8 - (dvx+dvy)*rv), sl_vfloor)
+    else
+      sl_crit = subpass_crit(cfc, dvx, dvy, 0._8, rv, .false.)
+    end if
+  end function sl_crit
+
   subroutine sl_ranges(istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
     ! valid cell ranges of the swept fluxes: the 2-point halo, or the
     ! boundary row at a physical edge (as bgc_subcycle_mod)
@@ -1016,7 +1070,7 @@ contains
           if (j > jlo) then
             dvy = dvy - vy(i,j) ; cfc = max(cfc, -min(vy(i,j),0._8)*rv)
           end if
-          cr = subpass_crit(cfc, dvx, dvy, 0._8, rv, .false.)
+          cr = sl_crit(cfc, dvx, dvy, rv, sl_keept(k))
           if (cr > lc(k)) then
             lc(k) = cr ; lij(1,k) = i ; lij(2,k) = j
           end if
@@ -1110,7 +1164,15 @@ contains
         do j = jstr, jend
           do i = istr, iend
             vs(i,j) = sl_hz0(i,j,k) - dble(isub-1)*fm*pm(i,j)*pn(i,j)*(vx(i+1,j)-vx(i,j)+vy(i,j+1)-vy(i,j))
-            if (vs(i,j) > 0._8) qs(i,j) = cc(i,j)/vs(i,j)
+            if (sl_keept(k)) then                ! (e) the floor: a drained cell keeps its concentration
+              if (vs(i,j) < sl_vfloor*sl_hz0(i,j,k)) then
+                vs(i,j) = sl_vfloor*sl_hz0(i,j,k)
+              else
+                qs(i,j) = cc(i,j)/vs(i,j)
+              end if
+            else
+              if (vs(i,j) > 0._8) qs(i,j) = cc(i,j)/vs(i,j)
+            end if
           end do
         end do
         call exchange_xxx(qs, vs)
@@ -2106,7 +2168,7 @@ contains
   end subroutine mlr_pass
 
 ! ----------------------------------------------------------------------
-  subroutine msweep(msub, g, vol0, vx, vy, q, mx, my, mc, Fsx, Fsy, istr, iend, jstr, jend, idle)
+  subroutine msweep(msub, g, vol0, vx, vy, q, mx, my, mc, Fsx, Fsy, istr, iend, jstr, jend, idle, floor)
     ! as sl_sweep on a grid g: the swept fluxes (volume x value over the
     ! step) of q (valid on the grid's halo) as msub Lin-Rood passes of the
     ! face volumes vx/msub, vy/msub in the cell volumes vol0, each pass from
@@ -2120,7 +2182,9 @@ contains
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in) :: vol0, vx, vy, q, mx, my, mc
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: Fsx, Fsy
     logical, intent(in), optional :: idle  ! (O2) no hot face here or next door: only the passes' exchanges
+    logical, intent(in), optional :: floor ! (e) a level with a kept face: pass volumes floored at sl_vfloor
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: cc, Fx, Fy
+    logical :: fl
     real(kind=8), allocatable, dimension(:,:), save :: qs, vs
     real(kind=8) :: fm
     integer(kind=4) :: i, j, isub
@@ -2145,6 +2209,8 @@ contains
         return
       end if
     end if
+    fl = .false.
+    if (present(floor)) fl = floor
     fm = 1._8/dble(msub)
     do j = g%jlo, g%jhi
       do i = g%ilo, g%ihi
@@ -2162,7 +2228,15 @@ contains
         do j = g%j0, g%j1
           do i = g%i0, g%i1
             vs(i,j) = vol0(i,j) - dble(isub-1)*fm*(vx(i+1,j)-vx(i,j)+vy(i,j+1)-vy(i,j))
-            if (vs(i,j) > 0._8) qs(i,j) = cc(i,j)/vs(i,j)
+            if (fl) then                         ! (e) the floor: a drained cell keeps its value
+              if (vs(i,j) < sl_vfloor*vol0(i,j)) then
+                vs(i,j) = sl_vfloor*vol0(i,j)
+              else
+                qs(i,j) = cc(i,j)/vs(i,j)
+              end if
+            else
+              if (vs(i,j) > 0._8) qs(i,j) = cc(i,j)/vs(i,j)
+            end if
           end do
         end do
         call exchange_xxx(qs, vs)
@@ -2282,7 +2356,8 @@ contains
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     character(len=160) :: info
     real(kind=8), allocatable, dimension(:,:,:), save :: wtu, wtv, degu, degv
-    real(kind=8) :: fa, fb, rv, v1, v1x, v1y, cfc, dvx, dvy, lmx(2*nz), gmx(2*nz), lsm(3), gsm(3)
+    real(kind=8) :: fa, fb, rv, v1, v1x, v1y, cfc, dvx, dvy, lmx(2*nz), gmx(2*nz), lsm(3), gsm(3), lkm(nz), gkm(nz),&
+    &               cm2
     logical :: hc(istr-2:iend+2,jstr-2:jend+2)
     integer(kind=4) :: i, j, k, ierr
 # include "compute_auxiliary_bounds.h"
@@ -2299,6 +2374,7 @@ contains
     end if
     wtu = sl_wu ; wtv = sl_wv
     call exchange_xxx(wtu, wtv)
+    call exchange_xxx(sl_c2u, sl_c2v)       ! (e) the tracer faces' c2d on the halo for the momentum faces
     if (sl_mvol == 2) then          ! swept volume dt U* alone (the means below then give dt U*)
       sl_fu0 = FlxU ; sl_fv0 = FlxV
     end if
@@ -2382,7 +2458,7 @@ contains
       end do
     end do
     call exchange_xxx(degu, degv)
-    lsm = 0._8 ; lmx = 0._8
+    lsm = 0._8 ; lmx = 0._8 ; lkm = 0._8
     do k = 1, nz
       if (.not. sl_lact(k)) then             ! (O2) no momentum hot face at this level on the rank
         lmx(k) = lsm(1) + lsm(2)
@@ -2392,28 +2468,48 @@ contains
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1+1
           if (mwux(i,j,k) > 0._8 .and. (bad(degu, i-1, j) .or. bad(degu, i, j))) then
-            mwux(i,j,k) = 0._8 ; lsm(3) = lsm(3) + 1._8
+            cm2 = max(sl_c2u(i-1,j,k), sl_c2u(i,j,k))
+            if (cm2 <= sl_cstock .or. cm2 > sl_ckeep) then
+              mwux(i,j,k) = 0._8 ; lsm(3) = lsm(3) + 1._8
+            else
+              lkm(k) = 1._8                      ! (e) kept swept
+            end if
           end if
         end do
       end do
       do j = gu%j0, gu%j1+1
         do i = gu%i0, gu%i1
           if (mwuy(i,j,k) > 0._8 .and. (bad(degu, i, j-1) .or. bad(degu, i, j))) then
-            mwuy(i,j,k) = 0._8 ; lsm(3) = lsm(3) + 1._8
+            cm2 = max(sl_c2v(i-1,j,k), sl_c2v(i,j,k))
+            if (cm2 <= sl_cstock .or. cm2 > sl_ckeep) then
+              mwuy(i,j,k) = 0._8 ; lsm(3) = lsm(3) + 1._8
+            else
+              lkm(k) = 1._8                      ! (e) kept swept
+            end if
           end if
         end do
       end do
       do j = gv%j0, gv%j1
         do i = gv%i0, gv%i1+1
           if (mwvx(i,j,k) > 0._8 .and. (bad(degv, i-1, j) .or. bad(degv, i, j))) then
-            mwvx(i,j,k) = 0._8 ; lsm(3) = lsm(3) + 1._8
+            cm2 = max(sl_c2u(i,j-1,k), sl_c2u(i,j,k))
+            if (cm2 <= sl_cstock .or. cm2 > sl_ckeep) then
+              mwvx(i,j,k) = 0._8 ; lsm(3) = lsm(3) + 1._8
+            else
+              lkm(k) = 1._8                      ! (e) kept swept
+            end if
           end if
         end do
       end do
       do j = gv%j0, gv%j1+1
         do i = gv%i0, gv%i1
           if (mwvy(i,j,k) > 0._8 .and. (bad(degv, i, j-1) .or. bad(degv, i, j))) then
-            mwvy(i,j,k) = 0._8 ; lsm(3) = lsm(3) + 1._8
+            cm2 = max(sl_c2v(i,j-1,k), sl_c2v(i,j,k))
+            if (cm2 <= sl_cstock .or. cm2 > sl_ckeep) then
+              mwvy(i,j,k) = 0._8 ; lsm(3) = lsm(3) + 1._8
+            else
+              lkm(k) = 1._8                      ! (e) kept swept
+            end if
           end if
         end do
       end do
@@ -2439,9 +2535,16 @@ contains
         end do
       end do
       lmx(k) = lsm(1) + lsm(2)
-      ! the sub-pass criterion of the cells with a hot face or next to one
-      call crit(gu, mwux(:,:,k), mwuy(:,:,k), mvux(:,:,k), mvuy(:,:,k), mvolu(:,:,k), umask, lmx(nz+k))
-      call crit(gv, mwvx(:,:,k), mwvy(:,:,k), mvvx(:,:,k), mvvy(:,:,k), mvolv(:,:,k), vmask, lmx(nz+k))
+    end do
+    ! (e) the levels with a kept momentum face (all ranks), then the sub-pass criterion
+    call mpi_allreduce(lkm, gkm, nz, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    do k = 1, nz
+      sl_keepm(k) = (gkm(k) > 0.5_8)
+      if (.not. sl_lact(k)) cycle
+      call crit(gu, mwux(:,:,k), mwuy(:,:,k), mvux(:,:,k), mvuy(:,:,k), mvolu(:,:,k), umask, sl_keepm(k),&
+      &         lmx(nz+k))
+      call crit(gv, mwvx(:,:,k), mwvy(:,:,k), mvvx(:,:,k), mvvy(:,:,k), mvolv(:,:,k), vmask, sl_keepm(k),&
+      &         lmx(nz+k))
     end do
     do k = nz, 2, -1                                ! hot faces per level (not cumulative)
       lmx(k) = lmx(k) - lmx(k-1)
@@ -2567,10 +2670,11 @@ contains
       integer(kind=4), intent(in) :: ii, jj
       bad = max(dg(ii,jj,k), dg(ii-1,jj,k), dg(ii+1,jj,k), dg(ii,jj-1,k), dg(ii,jj+1,k)) > 0.5_8
     end function bad
-    subroutine crit(g, wx_, wy_, vx_, vy_, vol_, mk, cm)
+    subroutine crit(g, wx_, wy_, vx_, vy_, vol_, mk, fl, cm)
       ! swept_flux_mod's criterion over the cells of g with a hot face or next to one
       type(mgrid_t), intent(in) :: g
       real(kind=8), dimension(GLOBAL_2D_ARRAY), intent(in) :: wx_, wy_, vx_, vy_, vol_, mk
+      logical, intent(in) :: fl
       real(kind=8), intent(inout) :: cm
       integer(kind=4) :: ii, jj
       hc = .false.
@@ -2611,7 +2715,7 @@ contains
           if (jj > g%jlo) then
             dvy = dvy - vy_(ii,jj) ; cfc = max(cfc, -min(vy_(ii,jj),0._8)*rv)
           end if
-          cm = max(cm, subpass_crit(cfc, dvx, dvy, 0._8, rv, .false.))
+          cm = max(cm, sl_crit(cfc, dvx, dvy, rv, fl))
         end do
       end do
     end subroutine crit
@@ -2648,7 +2752,7 @@ contains
     if (sl_levhm(k)) then
       q = sl_ut(:,:,k)
       call msweep(sl_msubm(k), gu, mvolu(:,:,k), mvux(:,:,k), mvuy(:,:,k), q, mmxu, mmyu, umask, Fsx, Fsy,&
-      &           istr, iend, jstr, jend, idle=.not. sl_lact(k))
+      &           istr, iend, jstr, jend, idle=.not. sl_lact(k), floor=sl_keepm(k))
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1+1
           w = mwux(i,j,k)
@@ -2678,7 +2782,7 @@ contains
       ! the new carry: swept fluxes of e^n
       q = sl_ue(:,:,k)
       call msweep(sl_msubm(k), gu, mvolu(:,:,k), mvux(:,:,k), mvuy(:,:,k), q, mmxu, mmyu, umask, Fsx, Fsy,&
-      &           istr, iend, jstr, jend, idle=.not. sl_lact(k))
+      &           istr, iend, jstr, jend, idle=.not. sl_lact(k), floor=sl_keepm(k))
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1
           sl_eun(i,j,k) = -(mwux(i+1,j,k)*Fsx(i+1,j) - mwux(i,j,k)*Fsx(i,j)&
@@ -2699,7 +2803,7 @@ contains
     if (sl_levhm(k)) then
       q = sl_vt(:,:,k)
       call msweep(sl_msubm(k), gv, mvolv(:,:,k), mvvx(:,:,k), mvvy(:,:,k), q, mmxv, mmyv, vmask, Fsx, Fsy,&
-      &           istr, iend, jstr, jend, idle=.not. sl_lact(k))
+      &           istr, iend, jstr, jend, idle=.not. sl_lact(k), floor=sl_keepm(k))
       do j = gv%j0, gv%j1
         do i = gv%i0, gv%i1+1
           w = mwvx(i,j,k)
@@ -2728,7 +2832,7 @@ contains
       if (sl_diag > 0) call budget(gv, dfx, dfy, 2)
       q = sl_ve(:,:,k)
       call msweep(sl_msubm(k), gv, mvolv(:,:,k), mvvx(:,:,k), mvvy(:,:,k), q, mmxv, mmyv, vmask, Fsx, Fsy,&
-      &           istr, iend, jstr, jend, idle=.not. sl_lact(k))
+      &           istr, iend, jstr, jend, idle=.not. sl_lact(k), floor=sl_keepm(k))
       do j = gv%j0, gv%j1
         do i = gv%i0, gv%i1
           sl_evn(i,j,k) = -(mwvx(i+1,j,k)*Fsx(i+1,j) - mwvx(i,j,k)*Fsx(i,j)&
