@@ -2618,7 +2618,7 @@ contains
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2,nz), intent(inout) :: ru, rv
     real(kind=8) :: hzc(nz), hs(nz), v1(nz), a(nz), x(nz), us(nz), wx(nz), cw(nz), wmx(nz), we_(0:nz), wi_(0:nz),&
     &               fzx(0:nz), fzs(0:nz), fz3(0:nz), fsp(0:nz), dtpp, s, pgp, cs, cwv, ce, dn, qr0, qr1, qu,&
-    &               pgr(nz), sps, spc, shz
+    &               pgr(nz), sps, spc, shz, def
     integer(kind=4) :: i, k, nrhs3
     logical :: hot
 # include "compute_auxiliary_bounds.h"
@@ -2655,6 +2655,20 @@ contains
       call column(sl_ut(i,j,:), sl_rhu(i,j,:), sl_dvu(i,j,:))
       do k = 1, nz
         ru(i,j,k) = ru(i,j,k) - (fzx(k)-fzx(k-1)) + (fzs(k)-fzs(k-1))
+        ! close the cell's volume budget: its relative volume loss by its own transports (the blended horizontal
+        ! ones and the interpolated We, Wi) less the mean loss of its two rho cells; the flux form leaves
+        ! X (1 - def) for a uniform X, so X def is added back (advective: in ru, and in the barotropic forcing)
+        qr0 = dt*pm(i-1,j)*pn(i-1,j)*(FlxU(i,j,k)-FlxU(i-1,j,k)+FlxV(i-1,j+1,k)-FlxV(i-1,j,k)&
+        &   + We(i-1,j,k)-We(i-1,j,k-1)+Wi(i-1,j,k)-Wi(i-1,j,k-1))/Hz(i-1,j,k)
+        qr1 = dt*pm(i,j)*pn(i,j)*(FlxU(i+1,j,k)-FlxU(i,j,k)+FlxV(i,j+1,k)-FlxV(i,j,k)&
+        &   + We(i,j,k)-We(i,j,k-1)+Wi(i,j,k)-Wi(i,j,k-1))/Hz(i,j,k)
+        qu = dtpp*(we_(k)-we_(k-1)+wi_(k)-wi_(k-1))/hzc(k)
+        def = qu + dtpp*sl_dvu(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)
+        ru(i,j,k) = ru(i,j,k) + x(k)*hzc(k)*def/dtpp
+        if (sl_diag > 0) then        ! the residual the term cancels (stock and blended transports)
+          dm_def(1) = max(dm_def(1), abs(qu + dtpp*sl_dsu(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)))
+          dm_def(2) = max(dm_def(2), abs(def))
+        end if
       end do
       ! pointwise terms: the whole PG that ru holds (with its depth-mean correction) and the Coriolis term
       pgr = 0._8
@@ -2679,17 +2693,6 @@ contains
         sl_dfu(i,j) = sl_dfu(i,j) + dn
       end do
       call vcarry(sl_ue(i,j,:), sl_eun(i,j,:))
-      if (sl_diag > 0) then        ! u-grid continuity defect against the rho grid's (stock and blended transports)
-        do k = 1, nz
-          qr0 = dt*pm(i-1,j)*pn(i-1,j)*(FlxU(i,j,k)-FlxU(i-1,j,k)+FlxV(i-1,j+1,k)-FlxV(i-1,j,k)&
-          &   + We(i-1,j,k)-We(i-1,j,k-1)+Wi(i-1,j,k)-Wi(i-1,j,k-1))/Hz(i-1,j,k)
-          qr1 = dt*pm(i,j)*pn(i,j)*(FlxU(i+1,j,k)-FlxU(i,j,k)+FlxV(i,j+1,k)-FlxV(i,j,k)&
-          &   + We(i,j,k)-We(i,j,k-1)+Wi(i,j,k)-Wi(i,j,k-1))/Hz(i,j,k)
-          qu = dtpp*(we_(k)-we_(k-1)+wi_(k)-wi_(k-1))/hzc(k)
-          dm_def(1) = max(dm_def(1), abs(qu + dtpp*sl_dsu(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)))
-          dm_def(2) = max(dm_def(2), abs(qu + dtpp*sl_dvu(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)))
-        end do
-      end if
     end do
     ! ---- v-points of row j
     if (j >= gv%j0) then
@@ -2722,6 +2725,14 @@ contains
         call column(sl_vt(i,j,:), sl_rhv(i,j,:), sl_dvv(i,j,:))
         do k = 1, nz
           rv(i,j,k) = rv(i,j,k) - (fzx(k)-fzx(k-1)) + (fzs(k)-fzs(k-1))
+          ! the cell's volume budget closed, as for u (its rho cells (i,j-1), (i,j))
+          qr0 = dt*pm(i,j-1)*pn(i,j-1)*(FlxU(i+1,j-1,k)-FlxU(i,j-1,k)+FlxV(i,j,k)-FlxV(i,j-1,k)&
+          &   + We(i,j-1,k)-We(i,j-1,k-1)+Wi(i,j-1,k)-Wi(i,j-1,k-1))/Hz(i,j-1,k)
+          qr1 = dt*pm(i,j)*pn(i,j)*(FlxU(i+1,j,k)-FlxU(i,j,k)+FlxV(i,j+1,k)-FlxV(i,j,k)&
+          &   + We(i,j,k)-We(i,j,k-1)+Wi(i,j,k)-Wi(i,j,k-1))/Hz(i,j,k)
+          qu = dtpp*(we_(k)-we_(k-1)+wi_(k)-wi_(k-1))/hzc(k)
+          def = qu + dtpp*sl_dvv(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)
+          rv(i,j,k) = rv(i,j,k) + x(k)*hzc(k)*def/dtpp
         end do
         pgr = 0._8
 #ifdef IMEX_IGW
