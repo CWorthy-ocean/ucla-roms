@@ -253,6 +253,8 @@ contains
   subroutine sl_adv_init
     ! roms_init, after the initial state: checks, arrays, the SL line's header
     use param, only: mynode
+    use dimensions, only: inode, jnode
+    use timers, only: reg_set_node
     use error_handling_mod, only: error_log
 #ifdef IMEX_IGW
     use imex_igw, only: imex_solver_enabled
@@ -264,6 +266,7 @@ contains
     &info="sl_adv requires the IMEX solves (imex_solver_enabled)")
 #endif
     call error_log%abort_check()
+    call reg_set_node(inode, jnode)        ! the per-rank SL timer table names the ranks
     call sl_alloc
     if (mynode == 0) write(*,'(1x,A)') 'SL_ADV: SL line = step, hot u- and v-faces [% of wet faces],'&
     &//' fully swept u, v [%], largest c2d, largest single-direction C, most sub-passes of a level,'&
@@ -1057,7 +1060,7 @@ contains
     use tracers, only: iTandS
     use roms_mpi, only: exchange_xxx
     use imex_igw, only: wflx_corr, u_nm1, v_nm1, imex_corr_adv, advb_sl
-    use timers, only: reg_tic, reg_toc, rg_sl_trc
+    use timers, only: reg_tic, reg_toc, rg_sl_trc, rg_sl_wave, rg_sl_xprep
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
     implicit none
     integer(kind=4) :: i, j, k, itrc
@@ -1069,8 +1072,12 @@ contains
     if (.not. sl_on) return
     call reg_tic(rg_sl_trc)
     if (sl_anyhot) then
+      call reg_tic(rg_sl_wave)
       call sl_wave_incr(u(:,:,:,nstp), v(:,:,:,nstp), sl_en)
+      call reg_toc(rg_sl_wave)
+      call reg_tic(rg_sl_wave)
       call sl_wave_incr(u_nm1, v_nm1, sl_et)
+      call reg_toc(rg_sl_wave)
       if (sl_hotprev) then
         do itrc = 1, iTandS
           do k = 1, nz
@@ -1088,7 +1095,11 @@ contains
         call exchange_xxx(sl_en(:,:,:,1), sl_et(:,:,:,1))
       end if
     end if
-    if (imex_corr_adv == 1) call sl_x_prep(istr, iend, jstr, jend)
+    if (imex_corr_adv == 1) then
+      call reg_tic(rg_sl_xprep)
+      call sl_x_prep(istr, iend, jstr, jend)
+      call reg_toc(rg_sl_xprep)
+    end if
     call reg_toc(rg_sl_trc)
   end subroutine sl_ts_prep
 
@@ -1118,6 +1129,7 @@ contains
     use rho_eos_mod, only: rho_eos_point
     use roms_mpi, only: exchange_xxx
     use imex_igw, only: advb_slrt, advb_sl
+    use timers, only: reg_tic, reg_toc, rg_sl_sweep
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     real(kind=8), allocatable, dimension(:,:,:), save :: bs, bt, bnum
@@ -1178,7 +1190,9 @@ contains
         dfx = 0._8 ; dfy = 0._8
         if (sl_levhot(k)) then
           call sl_facevol(k, vx, vy, istr, iend, jstr, jend)
+          call reg_tic(rg_sl_sweep)
           call sl_sweep(k, msub(k), vx, vy, bt(:,:,k), Fsx, Fsy, istr, iend, jstr, jend, 0)
+          call reg_toc(rg_sl_sweep)
           do j = jstr, jend
             do i = istr, iend+1
               if (sl_wu(i,j,k) > 0._8) dfx(i,j) = sl_wu(i,j,k)*(Fsx(i,j)/dt - fxs(i,j))
@@ -1300,7 +1314,7 @@ contains
     use param, only: np_xi, np_eta
     use scalars, only: dt, nstp
     use ocean_vars, only: flxu, flxv
-    use timers, only: reg_tic, reg_toc, rg_sl_trc
+    use timers, only: reg_tic, reg_toc, rg_sl_trc, rg_sl_sweep
     use grid, only: pm, pn
     use tracers, only: t, iTandS
     implicit none
@@ -1337,7 +1351,9 @@ contains
         end do
       end do
     end if
+    call reg_tic(rg_sl_sweep)
     call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, itrc)
+    call reg_toc(rg_sl_sweep)
     dfx = 0._8 ; dfy = 0._8
     do n = hu_off(k-1)+1, hu_off(k)
       i = hu_i(n) ; j = hu_j(n) ; w = sl_wu(i,j,k)
@@ -1358,7 +1374,9 @@ contains
           q(i,j) = sl_en(i,j,k,itrc)
         end do
       end do
+      call reg_tic(rg_sl_sweep)
       call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, -1)
+      call reg_toc(rg_sl_sweep)
       do j = jstr, jend
         do i = istr, iend+1
           dfx(i,j) = sl_wu(i,j,k)*Fsx(i,j)
@@ -1379,7 +1397,9 @@ contains
     if (sl_diag > 0 .and. itrc == 1) then
       ! shadow tracer (c = 1, departure field 1): content after the horizontal step
       q = 1._8
+      call reg_tic(rg_sl_sweep)
       call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, -2)
+      call reg_toc(rg_sl_sweep)
       do j = jstr, jend
         do i = istr, iend+1
           w = sl_wu(i,j,k)
@@ -1441,7 +1461,7 @@ contains
     use ocean_vars, only: hz, flxu, flxv, we
     use grid, only: pm, pn, rmask
     use tracers, only: t, iTandS
-    use timers, only: reg_tic, reg_toc, rg_sl_trc
+    use timers, only: reg_tic, reg_toc, rg_sl_trc, rg_sl_vflux
     implicit none
     integer(kind=4), intent(in) :: j, itrc, istr, iend
     real(kind=8), intent(inout) :: FC(istr-2:iend+2,0:nz)
@@ -1450,6 +1470,7 @@ contains
     logical :: hot
     if (.not. sl_on) return
     call reg_tic(rg_sl_trc)
+    call reg_tic(rg_sl_vflux)
     do i = istr, iend
       if (.not. sl_anyhot) exit                      ! (only the arrival term below)
       if (rmask(i,j) < 0.5_8) cycle
@@ -1527,6 +1548,7 @@ contains
         end do
       end do
     end if
+    call reg_toc(rg_sl_vflux)
     call reg_toc(rg_sl_trc)
   end subroutine sl_vflux
 
@@ -1999,12 +2021,14 @@ contains
 ! ----------------------------------------------------------------------
   subroutine sl_uv_prep
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
-    use timers, only: reg_tic, reg_toc, rg_sl_mom
+    use timers, only: reg_tic, reg_toc, rg_sl_mom, rg_sl_mprep
     implicit none
     integer(kind=4), save :: tile = 0
 # include "compute_tile_bounds.h"
     call reg_tic(rg_sl_mom)
+    call reg_tic(rg_sl_mprep)
     call sl_uv_prep_tile(istr, iend, jstr, jend)
+    call reg_toc(rg_sl_mprep)
     call reg_toc(rg_sl_mom)
   end subroutine sl_uv_prep
 
@@ -2370,7 +2394,7 @@ contains
     use param, only: np_xi, np_eta
     use scalars, only: dt
     use grid, only: umask, vmask
-    use timers, only: reg_tic, reg_toc, rg_sl_mom
+    use timers, only: reg_tic, reg_toc, rg_sl_mom, rg_sl_mhflux
     implicit none
     integer(kind=4), intent(in) :: k, istr, iend, jstr, jend
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2,nz), intent(inout) :: ru, rv
@@ -2381,6 +2405,7 @@ contains
 # include "compute_auxiliary_bounds.h"
     if (.not. sl_mon) return
     call reg_tic(rg_sl_mom)
+    call reg_tic(rg_sl_mhflux)
     ! ---- u: UFx(i,j) is the x-face east of u(i,j) (rho(i,j)), UFe(i,j) the y-face south of it
     call stock_tr(1, k, tx, ty)
     dfx = 0._8 ; dfy = 0._8 ; gx = tx ; gy = ty
@@ -2482,6 +2507,7 @@ contains
         sl_dsv(i,j,k) = tx(i+1,j)-tx(i,j)+ty(i,j+1)-ty(i,j)
       end do
     end do
+    call reg_toc(rg_sl_mhflux)
     call reg_toc(rg_sl_mom)
   contains
     subroutine stock_tr(kind, kk, tx_, ty_)
@@ -2624,7 +2650,7 @@ contains
 #ifdef IMEX_IGW
     use imex_igw, only: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v, pg_star_u, pg_star_v
 #endif
-    use timers, only: reg_tic, reg_toc, rg_sl_mom
+    use timers, only: reg_tic, reg_toc, rg_sl_mom, rg_sl_mvcol
     implicit none
     integer(kind=4), intent(in) :: j, istr, iend, jstr, jend
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2,nz), intent(inout) :: ru, rv
@@ -2636,6 +2662,7 @@ contains
 # include "compute_auxiliary_bounds.h"
     if (.not. sl_mon) return
     call reg_tic(rg_sl_mom)
+    call reg_tic(rg_sl_mvcol)
     nrhs3 = 3
     ! ---- u-points of row j
     do i = gu%i0, gu%i1
@@ -2770,6 +2797,7 @@ contains
         call vcarry(sl_ve(i,j,:), sl_evn(i,j,:))
       end do
     end if
+    call reg_toc(rg_sl_mvcol)
     call reg_toc(rg_sl_mom)
   contains
     real(kind=8) function dlim(d)
@@ -2854,7 +2882,7 @@ contains
     use grid, only: pm, pn
     use coupling, only: rufrc, rvfrc
     use roms_mpi, only: exchange_xxx
-    use timers, only: reg_tic, reg_toc, rg_sl_mom
+    use timers, only: reg_tic, reg_toc, rg_sl_mom, rg_sl_mcor
     use grid, only: umask, vmask
 #ifdef IMEX_IGW
     use imex_igw, only: pg_star_u, pg_star_v
@@ -2866,6 +2894,7 @@ contains
     integer(kind=4) :: i, j, k, isw
     if (.not. sl_mon) return
     call reg_tic(rg_sl_mom)
+    call reg_tic(rg_sl_mcor)
     if (.not. allocated(tu)) then
       allocate(tu(GLOBAL_2D_ARRAY,nz), tv(GLOBAL_2D_ARRAY,nz), pu(GLOBAL_2D_ARRAY,nz), pv(GLOBAL_2D_ARRAY,nz))
       tu = 0._8 ; tv = 0._8 ; pu = 0._8 ; pv = 0._8
@@ -2968,6 +2997,7 @@ contains
         rvfrc(i,j) = rvfrc(i,j) - sl_dfv(i,j)
       end do
     end do
+    call reg_toc(rg_sl_mcor)
     call reg_toc(rg_sl_mom)
   end subroutine sl_uv_cor
 
