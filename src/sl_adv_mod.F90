@@ -70,6 +70,14 @@ module sl_adv_mod
   ! momentum: u-, v-cells next to an interface whose vertical Courant number (the key's) exceeds sl_czmom count
   ! as near-degenerate; <= 0 off (the default: with the pseudo-density guard of the hot columns it is not needed)
   real(kind=8), parameter :: sl_czmom = 0._8
+  ! stop when a level needs more swept sub-passes than this (tracers or momentum). The near-degenerate fallback keeps
+  ! the pseudo-volumes of swept cells above half the cell and sl_cmax bounds c2d by 5, so a correct count stays
+  ! within about 2 sl_cmax; a larger one means a cell the criterion should not count (as the open-edge boundary
+  ! rows did: over 1000 passes)
+  integer(kind=4), parameter :: sl_msubmax = 16
+  ! sub-passes since the last SL line: the most of a level and of the sum over the swept levels, for the key's X
+  ! (sl_x_prep), for T, S (corrector) and for the momentum
+  integer(kind=4) :: sl_cnt(6) = 0
 
   public :: read_nml_sl_adv
 
@@ -270,7 +278,9 @@ contains
     call sl_alloc
     if (mynode == 0) write(*,'(1x,A)') 'SL_ADV: SL line = step, hot u- and v-faces [% of wet faces],'&
     &//' fully swept u, v [%], largest c2d, largest single-direction C, most sub-passes of a level,'&
-    &//' levels with more than one'
+    &//' levels with more than one (both from the level-n transports); then the sub-passes the swept passes'&
+    &//' used since the last line, the most of a level and of the sum over the swept levels, for the key''s X,'&
+    &//' for T, S and for u, v'
     if (mynode == 0 .and. sl_diag > 0) write(*,'(1x,A)') 'SL_ADV: SL_DIAG line = step, shadow tracer'&
     &//' max |c - 1| in hot columns after the explicit step, most hot faces within 3 cells of an open edge,'&
     &//' most faces put back to stock by the near-degenerate-cell fallback,'&
@@ -506,10 +516,11 @@ contains
     end do
     prt = (mod(iic, max(1, min(ip, ninfo))) == 0)
     if (prt .and. mynode == 0) then
-      write(*,'(1x,A,I8,4F9.4,2F8.3,2I4)') 'SL', iic, 100._8*gsm(2)/max(gsm(1),1._8),&
+      write(*,'(1x,A,I8,4F9.4,2F8.3,2I4,6I6)') 'SL', iic, 100._8*gsm(2)/max(gsm(1),1._8),&
       &100._8*gsm(5)/max(gsm(4),1._8), 100._8*gsm(3)/max(gsm(1),1._8), 100._8*gsm(6)/max(gsm(4),1._8),&
-      &gmx(1), gmx(2), maxval(sl_msub), nlev
+      &gmx(1), gmx(2), maxval(sl_msub), nlev, sl_cnt
     end if
+    if (prt) sl_cnt = 0
   contains
     logical function bad(ii, jj)
       ! the cell or one of its 4 neighbours is near-degenerate at level k
@@ -799,23 +810,27 @@ contains
   end subroutine sl_rivconc
 
 ! ----------------------------------------------------------------------
-  subroutine sl_subpasses(msub, istr, iend, jstr, jend)
+  subroutine sl_subpasses(msub, ic, istr, iend, jstr, jend)
     ! sub-passes per level for the current transports FlxU, FlxV and the
     ! volumes Hz^n: swept_flux_mod's criterion over the cells with a hot
     ! face or next to one (the cells the hot faces' fluxes reach), max over
-    ! all ranks (one reduction)
+    ! all ranks (one reduction); ic = 1 (the key's X) or 2 (T, S): the
+    ! counts for the SL line. Stops above sl_msubmax, naming the cell.
     use dimensions, only: nz
-    use param, only: ocean_grid_comm
+    use param, only: ocean_grid_comm, iSW_corn, jSW_corn
+    use scalars, only: iic
     use grid, only: pm, pn, rmask
     use swept_flux_mod, only: subpass_crit, subpass_count
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max
+    use error_handling_mod, only: error_log
     implicit none
-    integer(kind=4), intent(in) :: istr, iend, jstr, jend
+    integer(kind=4), intent(in) :: ic, istr, iend, jstr, jend
     integer(kind=4), intent(out) :: msub(nz)
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: vx, vy
     logical :: hc(istr-2:iend+2,jstr-2:jend+2)
-    real(kind=8) :: lc(nz), gc(nz), rv, cfc, dvx, dvy
-    integer(kind=4) :: i, j, k, ilo, ihi, jlo, jhi, ierr
+    real(kind=8) :: lc(nz), gc(nz), rv, cfc, dvx, dvy, cr
+    integer(kind=4) :: i, j, k, ilo, ihi, jlo, jhi, ierr, lij(2,nz), nsw
+    character(len=160) :: info
     call sl_ranges(istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
     lc = 0._8
     do k = 1, nz
@@ -839,6 +854,10 @@ contains
       do j = max(jlo,jstr-1), min(jhi,jend+1)
         do i = max(ilo,istr-1), min(ihi,iend+1)
           if (rmask(i,j) < 0.5_8) cycle
+          ! the boundary row at a physical edge (ilo, ihi, jlo, jhi there; outside the loop elsewhere) is not
+          ! advanced by the passes and supplies inflow at the boundary value: it sets no sub-passes (counted with
+          ! the faces it has in range, an inflow cell there asked for about 1000 C passes)
+          if (i == ilo .or. i == ihi .or. j == jlo .or. j == jhi) cycle
           if (.not. (hc(i,j) .or. hc(max(i-1,istr-1),j) .or. hc(min(i+1,iend+1),j) .or.&
           &          hc(i,max(j-1,jstr-1)) .or. hc(i,min(j+1,jend+1)))) cycle
           rv = pm(i,j)*pn(i,j)/sl_hz0(i,j,k)
@@ -855,14 +874,29 @@ contains
           if (j > jlo) then
             dvy = dvy - vy(i,j) ; cfc = max(cfc, -min(vy(i,j),0._8)*rv)
           end if
-          lc(k) = max(lc(k), subpass_crit(cfc, dvx, dvy, 0._8, rv, .false.))
+          cr = subpass_crit(cfc, dvx, dvy, 0._8, rv, .false.)
+          if (cr > lc(k)) then
+            lc(k) = cr ; lij(1,k) = i ; lij(2,k) = j
+          end if
         end do
       end do
     end do
     call mpi_allreduce(lc, gc, nz, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    nsw = 0
     do k = 1, nz
       msub(k) = subpass_count(gc(k))
+      if (sl_levhot(k)) nsw = nsw + msub(k)
+      if (msub(k) > sl_msubmax .and. lc(k) >= gc(k) .and. lc(k) > 0._8)&
+      &  write(*,'(1x,A,I0,A,I0,A,I0,A,I0,A,I0,A)') 'SL_ADV: step ', iic, ', level ', k, ': ', msub(k),&
+      &  ' tracer sub-passes, set by the cell (', lij(1,k)+iSW_corn, ', ', lij(2,k)+jSW_corn, ')'
     end do
+    sl_cnt(2*ic-1) = max(sl_cnt(2*ic-1), maxval(msub)) ; sl_cnt(2*ic) = max(sl_cnt(2*ic), nsw)
+    if (maxval(msub) > sl_msubmax) then
+      write(info,'(A,I0,A,I0,A,I0,A)') 'step ', iic, ': a level needs ', maxval(msub), ' tracer sub-passes (more than ',&
+      &  sl_msubmax, '; the cell is in the SL_ADV line above): shorten dt'
+      call error_log%raise_global(context=module_name//"/sl_subpasses", info=info)
+      call error_log%abort_check()
+    end if
   end subroutine sl_subpasses
 
 ! ----------------------------------------------------------------------
@@ -1177,7 +1211,7 @@ contains
         end do
       end do
       call exchange_xxx(bs, bt)
-      call sl_subpasses(msub, istr, iend, jstr, jend)
+      call sl_subpasses(msub, 1, istr, iend, jstr, jend)
       ! per level: content numerator Hz^n b~ - dt pm pn div(F_UP3(b*) + dF), and the horizontal change
       do k = 1, nz
         do j = jstr-2, jend+2
@@ -1299,7 +1333,7 @@ contains
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     if (.not. sl_anyhot) return
     call reg_tic(rg_sl_trc)
-    call sl_subpasses(sl_msubc, istr, iend, jstr, jend)
+    call sl_subpasses(sl_msubc, 2, istr, iend, jstr, jend)
     call reg_toc(rg_sl_trc)
   end subroutine sl_t_prep
 
@@ -2046,7 +2080,7 @@ contains
     ! weights. Nothing to do without a hot tracer face.
     use dimensions, only: nz, inode, jnode
     use param, only: ocean_grid_comm, np_xi, np_eta, lm, mm
-    use scalars, only: dt, nstp
+    use scalars, only: dt, nstp, iic
     use ocean_vars, only: u, v, hz, flxu, flxv
     use grid, only: pm, pn, umask, vmask
     use roms_mpi, only: exchange_xxx
@@ -2055,8 +2089,10 @@ contains
 #endif
     use swept_flux_mod, only: subpass_crit, subpass_count
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_sum
+    use error_handling_mod, only: error_log
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
+    character(len=160) :: info
     real(kind=8), allocatable, dimension(:,:,:), save :: wtu, wtv, degu, degv
     real(kind=8) :: fa, fb, rv, v1, v1x, v1y, cfc, dvx, dvy, lmx(2*nz), gmx(2*nz), lsm(3), gsm(3)
     logical :: hc(istr-2:iend+2,jstr-2:jend+2)
@@ -2223,6 +2259,13 @@ contains
       sl_msubm(k) = subpass_count(gmx(nz+k))
     end do
     sl_mon = any(sl_levhm)
+    sl_cnt(5) = max(sl_cnt(5), maxval(sl_msubm)) ; sl_cnt(6) = max(sl_cnt(6), sum(sl_msubm, mask=sl_levhm))
+    if (maxval(sl_msubm) > sl_msubmax) then
+      write(info,'(A,I0,A,I0,A,I0,A)') 'step ', iic, ': a level needs ', maxval(sl_msubm),&
+      &  ' momentum sub-passes (more than ', sl_msubmax, '): shorten dt'
+      call error_log%raise_global(context=module_name//"/sl_uv_prep_tile", info=info)
+      call error_log%abort_check()
+    end if
     if (sl_diag > 0) then
       call mpi_allreduce(lsm, gsm, 3, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
       dm_hot(1) = max(dm_hot(1), gsm(1)) ; dm_hot(2) = max(dm_hot(2), gsm(2)) ; dm_fb = max(dm_fb, gsm(3))
