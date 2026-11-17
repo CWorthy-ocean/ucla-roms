@@ -85,6 +85,10 @@ module sl_adv_mod
   ! c2d of every wet u-, v-face at the step's start; the sl_cmax guard tests the faces that stay swept after both
   ! fallbacks (sl_cfallback's second call); the largest such c2d since the last SL line
   real(kind=8), allocatable, dimension(:,:,:) :: sl_c2u, sl_c2v
+  ! (O2) the levels this rank works on: a hot face on the rank or on one of its 8 neighbours (sl_lact); the
+  ! other levels skip their swept arithmetic (their exchanges are still made, so every rank calls the same ones)
+  logical, allocatable, dimension(:) :: sl_lact
+  real(kind=8), allocatable, dimension(:,:,:) :: sl_actf
   real(kind=8) :: sl_c2sw = 0._8
   integer(kind=4) :: sl_cfb_call = 0
 
@@ -495,6 +499,20 @@ contains
       sl_levhot(k) = (gmx(2+nz+k) > 0.5_8)
     end do
     sl_anyhot = any(sl_levhot)
+    if (.not. allocated(sl_lact)) then
+      allocate(sl_lact(nz), sl_actf(GLOBAL_2D_ARRAY,nz)) ; sl_lact = .false. ; sl_actf = 0._8
+    end if
+    sl_lact = .false.
+    if (sl_anyhot) then                      ! (O2) one exchange of the per-level hot flags
+      sl_actf = 0._8
+      do k = 1, nz
+        if (lmx(2+nz+k) > 0.5_8) sl_actf(istr:iend,jstr:jend,k) = 1._8
+      end do
+      call exchange_xxx(sl_actf)
+      do k = 1, nz
+        sl_lact(k) = sl_levhot(k) .and. maxval(sl_actf(istr-2:iend+2,jstr-2:jend+2,k)) > 0.5_8
+      end do
+    end if
     sl_on = sl_anyhot .or. sl_hotprev
     omega_sl = sl_anyhot                     ! omega's corrector-stage budget
     if (sl_anyhot) then                      ! the level-n transports (swept momentum: (U^n + U*)/2)
@@ -607,7 +625,7 @@ contains
       do j = jstr, jend
         do i = istr, iend
           sl_cdeg(i,j,k) = 0._8
-          if (.not. sl_levhot(k) .or. rmask(i,j) < 0.5_8) cycle
+          if (.not. sl_lact(k) .or. rmask(i,j) < 0.5_8) cycle
           rv = dt*pm(i,j)*pn(i,j)/sl_hz0(i,j,k)
           v1x = 1._8 - rv*(FlxU(i+1,j,k)-FlxU(i,j,k))
           v1y = 1._8 - rv*(FlxV(i,j+1,k)-FlxV(i,j,k))
@@ -619,7 +637,7 @@ contains
     call exchange_xxx(sl_cdeg)
     lc = 0._8
     do k = 1, nz
-      if (.not. sl_levhot(k)) cycle
+      if (.not. sl_lact(k)) cycle
       do j = jstr, jend
         do i = istr, iend+1
           if (sl_wu(i,j,k) > 0._8 .and. (cbad(i-1, j) .or. cbad(i, j))) then
@@ -643,7 +661,7 @@ contains
     if (sl_cfb_call == 2) then        ! after step3d_uv2: the sl_cmax guard on the faces that stay swept
       lc = 0._8
       do k = 1, nz
-        if (.not. sl_levhot(k)) cycle
+        if (.not. sl_lact(k)) cycle
         do j = jstr, jend
           do i = istr, iend+1
             if (sl_wu(i,j,k) > 0._8) lc = max(lc, sl_c2u(i,j,k))
@@ -958,7 +976,7 @@ contains
     call sl_ranges(istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
     lc = 0._8
     do k = 1, nz
-      if (.not. sl_levhot(k)) cycle
+      if (.not. sl_lact(k)) cycle            ! (O2) no hot cell on this rank's levels without a hot face nearby
       call sl_facevol(k, vx, vy, istr, iend, jstr, jend)
       hc = .false.
       do j = jstr, jend
@@ -1025,7 +1043,7 @@ contains
   end subroutine sl_subpasses
 
 ! ----------------------------------------------------------------------
-  subroutine sl_sweep(k, msub, vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, rtrc)
+  subroutine sl_sweep(k, msub, vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, rtrc, idle)
     ! level k: the swept fluxes (volume x concentration over the step) of q
     ! (valid on the 2-point halo or the boundary row) through the x-faces
     ! istr..iend+1 x jstr..jend and the y-faces istr..iend x jstr..jend+1,
@@ -1042,6 +1060,7 @@ contains
     integer(kind=4), intent(in) :: k, msub, istr, iend, jstr, jend, rtrc
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in) :: vx, vy, q
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: Fsx, Fsy
+    logical, intent(in), optional :: idle  ! (O2) no hot face here or next door: only the passes' exchanges
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: vol, cc, vxf, cxf, vyf, cyf, dnx, dny,&
     &                                                      Fx, Fy, Fxi, Fyi, sx, sy, dx2, dy2, rcu, rcv
     real(kind=8), allocatable, dimension(:,:), save :: qs, vs
@@ -1051,6 +1070,23 @@ contains
     if (.not. allocated(qs)) then
       allocate(qs(istr-2:iend+2,jstr-2:jend+2), vs(istr-2:iend+2,jstr-2:jend+2))
       qs = 0._8 ; vs = 0._8
+    end if
+    if (present(idle)) then
+      if (idle) then                         ! the neighbours read halos of start values from here (finite, and
+        !                                      the same whatever the run's history: a restart repeats them)
+        Fsx = 0._8 ; Fsy = 0._8
+        if (msub > 1) then
+          do j = jlo, jhi
+            do i = ilo, ihi
+              qs(i,j) = q(i,j) ; vs(i,j) = sl_hz0(i,j,k)
+            end do
+          end do
+        end if
+        do isub = 2, msub
+          call exchange_xxx(qs, vs)
+        end do
+        return
+      end if
     end if
     fm = 1._8/dble(msub)
     do j = jlo, jhi
@@ -1326,6 +1362,7 @@ contains
             dp = -z_r(i,j,k)
 #  endif
             bs(i,j,k) = ga*rhob(i,j,k)
+            if (.not. sl_lact(k)) cycle          ! (O2) b~ only where the sweeps need it
             tt = t(i,j,k,nstp,itemp) + sl_nu*sl_en(i,j,k,1) + sl_rho*sl_et(i,j,k,1)
             if (iTandS > 1) ss = t(i,j,k,nstp,isalt) + sl_nu*sl_en(i,j,k,iTandS) + sl_rho*sl_et(i,j,k,iTandS)
             bt(i,j,k) = rho_eos_point(tt, ss, dp)
@@ -1339,6 +1376,14 @@ contains
       call sl_subpasses(msub, 1, istr, iend, jstr, jend)
       ! per level: content numerator Hz^n b~ - dt pm pn div(F_UP3(b*) + dF), and the horizontal change
       do k = 1, nz
+        if (.not. sl_lact(k)) then           ! (O2) no hot face here or next door: no change, no numerator
+          if (sl_levhot(k)) then
+            call reg_tic(rg_sl_sweep)
+            call sl_sweep(k, msub(k), vx, vy, bs(:,:,k), Fsx, Fsy, istr, iend, jstr, jend, 0, idle=.true.)
+            call reg_toc(rg_sl_sweep)
+          end if
+          cycle
+        end if
         do j = jstr-2, jend+2
           do i = istr-2, iend+2
             fu(i,j) = FlxU(i,j,k)*umask(i,j) ; fv(i,j) = FlxV(i,j,k)*vmask(i,j)
@@ -1511,7 +1556,7 @@ contains
       end do
     end if
     call reg_tic(rg_sl_sweep)
-    call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, itrc)
+    call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, itrc, idle=.not. sl_lact(k))
     call reg_toc(rg_sl_sweep)
     dfx = 0._8 ; dfy = 0._8
     do n = hu_off(k-1)+1, hu_off(k)
@@ -1534,7 +1579,7 @@ contains
         end do
       end do
       call reg_tic(rg_sl_sweep)
-      call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, -1)
+      call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, -1, idle=.not. sl_lact(k))
       call reg_toc(rg_sl_sweep)
       do j = jstr, jend
         do i = istr, iend+1
@@ -1557,7 +1602,7 @@ contains
       ! shadow tracer (c = 1, departure field 1): content after the horizontal step
       q = 1._8
       call reg_tic(rg_sl_sweep)
-      call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, -2)
+      call sl_sweep(k, sl_msubc(k), vx, vy, q, Fsx, Fsy, istr, iend, jstr, jend, -2, idle=.not. sl_lact(k))
       call reg_toc(rg_sl_sweep)
       do j = jstr, jend
         do i = istr, iend+1
@@ -2061,7 +2106,7 @@ contains
   end subroutine mlr_pass
 
 ! ----------------------------------------------------------------------
-  subroutine msweep(msub, g, vol0, vx, vy, q, mx, my, mc, Fsx, Fsy, istr, iend, jstr, jend)
+  subroutine msweep(msub, g, vol0, vx, vy, q, mx, my, mc, Fsx, Fsy, istr, iend, jstr, jend, idle)
     ! as sl_sweep on a grid g: the swept fluxes (volume x value over the
     ! step) of q (valid on the grid's halo) as msub Lin-Rood passes of the
     ! face volumes vx/msub, vy/msub in the cell volumes vol0, each pass from
@@ -2074,6 +2119,7 @@ contains
     integer(kind=4), intent(in) :: msub, istr, iend, jstr, jend
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in) :: vol0, vx, vy, q, mx, my, mc
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: Fsx, Fsy
+    logical, intent(in), optional :: idle  ! (O2) no hot face here or next door: only the passes' exchanges
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: cc, Fx, Fy
     real(kind=8), allocatable, dimension(:,:), save :: qs, vs
     real(kind=8) :: fm
@@ -2081,6 +2127,23 @@ contains
     if (.not. allocated(qs)) then
       allocate(qs(GLOBAL_2D_ARRAY), vs(GLOBAL_2D_ARRAY))
       qs = 0._8 ; vs = 0._8
+    end if
+    if (present(idle)) then
+      if (idle) then                         ! the neighbours read halos of start values from here (finite, and
+        !                                      the same whatever the run's history: a restart repeats them)
+        Fsx = 0._8 ; Fsy = 0._8
+        if (msub > 1) then
+          do j = g%jlo, g%jhi
+            do i = g%ilo, g%ihi
+              qs(i,j) = q(i,j) ; vs(i,j) = vol0(i,j)
+            end do
+          end do
+        end if
+        do isub = 2, msub
+          call exchange_xxx(qs, vs)
+        end do
+        return
+      end if
     end if
     fm = 1._8/dble(msub)
     do j = g%jlo, g%jhi
@@ -2266,6 +2329,7 @@ contains
     mwux = 0._8 ; mwuy = 0._8 ; mwvx = 0._8 ; mwvy = 0._8
     degu = 0._8 ; degv = 0._8
     do k = 1, nz
+      if (.not. sl_lact(k)) cycle            ! (O2) no tracer hot face on the rank or its halo: weights 0
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1+1
           if (mmxu(i,j) > 0.5_8) mwux(i,j,k) = max(wtu(i-1,j,k), wtu(i,j,k))
@@ -2320,6 +2384,10 @@ contains
     call exchange_xxx(degu, degv)
     lsm = 0._8 ; lmx = 0._8
     do k = 1, nz
+      if (.not. sl_lact(k)) then             ! (O2) no momentum hot face at this level on the rank
+        lmx(k) = lsm(1) + lsm(2)
+        cycle
+      end if
       ! the fallback: faces of a near-degenerate cell and of its neighbours are not swept
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1+1
@@ -2580,7 +2648,7 @@ contains
     if (sl_levhm(k)) then
       q = sl_ut(:,:,k)
       call msweep(sl_msubm(k), gu, mvolu(:,:,k), mvux(:,:,k), mvuy(:,:,k), q, mmxu, mmyu, umask, Fsx, Fsy,&
-      &           istr, iend, jstr, jend)
+      &           istr, iend, jstr, jend, idle=.not. sl_lact(k))
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1+1
           w = mwux(i,j,k)
@@ -2610,7 +2678,7 @@ contains
       ! the new carry: swept fluxes of e^n
       q = sl_ue(:,:,k)
       call msweep(sl_msubm(k), gu, mvolu(:,:,k), mvux(:,:,k), mvuy(:,:,k), q, mmxu, mmyu, umask, Fsx, Fsy,&
-      &           istr, iend, jstr, jend)
+      &           istr, iend, jstr, jend, idle=.not. sl_lact(k))
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1
           sl_eun(i,j,k) = -(mwux(i+1,j,k)*Fsx(i+1,j) - mwux(i,j,k)*Fsx(i,j)&
@@ -2631,7 +2699,7 @@ contains
     if (sl_levhm(k)) then
       q = sl_vt(:,:,k)
       call msweep(sl_msubm(k), gv, mvolv(:,:,k), mvvx(:,:,k), mvvy(:,:,k), q, mmxv, mmyv, vmask, Fsx, Fsy,&
-      &           istr, iend, jstr, jend)
+      &           istr, iend, jstr, jend, idle=.not. sl_lact(k))
       do j = gv%j0, gv%j1
         do i = gv%i0, gv%i1+1
           w = mwvx(i,j,k)
@@ -2660,7 +2728,7 @@ contains
       if (sl_diag > 0) call budget(gv, dfx, dfy, 2)
       q = sl_ve(:,:,k)
       call msweep(sl_msubm(k), gv, mvolv(:,:,k), mvvx(:,:,k), mvvy(:,:,k), q, mmxv, mmyv, vmask, Fsx, Fsy,&
-      &           istr, iend, jstr, jend)
+      &           istr, iend, jstr, jend, idle=.not. sl_lact(k))
       do j = gv%j0, gv%j1
         do i = gv%i0, gv%i1
           sl_evn(i,j,k) = -(mwvx(i+1,j,k)*Fsx(i+1,j) - mwvx(i,j,k)*Fsx(i,j)&
@@ -3073,6 +3141,7 @@ contains
     pu = 0._8 ; pv = 0._8
 #ifdef IMEX_IGW
     do k = 1, nz
+      if (.not. sl_lact(k)) cycle            ! (O2) read only at the hot points of the level
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1
           pu(i,j,k) = sl_wth*dt*0.25_8*(pm(i,j)+pm(i-1,j))*(pn(i,j)+pn(i-1,j))*pg_star_u(i,j,k)&
@@ -3090,6 +3159,7 @@ contains
 #endif
     sl_zu = u(:,:,:,nstp) ; sl_zv = v(:,:,:,nstp)
     do k = 1, nz
+      if (.not. sl_lact(k)) cycle            ! (O2) no point with wc > 0 on this level of the rank
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1
           sl_zu(i,j,k) = u(i,j,k,nnew)/(0.5_8*(Hz(i,j,k)+Hz(i-1,j,k)))
@@ -3114,6 +3184,7 @@ contains
     do isw = 1, 3
       call exchange_xxx(sl_zu, sl_zv)
       do k = 1, nz
+        if (.not. sl_lact(k)) cycle
         do j = gu%j0, gu%j1
           do i = gu%i0, gu%i1
             if (sl_wcu(i,j,k) <= 0._8) cycle
@@ -3130,6 +3201,7 @@ contains
         end do
       end do
       do k = 1, nz
+        if (.not. sl_lact(k)) cycle
         do j = gu%j0, gu%j1
           do i = gu%i0, gu%i1
             if (sl_wcu(i,j,k) > 0._8) sl_zu(i,j,k) = tu(i,j,k)
