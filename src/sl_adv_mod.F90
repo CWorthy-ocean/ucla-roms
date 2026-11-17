@@ -82,6 +82,11 @@ module sl_adv_mod
   ! since the last SL line
   real(kind=8) :: sl_cfb_step = 0._8, sl_cfb_max = 0._8
   real(kind=8), allocatable, dimension(:,:,:) :: sl_cdeg
+  ! c2d of every wet u-, v-face at the step's start; the sl_cmax guard tests the faces that stay swept after both
+  ! fallbacks (sl_cfallback's second call); the largest such c2d since the last SL line
+  real(kind=8), allocatable, dimension(:,:,:) :: sl_c2u, sl_c2v
+  real(kind=8) :: sl_c2sw = 0._8
+  integer(kind=4) :: sl_cfb_call = 0
 
   public :: read_nml_sl_adv
 
@@ -285,7 +290,9 @@ contains
     &//' levels with more than one (both from the level-n transports); then the sub-passes the swept passes'&
     &//' used since the last line, the most of a level and of the sum over the swept levels, for the key''s X,'&
     &//' for T, S and for u, v; the faces put back to stock by the near-degenerate fallback with the level-n'&
-    &//' transports (this step) and with the corrector transports (the most per step since the last line)'
+    &//' transports (this step) and with the corrector transports (the most per step since the last line);'&
+    &//' the largest c2d of the faces that stay swept after both (since the last line; the sl_cmax guard).'&
+    &//' The largest c2d (6th column) is over all faces, the stock ones included'
     if (mynode == 0 .and. sl_diag > 0) write(*,'(1x,A)') 'SL_ADV: SL_DIAG line = step, shadow tracer'&
     &//' max |c - 1| in hot columns after the explicit step, most hot faces within 3 cells of an open edge,'&
     &//' most faces put back to stock by the near-degenerate-cell fallback,'&
@@ -362,6 +369,10 @@ contains
     hu_off(0) = 0 ; hv_off(0) = 0
     ! near-degenerate cells (the stock fallback): the level-n transports' net
     ! horizontal outflow over the step leaves less than sl_v1min of the volume
+    if (.not. allocated(sl_c2u)) then
+      allocate(sl_c2u(GLOBAL_2D_ARRAY,nz), sl_c2v(GLOBAL_2D_ARRAY,nz)) ; sl_c2u = 0._8 ; sl_c2v = 0._8
+    end if
+    sl_cfb_call = 0
     if (.not. allocated(sl_deg)) then
       allocate(sl_deg(GLOBAL_2D_ARRAY,nz)) ; sl_deg = 0._8
     end if
@@ -406,6 +417,7 @@ contains
               w = 0._8                                 ! stock fallback
               if (i <= iendR) lsm(8) = lsm(8) + 1._8
             end if
+            sl_c2u(i,j,k) = c2d
             if (i <= iendR) then                 ! faces of this rank (statistics)
               lsm(1) = lsm(1) + 1._8
               if (w > 0._8) lsm(2) = lsm(2) + 1._8
@@ -437,6 +449,7 @@ contains
               w = 0._8                                 ! stock fallback
               if (j <= jendR) lsm(8) = lsm(8) + 1._8
             end if
+            sl_c2v(i,j,k) = c2d
             if (j <= jendR) then
               lsm(4) = lsm(4) + 1._8
               if (w > 0._8) lsm(5) = lsm(5) + 1._8
@@ -507,12 +520,6 @@ contains
       sl_msub(k) = subpass_count(gmx(2+k))
       if (sl_msub(k) > 1) nlev = nlev + 1
     end do
-    if (gmx(1) > sl_cmax) then
-      write(info,'(A,I0,A,F8.3,A,F8.3,A)') 'step ', iic, ': the largest c2d, ', gmx(1),&
-      &', exceeds sl_cmax = ', sl_cmax, ': shorten dt'
-      call error_log%raise_global(context=module_name//"/sl_weights_tile", info=info)
-      call error_log%abort_check()
-    end if
     ! the SL line at the cadence of diag's line
     sl_cfb_max = max(sl_cfb_max, sl_cfb_step) ; sl_cfb_step = 0._8
     jp = min(iic, 2*ninfo) - 1
@@ -522,12 +529,12 @@ contains
     end do
     prt = (mod(iic, max(1, min(ip, ninfo))) == 0)
     if (prt .and. mynode == 0) then
-      write(*,'(1x,A,I8,4F9.4,2F8.3,2I4,6I6,2I8)') 'SL', iic, 100._8*gsm(2)/max(gsm(1),1._8),&
+      write(*,'(1x,A,I8,4F9.4,2F8.3,2I4,6I6,2I8,F8.3)') 'SL', iic, 100._8*gsm(2)/max(gsm(1),1._8),&
       &100._8*gsm(5)/max(gsm(4),1._8), 100._8*gsm(3)/max(gsm(1),1._8), 100._8*gsm(6)/max(gsm(4),1._8),&
-      &gmx(1), gmx(2), maxval(sl_msub), nlev, sl_cnt, nint(gsm(8)), nint(sl_cfb_max)
+      &gmx(1), gmx(2), maxval(sl_msub), nlev, sl_cnt, nint(gsm(8)), nint(sl_cfb_max), sl_c2sw
     end if
     if (prt) then
-      sl_cnt = 0 ; sl_cfb_max = 0._8
+      sl_cnt = 0 ; sl_cfb_max = 0._8 ; sl_c2sw = 0._8
     end if
   contains
     logical function bad(ii, jj)
@@ -583,10 +590,13 @@ contains
     use ocean_vars, only: flxu, flxv
     use grid, only: pm, pn, rmask
     use roms_mpi, only: exchange_xxx
-    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_sum
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_sum, mpi_max
     use timers, only: reg_tic, reg_toc, rg_sl_adv
+    use scalars, only: iic
+    use error_handling_mod, only: error_log
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
+    character(len=160) :: info
     real(kind=8) :: rv, v1, v1x, v1y, lc, gc
     integer(kind=4) :: i, j, k, ierr
     call reg_tic(rg_sl_adv)
@@ -629,6 +639,31 @@ contains
     end do
     call mpi_allreduce(lc, gc, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     sl_cfb_step = sl_cfb_step + gc
+    sl_cfb_call = sl_cfb_call + 1
+    if (sl_cfb_call == 2) then        ! after step3d_uv2: the sl_cmax guard on the faces that stay swept
+      lc = 0._8
+      do k = 1, nz
+        if (.not. sl_levhot(k)) cycle
+        do j = jstr, jend
+          do i = istr, iend+1
+            if (sl_wu(i,j,k) > 0._8) lc = max(lc, sl_c2u(i,j,k))
+          end do
+        end do
+        do j = jstr, jend+1
+          do i = istr, iend
+            if (sl_wv(i,j,k) > 0._8) lc = max(lc, sl_c2v(i,j,k))
+          end do
+        end do
+      end do
+      call mpi_allreduce(lc, gc, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+      sl_c2sw = max(sl_c2sw, gc)
+      if (gc > sl_cmax) then
+        write(info,'(A,I0,A,F8.3,A,F8.3,A)') 'step ', iic, ': the largest c2d of the faces that stay swept, ', gc,&
+        &', exceeds sl_cmax = ', sl_cmax, ': shorten dt'
+        call error_log%raise_global(context=module_name//"/sl_cfallback", info=info)
+        call error_log%abort_check()
+      end if
+    end if
     call reg_toc(rg_sl_adv)
   contains
     logical function cbad(ii, jj)
