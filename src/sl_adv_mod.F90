@@ -78,12 +78,16 @@ module sl_adv_mod
   ! sub-passes since the last SL line: the most of a level and of the sum over the swept levels, for the key's X
   ! (sl_x_prep), for T, S (corrector) and for the momentum
   integer(kind=4) :: sl_cnt(6) = 0
+  ! faces put back to stock by the corrector-transport test (sl_cfallback): this step's, and the most per step
+  ! since the last SL line
+  real(kind=8) :: sl_cfb_step = 0._8, sl_cfb_max = 0._8
+  real(kind=8), allocatable, dimension(:,:,:) :: sl_cdeg
 
   public :: read_nml_sl_adv
 
 #ifdef SOLVE3D
   public :: sl_adv_init, sl_adv_weights, sl_rst_def, sl_rst_wrt, sl_rst_get
-  public :: sl_ts_prep, sl_t_prep, sl_hflux, sl_vflux, sl_t_finish
+  public :: sl_ts_prep, sl_t_prep, sl_hflux, sl_vflux, sl_t_finish, sl_cfallback
   public :: sl_uv_carry_in, sl_uv_hflux, sl_uv_vcol, sl_uv_cor
 
   ! blend weights of the u- and v-faces (0 stock .. 1 fully swept) for the
@@ -280,7 +284,8 @@ contains
     &//' fully swept u, v [%], largest c2d, largest single-direction C, most sub-passes of a level,'&
     &//' levels with more than one (both from the level-n transports); then the sub-passes the swept passes'&
     &//' used since the last line, the most of a level and of the sum over the swept levels, for the key''s X,'&
-    &//' for T, S and for u, v'
+    &//' for T, S and for u, v; the faces put back to stock by the near-degenerate fallback with the level-n'&
+    &//' transports (this step) and with the corrector transports (the most per step since the last line)'
     if (mynode == 0 .and. sl_diag > 0) write(*,'(1x,A)') 'SL_ADV: SL_DIAG line = step, shadow tracer'&
     &//' max |c - 1| in hot columns after the explicit step, most hot faces within 3 cells of an open edge,'&
     &//' most faces put back to stock by the near-degenerate-cell fallback,'&
@@ -509,6 +514,7 @@ contains
       call error_log%abort_check()
     end if
     ! the SL line at the cadence of diag's line
+    sl_cfb_max = max(sl_cfb_max, sl_cfb_step) ; sl_cfb_step = 0._8
     jp = min(iic, 2*ninfo) - 1
     ip = 1
     do while (ip < jp)
@@ -516,11 +522,13 @@ contains
     end do
     prt = (mod(iic, max(1, min(ip, ninfo))) == 0)
     if (prt .and. mynode == 0) then
-      write(*,'(1x,A,I8,4F9.4,2F8.3,2I4,6I6)') 'SL', iic, 100._8*gsm(2)/max(gsm(1),1._8),&
+      write(*,'(1x,A,I8,4F9.4,2F8.3,2I4,6I6,2I8)') 'SL', iic, 100._8*gsm(2)/max(gsm(1),1._8),&
       &100._8*gsm(5)/max(gsm(4),1._8), 100._8*gsm(3)/max(gsm(1),1._8), 100._8*gsm(6)/max(gsm(4),1._8),&
-      &gmx(1), gmx(2), maxval(sl_msub), nlev, sl_cnt
+      &gmx(1), gmx(2), maxval(sl_msub), nlev, sl_cnt, nint(gsm(8)), nint(sl_cfb_max)
     end if
-    if (prt) sl_cnt = 0
+    if (prt) then
+      sl_cnt = 0 ; sl_cfb_max = 0._8
+    end if
   contains
     logical function bad(ii, jj)
       ! the cell or one of its 4 neighbours is near-degenerate at level k
@@ -549,6 +557,86 @@ contains
 #endif
     end function near_edge
   end subroutine sl_weights_tile
+
+! ----------------------------------------------------------------------
+  subroutine sl_cfallback
+    ! After set_HUV1 and after step3d_uv2 (before each corrector-stage omega):
+    ! the near-degenerate test of sl_weights_tile with the transports the
+    ! following swept passes sweep (the corrector's FlxU, FlxV over the volumes
+    ! Hz^n). A cell whose net horizontal outflow leaves less than sl_v1min of
+    ! its volume (2-D or either 1-D direction) puts its faces and its
+    ! neighbours' back to stock, as the level-n test does at the start of the
+    ! step; the level-n test stays (the momentum's weights and the key's X
+    ! are made between the two calls).
+    use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
+    implicit none
+    integer(kind=4), save :: tile = 0
+# include "compute_tile_bounds.h"
+    if (.not. sl_anyhot) return
+    call sl_cfallback_tile(istr, iend, jstr, jend)
+  end subroutine sl_cfallback
+
+  subroutine sl_cfallback_tile(istr, iend, jstr, jend)
+    use dimensions, only: nz
+    use param, only: ocean_grid_comm, lm, mm
+    use scalars, only: dt
+    use ocean_vars, only: flxu, flxv
+    use grid, only: pm, pn, rmask
+    use roms_mpi, only: exchange_xxx
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_sum
+    use timers, only: reg_tic, reg_toc, rg_sl_adv
+    implicit none
+    integer(kind=4), intent(in) :: istr, iend, jstr, jend
+    real(kind=8) :: rv, v1, v1x, v1y, lc, gc
+    integer(kind=4) :: i, j, k, ierr
+    call reg_tic(rg_sl_adv)
+    if (.not. allocated(sl_cdeg)) then
+      allocate(sl_cdeg(GLOBAL_2D_ARRAY,nz)) ; sl_cdeg = 0._8
+    end if
+    do k = 1, nz
+      do j = jstr, jend
+        do i = istr, iend
+          sl_cdeg(i,j,k) = 0._8
+          if (.not. sl_levhot(k) .or. rmask(i,j) < 0.5_8) cycle
+          rv = dt*pm(i,j)*pn(i,j)/sl_hz0(i,j,k)
+          v1x = 1._8 - rv*(FlxU(i+1,j,k)-FlxU(i,j,k))
+          v1y = 1._8 - rv*(FlxV(i,j+1,k)-FlxV(i,j,k))
+          v1 = v1x + v1y - 1._8
+          if (min(v1, v1x, v1y) < sl_v1min) sl_cdeg(i,j,k) = 1._8
+        end do
+      end do
+    end do
+    call exchange_xxx(sl_cdeg)
+    lc = 0._8
+    do k = 1, nz
+      if (.not. sl_levhot(k)) cycle
+      do j = jstr, jend
+        do i = istr, iend+1
+          if (sl_wu(i,j,k) > 0._8 .and. (cbad(i-1, j) .or. cbad(i, j))) then
+            sl_wu(i,j,k) = 0._8
+            if (i <= iend) lc = lc + 1._8
+          end if
+        end do
+      end do
+      do j = jstr, jend+1
+        do i = istr, iend
+          if (sl_wv(i,j,k) > 0._8 .and. (cbad(i, j-1) .or. cbad(i, j))) then
+            sl_wv(i,j,k) = 0._8
+            if (j <= jend) lc = lc + 1._8
+          end if
+        end do
+      end do
+    end do
+    call mpi_allreduce(lc, gc, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    sl_cfb_step = sl_cfb_step + gc
+    call reg_toc(rg_sl_adv)
+  contains
+    logical function cbad(ii, jj)
+      integer(kind=4), intent(in) :: ii, jj
+      cbad = max(sl_cdeg(ii,jj,k), sl_cdeg(ii-1,jj,k), sl_cdeg(ii+1,jj,k), sl_cdeg(ii,jj-1,k),&
+      &          sl_cdeg(ii,jj+1,k)) > 0.5_8
+    end function cbad
+  end subroutine sl_cfallback_tile
 
 ! ----------------------------------------------------------------------
   subroutine sl_ranges(istr, iend, jstr, jend, ilo, ihi, jlo, jhi)

@@ -508,7 +508,7 @@ contains
     use step3d_t_mod, only: step3d_t
     use bgc_subcycle_mod, only: bgc_physics_subcycle, bgcsub_accumulate, bgcsub_step
 #ifdef SOLVE3D
-    use sl_adv_mod, only: sl_adv, sl_adv_weights, sl_ts_prep, sl_uv_carry_in
+    use sl_adv_mod, only: sl_adv, sl_adv_weights, sl_ts_prep, sl_uv_carry_in, sl_cfallback
 #endif
     use step3d_uv_mod, only: step3d_uv1, step3d_uv2
 #  ifdef UV_VIS2
@@ -623,6 +623,7 @@ contains
 
     !! nnew = n+1
     !! nrhs = n+1/2
+    if (sl_adv) call sl_cfallback   ! swept-volume advection: near-degenerate cells with the corrector transport
     call omega
     call reg_toc(rg_huv1_omega)
 
@@ -725,6 +726,7 @@ contains
     call reg_tic(rg_uv2_omega)
     call step3d_uv2(0)
 
+    if (sl_adv) call sl_cfallback   ! swept-volume advection: near-degenerate cells with the transport T, S sweep
     call omega
     call reg_toc(rg_uv2_omega)
 
