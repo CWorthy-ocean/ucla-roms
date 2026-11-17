@@ -119,6 +119,8 @@ contains
     use timers, only: start_timers, stop_timers
     use error_handling_mod, only: error_log
     use roms_read_write, only: close_frc_read_files
+    use zslice_output, only: close_zslice_file
+    use extract_data, only: close_extract_files
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: wrt_upscale_final, do_upscale
 #endif
@@ -149,6 +151,8 @@ contains
     if (do_cdr_gas_exch_output) call wrt_cdr_gas_final
 #endif
     call close_frc_read_files
+    call close_zslice_file      ! output files kept open between records
+    call close_extract_files
 
     call stop_timers()
     return
@@ -522,12 +526,13 @@ contains
 ! below corresponds to step "n" (denoted here as "nstp"), while counter
 ! "iic" corresponds to "n+1", so normally, assuming that time is
 ! counted from zero, the following relation holds: time=dt*(iic-1).
-!  Also note that the output history/restart/averages routines write
-! time and all the fields at step "n" (not n+1), while the first
-! element of structure "time_index" written into the files is actually
-! iic-1, hence normally time=time_index*dt there.  Same rule applies
-! to the diagnostic routine "diag" which prints time and time step
-! (actually iic-1) on the screen.
+!  Within the step, the outputs and the diagnostic routine "diag" run at
+! its end, after "time" has been advanced to n+1, so there normally
+! time=dt*iic, and "iic" is the step written to "time_step" and printed
+! by "diag".
+! The snapshot outputs (history, restart, extracted data) write the
+! fields of n+1 there: the 2D fields at "knew" and the 3D fields at
+! "nnew"; "nstp" still holds time n.
 
     time=start_time+dt*float(iic-ntstart) !<-- corresp. to "nstp"
     tdays=time*sec2day

@@ -22,14 +22,20 @@ module zslice_output
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_z, pio_open_or_abort
-  use pio, only : PIO_closefile, PIO_write
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_initialize_z, pio_open_or_abort,&
+  &pio_keep_output_open, pio_put_time, pio_kept_file_t, pio_use_kept_file, pio_close_kept_file
+  use pio, only : PIO_closefile, PIO_write, PIO_syncfile
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
 
   implicit none
 
   private
+  public :: close_zslice_file
+#ifdef PARALLEL_IO
+  ! The z-slice file, kept open between records (pio_keep_output_open)
+  type(pio_kept_file_t) :: zslice_file
+#endif
   character(len=13) :: module_name = "zslice_output"
   integer(kind=4),parameter :: max_ndep = 20
   integer(kind=4),parameter :: max_nt_z = 10
@@ -450,6 +456,7 @@ contains
 #ifdef PARALLEL_IO
 
       if (record==nrpf_zslice) then
+        call close_zslice_file
         if (mynode == 0) then
           call create_file('_zsl',fname,nonode=.true.)
           ierr=nf90_open(fname,nf90_write,ncid)
@@ -478,20 +485,28 @@ contains
       if (.not. zslice_avg) call calc_zslice
       record = record+1
 
-      if (mynode == 0) then
-        ierr=nf90_open(fname,nf90_write,ncid)
-        if (ierr/=nf90_noerr) then
-          call error_log%check_netcdf_status(netcdf_status=ierr, &
-            info="error opening "//trim(fname), &
-            context=module_name//"/"//sr_name)
-        end if
-        call ncwrite(ncid,'ocean_time',(/time/),(/record/))
-        ierr=nf90_close(ncid)
-      endif
-      call error_log%abort_check()
-      call MPI_Barrier(ocean_grid_comm, ierr)
+      if (pio_keep_output_open) then
+        ! Open the file once and add each record's time value through PIO,
+        ! instead of a serial netCDF open, write and close on rank 0 behind a
+        ! barrier and a collective open and close for every record.
+        call pio_use_kept_file(zslice_file, fname, module_name//"/"//sr_name)
+        call pio_put_time('ocean_time', time, record)
+      else
+        if (mynode == 0) then
+          ierr=nf90_open(fname,nf90_write,ncid)
+          if (ierr/=nf90_noerr) then
+            call error_log%check_netcdf_status(netcdf_status=ierr, &
+              info="error opening "//trim(fname), &
+              context=module_name//"/"//sr_name)
+          end if
+          call ncwrite(ncid,'ocean_time',(/time/),(/record/))
+          ierr=nf90_close(ncid)
+        endif
+        call error_log%abort_check()
+        call MPI_Barrier(ocean_grid_comm, ierr)
 
-      call pio_open_or_abort(trim(fname), module_name//"/"//sr_name, PIO_write)
+        call pio_open_or_abort(trim(fname), module_name//"/"//sr_name, PIO_write)
+      endif
 
       pio_gtype = '3Drz'
       if (wrt_T_zslice) then
@@ -522,7 +537,13 @@ contains
         endif
       endif
 
-      call PIO_closefile(pio_FileDesc)
+      if (pio_keep_output_open) then
+        ! The fields were flushed one by one (pio_ncwrite3); this flushes
+        ! the time value, so the file on disk is complete up to this record.
+        call PIO_syncfile(pio_FileDesc)
+      else
+        call PIO_closefile(pio_FileDesc)
+      endif
 
       if (mynode == 0) then
         write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
@@ -597,6 +618,15 @@ contains
     endif
     call error_log%abort_check()
   end subroutine wrt_zslice !]
+!----------------------------------------------------------------------
+  subroutine close_zslice_file  ![
+    ! Close the z-slice file kept open between records: before the next file
+    ! is created, and at the end of the run (collective).
+    implicit none
+#ifdef PARALLEL_IO
+    call pio_close_kept_file(zslice_file)
+#endif
+  end subroutine close_zslice_file  !]
 !----------------------------------------------------------------------
 
 end module zslice_output

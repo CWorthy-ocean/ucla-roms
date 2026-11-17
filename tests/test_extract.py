@@ -22,7 +22,10 @@ the tiling. The settings extract_data rejects for several children stop
 ROMS at startup with a message. Every variable of the boundary files must
 hold data: with PARALLEL_IO the joined file used to define every tracer on
 every boundary and leave the ones output_vars does not request (passive,
-CDR_LITE, bgc) at the netCDF fill value.
+CDR_LITE, bgc) at the netCDF fill value. With PARALLEL_IO, child A's
+boundary records must equal the parent history at their bry_time,
+interpolated with extract_data's weights; the 3D fields used to be one
+parent step older.
 """
 import hashlib
 from pathlib import Path
@@ -245,6 +248,87 @@ def test_two_children(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_
             assert ds["temp_south"].shape == (800 // OUTPUT_PERIOD, n, nx)
 
     assert_output_matches_reference(reference_results, "extract_two_children_pio", summaries)
+
+
+def _bilinear(field: np.ndarray, i: np.ndarray, j: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """``field`` (..., eta, xi) at the fractional indices ``i``, ``j`` of its
+    own grid, with extract_data's weights (compute_coef): bilinear, times
+    ``mask``, normalised."""
+    i0, j0 = np.floor(i).astype(int), np.floor(j).astype(int)
+    fx, fy = i - i0, j - j0
+    corners = [(0, 0, (1 - fx) * (1 - fy)), (1, 0, fx * (1 - fy)),
+               (0, 1, (1 - fx) * fy), (1, 1, fx * fy)]
+    weights = np.stack([c * mask[j0 + dj, i0 + di] for di, dj, c in corners])
+    weights /= weights.sum(axis=0)
+    return sum(field[..., j0 + dj, i0 + di] * w for (di, dj, _), w in zip(corners, weights))
+
+
+def _expected_boundary(his, h: int, grid, nest, var: str, bnd: str) -> np.ndarray:
+    """What extract_data writes to ``<var>_<bnd>`` (no vertical remapping)
+    from history record ``h`` of the parent. The nesting file holds absolute
+    parent indices; rho indices are 0.5 larger, as in init_extract_data, and
+    the history and grid files index u from i = 1 and v from j = 1.
+    Velocities are rotated from the parent's grid to the child's by the
+    parent grid angle at the point minus the child's angle there."""
+    if var in ("zeta", "temp", "salt"):
+        i, j = nest[f"child_{bnd}_r"].values
+        return _bilinear(his[var].values[h], i + 0.5, j + 0.5, grid["mask_rho"].values)
+    i, j, ang = nest[f"child_{bnd}_{'u' if var in ('u', 'ubar') else 'v'}"].values
+    ang = _bilinear(grid["angle"].values, i + 0.5, j + 0.5, grid["mask_rho"].values) - ang
+    xi, eta = ("u", "v") if var in ("u", "v") else ("ubar", "vbar")
+    ui = _bilinear(his[xi].values[h], i, j + 0.5, grid["mask_u"].values)
+    vi = _bilinear(his[eta].values[h], i + 0.5, j, grid["mask_v"].values)
+    if var in ("u", "ubar"):
+        return np.cos(ang) * ui - np.sin(ang) * vi
+    return np.sin(ang) * ui + np.cos(ang) * vi
+
+
+def test_boundary_data_at_record_time(tmp_path, extract_conf, input_dir, pio_input_dir,
+                                      nesting_files):
+    """Each boundary record holds the parent's state at its bry_time: child
+    A's zeta, ubar, vbar, temp, salt, u and v (not remapped: child A has the
+    parent's vertical grid) equal the parent history, written every step, at
+    the record's time, interpolated and rotated as extract_data does.
+    do_extract_data runs at the end of the step, when time is already n+1;
+    it used to take the 3D fields at nstp (time n), one step older than the
+    record and its 2D fields. temp, u and v change over one step, so that lag
+    fails here. The other tracers, which the history file does not hold, are
+    read the same way. Both builds share these lines of do_extract_data; the
+    joined PARALLEL_IO files are compared."""
+    conf = extract_conf
+    if not conf.pio:
+        pytest.skip("only PARALLEL_IO writes joined history and boundary files")
+    nml = _nml(conf, input_dir, pio_input_dir, [_child(conf, nesting_files, "A")])
+    steps, dt = nml["TIME_STEPPING"]["ntimes"], nml["TIME_STEPPING"]["dt"]
+    nml["BASIC_OUTPUT_SETTINGS"].update(output_period_his=dt, nrpf_his=steps + 1)
+    nml["TS_OUTPUT_SETTINGS"].update(wrt_temp=True, wrt_salt=True)
+    conf.run(nml, cwd=tmp_path)
+
+    (bry_path,) = tmp_path.glob("childA_bry.*.nc")
+    (his_path,) = tmp_path.glob("roms_his.*.nc")
+    with (
+        xr.open_dataset(bry_path, decode_cf=False) as bry,
+        xr.open_dataset(his_path, decode_cf=False) as his,
+        xr.open_dataset(nesting_files["A"], decode_cf=False) as nest,
+        xr.open_dataset(pio_input_dir / "example_input_grid.nc", decode_cf=False) as grid,
+    ):
+        his_time = his["ocean_time"].values  # s; bry_time is in days
+        assert len(his_time) == steps + 1
+        assert bry.sizes["time"] == steps * dt // OUTPUT_PERIOD
+        for rec, day in enumerate(bry["bry_time"].values):
+            (h,) = np.flatnonzero(np.abs(his_time - day * 86400) < 1e-3)
+            assert h > 0, f"record {rec} at the initial time"
+            for bnd in ("south", "north", "east", "west"):
+                for var in ("zeta", "ubar", "vbar", "temp", "salt", "u", "v"):
+                    name = f"{var}_{bnd} record {rec}"
+                    now = _expected_boundary(his, h, grid, nest, var, bnd)
+                    scale = np.abs(now).max()
+                    err = float(np.abs(bry[f"{var}_{bnd}"].values[rec] - now).max() / scale)
+                    assert err <= 1e-12, f"{name}: max relative difference {err:.2e}"
+                    if var in ("temp", "u", "v"):
+                        before = _expected_boundary(his, h - 1, grid, nest, var, bnd)
+                        change = float(np.abs(now - before).max() / scale)
+                        assert change > 1e-7, f"{name}: changes by {change:.2e} in a step"
 
 
 def _pflx_values(conf, run_dir: Path) -> dict[str, np.ndarray]:

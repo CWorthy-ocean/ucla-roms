@@ -11,7 +11,7 @@ module random_output
   use roms_read_write, only:&
   &dn_tm, dn_xr, dn_xu, dn_yr, dn_yv, dn_zr,&
   &create_file
-  use nc_read_write, only: nccreate, ncwrite
+  use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill
   use netcdf, only:&
   &nf90_noerr, nf90_write, nf90_open,&
   &nf90_put_att, nf90_close, nf90_double,&
@@ -169,6 +169,7 @@ contains
           &info="error opening "//fname,&
           &context=module_name//"/"//sr_name)
         end if
+        call nc_set_record_nofill(ncid)
         ! always add time
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
         ierr=nf90_close (ncid)

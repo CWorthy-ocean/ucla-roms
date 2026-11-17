@@ -14,7 +14,7 @@ module surf_flux
   use roms_read_write, only:&
   &ncforce, dn_tm, dn_xr, dn_xu, dn_yr&
   &, dn_yv, create_file, store_string_att
-  use nc_read_write, only: nccreate, ncwrite
+  use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill
   use netcdf, only:&
   &nf90_global, nf90_write, nf90_nofill,&
   &nf90_open, nf90_put_att, nf90_close, nf90_set_fill, nf90_redef
@@ -647,7 +647,7 @@ subroutine wrt_sflux  ![
 
     if (mynode == 0) then
     ierr=nf90_open(fname,nf90_write,ncid)
-!    ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
+    call nc_set_record_nofill(ncid)
 
     call ncwrite(ncid,'ocean_time',(/time/),(/record/))
     ierr=nf90_close(ncid)
