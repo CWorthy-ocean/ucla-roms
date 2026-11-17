@@ -2864,14 +2864,15 @@ contains
         ru(i,j,k) = ru(i,j,k) - (fzx(k)-fzx(k-1)) + (fzs(k)-fzs(k-1))
         ! close the cell's volume budget: its relative volume loss by its own transports (the blended horizontal
         ! ones and the interpolated We, Wi) less the mean loss of its two rho cells; the flux form leaves
-        ! X (1 - def) for a uniform X, so X def is added back (advective: in ru, and in the barotropic forcing)
+        ! X (1 - def) for a uniform X, so X def is added back (advective: in ru, and in the barotropic forcing);
+        ! only at levels with a hot face: elsewhere the fluxes are the stock ones, which carry the same residual
         qr0 = dt*pm(i-1,j)*pn(i-1,j)*(FlxU(i,j,k)-FlxU(i-1,j,k)+FlxV(i-1,j+1,k)-FlxV(i-1,j,k)&
         &   + We(i-1,j,k)-We(i-1,j,k-1)+Wi(i-1,j,k)-Wi(i-1,j,k-1))/Hz(i-1,j,k)
         qr1 = dt*pm(i,j)*pn(i,j)*(FlxU(i+1,j,k)-FlxU(i,j,k)+FlxV(i,j+1,k)-FlxV(i,j,k)&
         &   + We(i,j,k)-We(i,j,k-1)+Wi(i,j,k)-Wi(i,j,k-1))/Hz(i,j,k)
         qu = dtpp*(we_(k)-we_(k-1)+wi_(k)-wi_(k-1))/hzc(k)
         def = qu + dtpp*sl_dvu(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)
-        if (sl_mvol == 1) ru(i,j,k) = ru(i,j,k) + x(k)*hzc(k)*dlim(def)/dtpp
+        if (sl_mvol == 1 .and. wmx(k) > 0._8) ru(i,j,k) = ru(i,j,k) + x(k)*hzc(k)*dlim(def)/dtpp
         if (sl_diag > 0) then        ! the residual the term cancels (stock and blended transports)
           dm_def(1) = max(dm_def(1), abs(qu + dtpp*sl_dsu(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)))
           dm_def(2) = max(dm_def(2), abs(def))
@@ -2939,7 +2940,7 @@ contains
           &   + We(i,j,k)-We(i,j,k-1)+Wi(i,j,k)-Wi(i,j,k-1))/Hz(i,j,k)
           qu = dtpp*(we_(k)-we_(k-1)+wi_(k)-wi_(k-1))/hzc(k)
           def = qu + dtpp*sl_dvv(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)
-          if (sl_mvol == 1) rv(i,j,k) = rv(i,j,k) + x(k)*hzc(k)*dlim(def)/dtpp
+          if (sl_mvol == 1 .and. wmx(k) > 0._8) rv(i,j,k) = rv(i,j,k) + x(k)*hzc(k)*dlim(def)/dtpp
         end do
         pgr = 0._8
 #ifdef IMEX_IGW
