@@ -701,6 +701,8 @@ Optional: if the group is absent, `sl_adv = .false.`. Experimental and in develo
 | `sl_c_hi` | `0.9` | `c2d` from which a face is fully swept (weight 1); `0 <= sl_c_lo < sl_c_hi` |
 | `sl_cmax` | `5.0` | ROMS stops when the largest `c2d` of a step exceeds it; must exceed `sl_c_hi` |
 | `sl_diag` | `0` | 1: the `SL_DIAG` and `SL_TRC` diagnostic lines (constancy, budgets, per-tracer content) |
+| `sl_mvol` | `1` | Momentum swept volumes: 1 = the 2-point means of `dt (U^n + U*)/2`, with the closure of the momentum cells' volume budget; 2 = of `dt U*`, the transport the rho cells' volumes are stepped with (no closure) |
+| `sl_defmax` | `0.0` | With `sl_mvol = 1`: the closure defect `def` is clipped to `+-sl_defmax` (0: no limit) |
 
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)

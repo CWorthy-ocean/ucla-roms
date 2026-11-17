@@ -54,7 +54,12 @@ module sl_adv_mod
   real(kind=8), public, protected :: sl_c_hi = 0.9_8   ! c2d from which faces are fully swept
   real(kind=8), public, protected :: sl_cmax = 5._8    ! stop when the largest c2d exceeds it
   integer(kind=4), public, protected :: sl_diag = 0    ! 1: SL_DIAG line (shadow tracer constancy, budgets)
-  namelist /SL_ADV_SETTINGS/ sl_adv, sl_c_lo, sl_c_hi, sl_cmax, sl_diag
+  ! momentum swept volumes: 1 = dt (U^n + U*)/2 with the closure of the cells' volume budget; 2 = dt U* (the
+  ! transport the rho cells' volumes are stepped with), no closure
+  integer(kind=4), public, protected :: sl_mvol = 1
+  ! with sl_mvol = 1: the closure term X def of a hot momentum cell uses def clipped to +-sl_defmax (<= 0: no limit)
+  real(kind=8), public, protected :: sl_defmax = 0._8
+  namelist /SL_ADV_SETTINGS/ sl_adv, sl_c_lo, sl_c_hi, sl_cmax, sl_diag, sl_mvol, sl_defmax
 
   character(len=10) :: module_name = "sl_adv_mod"
   real(kind=8), parameter :: c6 = 0.1666666666666666_8   ! the UP3 constant of compute_horiz_tracer_fluxes.h
@@ -202,6 +207,8 @@ contains
     &context=module_name//"/"//sr_name, info="sl_adv: sl_cmax must exceed sl_c_hi")
     if (sl_diag < 0 .or. sl_diag > 1) call error_log%raise_global(&
     &context=module_name//"/"//sr_name, info="sl_adv: sl_diag must be 0 or 1")
+    if (sl_mvol < 1 .or. sl_mvol > 2) call error_log%raise_global(&
+    &context=module_name//"/"//sr_name, info="sl_adv: sl_mvol must be 1 or 2")
 #if defined ADV_ISONEUTRAL || defined PARABOLIC_SPLINES || defined BIO_1ST_USTREAM_TEST
     call error_log%raise_global(context=module_name//"/"//sr_name,&
     &info="sl_adv needs the UP3 / U3 tracer corrector (no ADV_ISONEUTRAL, PARABOLIC_SPLINES,"&
@@ -210,6 +217,8 @@ contains
     if (mynode == 0) write(*,'(/1x,A,3(A,ES10.3),A,I2)') 'SL_ADV: swept-volume advection on'&
     &//' (tracers and momentum):', ' sl_c_lo =', sl_c_lo, ', sl_c_hi =', sl_c_hi,&
     &', sl_cmax =', sl_cmax, ', sl_diag =', sl_diag
+    if (mynode == 0) write(*,'(1x,A,I2,A,ES10.3)') 'SL_ADV: momentum swept volumes sl_mvol =', sl_mvol,&
+    &', closure limit sl_defmax =', sl_defmax
   end subroutine read_nml_sl_adv
 
 #ifdef SOLVE3D
@@ -2042,6 +2051,9 @@ contains
     end if
     wtu = sl_wu ; wtv = sl_wv
     call exchange_xxx(wtu, wtv)
+    if (sl_mvol == 2) then          ! swept volume dt U* alone (the means below then give dt U*)
+      sl_fu0 = FlxU ; sl_fv0 = FlxV
+    end if
     ! swept volumes of the momentum faces and the cell volumes
     do k = 1, nz
       do j = jstr-2, jend+2
@@ -2664,7 +2676,7 @@ contains
         &   + We(i,j,k)-We(i,j,k-1)+Wi(i,j,k)-Wi(i,j,k-1))/Hz(i,j,k)
         qu = dtpp*(we_(k)-we_(k-1)+wi_(k)-wi_(k-1))/hzc(k)
         def = qu + dtpp*sl_dvu(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)
-        ru(i,j,k) = ru(i,j,k) + x(k)*hzc(k)*def/dtpp
+        if (sl_mvol == 1) ru(i,j,k) = ru(i,j,k) + x(k)*hzc(k)*dlim(def)/dtpp
         if (sl_diag > 0) then        ! the residual the term cancels (stock and blended transports)
           dm_def(1) = max(dm_def(1), abs(qu + dtpp*sl_dsu(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)))
           dm_def(2) = max(dm_def(2), abs(def))
@@ -2732,7 +2744,7 @@ contains
           &   + We(i,j,k)-We(i,j,k-1)+Wi(i,j,k)-Wi(i,j,k-1))/Hz(i,j,k)
           qu = dtpp*(we_(k)-we_(k-1)+wi_(k)-wi_(k-1))/hzc(k)
           def = qu + dtpp*sl_dvv(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)
-          rv(i,j,k) = rv(i,j,k) + x(k)*hzc(k)*def/dtpp
+          if (sl_mvol == 1) rv(i,j,k) = rv(i,j,k) + x(k)*hzc(k)*dlim(def)/dtpp
         end do
         pgr = 0._8
 #ifdef IMEX_IGW
@@ -2760,6 +2772,14 @@ contains
     end if
     call reg_toc(rg_sl_mom)
   contains
+    real(kind=8) function dlim(d)
+      ! the closure defect, clipped to +-sl_defmax when sl_defmax > 0: the term X def is an explicit source of
+      ! def times the cell's content per step; beyond 1 - sl_v1min (half the content) the u-cell's own transports
+      ! and the rho cells disagree about the cell's volume by as much as the near-degenerate fallback allows
+      real(kind=8), intent(in) :: d
+      dlim = d
+      if (sl_defmax > 0._8) dlim = max(-sl_defmax, min(sl_defmax, d))
+    end function dlim
     subroutine column(qt, rh, dv)
       ! the hot column's explicit vertical fluxes: fzx of X (U3 on hot interfaces, spline elsewhere),
       ! fzs the stock spline of u*
