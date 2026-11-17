@@ -196,6 +196,16 @@ module imex_igw
                                                  ! of the step less the wave part that R carries (ADVECTIVE_LIMIT_DIAG:
                                                  ! uniform-current limit 0.5 -> 0.9 in the slice). Cost: one more
                                                  ! advection pass of one scalar and a halo exchange per step
+  real(kind=8)    :: imex_corr_adv_clip = 0.1_8 ! imex_corr_adv = 1: X clipped per cell so that the face velocity
+                                                 ! it commands through the cell's own along-level coupling stays
+                                                 ! below this Courant number (adj_diag in imex_adj_setup); 0 off.
+                                                 ! Where b_ref varies along a level by much more than its N2
+                                                 ! allows (the b_ref smoothing near the bed and the surface of
+                                                 ! sloping columns at fronts; operator N2 near the floor) a cell is
+                                                 ! stiff along the level, and the corrector turns X into a velocity
+                                                 ! of one cell on one level (1-25 m/s on a Bay of Bengal nest,
+                                                 ! blow-ups from 810 s). The clip acted on 1e-5 of the cell-steps
+                                                 ! there and on none of a Hawaii nest and the Sargasso Sea
   integer(kind=4) :: imex_warm = 1               ! stage-solve start: 0 zero; 1 the stage's previous solution
   integer(kind=4) :: imex_pcg_start = 3          ! stage solve: 0 imex_pcg_warm/
                                                  ! imex_pcg; 1 imex_pcg_s: rhs scaling, residual of the guess,
@@ -336,7 +346,7 @@ module imex_igw
   &  imex_verbose, imex_solver_enabled, imex_allow_explicit, imex_selftest,&
   &  imex_n2_ref, imex_n2_taper, imex_warm,&
   &  imex_bref_hours, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec, imex_stage_fused,&
-  &  imex_redu, imex_rst_state, imex_mix_split, imex_corr_adv,&
+  &  imex_redu, imex_rst_state, imex_mix_split, imex_corr_adv, imex_corr_adv_clip,&
   &  imex_obc_mode, imex_obc_nmodes, imex_obc_q0, imex_obc_tref,&
   &  imex_obc_mprint, imex_obc_cmin, imex_pc, imex_pc_modes, imex_pc_dump, imex_pc_cou_on, imex_pc_cou_k,&
   &  imex_pc_smoother, imex_pc_levels, imex_pc_ncoarse
@@ -420,6 +430,10 @@ module imex_igw
   ! diagonal term of M (1/N2, see imex_eta_setup)
   real(kind=8), allocatable, dimension(:,:,:) :: ad_n2k, ad_n2t, ad_n2o
   logical :: eta_old = .false.
+  ! imex_corr_adv_clip > 0 (imex_corr_adv = 1): the largest |X| of each cell (adj_diag; allocated only then),
+  ! and this rank's clipped and active cell-steps since the last IMEX_CLIP line (imex_verbose >= 1)
+  real(kind=8), allocatable, dimension(:,:,:) :: ad_xc
+  real(kind=8) :: xc_cnt(2) = 0._8
   real(kind=8), allocatable, dimension(:,:,:) :: bref_sav   ! last b_ref (reused until the next rebuild; exact restart)
   integer(kind=4) :: bref_last = -100000000        ! step of the last b_ref build
   logical :: act_exchanged = .false.               ! ad_act (static) has its halos
@@ -732,6 +746,10 @@ contains
       write(info,'(A,I0,A)') 'imex_corr_adv = ', imex_corr_adv, ' must be 0 or 1'
       call error_log%raise_global(context=context, info=trim(info))
     end if
+    if (imex_corr_adv_clip < 0._8) then
+      write(info,'(A,ES12.4,A)') 'imex_corr_adv_clip = ', imex_corr_adv_clip, ' must be >= 0 (0: off)'
+      call error_log%raise_global(context=context, info=trim(info))
+    end if
     if (imex_selftest /= 0 .and. imex_selftest /= 1) then
       write(info,'(A,I0,A)') 'imex_selftest = ', imex_selftest, ' must be 0 (none) or 1 (elliptic solver)'
       call error_log%raise_global(context=context, info=trim(info))
@@ -895,6 +913,8 @@ contains
     write(*,'(3x,A,ES10.2)') "unknown eta = db/N2, operator N2 + c D_b D_b^T;  imex_n2_taper =", imex_n2_taper
     if (imex_corr_adv == 1) write(*,'(3x,A)') 'imex_corr_adv = 1: corrector rhs with the step''s advective'&
     &//' buoyancy change'
+    if (imex_corr_adv == 1) write(*,'(3x,A,F7.3,A)') 'imex_corr_adv_clip =', imex_corr_adv_clip,&
+    &' (largest Courant number of the face velocity X commands in a cell; 0 off)'
     if (imex_obc_modal) write(*,'(3x,A,A,A,I3,A,F7.4,A,F10.1,A)') "imex_obc_mode = '",&
     &trim(imex_obc_mode), "' -> 'modal': imex_obc_nmodes =", imex_obc_nmodes, '  imex_obc_q0 =', imex_obc_q0,&
     &'  imex_obc_tref =', imex_obc_tref, ' s'
@@ -1556,6 +1576,7 @@ contains
     !   response R that the rhs carries with the IMEX weights, so X holds the advection of b* - b_ref by the
     !   whole flow and of b_ref by the depth-mean part of the flow, less the predictor's non-wave change NW.
     ! sqrt(s) = 1/ad_n2k (imex_n2_taper): a tapered cell gets X scaled as its wave forcing is.
+    ! imex_corr_adv_clip > 0: |X| <= ad_xc, the cell's cap (adj_diag in imex_adj_setup).
     ! imex_verbose >= 2: one IMEX_ADVB line per step (rank 0): rms of NW, of X and of dps, max |X|; and where
     ! (global i, j, k; from the rank that holds it).
     !DIR$ ATTRIBUTES NOINLINE :: imex_advb_rhs
@@ -1583,6 +1604,7 @@ contains
     real(kind=8) :: ga, sf, hf, mk, rh(nz), cp(nz), cm(nz), qs(nz), qr(nz), ws(0:nz), wr(0:nz), fzs(0:nz),&
     &               fzr(0:nz), cz(0:nz), as, ar, rt, nw, x, hk, hkp, hkm, hkp2, loc(4), glob(4), xm, xmg
     integer(kind=4) :: i, j, k, i0, i1, s0, s1, st, ierr, xl(3)
+    logical :: clip
     if (.not. allocated(fxs) .or. na0 /= ib0 .or. na1 /= ib1) then
       if (allocated(fxs)) deallocate(fxs, fus, fxr, fur, fes, fvs, fer, fvr, dd, cv)
       allocate( fxs(ib0:ib1+1,nz), fus(ib0:ib1+1,nz), fxr(ib0:ib1+1,nz), fur(ib0:ib1+1,nz),&
@@ -1607,6 +1629,7 @@ contains
     enddo
     call exchange_xxx(advb_bs)
     loc = 0._8 ; xm = 0._8 ; xl = 0
+    clip = allocated(ad_xc)
     s0 = 1 ; s1 = 2
     call vrow(jb0, s0)
     do j=jb0,jb1
@@ -1645,6 +1668,12 @@ contains
           nw = ad_n2c(i,j,k)*ga*(rhob(i,j,k) - advb_rn(i,j,k)) - dps(i,j,k)
           x = act(i,j)/ad_n2k(i,j,k)*( ad_n2c(i,j,k)*dts*rt - nw )
           if (max(cz(k-1), cz(k)) > advb_czmax) x = 0._8   ! no explicit estimate (see above)
+          if (clip) then                                   ! imex_corr_adv_clip
+            if (abs(x) > ad_xc(i,j,k)) then
+              x = sign(ad_xc(i,j,k), x) ; xc_cnt(1) = xc_cnt(1) + 1._8
+            end if
+            xc_cnt(2) = xc_cnt(2) + act(i,j)
+          end if
           advb_mem(i,j,k) = dps(i,j,k) - x
           if (imex_verbose >= 2 .and. act(i,j) > 0._8) then
             loc(1) = loc(1) + nw*nw ; loc(2) = loc(2) + x*x ; loc(3) = loc(3) + dps(i,j,k)**2
@@ -2167,6 +2196,7 @@ contains
     call imex_diag_line
     call tq_mark(26)
     if (iic == ntstart+ntimes-1) call imex_tm_print
+    if (iic == ntstart+ntimes-1 .and. allocated(ad_xc) .and. imex_verbose >= 1) call imex_clip_line
 
     if (imex_selftest == 1 .and. iic < ntstart+3 .and. mynode == 0) then
       tstep = mpi_wtime() - t_step_start
@@ -5474,6 +5504,7 @@ contains
     real(kind=8), dimension(0:nz) :: dlt
     real(kind=8) :: hk, hkp, hkm, hkp2, rh, tlin, tp, tm, loc(2), glob(2), bref
     integer(kind=4) :: i, j, k, kp, km, i0, i1, j0, j1, ierr, nbref
+    logical :: clip
 
     ! with nbref > 1 (imex_bref_hours): b_ref is rebuilt from the
     ! state every nbref steps and reused (bref_sav, with halos and the N2raw
@@ -5554,7 +5585,10 @@ contains
     call imex_bcoef(ad_bb, ad_cu, ad_cv, ad_cz)
     call imex_cz_split(.true.)
     call tq_mark(9)
-    call adj_diag
+    clip = (imex_corr_adv == 1 .and. imex_corr_adv_clip > 0._8)
+    if (clip .and. .not. allocated(ad_xc)) allocate( ad_xc(GLOBAL_2D_ARRAY,nz) )
+    call adj_diag                            ! (and the cap ad_xc of imex_corr_adv_clip)
+    if (clip .and. imex_verbose >= 1) call imex_clip_line
     call tq_mark(10)
     call imex_eta_setup(2)                   ! rhs and diagonal weights
     if (imex_obc_modal) call obm_build       ! 'modal': modes, admittances and the Jacobi term
@@ -5568,14 +5602,26 @@ contains
       !   P the prefix sum of rho, A = gam - cz(k) + cz(k-1), B = gam + c - cz(k);
       ! a^2/V_f = Hz_f dn_f/dm_f = q.
       ! (the vertical term with each cell's floored interface values czt, czb: imex_cz_split)
+      ! clip (imex_corr_adv_clip > 0): the cap ad_xc of X (imex_advb_rhs), the |X| at which the cell's own
+      ! response to X alone, eta = X N2/(N2 + c2 dd) (N2 = ad_n2t, c2 = (theta_c dt)^2), moves its faces
+      ! through its along-level coupling by imex_corr_adv_clip dx/dt:
+      !   sqrt(c2 dd_h) N2/(N2 + c2 dd) |X| = imex_corr_adv_clip/(dt max(pm, pn)),
+      ! dd_h = dd without the cell's vertical term (czt = czb = b_cell: dl = c_face - b_cell along the level),
+      ! so that sqrt(c2 dd_h) is the rms over the faces of theta_c dt |c_face - b_cell| pm (taper included).
+      ! Large only where dd_h is large against N2 (a cell stiff along the level); huge where dd_h = 0 and
+      ! in inactive cells. A function of the operator's arrays only, so imex_rst_replay rebuilds it.
       use ocean_vars, only: hz
-      real(kind=8), dimension(nz) :: cf, hf, q
-      real(kind=8) :: rs, qq(0:nz), pr(0:nz), gam, aa, bq
+      use scalars, only: dt
+      real(kind=8), dimension(nz) :: cf, hf, q, sh
+      real(kind=8) :: rs, qq(0:nz), pr(0:nz), gam, aa, bq, dl, c2c, kh, gx
       integer(kind=4) :: i, j, k, m, ii, jj
       ad_dd = 0._8
+      if (clip) ad_xc = huge(1._8)
+      c2c = (imex_theta_c*dt)**2
       do j=jb0,jb1
         do i=ib0,ib1
           if (act(i,j) <= 0._8) cycle
+          if (clip) sh = 0._8
           do m=1,4
             select case (m)
             case (1, 2)                                  ! west, east u-face
@@ -5606,14 +5652,44 @@ contains
               bq = gam + cf(k) - ad_czt(i,j,k)
               ad_dd(i,j,k) = ad_dd(i,j,k) + aa*aa*qq(k-1) + bq*bq*q(k) + gam*gam*(qq(nz)-qq(k))
             enddo
+            if (clip) then                               ! dd_h: czt = czb = b_cell, so aa = gam
+              do k=1,nz
+                dl = cf(k) - ad_bb(i,j,k)
+                gam = -dl*hf(k)*rs ; bq = gam + dl
+                sh(k) = sh(k) + gam*gam*(qq(nz)-q(k)) + bq*bq*q(k)
+              enddo
+            end if
           enddo
           do k=1,nz
             ad_dd(i,j,k) = ad_dd(i,j,k)*pm(i,j)*pn(i,j)/(Hz(i,j,k)*ad_n2k(i,j,k)**2)
           enddo
+          if (clip) then
+            do k=1,nz
+              kh = c2c*pm(i,j)*pn(i,j)/(Hz(i,j,k)*ad_n2k(i,j,k)**2*ad_n2t(i,j,k))*sh(k)   ! c2 dd_h/N2
+              gx = sqrt(max(kh, 0._8)*ad_n2t(i,j,k))*ad_n2t(i,j,k)/(ad_n2t(i,j,k) + c2c*ad_dd(i,j,k))
+              if (gx > 0._8) ad_xc(i,j,k) = imex_corr_adv_clip/(dt*max(pm(i,j), pn(i,j))*gx)
+            enddo
+          end if
         enddo
       enddo
     end subroutine adj_diag
   end subroutine imex_adj_setup
+
+  !----------------------------------------------------------------------
+  subroutine imex_clip_line
+    ! imex_corr_adv_clip, imex_verbose >= 1 (rank 0; at each operator rebuild and at the end of the run):
+    ! the cell-steps whose X was clipped since the last line, of all active cell-steps
+    use scalars, only: iic
+    use param, only: mynode, ocean_grid_comm
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_sum
+    implicit none
+    real(kind=8) :: glob(2)
+    integer(kind=4) :: ierr
+    call mpi_allreduce(xc_cnt, glob, 2, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    xc_cnt = 0._8
+    if (mynode == 0) write(*,'(1x,A,I8,A,ES11.4,A,ES11.4)') 'IMEX_CLIP', iic,&
+    &' cell-steps with X clipped since the last line', glob(1), ' of', glob(2)
+  end subroutine imex_clip_line
 
   !----------------------------------------------------------------------
   subroutine imex_cz_split(flo)
