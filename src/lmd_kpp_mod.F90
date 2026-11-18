@@ -72,7 +72,9 @@ contains
 
     real(kind=8), parameter ::&
     ! Ricr - chosen as 0.15 by JM & PD 2020-09
-    &Ricr=0.15_8,&     ! Critical bulk Richardson number (0.3_8)
+    ! KPP sensitivity test: Ricr lowered to 0.10 (0.12.0 has 0.15). Vtc scales as
+    ! 1/Ricr, so only the resolved-shear and Ekman terms of Cr change.
+    &Ricr=0.10_8,&     ! Critical bulk Richardson number (0.3_8)
     &Ri_inv=1._8/Ricr,&
     &epssfc=0.1_8,&    ! nondimensional extent of the surface layer
     &betaT=-0.2_8,&    ! ratio of entrainment flux to surface buoyancy
