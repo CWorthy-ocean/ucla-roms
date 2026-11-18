@@ -174,11 +174,22 @@ module imex_igw
                                                  ! faces keep u^n, wall ghost rows the wall rule; the depth mean of u(nnew) is the
                                                  ! explicit barotropic step that step3d_uv2 replaces, so it stays at u^n; land faces
                                                  ! masked, as u^n is); default 1;
+                                                 ! 2 the same split Laplacian from the explicit state, i.e. u,v(nnew)/Hz
+                                                 ! before the corrector's implicit correction, added before it (roms_step calls
+                                                 ! imex_solve_stage(corr) after visc3d), so that the solve's pressure and the
+                                                 ! corrector transport answer to the viscous increment, and t3dmix from t^n+1
+                                                 ! (after step3d_t, flux form); with 1 the increment added after the solve
+                                                 ! reaches the buoyancy through the corrector transport with no pressure
+                                                 ! response, which lets an along-edge mode grow at 'modal' open edges from
+                                                 ! v dt/dx^2 ~ 0.09 (hence the rule <= 0.05 for value 1); 2 removes it
+                                                 ! (sargasso 3040 s with v_sponge 300: 0.10). The Laplacian's
+                                                 ! own explicit limit remains (v dt/dx^2 ~ 0.25). Not with NHMG or TS_DIF4;
+                                                 ! under BGC subcycling only T and S are mixed here (the window is unchanged);
                                                  ! 0 as before (visc3d from u^n added after the implicit
                                                  ! correction). With the additive form the implicit step's stiff-limit eigenvalue
                                                  ! (-0.25 +- 0.32i for set B) plus the explicit Laplacian -4 v dt/dx^2 leaves the
                                                  ! unit circle at v dt/dx^2 ~ 0.07-0.08 (C_igw 2.4-2.7); the split form multiplies
-                                                 ! it by (1 - 4 v dt/dx^2). Lateral tracer mixing (t3dmix) is always from t^n
+                                                 ! it by (1 - 4 v dt/dx^2). Lateral tracer mixing (t3dmix) is from t^n with 0 and 1
                                                  ! (main.F90): the predictor's implicit correction overshoots and is reversed by the
                                                  ! corrector's, so mixing the predictor state t^n+1/2 anti-diffuses the step's net
                                                  ! change
@@ -742,10 +753,16 @@ contains
       write(info,'(A,I0,A)') 'imex_verbose = ', imex_verbose, ' must be 0, 1 or 2'
       call error_log%raise_global(context=context, info=trim(info))
     end if
-    if (imex_mix_split < 0 .or. imex_mix_split > 1) then
-      write(info,'(A,I0,A)') 'imex_mix_split = ', imex_mix_split, ' must be 0 or 1'
+    if (imex_mix_split < 0 .or. imex_mix_split > 2) then
+      write(info,'(A,I0,A)') 'imex_mix_split = ', imex_mix_split, ' must be 0, 1 or 2'
       call error_log%raise_global(context=context, info=trim(info))
     end if
+#if defined NHMG || defined TS_DIF4
+    if (imex_mix_split == 2) then
+      write(info,'(A)') 'imex_mix_split = 2 is not supported with NHMG or TS_DIF4'
+      call error_log%raise_global(context=context, info=trim(info))
+    end if
+#endif
     if (imex_corr_adv < 0 .or. imex_corr_adv > 1) then
       write(info,'(A,I0,A)') 'imex_corr_adv = ', imex_corr_adv, ' must be 0 or 1'
       call error_log%raise_global(context=context, info=trim(info))
@@ -3941,7 +3958,8 @@ contains
   !   sqrt(1 - f^2/omega_M2^2). It returns part of a Kelvin wave that leaves along a coast (13 % at 0.5);
   ! - sponge: a nest whose boundary data carry the internal tide runs best with a quarter of the v_sponge
   !   used with the stock boundary (the sponge damps the tide that comes in); an outermost domain, whose
-  !   boundary data have no internal tide, keeps the stock value. Keep v_sponge dt/dx^2 <= 0.1;
+  !   boundary data have no internal tide, keeps the stock value. Keep v_sponge dt/dx^2 <= 0.1
+  !   (imex_mix_split 0, 1; with 2 the explicit Laplacian's own limit, about 0.25);
   ! - SPONGE_TUNE's ub_tune has no effect on the normal velocity under 'modal': leave it off;
   ! - start: a run that does not begin from the state its boundary data come from (a nest not initialised
   !   from its parent) should take its first ~10 days with imex_obc_mode = 'fixed' and switch to 'modal'
@@ -4293,10 +4311,15 @@ contains
       enddo
 #  endif
       call mpi_allreduce(sdn, gsdn, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
-      if (mynode == 0 .and. imex_obc_tref > 0._8 .and. gsdn > 0.1_8) write(*,'(1x,A,F6.3,A)')&
+      if (mynode == 0 .and. imex_mix_split < 2 .and. imex_obc_tref > 0._8 .and. gsdn > 0.1_8)&
+      &  write(*,'(1x,A,F6.3,A)')&
       &  'IMEX_IGW NOTE: the explicit viscosity (sponge) reaches visc2 dt/dx^2 =', gsdn, ' (> 0.1): with the'&
       &//' modal reference an edge mode can grow at a rate ~1/tref (N3 Hawaii nest: 0.17 blew up for tref 6 h'&
-      &//' to 3 d, 0.085 ran 29 d); reduce v_sponge or dt'
+      &//' to 3 d, 0.085 ran 29 d); reduce v_sponge or dt, or set imex_mix_split = 2'
+      if (mynode == 0 .and. imex_mix_split == 2 .and. gsdn > 0.2_8) write(*,'(1x,A,F6.3,A)')&
+      &  'IMEX_IGW NOTE: the explicit viscosity (sponge) reaches visc2 dt/dx^2 =', gsdn, ' (> 0.2): the'&
+      &//' explicit Laplacian itself is stable only to about 0.25 (where the coefficient is uniform in both'&
+      &//' directions, as in the corners of the sponge); reduce v_sponge or dt'
       if (mynode == 0 .and. imex_obc_tref > 0._8) then
         ! |H| of the filter at the lowest inertial frequency of the open edges; the rule tref >= 3
         ! inertial periods (first order) is |H| <= 1/sqrt(1 + (6 pi)^2) = 0.053

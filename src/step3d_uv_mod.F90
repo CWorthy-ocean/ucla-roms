@@ -68,7 +68,7 @@ contains
 #endif
     use instant_output, only: wrt_instant
 #ifdef IMEX_IGW
-    use imex_igw, only: imex_solve_stage, imex_stage_corr
+    use imex_igw, only: imex_solve_stage, imex_stage_corr, imex_mix_split
 #endif
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
@@ -370,8 +370,10 @@ contains
     !! velocities are in the form:  u*dz, v*dz, w*dz
 #ifdef IMEX_IGW
     ! Elliptic correction of u, v(nnew) (Hz-weighted here); rufrc keeps
-    ! the vertical integral of the explicit rhs. visc3d runs after this.
-    call imex_solve_stage(imex_stage_corr)
+    ! the vertical integral of the explicit rhs. visc3d runs after this,
+    ! except with imex_mix_split = 2, where roms_step calls the correction
+    ! after visc3d (lateral mixing ahead of the implicit solve).
+    if (imex_mix_split /= 2) call imex_solve_stage(imex_stage_corr)
 #endif
 
 # if defined NHMG

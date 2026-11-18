@@ -514,7 +514,9 @@ contains
     &  rg_prsgrd, rg_pre_step3d, rg_huv1_omega, rg_uv1_visc, rg_step2d,&
     &  rg_uv2_omega, rg_step3d_t, rg_t3dmix, rg_avg_diag, rg_output
 #ifdef IMEX_IGW
-    use imex_igw, only: imex_begin_step, imex_shift_levels, imex_solver_enabled
+    use imex_igw, only: imex_begin_step, imex_shift_levels, imex_solver_enabled,&
+    &  imex_mix_split, imex_solve_stage, imex_stage_corr
+    use tracers, only: exchange_tracers, nt_step
 #endif
     implicit none
 #ifdef IMEX_IGW
@@ -674,6 +676,13 @@ contains
 #  ifdef UV_VIS2
     call visc3d
 #  endif
+#ifdef IMEX_IGW
+    ! imex_mix_split = 2: the corrector's elliptic correction after visc3d, so
+    ! that the implicit pressure and the corrector transport answer to the
+    ! viscous increment (visc3d's split Laplacian of the explicit state);
+    ! otherwise step3d_uv1 has made it (no-op when the solver is off)
+    if (imex_mix_split == 2) call imex_solve_stage(imex_stage_corr)
+#endif
     call reg_toc(rg_uv1_visc)
 
 
@@ -721,7 +730,16 @@ contains
     call reg_tic(rg_t3dmix)
 #  ifdef IMEX_IGW
     nrhs_sv = nrhs
-    if (imex_solver_enabled) nrhs = nstp   ! mix t^n, not t^n+1/2
+    if (imex_solver_enabled) then
+      if (imex_mix_split == 2) then
+        ! mix t^n+1 (the state step3d_t left, open-boundary and wall ghost
+        ! cells by t3dbc); under TS_DIF2 step3d_t leaves its MPI halo stale
+        call exchange_tracers(nnew, nt_step)
+        nrhs = nnew
+      else
+        nrhs = nstp                           ! mix t^n, not t^n+1/2
+      end if
+    end if
 #  endif
     call t3dmix
 #  ifdef IMEX_IGW
