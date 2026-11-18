@@ -105,7 +105,7 @@ contains
         if (cx < 0._8) then       !--> cancel, if inflow
           cx=0._8 ; cy=0._8
 #   if defined M2_FRC_BRY || defined M2NUDGING
-          cext=dtfast*ubind * 0.5_8*(pn(i,jstr-1)+pn(i,jstr))
+          cext=min(dtfast*ubind * 0.5_8*(pn(i,jstr-1)+pn(i,jstr)), 1._8)
         else
           cext=0._8
 #   endif
@@ -226,7 +226,7 @@ contains
         if (cx < 0._8) then       !--> cancel, if inflow
           cx=0._8 ; cy=0._8
 #   if defined M2_FRC_BRY || defined M2NUDGING
-          cext=dtfast*ubind * 0.5_8*(pn(i,jend)+pn(i,jend+1))
+          cext=min(dtfast*ubind * 0.5_8*(pn(i,jend)+pn(i,jend+1)), 1._8)
         else
           cext=0._8
 #   endif
@@ -324,7 +324,7 @@ contains
         if (cx < 0._8) then       !--> cancel, if inflow
           cx=0._8 ; cy=0._8
 #    if defined M2_FRC_BRY || defined M2NUDGING
-          cext=dtfast*ubind * 0.5_8*(pm(istr-1,j-1)+pm(istr-1,j))
+          cext=min(dtfast*ubind * 0.5_8*(pm(istr-1,j-1)+pm(istr-1,j)), 1._8)
         else
           cext=0._8
 #    endif
@@ -344,10 +344,11 @@ contains
         cy= 0.125_8*dtfast*(vbar(istr-1,j,kstp)+vbar(istr,j,kstp))&
         &*(pn(istr-1,j)+pn(istr-1,j-1)+pn(istr,j)+pn(istr,j-1))
 
+        cy=max(-1._8, min(1._8, cy))   ! Courant numbers <= 1: convex update
         if (cx > 0._8) then
-          cext=0._8
+          cext=0._8 ; cx=min(cx, 1._8)
         else
-          cext=-cx ; cx=0._8
+          cext=min(-cx, 1._8) ; cx=0._8
         endif
 
         vbar(istr-1,j,knew)=(1._8-cx)*( vbar(istr-1,j,kstp)&
@@ -446,7 +447,7 @@ contains
       if (cx < 0._8) then       !--> cancel, if inflow
         cx=0._8 ; cy=0._8
 #    if defined M2_FRC_BRY || defined M2NUDGING
-        cext=dtfast*ubind * 0.5_8*(pm(iend+1,j-1)+pm(iend+1,j))
+        cext=min(dtfast*ubind * 0.5_8*(pm(iend+1,j-1)+pm(iend+1,j)), 1._8)
       else
         cext=0._8
 #    endif
@@ -466,10 +467,11 @@ contains
       cy=0.125_8*dtfast*(vbar(iend,j,kstp)+vbar(iend+1,j,kstp))&
       &*(pn(iend,j)+pn(iend,j-1)+pn(iend+1,j)+pn(iend+1,j-1))
 
+      cy=max(-1._8, min(1._8, cy))   ! Courant numbers <= 1: convex update
       if (cx > 0._8) then
-        cext=0._8
+        cext=0._8 ; cx=min(cx, 1._8)
       else
-        cext=-cx ; cx=0._8
+        cext=min(-cx, 1._8) ; cx=0._8
       endif
 
       vbar(iend+1,j,knew)=(1._8-cx)*( vbar(iend+1,j,kstp)&

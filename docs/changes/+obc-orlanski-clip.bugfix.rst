@@ -1,0 +1,3 @@
+The Orlanski open-boundary updates no longer overshoot and grow a two-cell checkerboard along the edge at long time steps or under fast flow along the edge: their Courant numbers (across the edge, along it, and the inflow nudging weight) are capped at 1, so each update is an average with weights between 0 and 1.
+- This covers the 3-D velocities (``OBC_M3ORLANSKI``), the tracers (``OBC_TORLANSKI``), the tangential barotropic velocity and the non-hydrostatic ``w``, on all four edges. The Flather conditions are unchanged.
+- Results change only where a Courant number exceeded 1; elsewhere they are unchanged bit for bit (sargasso, N3 and N6 nests at their usual steps).

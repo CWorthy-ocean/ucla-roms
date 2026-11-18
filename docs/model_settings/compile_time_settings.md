@@ -80,6 +80,8 @@ These switches control the configuration of the open boundaries, including which
 
 Tracer advection through an open-boundary face is upwind on inflow: the corrector step uses the ghost-cell value, which the tracer boundary condition relaxes toward the boundary data while water flows in (`OBC_TORLANSKI` with `T_FRC_BRY`) or sets to the boundary data (`OBC_TSPECIFIED`). Outflow faces use the interior advection scheme. This needs no key and applies to every tracer on every open side.
 
+The Orlanski radiation updates (`OBC_M3ORLANSKI`, `OBC_TORLANSKI`, and the tangential barotropic velocity) form the new boundary value as a weighted average of the old boundary value, its neighbour along the edge, the first interior value and the boundary data, with weights from Courant numbers of the flow across the edge, along it, and of the inflow nudging. Each of these Courant numbers is capped at 1, so the weights stay between 0 and 1 and the update cannot overshoot when a long time step or a fast flow along the edge would otherwise take it above 1.
+
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
 | `M2_FRC_BRY` | Apply barotropic (2D) momentum forcing at the open boundaries | enabled | Can be combined with other keys (`M2NUDGING`, `OBC_M2SPECIFIED`) to have different effects. Requires inputs for `ubar` and `vbar`. |

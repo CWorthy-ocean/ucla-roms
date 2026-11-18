@@ -46,10 +46,11 @@ contains
           cx=-dtfwd*u(istr,j,k,nrhs)*pm(istr-1,j)
           cy=0.5_8*dtfwd*(v(istr-1,j,k,nrhs)+v(istr-1,j+1,k,nrhs))&
           &*pn(istr-1,j)
+          cy=max(-1._8, min(1._8, cy))   ! Courant numbers <= 1: convex update
           if (cx > 0._8) then
-            cext=0._8
+            cext=0._8 ; cx=min(cx, 1._8)
           else
-            cext=-cx ; cx=0._8
+            cext=min(-cx, 1._8) ; cx=0._8
           endif
 
           w(istr-1,j,k,nnew)=(1._8-cx)*( w(istr-1,j,k,nstp)&
@@ -100,10 +101,11 @@ contains
           cx=    dtfwd* u(iend+1,j,k,nrhs)*pm(iend+1,j)
           cy=0.5_8*dtfwd*(v(iend+1,j,k,nrhs)+v(iend+1,j+1,k,nrhs))&
           &*pn(iend+1,j)
+          cy=max(-1._8, min(1._8, cy))   ! Courant numbers <= 1: convex update
           if (cx > 0._8) then
-            cext=0._8
+            cext=0._8 ; cx=min(cx, 1._8)
           else
-            cext=-cx ; cx=0._8
+            cext=min(-cx, 1._8) ; cx=0._8
           endif
 
           w(iend+1,j,k,nnew)=(1._8-cx)*( w(iend+1,j,k,nstp)&
@@ -158,10 +160,11 @@ contains
           cx=-dtfwd*v(i,jstr,k,nrhs)*pn(i,jstr-1)
           cy=0.5_8*dtfwd*(u(i,jstr-1,k,nrhs)+u(i+1,jstr-1,k,nrhs))&
           &*pm(i,jstr-1)
+          cy=max(-1._8, min(1._8, cy))   ! Courant numbers <= 1: convex update
           if (cx > 0._8) then
-            cext=0._8
+            cext=0._8 ; cx=min(cx, 1._8)
           else
-            cext=-cx ; cx=0._8
+            cext=min(-cx, 1._8) ; cx=0._8
           endif
           w(i,jstr-1,k,nnew)=(1._8-cx)*( w(i,jstr-1,k,nstp)&
           &-max(cy,0._8)*grad(i  ,jstr-1)&
@@ -209,10 +212,11 @@ contains
           cx=dtfwd*v(i,jend+1,k,nrhs)*pn(i,jend+1)
           cy=0.5_8*dtfwd*(u(i,jend+1,k,nrhs)+u(i+1,jend+1,k,nrhs))&
           &*pm(i,jend+1)
+          cy=max(-1._8, min(1._8, cy))   ! Courant numbers <= 1: convex update
           if (cx > 0._8) then
-            cext=0._8
+            cext=0._8 ; cx=min(cx, 1._8)
           else
-            cext=-cx ; cx=0._8
+            cext=min(-cx, 1._8) ; cx=0._8
           endif
 
           w(i,jend+1,k,nnew)=(1._8-cx)*( w(i,jend+1,k,nstp)&
