@@ -10,7 +10,7 @@ mpirun -n 64 ./roms my_namelist.nml
 
 With the standard tiling (no tiles skipped over land, as `MPI_MASKING` does), the number of MPI processes must equal `NP_XI * NP_ETA` from `PARAM_SETTINGS`.
 
-Start from `$ROMS_ROOT/src/namelist.nml`, which contains every group below with a default for each setting. ROMS reads a group only when the feature it belongs to is compiled in (noted below as "Read only with ..."), and ignores the others. A group that ROMS reads must be present, except where noted, and a misspelled or unknown setting in it stops ROMS at startup.
+Start from `$ROMS_ROOT/src/namelist.nml`, which contains every group below with a default for each setting. ROMS reads a group only when the feature it belongs to is compiled in (noted below as "Read only with ..."), and ignores the others. `IMEX_IGW_SETTINGS` is the exception: it is required in every namelist (its switch `imex_igw` states whether the run takes the IMEX step). A group that ROMS reads must be present, except where noted, and a misspelled or unknown setting in it stops ROMS at startup.
 
 This page describes every setting in `src/namelist.nml`, one section per group.
 
@@ -631,12 +631,21 @@ Multigrid settings (`fs_precond = 'mg'`; solver settings as above):
 ### `IMEX_IGW_SETTINGS`
 (read by module `imex_igw.F90`)
 
-Read only with `IMEX_IGW`, and then required. Settings of the implicit internal-wave (IMEX) baroclinic step: the baroclinic pressure gradient and the buoyancy response to the transport divergence are implicit in both stages, so the time step is limited by horizontal advection instead of internal waves. The scheme, the choice of `dt`, restarts and limitations are described in [Implicit internal waves (IMEX)](implicit_internal_waves.md).
+Required in every namelist, with or without `IMEX_IGW`. Settings of the implicit internal-wave (IMEX) baroclinic step: the baroclinic pressure gradient and the buoyancy response to the transport divergence are implicit in both stages, so the time step is limited by horizontal advection instead of internal waves. The scheme, the choice of `dt`, restarts and limitations are described in [Implicit internal waves (IMEX)](implicit_internal_waves.md).
+
+The switch `imex_igw` is required and has no default. It must match the build: `.true.` needs `IMEX_IGW` in `cppdefs.opt`, `.false.` a build without it. A namelist without the group or without `imex_igw`, or with a value that does not match the build, stops ROMS at startup with a message that names the key. The startup log states the setting (`IMEX_IGW: on (imex_igw = .true.)` or `IMEX_IGW: off (imex_igw = .false.)`). A run without IMEX needs only
+
+```
+&IMEX_IGW_SETTINGS imex_igw = .false. /
+```
+
+Without `IMEX_IGW` the group's other keys are read (an unknown or removed key still stops ROMS) and ignored, and a startup note lists them, so the template's group runs unchanged in either build once `imex_igw` matches it.
 
 Settings (the keys of the namelist template):
 
 | Setting | Default | Description |
 |--------|---------|-------------|
+| `imex_igw` | none (required) | `.true.`: the IMEX internal-wave step (build with `IMEX_IGW`); `.false.`: the stock baroclinic step (build without `IMEX_IGW`) |
 | `imex_verbose` | `0` | 1: an `IMEX` line every `ninfo` steps (iterations of each stage's solve, largest velocity correction, unconverged solves), an `IMEX_SOLVE` line per solve, `IMEX_BREF` and `IMEX_TAPER` lines at the rebuilds; 2: also the true FP64 residual of every solve (`IMEX_PCHK`), the residual history of every solve (`IMEX_RH`) and the largest pressure correction. 0, 1 and 2 give the same results |
 | `imex_bref_hours` | `24.0` | Rebuild interval (model hours) of the reference stratification `b_ref`, the operator and its preconditioner, which are held in between. 12 is the cautious value where the stratification changes strongly within a day. It is the longest age of `b_ref`: `imex_bref_trigger` rebuilds it earlier where it goes stale |
 | `imex_obc_mode` | `'auto'` | Normal velocity at the open-boundary faces: `'modal'` the characteristic (per-mode Flather) condition on the internal modes, implicit in the stage solves; `'fixed'` the explicit value of the boundary conditions, as without IMEX; `'auto'` `'modal'` where supported (an open edge, `M3_FRC_BRY` and `T_FRC_BRY`), else `'fixed'`. A run that does not start from the state its boundary data come from should take its first ~10 days with `'fixed'` (see [open boundaries](implicit_internal_waves.md#5-open-boundaries)) |
