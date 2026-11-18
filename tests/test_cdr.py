@@ -232,7 +232,8 @@ class TestCdr:
         the restart end on MARBL steps, as the precheck requires (see
         ``test_avg_period_must_end_on_marbl_step``). With ``marbl_timestep``
         200 s each window must also average exactly the values its one MARBL
-        step computed. Checked directly, so the test needs no reference.
+        step computed, and those values must keep MARBL's double precision.
+        Checked directly, so the test needs no reference.
         """
         nml = _restart_nml(input_dir, marbl_timestep)
         nml["CDR_OUTPUT_SETTINGS"].update({
@@ -248,6 +249,7 @@ class TestCdr:
         assert "FG_CO2" in compared
         if marbl_timestep == 200:
             assert "FG_CO2" in _check_averages_hold_marbl_values(whole, "cdr")
+            _check_marbl_diagnostics_are_double(whole)
 
 
     @pytest.mark.parametrize(
@@ -317,7 +319,9 @@ class TestCdr:
         restarted run's records equal the uninterrupted run's.
 
         With ``wrt_bgc_his`` off, the start-up call used to add the start-up
-        state to the first window, so records came one step early.
+        state to the first window, so records came one step early, and the
+        ``_bgc_avg`` writer reset the ``_bgc_dia`` record count on every step,
+        so each ``_bgc_dia`` record after the first went to a new file.
         """
         nml = _restart_nml(input_dir, 200)
         nml["BGC_SETTINGS"].update({
@@ -330,6 +334,9 @@ class TestCdr:
 
         compared = _check_restarted_averages(whole, restarted, "bgc_avg")
         assert "DIC" in compared
+        # _bgc_dia (nrpf_bgc_his_dia 2) at 0, 200, ..., 800 s; restart at 400 s
+        assert _records_per_file(whole, "bgc_dia") == [2, 2, 1]
+        assert _records_per_file(restarted, "bgc_dia") == [2, 1]
 
 
 def _restart_nml(input_dir, marbl_timestep) -> dict:
@@ -400,6 +407,30 @@ def _check_averages_hold_marbl_values(run_dir, stream) -> list[str]:
     return checked
 
 
+def _check_marbl_diagnostics_are_double(run_dir) -> None:
+    """Check that the MARBL diagnostics in ``_bgc_dia`` keep double precision.
+
+    MARBL computes its diagnostics in double precision. ROMS used to copy
+    them with a kind-less ``real()``, which rounded every value to single
+    precision, so all of them were exact float32 numbers. A double-precision
+    value is a float32 number by chance only (about 1 in 2**29).
+
+    The variables cover each copy in ``marbldrv_update_roms_diagnostics``
+    that has data: surface-flux 2D (``FG_CO2``, ``pCO2SURF``), interior 2D
+    (``photoC_TOT_zint``) and interior 3D (``CO3``, ``co3_sat_arag``).
+    MARBL has no 3D surface-flux diagnostics.
+    """
+    his = _joined_records(run_dir, "bgc_dia")
+    for var in ("FG_CO2", "pCO2SURF", "photoC_TOT_zint", "CO3", "co3_sat_arag"):
+        values = his[var].values.ravel()
+        values = values[np.isfinite(values) & (values != 0)]
+        assert values.size, f"{var}: no nonzero values in _bgc_dia"
+        exact = np.mean(values == values.astype(np.float32).astype(np.float64))
+        assert exact < 0.01, (
+            f"{var}: {exact:.0%} of the _bgc_dia values are float32 numbers"
+        )
+
+
 def _check_restarted_averages(whole, restarted, stream) -> list[str]:
     """Check the 200 s averages of ``stream`` around the restart at 400 s.
 
@@ -423,6 +454,16 @@ def _check_restarted_averages(whole, restarted, stream) -> list[str]:
     for var in compared:
         np.testing.assert_array_equal(new[var].values, ref[var].values, err_msg=var)
     return compared
+
+
+def _records_per_file(run_dir, stream) -> list[int]:
+    """The number of records in each ``roms_<stream>`` file of a run, in time order."""
+    counts = []
+    for path in sorted(run_dir.glob(f"roms_{stream}.*.0.nc")):
+        with xr.open_dataset(path, decode_times=False) as ds:
+            counts.append(ds.sizes["time"])
+    return counts
+
 
 def _joined_records(run_dir, stream) -> xr.Dataset:
     """Join every ``roms_<stream>.<date>`` file set of a run; return all records."""

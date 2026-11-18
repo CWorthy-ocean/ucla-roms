@@ -51,7 +51,7 @@ module bgc_io
        &wrt_bgc_diag_3d, idx_bgc_diag_3d, vname_bgc_diag_3d
 #endif
 ! /bgc_shared_vars
-  use nc_read_write, only: nccreate, ncwrite
+  use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill
   use roms_read_write, only:&
   &dn_tm, dn_xr, dn_yr, dn_zr,&
   &create_file, set_frc_data
@@ -89,9 +89,11 @@ module bgc_io
   ! addition.
   integer(kind=4),save :: nheld_dia = 0
   logical,save         :: dia_first = .true.
-  integer(kind=4) :: record_avg = 0           ! Triggers making of initial file
+  ! Records in the current file of each stream; 0 makes the first write open
+  ! a file. Set only by that stream's own writer.
+  integer(kind=4) :: record_avg = 0
   integer(kind=4) :: record_his = 0
-  integer(kind=4) :: record_dia_avg = 0   ! Triggers making of initial file
+  integer(kind=4) :: record_dia_avg = 0
   integer(kind=4) :: record_dia_his = 0
   real(kind=8),save :: output_time_his = 0
   real(kind=8),save :: output_time_avg = 0
@@ -251,11 +253,6 @@ contains
       &info=error_info)
     endif
 
-    if (first_step_his) then
-      record_his = nrpf_bgc_his
-      record_dia_his = nrpf_bgc_his_dia
-    end if
-
     call error_log%abort_check()
 
 #ifdef PARALLEL_IO
@@ -285,6 +282,7 @@ contains
         navg_bgc = 0
         if (mynode == 0) then
           ierr=nf90_open(fname_avg,nf90_write,ncid)
+          call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/time/),(/record_avg/))
           ierr=nf90_close(ncid)
         endif
@@ -339,6 +337,7 @@ contains
         output_time_his=0
         if (mynode == 0) then
           ierr=nf90_open(fname_his,nf90_write,ncid)
+          call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/time/),(/record_his/))
           ierr=nf90_close(ncid)
         endif
@@ -405,6 +404,7 @@ contains
           &'bgc :: wrote average, tdays =', tdays,&
           &'step =', iic, 'rec =', record_avg
         endif
+        ierr=nf90_close(ncid)
       endif
 
     else
@@ -445,11 +445,11 @@ contains
           &'bgc :: wrote history, tdays =', tdays,&
           &'step =', iic-1, 'rec =', record_his
         endif
+        ierr=nf90_close(ncid)
       endif
 
     endif
 
-    ierr=nf90_close(ncid)
 #endif
   end subroutine wrt_bgc_tracers  !]
 ! ----------------------------------------------------------------------
@@ -517,6 +517,7 @@ contains
         navg_dia_bgc = 0
         if (mynode == 0) then
           ierr=nf90_open(fname_avg,nf90_write,ncid)
+          call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/time/),(/record_dia_avg/))
           ierr=nf90_close(ncid)
         endif
@@ -590,8 +591,8 @@ contains
           &'bgc diag :: wrote average, tdays =', tdays,&
           &'step =', iic, 'rec =', record_dia_avg
         endif
+        ierr=nf90_close(ncid)
       endif
-      ierr=nf90_close(ncid)
 #endif ! PARALLEL_IO
     endif
 
@@ -617,6 +618,7 @@ contains
         output_time_dia_his = 0
         if (mynode == 0) then
           ierr=nf90_open(fname_his,nf90_write,ncid)
+          call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/time/),(/record_dia_his/))
           ierr=nf90_close(ncid)
         endif
@@ -729,6 +731,7 @@ contains
     call def_vars_bgc( ncid,avg )
 
     ierr = nf90_enddef(ncid)
+    ierr = nf90_close(ncid)
   end subroutine create_bgc_file !]
 !----------------------------------------------------------------------
 #if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
@@ -761,6 +764,7 @@ contains
     call def_bgc_diag(ncid,avg)
 
     ierr = nf90_enddef(ncid)
+    ierr = nf90_close(ncid)
   end subroutine create_bgc_dia_file !]
 #endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
 ! ----------------------------------------------------------------------

@@ -1931,18 +1931,19 @@ contains
     end do
 #ifdef MARBL_DIAGS
 !     written diagnostics, in the order of marbldrv_update_roms_diagnostics
+!     and, as there, in double precision (no kind-less real())
     diagidx2d = 1 ; diagidx3d = 1 ; c2 = 0 ; c3 = 0
     do m = 1, size(MARBL_instance%surface_flux_diags%diags)
       if (surface_flux_diag_is_2d(m)) then
         if (wrt_marbl_diag_2d(diagidx2d)) then
           c2 = c2 + 1
-          q(q_d2+c2) = real(MARBL_instance%surface_flux_diags%diags(m)%field_2d(1))
+          q(q_d2+c2) = MARBL_instance%surface_flux_diags%diags(m)%field_2d(1)
         end if
         diagidx2d = diagidx2d + 1
       else
         if (wrt_marbl_diag_3d(diagidx3d)) then
           q(q_d3+c3*nz+1:q_d3+(c3+1)*nz) =&
-          &  real(MARBL_instance%surface_flux_diags%diags(m)%field_3d(nz:1:-1,1))
+          &  MARBL_instance%surface_flux_diags%diags(m)%field_3d(nz:1:-1,1)
           c3 = c3 + 1
         end if
         diagidx3d = diagidx3d + 1
@@ -1953,13 +1954,13 @@ contains
       if (interior_tendency_diag_is_2d(m)) then
         if (wrt_marbl_diag_2d(diagidx2d)) then
           c2 = c2 + 1
-          q(q_d2+c2) = real(MARBL_instance%interior_tendency_diags%diags(m)%field_2d(1))
+          q(q_d2+c2) = MARBL_instance%interior_tendency_diags%diags(m)%field_2d(1)
         end if
         diagidx2d = diagidx2d + 1
       else
         if (wrt_marbl_diag_3d(diagidx3d)) then
           q(q_d3+c3*nz+1:q_d3+(c3+1)*nz) =&
-          &  real(MARBL_instance%interior_tendency_diags%diags(m)%field_3d(nz:1:-1,1))
+          &  MARBL_instance%interior_tendency_diags%diags(m)%field_3d(nz:1:-1,1)
           c3 = c3 + 1
         end if
         diagidx3d = diagidx3d + 1
@@ -2550,7 +2551,9 @@ contains
 !     SUBROUTINE: marbldrv_update_roms_diagnostics
 !     DESCRIPTION:
 !     Update ROMS' bgc diagnostics arrays from this MARBL instance's
-!     `surface_flux_diags` and `interior_tendency_diags` fields
+!     `surface_flux_diags` and `interior_tendency_diags` fields. Both
+!     are double precision; copy them as is (a kind-less real() would
+!     round them to single precision).
 !-----------------------------------------------------------------------
     integer(kind=4) :: i,j,m,diagidx2d,diagidx3d
 !-----------------------------------------------------------------------
@@ -2562,14 +2565,14 @@ contains
 
         if (wrt_marbl_diag_2d(diagidx2d)) then
           marbl_diag_2d(i,j,idx_marbl_diag_2d(diagidx2d))=&
-          &real(MARBL_instance%surface_flux_diags%diags(m)%field_2d(1))
+          &MARBL_instance%surface_flux_diags%diags(m)%field_2d(1)
         end if
         diagidx2d=diagidx2d+1
 
       else                   ! 3D field
         if (wrt_marbl_diag_3d(diagidx3d)) then
           marbl_diag_3d(i,j,:,idx_marbl_diag_3d(diagidx3d))=&
-          &real(MARBL_instance%surface_flux_diags%diags(m)%field_3d(nz:1:-1,1))
+          &MARBL_instance%surface_flux_diags%diags(m)%field_3d(nz:1:-1,1)
         end if
         diagidx3d=diagidx3d+1
 
@@ -2583,13 +2586,13 @@ contains
       if (interior_tendency_diag_is_2d(m)) then ! 2D field
         if (wrt_marbl_diag_2d(diagidx2d)) then
           marbl_diag_2d(i,j,idx_marbl_diag_2d(diagidx2d))=&
-          &real(MARBL_instance%interior_tendency_diags%diags(m)%field_2d(1))
+          &MARBL_instance%interior_tendency_diags%diags(m)%field_2d(1)
         end if
         diagidx2d=diagidx2d+1
       else                   ! 3D field
         if (wrt_marbl_diag_3d(diagidx3d)) then
           marbl_diag_3d(i,j,:,idx_marbl_diag_3d(diagidx3d))=&
-          &real(MARBL_instance%interior_tendency_diags%diags(m)%field_3d(nz:1:-1,1))
+          &MARBL_instance%interior_tendency_diags%diags(m)%field_3d(nz:1:-1,1)
         end if
         diagidx3d=diagidx3d+1
 

@@ -1,0 +1,79 @@
+.. _0.15.0:
+
+0.15.0
+------
+
+Changes to Output
+~~~~~~~~~~~~~~~~~
+
+- Child runs forced with newly made boundary files give different results: in extracted data, including the boundary files of nested child domains, ``u``, ``v``, ``temp``, ``salt`` and the other tracers are now the parent's state at the time of the record, one parent time step later than before. (`#435 <https://github.com/CWorthy-ocean/ucla-roms/pull/435>`_)
+
+  - ``zeta``, ``ubar``, ``vbar``, ``up``, ``vp`` and the record times are unchanged.
+
+- With ``wrt_bgc_his`` off and ``wrt_bgc_avg`` on, ``_bgc_dia`` output goes to one file per ``nrpf_bgc_his_dia`` records instead of one file per record. The values are unchanged, so tools that expect one record per file must read the record dimension. (`#437 <https://github.com/CWorthy-ocean/ucla-roms/pull/437>`_)
+- Every MARBL diagnostic in ``_bgc_dia`` and ``_bgc_dia_avg``, and the held MARBL fields of the ``_cdr`` averages (``FG_CO2``, ``FG_ALT_CO2``, ``pCO2SURF``, ``pCO2SURF_ALT_CO2``, ``CO3``, ``CO3_ALT_CO2``, ``co3_sat_arag``, ``co3_sat_calc``, ``zsatarag`` and ``zsatcalc``), changes by up to 6e-8 relative, because it now keeps double precision. (`#443 <https://github.com/CWorthy-ocean/ucla-roms/pull/443>`_)
+
+  - The ``pH`` fields of the ``_cdr`` averages, the tracers and the rest of the model state are unchanged.
+
+New Features
+~~~~~~~~~~~~
+
+- Output files record the barotropic scheme in the global attributes ``fs_mode``, and in implicit mode ``fs_rho_inf`` and ``fs_nsub``. (`#420 <https://github.com/CWorthy-ocean/ucla-roms/pull/420>`_)
+- New namelist group ``IMPLICIT_FS``: ``fs_mode = 'implicit'`` replaces the split-explicit fast loop with an implicit free surface that has no barotropic Courant limit and an exact volume budget. (`#420 <https://github.com/CWorthy-ocean/ucla-roms/pull/420>`_)
+
+  - Defaults: two implicit sub-steps per baroclinic step at ``fs_rho_inf = 0.5``, with a density-weighted pressure-gradient operator and the split loop's boundary sea level in the Flather condition.
+  - The namelist template lists the five supported settings (``fs_mode``, ``fs_nsub``, ``fs_rho_inf``, ``fs_tol``, ``fs_verbose``); the solver settings are documented separately and keep their defaults when omitted.
+  - Restart files written in implicit mode hold the scheme's state, so restarts are exact.
+  - A free-surface solve that does not converge stops the run with the step, iterations and residual.
+  - Without the group, or with ``fs_mode = 'split'``, results are bit-for-bit unchanged.
+
+Bug Fixes
+~~~~~~~~~
+
+- Extracted data, including the boundary files written for nested child domains, now hold ``u``, ``v``, ``temp``, ``salt`` and the other tracers at the time of their record, like ``zeta``, ``ubar`` and ``vbar``; they were one parent time step older. (`#435 <https://github.com/CWorthy-ocean/ucla-roms/pull/435>`_)
+- ``_bgc_dia`` files now hold ``nrpf_bgc_his_dia`` records when ``wrt_bgc_his`` is off and ``wrt_bgc_avg`` is on. The ``_bgc_avg`` writer reset the ``_bgc_dia`` record count on every step, so each ``_bgc_dia`` record after the first went to a new file. (`#437 <https://github.com/CWorthy-ocean/ucla-roms/pull/437>`_)
+- The BGC output files (``_bgc``, ``_bgc_avg``, ``_bgc_dia`` and ``_bgc_dia_avg``) are now closed after they are created. Each new file used to keep a netCDF file handle open until the end of the run (on rank 0 with ``PARALLEL_IO``, on every rank without it), so a run that writes many BGC files could reach the limit on open files. (`#440 <https://github.com/CWorthy-ocean/ucla-roms/pull/440>`_)
+
+  - Without ``PARALLEL_IO``, the BGC writers also no longer close a netCDF file in steps without output. Since forcing files stay open across records (#429), that close could hit a forcing file and stop the run with ``Not a valid ID`` at its next record.
+
+- MARBL diagnostics are now kept in double precision. ROMS rounded them to single precision when it copied them from MARBL, so they were off by up to 6e-8 relative. (`#443 <https://github.com/CWorthy-ocean/ucla-roms/pull/443>`_)
+
+  - The CDR uptake signal ``FG_CO2 - FG_ALT_CO2`` in ``_cdr`` is no longer rounded to zero where it is smaller than about 6e-8 of the flux, as it can be early in a release and far from the release site.
+
+Improvements
+~~~~~~~~~~~~
+
+- The implicit free-surface solve takes 12-14 % less time per step (Pacific basin on 512 ranks, Iceland domain on 256 ranks), with unchanged iteration counts. (`#422 <https://github.com/CWorthy-ocean/ucla-roms/pull/422>`_)
+
+  - The V-cycle that was applied to the converged residual and then discarded is skipped.
+  - Halo exchanges that refreshed values never read are thinned or dropped, and whole-array clears and copies are removed.
+  - The coarsest multigrid level is factored in column form, which is faster on the ranks that solve it.
+
+- A free-surface solve that meets a NaN or Inf now stops the run at that step with a message, instead of iterating to ``fs_maxit`` first. (`#422 <https://github.com/CWorthy-ocean/ucla-roms/pull/422>`_)
+- Forcing and boundary input is faster: on a 128-rank nest with CDF5 inputs it drops from about 3 s to 1.5 s per 18 model hours. (`#429 <https://github.com/CWorthy-ocean/ucla-roms/pull/429>`_)
+
+  - Finding the next forcing record no longer reopens the file for every variable and record.
+  - Without PIO, each rank keeps up to 8 forcing files open across records instead of reopening them; a 128-rank nest without PIO runs 25 % faster.
+
+- Under PIO, ROMS now warns once per netCDF-4 input file, which PIO reads serially through one rank; convert such files to CDF5 (e.g. ``nccopy -k cdf5``). (`#429 <https://github.com/CWorthy-ocean/ucla-roms/pull/429>`_)
+- With ``PARALLEL_IO``, each new record of an output file (history, averages, restart, BGC, CDR, forcing, surface flux, random and upscaling output) is written faster: rank 0 no longer fills the whole record with ``_FillValue`` on its own before PIO writes the data. (`#441 <https://github.com/CWorthy-ocean/ucla-roms/pull/441>`_)
+
+  - The output files of a completed run are unchanged, byte for byte.
+  - In a run killed while it writes a record, the points of that last record that were not written yet now read 0 instead of ``_FillValue`` (also in z-slice and extraction files). Check that the newest record of such a run is complete before restarting from it.
+  - With ``MPI_MASKING`` the fill is kept: it is what leaves the points of all-land tiles at ``_FillValue``.
+
+- With ``PARALLEL_IO``, z-slice and extraction (child boundary) output take about half the time: the files stay open between records instead of being opened and closed for every record, and an extraction record is flushed to the file once instead of once per variable. (`#441 <https://github.com/CWorthy-ocean/ucla-roms/pull/441>`_)
+
+  - The output files are unchanged, byte for byte. Each record is written to the file before the run goes on, so a killed run leaves every completed record readable, and the files are closed when a new file is started and at the end of the run.
+  - With ``MPI_MASKING`` the files are still opened for every record, so that the points of all-land tiles keep ``_FillValue``.
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+- New tests in ``test_implicit_fs.py``: a hashed open-boundary run with the tidal potential, exact restarts (flux forcing; bulk forcing with ``PARALLEL_IO``), rivers and pipes, a CDR volume release, per-step volume-budget checks, and two rejected settings. (`#420 <https://github.com/CWorthy-ocean/ucla-roms/pull/420>`_)
+- New documentation page "Implicit free surface" (scheme, solver, boundary conditions, sources, restarts, diagnostics, defaults, measured cost, limitations) and the ``IMPLICIT_FS`` tables in the runtime settings. (`#420 <https://github.com/CWorthy-ocean/ucla-roms/pull/420>`_)
+- The implicit free-surface page gives the free-surface cost of the current solver and says that a NaN or Inf stops the solve at once. (`#423 <https://github.com/CWorthy-ocean/ucla-roms/pull/423>`_)
+- New test: a NaN that reaches the implicit free-surface solve stops the run at the first solve, without iterating to ``fs_maxit``. (`#423 <https://github.com/CWorthy-ocean/ucla-roms/pull/423>`_)
+- Pull request descriptions now carry an ``AI disclosure:`` line, as the organization's AI policy asks. (`#425 <https://github.com/CWorthy-ocean/ucla-roms/pull/425>`_)
+- ``AGENTS.md`` gives AI coding agents this project's build, test, lint, and contribution rules. (`#426 <https://github.com/CWorthy-ocean/ucla-roms/pull/426>`_)
+- Release notes are now assembled by towncrier from one fragment file per pull request in ``docs/changes/``, instead of being collected from pull request descriptions; ``docs/changes/README.md`` explains how to write one. (`#431 <https://github.com/CWorthy-ocean/ucla-roms/pull/431>`_)

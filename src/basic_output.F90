@@ -10,7 +10,7 @@ module basic_output
   &nf90_inq_varid, nf90_put_var, nf90_put_att, nf90_open, nf90_close,&
   &nf90_nofill, nf90_set_fill, nf90_redef, nf90_enddef,&
   &nf90_create, nf90_clobber, nf90_64bit_data, nf90_noerr
-  use nc_read_write, only: nccreate, ncwrite
+  use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill, nc_fill_record
   use dimensions, only:  eta_rho, eta_v, xi_rho, xi_u&
   &, ds_xr, ds_yr, ds_zr, ds_xu, ds_yv, ds_zw
   use roms_read_write, only:&
@@ -33,7 +33,7 @@ module basic_output
   &zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,&
   &w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
   use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
-  &max_name_size
+  &max_name_size, obc_west, obc_east, obc_north, obc_south
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
@@ -473,6 +473,7 @@ contains                  !]
 
         if (mynode == 0) then
           ierr=nf90_open(fname_his,nf90_write,ncid)
+          call nc_set_record_nofill(ncid)
           ! always add time
           call ncwrite(ncid,'ocean_time',(/time/),(/rec_his/))
           call write_time_step( ncid, rec_his, total_rec_his)
@@ -493,10 +494,9 @@ contains                  !]
         if (wrt_Vb) call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start, .true.)
 
 #ifdef SOLVE3D
-! 3D momentum components in XI- and ETA-directions:
-! 'nstp' index is current timestep 'n', which was computed as the final 'nnew'
-! in the previous timestep (same result).
-! wrt_his called at the middle of next timestep as some variables only calculated there for t=n.
+! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_his runs
+! after initialization and at the end of each step, where 'nnew' holds the
+! time of the record (n+1 at the end of a step) and 'nstp' still holds time n.
 
         start(3)=1; start(4)=rec_his
         pio_gtype = '3Duw'
@@ -579,10 +579,9 @@ contains                  !]
         if (wrt_Vb) call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start)
 
 #ifdef SOLVE3D
-! 3D momentum components in XI- and ETA-directions:
-! 'nstp' index is current timestep 'n', which was computed as the final 'nnew'
-! in the previous timestep (same result).
-! wrt_his called at the middle of next timestep as some variables only calculated there for t=n.
+! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_his runs
+! after initialization and at the end of each step, where 'nnew' holds the
+! time of the record (n+1 at the end of a step) and 'nstp' still holds time n.
 
         start(3)=1; start(4)=rec_his
         if (wrt_U) call ncwrite(ncid,vname(1,indxU),u( 1:i1,j0:j1,:,nnew),start)
@@ -697,7 +696,9 @@ contains                  !]
 
         if (mynode == 0) then
           ierr=nf90_open(fname_avg,nf90_write,ncid)
+          call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/t_avg_ovars/),(/rec_avg/))
+          call nc_fill_record(ncid,'time_step',rec_avg)   ! defined, but no step to record
           ierr=nf90_close (ncid)
         endif
 
@@ -922,6 +923,7 @@ contains                  !]
 
     if (mynode == 0) then
       ierr=nf90_open(fname_rst,nf90_write,ncid)
+      call nc_set_record_nofill(ncid)
 
       call ncwrite(ncid,'ocean_time',(/time/),(/rec_rst/))
 
@@ -931,6 +933,14 @@ contains                  !]
 #endif
 #if defined IMEX_IGW && defined EXACT_RESTART
       call imex_rst_wrt_scal(ncid, rec_rst)    ! IMEX_IGW: restart scalars
+#endif
+#ifdef SPONGE_TUNE
+      if (ub_tune) then                        ! wrt_rst_ub writes the open sides only
+        if (.not. obc_west)  call nc_fill_record(ncid,'ub_west',rec_rst)
+        if (.not. obc_east)  call nc_fill_record(ncid,'ub_east',rec_rst)
+        if (.not. obc_north) call nc_fill_record(ncid,'ub_north',rec_rst)
+        if (.not. obc_south) call nc_fill_record(ncid,'ub_south',rec_rst)
+      endif
 #endif
       ierr=nf90_close (ncid)
     endif
@@ -947,10 +957,9 @@ contains                  !]
     pio_gtype = '2Dvw'
     call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start,.true.)
 #ifdef SOLVE3D
-! 3D momentum components in XI- and ETA-directions:
-! 'nstp' index is current timestep 'n', which was computed as the final 'nnew'
-! in the previous timestep (same result).
-! wrt_rst called at the middle of next timestep as some variables only calculated there for t=n.
+! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_rst runs
+! at the end of the step, where 'nnew' holds time n+1 (the time of the
+! record) and 'nstp' still holds time n.
 
     start(3)=1; start(4)=rec_rst
     pio_gtype = '3Duw'
@@ -1069,10 +1078,9 @@ contains                  !]
     call ncwrite(ncid,vname(1,indxUb),ubar( 1:i1,j0:j1,knew),start)
     call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start)
 #ifdef SOLVE3D
-! 3D momentum components in XI- and ETA-directions:
-! 'nstp' index is current timestep 'n', which was computed as the final 'nnew'
-! in the previous timestep (same result).
-! wrt_rst called at the middle of next timestep as some variables only calculated there for t=n.
+! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_rst runs
+! at the end of the step, where 'nnew' holds time n+1 (the time of the
+! record) and 'nstp' still holds time n.
 
     start(3)=1; start(4)=rec_rst
     call ncwrite(ncid,vname(1,indxU),u( 1:i1,j0:j1,:,nnew),start)

@@ -19,7 +19,7 @@ module upscale_output
   use error_handling_mod, only: error_log
   use tracers, only: t_units, t_vname, iTandS
   use grid, only: latr, lonr
-  use nc_read_write, only: nccreate, ncwrite
+  use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill
   use roms_read_write, only: create_file, dn_tm, dn_xr, dn_yr, dn_zr
   use netcdf, only:&
   &nf90_double, nf90_noerr, nf90_write, nf90_put_att,&
@@ -608,6 +608,7 @@ contains
             info="error opening "//trim(fname_uscl), &
             context=module_name//"/"//sr_name)
         end if
+        call nc_set_record_nofill(ncid)
         call ncwrite(ncid,'ocean_time',(/end_time/),(/record_uscl/))
         call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record_uscl/))
         call ncwrite(ncid,'avg_end_time',(/end_time/),(/record_uscl/))

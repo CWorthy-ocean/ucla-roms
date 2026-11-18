@@ -39,6 +39,8 @@ module nc_read_write
   public :: ncread
   public :: ncwrite
   public :: nccreate
+  public :: nc_set_record_nofill
+  public :: nc_fill_record
 
 contains
 
@@ -455,5 +457,93 @@ contains
     nccreate = varid
 
   end function nccreate  !]
+
+!----------------------------------------------------------------------
+  subroutine nc_set_record_nofill(ncid)  ![
+    ! Switch off netCDF fill mode on rank 0's serial open of a PIO output
+    ! file, which only writes the time value of a new record before PIO
+    ! writes the fields. In fill mode, netCDF would first write _FillValue
+    ! into the whole new record of every record variable, from rank 0
+    ! alone, and PIO would then overwrite it (half the time of a 3-D
+    ! history write). The serial writers already open their files in
+    ! no-fill mode. A record variable that a writer does not write on
+    ! every record must then be filled explicitly (nc_fill_record).
+    !
+    ! Under MPI_MASKING all-land tiles have no rank, so no rank writes
+    ! their points and the fill is what leaves them at _FillValue: keep it.
+    use netcdf, only: nf90_set_fill, nf90_nofill
+    implicit none
+    integer(kind=4), intent(in) :: ncid
+#ifndef MPI_MASKING
+    integer(kind=4) :: ierr, old_mode
+
+    ierr = nf90_set_fill(ncid, nf90_nofill, old_mode)
+    if (ierr /= nf90_noerr) then
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &context=module_name//"/nc_set_record_nofill", info="nf90_set_fill")
+    endif
+#endif
+
+  end subroutine nc_set_record_nofill  !]
+!----------------------------------------------------------------------
+  subroutine nc_fill_record(ncid, vname, irec)  ![
+    ! Write the fill value of record variable vname into record irec, for
+    ! a variable that its file defines but its writer does not write on
+    ! that record (rank 0, serial netCDF). It then reads _FillValue, as it
+    ! did when rank 0 opened the file in fill mode (nc_set_record_nofill).
+    use netcdf, only: nf90_inquire_variable, nf90_inquire_dimension,&
+    &nf90_get_att, nf90_int, nf90_double, nf90_fill_int, nf90_fill_float,&
+    &nf90_fill_double, nf90_max_var_dims
+    implicit none
+    character(len=14) :: sr_name = "nc_fill_record"
+    integer(kind=4), intent(in) :: ncid, irec
+    character(len=*), intent(in) :: vname
+    integer(kind=4) :: varid, xtype, nd, k, ierr, ifill
+    integer(kind=4), dimension(nf90_max_var_dims) :: dimids, start, count
+    real(kind=4) :: ffill
+    real(kind=8) :: dfill
+    integer(kind=4), allocatable :: ibuf(:)
+    real(kind=4), allocatable :: fbuf(:)
+    real(kind=8), allocatable :: dbuf(:)
+
+    ierr = nf90_inq_varid(ncid, vname, varid)
+    if (ierr == nf90_noerr) ierr = nf90_inquire_variable(ncid, varid, xtype=xtype,&
+    &ndims=nd, dimids=dimids)
+    do k = 1, nd-1                                ! the last dimension is time
+      if (ierr == nf90_noerr) ierr = nf90_inquire_dimension(ncid, dimids(k), len=count(k))
+    enddo
+    if (ierr /= nf90_noerr) then
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name, info="inquire var="//trim(vname))
+      return
+    endif
+    start(1:nd) = 1
+    start(nd) = irec
+    count(nd) = 1
+
+    select case (xtype)
+    case (nf90_int)
+      if (nf90_get_att(ncid, varid, '_FillValue', ifill) /= nf90_noerr) ifill = nf90_fill_int
+      allocate(ibuf(product(count(1:nd))), source=ifill)
+      ierr = nf90_put_var(ncid, varid, ibuf, start(1:nd), count(1:nd))
+    case (nf90_float)
+      if (nf90_get_att(ncid, varid, '_FillValue', ffill) /= nf90_noerr) ffill = nf90_fill_float
+      allocate(fbuf(product(count(1:nd))), source=ffill)
+      ierr = nf90_put_var(ncid, varid, fbuf, start(1:nd), count(1:nd))
+    case (nf90_double)
+      if (nf90_get_att(ncid, varid, '_FillValue', dfill) /= nf90_noerr) dfill = nf90_fill_double
+      allocate(dbuf(product(count(1:nd))), source=dfill)
+      ierr = nf90_put_var(ncid, varid, dbuf, start(1:nd), count(1:nd))
+    case default
+      call error_log%raise_global(context=module_name//"/"//sr_name,&
+      &info="unsupported type of var="//trim(vname))
+      return
+    end select
+    if (ierr /= nf90_noerr) then
+      call error_log%check_netcdf_status(netcdf_status=ierr,&
+      &context=module_name//"/"//sr_name, info="write var="//trim(vname))
+    endif
+
+  end subroutine nc_fill_record  !]
 
 end module nc_read_write
