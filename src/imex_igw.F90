@@ -18,7 +18,8 @@ module imex_igw
   !     - the explicit PG combination (called at the end of prsgrd_tile),
   !       the predictor tracer transport (called by pre_step3d), and the
   !       end-of-step level shift (called by roms_step).
-  !     With IMEX_IGW undefined the module is empty.
+  !     With IMEX_IGW undefined the module only reads the namelist group
+  !     (required in every build) and checks that imex_igw = .false.
   !
   !     Time levels: n current, * predicted (u,v slot 3 after
   !     pre_step3d), n+1 new. Weights:
@@ -100,8 +101,11 @@ module imex_igw
   implicit none
   private
 
+  public :: read_nml_imex_igw     ! in every build: the group and its key imex_igw are required
+
+  character(len=8) :: module_name = "imex_igw"
+
 #ifdef IMEX_IGW
-  public :: read_nml_imex_igw
   public :: init_arrays_imex_igw
   public :: imex_begin_step
   public :: imex_pg_store_combine
@@ -111,13 +115,17 @@ module imex_igw
   public :: imex_rst_def, imex_rst_wrt, imex_rst_wrt_scal, imex_rst_get
   public :: imex_obc_faces
 
-  character(len=8) :: module_name = "imex_igw"
-
   ! Stage identifiers passed by the consumers
   integer(kind=4), parameter, public :: imex_stage_pred = 1  ! prsgrd at n, pre_step3d
   integer(kind=4), parameter, public :: imex_stage_corr = 2  ! prsgrd at *, step3d_uv1
+#endif /* IMEX_IGW */
 
-  ! Namelist IMEX_IGW_SETTINGS. src/namelist.nml lists the keys a user sets (imex_verbose,
+  ! Namelist IMEX_IGW_SETTINGS, required in every namelist. Its logical key imex_igw (required, no
+  ! default) says whether the run takes the IMEX step; it must agree with the build (.true. with
+  ! IMEX_IGW, .false. without). It is a local of read_nml_imex_igw, which also holds the namelist
+  ! statement, since a module variable cannot share the module's name. The keys below are declared
+  ! and read in every build, so that a build without IMEX_IGW reads (and ignores) a full group with
+  ! imex_igw = .false. src/namelist.nml lists the keys a user sets (imex_verbose,
   ! imex_bref_hours, imex_rst_state, imex_obc_mode, imex_obc_tref); the others are solver and
   ! development settings. Defaults: weight set B, the tested solver configuration
   real(kind=8)    :: imex_theta_p = 0.5_8        ! implicit PG weight, predictor
@@ -384,18 +392,7 @@ module imex_igw
   &  'imex_sponge_eq', 'imex_trim3d', 'imex_obc_eig', 'imex_obc_dcols', 'imex_obc_scrit', 'imex_obc_sband',&
   &  'imex_obc_fref', 'imex_obc_trelax', 'imex_obc_cslow', 'imex_obc_supercrit']
 
-  namelist /IMEX_IGW_SETTINGS/ &
-  &  imex_theta_p, imex_phi, imex_theta_c, imex_mu, imex_nu, imex_rho,&
-  &  imex_am3_crv, imex_tol_pred, imex_tol_corr, imex_maxit,&
-  &  imex_verbose, imex_solver_enabled, imex_allow_explicit, imex_selftest,&
-  &  imex_n2_ref, imex_n2_taper, imex_warm,&
-  &  imex_bref_hours, imex_bref_trigger, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec,&
-  &  imex_stage_fused,&
-  &  imex_redu, imex_rst_state, imex_mix_split, imex_corr_adv, imex_corr_adv_clip,&
-  &  imex_obc_mode, imex_obc_nmodes, imex_obc_q0, imex_obc_tref,&
-  &  imex_obc_mprint, imex_obc_cmin, imex_pc, imex_pc_modes, imex_pc_dump, imex_pc_cou_on, imex_pc_cou_k,&
-  &  imex_pc_smoother, imex_pc_levels, imex_pc_ncoarse
-
+#ifdef IMEX_IGW
   ! Derived quantities read by the consumers
   real(kind=8), public, protected :: imex_am3      ! AM3_crv for pre_step3d
   real(kind=8), public, protected :: wflx_corr(4)  ! corrector transport weights on
@@ -659,11 +656,12 @@ module imex_igw
 
 contains
 
-#ifdef IMEX_IGW
   !----------------------------------------------------------------------
   subroutine read_nml_imex_igw
-    ! Read the IMEX_IGW_SETTINGS section of the namelist file, check the
-    ! weights and derive the per-stage weights from them.
+    ! Read the IMEX_IGW_SETTINGS section of the namelist file (required in every build) and its
+    ! required switch imex_igw, which must agree with the build. With IMEX_IGW: check the
+    ! weights and derive the per-stage weights from them. Without: the other keys are read
+    ! (unknown or removed keys stop the run, as with IMEX_IGW) and ignored, with a note.
     use, intrinsic :: iso_fortran_env, only: iostat_end
     use namelist_open_mod, only: open_namelist_file
     use error_handling_mod, only: error_log
@@ -673,18 +671,46 @@ contains
     character(len=17) :: sr_name = "read_nml_imex_igw"
     character(len=200) :: msg
     character(len=1024) :: found
+    logical :: imex_igw    ! the switch: .true. the IMEX step (needs IMEX_IGW), .false. the stock step
+    logical :: first, has_key
+    namelist /IMEX_IGW_SETTINGS/ imex_igw,&
+    &  imex_theta_p, imex_phi, imex_theta_c, imex_mu, imex_nu, imex_rho,&
+    &  imex_am3_crv, imex_tol_pred, imex_tol_corr, imex_maxit,&
+    &  imex_verbose, imex_solver_enabled, imex_allow_explicit, imex_selftest,&
+    &  imex_n2_ref, imex_n2_taper, imex_warm,&
+    &  imex_bref_hours, imex_bref_trigger, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec,&
+    &  imex_stage_fused,&
+    &  imex_redu, imex_rst_state, imex_mix_split, imex_corr_adv, imex_corr_adv_clip,&
+    &  imex_obc_mode, imex_obc_nmodes, imex_obc_q0, imex_obc_tref,&
+    &  imex_obc_mprint, imex_obc_cmin, imex_pc, imex_pc_modes, imex_pc_dump, imex_pc_cou_on, imex_pc_cou_k,&
+    &  imex_pc_smoother, imex_pc_levels, imex_pc_ncoarse
 
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
     msg = '' ; found = ''
+    imex_igw = .false.
     read (unit=namelist_unit, nml=IMEX_IGW_SETTINGS, iostat=ios, iomsg=msg)
+    has_key = .true.
+    if (ios == 0) then
+      ! imex_igw has no default: read the group again from the other start value; a key left out
+      ! keeps the start value, so the two reads differ only then
+      first = imex_igw
+      imex_igw = .true.
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=IMEX_IGW_SETTINGS, iostat=ios, iomsg=msg)
+      has_key = imex_igw .eqv. first
+    end if
     if (ios /= 0 .and. ios /= iostat_end) call removed_keys_set(namelist_unit, found)
+#ifndef IMEX_IGW
+    if (ios == 0 .and. has_key .and. .not. imex_igw) call other_keys_set(namelist_unit, found)
+#endif
     close(namelist_unit)
     if (ios == iostat_end) then
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
-      &info="IMEX_IGW is defined but the namelist file has no IMEX_IGW_SETTINGS"&
-      &//" section: add an &IMEX_IGW_SETTINGS group; see src/namelist.nml")
+      &info="the namelist file has no IMEX_IGW_SETTINGS section, which every namelist needs: add"&
+      &//" &IMEX_IGW_SETTINGS imex_igw = .false. / (stock baroclinic step), or the group with"&
+      &//" imex_igw = .true. (IMEX internal-wave step, needs a build with IMEX_IGW); see src/namelist.nml")
       return
     else if (ios /= 0 .and. len_trim(found) > 0) then
       call error_log%raise_global(&
@@ -699,11 +725,39 @@ contains
       &context=module_name//"/"//sr_name,&
       &info="could not read the IMEX_IGW_SETTINGS section of the namelist file ("//trim(msg)//")")
       return
+    else if (.not. has_key) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="the IMEX_IGW_SETTINGS section of the namelist file has no imex_igw, which is required:"&
+      &//" set imex_igw = .true. (IMEX internal-wave step, needs a build with IMEX_IGW) or"&
+      &//" imex_igw = .false. (stock baroclinic step)")
+      return
     end if
 
+#ifdef IMEX_IGW
+    if (.not. imex_igw) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="imex_igw = .false. in IMEX_IGW_SETTINGS, but IMEX_IGW is compiled in:"&
+      &//" set imex_igw = .true. or rebuild without IMEX_IGW")
+      return
+    end if
     call check_settings(module_name//"/"//sr_name)
     call set_derived_weights
     if (mynode == 0) call print_settings
+#else
+    if (imex_igw) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="imex_igw = .true. in IMEX_IGW_SETTINGS needs a build with IMEX_IGW:"&
+      &//" add IMEX_IGW to cppdefs.opt and rebuild, or set imex_igw = .false.")
+      return
+    end if
+    if (mynode == 0) then
+      write(*,'(/1x,A)') 'IMEX_IGW: off (imex_igw = .false.)'
+      if (len_trim(found) > 0) write(*,'(3x,A)') 'the other keys of IMEX_IGW_SETTINGS are ignored: '//trim(found)
+    end if
+#endif
   end subroutine read_nml_imex_igw
 
   !----------------------------------------------------------------------
@@ -764,6 +818,100 @@ contains
     enddo
   end subroutine removed_keys_set
 
+#ifndef IMEX_IGW
+  !----------------------------------------------------------------------
+  subroutine other_keys_set(unit, found)
+    ! The keys other than imex_igw that the namelist file's IMEX_IGW_SETTINGS group sets, as a
+    ! comma-separated list (empty if none; for the note that a build without IMEX_IGW ignores
+    ! them). A key is the name before an '=' (and its subscript, if any) outside quoted strings;
+    ! comments after '!' are skipped
+    implicit none
+    integer(kind=4), intent(in) :: unit
+    character(len=*), intent(out) :: found
+    character(len=1024) :: ln
+    character(len=64) :: key
+    character(len=1) :: q
+    integer(kind=4) :: ios, p, c, e, b, depth
+    logical :: ingrp, last
+
+    found = '' ; ingrp = .false.
+    rewind(unit)
+    do
+      read(unit, '(A)', iostat=ios) ln
+      if (ios /= 0) exit
+      q = ' '
+      do p=1,len_trim(ln)                       ! blank quoted strings, cut the comment, lower case
+        if (q /= ' ') then
+          if (ln(p:p) == q) q = ' '
+          ln(p:p) = ' '
+        else if (ln(p:p) == "'" .or. ln(p:p) == '"') then
+          q = ln(p:p)
+          ln(p:p) = ' '
+        else if (ln(p:p) == '!') then
+          ln(p:) = ' '
+          exit
+        else
+          c = iachar(ln(p:p))
+          if (c >= iachar('A') .and. c <= iachar('Z')) ln(p:p) = achar(c + 32)
+        end if
+      enddo
+      if (.not. ingrp) then                     ! the group starts (entries may follow on the line)
+        p = index(ln, '&imex_igw_settings')
+        if (p == 0) cycle
+        ingrp = .true.
+        ln = ln(p+18:)
+      end if
+      last = index(ln, '/') > 0                 ! the group ends on this line
+      if (last) ln(index(ln, '/'):) = ' '
+      e = 0
+      do
+        p = index(ln(e+1:), '=')
+        if (p == 0) exit
+        e = e + p                               ! an '=' at e: the key ends before it
+        b = e - 1
+        do while (b > 0)                        ! blanks
+          if (ln(b:b) /= ' ') exit
+          b = b - 1
+        enddo
+        if (b > 0) then                         ! a subscript
+          if (ln(b:b) == ')') then
+            depth = 0
+            do while (b > 0)
+              if (ln(b:b) == ')') depth = depth + 1
+              if (ln(b:b) == '(') depth = depth - 1
+              b = b - 1
+              if (depth == 0) exit
+            enddo
+            do while (b > 0)
+              if (ln(b:b) /= ' ') exit
+              b = b - 1
+            enddo
+          end if
+        end if
+        p = b                                   ! the name ends at b
+        do while (p > 0)
+          c = iachar(ln(p:p))
+          if (.not. (ln(p:p) == '_' .or. (c >= iachar('a') .and. c <= iachar('z'))&
+          &          .or. (c >= iachar('0') .and. c <= iachar('9')))) exit
+          p = p - 1
+        enddo
+        if (p == b) cycle
+        key = ln(p+1:b)
+        if (trim(key) == 'imex_igw') cycle
+        if (index(', '//trim(found)//',', ', '//trim(key)//',') > 0) cycle
+        if (len_trim(found) + len_trim(key) + 2 > len(found)) cycle
+        if (len_trim(found) > 0) then
+          found = trim(found)//', '//trim(key)
+        else
+          found = trim(key)
+        end if
+      enddo
+      if (last) exit
+    enddo
+  end subroutine other_keys_set
+#endif
+
+#ifdef IMEX_IGW
   !----------------------------------------------------------------------
   subroutine check_settings(context)
     ! Constraints on the weights and the allowed values of the keys. A violation is raised globally;
@@ -972,7 +1120,7 @@ contains
   !----------------------------------------------------------------------
   subroutine print_settings
     implicit none
-    write(*,'(/1x,A)') 'IMEX_IGW: implicit internal-wave terms'
+    write(*,'(/1x,A)') 'IMEX_IGW: on (imex_igw = .true.), implicit internal-wave terms'
     write(*,'(3x,A,3F10.5)') 'predictor theta_p, phi, 1-theta_p-phi   =',&
     &imex_theta_p, imex_phi, 1._8 - imex_theta_p - imex_phi
     write(*,'(3x,A,4F10.5)') 'corrector theta_c, mu, nu, rho          =',&
@@ -11195,9 +11343,5 @@ contains
     s = sin(12.9898_8*ig + 78.233_8*jg + 37.719_8*k + 4.581_8*seed)*43758.5453_8
     h = s - floor(s) - 0.5_8
   end function imex_hash01
-
-#else
-  subroutine imex_igw_empty
-  end subroutine imex_igw_empty
 #endif /* IMEX_IGW */
 end module imex_igw
