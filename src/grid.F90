@@ -27,7 +27,7 @@ module grid
   use roms_mpi, only: exchange_xxx
   use pio_roms, only: use_pio, pio_gtype
 #ifdef PARALLEL_IO
-  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
+  use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort, pio_direct_close
   use pio, only : PIO_closefile, PIO_write
   use netcdf, only: nf90_redef, nf90_enddef
   use mpi_f08, only: MPI_Bcast, MPI_Barrier, MPI_CHARACTER
@@ -546,7 +546,7 @@ contains
 !===== == ==== =======
 
 #ifdef PARALLEL_IO
-    call pio_open_or_abort(grdname, sr_name)
+    call pio_open_or_abort(grdname, sr_name, direct=.true.)   ! direct reads (pio_direct_read)
 #endif
 
     start=1; start(3)=0      ! starting indices in netcdf file. Might not be needed here
@@ -610,6 +610,7 @@ contains
 
     endif
 #ifdef PARALLEL_IO
+    call pio_direct_close
     call PIO_closefile(pio_FileDesc)
 #endif
     call error_log%abort_check()
