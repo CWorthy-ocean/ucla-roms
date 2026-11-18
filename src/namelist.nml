@@ -66,6 +66,12 @@ nt_bgc = 32          ! Number of BGC tracers
 ! Stride between MPI ranks assigned as PIO I/O tasks (requires PARALLEL_IO)
 !---------------------------
 pio_stride = 1
+!---------------------------
+! Read the grid and initial/restart files directly with O_DIRECT when they are
+! classic netCDF (CDF-1, CDF-2, CDF-5): 'on', 'off' (read through PIO), or
+! 'verify' (read both ways and report values that differ)
+!---------------------------
+pio_direct_read = 'on'
 /
 
 &INITIAL_CONDITIONS                                          !roms_read_write.F90

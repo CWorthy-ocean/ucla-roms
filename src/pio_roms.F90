@@ -18,6 +18,11 @@ module pio_roms
   use pio_nf, only : PIO_inq_varid, PIO_inq_dimid, PIO_strerror
   use pionfatt_mod, only : put_att_desc_text
   use mpi_f08, only: mpi_character, mpi_wtime
+  use mpi_f08, only: MPI_Comm, MPI_Comm_split_type, MPI_COMM_TYPE_SHARED, MPI_INFO_NULL, MPI_Comm_rank,&
+  &                  MPI_Comm_size, MPI_Comm_free, MPI_Allgather, MPI_Allreduce, MPI_Bcast, MPI_Alltoallv,&
+  &                  MPI_LOGICAL, MPI_INTEGER, MPI_INTEGER8, MPI_DOUBLE_PRECISION, MPI_LAND, MPI_MAX, MPI_SUM
+  use cdf_direct, only: cdf_file_t, cdf_buf_t, cdf_open, cdf_close, cdf_find, cdf_read, cdf_unpack_row,&
+  &                     cdf_buf_free
   use param, only: max_name_size
   use param, only: LLm, MMm, nz, ocean_grid_comm, nt, mynode, max_extract_chd
   use timers, only: tstart
@@ -32,7 +37,12 @@ module pio_roms
   integer(kind=4), public :: pio_stride = 1
   integer(kind=4), public :: pio_type = PIO_iotype_pnetcdf
 
-  namelist /PIO_SETTINGS/ pio_stride
+  ! Direct reads of the start-up files (grid, initial/restart) when they are
+  ! classic netCDF (CDF-1, CDF-2, CDF-5): 'on' (default), 'off' (read through
+  ! PIO), 'verify' (read both ways and count the values that differ).
+  character(len=8), public :: pio_direct_read = 'on'
+
+  namelist /PIO_SETTINGS/ pio_stride, pio_direct_read
 
   logical, parameter, public  :: use_pio = .true.
   ! When PARALLEL_IO is on, skip PIO's needsfill coverage check (force needsfill=false).
@@ -51,6 +61,30 @@ module pio_roms
   ! read-only (rank 0 only; see pio_warn_netcdf4_input).
   character(len=max_name_size), allocatable :: fmt_checked_file(:)
   integer(kind=4) :: n_fmt_checked = 0
+
+  ! Direct start-up reads (pio_direct_read; see dr_read). PIO reads a file
+  ! through MPI-IO's collective buffering, which on Lustre gives a few
+  ! aggregators per file and a slow exchange (a 118-GB restart took over
+  ! 100 s on 2 nodes). Instead, a few reader ranks per node read the record
+  ! of each variable with O_DIRECT (cdf_direct), each a contiguous slab of
+  ! rows, convert it, and send every rank its box (the window of the PIO read
+  ! decomposition) with one MPI_Alltoallv. Any file or variable that cannot
+  ! be read this way is read through PIO, as before.
+  integer(kind=4), parameter :: dr_per_node = 8            ! reader ranks per node (at most)
+  integer(kind=8), parameter :: dr_piece = 1073741824_8    ! bytes per pread
+  logical :: dr_reader = .false.                           ! this rank is a reader
+  integer(kind=4) :: dr_nread = 0                          ! number of readers (0: direct reads off)
+  integer(kind=4), allocatable :: dr_rank(:)               ! their ranks in ocean_grid_comm, rank 0 first
+  integer(kind=4) :: dr_me = -1                            ! my index among the readers, -1 if not one
+  logical :: dr_active = .false.                           ! dr_path is attached
+  logical :: dr_verify = .false.
+  character(len=max_name_size) :: dr_path = ''
+  type(cdf_file_t) :: dr_file                              ! readers only
+  type(cdf_buf_t) :: dr_buf                                ! readers only
+  integer(kind=4) :: dr_nvar = 0, dr_npio = 0              ! variables read directly / through PIO
+  integer(kind=8) :: dr_nbytes = 0, dr_ndiff = 0
+  real(kind=8) :: dr_tread = 0, dr_tconv = 0, dr_texch = 0, dr_t0 = 0   ! read, convert, exchange time
+  public :: pio_direct_close
   !> @brief Rank of processor running the code.
   integer(kind=4), public :: pio_myRank
   !> @brief Number of processors participating in MPI communicator.
@@ -723,6 +757,11 @@ contains
       &context=module_name//'/'//sr_name,&
       &info='pio_stride must be >= 1')
     end if
+    if (pio_direct_read /= 'on' .and. pio_direct_read /= 'off' .and. pio_direct_read /= 'verify') then
+      call error_log%raise_global(&
+      &context=module_name//'/'//sr_name,&
+      &info="pio_direct_read must be 'on', 'off' or 'verify', not '"//trim(pio_direct_read)//"'")
+    end if
     call error_log%abort_check()
   end subroutine read_nml_pio
 
@@ -1303,6 +1342,8 @@ contains
 
     call pio_createDecomps
 
+    call dr_setup
+
   end subroutine pio_initialize
 ! ----------------------------------------------------------------------
   subroutine pio_initialize_coarse
@@ -1842,7 +1883,7 @@ contains
 
   end subroutine pio_createDecomps
 ! ----------------------------------------------------------------------
-  subroutine pio_open_or_abort(fname, context, mode) ![
+  subroutine pio_open_or_abort(fname, context, mode, direct) ![
     ! Open fname into pio_FileDesc, aborting with a ROMS-side message on
     ! failure. PIO is switched to PIO_BCAST_ERROR for the duration of the
     ! open so that every rank receives the same status (this is safe because
@@ -1850,11 +1891,15 @@ contains
     ! iosystem) and the failure can be reported with the file name and
     ! calling context, instead of PIO's own unhelpful
     ! "Abort with message <strerror> in file pioc_support.c at line N".
+    ! direct (read-only start-up files: grid, initial/restart): also prepare
+    ! the direct reads of pio_direct_read; the caller ends them with
+    ! pio_direct_close before it closes the file.
     implicit none
 
     ! input
     character(len=*), intent(in) :: fname, context
     integer(kind=4), intent(in), optional :: mode   ! PIO_write etc.; default PIO_nowrite
+    logical, intent(in), optional :: direct
 
     ! local
     integer(kind=4) :: ierr, ierr2, old_method
@@ -1891,6 +1936,11 @@ contains
       call error_log%abort_check()
     else
       pio_current_file = fname
+    endif
+
+    call pio_direct_close                      ! a file left attached (should not happen)
+    if (present(direct) .and. .not. present(mode)) then
+      if (direct) call dr_attach(fname)
     endif
 
   end subroutine pio_open_or_abort !]
@@ -2023,13 +2073,25 @@ contains
     integer(kind=4),optional,intent(in)       :: irec
 
     type(var_desc_t) :: varId
-    integer(kind=4) :: ierr
+    integer(kind=4) :: ierr, irec0
+    real(kind=8), allocatable :: dval(:)
+    logical :: direct
 
     call pio_inq_varid_or_abort(trim(varName), varId, "pio_roms/pio_ncread2")
 
     if (present(irec)) then
       frame = irec
       call PIO_setframe(pio_FileDesc, varId, frame)
+    endif
+
+    ! Direct read of a start-up file (pio_direct_read); with 'verify', PIO
+    ! reads the variable as well below, and the two are compared.
+    irec0 = 0
+    if (present(irec)) irec0 = irec
+    direct = dr_try(varName, irec0, size(arr, kind=8), dval)
+    if (direct .and. .not. dr_verify) then
+      arr = reshape(dval, shape(arr))
+      return
     endif
 
     if (pio_gtype == 'n2rr') then
@@ -2070,6 +2132,11 @@ contains
       call PIO_read_darray(pio_FileDesc, varId, pio_desc_2Cv_r, arr, ierr)
     endif
 
+    if (direct) then
+      call dr_compare(varName, size(arr), arr, dval)
+      arr = reshape(dval, shape(arr))
+    endif
+
   end subroutine pio_ncread2
 ! ----------------------------------------------------------------------
   subroutine pio_ncread3(varName, arr, irec)
@@ -2081,13 +2148,24 @@ contains
     integer(kind=4),optional,intent(in)       :: irec
 
     type(var_desc_t) :: varId
-    integer(kind=4) :: ierr
+    integer(kind=4) :: ierr, irec0
+    real(kind=8), allocatable :: dval(:)
+    logical :: direct
 
     call pio_inq_varid_or_abort(trim(varName), varId, "pio_roms/pio_ncread3")
 
     if (present(irec)) then
       frame = irec
       call PIO_setframe(pio_FileDesc, varId, frame)
+    endif
+
+    ! Direct read of a start-up file (pio_direct_read); see pio_ncread2
+    irec0 = 0
+    if (present(irec)) irec0 = irec
+    direct = dr_try(varName, irec0, size(arr, kind=8), dval)
+    if (direct .and. .not. dr_verify) then
+      arr = reshape(dval, shape(arr))
+      return
     endif
 
     if (pio_gtype == '3Drr') then
@@ -2098,7 +2176,353 @@ contains
       call PIO_read_darray(pio_FileDesc, varId, pio_desc_3Dv_r, arr, ierr)
     endif
 
+    if (direct) then
+      call dr_compare(varName, size(arr), arr, dval)
+      arr = reshape(dval, shape(arr))
+    endif
+
   end subroutine pio_ncread3
+! ----------------------------------------------------------------------
+  subroutine dr_setup ![
+    ! Choose the reader ranks of the direct start-up reads: up to dr_per_node
+    ! ranks per node, spread evenly over the node's ranks; world rank 0 is
+    ! always one (reader 0).
+    implicit none
+    type(MPI_Comm) :: nodecomm
+    integer(kind=4) :: lrank, lsize, nper, stride, ierr, i, n
+    logical :: me
+    logical, allocatable :: flags(:)
+
+    dr_nread = 0
+    if (pio_direct_read == 'off') return
+    call MPI_Comm_split_type(ocean_grid_comm, MPI_COMM_TYPE_SHARED, mynode, MPI_INFO_NULL, nodecomm, ierr)
+    call MPI_Comm_rank(nodecomm, lrank, ierr)
+    call MPI_Comm_size(nodecomm, lsize, ierr)
+    call MPI_Comm_free(nodecomm, ierr)
+    nper = max(1, min(dr_per_node, lsize))
+    stride = lsize / nper
+    me = (mod(lrank, stride) == 0 .and. lrank / stride < nper)
+    if (mynode == 0) me = .true.
+    allocate(flags(0:pio_ntasks-1))
+    call MPI_Allgather(me, 1, MPI_LOGICAL, flags, 1, MPI_LOGICAL, ocean_grid_comm, ierr)
+    dr_nread = count(flags)
+    allocate(dr_rank(0:dr_nread-1))
+    n = 0
+    dr_me = -1
+    do i = 0, pio_ntasks-1
+      if (flags(i)) then
+        dr_rank(n) = i
+        if (i == mynode) dr_me = n
+        n = n + 1
+      endif
+    enddo
+    dr_reader = me
+    if (mynode == 0) write(*,'(1x,A,I0,A,I0,A)') 'pio_direct_read = '''//trim(pio_direct_read)//''': ',&
+    &dr_nread, ' reader ranks (up to ', dr_per_node, ' per node)'
+
+  end subroutine dr_setup !]
+! ----------------------------------------------------------------------
+  subroutine dr_attach(fname) ![
+    ! Prepare the direct reads of fname: every reader parses its header and
+    ! opens it with O_DIRECT. If any reader cannot (not a classic file, no
+    ! O_DIRECT), the whole file is read through PIO and rank 0 says why.
+    implicit none
+    character(len=*), intent(in) :: fname
+    logical :: ok, allok
+    integer(kind=4) :: ierr
+    character(len=256) :: msg
+
+    if (dr_nread == 0) return
+    ok = .true.
+    msg = ''
+    if (dr_reader) ok = cdf_open(trim(fname), dr_file, msg, .true.)
+    call MPI_Allreduce(ok, allok, 1, MPI_LOGICAL, MPI_LAND, ocean_grid_comm, ierr)
+    if (.not. allok) then
+      if (mynode == 0) then
+        if (ok) msg = 'another reader rank could not open it with O_DIRECT'
+        write(*,'(1x,5A)') 'pio_direct_read: reading ''', trim(fname), ''' through PIO: ', trim(msg), '.'
+      endif
+      if (dr_reader) call cdf_close(dr_file)
+      return
+    endif
+    dr_active = .true.
+    dr_verify = (pio_direct_read == 'verify')
+    dr_path = fname
+    dr_nvar = 0
+    dr_npio = 0
+    dr_nbytes = 0
+    dr_ndiff = 0
+    dr_tread = 0
+    dr_tconv = 0
+    dr_texch = 0
+    dr_t0 = MPI_Wtime()
+
+  end subroutine dr_attach !]
+! ----------------------------------------------------------------------
+  subroutine pio_direct_close ![
+    ! End the direct reads of the attached start-up file (collective; nothing
+    ! to do if none is attached): rank 0 reports what was read and how.
+    implicit none
+    real(kind=8) :: tmax(3)
+    integer(kind=4) :: ierr
+
+    if (.not. dr_active) return
+    call MPI_Allreduce([dr_tread, dr_tconv, dr_texch], tmax, 3, MPI_DOUBLE_PRECISION, MPI_MAX, ocean_grid_comm, ierr)
+    if (mynode == 0) then
+      write(*,'(1x,3A,I0,A,F0.2,A,I0,A,F0.2,A,3(F0.2,A))') 'pio_direct_read: ''', trim(dr_path), ''': ',&
+      &dr_nvar, ' variables read directly (', real(dr_nbytes, 8)/1.e9_8, ' GB), ', dr_npio, ' through PIO, in ',&
+      &MPI_Wtime() - dr_t0, ' s (largest per rank: read ', tmax(1), ' s, convert ', tmax(2), ' s, exchange ',&
+      &tmax(3), ' s)'
+      if (dr_verify) write(*,'(1x,3A,I0,A,I0,A)') 'pio_direct_read verify: ''', trim(dr_path), ''': ',&
+      &dr_nvar, ' variables compared with PIO, ', dr_ndiff, ' values differ'
+    endif
+    if (dr_reader) then
+      call cdf_close(dr_file)
+      call cdf_buf_free(dr_buf)
+    endif
+    dr_active = .false.
+    dr_path = ''
+
+  end subroutine pio_direct_close !]
+! ----------------------------------------------------------------------
+  logical function dr_window(nd, dlen, st, ct) result(ok)
+    ! The read decomposition of pio_gtype that the direct reads handle: the
+    ! global lengths, and this rank's start and count (rows i, j, level k;
+    ! k is 1..1 for 2-D). .false.: any other gtype (read through PIO).
+    implicit none
+    integer(kind=4), intent(out) :: nd, dlen(3), st(3), ct(3)
+
+    ok = .true.
+    nd = 2
+    dlen = 1
+    st = 1
+    ct = 1
+    select case (pio_gtype)
+    case ('2Drr')
+      dlen(1:2) = pio_dimLen_2Dr_r; st(1:2) = int(pio_start_2Dr_r); ct(1:2) = int(pio_count_2Dr_r)
+    case ('2Dur')
+      dlen(1:2) = pio_dimLen_2Du_r; st(1:2) = int(pio_start_2Du_r); ct(1:2) = int(pio_count_2Du_r)
+    case ('2Dvr')
+      dlen(1:2) = pio_dimLen_2Dv_r; st(1:2) = int(pio_start_2Dv_r); ct(1:2) = int(pio_count_2Dv_r)
+    case ('3Drr')
+      nd = 3; dlen = pio_dimLen_3Dr_r; st = int(pio_start_3Dr_r); ct = int(pio_count_3Dr_r)
+    case ('3Dur')
+      nd = 3; dlen = pio_dimLen_3Du_r; st = int(pio_start_3Du_r); ct = int(pio_count_3Du_r)
+    case ('3Dvr')
+      nd = 3; dlen = pio_dimLen_3Dv_r; st = int(pio_start_3Dv_r); ct = int(pio_count_3Dv_r)
+    case default
+      ok = .false.
+    end select
+
+  end function dr_window !]
+! ----------------------------------------------------------------------
+  integer(kind=8) function dr_nrows(r0, r1, gy, js, nj) result(n)
+    ! Rows r in [r0, r1) (r = (k-1)*gy + (j-1), 0-based) whose j is in js..js+nj-1.
+    implicit none
+    integer(kind=8), intent(in) :: r0, r1, gy
+    integer(kind=4), intent(in) :: js, nj
+    integer(kind=8) :: k, lo, hi
+
+    n = 0
+    if (r1 <= r0 .or. nj <= 0) return
+    do k = r0 / gy, (r1 - 1) / gy
+      lo = max(r0, k * gy + js - 1)
+      hi = min(r1 - 1, k * gy + js + nj - 2)
+      if (hi >= lo) n = n + hi - lo + 1
+    enddo
+
+  end function dr_nrows !]
+! ----------------------------------------------------------------------
+  logical function dr_try(varName, irec, n, val) result(done)
+    ! Read the box of this rank of varName (record irec; 0: none given) from
+    ! the attached start-up file directly, into val(1:n) in the order of the
+    ! box (i fastest, then j, then k), as PIO_read_darray with the read
+    ! decomposition of pio_gtype would fill it. Collective: every rank takes
+    ! the same branch. .false.: not attached, not a handled gtype, a variable
+    ! this module does not read (type, shape, record), or a failed read; the
+    ! caller then reads the variable through PIO.
+    !
+    ! The record's rows (gx values each, rows r = (k-1)*gy + j-1) are dealt
+    ! to the readers in contiguous slabs; each reader reads its slab with
+    ! O_DIRECT, converts the part of each row that each rank's box needs,
+    ! and one MPI_Alltoallv delivers the boxes.
+    implicit none
+    character(len=*), intent(in) :: varName
+    integer(kind=4), intent(in) :: irec
+    integer(kind=8), intent(in) :: n
+    real(kind=8), allocatable, intent(out) :: val(:)
+
+    integer(kind=4) :: nd, dlen(3), st(3), ct(3), ierr, iv, p, q, ni, nj, js
+    integer(kind=4), allocatable :: win(:,:), scnt(:), sdsp(:), rcnt(:), rdsp(:)
+    integer(kind=8) :: info(7), off, gx, gy, nzz, xsz, nrow, r0, r1, rq0, rq1, k, lo, hi, r, pos, boff
+    integer(kind=8) :: dshift, ns
+    logical :: ok, allok
+    real(kind=8) :: t
+    real(kind=8), allocatable :: sbuf(:), rbuf(:)
+
+    done = .false.
+    if (.not. dr_active) return
+    if (trim(pio_current_file) /= trim(dr_path)) return
+    if (.not. dr_window(nd, dlen, st, ct)) return
+
+    ! the variable's record, decided on rank 0 (a reader) for every rank:
+    ! info = ok, type, bytes per value, first byte, gx, gy, levels
+    info = 0
+    if (mynode == 0) then
+      iv = cdf_find(dr_file, trim(varName))
+      if (iv > 0) then
+        associate (v => dr_file%v(iv))
+          ok = v%ok .and. (v%ndims == nd + merge(1, 0, v%isrec))
+          if (ok) ok = (v%dimf(1) == dlen(1) .and. v%dimf(2) == dlen(2))
+          if (ok .and. nd == 3) ok = (v%dimf(3) == dlen(3))
+          if (ok) then
+            if (v%isrec) then
+              ok = (irec >= 1 .and. irec <= dr_file%numrecs)
+              off = v%begin + (irec - 1) * dr_file%recsize
+            else
+              ok = (irec == 0)                    ! a record asked of a fixed variable: as PIO does
+              off = v%begin
+            endif
+          endif
+          if (ok) then
+            info(2:7) = [int(v%xtype, 8), int(v%xsz, 8), off, int(dlen(1), 8), int(dlen(2), 8), int(dlen(3), 8)]
+            ok = (off + info(5) * info(6) * info(7) * info(3) <= dr_file%fsize)   ! truncated file
+          endif
+          if (ok) info(1) = 1
+        end associate
+      endif
+    endif
+    call MPI_Bcast(info, 7, MPI_INTEGER8, 0, ocean_grid_comm, ierr)
+    if (info(1) /= 1) then
+      dr_npio = dr_npio + 1
+      return
+    endif
+    off = info(4); gx = info(5); gy = info(6); nzz = info(7); xsz = info(3)
+    nrow = gy * nzz
+
+    ! every rank's box: i start, i count, j start, j count, usable (the box
+    ! has all levels and matches the array)
+    allocate(win(5, 0:pio_ntasks-1))
+    ok = (st(3) == 1 .and. ct(3) == dlen(3) .and. int(ct(1), 8) * ct(2) * ct(3) == n .and. ct(1) >= 0&
+    &     .and. ct(2) >= 0 .and. st(1) >= 1 .and. st(2) >= 1 .and. st(1) + ct(1) - 1 <= dlen(1)&
+    &     .and. st(2) + ct(2) - 1 <= dlen(2))
+    call MPI_Allgather([st(1), ct(1), st(2), ct(2), merge(1, 0, ok)], 5, MPI_INTEGER, win, 5, MPI_INTEGER,&
+    &                  ocean_grid_comm, ierr)
+    ! the counts of MPI_Alltoallv are default integers: a reader's slab must fit
+    if (any(win(5,:) == 0) .or. ((nrow / dr_nread + 1) * gx >= huge(1_4))) then
+      dr_npio = dr_npio + 1
+      return
+    endif
+
+    ! my slab: rows r0 .. r1-1
+    r0 = 0
+    r1 = 0
+    if (dr_reader) then
+      r0 = (dr_me * nrow) / dr_nread
+      r1 = ((dr_me + 1) * nrow) / dr_nread
+    endif
+    ok = .true.
+    if (r1 > r0) then
+      t = MPI_Wtime()
+      ok = cdf_read(dr_file, off + r0 * gx * xsz, (r1 - r0) * gx * xsz, dr_buf, dshift, dr_piece)
+      dr_tread = dr_tread + MPI_Wtime() - t
+    endif
+    call MPI_Allreduce(ok, allok, 1, MPI_LOGICAL, MPI_LAND, ocean_grid_comm, ierr)
+    if (.not. allok) then
+      if (mynode == 0) write(*,'(1x,5A)') 'pio_direct_read: a direct read of ', trim(varName), ' from ''',&
+      &trim(dr_path), ''' failed; reading it through PIO'
+      dr_npio = dr_npio + 1
+      return
+    endif
+
+    ! counts: from my slab to every rank, and to me from every reader
+    allocate(scnt(0:pio_ntasks-1), sdsp(0:pio_ntasks-1), rcnt(0:pio_ntasks-1), rdsp(0:pio_ntasks-1))
+    scnt = 0
+    rcnt = 0
+    do p = 0, pio_ntasks-1
+      if (r1 > r0) scnt(p) = int(win(2,p) * dr_nrows(r0, r1, gy, win(3,p), win(4,p)))
+    enddo
+    do q = 0, dr_nread-1
+      rq0 = (q * nrow) / dr_nread
+      rq1 = ((q + 1) * nrow) / dr_nread
+      rcnt(dr_rank(q)) = int(ct(1) * dr_nrows(rq0, rq1, gy, st(2), ct(2)))
+    enddo
+    sdsp(0) = 0
+    rdsp(0) = 0
+    do p = 1, pio_ntasks-1
+      sdsp(p) = sdsp(p-1) + scnt(p-1)
+      rdsp(p) = rdsp(p-1) + rcnt(p-1)
+    enddo
+
+    ! convert my slab's rows into the send buffer, rank by rank, rows ascending
+    ns = sum(int(scnt, 8))
+    allocate(sbuf(max(ns, 1_8)), rbuf(max(n, 1_8)))
+    t = MPI_Wtime()
+    if (r1 > r0) then
+      pos = 0
+      do p = 0, pio_ntasks-1
+        ni = win(2,p); js = win(3,p); nj = win(4,p)
+        if (ni <= 0 .or. nj <= 0) cycle
+        do k = r0 / gy, (r1 - 1) / gy
+          lo = max(r0, k * gy + js - 1)
+          hi = min(r1 - 1, k * gy + js + nj - 2)
+          do r = lo, hi
+            boff = dshift + ((r - r0) * gx + (win(1,p) - 1)) * xsz
+            call cdf_unpack_row(dr_buf, boff, int(info(2)), ni, sbuf(pos+1:pos+ni))
+            pos = pos + ni
+          enddo
+        enddo
+      enddo
+    endif
+    dr_tconv = dr_tconv + MPI_Wtime() - t
+    t = MPI_Wtime()
+    call MPI_Alltoallv(sbuf, scnt, sdsp, MPI_DOUBLE_PRECISION, rbuf, rcnt, rdsp, MPI_DOUBLE_PRECISION,&
+    &                  ocean_grid_comm, ierr)
+
+    ! place the rows into my box: from reader 0, 1, ..., rows ascending
+    allocate(val(n))
+    ni = ct(1); js = st(2); nj = ct(2)
+    pos = 0
+    if (ni > 0 .and. nj > 0) then
+      do q = 0, dr_nread-1
+        rq0 = (q * nrow) / dr_nread
+        rq1 = ((q + 1) * nrow) / dr_nread
+        if (rq1 <= rq0) cycle
+        do k = rq0 / gy, (rq1 - 1) / gy
+          lo = max(rq0, k * gy + js - 1)
+          hi = min(rq1 - 1, k * gy + js + nj - 2)
+          do r = lo, hi
+            boff = (k * nj + (r - k * gy - (js - 1))) * ni      ! (j, k) of row r in the box, 0-based
+            val(boff+1:boff+ni) = rbuf(pos+1:pos+ni)
+            pos = pos + ni
+          enddo
+        enddo
+      enddo
+    endif
+    dr_texch = dr_texch + MPI_Wtime() - t
+    dr_nvar = dr_nvar + 1
+    dr_nbytes = dr_nbytes + nrow * gx * xsz
+    done = .true.
+
+  end function dr_try !]
+! ----------------------------------------------------------------------
+  subroutine dr_compare(varName, n, a, b) ![
+    ! pio_direct_read = 'verify': count the values of the direct read (b)
+    ! that are not bit for bit the PIO read's (a), over all ranks.
+    implicit none
+    character(len=*), intent(in) :: varName
+    integer(kind=4), intent(in) :: n
+    real(kind=8), intent(in) :: a(n), b(n)
+    integer(kind=8) :: nd, ndall
+    integer(kind=4) :: ierr
+
+    nd = count(transfer(a, 1_8, n) /= transfer(b, 1_8, n))
+    call MPI_Allreduce(nd, ndall, 1, MPI_INTEGER8, MPI_SUM, ocean_grid_comm, ierr)
+    dr_ndiff = dr_ndiff + ndall
+    if (mynode == 0 .and. ndall > 0) write(*,'(1x,3A,I0,A)') 'pio_direct_read verify: ', trim(varName),&
+    &': ', ndall, ' values differ from PIO''s'
+
+  end subroutine dr_compare !]
 ! ----------------------------------------------------------------------
   subroutine pio_put_time(varName, val, irec) ![
     ! Write the time value val into record irec of the 1-D record variable

@@ -77,7 +77,8 @@ t3dbc_mod.o : t3dbc_mod.F90 cppdefs.opt param.o tracers.o boundary.o dimensions.
 dimensions.o : dimensions.F90 cppdefs.opt param.o insert_node_mod.o pio_roms.o error_handling_mod.o namelist_open_mod.o utils_mod.o
 w3dbc_mod.o : w3dbc_mod.F90 cppdefs.opt param.o boundary.o grid.o ocean_vars.o scalars.o
 param.o : param.F90 cppdefs.opt
-pio_roms.o : pio_roms.F90 pio_config.h cppdefs.opt param.o timers.o namelist_open_mod.o error_handling_mod.o
+pio_roms.o : pio_roms.F90 pio_config.h cppdefs.opt cdf_direct.o param.o timers.o namelist_open_mod.o error_handling_mod.o
+cdf_direct.o : cdf_direct.F90
 zslice_output.o : zslice_output.F90 cppdefs.opt namelist_open_mod.o grid.o param.o roms_mpi.o dimensions.o roms_read_write.o nc_read_write.o scalars.o ocean_vars.o tracers.o error_handling_mod.o pio_roms.o
 instant_output.o : instant_output.F90 cppdefs.opt nc_read_write.o error_handling_mod.o param.o scalars.o dimensions.o roms_mpi.o
 set_forces.o : set_forces.F90 cppdefs.opt param.o flux_frc.o surf_flux.o tracers.o river_frc.o pipe_frc.o bgc_io.o dimensions.o boundary.o scalars.o cdr_frc.o bulk_frc.o analytical.o compute_tile_bounds.h
