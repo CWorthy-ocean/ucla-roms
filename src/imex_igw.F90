@@ -146,7 +146,30 @@ module imex_igw
                                                  ! change in stability or accuracy against 6 on Pac, N1, N3,
                                                  ! sargasso; ~3 % per model day saved on Pac at 1800 s);
                                                  ! 12 is the cautious alternative (was 6; 1: the cadence
-                                                 ! before the setup lag)
+                                                 ! before the setup lag). It is the longest age of b_ref:
+                                                 ! imex_bref_trigger rebuilds it earlier where it goes stale
+  real(kind=8)    :: imex_bref_trigger = 0.646_8 ! b_ref also rebuilt on demand (0: never; imex_bref_exposure): at
+                                                 ! the next step when the exposure E of some column exceeds this and
+                                                 ! b_ref is at least imex_bref_minhours old. Between rebuilds the
+                                                 ! corrector carries the stratification that b_ref no longer holds,
+                                                 ! N2act - N2raw (N2 of b* and of b_ref), explicitly (in X with
+                                                 ! imex_corr_adv = 1, else in the explicit buoyancy), against the
+                                                 ! operator's N2op; under a deepening mixed layer this residual grows,
+                                                 ! and past a threshold a grid-scale mode of the stiff internal waves
+                                                 ! grows at long steps (column models of a Gulf of Mexico nest at 1350
+                                                 ! s: from e 0.21-0.27). Per column and WKB mode m = 1..3 of N2op,
+                                                 ! e_m = [sum (N2act - N2raw) w_m^2 Hz/sum N2op w_m^2 Hz] W^2/(W^2 + 2),
+                                                 ! W = c_m dt sqrt(4 pm^2 + 4 pn^2) (the (pi, pi) wave; columns
+                                                 ! within two cells of an open edge left out), and
+                                                 ! E = max_m e_m/x_inf, x_inf the stiff-mode threshold of the residual
+                                                 ! (r - 1 at which the one-mode model of the step goes unstable,
+                                                 ! W -> infinity) for the weights in effect and imex_corr_adv
+                                                 ! (bre_xinf: 0.3096 for set B, 0.2695 with theta_c 0.7, 1/(2
+                                                 ! theta_c) without imex_corr_adv), so that one value serves any
+                                                 ! weights. 0.646 is e = 0.200 for set B: 6 demands in 7 days on that
+                                                 ! nest at 600 s, at b_ref ages of 6-10 h; none on a Hawaii nest at
+                                                 ! 900 s, whose internal tide reaches E 0.43. E is computed every
+                                                 ! step and printed (IMEX_BREF_E lines) also with 0
   integer(kind=4) :: imex_setup_lag = 1          ! operator coefficients: 1 rebuilt with b_ref only: the
                                                  ! operator, its Jacobi diagonal and the PCG inner products
                                                  ! are those of the rebuild step (Hz and its face sums
@@ -346,6 +369,11 @@ module imex_igw
   real(kind=8), parameter :: imex_n2_min = 1.e-8_8   ! the self-test's 'state' N2 floor [s-2]
   real(kind=8), parameter :: imex_n2_reg = 1.e-12_8  ! N2 floor (regularization of the diagonal) [s-2]
   integer(kind=4), parameter :: imex_bref_smooth = 4 ! b_ref smoothing passes along geopotentials
+  real(kind=8), parameter :: imex_bref_minhours = 1._8 ! smallest age [h] of b_ref at an on-demand rebuild
+                                                 ! (imex_bref_trigger): staleness builds over hours (e reached
+                                                 ! 0.2 at ages of 2.8 h and more), while the b_ref smoothing alone
+                                                 ! gives E > 0 on a fresh b_ref; the floor bounds the cost (at most
+                                                 ! one rebuild per model hour) and rules out a rebuild every step
   ! keys removed from IMEX_IGW_SETTINGS: a namelist that sets one stops at the read with a note listing them
   integer(kind=4), parameter :: n_removed = 34
   character(len=20), parameter :: removed_keys(n_removed) = [character(len=20) ::&
@@ -361,7 +389,8 @@ module imex_igw
   &  imex_am3_crv, imex_tol_pred, imex_tol_corr, imex_maxit,&
   &  imex_verbose, imex_solver_enabled, imex_allow_explicit, imex_selftest,&
   &  imex_n2_ref, imex_n2_taper, imex_warm,&
-  &  imex_bref_hours, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec, imex_stage_fused,&
+  &  imex_bref_hours, imex_bref_trigger, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec,&
+  &  imex_stage_fused,&
   &  imex_redu, imex_rst_state, imex_mix_split, imex_corr_adv, imex_corr_adv_clip,&
   &  imex_obc_mode, imex_obc_nmodes, imex_obc_q0, imex_obc_tref,&
   &  imex_obc_mprint, imex_obc_cmin, imex_pc, imex_pc_modes, imex_pc_dump, imex_pc_cou_on, imex_pc_cou_k,&
@@ -452,6 +481,21 @@ module imex_igw
   real(kind=8) :: xc_cnt(2) = 0._8
   real(kind=8), allocatable, dimension(:,:,:) :: bref_sav   ! last b_ref (reused until the next rebuild; exact restart)
   integer(kind=4) :: bref_last = -100000000        ! step of the last b_ref build
+  ! Exposure of the stale b_ref (imex_bref_trigger; bre_weights, imex_bref_exposure). bre_c(i,j,k,m): the weight of
+  ! the centred rho_b difference of cell k in E of mode m (0 in inactive and open-edge columns), bre_er(i,j,m) the
+  ! b_ref part, bre_h0 the operator's Hz(nz), bre_w2 the mode's W^2; all from the
+  ! operator's arrays at its setup, so imex_rst_replay rebuilds them. bre_xinf: x_inf (check_settings). The largest
+  ! E of the domain (the same on every rank) since the last IMEX line (1), since the last b_ref rebuild (2) and in
+  ! the run (3): bre_tv value, bre_ts step, bre_ta b_ref age [steps]; bre_tl its global i, j, mode and W^2 on the
+  ! rank that held it, -huge elsewhere. bre_ndem: demands, bre_nreb: rebuilds after the run's first (since the run
+  ! started; not in the restart file); bre_dem: the next rebuild is a demand's, bre_dage its b_ref age [steps]
+  real(kind=8), allocatable, dimension(:,:,:,:) :: bre_c
+  real(kind=8), allocatable, dimension(:,:,:) :: bre_w2, bre_er
+  real(kind=8), allocatable, dimension(:,:) :: bre_h0
+  real(kind=8) :: bre_xinf = 1._8
+  real(kind=8) :: bre_tv(3) = -huge(1._8), bre_tl(4,3) = -huge(1._8)
+  integer(kind=4) :: bre_ts(3) = 0, bre_ta(3) = 0, bre_ndem = 0, bre_nreb = 0, bre_dage = 0
+  logical :: bre_dem = .false.
   logical :: act_exchanged = .false.               ! ad_act (static) has its halos
   ! imex_setup_lag = 1: Hz (with halos) and the face-thickness sums rshu, rshv of the last
   ! b_ref rebuild step, read by the operator, the Jacobi diagonal and the PCG inner products
@@ -507,13 +551,14 @@ module imex_igw
   real(kind=8), allocatable, dimension(:,:,:) :: ad_n2raw   ! N2 of b_ref before its floor (taper)
   real(kind=8) :: tmr(10) = 0._8, tlast = 0._8      ! cost breakdown (imex_tlap, imex_tm_print)
   ! fine cost breakdown (tq_start, tq_mark; IMEX_COST2 line at the end of the run)
-  integer(kind=4), parameter :: ntq = 33
+  integer(kind=4), parameter :: ntq = 35
   real(kind=8) :: tq(ntq) = 0._8, tq_t0 = 0._8
   character(len=14), parameter :: tq_name(ntq) = [character(len=14) :: 'setup_geom', 'adj_mean_rho',&
   &  'adj_bb_exch', 'bref_sort', 'bref_smooth', 'bref_floor', 'adj_n2c_en2', 'eta_setup1', 'bcoef',&
   &  'adj_diag', 'eta_setup2', 'stage_exch_uv', 'rhs_pred', 'rhs_corr', 'scale_b', 'pcg_warm_ovh',&
   &  'pcg_init', 'correct', 'stage_end', 'pg_combine', 'ptr_exch_uv', 'ptr_btfix', 'ptr_build', 'ptr_exch_flx',&
-  &  'ptr_omega', 'shift_levels', 'obc_pre', 'pcg_exch', 'pcg_allred', 'pcg_op', 'pcg_pc', 'pcg_vec', 'corr_advb']
+  &  'ptr_omega', 'shift_levels', 'obc_pre', 'pcg_exch', 'pcg_allred', 'pcg_op', 'pcg_pc', 'pcg_vec', 'corr_advb',&
+  &  'bref_expo', 'bref_expo_red']
   ! Timing of the operator and preconditioner applications (imex_solve_line: per solve, from the
   ! snapshot sv_t); cb_tbuild (the build time of the removed 'column' preconditioner) stays 0 and
   ! keeps the IMEX_SOLVE line's 'col build' field
@@ -772,6 +817,11 @@ contains
       write(info,'(A,ES12.4,A)') 'imex_corr_adv_clip = ', imex_corr_adv_clip, ' must be >= 0 (0: off)'
       call error_log%raise_global(context=context, info=trim(info))
     end if
+    if (imex_bref_trigger < 0._8) then
+      write(info,'(A,ES12.4,A)') 'imex_bref_trigger = ', imex_bref_trigger, ' must be >= 0 (0: no on-demand rebuild)'
+      call error_log%raise_global(context=context, info=trim(info))
+    end if
+    bre_xinf = bre_model_xinf()                      ! (the weights' range checks above make it finite)
     if (imex_selftest /= 0 .and. imex_selftest /= 1) then
       write(info,'(A,I0,A)') 'imex_selftest = ', imex_selftest, ' must be 0 (none) or 1 (elliptic solver)'
       call error_log%raise_global(context=context, info=trim(info))
@@ -952,6 +1002,9 @@ contains
     write(*,'(3x,A,I3,A,ES10.2,A)') "b_ref: smoothing passes", imex_bref_smooth, '  imex_n2_ref =', imex_n2_ref,&
     &" (floor on the operator's vertical coefficients)"
     write(*,'(3x,A,F7.3,A,I2)') 'imex_bref_hours =', imex_bref_hours, '  imex_setup_lag =', merge(1, 0, lag_on)
+    write(*,'(3x,A,F7.4,A,F7.4,A,F7.4,A,F5.2,A)') 'imex_bref_trigger =', imex_bref_trigger, ' (0: off): b_ref also'&
+    &//' rebuilt when the exposure E = e/x_inf exceeds it, x_inf =', bre_xinf, ' for these weights (e >',&
+    &imex_bref_trigger*bre_xinf, '), at ages >=', imex_bref_minhours, ' h'
     if (imex_setup_lag == 1 .and. .not. lag_on) write(*,'(3x,A)') 'imex_setup_lag = 1 is not supported with'&
     &//' the self-test: coefficients every step (0)'
     write(*,'(3x,A,I2,A,I2,A,I2)') 'imex_pcg_start =', pcg_start, '  imex_pcg_fused =', merge(1, 0, pf_on),&
@@ -1235,6 +1288,9 @@ contains
     call imex_tlap(0)
     call imex_step_setup                    ! per step: computed by the first solve
     call imex_tlap(2)
+    if (stage == imex_stage_corr) then      ! the stale-b_ref exposure E; the on-demand rebuild
+      call imex_bref_exposure                ! (timers bref_expo, bref_expo_red)
+    end if
     if (imex_corr_adv == 1) then            ! the step's advective buoyancy change in the corrector rhs
       if (stage == imex_stage_pred) then
         call imex_advb_save                 ! rho_b at level n
@@ -2028,6 +2084,7 @@ contains
       if (mynode == 0) write(*,'(1x,A,3I5,A,3I5)') 'IMEX max|du| at (i,j,k): pred', iglob(:,1),&
       &'  corr', iglob(:,2)
     end if
+    call bre_line(1, 'line')                 ! IMEX_BREF_E: the largest exposure since the last IMEX line
     st_n = 0 ; st_it = 0 ; st_itmax = 0 ; st_bad = 0 ; st_dp = 0._8 ; st_du = 0._8 ; st_duloc = 0
   end subroutine imex_diag_line
 
@@ -2222,6 +2279,7 @@ contains
     call imex_diag_line
     call tq_mark(26)
     if (iic == ntstart+ntimes-1) call imex_tm_print
+    if (iic == ntstart+ntimes-1) call bre_line(3, 'run')   ! (IMEX_BREF_E: the run's largest exposure)
     if (iic == ntstart+ntimes-1 .and. allocated(ad_xc) .and. imex_verbose >= 1) call imex_clip_line
 
     if (imex_selftest == 1 .and. iic < ntstart+3 .and. mynode == 0) then
@@ -5511,6 +5569,289 @@ contains
   end function imex_bref_due
 
   !----------------------------------------------------------------------
+  real(kind=8) function bre_model_xinf() result(xinf)
+    ! x_inf of imex_bref_trigger (check_settings): the residual x = r - 1 (the actual N2 = r times the operator's,
+    ! uniform) at which the one-mode model of the IMEX step goes unstable in the stiff limit, for the weights in
+    ! effect. The model is one vertical mode and one horizontal wave with the state (u, b, u^n-1, b^n-1, the memory
+    ! term), the operator response W (= omega dt, here 1e4), the actual response r W and the pressure gradient -W:
+    ! the predictor (theta_p, phi, LF-AM3 with gamma = imex_am3_crv/2) and the corrector (theta_c, mu, nu, rho), with
+    ! imex_corr_adv's X (the residual (r - 1) W and the predictor's non-wave change). Its spectral radius from the
+    ! norm of G^(2^40) (repeated squaring, normalised at each squaring); r by bisection on [1, 12] (x_inf = 11 when
+    ! the model is stable up to 12). Set B: 0.3096; theta_c 0.7: 0.2695; imex_corr_adv = 0: 1/(2 theta_c).
+    implicit none
+    real(kind=8), parameter :: wst = 1.e4_8, xmax = 11._8
+    real(kind=8) :: lo, hi, xm
+    integer(kind=4) :: it
+    if (lrho(1._8 + xmax) <= 1.e-10_8) then
+      xinf = xmax
+      return
+    end if
+    lo = 0._8 ; hi = xmax
+    do it=1,50
+      xm = 0.5_8*(lo + hi)
+      if (lrho(1._8 + xm) > 1.e-10_8) then
+        hi = xm
+      else
+        lo = xm
+      end if
+    enddo
+    xinf = hi
+  contains
+    real(kind=8) function lrho(r)
+      ! the log of the spectral radius of the one-step matrix at N2 ratio r
+      real(kind=8), intent(in) :: r
+      real(kind=8) :: g(5,5), a(5,5), s
+      integer(kind=4) :: i
+      call gmat(r, g)
+      a = g ; lrho = 0._8
+      do i=0,39
+        s = maxval(abs(a))
+        a = a/s ; lrho = lrho + log(s)/2._8**i
+        a = matmul(a, a)
+      enddo
+      lrho = lrho + log(maxval(abs(a)))/2._8**40
+    end function lrho
+    subroutine gmat(r, g)
+      ! the one-step matrix: row i the new state variable i as a combination of the old ones
+      real(kind=8), intent(in) :: r
+      real(kind=8), intent(out) :: g(5,5)
+      real(kind=8), dimension(5) :: u, b, uo, bo, q, fpe, us, fp, dps, bs, x, d0, u1, fc, b1, q1
+      real(kind=8) :: gam, dtau, cs, cb, tp, ph, tc, rr, ra, pg, key
+      u = 0._8 ; b = 0._8 ; uo = 0._8 ; bo = 0._8 ; q = 0._8
+      u(1) = 1._8 ; b(2) = 1._8 ; uo(3) = 1._8 ; bo(4) = 1._8 ; q(5) = 1._8
+      gam = 0.5_8*imex_am3_crv
+      dtau = 1._8 - 2._8*gam ; cs = 0.5_8 + 2._8*gam ; cb = 0.5_8 - 2._8*gam
+      tp = imex_theta_p ; ph = imex_phi ; tc = imex_theta_c
+      rr = wst ; ra = r*wst ; pg = -wst ; key = dble(imex_corr_adv)
+      fpe = ph*u + (1._8 - tp - ph)*uo                                       ! predictor transport, explicit part
+      us = (cs*u + cb*uo + dtau*pg*((tp + ph)*b + (1._8 - tp - ph)*bo) + tp*dtau*pg*(dtau*rr*fpe - cb*q))&
+      &    /(1._8 - tp**2*dtau**2*pg*rr)                                     ! u*
+      fp = tp*us + fpe
+      dps = dtau*rr*fp - cb*q                                                ! the predictor's memory term
+      bs = cs*b + cb*bo + dtau*ra*fp                                         ! b*
+      x = key*((ra - rr)*us - (bs - b - dps))                                ! imex_corr_adv's X
+      d0 = rr*(imex_mu*us + imex_nu*u + imex_rho*uo) - dps + x
+      u1 = (u + pg*((tc + imex_mu)*bs + imex_nu*b + imex_rho*bo) + tc*pg*d0)/(1._8 - tc**2*pg*rr)
+      fc = tc*u1 + imex_mu*us + imex_nu*u + imex_rho*uo
+      b1 = b + ra*fc
+      q1 = dps + tc*rr*u1 + d0
+      g(1,:) = u1 ; g(2,:) = b1 ; g(3,:) = u ; g(4,:) = b ; g(5,:) = q1
+    end subroutine gmat
+  end function bre_model_xinf
+
+  !----------------------------------------------------------------------
+  subroutine bre_weights
+    ! imex_adj_setup, after imex_eta_setup(1) (at every operator setup: the b_ref rebuilds and imex_rst_replay with
+    ! the setup lag, every step without it): the weights of the exposure E (imex_bref_exposure). Per active column,
+    ! from the operator's N2op = ad_n2t and Hz: the WKB coordinate zeta(k) = (sum_{k' < k} sqrt(N2op) Hz + sqrt(N2op)
+    ! Hz(k)/2)/T, T = sum_k sqrt(N2op) Hz; for m = 1..3 w_m = sin(m pi zeta), c_m = T/(m pi), W_m^2 = (c_m dt)^2
+    ! 4 (pm^2 + pn^2) (the (pi, pi) wave), S_m = sum_k N2op w_m^2 Hz and
+    !   a(k, m) = w_m^2 Hz/S_m W_m^2/(W_m^2 + 2)/x_inf,   E_m = sum_k a(k, m) (N2act - N2raw)(k),
+    ! N2 centred on the current z_r. The sigma levels stretch uniformly with zeta, so the current spacing is the
+    ! operator's (dza) times hz0/Hz(nz) of the column, and E_m = (sum_k bre_c(k, m) (rho_b(k+1) - rho_b(k-1))
+    ! - bre_er(m)) bre_h0/Hz(nz) with bre_c = -g/rho0 a dza, bre_er = sum_k a dza (b_ref(k+1) - b_ref(k-1)) and
+    ! bre_h0 = Hz(nz) at the setup (one-sided differences at k = 1 and nz, as dza): per step only rho_b and the
+    ! weights are read.
+    ! Columns within bre_nedge = 2 cells of an open physical edge are left out (weights 0, not in the maximum): their
+    ! b* is set within the step by the boundary values (the corrector's UP3 advection reaches two cells, the tracer
+    ! OBC and the sponge act there), so their residual measures the boundary data's mismatch, not the staleness of
+    ! b_ref, and the one-column model of the grid-scale wave does not hold at a boundary row (with the open edges
+    ! counted, a Gulf of Mexico nest at 1350 s had its largest E in the first two rows on 19 % of the steps).
+    use ocean_vars, only: hz
+    use grid, only: pm, pn
+    use scalars, only: dt, g, rho0
+    use param, only: lm, mm, nz
+    implicit none
+    real(kind=8), parameter :: pi = 3.14159265358979323846_8
+    real(kind=8) :: zc(nz), sq, tot, so, wm2, fac, er
+    integer(kind=4) :: i, j, k, m
+    if (.not. allocated(bre_c)) then
+      allocate( bre_c(GLOBAL_2D_ARRAY,nz,3), bre_w2(GLOBAL_2D_ARRAY,3), bre_er(GLOBAL_2D_ARRAY,3),&
+      &         bre_h0(GLOBAL_2D_ARRAY) )
+      bre_c = 0._8 ; bre_w2 = 0._8 ; bre_er = 0._8 ; bre_h0 = 1._8   ! (act is static: inactive columns stay 0)
+    end if
+    do j=jb0,jb1
+      do i=ib0,ib1
+        if (act(i,j) <= 0._8 .or. bre_edge(i, j)) cycle
+        tot = 0._8
+        do k=1,nz
+          sq = sqrt(ad_n2t(i,j,k))*Hz(i,j,k)
+          zc(k) = tot + 0.5_8*sq ; tot = tot + sq
+        enddo
+        do m=1,3
+          so = 0._8
+          do k=1,nz
+            bre_c(i,j,k,m) = sin(dble(m)*pi*zc(k)/tot)**2*Hz(i,j,k)
+            so = so + ad_n2t(i,j,k)*bre_c(i,j,k,m)
+          enddo
+          wm2 = (tot/(dble(m)*pi)*dt)**2*4._8*(pm(i,j)**2 + pn(i,j)**2)
+          fac = wm2/((wm2 + 2._8)*so*bre_xinf)
+          er = 0._8
+          do k=1,nz
+            bre_c(i,j,k,m) = bre_c(i,j,k,m)*fac*dza(i,j,k)
+            er = er + bre_c(i,j,k,m)*(ad_bb(i,j,min(k+1,nz)) - ad_bb(i,j,max(k-1,1)))
+            bre_c(i,j,k,m) = -g/rho0*bre_c(i,j,k,m)
+          enddo
+          bre_er(i,j,m) = er ; bre_w2(i,j,m) = wm2
+        enddo
+        bre_h0(i,j) = Hz(i,j,nz)
+      enddo
+    enddo
+  contains
+    logical function bre_edge(i, j)
+      ! the column lies within bre_nedge cells of an open physical edge: left out of E (weights and W^2 stay 0)
+      use param, only: llm, mmm, isw_corn, jsw_corn
+      integer(kind=4), intent(in) :: i, j
+      integer(kind=4), parameter :: bre_nedge = 2
+      bre_edge = .false.
+#  ifdef OBC_WEST
+      if (isw_corn + i <= bre_nedge) bre_edge = .true.
+#  endif
+#  ifdef OBC_EAST
+      if (isw_corn + i > llm - bre_nedge) bre_edge = .true.
+#  endif
+#  ifdef OBC_SOUTH
+      if (jsw_corn + j <= bre_nedge) bre_edge = .true.
+#  endif
+#  ifdef OBC_NORTH
+      if (jsw_corn + j > mmm - bre_nedge) bre_edge = .true.
+#  endif
+    end function bre_edge
+  end subroutine bre_weights
+
+  !----------------------------------------------------------------------
+  subroutine imex_bref_exposure
+    ! Corrector (imex_solve_stage, after imex_step_setup), every step and every setting: the exposure of each
+    ! active column (not within two cells of an open edge, bre_weights) to the stale b_ref (imex_bref_trigger),
+    !   E = max_m sum_k a(k, m) [N2(b*) - N2(b_ref)](k)   (a and its folded form: bre_weights),
+    ! N2 centred on the current z_r (one-sided in the bottom and top cells; bre_weights), b* = -g rho_b/rho0
+    ! (rho_eos after set_HUV1, as imex_advb_rhs reads it), b_ref = ad_bb; its largest
+    ! value over the domain by one MPI_Allreduce (max) of one number: the same on every rank, and independent of
+    ! the tiling (each column's sum runs over k in the same order on any tiling). With imex_bref_trigger > 0, a
+    ! value above it at a b_ref age of at least imex_bref_minhours (and not due at the next step anyway) ages b_ref
+    ! so that the next step rebuilds it (imex_bref_due): the age is in the restart file, so an exact restart
+    ! repeats the rebuild. Rank 0 prints an IMEX_BREF_DEMAND line. Cost: one pass over rho_b and the three
+    ! weights per step.
+    !DIR$ ATTRIBUTES NOINLINE :: imex_bref_exposure
+#  ifdef SPLIT_EOS
+    use eos_vars, only: rhob => rho1
+#  else
+    use eos_vars, only: rhob => rho
+#  endif
+    use ocean_vars, only: hz
+    use scalars, only: iic, dt
+    use param, only: lm, mm, nz, mynode, ocean_grid_comm, isw_corn, jsw_corn
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max
+    implicit none
+    real(kind=8) :: dr, f, e, el(1), eg(1), lc(4), es(ib0:ib1,3)
+    integer(kind=4) :: i, j, k, kp, km, m, ierr, nb, age
+    el(1) = -huge(1._8) ; lc = -huge(1._8)
+    do j=jb0,jb1                                     ! row by row; each column's sum runs over k ascending
+      do i=ib0,ib1
+        es(i,1) = 0._8 ; es(i,2) = 0._8 ; es(i,3) = 0._8
+      enddo
+      do k=1,nz
+        kp = min(k+1,nz) ; km = max(k-1,1)
+        do i=ib0,ib1
+          dr = rhob(i,j,kp) - rhob(i,j,km)
+          es(i,1) = es(i,1) + bre_c(i,j,k,1)*dr
+          es(i,2) = es(i,2) + bre_c(i,j,k,2)*dr
+          es(i,3) = es(i,3) + bre_c(i,j,k,3)*dr
+        enddo
+      enddo
+      do i=ib0,ib1
+        if (bre_w2(i,j,1) <= 0._8) cycle             ! inactive or open-edge column (bre_weights)
+        f = bre_h0(i,j)/Hz(i,j,nz)                   ! the operator's level spacing over the current one
+        do m=1,3
+          e = (es(i,m) - bre_er(i,j,m))*f
+          if (e > el(1)) then
+            el(1) = e ; lc = [dble(isw_corn+i), dble(jsw_corn+j), dble(m), bre_w2(i,j,m)]
+          end if
+        enddo
+      enddo
+    enddo
+    call tq_mark(34)
+    call mpi_allreduce(el, eg, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    call tq_mark(35)
+    age = iic - bref_last
+    do m=1,3                                         ! the trackers (IMEX line, rebuild, run)
+      if (eg(1) > bre_tv(m)) then
+        bre_tv(m) = eg(1) ; bre_ts(m) = iic ; bre_ta(m) = age ; bre_tl(:,m) = -huge(1._8)
+        if (el(1) == eg(1)) bre_tl(:,m) = lc
+      end if
+    enddo
+    if (imex_bref_trigger <= 0._8) return
+    nb = imex_nbref()
+    if (eg(1) > imex_bref_trigger .and. dble(age)*dt >= 3600._8*imex_bref_minhours .and. age + 1 < nb) then
+      bref_last = iic + 1 - nb                       ! due at the next step
+      bre_ndem = bre_ndem + 1 ; bre_dem = .true. ; bre_dage = age + 1
+      if (mynode == 0) write(*,'(1x,A,I8,A,F8.4,A,F8.4,A,F7.2,A,I6)') 'IMEX_BREF_DEMAND', iic, ' E', eg(1),&
+      &' > imex_bref_trigger', imex_bref_trigger, ' at b_ref age', dble(age)*dt/3600._8,&
+      &' h: b_ref rebuilt at the next step; demands', bre_ndem
+    end if
+  end subroutine imex_bref_exposure
+
+  !----------------------------------------------------------------------
+  subroutine bre_rebuild_line
+    ! imex_adj_setup, at a b_ref rebuild (not at imex_rst_replay): the IMEX_BREF_E line (rank 0, every
+    ! imex_verbose) of the largest exposure since the last rebuild, with the reason of this one (cadence:
+    ! imex_bref_hours; demand: imex_bref_trigger; after a restart a demand of the restart step shows as cadence)
+    ! and the age of b_ref. Nothing at the run's first build or a forced one. Collective.
+    use scalars, only: iic, dt
+    implicit none
+    character(len=96) :: what
+    integer(kind=4) :: age
+    if (allocated(bref_sav) .and. bref_last /= -100000000) then
+      bre_nreb = bre_nreb + 1
+      age = iic - bref_last
+      if (bre_dem) age = bre_dage
+      write(what,'(A,A,A,F7.2,A)') 'rebuild (', trim(merge('demand ', 'cadence', bre_dem)), ') at b_ref age',&
+      &dble(age)*dt/3600._8, ' h; since the last rebuild'
+      call bre_line(2, trim(what))
+    end if
+    bre_dem = .false. ; bre_tv(2) = -huge(1._8) ; bre_tl(:,2) = -huge(1._8)
+  end subroutine bre_rebuild_line
+
+  !----------------------------------------------------------------------
+  subroutine bre_line(m, what)
+    ! IMEX_BREF_E line (rank 0) of the largest exposure E (bre_tv) since the last IMEX line (m = 1), since the last
+    ! b_ref rebuild (2) or in the run (3, with the rebuild and demand counts): E, e = E x_inf, the step and the
+    ! b_ref age, the column (global i, j) and mode, the mode's residual x_m (e = x_m W^2/(W^2 + 2)) and W. Trackers
+    ! 1 and 2 then restart. Collective: the location is taken from the lowest rank that holds it.
+    use scalars, only: iic, dt
+    use param, only: mynode, ocean_grid_comm
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_integer, mpi_min, mpi_sum
+    implicit none
+    integer(kind=4), intent(in) :: m
+    character(len=*), intent(in) :: what
+    real(kind=8) :: lc(4), lg(4)
+    integer(kind=4) :: cand, gcand, ierr
+    if (.not. imex_solver_enabled) return
+    cand = huge(1)
+    if (bre_tl(1,m) > -huge(1._8)) cand = mynode
+    call mpi_allreduce(cand, gcand, 1, mpi_integer, mpi_min, ocean_grid_comm, ierr)
+    lc = 0._8
+    if (mynode == gcand) lc = bre_tl(:,m)
+    call mpi_allreduce(lc, lg, 4, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+    if (mynode == 0) then
+      if (bre_tv(m) > -huge(1._8)) then
+        write(*,'(1x,A,I8,1x,A,A,F8.4,A,F8.4,A,I8,A,F7.2,A,2I5,A,I2,A,F8.4,A,F7.2)') 'IMEX_BREF_E', iic, what,&
+        &': max E', bre_tv(m), ' (e', bre_tv(m)*bre_xinf, ') at step', bre_ts(m), ', b_ref age',&
+        &dble(bre_ta(m))*dt/3600._8, ' h, (i,j)', nint(lg(1:2)), ' mode', nint(lg(3)), ', x_m',&
+        &bre_tv(m)*bre_xinf*(lg(4) + 2._8)/max(lg(4), 1.e-300_8), ' W', sqrt(lg(4))
+      else
+        write(*,'(1x,A,I8,1x,A,A)') 'IMEX_BREF_E', iic, what, ': no corrector step'
+      end if
+      if (m == 3) write(*,'(1x,A,I8,A,I6,A,I6,A,F8.4,A,F8.4,A)') 'IMEX_BREF_E', iic, ' run: b_ref rebuilds',&
+      &bre_nreb, ' after the first,', bre_ndem, ' on demand (imex_bref_trigger', imex_bref_trigger, ', e',&
+      &imex_bref_trigger*bre_xinf, '; 0 off)'
+    end if
+    if (m < 3) then
+      bre_tv(m) = -huge(1._8) ; bre_tl(:,m) = -huge(1._8)
+    end if
+  end subroutine bre_line
+
+  !----------------------------------------------------------------------
   subroutine imex_adj_setup
     ! Per-step coefficients of D (after the rest of imex_step_setup):
     ! bb = -g rho/rho0 (rho1 under SPLIT_EOS) with halos; n2c = max(dza
@@ -5549,6 +5890,7 @@ contains
       ad_bb = bref_sav
       call tq_mark(4)
     else
+    call bre_rebuild_line                    ! (IMEX_BREF_E: the exposure since the last rebuild)
     ! bb relative to its domain mean: D of a projected transport does not see
     ! a constant (div F + dW = 0), and the shift keeps the flux differences
     ! well conditioned
@@ -5614,6 +5956,7 @@ contains
     ! (ad_n2c, ad_en2, ad_n2k, ad_n2t are set by imex_eta_setup: the adjoint
     ! mode's only unknown is eta)
     call imex_eta_setup(1)                   ! kernels without N2
+    call bre_weights                         ! the weights of the exposure E (from the operator's N2 and Hz)
     call tq_mark(8)
     call imex_bcoef(ad_bb, ad_cu, ad_cv, ad_cz)
     call imex_cz_split(.true.)
