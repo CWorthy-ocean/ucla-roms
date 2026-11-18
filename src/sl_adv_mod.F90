@@ -33,8 +33,8 @@ module sl_adv_mod
   ! (F uw / 2 + (kappa - 1/2) F rho E) and wc F u^(n+1) / 2 by 3 fixed-point
   ! sweeps after the implicit vertical step; hot columns take their explicit
   ! vertical momentum flux at the half-stepped pseudo-density level with U3
-  ! on hot interfaces, and their pointwise increments (PG, Coriolis) scaled
-  ! by V1/Hz, V1 the volume after omega's implicit share; the barotropic
+  ! on hot interfaces, and the trajectory Coriolis as their only pointwise
+  ! change (no V1/Hz factor: SL_CEILING.md); the barotropic
   ! forcing keeps the stock pointwise terms. The hot columns' pseudo-density
   ! is used only at levels with a hot face and a pseudo-volume above
   ! sl_v1min of the cell (u* elsewhere). The arrival half of the Coriolis
@@ -3000,10 +3000,9 @@ contains
     !    blended advective rate)/(Hz - dt pm pn blended transport divergence)
     !    with the explicit vertical half step; U3 faces on the hot
     !    interfaces, the stock spline elsewhere (replacing the stock flux of u*);
-    !  - the pointwise terms: the PG increments nu pg_n + rho pg_E and the
-    !    Coriolis term (1 - wc) F u* + wc (1/2 F uw + (kappa - 1/2) F rho E),
-    !    all scaled by V1/Hz = 1 + dt pm pn d_z Wi / Hz (the volume after
-    !    omega's implicit share), in place of the stock PG and F u*; their
+    !  - the pointwise term: the Coriolis term (1 - wc) F u* + wc (1/2 F uw +
+    !    (kappa - 1/2) F rho E) in place of the stock F u* (the PG increments
+    !    are the stock ones, nu pg_n + rho pg_E with the carry in pg_nm1); its
     !    depth sum is kept out of the barotropic forcing (sl_dfu);
     !  - the vertical part of the new carry (the half-stepped e^n carry, weight cw)
     ! u-points use We, Wi interpolated as the stock code does.
@@ -3012,16 +3011,12 @@ contains
     use scalars, only: dt
     use ocean_vars, only: u, v, hz, we, wi, flxu, flxv
     use grid, only: pm, pn, umask, vmask
-#ifdef IMEX_IGW
-    use imex_igw, only: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v, pg_star_u, pg_star_v
-#endif
     use timers, only: reg_tic, reg_toc, rg_sl_mom, rg_sl_mvcol
     implicit none
     integer(kind=4), intent(in) :: j, istr, iend, jstr, jend
     real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2,nz), intent(inout) :: ru, rv
     real(kind=8) :: hzc(nz), hs(nz), v1(nz), a(nz), x(nz), us(nz), wx(nz), cw(nz), wmx(nz), we_(0:nz), wi_(0:nz),&
-    &               fzx(0:nz), fzs(0:nz), fz3(0:nz), fsp(0:nz), dtpp, s, pgp, cs, cwv, ce, dn, qr0, qr1, qu,&
-    &               pgr(nz), sps, spc, shz, def
+    &               fzx(0:nz), fzs(0:nz), fz3(0:nz), fsp(0:nz), dtpp, cs, cwv, ce, dn, qr0, qr1, qu, def
     integer(kind=4) :: i, k, nrhs3
     logical :: hot
 # include "compute_auxiliary_bounds.h"
@@ -3075,25 +3070,14 @@ contains
           dm_def(2) = max(dm_def(2), abs(def))
         end if
       end do
-      ! pointwise terms: the whole PG that ru holds (with its depth-mean correction) and the Coriolis term
-      pgr = 0._8
-#ifdef IMEX_IGW
-      sps = 0._8 ; spc = 0._8 ; shz = 0._8
+      ! pointwise term: the trajectory Coriolis in place of the stock F u* (the PG stays the stock one; no V1/H
+      ! factor: scaling the explicit pointwise increments by the volume after the implicit vertical share
+      ! unbalances them against the IMEX corrector's unscaled implicit PG where that share is O(1))
       do k = 1, nz
-        pgr(k) = sl_wth*pg_star_u(i,j,k) + sl_nu*pg_n_u(i,j,k) + sl_rho*pg_nm1_u(i,j,k)
-        sps = sps + pg_star_u(i,j,k) ; spc = spc + pgr(k) ; shz = shz + hzc(k)
-      end do
-      do k = 1, nz
-        pgr(k) = pgr(k) + hzc(k)*(sps - spc)/shz
-      end do
-#endif
-      do k = 1, nz
-        s = 1._8 + dtpp*(wi_(k)-wi_(k-1))/hzc(k)
-        pgp = pgr(k)
         cs = coru(v(:,:,:,nrhs3), i, j, k)
         cwv = coru(sl_vw, i, j, k)
         ce = coru(sl_vr, i, j, k)
-        dn = (s - 1._8)*pgp + s*((1._8 - cw(k))*cs + cw(k)*(0.5_8*cwv + ce)) - cs
+        dn = cw(k)*(0.5_8*cwv + ce - cs)
         ru(i,j,k) = ru(i,j,k) + dn
         sl_dfu(i,j) = sl_dfu(i,j) + dn
       end do
@@ -3139,24 +3123,11 @@ contains
           def = qu + dtpp*sl_dvv(i,j,k)/hzc(k) - 0.5_8*(qr0+qr1)
           if (sl_mvol == 1 .and. wmx(k) > 0._8) rv(i,j,k) = rv(i,j,k) + x(k)*hzc(k)*dlim(def)/dtpp
         end do
-        pgr = 0._8
-#ifdef IMEX_IGW
-        sps = 0._8 ; spc = 0._8 ; shz = 0._8
         do k = 1, nz
-          pgr(k) = sl_wth*pg_star_v(i,j,k) + sl_nu*pg_n_v(i,j,k) + sl_rho*pg_nm1_v(i,j,k)
-          sps = sps + pg_star_v(i,j,k) ; spc = spc + pgr(k) ; shz = shz + hzc(k)
-        end do
-        do k = 1, nz
-          pgr(k) = pgr(k) + hzc(k)*(sps - spc)/shz
-        end do
-#endif
-        do k = 1, nz
-          s = 1._8 + dtpp*(wi_(k)-wi_(k-1))/hzc(k)
-          pgp = pgr(k)
           cs = corv(u(:,:,:,nrhs3), i, j, k)
           cwv = corv(sl_uw, i, j, k)
           ce = corv(sl_ur, i, j, k)
-          dn = (s - 1._8)*pgp + s*((1._8 - cw(k))*cs + cw(k)*(0.5_8*cwv + ce)) - cs
+          dn = cw(k)*(0.5_8*cwv + ce - cs)
           rv(i,j,k) = rv(i,j,k) + dn
           sl_dfv(i,j) = sl_dfv(i,j) + dn
         end do
