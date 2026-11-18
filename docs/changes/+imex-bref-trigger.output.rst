@@ -1,0 +1,4 @@
+``IMEX_IGW`` runs now also rebuild the reference stratification ``b_ref`` (and the operator and preconditioner built from it) before the ``imex_bref_hours`` cadence when it has gone stale: at the next step after the new exposure measure of some column exceeds ``imex_bref_trigger`` in ``IMEX_IGW_SETTINGS`` (default 0.646) and ``b_ref`` is at least 1 h old.
+- Results change only in runs where such a rebuild happens (in 7-day tests: 6 rebuilds on a Gulf of Mexico nest at 600 s, 3 in 3 days on the Sargasso Sea at 2880 s); runs without one are unchanged bit for bit (a Hawaii nest at 900 s).
+- The exposure is printed in every run: ``IMEX_BREF_E`` lines at each rebuild and at the end of the run, and an ``IMEX_BREF_DEMAND`` line at each rebuild on demand.
+- Set ``imex_bref_trigger = 0`` to reproduce earlier results.
