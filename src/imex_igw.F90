@@ -167,13 +167,14 @@ module imex_igw
                                                  ! mode-1 Courant number N_ref H dt sqrt(pm2+pn2)/pi of the floor
                                                  ! is printed at startup (sargasso 1440 s: 1.4); the earlier
                                                  ! guide "<~ 0.5" did not bind in any test
-  integer(kind=4), public, protected :: imex_mix_split = 1  ! lateral mixing as a split step from the corrected state
-                                                 ! (see below): 1 visc3d's Laplacian from u^n + the baroclinic part
+  integer(kind=4), public, protected :: imex_mix_split = 2  ! lateral mixing as a split step ahead of the corrector's solve
+                                                 ! (default 2 since 2026-11, was 1; see below).
+                                                 ! 1 visc3d's Laplacian from u^n + the baroclinic part
                                                  ! of this step's increment, i.e. u,v(nnew)/Hz after the corrector's implicit
                                                  ! correction less the depth mean of the increment (interior faces; open-boundary
                                                  ! faces keep u^n, wall ghost rows the wall rule; the depth mean of u(nnew) is the
                                                  ! explicit barotropic step that step3d_uv2 replaces, so it stays at u^n; land faces
-                                                 ! masked, as u^n is); default 1;
+                                                 ! masked, as u^n is);
                                                  ! 2 the same split Laplacian from the explicit state, i.e. u,v(nnew)/Hz
                                                  ! before the corrector's implicit correction, added before it (roms_step calls
                                                  ! imex_solve_stage(corr) after visc3d), so that the solve's pressure and the
@@ -3958,8 +3959,9 @@ contains
   !   sqrt(1 - f^2/omega_M2^2). It returns part of a Kelvin wave that leaves along a coast (13 % at 0.5);
   ! - sponge: a nest whose boundary data carry the internal tide runs best with a quarter of the v_sponge
   !   used with the stock boundary (the sponge damps the tide that comes in); an outermost domain, whose
-  !   boundary data have no internal tide, keeps the stock value. Keep v_sponge dt/dx^2 <= 0.1
-  !   (imex_mix_split 0, 1; with 2 the explicit Laplacian's own limit, about 0.25);
+  !   boundary data have no internal tide, keeps the stock value. With imex_mix_split = 2 (default) keep
+  !   v_sponge dt/dx^2 below the explicit Laplacian's own limit, about 0.25 (a NOTE above 0.2); with 0 or 1
+  !   keep it <= 0.05 (a NOTE above 0.1);
   ! - SPONGE_TUNE's ub_tune has no effect on the normal velocity under 'modal': leave it off;
   ! - start: a run that does not begin from the state its boundary data come from (a nest not initialised
   !   from its parent) should take its first ~10 days with imex_obc_mode = 'fixed' and switch to 'modal'
