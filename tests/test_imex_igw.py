@@ -3,8 +3,9 @@
 One build: the open-boundary physics of test_implicit_fs.py with IMEX_IGW, run
 with the implicit free surface's defaults: the hashed runs with the 'fixed' and
 the 'modal' open boundary, exact restarts with both, the mode-split preconditioner
-(imex_pc = 'modes': convergence and an exact restart, both boundaries), and the stop
-on removed keys with the template's sed line.
+(imex_pc = 'modes', the default: convergence and an exact restart, both boundaries; the
+stop on a diagnostic setting it does not support), and the stop on removed keys with the
+template's sed line.
 
 A second build: the realistic MARBL case of test_bgc.py with IMEX_IGW, run with
 BGC tracer subcycling and the 'fixed' and the 'modal' open boundary
@@ -153,6 +154,26 @@ def test_imex_igw_modes(imex_configuration, input_dir, tmp_path, obc_mode):
     run1_val = get_summary_value(run1, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
     run2_val = get_summary_value(run2, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
     assert run1_val.variables == run2_val.variables
+
+
+def test_imex_igw_pc_needs_jacobi(imex_configuration, input_dir, tmp_path):
+    """The default imex_pc = 'modes' does not support imex_pcg_start = 1 (a diagnostic
+    setting): the run stops and names imex_pc = 'jacobi', with which it runs."""
+    conf = imex_configuration
+    nml = imex_namelist(input_dir, imex_pcg_start=1)
+    nml["TIME_STEPPING"]["ntimes"] = 2
+    (tmp_path / "modes").mkdir()
+    assert_run_rejected(
+        conf, nml, tmp_path / "modes", ["does not support imex_pcg_start", "set imex_pc = 'jacobi'"],
+        label="pcg_start_1", absent=["IMEX it pred"],
+    )
+
+    nml["IMEX_IGW_SETTINGS"]["imex_pc"] = "jacobi"
+    run_dir = tmp_path / "jacobi"
+    run_dir.mkdir()
+    log = conf.run(nml, cwd=run_dir, capture_output=True)
+    assert_imex_converged(log)
+    assert squeezed("imex_pc = 'jacobi'") in squeezed(log)
 
 
 # Keys removed from IMEX_IGW_SETTINGS on 2026-11-13, as old namelists set them;
