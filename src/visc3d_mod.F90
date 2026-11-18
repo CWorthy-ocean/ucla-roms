@@ -23,9 +23,10 @@ contains
 
 # include "compute_tile_bounds.h"
 #ifdef IMEX_IGW
-    ! imex_mix_split bit 1: the Laplacian from the corrected momentum u,v(3-nstp), whose
-    ! halo faces (iend+1, jend+1, istr-1, jstr-1 of interior tiles) need the neighbours' values
-    if (iand(imex_mix_split, 1) /= 0 .and. imex_solver_enabled)&
+    ! imex_mix_split 1, 2: the Laplacian from this step's momentum u,v(3-nstp) (1: after the
+    ! corrector's implicit correction; 2: the explicit state, before it), whose halo faces
+    ! (iend+1, jend+1, istr-1, jstr-1 of interior tiles) need the neighbours' values
+    if (imex_mix_split >= 1 .and. imex_solver_enabled)&
     &  call exchange_xxx(u(:,:,:,3-nstp), v(:,:,:,3-nstp))
 #endif
     call visc3d_s_tile (istr,iend,jstr,jend, A2d(1,1), A2d(1,2),&
@@ -65,19 +66,20 @@ contains
     integer(kind=4) istr,iend,jstr,jend, i,j,k, indx
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: UFx,UFe,VFx,VFe, Uk,Vk, dUb,dVb
     real(kind=8) cff
-    logical spl   ! IMEX_IGW imex_mix_split bit 1: the Laplacian from the corrected momentum
+    logical spl   ! IMEX_IGW imex_mix_split 1, 2: the Laplacian from this step's momentum
 
 # include "compute_auxiliary_bounds.h"
 
     indx=3-nstp    !--> time index for target arrays;
     spl = .false.
 #ifdef IMEX_IGW
-    spl = iand(imex_mix_split, 1) /= 0 .and. imex_solver_enabled
+    spl = imex_mix_split >= 1 .and. imex_solver_enabled
     if (spl) then
-      ! Column mean of the step's explicit + implicitly corrected velocity increment,
-      ! dUb = sum_k (u(indx) - Hz_u u^n) / sum_k Hz_u. The Laplacian below acts on
-      ! u^n + (du - dUb): the baroclinic part of the increment is taken at the
-      ! corrected state (the IMEX correction is baroclinic), the depth mean stays at
+      ! Column mean of the step's velocity increment (explicit, plus the implicit
+      ! correction with imex_mix_split = 1; explicit only with 2, where visc3d runs
+      ! before the correction), dUb = sum_k (u(indx) - Hz_u u^n) / sum_k Hz_u. The
+      ! Laplacian below acts on u^n + (du - dUb): the baroclinic part of the
+      ! increment is taken at this step's state (the IMEX correction is baroclinic), the depth mean stays at
       ! u^n as in stock, because u(indx)'s depth mean is the explicit barotropic
       ! step that step3d_uv2 replaces by the implicit 2-D solution (with it in, the
       ! viscous forcing of rufrc carries dt g grad(zeta) at C_bt >> 1: unstable).
@@ -125,7 +127,7 @@ contains
 
     do k=1,nz
       ! Velocity the Laplacian acts on: u, v(nstp) = u^n (stock), or (IMEX_IGW,
-      ! imex_mix_split bit 1) the corrected momentum u, v(indx)/Hz_u of this step
+      ! imex_mix_split 1, 2) this step's momentum u, v(indx)/Hz_u (1: corrected, 2: explicit)
       ! less the depth mean of its increment (dUb, dVb: the depth mean stays at u^n)
       ! on the interior faces (split step), with the physical edges as the stock
       ! field would have them: normal faces u^n (0 at walls, the OBC's value at
