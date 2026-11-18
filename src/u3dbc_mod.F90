@@ -86,7 +86,7 @@ contains
             else
               cext=ubind
             endif
-            cext=cext * dtfwd * 0.5_8*(pm(istr-1,j)+pm(istr,j))
+            cext=min(cext * dtfwd * 0.5_8*(pm(istr-1,j)+pm(istr,j)), 1._8)
           else
             cext=0._8
 #    endif
@@ -175,7 +175,7 @@ contains
             else
               cext=ubind
             endif
-            cext=cext * dtfwd *0.5_8*(pm(iend,j)+pm(iend+1,j))
+            cext=min(cext * dtfwd *0.5_8*(pm(iend,j)+pm(iend+1,j)), 1._8)
           else
             cext=0._8
 #    endif
@@ -243,10 +243,11 @@ contains
           &*( pm(i,jstr-1)+pm(i-1,jstr-1)&
           &+pm(i,jstr)+pm(i-1,jstr) )
 
+          cy=max(-1._8, min(1._8, cy))   ! Courant numbers <= 1: convex update
           if (cx > 0._8) then
-            cext=0._8
+            cext=0._8 ; cx=min(cx, 1._8)
           else
-            cext=-cx ; cx=0._8
+            cext=min(-cx, 1._8) ; cx=0._8
           endif
 
           u(i,jstr-1,k,nnew)=(1._8-cx)*(   u(i,jstr-1,k,nstp)&
@@ -322,10 +323,11 @@ contains
         &*( pm(i,jend+1)+pm(i-1,jend+1)&
         &+pm(i,jend)+pm(i-1,jend) )
 
+        cy=max(-1._8, min(1._8, cy))   ! Courant numbers <= 1: convex update
         if (cx > 0._8) then
-          cext=0._8
+          cext=0._8 ; cx=min(cx, 1._8)
         else
-          cext=-cx ; cx=0._8
+          cext=min(-cx, 1._8) ; cx=0._8
         endif
 
         u(i,jend+1,k,nnew)=(1._8-cx)*(  u(i,jend+1,k,nstp)&
