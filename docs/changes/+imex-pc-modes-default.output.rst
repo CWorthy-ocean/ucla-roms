@@ -1,0 +1,2 @@
+``IMEX_IGW`` runs use the mode-split preconditioner by default (``imex_pc = 'modes'`` in ``IMEX_IGW_SETTINGS``; it was ``'jacobi'``). With ``imex_pc_modes = 0`` (default) it keeps Jacobi where the internal-wave Courant number is small, so those runs are unchanged; where it keeps modes the solves are faster (solve time 21-32 % lower on a Hawaii nest at 900 s and the Sargasso Sea at 1440 s) and the results change at the level of the solver tolerance, and depend on the tiling at that level also with ``imex_redu = 1``.
+- Set ``imex_pc = 'jacobi'`` to keep the former results.

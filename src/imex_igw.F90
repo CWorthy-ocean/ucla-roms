@@ -289,8 +289,12 @@ module imex_igw
                                                  ! imex_obc_faces): fractions of the (face, level) pairs where the
                                                  ! predictor's u* is inflow (t3dbc's test), where its barotropic
                                                  ! part is inflow, and where both agree; rms of both parts
-  character(len=8) :: imex_pc = 'jacobi'         ! stage-solve preconditioner: 'jacobi' the exact diagonal (default);
-                                                 ! 'modes' the mode-split (prototype, imex_pcg_fused = 0 only): in each
+  character(len=8) :: imex_pc = 'modes'          ! stage-solve preconditioner: 'modes' the mode-split (default; with
+                                                 ! imex_pc_modes = 0 it is Jacobi wherever the automatic K is 0), with
+                                                 ! the fused (imex_pcg_fused = 1, imex_redu 0 or 1) or the unfused
+                                                 ! solve (imex_redu = 0), imex_pcg_start 2 or 3 and no self-test: the
+                                                 ! other settings are diagnostics and need 'jacobi' (check_settings
+                                                 ! stops, no fallback); 'jacobi' the exact diagonal. 'modes': in each
                                                  ! column the imex_pc_modes fastest vertical modes replace the Jacobi on
                                                  ! their subspace, each mode's 2-D Helmholtz problem gets one 3-level
                                                  ! V-cycle (implicit_fs_mod's level kernels, aggregates inside the tile:
@@ -826,18 +830,21 @@ contains
     if (trim(imex_pc) /= 'jacobi' .and. trim(imex_pc) /= 'modes') call error_log%raise_global(context=context,&
     &  info="imex_pc = '"//trim(imex_pc)//"' must be 'jacobi' or 'modes'")
     pcm_on = (trim(imex_pc) == 'modes')
-    ! 'modes': the fused stage solve (imex_pcg_fused = 1, both storage kinds, with or without imex_stage_fused;
-    ! imex_redu 0 or 1) or the unfused reference (imex_pcg_fused = 0, imex_redu = 0); imex_pcg_start 2 or 3, no
-    ! self-test
-    if (pcm_on .and. (pcg_start < 2 .or. (redu_on .and. .not. pf_on) .or. imex_selftest /= 0 .or.&
-    &   imex_pc_modes < 0 .or. imex_pc_modes > 4 .or. imex_pc_dump < 0 .or. imex_pc_cou_on < 0._8 .or.&
-    &   imex_pc_cou_k < 0._8 .or. (trim(imex_pc_smoother) /= 'rbgs' .and. trim(imex_pc_smoother) /= 'jacobi') .or.&
-    &   (imex_pc_levels /= 0 .and. imex_pc_levels /= 2 .and. imex_pc_levels /= 3) .or. imex_pc_ncoarse < 1 .or.&
-    &   imex_pc_ncoarse > 2))&
+    ! 'modes' (the default): the fused stage solve (imex_pcg_fused = 1, both storage kinds, with or without
+    ! imex_stage_fused; imex_redu 0 or 1) or the unfused reference (imex_pcg_fused = 0, imex_redu = 0);
+    ! imex_pcg_start 2 or 3, no self-test. The other solver settings are diagnostics: they stop here with a pointer
+    ! to imex_pc = 'jacobi' (no silent fallback, so a run never uses another preconditioner than it asked for)
+    if (pcm_on .and. (pcg_start < 2 .or. (redu_on .and. .not. pf_on) .or. imex_selftest /= 0))&
     &  call error_log%raise_global(context=context,&
-    &  info="imex_pc = 'modes' needs imex_pcg_start 2 or 3, imex_selftest = 0, imex_redu = 0 with imex_pcg_fused = 0,"&
-    &//" imex_pc_modes in 0..4, imex_pc_dump >= 0, imex_pc_cou_on, imex_pc_cou_k >= 0 and imex_pc_smoother 'rbgs'"&
-    &//" or 'jacobi', imex_pc_levels 0, 2 or 3 and imex_pc_ncoarse 1 or 2")
+    &  info="imex_pc = 'modes' (the default) does not support imex_pcg_start 0 or 1, imex_selftest = 1 or"&
+    &//" imex_redu = 1 with imex_pcg_fused = 0: set imex_pc = 'jacobi' in IMEX_IGW_SETTINGS for these settings")
+    if (pcm_on .and. (imex_pc_modes < 0 .or. imex_pc_modes > 4 .or. imex_pc_dump < 0 .or. imex_pc_cou_on < 0._8&
+    &   .or. imex_pc_cou_k < 0._8 .or. (trim(imex_pc_smoother) /= 'rbgs' .and. trim(imex_pc_smoother) /= 'jacobi')&
+    &   .or. (imex_pc_levels /= 0 .and. imex_pc_levels /= 2 .and. imex_pc_levels /= 3) .or. imex_pc_ncoarse < 1&
+    &   .or. imex_pc_ncoarse > 2))&
+    &  call error_log%raise_global(context=context,&
+    &  info="imex_pc = 'modes' needs imex_pc_modes in 0..4, imex_pc_dump >= 0, imex_pc_cou_on, imex_pc_cou_k >= 0,"&
+    &//" imex_pc_smoother 'rbgs' or 'jacobi', imex_pc_levels 0, 2 or 3 and imex_pc_ncoarse 1 or 2")
     if (imex_theta_p + imex_phi > 1._8 + tol) then
       write(info,'(A,ES22.14,A)') 'imex_theta_p + imex_phi = ',&
       &imex_theta_p + imex_phi, ' must be <= 1'
@@ -942,6 +949,7 @@ contains
     if (pcm_on) write(*,'(3x,A,I2,A,2F6.2,A,A,A,L2)') "imex_pc = 'modes': mode-split preconditioner, imex_pc_modes =",&
     &imex_pc_modes, ' (0 automatic; thresholds on/K', imex_pc_cou_on, imex_pc_cou_k, '), smoother ',&
     &trim(imex_pc_smoother), ', fused', pf_on
+    if (.not. pcm_on) write(*,'(3x,A)') "imex_pc = 'jacobi': Jacobi preconditioner"
     if (imex_redu == 1 .and. .not. redu_on) write(*,'(3x,A)') 'imex_redu = 1 needs imex_pcg_start >= 1 in'&
     &//' effect: imex_redu = 0'
     if (imex_allow_explicit) write(*,'(3x,A)')&
