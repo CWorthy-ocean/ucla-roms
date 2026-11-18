@@ -79,9 +79,7 @@ contains
     use pio_roms, only: read_nml_pio              !PIO_SETTINGS
 #endif
     use diag_mod, only: read_nml_stdout_diag
-#ifdef IMEX_IGW
-    use imex_igw, only: read_nml_imex_igw          !IMEX_IGW_SETTINGS
-#endif
+    use imex_igw, only: read_nml_imex_igw          !IMEX_IGW_SETTINGS (required in every build)
     use implicit_fs_mod, only: read_nml_implicit_fs !IMPLICIT_FS (optional)
     implicit none
     call read_nml_param
@@ -140,9 +138,7 @@ contains
    call read_nml_pio
 #endif
    call read_nml_stdout_diag
-#ifdef IMEX_IGW
    call read_nml_imex_igw
-#endif
    call read_nml_implicit_fs
 
    ! Stop on any namelist error before the values are used (a path cut off

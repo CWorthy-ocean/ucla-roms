@@ -4,8 +4,9 @@ One build: the open-boundary physics of test_implicit_fs.py with IMEX_IGW, run
 with the implicit free surface's defaults: the hashed runs with the 'fixed' and
 the 'modal' open boundary, exact restarts with both, the mode-split preconditioner
 (imex_pc = 'modes', the default: convergence and an exact restart, both boundaries; the
-stop on a diagnostic setting it does not support), and the stop on removed keys with the
-template's sed line.
+stop on a diagnostic setting it does not support), the stop on removed keys with the
+template's sed line, and the stops on a group or an imex_igw key that is missing or
+.false. (the build without IMEX_IGW: test_implicit_fs.py, test_imex_igw_key_*).
 
 A second build: the realistic MARBL case of test_bgc.py with IMEX_IGW, run with
 BGC tracer subcycling and the 'fixed' and the 'modal' open boundary
@@ -65,7 +66,7 @@ def imex_namelist(input_dir, obc_mode="fixed", **imex):
     nml["FORCING_FILES"]["frcfiles"].append(str(input_dir / "example_input_tides.nc"))
     nml["IMPLICIT_FS"]["fs_mode"] = "implicit"
     nml["IMEX_IGW_SETTINGS"].update(
-        {"imex_verbose": 1, "imex_bref_hours": 0.14, "imex_obc_mode": obc_mode, **imex}
+        {"imex_igw": True, "imex_verbose": 1, "imex_bref_hours": 0.14, "imex_obc_mode": obc_mode, **imex}
     )
     return nml
 
@@ -84,6 +85,7 @@ def test_imex_igw_real(imex_configuration, input_dir, tmp_path, reference_result
     """Output of the IMEX step with the 'fixed' and the 'modal' open boundary."""
     log = imex_configuration.run(imex_namelist(input_dir, obc_mode), cwd=tmp_path, capture_output=True)
     assert_imex_converged(log)
+    assert squeezed("IMEX_IGW: on (imex_igw = .true.)") in squeezed(log)
     assert squeezed(f"imex_obc_mode = '{obc_mode}' -> '{obc_mode}'") in squeezed(log)
 
     pv = get_summary_value(tmp_path, prefix="roms_his.20100101000000")
@@ -219,6 +221,32 @@ def test_imex_igw_removed_keys(imex_configuration, input_dir, tmp_path):
     assert_imex_converged(log)
 
 
+# The switch imex_igw (required, no default) in a build with IMEX_IGW: the run stops, naming
+# the key, without the group, without the key, or with imex_igw = .false.
+IMEX_KEY_STOPS = {
+    "no_group": ["has no IMEX_IGW_SETTINGS section", "imex_igw = .false.", "imex_igw = .true."],
+    "no_key": ["has no imex_igw, which is required", "imex_igw = .true.", "imex_igw = .false."],
+    "false": ["imex_igw = .false. in IMEX_IGW_SETTINGS, but IMEX_IGW is compiled in",
+              "set imex_igw = .true. or rebuild without IMEX_IGW"],
+}
+
+
+@pytest.mark.parametrize("case", IMEX_KEY_STOPS)
+def test_imex_igw_key_stops(imex_configuration, input_dir, tmp_path, case):
+    """A build with IMEX_IGW stops at startup unless the namelist sets imex_igw = .true."""
+    nml = imex_namelist(input_dir)
+    nml["TIME_STEPPING"]["ntimes"] = 2
+    if case == "no_group":
+        del nml["IMEX_IGW_SETTINGS"]
+    elif case == "no_key":
+        del nml["IMEX_IGW_SETTINGS"]["imex_igw"]
+    else:
+        nml["IMEX_IGW_SETTINGS"]["imex_igw"] = False
+    assert_run_rejected(
+        imex_configuration, nml, tmp_path, IMEX_KEY_STOPS[case], label=case, absent=["IMEX it pred"]
+    )
+
+
 @pytest.fixture(scope="module")
 def imex_marbl_configuration(tmp_path_factory) -> ROMSConfiguration:
     """The realistic MARBL case of test_bgc.py with IMEX_IGW, compiled once for this module."""
@@ -244,7 +272,7 @@ def imex_subcycle_namelist(input_dir, obc_mode="fixed", subcycle=True) -> dict:
     _with_restarts(nml, 4 * nml["TIME_STEPPING"]["dt"])
     nml["IMPLICIT_FS"]["fs_mode"] = "implicit"
     nml["IMEX_IGW_SETTINGS"].update(
-        {"imex_verbose": 1, "imex_bref_hours": 0.05, "imex_obc_mode": obc_mode, "imex_redu": 1}
+        {"imex_igw": True, "imex_verbose": 1, "imex_bref_hours": 0.05, "imex_obc_mode": obc_mode, "imex_redu": 1}
     )
     return nml
 
