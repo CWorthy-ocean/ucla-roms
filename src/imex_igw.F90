@@ -249,6 +249,14 @@ module imex_igw
                                                  ! of one cell on one level (1-25 m/s on a Bay of Bengal nest,
                                                  ! blow-ups from 810 s). The clip acted on 1e-5 of the cell-steps
                                                  ! there and on none of a Hawaii nest and the Sargasso Sea
+  integer(kind=4) :: imex_corr_adv_vimp = 0     ! imex_corr_adv = 1: X in a cell where the vertical Courant number
+                                                 ! dt pm pn |We + Wi|/min(Hz) exceeds 1 at either interface (any
+                                                 ! step, any cell; imex_advb_rhs), where the explicit U3 estimate
+                                                 ! overshoots: 0 X = 0 (the cell runs without the key); 1 X from
+                                                 ! the tracer step's own vertical estimate (vimp_col: explicit with
+                                                 ! We, then the implicit first-order upwind column solve with Wi).
+                                                 ! 0 is the arithmetic before the key, bit for bit. Swept-volume
+                                                 ! advection needs 1
   integer(kind=4) :: imex_warm = 1               ! stage-solve start: 0 zero; 1 the stage's previous solution
   integer(kind=4) :: imex_pcg_start = 3          ! stage solve: 0 imex_pcg_warm/
                                                  ! imex_pcg; 1 imex_pcg_s: rhs scaling, residual of the guess,
@@ -680,7 +688,7 @@ contains
     &  imex_n2_ref, imex_n2_taper, imex_warm,&
     &  imex_bref_hours, imex_bref_trigger, imex_setup_lag, imex_pcg_start, imex_pcg_fused, imex_solver_prec,&
     &  imex_stage_fused,&
-    &  imex_redu, imex_rst_state, imex_mix_split, imex_corr_adv, imex_corr_adv_clip,&
+    &  imex_redu, imex_rst_state, imex_mix_split, imex_corr_adv, imex_corr_adv_clip, imex_corr_adv_vimp,&
     &  imex_obc_mode, imex_obc_nmodes, imex_obc_q0, imex_obc_tref,&
     &  imex_obc_mprint, imex_obc_cmin, imex_pc, imex_pc_modes, imex_pc_dump, imex_pc_cou_on, imex_pc_cou_k,&
     &  imex_pc_smoother, imex_pc_levels, imex_pc_ncoarse
@@ -965,6 +973,10 @@ contains
       write(info,'(A,ES12.4,A)') 'imex_corr_adv_clip = ', imex_corr_adv_clip, ' must be >= 0 (0: off)'
       call error_log%raise_global(context=context, info=trim(info))
     end if
+    if (imex_corr_adv_vimp < 0 .or. imex_corr_adv_vimp > 1) then
+      write(info,'(A,I0,A)') 'imex_corr_adv_vimp = ', imex_corr_adv_vimp, ' must be 0 or 1'
+      call error_log%raise_global(context=context, info=trim(info))
+    end if
     if (imex_bref_trigger < 0._8) then
       write(info,'(A,ES12.4,A)') 'imex_bref_trigger = ', imex_bref_trigger, ' must be >= 0 (0: no on-demand rebuild)'
       call error_log%raise_global(context=context, info=trim(info))
@@ -1138,6 +1150,10 @@ contains
     &//' buoyancy change'
     if (imex_corr_adv == 1) write(*,'(3x,A,F7.3,A)') 'imex_corr_adv_clip =', imex_corr_adv_clip,&
     &' (largest Courant number of the face velocity X commands in a cell; 0 off)'
+    if (imex_corr_adv == 1) write(*,'(3x,A,I2,A)') 'imex_corr_adv_vimp =', imex_corr_adv_vimp,&
+    &' (X above vertical Courant number 1: 0 zero; 1 the tracer step''s implicit estimate)'
+    if (imex_corr_adv /= 1 .and. imex_corr_adv_vimp == 1) write(*,'(3x,A)') 'imex_corr_adv_vimp = 1 has no'&
+    &//' effect with imex_corr_adv = 0'
     if (imex_obc_modal) write(*,'(3x,A,A,A,I3,A,F7.4,A,F10.1,A)') "imex_obc_mode = '",&
     &trim(imex_obc_mode), "' -> 'modal': imex_obc_nmodes =", imex_obc_nmodes, '  imex_obc_q0 =', imex_obc_q0,&
     &'  imex_obc_tref =', imex_obc_tref, ' s'
@@ -1797,10 +1813,18 @@ contains
     !   thickness-aware U3 interface value of advection.F90 (t_vadv_up3); a constant q has A = 0.
     ! F = FlxU, FlxV (set_HUV1, level n+1/2; land and river faces left out through umask, vmask: a volume
     !   source enters with the cell's own b), W = We + Wi (omega after set_HUV1). Where the vertical Courant
-    !   number dts pm pn |W|/min(Hz) at either interface of a cell exceeds advb_czmax (1), the explicit U3
-    !   estimate overshoots (the tracer steps advect that part implicitly): X = 0 there, so the implicit level
-    !   stays b* + db as without the key (on the Sargasso Sea, an open-edge corner with vertical Courant numbers
-    !   of 3-8 at the start of a run blew up within 4 steps from 2320 s without this).
+    !   number dts pm pn |W|/min(Hz(k), Hz(k+1)) at either interface of a cell exceeds advb_czmax (1), on any
+    !   step, the explicit U3 estimate overshoots (the tracer steps advect that part implicitly; on the
+    !   Sargasso Sea an open-edge corner with vertical Courant numbers of 3-8 at the start of a run blew up
+    !   within 4 steps from 2320 s with it). There, by imex_corr_adv_vimp:
+    !   0: X = 0, so the implicit level stays b* + db as without the key (the stock loop below);
+    !   1: X from b2, the tracer step's own estimate of b at n+1 (vimp_col, after the stock loop): b1 = b^n
+    !      advanced by the explicit part (UP3 faces, U3 interfaces with We), then b2 from b1 by the implicit
+    !      first-order upwind step with Wi, X = sqrt(s) act [ n2c (b2 - b* - dts A(b_ref; PF, W_PF)) + dps ].
+    !      b2 lies within the column range of b1, but X is not bounded by that, by design: A(b_ref; PF, W_PF)
+    !      is linear at any Courant number, as is the response that the solver adds, and X takes the excess
+    !      out again.
+    !   See docs/model_settings/implicit_internal_waves.md (imex_corr_adv_vimp).
     ! PF = F with its column mean removed per face as imex_rhs_transport does (closed faces 0), W_PF its
     !   column recursion (0 at the bottom and the top): A(b_ref; PF, W_PF) is the UP3 counterpart of the wave
     !   response R that the rhs carries with the IMEX weights, so X holds the advection of b* - b_ref by the
@@ -1808,7 +1832,8 @@ contains
     ! sqrt(s) = 1/ad_n2k (imex_n2_taper): a tapered cell gets X scaled as its wave forcing is.
     ! imex_corr_adv_clip > 0: |X| <= ad_xc, the cell's cap (adj_diag in imex_adj_setup).
     ! imex_verbose >= 2: one IMEX_ADVB line per step (rank 0): rms of NW, of X and of dps, max |X|; and where
-    ! (global i, j, k; from the rank that holds it).
+    ! (global i, j, k; from the rank that holds it); with imex_corr_adv_vimp = 1 also an IMEX_VIMP line, the
+    ! number of active cells that took X from vimp_col.
     !DIR$ ATTRIBUTES NOINLINE :: imex_advb_rhs
 #  ifdef SPLIT_EOS
     use eos_vars, only: rhob => rho1
@@ -1833,6 +1858,7 @@ contains
     real(kind=8), parameter :: advb_czmax = 1._8   ! vertical Courant number above which X = 0
     real(kind=8) :: ga, sf, hf, mk, rh(nz), cp(nz), cm(nz), qs(nz), qr(nz), ws(0:nz), wr(0:nz), fzs(0:nz),&
     &               fzr(0:nz), cz(0:nz), as, ar, rt, nw, x, hk, hkp, hkm, hkp2, loc(4), glob(4), xm, xmg
+    real(kind=8) :: nv, nvg                         ! imex_corr_adv_vimp = 1: cells that took X from vimp_col
     integer(kind=4) :: i, j, k, i0, i1, s0, s1, st, ierr, xl(3)
     logical :: clip
     if (.not. allocated(fxs) .or. na0 /= ib0 .or. na1 /= ib1) then
@@ -1858,7 +1884,7 @@ contains
       enddo
     enddo
     call exchange_xxx(advb_bs)
-    loc = 0._8 ; xm = 0._8 ; xl = 0
+    loc = 0._8 ; xm = 0._8 ; xl = 0 ; nv = 0._8
     clip = allocated(ad_xc)
     s0 = 1 ; s1 = 2
     call vrow(jb0, s0)
@@ -1913,6 +1939,7 @@ contains
             end if
           end if
         enddo
+        if (imex_corr_adv_vimp == 1) call vimp_col     ! the cells above advb_czmax (X = 0 so far)
       enddo
       st = s0 ; s0 = s1 ; s1 = st
     enddo
@@ -1924,7 +1951,71 @@ contains
       &  sqrt(glob(1)/glob(4)), sqrt(glob(2)/glob(4)), sqrt(glob(3)/glob(4)), xmg
       if (xm == xmg .and. xmg > 0._8) write(*,'(1x,A,I8,A,3I5)') 'IMEX_ADVB step', iic, ' max|X| at (i,j,k)', xl
     end if
+    if (imex_verbose >= 2 .and. imex_corr_adv_vimp == 1) then
+      call mpi_allreduce(nv, nvg, 1, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
+      if (mynode == 0) write(*,'(1x,A,I8,A,F12.0)') 'IMEX_VIMP step', iic, ' cells with X from vimp_col:', nvg
+    end if
   contains
+    subroutine vimp_col
+      ! imex_corr_adv_vimp = 1, column (i, j) after the stock loop (its values for this column: qs, qr, wr, fzr,
+      ! cz, rh, cp, cm; the face fluxes of row j in slots s0, s1). In the cells with an interface above
+      ! advb_czmax, where the stock loop set X = 0, X from b2, the tracer step's estimate of b at n+1:
+      !   b1 = b^n - c/Hz [UP3 faces and U3 interfaces with We of b*, advective form],   c = dts pm pn,
+      !   Hz b2(k) + c [ min(Wi(k), 0) (b2(k+1) - b2(k)) + max(Wi(k-1), 0) (b2(k) - b2(k-1)) ] = Hz b1(k),
+      ! the advective form of the tracer corrector's implicit vertical step (rows sum to Hz with non-positive
+      ! off-diagonals: b2 stays within the column range of b1); X = sqrt(s) act [ n2c (b2 - b* - dts
+      ! A(b_ref; PF, W_PF)) + dps ], clipped as in the stock loop (which has counted the cell)
+      real(kind=8) :: wec(0:nz), fze(0:nz), b2(nz), tlo(nz), tup(nz), tdg(nz), cc, ase, arr, bet, xv
+      integer(kind=4) :: kk
+      if (maxval(cz) <= advb_czmax) return
+      wec(0) = 0._8 ; wec(nz) = 0._8
+      do kk=1,nz-1
+        wec(kk) = We(i,j,kk)
+      enddo
+      call u3col(qs, wec, fze)
+      cc = dts*pm(i,j)*pn(i,j)
+      do kk=1,nz
+        ase = fxs(i+1,kk) - qs(kk)*fus(i+1,kk) - fxs(i,kk) + qs(kk)*fus(i,kk)&
+        &   + fes(i,kk,s1) - qs(kk)*fvs(i,kk,s1) - fes(i,kk,s0) + qs(kk)*fvs(i,kk,s0)&
+        &   + fze(kk) - qs(kk)*wec(kk) - fze(kk-1) + qs(kk)*wec(kk-1)
+        b2(kk) = ga*advb_rn(i,j,kk) - cc/Hz(i,j,kk)*ase
+        tlo(kk) = 0._8 ; tup(kk) = 0._8
+        if (kk > 1) tlo(kk) = -cc*max(Wi(i,j,kk-1), 0._8)
+        if (kk < nz) tup(kk) = cc*min(Wi(i,j,kk), 0._8)
+        tdg(kk) = Hz(i,j,kk) - tlo(kk) - tup(kk)
+        b2(kk) = Hz(i,j,kk)*b2(kk)
+      enddo
+      do kk=2,nz                                     ! tridiagonal solve (Thomas)
+        bet = tlo(kk)/tdg(kk-1)
+        tdg(kk) = tdg(kk) - bet*tup(kk-1)
+        b2(kk) = b2(kk) - bet*b2(kk-1)
+      enddo
+      b2(nz) = b2(nz)/tdg(nz)
+      do kk=nz-1,1,-1
+        b2(kk) = (b2(kk) - tup(kk)*b2(kk+1))/tdg(kk)
+      enddo
+      do kk=1,nz
+        if (max(cz(kk-1), cz(kk)) <= advb_czmax) cycle
+        arr = fxr(i+1,kk) - qr(kk)*fur(i+1,kk) - fxr(i,kk) + qr(kk)*fur(i,kk)&
+        &   + fer(i,kk,s1) - qr(kk)*fvr(i,kk,s1) - fer(i,kk,s0) + qr(kk)*fvr(i,kk,s0)&
+        &   + fzr(kk) - qr(kk)*wr(kk) - fzr(kk-1) + qr(kk)*wr(kk-1)
+        xv = act(i,j)/ad_n2k(i,j,kk)*( ad_n2c(i,j,kk)*(b2(kk) - qs(kk) + dts*pm(i,j)*pn(i,j)/Hz(i,j,kk)*arr)&
+        &    + dps(i,j,kk) )
+        if (clip) then                                 ! imex_corr_adv_clip
+          if (abs(xv) > ad_xc(i,j,kk)) then
+            xv = sign(ad_xc(i,j,kk), xv) ; xc_cnt(1) = xc_cnt(1) + 1._8
+          end if
+        end if
+        advb_mem(i,j,kk) = dps(i,j,kk) - xv
+        nv = nv + act(i,j)
+        if (imex_verbose >= 2 .and. act(i,j) > 0._8) then
+          loc(2) = loc(2) + xv*xv
+          if (abs(xv) > xm) then
+            xm = abs(xv) ; xl = [isw_corn + i, jsw_corn + j, kk]
+          end if
+        end if
+      enddo
+    end subroutine vimp_col
     subroutine urow(jj)
       ! u-faces ib0:ib1+1 of row jj: b* flux fxs with F = FlxU (fus), b_ref flux fxr with PF (fur)
       integer(kind=4), intent(in) :: jj
