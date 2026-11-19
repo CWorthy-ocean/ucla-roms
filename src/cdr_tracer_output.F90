@@ -46,9 +46,12 @@ module cdr_tracer_output
 
   real(kind=8), public    :: output_period_cdr_trc = 3600
   integer(kind=4), public :: nrpf_cdr_trc = 4
-  logical, public :: wrt_cdr_trc_avg, cdr_trc_monthly_averages, do_cdr_tracer_output
-  logical, public :: wrt_tracers, wrt_vertical_integrals, wrt_thickness_weighted
-  logical, public :: wrt_sources
+  ! Defaults as in namelist.nml: they stand when the namelist has no
+  ! CDR_TRACER_OUTPUT_SETTINGS group (see read_cdr_tracer_output_nml).
+  logical, public :: do_cdr_tracer_output = .false.
+  logical, public :: wrt_cdr_trc_avg = .true., cdr_trc_monthly_averages = .false.
+  logical, public :: wrt_tracers = .true., wrt_vertical_integrals = .true.
+  logical, public :: wrt_thickness_weighted = .true., wrt_sources = .true.
   logical, public :: wrt_alk = .true., wrt_dic = .true.
   namelist /CDR_TRACER_OUTPUT_SETTINGS/ output_period_cdr_trc, nrpf_cdr_trc,&
   &wrt_cdr_trc_avg, cdr_trc_monthly_averages, do_cdr_tracer_output,&
@@ -108,7 +111,18 @@ contains
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=CDR_TRACER_OUTPUT_SETTINGS, iostat=ios)
-    if (ios /= 0) then
+    if (is_iostat_end(ios)) then
+      ! No CDR_TRACER_OUTPUT_SETTINGS group in the namelist. C-Star writes the
+      ! ucla-roms >= 0.9.0 namelist for a branch pin such as constant_Fe, and
+      ! 0.9.0 renamed this group CDR_LITE_OUTPUT_SETTINGS. The stream stays off.
+      ! (After end-of-file the group's variables are formally undefined, so the
+      ! ones read elsewhere are set again.)
+      do_cdr_tracer_output = .false.
+      output_period_cdr_trc = 3600
+      nrpf_cdr_trc = 4
+      if (mynode == 0) write(*,'(A)') ' cdr_tracer_output: no '//&
+      &'CDR_TRACER_OUTPUT_SETTINGS group in the namelist; CDR tracer output off'
+    else if (ios /= 0) then
       call error_log%raise_global(&
       &context=module_name//'/'//sr_name, info=&
       &'could not read CDR_TRACER_OUTPUT_SETTINGS section of namelist file')
