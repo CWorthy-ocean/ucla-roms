@@ -15,6 +15,8 @@ import netCDF4
 import numpy as np
 import pytest
 
+from ._helpers import MAKE_CMD
+
 ROMS_ROOT = Path(os.environ["ROMS_ROOT"])
 SRC = ROMS_ROOT / "src"
 TEST_F90 = ROMS_ROOT / "tests" / "additional_files" / "test_cdf_direct.F90"
@@ -24,6 +26,8 @@ test_cdf_direct: cdf_direct.F90 test_cdf_direct.F90
 \t$(CPP) -P $(CPPFLAGS) cdf_direct.F90 > cdf_direct.f90
 \t$(CPP) -P $(CPPFLAGS) test_cdf_direct.F90 > test_cdf_direct.f90
 \t$(CFT) $(FFLAGS) -o test_cdf_direct cdf_direct.f90 test_cdf_direct.f90 $(LCDF)
+test_cdf_direct_O3: test_cdf_direct
+\t$(CFT) $(FFLAGS) -O3 -o test_cdf_direct_O3 cdf_direct.f90 test_cdf_direct.f90 $(LCDF)
 """
 
 
@@ -85,14 +89,22 @@ def _write_one_record_var(path):
 
 
 @pytest.fixture(scope="module")
-def test_binary(tmp_path_factory):
+def build_dir(tmp_path_factory):
+    # built with the suite's make command (the CI ifx job adds COMPILER=intel to it), at the test build's
+    # flags and also at -O3 as ROMS runs are built (gfortran -O3 once miscompiled a type-punned conversion)
     d = tmp_path_factory.mktemp("cdf_direct_build")
     shutil.copy(SRC / "cdf_direct.F90", d)
     shutil.copy(TEST_F90, d)
     (d / "Makefile").write_text(MAKEFILE.format(src=SRC))
-    res = subprocess.run(["make", "test_cdf_direct"], cwd=d, capture_output=True, text=True)
+    res = subprocess.run(f"{MAKE_CMD} test_cdf_direct test_cdf_direct_O3", shell=True, cwd=d,
+                         capture_output=True, text=True)
     assert res.returncode == 0, res.stdout + res.stderr
-    return d / "test_cdf_direct"
+    return d
+
+
+@pytest.fixture(params=["test", "O3"])
+def test_binary(request, build_dir):
+    return build_dir / ("test_cdf_direct" if request.param == "test" else "test_cdf_direct_O3")
 
 
 def _run(binary, path, mode):
