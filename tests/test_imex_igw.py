@@ -4,9 +4,10 @@ One build: the open-boundary physics of test_implicit_fs.py with IMEX_IGW, run
 with the implicit free surface's defaults: the hashed runs with the 'fixed' and
 the 'modal' open boundary, exact restarts with both, the mode-split preconditioner
 (imex_pc = 'modes', the default: convergence and an exact restart, both boundaries; the
-stop on a diagnostic setting it does not support), the stop on removed keys with the
-template's sed line, and the stops on a group or an imex_igw key that is missing or
-.false. (the build without IMEX_IGW: test_implicit_fs.py, test_imex_igw_key_*).
+stop on a diagnostic setting it does not support), imex_corr_adv_vimp = 1 (read and
+reported; equal to 0 where no cell exceeds vertical Courant number 1, as on this grid),
+the stop on removed keys with the template's sed line, and the stops on a group or an
+imex_igw key that is missing or .false. (the build without IMEX_IGW: test_implicit_fs.py, test_imex_igw_key_*).
 
 A second build: the realistic MARBL case of test_bgc.py with IMEX_IGW, run with
 BGC tracer subcycling and the 'fixed' and the 'modal' open boundary
@@ -156,6 +157,49 @@ def test_imex_igw_modes(imex_configuration, input_dir, tmp_path, obc_mode):
     run1_val = get_summary_value(run1, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
     run2_val = get_summary_value(run2, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
     assert run1_val.variables == run2_val.variables
+
+
+VIMP_LINE = re.compile(r"IMEX_VIMP step\s+\d+ cells with X from vimp_col:\s+(\d+)\.")
+
+
+def test_imex_igw_corr_adv_vimp(imex_configuration, input_dir, tmp_path):
+    """imex_corr_adv_vimp = 1 is read, printed and reported per step (IMEX_VIMP lines with
+    imex_verbose = 2), and a value other than 0 or 1 stops the run. The estimate acts only in
+    cells above vertical Courant number 1, which this grid does not reach (MAX_VERT_CFL about
+    1.5e-3 at 40 s): every IMEX_VIMP line counts 0 cells, and the output equals that of the
+    default 0 bit for bit. Equalities only, no reference."""
+    conf = imex_configuration
+    nml = imex_namelist(input_dir, imex_verbose=2, imex_corr_adv_vimp=1)
+    nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
+    nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})
+
+    run1 = tmp_path / "run_1"
+    run1.mkdir()
+    log1 = conf.run(nml, cwd=run1, capture_output=True)
+    assert_imex_converged(log1)
+    assert squeezed("imex_corr_adv_vimp = 1") in squeezed(log1)
+    cells = [int(m) for m in VIMP_LINE.findall(log1)]
+    assert cells == [0] * 20, f"IMEX_VIMP cells per step: {cells}"
+
+    run0 = tmp_path / "run_0"
+    run0.mkdir()
+    nml_0 = copy.deepcopy(nml)
+    nml_0["IMEX_IGW_SETTINGS"]["imex_corr_adv_vimp"] = 0
+    log0 = conf.run(nml_0, cwd=run0, capture_output=True)
+    assert squeezed("imex_corr_adv_vimp = 0") in squeezed(log0)
+    assert not VIMP_LINE.findall(log0)
+    for prefix in ("roms_rst.20100101001320", "roms_his.20100101001320"):
+        val1 = get_summary_value(run1, prefix=prefix)
+        val0 = get_summary_value(run0, prefix=prefix)
+        assert val1.variables == val0.variables, prefix
+
+    nml["IMEX_IGW_SETTINGS"]["imex_corr_adv_vimp"] = 2
+    nml["TIME_STEPPING"]["ntimes"] = 2
+    (tmp_path / "bad").mkdir()
+    assert_run_rejected(
+        conf, nml, tmp_path / "bad", ["imex_corr_adv_vimp = 2 must be 0 or 1"],
+        label="vimp_2", absent=["IMEX it pred"],
+    )
 
 
 def test_imex_igw_pc_needs_jacobi(imex_configuration, input_dir, tmp_path):
