@@ -23,11 +23,11 @@ TEST_F90 = ROMS_ROOT / "tests" / "additional_files" / "test_cdf_direct.F90"
 
 MAKEFILE = """include {src}/Makedefs.inc
 test_cdf_direct: cdf_direct.F90 test_cdf_direct.F90
-\t$(CPP) -P $(CPPFLAGS) cdf_direct.F90 > cdf_direct.f90
-\t$(CPP) -P $(CPPFLAGS) test_cdf_direct.F90 > test_cdf_direct.f90
-\t$(CFT) $(FFLAGS) -o test_cdf_direct cdf_direct.f90 test_cdf_direct.f90 $(LCDF)
+\t$(CPP) -P $(CPPFLAGS) cdf_direct.F90 > cdf_direct$(PPF90_ext)
+\t$(CPP) -P $(CPPFLAGS) test_cdf_direct.F90 > test_cdf_direct$(PPF90_ext)
+\t$(CFT) $(FFLAGS) -o test_cdf_direct cdf_direct$(PPF90_ext) test_cdf_direct$(PPF90_ext) $(LCDF)
 test_cdf_direct_O3: test_cdf_direct
-\t$(CFT) $(FFLAGS) -O3 -o test_cdf_direct_O3 cdf_direct.f90 test_cdf_direct.f90 $(LCDF)
+\t$(CFT) $(FFLAGS) -O3 -o test_cdf_direct_O3 cdf_direct$(PPF90_ext) test_cdf_direct$(PPF90_ext) $(LCDF)
 """
 
 
