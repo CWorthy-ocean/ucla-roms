@@ -64,7 +64,7 @@ contains
     use sponge_tune, only: get_init_ub, ub_tune
     use pio_roms, only: use_pio, pio_gtype
 #ifdef PARALLEL_IO
-    use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort
+    use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort, pio_direct_close
     use pio, only : PIO_closefile
 #endif
     use checkdims_mod, only: checkdims
@@ -415,7 +415,7 @@ contains
 ! River mask (needed for exact restarts)
 
 #ifdef PARALLEL_IO
-    call pio_open_or_abort(inifile, sr_name)
+    call pio_open_or_abort(inifile, sr_name, direct=.true.)   ! direct reads (pio_direct_read)
 #endif
 
     start=1; start(3)=record                                       ! 2D vars
@@ -702,6 +702,7 @@ contains
 #endif
 
 #ifdef PARALLEL_IO
+    call pio_direct_close
     call PIO_closefile(pio_FileDesc)
 #endif
 
