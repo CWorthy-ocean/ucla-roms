@@ -692,11 +692,11 @@ Keys removed on 2026-11-13 stop ROMS at the read with a message that names them;
 ### `SL_ADV_SETTINGS`
 (read by module `sl_adv_mod.F90`)
 
-Optional: if the group is absent, `sl_adv = .false.`. Experimental and in development: swept-volume (flux-form semi-Lagrangian) advection on the faces where the 2-D Courant number is large, for the `IMEX_IGW` step (requires `IMEX_IGW`). So far T, S and the passive tracers stepped with the dynamics take it; momentum is still advected by the stock scheme. A run in which no face is hot is the same as with `sl_adv = .false.`. See [Swept-volume advection](swept_volume_advection.md).
+Optional: if the group is absent, `sl_adv = .false.`. Experimental and in development: swept-volume (flux-form semi-Lagrangian) advection on the faces where the 2-D Courant number is large, for the `IMEX_IGW` step (requires `IMEX_IGW`, `imex_igw = .true.` and `imex_corr_adv_vimp = 1`; it stops at start-up otherwise). T, S, the passive tracers stepped with the dynamics, u and v take it. A run in which no face is hot is the same as with `sl_adv = .false.` and the same `IMEX_IGW_SETTINGS`. See [Swept-volume advection](swept_volume_advection.md).
 
 | Setting | Default | Description |
 |--------|---------|-------------|
-| `sl_adv` | `.false.` | Swept-volume advection on the faces whose 2-D Courant number `c2d` exceeds `sl_c_lo` (so far: tracers) |
+| `sl_adv` | `.false.` | Swept-volume advection on the faces whose 2-D Courant number `c2d` exceeds `sl_c_lo` |
 | `sl_c_lo` | `0.6` | `c2d` where the blend of the stock and the swept flux starts (weight 0) |
 | `sl_c_hi` | `0.9` | `c2d` from which a face is fully swept (weight 1); `0 <= sl_c_lo < sl_c_hi` |
 | `sl_cmax` | `5.0` | ROMS stops when the largest `c2d` of the faces that stay swept after the near-degenerate fallbacks exceeds it (faces put back to stock are advanced by the stock scheme and not tested); must exceed `sl_c_hi` |
