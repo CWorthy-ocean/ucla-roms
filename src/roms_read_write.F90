@@ -9,7 +9,7 @@ module roms_read_write
   use add_git_hash_mod, only: add_git_hash, git_hash
   use netcdf, only:&
   &nf90_noerr, nf90_nowrite, nf90_double,&
-  &nf90_netcdf4, nf90_global, nf90_enotatt, nf90_open,&
+  &nf90_global, nf90_enotatt, nf90_open,&
   &nf90_inq_varid, nf90_get_att, nf90_close, nf90_create,&
   &nf90_put_att, nf90_inquire_variable, nf90_inquire_dimension,&
   &nf90_get_var, nf90_clobber, nf90_64bit_data, nf90_max_name, nf90_inquire
@@ -2165,12 +2165,9 @@ contains
       call append_date_node(fname)
     endif
 
-#ifdef PARALLEL_IO
+    ! Classic CDF-5 with and without PARALLEL_IO (the per-rank files of a
+    ! build without it used to be netCDF-4)
     ierr = nf90_create(trim(fname), ior(nf90_clobber, nf90_64bit_data), ncid)
-#else
-    ierr = nf90_create(trim(fname), nf90_netcdf4, ncid)
-#endif
-!      ierr=nf90_create(trim(fname),nf90_netcdf4,ncid)
     if (ierr/=nf90_noerr) then
       call error_log%check_netcdf_status(netcdf_status=ierr,&
       &context=module_name//"/"//sr_name,&

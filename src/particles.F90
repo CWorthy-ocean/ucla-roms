@@ -6,9 +6,9 @@ module particles
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
   use netcdf, only:&
-  &nf90_double, nf90_global, nf90_nofill,&
+  &nf90_double, nf90_global, nf90_fill,&
   &nf90_put_att, nf90_set_fill, nf90_noerr, nf90_write,&
-  &nf90_open, nf90_close
+  &nf90_open, nf90_close, nf90_redef, nf90_enddef
   use ocean_vars, only: z_w, u, v, hz, z_r, flxu, flxv
   use scalars, only: dt, nnew, iic, tdays, time
   use param, only: max_name_size
@@ -446,7 +446,10 @@ contains
     record = record + 1
 
     ierr=nf90_open(fname,nf90_write,ncid)
-    ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
+    ! Fill mode: rows np+1:npmx of the record are not written and keep the
+    ! fill value (the default of a classic-format file; netCDF-4 files had it
+    ! even with nofill, which there applied only to later variables)
+    ierr=nf90_set_fill(ncid, nf90_fill, prev_fill_mode)
 
     call ncwrite(ncid,'ocean_time',(/time/),(/record/))
 
@@ -498,6 +501,7 @@ contains
     dimsizes = (/ npmx,  7,      0/)
 
     ierr=nf90_open(fname,nf90_write,ncid)
+    ierr=nf90_redef(ncid)          ! a classic-format file: define mode
 
     varid = nccreate(ncid,'particles',dimnames,dimsizes,nf90_double)
     if (ierr/=nf90_noerr) then
@@ -509,6 +513,7 @@ contains
     &,'Tag/x/y/z/u/v/w')
 
     ierr=nf90_put_att( ncid, nf90_global, 'big_number', big_number )
+    ierr=nf90_enddef(ncid)
     call error_log%abort_check()
     ierr = nf90_close(ncid)
 

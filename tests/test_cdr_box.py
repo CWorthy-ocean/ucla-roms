@@ -9,6 +9,7 @@ hashes.
 """
 import copy
 
+import netCDF4
 import numpy as np
 import pytest
 import xarray as xr
@@ -176,3 +177,27 @@ def test_cdr_release_tiling(box_conf, box_cdr_file, input_dir, tmp_path):
     differ = {tiles: sorted(k for k in v if v[k]["sha256"] != runs[(2, 2)][k]["sha256"])
               for tiles, v in runs.items()}
     assert all(not d for d in differ.values()), f"variables differing from 2x2: {differ}"
+
+
+def test_output_is_cdf5(box_conf, box_cdr_file, input_dir, tmp_path):
+    """Without PARALLEL_IO the per-rank output files (grid, history, averages,
+    restart) are classic CDF-5, as with PARALLEL_IO (they were netCDF-4), and
+    they still join."""
+    link_cdr_pieces(box_cdr_file, tmp_path)
+    nml = box_namelist(input_dir, box_cdr_file)
+    nml["FORCING_FILES"] = {"frcfiles": [str(tmp_path / "cdr_box.nc")]}
+    nml["BASIC_OUTPUT_SETTINGS"].update({
+        "wrt_file_rst": True, "output_period_rst": NSTEPS * DT,
+        "wrt_file_avg": True, "output_period_avg": NSTEPS * DT, "nrpf_avg": 1,
+    })
+    nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": NSTEPS * DT, "nrpf_sponge": 1})
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    box_conf.run(nml, cwd=run_dir)
+    pieces = sorted(run_dir.glob("roms_*.nc"))
+    kinds = {p.name.split(".")[0] for p in pieces}
+    assert {"roms_grd", "roms_his", "roms_avg", "roms_rst"} <= kinds, kinds
+    for piece in pieces:
+        with netCDF4.Dataset(piece) as ds:
+            assert ds.data_model == "NETCDF3_64BIT_DATA", f"{piece.name}: {ds.data_model}"
+    assert "zeta" in get_summary_value(run_dir, his_prefix(run_dir)).variables
