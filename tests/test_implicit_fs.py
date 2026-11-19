@@ -5,6 +5,7 @@ Two builds: the open-boundary physics with flux forcing and the tidal potential
 with BULK_FRC, PARALLEL_IO and CDR_FORCING (exact restart, a CDR volume release).
 """
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -255,6 +256,7 @@ DIRECT_VERIFY = re.compile(
 DIRECT_SUMMARY = re.compile(r"pio_direct_read:'([^']+)':(\d+)variablesreaddirectly\(.*?\),(\d+)throughPIO")
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="ROMS reads with O_DIRECT only on Linux")
 def test_bulk_pio_direct_read_verify(bulk_pio_configuration, tmp_path):
     """pio_direct_read = 'verify' reads the grid, the initial file and a restart both
     directly and through PIO, and finds no value that differs.
