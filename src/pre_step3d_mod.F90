@@ -74,6 +74,7 @@ contains
     &dxdyi_u, dxdyi_v
 #endif
     use ext_copy_prv2shr_mod, only: ext_copy_prv2shr_2d_tile
+    use sl_adv_mod, only: sl_adv, sl_uv_pred, sl_t_pred, sl_t_pred_add
 #ifdef SOLVE3D
     use t3dbc_mod, only: t3dbc_tile
     use u3dbc_mod, only: u3dbc_tile
@@ -198,6 +199,8 @@ contains
         ! horizontal fluxes. Also
 # include "compute_horiz_tracer_fluxes.h"
 !! river included in above include file
+        ! swept-volume advection: the tracer predictor's change in the swept cells (added after the update)
+        if (sl_adv) call sl_t_pred(k, itrc, FX, FE, Hz_bak, dtau, cf_stp, cf_bak, istr, iend, jstr, jend)
         ! INITIALIZE CORRECTOR
         do j=jstr,jend                     ! STEP by pre-multiplying
           do i=istr,iend
@@ -210,6 +213,7 @@ contains
             t(i,j,k,indx,itrc)=Hz(i,j,k)*t(i,j,k,nstp,itrc)
           enddo
         enddo                              ! tracer at "nstp" by Hz
+        if (sl_adv) call sl_t_pred_add(k, itrc)
       enddo !<-- itrc                      ! also at "nstp" before
       ! it is owerwritten by
 
@@ -224,6 +228,9 @@ contains
 #endif
 
 # include "compute_horiz_rhs_uv_terms.h"
+      ! swept-volume advection: the predictor's momentum advection on the fully swept faces
+      if (sl_adv) call sl_uv_pred(k, ru, rv, UFx, UFe, VFx, VFe, Hz_bak, dtau, cf_stp, cf_bak,&
+      &                           istr, iend, jstr, jend)
 #ifdef IMEX_IGW
       endif
 #endif

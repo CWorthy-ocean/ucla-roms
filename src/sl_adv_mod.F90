@@ -39,6 +39,11 @@ module sl_adv_mod
   ! is used only at levels with a hot face and a pseudo-volume above
   ! sl_v1min of the cell (u* elsewhere). The arrival half of the Coriolis
   ! term acts on u^(n+1) less the implicit-level PG, (theta_c + mu) pg_*.
+  ! Predictor (sl_uv_pred, sl_t_pred; sl_pred): on fully swept faces the
+  ! LF-AM3 predictor's Eulerian horizontal advection of u^n, v^n (and of the
+  ! tracers) is blended, with a weight that grows from c2d = sl_c_hi, with
+  ! a semi-Lagrangian value: the predictor's start field cf_stp q^n + cf_bak
+  ! q^(n-1) at the departure point x - dtau U.
   !
   ! c2d of a face = |C_normal| + the mean |C_tangential| of the 4 neighbouring
   ! tangential faces, C = |u| dt / dx with the 2-point mean of pm (pn) at the
@@ -63,7 +68,12 @@ module sl_adv_mod
   ! sl_c2pass (<= 0: off). A single pass at c2d 0.8-1 keeps most of a 2-dx pattern; two passes damp it
   ! (STAGE3.md 22: it removed a one-level T checkerboard next to an open edge)
   real(kind=8), public, protected :: sl_c2pass = 0.8_8
-  namelist /SL_ADV_SETTINGS/ sl_adv, sl_c_lo, sl_c_hi, sl_cmax, sl_diag, sl_mvol, sl_defmax, sl_c2pass
+  ! the predictor's horizontal advection on fully swept faces: 0 = the stock Eulerian flux of u^n, t^n
+  ! everywhere; 1 = semi-Lagrangian for u, v (the LF-AM3 start field at the departure point); 2 = for u, v and
+  ! the tracers of the dynamics step. The stock predictor amplifies grid-scale velocity 1.2 to 2.2 times at
+  ! c2d 2 (a sign-flipping mode of u* that stopped a Gulf of Mexico nest at 1800 s).
+  integer(kind=4), public, protected :: sl_pred = 2
+  namelist /SL_ADV_SETTINGS/ sl_adv, sl_c_lo, sl_c_hi, sl_cmax, sl_diag, sl_mvol, sl_defmax, sl_c2pass, sl_pred
 
   character(len=10) :: module_name = "sl_adv_mod"
   real(kind=8), parameter :: c6 = 0.1666666666666666_8   ! the UP3 constant of compute_horiz_tracer_fluxes.h
@@ -71,6 +81,14 @@ module sl_adv_mod
   ! of its volume (2-D or either 1-D direction; the Lin-Rood pseudo-volumes), and of its neighbours, are
   ! not swept
   real(kind=8), parameter :: sl_v1min = 0.5_8
+  ! the predictor's semi-Lagrangian weight of a fully swept face grows from 0 at c2d = sl_c_hi to 1 at sl_c_hi +
+  ! sl_pdc (smoothstep): blended faces keep the stock predictor, whose u* their stock flux share advects (with
+  ! the face weight itself, i.e. from sl_c_lo on, a Hawaii nest stopped on day 3 where most hot faces are blended)
+  real(kind=8), parameter :: sl_pdc = 0.4_8
+  ! the tracer predictor's changes of one level and tracer (sl_t_pred -> sl_t_pred_add): cells and amounts
+  integer(kind=4), allocatable, dimension(:) :: tp_i, tp_j
+  real(kind=8), allocatable, dimension(:) :: tp_d
+  integer(kind=4) :: tp_n = 0
   ! momentum: u-, v-cells next to an interface whose vertical Courant number (the key's) exceeds sl_czmom count
   ! as near-degenerate; <= 0 off (the default: with the pseudo-density guard of the hot columns it is not needed)
   real(kind=8), parameter :: sl_czmom = 0._8
@@ -108,7 +126,7 @@ module sl_adv_mod
 #ifdef SOLVE3D
   public :: sl_adv_init, sl_adv_weights, sl_rst_def, sl_rst_wrt, sl_rst_get
   public :: sl_ts_prep, sl_t_prep, sl_hflux, sl_vflux, sl_t_finish, sl_cfallback
-  public :: sl_uv_carry_in, sl_uv_hflux, sl_uv_vcol, sl_uv_cor
+  public :: sl_uv_carry_in, sl_uv_hflux, sl_uv_vcol, sl_uv_cor, sl_uv_pred, sl_t_pred, sl_t_pred_add
 
   ! blend weights of the u- and v-faces (0 stock .. 1 fully swept) for the
   ! step from level n: u-faces istr..iend+1 x jstr..jend, v-faces istr..iend
@@ -241,6 +259,8 @@ contains
     &context=module_name//"/"//sr_name, info="sl_adv: sl_diag must be 0 or 1")
     if (sl_mvol < 1 .or. sl_mvol > 2) call error_log%raise_global(&
     &context=module_name//"/"//sr_name, info="sl_adv: sl_mvol must be 1 or 2")
+    if (sl_pred < 0 .or. sl_pred > 2) call error_log%raise_global(&
+    &context=module_name//"/"//sr_name, info="sl_adv: sl_pred must be 0, 1 or 2")
 #if defined ADV_ISONEUTRAL || defined PARABOLIC_SPLINES || defined BIO_1ST_USTREAM_TEST
     call error_log%raise_global(context=module_name//"/"//sr_name,&
     &info="sl_adv needs the UP3 / U3 tracer corrector (no ADV_ISONEUTRAL, PARABOLIC_SPLINES,"&
@@ -253,6 +273,8 @@ contains
     &//' above c2d sl_c2pass =', sl_c2pass
     if (mynode == 0) write(*,'(1x,A,I2,A,ES10.3)') 'SL_ADV: momentum swept volumes sl_mvol =', sl_mvol,&
     &', closure limit sl_defmax =', sl_defmax
+    if (mynode == 0) write(*,'(1x,A,I2)') 'SL_ADV: predictor on fully swept faces (0 stock, 1 semi-Lagrangian'&
+    &//' u, v, 2 also tracers) sl_pred =', sl_pred
   end subroutine read_nml_sl_adv
 
 #ifdef SOLVE3D
@@ -2325,6 +2347,342 @@ contains
   end function corv
 
 ! ----------------------------------------------------------------------
+  subroutine sl_stock_tr(kind, kk, tx_, ty_, istr, iend, jstr, jend)
+    ! the stock face transports of compute_horiz_rhs_uv_terms.h (UPSTREAM_UV: cff/2, with the
+    ! Huxx-type corrections and their edge extrapolation) in the grid's face indexing: kind 1 the
+    ! u-cells' x-faces (west of u(i,j)) and y-faces (south), kind 2 the v-cells'
+    use dimensions, only: inode, jnode
+    use param, only: np_xi, np_eta
+    use ocean_vars, only: flxu, flxv
+    implicit none
+    integer(kind=4), intent(in) :: kind, kk, istr, iend, jstr, jend
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: tx_, ty_
+    real(kind=8), parameter :: delta = 0.1666666666666667_8
+    real(kind=8) :: hh(istr-2:iend+2,jstr-2:jend+2)
+    integer(kind=4) :: ii, jj, imn, imx, jmn, jmx
+# include "compute_auxiliary_bounds.h"
+    tx_ = 0._8 ; ty_ = 0._8
+    if (kind == 1) then
+      imn = istrU-1 ; imx = iend+1
+#ifndef EW_PERIODIC
+      if (WESTERN_EDGE) imn = istrU
+      if (EASTERN_EDGE) imx = iend
+#endif
+      do jj = jstr, jend
+        do ii = imn, imx
+          hh(ii,jj) = FlxU(ii-1,jj,kk) - 2._8*FlxU(ii,jj,kk) + FlxU(ii+1,jj,kk)
+        end do
+#ifndef EW_PERIODIC
+        if (WESTERN_EDGE) hh(istrU-1,jj) = hh(istrU,jj)
+        if (EASTERN_EDGE) hh(iend+1,jj) = hh(iend,jj)
+#endif
+        do ii = istrU-1, iend
+          tx_(ii+1,jj) = 0.5_8*(FlxU(ii,jj,kk)+FlxU(ii+1,jj,kk) - delta*(hh(ii,jj)+hh(ii+1,jj)))
+        end do
+      end do
+      do jj = jstr, jend+1
+        do ii = istrU-1, iend
+          hh(ii,jj) = FlxV(ii-1,jj,kk) - 2._8*FlxV(ii,jj,kk) + FlxV(ii+1,jj,kk)
+        end do
+        do ii = istrU, iend
+          ty_(ii,jj) = 0.5_8*(FlxV(ii,jj,kk)+FlxV(ii-1,jj,kk) - delta*(hh(ii,jj)+hh(ii-1,jj)))
+        end do
+      end do
+    else
+      do jj = jstrV-1, jend
+        do ii = istr, iend+1
+          hh(ii,jj) = FlxU(ii,jj-1,kk) - 2._8*FlxU(ii,jj,kk) + FlxU(ii,jj+1,kk)
+        end do
+      end do
+      do jj = jstrV, jend
+        do ii = istr, iend+1
+          tx_(ii,jj) = 0.5_8*(FlxU(ii,jj,kk)+FlxU(ii,jj-1,kk) - delta*(hh(ii,jj)+hh(ii,jj-1)))
+        end do
+      end do
+      jmn = jstrV-1 ; jmx = jend+1
+#ifndef NS_PERIODIC
+      if (SOUTHERN_EDGE) jmn = jstrV
+      if (NORTHERN_EDGE) jmx = jend
+#endif
+      do jj = jmn, jmx
+        do ii = istr, iend
+          hh(ii,jj) = FlxV(ii,jj-1,kk) - 2._8*FlxV(ii,jj,kk) + FlxV(ii,jj+1,kk)
+        end do
+      end do
+#ifndef NS_PERIODIC
+      if (SOUTHERN_EDGE) hh(istr:iend,jstrV-1) = hh(istr:iend,jstrV)
+      if (NORTHERN_EDGE) hh(istr:iend,jend+1) = hh(istr:iend,jend)
+#endif
+      do jj = jstrV-1, jend
+        do ii = istr, iend
+          ty_(ii,jj+1) = 0.5_8*(FlxV(ii,jj,kk)+FlxV(ii,jj+1,kk) - delta*(hh(ii,jj)+hh(ii,jj+1)))
+        end do
+      end do
+    end if
+  end subroutine sl_stock_tr
+
+! ----------------------------------------------------------------------
+  pure subroutine sl_depart(i, j, ax, ay, ilo, ihi, jlo, jhi, i0, j0, fx, fy)
+    ! the bilinear stencil (i0, i0+1) x (j0, j0+1) and the weights fx, fy of
+    ! the departure point (i - ax, j - ay) of point (i,j), in index units:
+    ! the displacement is clipped to 2 points (the halo) and the stencil to
+    ! the valid range ilo..ihi, jlo..jhi (the boundary row at a physical
+    ! edge, where inflow takes the boundary value)
+    implicit none
+    integer(kind=4), intent(in) :: i, j, ilo, ihi, jlo, jhi
+    real(kind=8), intent(in) :: ax, ay
+    integer(kind=4), intent(out) :: i0, j0
+    real(kind=8), intent(out) :: fx, fy
+    real(kind=8) :: xd, yd
+    xd = dble(i) - max(-2._8, min(2._8, ax))
+    i0 = max(ilo, min(ihi-1, min(floor(xd), i+1)))
+    fx = max(0._8, min(1._8, xd - dble(i0)))
+    yd = dble(j) - max(-2._8, min(2._8, ay))
+    j0 = max(jlo, min(jhi-1, min(floor(yd), j+1)))
+    fy = max(0._8, min(1._8, yd - dble(j0)))
+  end subroutine sl_depart
+
+! ----------------------------------------------------------------------
+  pure real(kind=8) function sl_pw(c2d)
+    ! the predictor's semi-Lagrangian weight at the 2-D Courant number c2d:
+    ! 0 up to sl_c_hi, 1 from sl_c_hi + sl_pdc
+    implicit none
+    real(kind=8), intent(in) :: c2d
+    real(kind=8) :: s
+    s = max(0._8, min(1._8, (c2d - sl_c_hi)/sl_pdc))
+    sl_pw = s*s*(3._8 - 2._8*s)
+  end function sl_pw
+
+! ----------------------------------------------------------------------
+  subroutine sl_uv_pred(k, ru, rv, UFx, UFe, VFx, VFe, Hz_bak, dtau, cf_stp, cf_bak, istr, iend, jstr, jend)
+    ! pre_step3d, pass 1 (u*, v*), level k, after the stock horizontal terms
+    ! of u^n (compute_horiz_rhs_uv_terms.h; ru units), with sl_pred > 0: at
+    ! the u-, v-points whose tracer face is fully swept the predictor's
+    ! Eulerian horizontal momentum advection A is blended with a
+    ! semi-Lagrangian one, (1 - wp) A + wp S, wp = sl_pw(c2d of the face).
+    ! The LF-AM3 predictor is [Hz_bak q + dtau pm pn ru]/Hz_fwd with the start
+    ! field q = cf_stp u^n + cf_bak u^(n-1); S puts q at the departure point
+    ! x - dtau (u^n, v^n) in its place and keeps the stock flux's transport
+    ! divergence term: S = Hz_bak (q_d - q)/(dtau pm pn) - D u^n, D the
+    ! divergence of the stock face transports of the u- (v-) cell, so that
+    ! the sum with the vertical flux form's -D_v u^n is the stock one (with
+    ! -D q_d the residual D_v (q_d - u^n) is O(1) at vertical Courant numbers
+    ! of 5-10: it stopped a Gulf of Mexico nest at 2000 s on day 12.5). q_d
+    ! is bilinear on the level, the displacement clipped to 2 points; across
+    ! a coast the tangential direction takes the wet rows only, the normal
+    ! one the zero of the land faces. For a field frozen in the flow q_d has
+    ! a gain between 1/3 and 1 at any Courant number; the stock predictor
+    ! amplifies grid-scale velocity 1.2 to 2.2 times at c2d 2 and flips the
+    ! sign of a two-point wave. A point with wp = 0 is not touched.
+    use dimensions, only: nz, inode, jnode
+    use param, only: np_xi, np_eta
+    use scalars, only: nstp
+    use ocean_vars, only: u, v
+    use grid, only: pm, pn, umask, vmask
+    use timers, only: reg_tic, reg_toc, rg_sl_mom, rg_sl_mpred
+    implicit none
+    integer(kind=4), intent(in) :: k, istr, iend, jstr, jend
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2,nz), intent(inout) :: ru, rv
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in) :: UFx, UFe, VFx, VFe
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2,nz), intent(in) :: Hz_bak
+    real(kind=8), intent(in) :: dtau, cf_stp, cf_bak
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2) :: tx, ty
+    real(kind=8) :: w, ax, ay, fx, fy, qd, hb, dc0, dh, s, a, r0, r1, a0, a1
+    integer(kind=4) :: i, j, n, i0, j0, ilo, ihi, jlo, jhi, indx
+    logical :: first
+# include "compute_auxiliary_bounds.h"
+    if (sl_pred == 0 .or. .not. sl_anyhot) return
+    if (hu_off(k) == hu_off(k-1) .and. hv_off(k) == hv_off(k-1)) return
+    call reg_tic(rg_sl_mom)
+    call reg_tic(rg_sl_mpred)
+    indx = 3 - nstp
+    ! ---- u-points: valid on the 2-point halo, or from the boundary face (x) and row (y) at a physical edge
+    ilo = istr-2 ; ihi = iend+2 ; jlo = jstr-2 ; jhi = jend+2
+#ifndef EW_PERIODIC
+    if (WESTERN_EDGE) ilo = istr
+    if (EASTERN_EDGE) ihi = iend+1
+#endif
+#ifndef NS_PERIODIC
+    if (SOUTHERN_EDGE) jlo = jstr-1
+    if (NORTHERN_EDGE) jhi = jend+1
+#endif
+    first = .true.
+    do n = hu_off(k-1)+1, hu_off(k)
+      i = hu_i(n) ; j = hu_j(n)
+      if (i < istrU .or. i > iend) cycle
+      if (sl_wu(i,j,k) < 1._8) cycle
+      w = sl_pw(sl_c2u(i,j,k))
+      if (w <= 0._8) cycle
+      if (first) then                        ! the stock face transports of the level's u-cells
+        call sl_stock_tr(1, k, tx, ty, istr, iend, jstr, jend)
+        first = .false.
+      end if
+      ax = dtau*u(i,j,k,nstp)*0.5_8*(pm(i,j)+pm(i-1,j))
+      ay = dtau*0.25_8*(v(i-1,j,k,nstp)+v(i,j,k,nstp)+v(i-1,j+1,k,nstp)+v(i,j+1,k,nstp))*0.5_8*(pn(i,j)+pn(i-1,j))
+      call sl_depart(i, j, ax, ay, ilo, ihi, jlo, jhi, i0, j0, fx, fy)
+      r0 = (1._8-fx)*qu(i0,j0) + fx*qu(i0+1,j0)
+      r1 = (1._8-fx)*qu(i0,j0+1) + fx*qu(i0+1,j0+1)
+      a0 = (1._8-fy)*max(umask(i0,j0), umask(i0+1,j0))
+      a1 = fy*max(umask(i0,j0+1), umask(i0+1,j0+1))
+      if (a0 + a1 <= 0._8) cycle
+      qd = (a0*r0 + a1*r1)/(a0 + a1)
+      hb = 0.5_8*(Hz_bak(i,j,k)+Hz_bak(i-1,j,k))
+      dc0 = dtau*0.25_8*(pm(i,j)+pm(i-1,j))*(pn(i,j)+pn(i-1,j))
+      dh = tx(i+1,j)-tx(i,j)+ty(i,j+1)-ty(i,j)
+      s = hb*(qd - qu(i,j))/dc0 - dh*u(i,j,k,nstp)
+      a = -UFx(i,j)+UFx(i-1,j)-UFe(i,j+1)+UFe(i,j)
+      ru(i,j,k) = ru(i,j,k) + w*(s - a)
+    end do
+    ! ---- v-points
+    ilo = istr-2 ; ihi = iend+2 ; jlo = jstr-2 ; jhi = jend+2
+#ifndef EW_PERIODIC
+    if (WESTERN_EDGE) ilo = istr-1
+    if (EASTERN_EDGE) ihi = iend+1
+#endif
+#ifndef NS_PERIODIC
+    if (SOUTHERN_EDGE) jlo = jstr
+    if (NORTHERN_EDGE) jhi = jend+1
+#endif
+    first = .true.
+    do n = hv_off(k-1)+1, hv_off(k)
+      i = hv_i(n) ; j = hv_j(n)
+      if (j < jstrV .or. j > jend) cycle
+      if (sl_wv(i,j,k) < 1._8) cycle
+      w = sl_pw(sl_c2v(i,j,k))
+      if (w <= 0._8) cycle
+      if (first) then
+        call sl_stock_tr(2, k, tx, ty, istr, iend, jstr, jend)
+        first = .false.
+      end if
+      ax = dtau*0.25_8*(u(i,j-1,k,nstp)+u(i+1,j-1,k,nstp)+u(i,j,k,nstp)+u(i+1,j,k,nstp))*0.5_8*(pm(i,j)+pm(i,j-1))
+      ay = dtau*v(i,j,k,nstp)*0.5_8*(pn(i,j)+pn(i,j-1))
+      call sl_depart(i, j, ax, ay, ilo, ihi, jlo, jhi, i0, j0, fx, fy)
+      r0 = (1._8-fy)*qv(i0,j0) + fy*qv(i0,j0+1)
+      r1 = (1._8-fy)*qv(i0+1,j0) + fy*qv(i0+1,j0+1)
+      a0 = (1._8-fx)*max(vmask(i0,j0), vmask(i0,j0+1))
+      a1 = fx*max(vmask(i0+1,j0), vmask(i0+1,j0+1))
+      if (a0 + a1 <= 0._8) cycle
+      qd = (a0*r0 + a1*r1)/(a0 + a1)
+      hb = 0.5_8*(Hz_bak(i,j,k)+Hz_bak(i,j-1,k))
+      dc0 = dtau*0.25_8*(pm(i,j)+pm(i,j-1))*(pn(i,j)+pn(i,j-1))
+      dh = tx(i+1,j)-tx(i,j)+ty(i,j+1)-ty(i,j)
+      s = hb*(qd - qv(i,j))/dc0 - dh*v(i,j,k,nstp)
+      a = -VFx(i+1,j)+VFx(i,j)-VFe(i,j)+VFe(i,j-1)
+      rv(i,j,k) = rv(i,j,k) + w*(s - a)
+    end do
+    call reg_toc(rg_sl_mpred)
+    call reg_toc(rg_sl_mom)
+  contains
+    real(kind=8) function qu(ii, jj)
+      ! the predictor's start field of u (u^n alone on the first step, where cf_bak = 0)
+      integer(kind=4), intent(in) :: ii, jj
+      qu = u(ii,jj,k,nstp)
+      if (cf_bak /= 0._8) qu = cf_stp*u(ii,jj,k,nstp) + cf_bak*u(ii,jj,k,indx)
+    end function qu
+    real(kind=8) function qv(ii, jj)
+      integer(kind=4), intent(in) :: ii, jj
+      qv = v(ii,jj,k,nstp)
+      if (cf_bak /= 0._8) qv = cf_stp*v(ii,jj,k,nstp) + cf_bak*v(ii,jj,k,indx)
+    end function qv
+  end subroutine sl_uv_pred
+
+! ----------------------------------------------------------------------
+  subroutine sl_t_pred(k, itrc, FX, FE, Hz_bak, dtau, cf_stp, cf_bak, istr, iend, jstr, jend)
+    ! pre_step3d, pass 2 (the tracer predictor), level k, tracer itrc, with
+    ! sl_pred = 2, between the stock horizontal fluxes FX, FE of t^n and the
+    ! stock update (which overwrites t^(n-1)): for the cells with a hot face
+    ! whose 2-D Courant number c (the larger of the means of the cell's two
+    ! x-faces' and two y-faces' c2d) exceeds sl_c_hi, the change of the
+    ! update that sl_t_pred_add adds after it, wp (S - A), wp = sl_pw(c): A
+    ! the stock flux divergence term and S = Hz_bak (q_d - q) - dtau pm pn
+    ! D t^n, with q = cf_stp t^n + cf_bak t^(n-1) at the departure point x -
+    ! dtau U (U the cell's mean predictor transport; bilinear over the wet
+    ! cells of the stencil) and D the cell's horizontal transport divergence
+    ! (as sl_uv_pred). Cells with a river face keep the stock update.
+    use dimensions, only: nz, inode, jnode
+    use param, only: np_xi, np_eta
+    use scalars, only: nstp
+    use ocean_vars, only: hz, flxu, flxv
+    use tracers, only: t
+    use grid, only: pm, pn, rmask
+    use timers, only: reg_tic, reg_toc, rg_sl_trc, rg_sl_tpred
+    implicit none
+    integer(kind=4), intent(in) :: k, itrc, istr, iend, jstr, jend
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(in) :: FX, FE
+    real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2,nz), intent(in) :: Hz_bak
+    real(kind=8), intent(in) :: dtau, cf_stp, cf_bak
+    real(kind=8) :: w, ax, ay, fx_, fy_, a00, a10, a01, a11, s, td, pp, dh
+    integer(kind=4) :: i, j, i0, j0, ilo, ihi, jlo, jhi, indx
+# include "compute_auxiliary_bounds.h"
+    tp_n = 0
+    if (sl_pred < 2 .or. .not. sl_anyhot) return
+    if (hu_off(k) == hu_off(k-1) .and. hv_off(k) == hv_off(k-1)) return
+    call reg_tic(rg_sl_trc)
+    call reg_tic(rg_sl_tpred)
+    if (.not. allocated(tp_i)) then
+      allocate(tp_i((iend-istr+1)*(jend-jstr+1)), tp_j((iend-istr+1)*(jend-jstr+1)), tp_d((iend-istr+1)*(jend-jstr+1)))
+    end if
+    call sl_rivmask
+    indx = 3 - nstp
+    ilo = istr-2 ; ihi = iend+2 ; jlo = jstr-2 ; jhi = jend+2
+#ifndef EW_PERIODIC
+    if (WESTERN_EDGE) ilo = istr-1
+    if (EASTERN_EDGE) ihi = iend+1
+#endif
+#ifndef NS_PERIODIC
+    if (SOUTHERN_EDGE) jlo = jstr-1
+    if (NORTHERN_EDGE) jhi = jend+1
+#endif
+    do j = jstr, jend
+      do i = istr, iend
+        if (rmask(i,j) < 0.5_8) cycle
+        if (sl_wu(i,j,k) <= 0._8 .and. sl_wu(i+1,j,k) <= 0._8 .and. sl_wv(i,j,k) <= 0._8 .and.&
+        &   sl_wv(i,j+1,k) <= 0._8) cycle
+        w = sl_pw(max(0.5_8*(sl_c2u(i,j,k)+sl_c2u(i+1,j,k)), 0.5_8*(sl_c2v(i,j,k)+sl_c2v(i,j+1,k))))
+        if (w <= 0._8) cycle
+        if (max(sl_rfu(i,j), sl_rfu(i+1,j), sl_rfv(i,j), sl_rfv(i,j+1)) > 0.5_8) cycle
+        pp = dtau*pm(i,j)*pn(i,j)
+        ax = pp*0.5_8*(FlxU(i,j,k)+FlxU(i+1,j,k))/Hz(i,j,k)
+        ay = pp*0.5_8*(FlxV(i,j,k)+FlxV(i,j+1,k))/Hz(i,j,k)
+        call sl_depart(i, j, ax, ay, ilo, ihi, jlo, jhi, i0, j0, fx_, fy_)
+        a00 = (1._8-fx_)*(1._8-fy_)*rmask(i0,j0) ; a10 = fx_*(1._8-fy_)*rmask(i0+1,j0)
+        a01 = (1._8-fx_)*fy_*rmask(i0,j0+1) ; a11 = fx_*fy_*rmask(i0+1,j0+1)
+        s = a00 + a10 + a01 + a11
+        if (s < 1.e-6_8) cycle
+        td = (a00*qt(i0,j0) + a10*qt(i0+1,j0) + a01*qt(i0,j0+1) + a11*qt(i0+1,j0+1))/s
+        dh = FlxU(i+1,j,k)-FlxU(i,j,k)+FlxV(i,j+1,k)-FlxV(i,j,k)
+        tp_n = tp_n + 1 ; tp_i(tp_n) = i ; tp_j(tp_n) = j
+        tp_d(tp_n) = w*(Hz_bak(i,j,k)*(td - qt(i,j)) - pp*dh*t(i,j,k,nstp,itrc)&
+        &          + pp*(FX(i+1,j)-FX(i,j)+FE(i,j+1)-FE(i,j)))
+      end do
+    end do
+    call reg_toc(rg_sl_tpred)
+    call reg_toc(rg_sl_trc)
+  contains
+    real(kind=8) function qt(ii, jj)
+      ! the predictor's start field of the tracer (t^n alone on the first step, where cf_bak = 0)
+      integer(kind=4), intent(in) :: ii, jj
+      qt = t(ii,jj,k,nstp,itrc)
+      if (cf_bak /= 0._8) qt = cf_stp*t(ii,jj,k,nstp,itrc) + cf_bak*t(ii,jj,k,indx,itrc)
+    end function qt
+  end subroutine sl_t_pred
+
+! ----------------------------------------------------------------------
+  subroutine sl_t_pred_add(k, itrc)
+    ! pre_step3d, pass 2, after the stock update of level k of tracer itrc
+    ! (Hz_fwd t* before the vertical terms): the changes of sl_t_pred
+    use scalars, only: nnew
+    use tracers, only: t
+    implicit none
+    integer(kind=4), intent(in) :: k, itrc
+    integer(kind=4) :: n
+    do n = 1, tp_n
+      t(tp_i(n),tp_j(n),k,nnew,itrc) = t(tp_i(n),tp_j(n),k,nnew,itrc) + tp_d(n)
+    end do
+    tp_n = 0
+  end subroutine sl_t_pred_add
+
+! ----------------------------------------------------------------------
   subroutine sl_uv_carry_in
     ! main, before the corrector's prsgrd: the carried n-1 momentum
     ! increment's swept part (sl_eu, sl_ev) joins IMEX's pg_nm1, so the
@@ -2772,7 +3130,7 @@ contains
     call reg_tic(rg_sl_mom)
     call reg_tic(rg_sl_mhflux)
     ! ---- u: UFx(i,j) is the x-face east of u(i,j) (rho(i,j)), UFe(i,j) the y-face south of it
-    call stock_tr(1, k, tx, ty)
+    call sl_stock_tr(1, k, tx, ty, istr, iend, jstr, jend)
     dfx = 0._8 ; dfy = 0._8 ; gx = tx ; gy = ty
     if (sl_levhm(k)) then
       q = sl_ut(:,:,k)
@@ -2823,7 +3181,7 @@ contains
       end do
     end do
     ! ---- v: VFx(i,j) is the x-face west of v(i,j) (psi(i,j)), VFe(i,j) the y-face north of it (rho(i,j))
-    call stock_tr(2, k, tx, ty)
+    call sl_stock_tr(2, k, tx, ty, istr, iend, jstr, jend)
     dfx = 0._8 ; dfy = 0._8 ; gx = tx ; gy = ty
     if (sl_levhm(k)) then
       q = sl_vt(:,:,k)
@@ -2875,75 +3233,6 @@ contains
     call reg_toc(rg_sl_mhflux)
     call reg_toc(rg_sl_mom)
   contains
-    subroutine stock_tr(kind, kk, tx_, ty_)
-      ! the stock face transports of compute_horiz_rhs_uv_terms.h (UPSTREAM_UV: cff/2, with the
-      ! Huxx-type corrections and their edge extrapolation) in the grid's face indexing: kind 1 the
-      ! u-cells' x-faces (west of u(i,j)) and y-faces (south), kind 2 the v-cells'
-      use ocean_vars, only: flxu, flxv
-      integer(kind=4), intent(in) :: kind, kk
-      real(kind=8), dimension(istr-2:iend+2,jstr-2:jend+2), intent(inout) :: tx_, ty_
-      real(kind=8), parameter :: delta = 0.1666666666666667_8
-      real(kind=8) :: hh(istr-2:iend+2,jstr-2:jend+2)
-      integer(kind=4) :: ii, jj, imn, imx, jmn, jmx
-      tx_ = 0._8 ; ty_ = 0._8
-      if (kind == 1) then
-        imn = istrU-1 ; imx = iend+1
-#ifndef EW_PERIODIC
-        if (WESTERN_EDGE) imn = istrU
-        if (EASTERN_EDGE) imx = iend
-#endif
-        do jj = jstr, jend
-          do ii = imn, imx
-            hh(ii,jj) = FlxU(ii-1,jj,kk) - 2._8*FlxU(ii,jj,kk) + FlxU(ii+1,jj,kk)
-          end do
-#ifndef EW_PERIODIC
-          if (WESTERN_EDGE) hh(istrU-1,jj) = hh(istrU,jj)
-          if (EASTERN_EDGE) hh(iend+1,jj) = hh(iend,jj)
-#endif
-          do ii = istrU-1, iend
-            tx_(ii+1,jj) = 0.5_8*(FlxU(ii,jj,kk)+FlxU(ii+1,jj,kk) - delta*(hh(ii,jj)+hh(ii+1,jj)))
-          end do
-        end do
-        do jj = jstr, jend+1
-          do ii = istrU-1, iend
-            hh(ii,jj) = FlxV(ii-1,jj,kk) - 2._8*FlxV(ii,jj,kk) + FlxV(ii+1,jj,kk)
-          end do
-          do ii = istrU, iend
-            ty_(ii,jj) = 0.5_8*(FlxV(ii,jj,kk)+FlxV(ii-1,jj,kk) - delta*(hh(ii,jj)+hh(ii-1,jj)))
-          end do
-        end do
-      else
-        do jj = jstrV-1, jend
-          do ii = istr, iend+1
-            hh(ii,jj) = FlxU(ii,jj-1,kk) - 2._8*FlxU(ii,jj,kk) + FlxU(ii,jj+1,kk)
-          end do
-        end do
-        do jj = jstrV, jend
-          do ii = istr, iend+1
-            tx_(ii,jj) = 0.5_8*(FlxU(ii,jj,kk)+FlxU(ii,jj-1,kk) - delta*(hh(ii,jj)+hh(ii,jj-1)))
-          end do
-        end do
-        jmn = jstrV-1 ; jmx = jend+1
-#ifndef NS_PERIODIC
-        if (SOUTHERN_EDGE) jmn = jstrV
-        if (NORTHERN_EDGE) jmx = jend
-#endif
-        do jj = jmn, jmx
-          do ii = istr, iend
-            hh(ii,jj) = FlxV(ii,jj-1,kk) - 2._8*FlxV(ii,jj,kk) + FlxV(ii,jj+1,kk)
-          end do
-        end do
-#ifndef NS_PERIODIC
-        if (SOUTHERN_EDGE) hh(istr:iend,jstrV-1) = hh(istr:iend,jstrV)
-        if (NORTHERN_EDGE) hh(istr:iend,jend+1) = hh(istr:iend,jend)
-#endif
-        do jj = jstrV-1, jend
-          do ii = istr, iend
-            ty_(ii,jj+1) = 0.5_8*(FlxV(ii,jj,kk)+FlxV(ii,jj+1,kk) - delta*(hh(ii,jj)+hh(ii,jj+1)))
-          end do
-        end do
-      end if
-    end subroutine stock_tr
     subroutine budget(g, gx_, gy_, ig)
       ! the domain sum of the changes' divergence less their open-edge faces, and the sum of magnitudes
       type(mgrid_t), intent(in) :: g

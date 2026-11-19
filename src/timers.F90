@@ -20,10 +20,11 @@ module timers
   ! the startup self-test outside the step); 26-28 are the swept-volume
   ! advection's (sl_adv_mod): the weights (nested in set_HUV+omega), the
   ! tracer work (nested in step3d_uv1+visc3d and step3d_t) and the momentum
-  ! work (nested in step3d_uv1+visc3d); 29-37 split them further: the halo
+  ! work (nested in step3d_uv1+visc3d); 29-39 split them further: the halo
   ! exchanges made while an SL row runs, and the SL routines (nested in 27,
-  ! 28); rows 18-37 are printed only when used.
-  integer(kind=4), parameter :: nreg = 37
+  ! 28; the two predictor rows run in pre_step3d); rows 18-39 are printed
+  ! only when used.
+  integer(kind=4), parameter :: nreg = 39
   integer(kind=4), parameter, public ::&
   &  rg_set_forces=1,  rg_set_bry=2,     rg_rho_eos=3,    rg_huv_omega=4,&
   &  rg_lmd_vmix=5,    rg_prsgrd=6,      rg_pre_step3d=7, rg_huv1_omega=8,&
@@ -34,7 +35,7 @@ module timers
   &  rg_imex_solve_pred=23, rg_imex_solve_corr=24, rg_imex_selftest=25,&
   &  rg_sl_adv=26, rg_sl_trc=27, rg_sl_mom=28,&
   &  rg_sl_exch=29, rg_sl_wave=30, rg_sl_xprep=31, rg_sl_sweep=32, rg_sl_vflux=33,&
-  &  rg_sl_mprep=34, rg_sl_mhflux=35, rg_sl_mvcol=36, rg_sl_mcor=37
+  &  rg_sl_mprep=34, rg_sl_mhflux=35, rg_sl_mvcol=36, rg_sl_mcor=37, rg_sl_mpred=38, rg_sl_tpred=39
   character(len=22), parameter :: reg_name(nreg) = [character(len=22) ::&
   &  'set_forces (x2)',       'set_bry_all+tides (x2)','rho_eos (x2-3)',&
   &  'set_HUV+omega',         'lmd_vmix (x2)',         'prsgrd (x2)',&
@@ -48,9 +49,10 @@ module timers
   &  '  SL weights (nested)',  '  SL tracers (nested)',  '  SL momentum (nested)',&
   &  '    SL halo exchanges',  '    SL wave increments',  '    SL key prep (X)',&
   &  '    SL tracer sweeps',   '    SL tracer vertical',  '    SL mom prep',&
-  &  '    SL mom horizontal',  '    SL mom hot columns',  '    SL mom Coriolis']
+  &  '    SL mom horizontal',  '    SL mom hot columns',  '    SL mom Coriolis',&
+  &  '    SL mom predictor',   '    SL trc predictor']
   real(kind=8) :: reg_t(nreg) = 0._8, reg_t0(nreg) = 0._8
-  integer(kind=4) :: sl_nest = 0     ! > 0 while an SL row (26-37) runs: exchanges also go to row 29
+  integer(kind=4) :: sl_nest = 0     ! > 0 while an SL row (26-39) runs: exchanges also go to row 29
   integer(kind=4) :: reg_ij(2) = -1   ! this rank's (inode, jnode), set by reg_set_node (sl_adv_init)
   public :: reg_tic, reg_toc, print_region_timers, reg_set_node
 #include "cppdefs.opt"
