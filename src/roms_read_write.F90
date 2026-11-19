@@ -1081,7 +1081,7 @@ contains
     logical :: found_rec                ! is correct record found of var
     logical :: found_var_ever           ! if variable was found in any previous files
     logical :: allow_miss
-    integer(kind=4) :: nfiles                   ! total number of forcing files
+    integer(kind=4) :: nfiles                   ! number of files to search
     integer(kind=4) :: irec_old, ifile_old
     integer(kind=4) :: max_recs                 ! total variable records in file
     integer(kind=4) :: islot, itax              ! cache slot of the file and of its time variable
@@ -1109,9 +1109,15 @@ contains
     found_rec      = .false.
     found_var_ever = .false.
 
+    ! An ungridded variable lives in its one named file, which need not be
+    ! listed in frcfiles: search that file once, whatever max_frc is (with
+    ! frcfiles empty the loop used to end before it started).
+    nfiles = max_frc
+    if (present(ungridded_filename)) nfiles = 1
+
     irec_stride = 0
     ifile_stride = 0
-    do while (.not.found_rec .and. ifile <= max_frc)               ! while record not found & still more files to chec
+    do while (.not.found_rec .and. ifile <= nfiles)                ! while record not found & still more files to chec
 
       found_var = .false.                                          ! reset for new file
       if (present(ungridded_filename)) then
@@ -1137,7 +1143,7 @@ contains
 
         ! Number of records in file
         max_recs = size(frc_meta(islot)%tax(itax)%t)
-        ifile_max_recs(ifile) = max_recs
+        if (.not. present(ungridded_filename)) ifile_max_recs(ifile) = max_recs  ! frcfiles(ifile) only
         do while (irec<max_recs .and. .not. found_rec)             ! Search through the records until correct time is
 
           irec_stride = irec_stride+1
@@ -1173,7 +1179,7 @@ contains
           ! abort the run at the next abort_check(). End the search through the
           ! loop condition rather than 'exit'.
           if (allow_miss .and. .not.found_var_ever) then
-            ifile = max_frc + 1
+            ifile = nfiles + 1
           else
             write(error_info, *)&
             &'find_new_record: Ran out of time records ',&
