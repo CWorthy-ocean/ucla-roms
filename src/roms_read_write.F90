@@ -219,7 +219,8 @@ module roms_read_write
   ! apart (tens of MB in a gridded surface file), so netCDF reads one block per
   ! value. Its default block is the file system's preferred I/O size (4 MiB on
   ! Lustre): a 700-record time axis then reads about 3 GB. Classic files only
-  ! (netCDF-4 ignores the hint); the values read are the same.
+  ! (netCDF-4 ignores the hint); the values read are the same. Keep it at 256
+  ! bytes or more: netCDF ignores a smaller hint and falls back to that block.
   integer(kind=4), parameter :: frc_meta_read_size = 8192
 
   ! Read handles kept open across records by the serial netCDF reads of the
