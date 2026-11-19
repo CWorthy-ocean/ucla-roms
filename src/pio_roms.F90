@@ -39,7 +39,8 @@ module pio_roms
 
   ! Direct reads of the start-up files (grid, initial/restart) when they are
   ! classic netCDF (CDF-1, CDF-2, CDF-5): 'on' (default), 'off' (read through
-  ! PIO), 'verify' (read both ways and count the values that differ).
+  ! PIO), 'verify' (read both ways, count the values that differ, and run on
+  ! PIO's values).
   character(len=8), public :: pio_direct_read = 'on'
 
   namelist /PIO_SETTINGS/ pio_stride, pio_direct_read
@@ -62,7 +63,7 @@ module pio_roms
   character(len=max_name_size), allocatable :: fmt_checked_file(:)
   integer(kind=4) :: n_fmt_checked = 0
 
-  ! Direct start-up reads (pio_direct_read; see dr_read). PIO reads a file
+  ! Direct start-up reads (pio_direct_read; see dr_try). PIO reads a file
   ! through MPI-IO's collective buffering, which on Lustre gives a few
   ! aggregators per file and a slow exchange (a 118-GB restart took over
   ! 100 s on 2 nodes). Instead, a few reader ranks per node read the record
@@ -84,6 +85,19 @@ module pio_roms
   integer(kind=4) :: dr_nvar = 0, dr_npio = 0              ! variables read directly / through PIO
   integer(kind=8) :: dr_nbytes = 0, dr_ndiff = 0
   real(kind=8) :: dr_tread = 0, dr_tconv = 0, dr_texch = 0, dr_t0 = 0   ! read, convert, exchange time
+  ! why variables of the attached file were read through PIO: per reason,
+  ! the count and the first few names (rank 0; printed by pio_direct_close)
+  integer(kind=4), parameter :: dr_nwhy = 7
+  character(len=*), parameter :: dr_whytxt(dr_nwhy) = [character(len=64) ::&
+  &  'grid type not read directly',&
+  &  'type not converted (only byte, short, int, float, double)',&
+  &  'dimensions not those of the grid',&
+  &  'record not given, or not in the file',&
+  &  'file shorter than the variable',&
+  &  'rank windows not handled',&
+  &  'direct read failed']
+  integer(kind=4) :: dr_whyn(dr_nwhy) = 0
+  character(len=160) :: dr_whyvar(dr_nwhy) = ''
   public :: pio_direct_close
   !> @brief Rank of processor running the code.
   integer(kind=4), public :: pio_myRank
@@ -2085,7 +2099,8 @@ contains
     endif
 
     ! Direct read of a start-up file (pio_direct_read); with 'verify', PIO
-    ! reads the variable as well below, and the two are compared.
+    ! reads the variable as well below, the two are compared, and the run
+    ! goes on with PIO's values.
     irec0 = 0
     if (present(irec)) irec0 = irec
     direct = dr_try(varName, irec0, size(arr, kind=8), dval)
@@ -2132,10 +2147,7 @@ contains
       call PIO_read_darray(pio_FileDesc, varId, pio_desc_2Cv_r, arr, ierr)
     endif
 
-    if (direct) then
-      call dr_compare(varName, size(arr), arr, dval)
-      arr = reshape(dval, shape(arr))
-    endif
+    if (direct) call dr_compare(varName, size(arr), arr, dval)   ! 'verify': the run keeps PIO's values
 
   end subroutine pio_ncread2
 ! ----------------------------------------------------------------------
@@ -2176,10 +2188,7 @@ contains
       call PIO_read_darray(pio_FileDesc, varId, pio_desc_3Dv_r, arr, ierr)
     endif
 
-    if (direct) then
-      call dr_compare(varName, size(arr), arr, dval)
-      arr = reshape(dval, shape(arr))
-    endif
+    if (direct) call dr_compare(varName, size(arr), arr, dval)   ! 'verify': the run keeps PIO's values
 
   end subroutine pio_ncread3
 ! ----------------------------------------------------------------------
@@ -2250,6 +2259,8 @@ contains
     dr_path = fname
     dr_nvar = 0
     dr_npio = 0
+    dr_whyn = 0
+    dr_whyvar = ''
     dr_nbytes = 0
     dr_ndiff = 0
     dr_tread = 0
@@ -2264,7 +2275,7 @@ contains
     ! to do if none is attached): rank 0 reports what was read and how.
     implicit none
     real(kind=8) :: tmax(3)
-    integer(kind=4) :: ierr
+    integer(kind=4) :: ierr, w
 
     if (.not. dr_active) return
     call MPI_Allreduce([dr_tread, dr_tconv, dr_texch], tmax, 3, MPI_DOUBLE_PRECISION, MPI_MAX, ocean_grid_comm, ierr)
@@ -2273,6 +2284,10 @@ contains
       &dr_nvar, ' variables read directly (', real(dr_nbytes, 8)/1.e9_8, ' GB), ', dr_npio, ' through PIO, in ',&
       &MPI_Wtime() - dr_t0, ' s (largest per rank: read ', tmax(1), ' s, convert ', tmax(2), ' s, exchange ',&
       &tmax(3), ' s)'
+      do w = 1, dr_nwhy        ! one line per reason a variable was read through PIO
+        if (dr_whyn(w) > 0) write(*,'(1x,A,I0,5A)') 'pio_direct_read:   through PIO, ', dr_whyn(w), ' (',&
+        &trim(dr_whyvar(w)), trim(merge(', ...', '     ', dr_whyn(w) > 3)), '): ', trim(dr_whytxt(w))
+      enddo
       if (dr_verify) write(*,'(1x,3A,I0,A,I0,A)') 'pio_direct_read verify: ''', trim(dr_path), ''': ',&
       &dr_nvar, ' variables compared with PIO, ', dr_ndiff, ' values differ'
     endif
@@ -2340,7 +2355,7 @@ contains
     ! decomposition of pio_gtype would fill it. Collective: every rank takes
     ! the same branch. .false.: not attached, not a handled gtype, a variable
     ! this module does not read (type, shape, record), or a failed read; the
-    ! caller then reads the variable through PIO.
+    ! caller then reads the variable through PIO (dr_fallback notes why).
     !
     ! The record's rows (gx values each, rows r = (k-1)*gy + j-1) are dealt
     ! to the readers in contiguous slabs; each reader reads its slab with
@@ -2352,10 +2367,10 @@ contains
     integer(kind=8), intent(in) :: n
     real(kind=8), allocatable, intent(out) :: val(:)
 
-    integer(kind=4) :: nd, dlen(3), st(3), ct(3), ierr, iv, p, q, ni, nj, js
+    integer(kind=4) :: nd, dlen(3), st(3), ct(3), ierr, iv, p, q, ni, nj, js, why
     integer(kind=4), allocatable :: win(:,:), scnt(:), sdsp(:), rcnt(:), rdsp(:)
     integer(kind=8) :: info(7), off, gx, gy, nzz, xsz, nrow, r0, r1, rq0, rq1, k, lo, hi, r, pos, boff
-    integer(kind=8) :: dshift, ns
+    integer(kind=8) :: dshift, ns, nx
     logical :: ok, allok
     real(kind=8) :: t
     real(kind=8), allocatable :: sbuf(:), rbuf(:)
@@ -2363,28 +2378,50 @@ contains
     done = .false.
     if (.not. dr_active) return
     if (trim(pio_current_file) /= trim(dr_path)) return
-    if (.not. dr_window(nd, dlen, st, ct)) return
+    if (.not. dr_window(nd, dlen, st, ct)) then
+      call dr_fallback(1, varName)
+      return
+    endif
 
     ! the variable's record, decided on rank 0 (a reader) for every rank:
-    ! info = ok, type, bytes per value, first byte, gx, gy, levels
+    ! info = ok, type, bytes per value, first byte, gx, gy, levels.
+    ! Read as PIO reads it: a record variable has the grid's dimensions and
+    ! the record dimension, and irec is its record. A fixed variable has the
+    ! grid's dimensions and at most one more, slowest, which PIO's setframe
+    ! indexes as a record (roms-tools writes initial conditions with a fixed
+    ! ocean_time of length 1): irec is the index in it, and without irec PIO
+    ! reads the frame set last (at first the first), which is known only if
+    ! that dimension has length 1. A fixed variable of the grid's dimensions
+    ! alone is read only without irec.
     info = 0
+    why = 2
     if (mynode == 0) then
       iv = cdf_find(dr_file, trim(varName))
       if (iv > 0) then
         associate (v => dr_file%v(iv))
-          ok = v%ok .and. (v%ndims == nd + merge(1, 0, v%isrec))
+          ok = v%ok
+          if (ok) then
+            why = 3
+            ok = (v%ndims == nd + 1 .or. (v%ndims == nd .and. .not. v%isrec))
+          endif
           if (ok) ok = (v%dimf(1) == dlen(1) .and. v%dimf(2) == dlen(2))
           if (ok .and. nd == 3) ok = (v%dimf(3) == dlen(3))
           if (ok) then
+            why = 4
             if (v%isrec) then
               ok = (irec >= 1 .and. irec <= dr_file%numrecs)
               off = v%begin + (irec - 1) * dr_file%recsize
-            else
-              ok = (irec == 0)                    ! a record asked of a fixed variable: as PIO does
+            elseif (v%ndims == nd) then
+              ok = (irec == 0)
               off = v%begin
+            else
+              nx = v%dimf(nd + 1)
+              ok = ((irec >= 1 .and. irec <= nx) .or. (irec == 0 .and. nx == 1))
+              off = v%begin + (max(irec, 1) - 1) * (int(dlen(1), 8) * dlen(2) * dlen(3) * v%xsz)
             endif
           endif
           if (ok) then
+            why = 5
             info(2:7) = [int(v%xtype, 8), int(v%xsz, 8), off, int(dlen(1), 8), int(dlen(2), 8), int(dlen(3), 8)]
             ok = (off + info(5) * info(6) * info(7) * info(3) <= dr_file%fsize)   ! truncated file
           endif
@@ -2394,7 +2431,7 @@ contains
     endif
     call MPI_Bcast(info, 7, MPI_INTEGER8, 0, ocean_grid_comm, ierr)
     if (info(1) /= 1) then
-      dr_npio = dr_npio + 1
+      call dr_fallback(why, varName)          ! why: rank 0's
       return
     endif
     off = info(4); gx = info(5); gy = info(6); nzz = info(7); xsz = info(3)
@@ -2410,7 +2447,7 @@ contains
     &                  ocean_grid_comm, ierr)
     ! the counts of MPI_Alltoallv are default integers: a reader's slab must fit
     if (any(win(5,:) == 0) .or. ((nrow / dr_nread + 1) * gx >= huge(1_4))) then
-      dr_npio = dr_npio + 1
+      call dr_fallback(6, varName)
       return
     endif
 
@@ -2431,7 +2468,7 @@ contains
     if (.not. allok) then
       if (mynode == 0) write(*,'(1x,5A)') 'pio_direct_read: a direct read of ', trim(varName), ' from ''',&
       &trim(dr_path), ''' failed; reading it through PIO'
-      dr_npio = dr_npio + 1
+      call dr_fallback(7, varName)
       return
     endif
 
@@ -2505,6 +2542,25 @@ contains
     done = .true.
 
   end function dr_try !]
+! ----------------------------------------------------------------------
+  subroutine dr_fallback(why, varName) ![
+    ! Count a variable of the attached file that is read through PIO; rank 0
+    ! also counts it under its reason why (dr_whytxt) and keeps the first
+    ! three names, for pio_direct_close's report.
+    implicit none
+    integer(kind=4), intent(in) :: why
+    character(len=*), intent(in) :: varName
+
+    dr_npio = dr_npio + 1
+    if (mynode /= 0) return
+    dr_whyn(why) = dr_whyn(why) + 1
+    if (dr_whyn(why) == 1) then
+      dr_whyvar(why) = trim(varName)
+    elseif (dr_whyn(why) <= 3) then
+      dr_whyvar(why) = trim(dr_whyvar(why))//', '//trim(varName)
+    endif
+
+  end subroutine dr_fallback !]
 ! ----------------------------------------------------------------------
   subroutine dr_compare(varName, n, a, b) ![
     ! pio_direct_read = 'verify': count the values of the direct read (b)

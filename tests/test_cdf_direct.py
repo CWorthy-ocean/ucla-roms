@@ -114,9 +114,10 @@ def _run(binary, path, mode):
 
 
 def _mode(binary, path):
-    # O_DIRECT where the file system has it (not tmpfs); the buffered path checks the same code otherwise
+    # O_DIRECT where the system and the file system have it; otherwise (tmpfs before Linux 6.6, macOS) the
+    # buffered mode checks the same parsing, reads and conversion through the page cache
     rc, out = _run(binary, path, "direct")
-    if "open with O_DIRECT failed" in out:
+    if "open with O_DIRECT failed" in out or "O_DIRECT is not known on this system" in out:
         return "buffered"
     return "direct"
 
@@ -152,5 +153,5 @@ def test_truncated_file(test_binary, tmp_path):
 def test_netcdf4_refused(test_binary, tmp_path):
     path = tmp_path / "t_nc4.nc"
     _write(path, "NETCDF4")
-    rc, out = _run(test_binary, path, "direct")
+    rc, out = _run(test_binary, path, _mode(test_binary, path))
     assert rc == 0 and "REFUSED" in out and "not a classic netCDF file" in out, out
