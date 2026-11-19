@@ -3707,9 +3707,12 @@ contains
     use tracers, only: iTandS
     use roms_mpi, only: exchange_xxx
     use netcdf, only: nf90_inq_varid, nf90_noerr
+    use param, only: ocean_grid_comm
+    use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max
     implicit none
     integer(kind=4), intent(in) :: ncid, record, tindx
-    integer(kind=4) :: varid, itrc
+    integer(kind=4) :: varid, itrc, ierr
+    real(kind=8) :: lnz(1), gnz(1)
     character(len=len(pio_gtype)) :: gsv
     if (tindx /= 1 .or. .not. sl_adv) return
     call sl_alloc
@@ -3736,7 +3739,14 @@ contains
     do itrc = 1, iTandS
       call exchange_xxx(sl_tref(:,:,:,itrc), sl_gd(:,:,:,itrc))
     end do
-    tref_set = .true. ; sl_hotprev = .true.     ! (Gd may be nonzero: the arrival term is added)
+    ! sl_hotprev as the continuous run has it (sl_t_finish: the step before had a hot face). A step with a
+    ! hot face leaves a nonzero carry (Gd, or the momentum's sl_eu, sl_ev); a step without one sets the
+    ! carry to zero (or leaves it zero), so the restarted run takes the same paths as the continuous one
+    lnz(1) = 0._8
+    if (any(sl_eu /= 0._8) .or. any(sl_ev /= 0._8) .or. any(sl_gd /= 0._8)) lnz(1) = 1._8
+    call mpi_allreduce(lnz, gnz, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
+    sl_hotprev = (gnz(1) > 0.5_8)
+    tref_set = .true.
     if (mynode == 0) write(*,'(1x,A,I0,A)') 'SL_ADV: SL state read from the initial file (record ', record,&
     &', exact restart)'
   end subroutine sl_rst_get
