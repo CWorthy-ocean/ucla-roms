@@ -302,6 +302,20 @@ contains
       &"cdr_forcing_parameterized = .true.")
     endif
 
+#ifndef SPHERICAL
+    ! Parameterized releases and depth profiles are placed by the great-circle
+    ! distance from cdr_lon/cdr_lat to the grid's lon_rho/lat_rho, which only
+    ! a SPHERICAL grid has (without it the search read unallocated arrays).
+    if (.not. cdr_forcing_3d) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info="cdr_forcing_parameterized and cdr_forcing_depth_profiles "//&
+      &"place releases by cdr_lon/cdr_lat and need SPHERICAL "//&
+      &"(lon_rho/lat_rho); this build has no SPHERICAL")
+    endif
+    call error_log%abort_check()
+#endif
+
 #ifndef MARBL
     if (cdr_forcing_3d) then
       call error_log%raise_global(&
