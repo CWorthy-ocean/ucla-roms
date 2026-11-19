@@ -541,52 +541,44 @@ contains
     &             ior(iand(ishft(x, -8), int(z'0000FF00', int32)), iand(ishft(x, -24), int(z'000000FF', int32))))
   end function bswap32
 
-  elemental integer(int64) function bswap64(x)
-    integer(int64), intent(in) :: x
-    integer(int64), parameter :: M16 = int(z'0000FFFF0000FFFF', int64), M8 = int(z'00FF00FF00FF00FF', int64)
-    integer(int64) :: y
-    y = ior(ishft(x, 32), ishft(x, -32))
-    y = ior(ishft(iand(y, M16), 16), iand(ishft(y, -16), M16))
-    bswap64 = ior(ishft(iand(y, M8), 8), iand(ishft(y, -8), M8))
-  end function bswap64
-
   subroutine cdf_unpack_row(b, boff, xtype, n, out)
     ! n values of type xtype whose big-endian bytes start at byte boff
     ! (0-based) of b, into out(1:n) as real(8) in host order, converted as
     ! netCDF converts (double copied, float -> double, int/short/byte ->
     ! integer -> double). Doubles, floats and ints must start 4-byte aligned
     ! in b (they are in a classic file, and cdf_read keeps the alignment).
-    ! The bytes are copied as 32-bit words and then swapped: loops the
-    ! compiler vectorises.
+    ! The bytes are read as 32-bit words (little-endian host), swapped, and
+    ! reinterpreted with TRANSFER. No pointer of another type is laid over
+    ! the same memory: with gfortran -O3, storing through an integer pointer
+    ! and loading the same bytes through a real pointer gave wrong values
+    ! (type-based alias analysis may reorder the two).
     type(cdf_buf_t), intent(in) :: b
     integer(int64), intent(in) :: boff
     integer, intent(in) :: xtype, n
-    real(real64), intent(out), target :: out(n)
-    integer(int64) :: w
+    real(real64), intent(out) :: out(n)
+    integer(int64), parameter :: LO32 = int(z'00000000FFFFFFFF', int64)
+    integer(int64) :: w, hi, lo
     integer :: i, v
-    integer(int64), pointer :: o64(:)
-    integer(int32), pointer :: o32(:)
-    integer(int32), allocatable, target :: t32(:)
-    real(real32), pointer :: t4(:)
     if (n <= 0) return
     select case (xtype)
     case (CDF_DOUBLE)
-      call c_f_pointer(c_loc(out(1)), o64, [n])
-      call c_f_pointer(c_loc(out(1)), o32, [2 * n])
+      ! big-endian: the first 4 bytes are the high half
       w = boff / 4
-      o32(1:2 * n) = b%u32(w + 1:w + 2 * n)
-      o64(1:n) = bswap64(o64(1:n))
+      do i = 1, n
+        hi = int(bswap32(b%u32(w + 2 * i - 1)), int64)
+        lo = iand(int(bswap32(b%u32(w + 2 * i)), int64), LO32)
+        out(i) = transfer(ior(ishft(hi, 32), lo), 0.0_real64)
+      enddo
     case (CDF_FLOAT)
-      allocate(t32(n))
-      call c_f_pointer(c_loc(t32(1)), t4, [n])
       w = boff / 4
-      t32(1:n) = bswap32(b%u32(w + 1:w + n))
-      out(1:n) = real(t4(1:n), real64)
+      do i = 1, n
+        out(i) = real(transfer(bswap32(b%u32(w + i)), 0.0_real32), real64)
+      enddo
     case (CDF_INT)
-      allocate(t32(n))
       w = boff / 4
-      t32(1:n) = bswap32(b%u32(w + 1:w + n))
-      out(1:n) = real(t32(1:n), real64)
+      do i = 1, n
+        out(i) = real(bswap32(b%u32(w + i)), real64)
+      enddo
     case (CDF_SHORT)
       ! the unsigned 16 bits, then the sign
       do i = 1, n
