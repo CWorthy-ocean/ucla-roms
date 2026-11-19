@@ -689,6 +689,23 @@ Solver and development settings. They can be added to the group and keep their d
 
 Keys removed on 2026-11-13 stop ROMS at the read with a message that names them; `src/namelist.nml` gives a `sed` line that deletes them (see [removed keys](implicit_internal_waves.md#removed-keys)).
 
+### `SL_ADV_SETTINGS`
+(read by module `sl_adv_mod.F90`)
+
+Optional: if the group is absent, `sl_adv = .false.`. Experimental and in development: swept-volume (flux-form semi-Lagrangian) advection on the faces where the 2-D Courant number is large, for the `IMEX_IGW` step (requires `IMEX_IGW`, `imex_igw = .true.` and, with `imex_corr_adv = 1` (the default), `imex_corr_adv_vimp = 1`; it stops at start-up otherwise). T, S, the passive tracers stepped with the dynamics, u and v take it. A run in which no face is hot is the same as with `sl_adv = .false.` and the same `IMEX_IGW_SETTINGS`. See [Swept-volume advection](swept_volume_advection.md).
+
+| Setting | Default | Description |
+|--------|---------|-------------|
+| `sl_adv` | `.false.` | Swept-volume advection on the faces whose 2-D Courant number `c2d` exceeds `sl_c_lo` |
+| `sl_c_lo` | `0.6` | `c2d` where the blend of the stock and the swept flux starts (weight 0) |
+| `sl_c_hi` | `0.9` | `c2d` from which a face is fully swept (weight 1); `0 <= sl_c_lo < sl_c_hi` |
+| `sl_cmax` | `5.0` | ROMS stops when the largest `c2d` of the faces that stay swept after the near-degenerate fallbacks exceeds it (faces put back to stock are advanced by the stock scheme and not tested); must exceed `sl_c_hi` |
+| `sl_diag` | `0` | 1: the `SL_DIAG` and `SL_TRC` diagnostic lines (constancy, budgets, per-tracer content) |
+| `sl_mvol` | `1` | Momentum swept volumes: 1 = the 2-point means of `dt (U^n + U*)/2`, with the closure of the momentum cells' volume budget; 2 = of `dt U*`, the transport the rho cells' volumes are stepped with (no closure) |
+| `sl_defmax` | `0.0` | With `sl_mvol = 1`: the closure defect `def` is clipped to `+-sl_defmax` (0: no limit) |
+| `sl_c2pass` | `0.8` | T, S and the key's X take at least two sub-passes on a level where a face that stays swept has `c2d` above it (0: off): one pass at `c2d` 0.8-1 keeps most of a two-cell pattern, two passes damp it |
+| `sl_pred` | `2` | Predictor on fully swept faces: 0 = the stock Eulerian flux everywhere (results before the key was added); 1 = semi-Lagrangian for u and v (the predictor's start field taken at the departure point); 2 = also for the tracers of the dynamics step |
+
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)
 

@@ -114,6 +114,15 @@ module imex_igw
   public :: imex_shift_levels
   public :: imex_rst_def, imex_rst_wrt, imex_rst_wrt_scal, imex_rst_get
   public :: imex_obc_faces
+  public :: imex_nbref
+  public :: imex_pg_nm1_add
+
+  ! SL_ADV (sl_adv_mod, sl_x_prep): with advb_sl, imex_advb_rhs adds advb_slrt to the advective
+  ! buoyancy rate of every cell: the change of the corrector's explicit advective rate of b* that the
+  ! swept-volume fluxes make (hot faces, hot columns and the carried increment), so that X is the
+  ! estimate of the swept step's change. Interior cells; zero elsewhere.
+  logical, public :: advb_sl = .false.
+  real(kind=8), allocatable, dimension(:,:,:), public :: advb_slrt
 
   ! Stage identifiers passed by the consumers
   integer(kind=4), parameter, public :: imex_stage_pred = 1  ! prsgrd at n, pre_step3d
@@ -225,7 +234,7 @@ module imex_igw
                                                  ! (main.F90): the predictor's implicit correction overshoots and is reversed by the
                                                  ! corrector's, so mixing the predictor state t^n+1/2 anti-diffuses the step's net
                                                  ! change
-  integer(kind=4) :: imex_corr_adv = 1          ! corrector rhs with the step's advective buoyancy change: 1 on
+  integer(kind=4), public, protected :: imex_corr_adv = 1  ! corrector rhs with the step's advective buoyancy change: 1 on
                                                  ! (default since 2026-11, was 0); 0 off (the earlier results:
                                                  ! about 4 % cheaper, shorter longest stable step on domains
                                                  ! limited by an interior jet). The corrector's implicit-level
@@ -257,6 +266,8 @@ module imex_igw
                                                  ! We, then the implicit first-order upwind column solve with Wi).
                                                  ! 0 is the arithmetic before the key, bit for bit. Swept-volume
                                                  ! advection needs 1
+  public :: imex_corr_adv_vimp                   ! SL_ADV (read_nml_sl_adv) stops with imex_corr_adv = 1 unless it is 1
+  protected :: imex_corr_adv_vimp
   integer(kind=4) :: imex_warm = 1               ! stage-solve start: 0 zero; 1 the stage's previous solution
   integer(kind=4) :: imex_pcg_start = 3          ! stage solve: 0 imex_pcg_warm/
                                                  ! imex_pcg; 1 imex_pcg_s: rhs scaling, residual of the guess,
@@ -424,6 +435,10 @@ module imex_igw
   real(kind=8), allocatable, dimension(:,:,:) :: pg_nm1_u, pg_nm1_v  ! level n-1
   real(kind=8), allocatable, dimension(:,:,:) :: pg_n_u, pg_n_v      ! level n
   real(kind=8), allocatable, dimension(:,:,:) :: pg_star_u, pg_star_v  ! level *
+  ! SL_ADV (sl_adv_mod) reads the levels n and n-1 for the momentum departure field and adds the swept
+  ! part of the carried n-1 increment to pg_nm1 before the corrector's combination (imex_pg_nm1_add)
+  public :: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v, pg_star_u, pg_star_v
+  protected :: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v, pg_star_u, pg_star_v
 
   ! Elliptic solver. Geometry (static, set at the first operator setup):
   ! tile interior bounds, physical edges, face coefficients
@@ -1410,6 +1425,18 @@ contains
   end subroutine imex_pg_store_combine
 
   !----------------------------------------------------------------------
+  subroutine imex_pg_nm1_add(eu, ev)
+    ! SL_ADV, before the corrector's prsgrd: pg_nm1 += the swept part of the carried n-1 momentum
+    ! increment (sl_adv_mod's sl_eu, sl_ev, Hz-weighted as pg). pg_nm1 is not read after the
+    ! corrector's combination (imex_shift_levels recycles its storage; the restart writes pg_n).
+    use param, only: nz, lm, mm
+    implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: eu, ev
+    pg_nm1_u = pg_nm1_u + eu
+    pg_nm1_v = pg_nm1_v + ev
+  end subroutine imex_pg_nm1_add
+
+  !----------------------------------------------------------------------
   subroutine imex_solve_stage(stage, dtau, cfbak)
     ! Elliptic correction of a stage. Called by all
     ! ranks.
@@ -1921,6 +1948,7 @@ contains
           &  + fer(i,k,s1) - qr(k)*fvr(i,k,s1) - fer(i,k,s0) + qr(k)*fvr(i,k,s0)&
           &  + fzr(k) - qr(k)*wr(k) - fzr(k-1) + qr(k)*wr(k-1)
           rt = -pm(i,j)*pn(i,j)/Hz(i,j,k)*(as - ar)
+          if (advb_sl) rt = rt + advb_slrt(i,j,k)       ! SL_ADV: the swept-volume change
           nw = ad_n2c(i,j,k)*ga*(rhob(i,j,k) - advb_rn(i,j,k)) - dps(i,j,k)
           x = act(i,j)/ad_n2k(i,j,k)*( ad_n2c(i,j,k)*dts*rt - nw )
           if (max(cz(k-1), cz(k)) > advb_czmax) x = 0._8   ! no explicit estimate (see above)
@@ -1979,6 +2007,7 @@ contains
         &   + fes(i,kk,s1) - qs(kk)*fvs(i,kk,s1) - fes(i,kk,s0) + qs(kk)*fvs(i,kk,s0)&
         &   + fze(kk) - qs(kk)*wec(kk) - fze(kk-1) + qs(kk)*wec(kk-1)
         b2(kk) = ga*advb_rn(i,j,kk) - cc/Hz(i,j,kk)*ase
+        if (advb_sl) b2(kk) = b2(kk) + dts*advb_slrt(i,j,kk)   ! SL_ADV: the swept-volume change
         tlo(kk) = 0._8 ; tup(kk) = 0._8
         if (kk > 1) tlo(kk) = -cc*max(Wi(i,j,kk-1), 0._8)
         if (kk < nz) tup(kk) = cc*min(Wi(i,j,kk), 0._8)

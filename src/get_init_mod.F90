@@ -60,6 +60,7 @@ contains
 #endif
 #ifdef IMEX_IGW
     use imex_igw, only: imex_rst_get
+    use sl_adv_mod, only: sl_rst_get
 #endif
     use sponge_tune, only: get_init_ub, ub_tune
     use pio_roms, only: use_pio, pio_gtype
@@ -663,6 +664,7 @@ contains
     if (ub_tune)   call get_init_ub(ncid,record)
 #if defined IMEX_IGW && defined EXACT_RESTART
     call imex_rst_get(ncid, record, tindx)   ! IMEX_IGW: the state carried across steps (exact restart)
+    call sl_rst_get(ncid, record, tindx)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
 #endif
 
 ! Close input NetCDF file and  write greeting message depending

@@ -9,6 +9,8 @@ module bgc_subcycle_mod
   ! marbl_timestep_ratio), with the transports of the window accumulated
   ! every step; MARBL runs at the window ends that are MARBL steps.
   ! T, S and the dynamics are unchanged. Documentation: docs/model_settings/bgc_subcycling.md.
+  ! The swept-flux kernels (sweep_x/y, vsweep, vfct, the sub-pass criterion) are in
+  ! swept_flux_mod, shared with the swept-volume advection of the dynamics step (sl_adv_mod).
   !
   ! Every step (bgcsub_accumulate, before step3d_t): sum dt*FlxU, dt*FlxV,
   ! dt*(We+Wi), dt*Akt and the source contents (surface fluxes, rivers,
@@ -49,7 +51,6 @@ module bgc_subcycle_mod
   public :: bgcsub_init, bgcsub_accumulate, bgcsub_step
 
   character(len=12) :: module_name = "bgc_subcycle"
-  real(kind=8), parameter :: r6 = 1._8/6._8
 
   integer(kind=4) :: nb = 0         ! number of subcycled tracers (nt - iTandS)
   integer(kind=4) :: it0 = 0        ! iTandS: tracer itrc = it0 + ib
@@ -438,6 +439,7 @@ contains
     &                       is_marbl_step
 #endif
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_sum, mpi_min
+    use swept_flux_mod, only: sweep_x, sweep_y, subpass_count, vsweep, vfct
     use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_signaling_nan
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend, tstep
@@ -581,7 +583,7 @@ contains
     ! sub-pass grow as the pseudo-volume shrinks, hence the v1 factor
     call mpi_allreduce(lck, gck, 5*nz, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
     do k = 1, nz
-      mk(k) = max(1, ceiling(gck(5,k)/0.95_8))
+      mk(k) = subpass_count(gck(5,k))
       fmk(k) = 1._8/dble(mk(k))
     end do
     msub = maxval(mk)
@@ -1064,8 +1066,8 @@ contains
         end do
       end do
       ! inner fluxes: y on the x-extended range, x on the y-extended range
-      call sweep_y(qs, Fyi, ilo, ihi)
-      call sweep_x(qs, Fxi, jlo, jhi)
+      call sweep_y(qs, Fyi, vyf, cyf, dy2, istr, iend, jstr, jend, jlo, jhi, ilo, ihi)
+      call sweep_x(qs, Fxi, vxf, cxf, dx2, istr, iend, jstr, jend, ilo, ihi, jlo, jhi)
       if (river_source) call river_faces(Fxi, Fyi, ilo, ihi, jlo, jhi)
       ! outer fields (q + Yq)/2 and (q + Xq)/2, pseudo-density inner operators
       do jj = jstr, jend
@@ -1088,8 +1090,8 @@ contains
           end if
         end do
       end do
-      call sweep_x(sx, Fx, jstr, jend)
-      call sweep_y(sy, Fy, istr, iend)
+      call sweep_x(sx, Fx, vxf, cxf, dx2, istr, iend, jstr, jend, ilo, ihi, jstr, jend)
+      call sweep_y(sy, Fy, vyf, cyf, dy2, istr, iend, jstr, jend, jlo, jhi, istr, iend)
       if (river_source) call river_faces(Fx, Fy, istr, iend, jstr, jend)
       if (bgc_subcycle_pos .and. ib > 0) then
         ! limiter R of each interior cell from the donor-cell content
@@ -1323,136 +1325,6 @@ contains
     end if
     end subroutine vpass
 
-    subroutine sweep_x(s, F, j0, j1)
-      ! Swept fluxes through the x-faces istr..iend+1 of rows j0..j1 (level k,
-      ! after hcoef): F = V [q_u + d_near (1-c)(2-c)/6 + d_far (1-c)(1+c)/6],
-      ! the UP3 parabola of the upstream cell integrated over the swept part.
-      real(kind=8), intent(in) :: s(istr-2:iend+2,jstr-2:jend+2)
-      real(kind=8), intent(out) :: F(istr-2:iend+2,jstr-2:jend+2)
-      integer(kind=4), intent(in) :: j0, j1
-      integer(kind=4) :: ii, jj
-      real(kind=8) :: c, dn, df, vv
-      do jj = j0, j1
-        do ii = ilo+1, ihi
-          dx2(ii,jj) = (s(ii,jj)-s(ii-1,jj))*umask(ii,jj)
-        end do
-        do ii = istr, iend+1
-          vv = vxf(ii,jj)
-          if (vv > 0._8) then
-            c = cxf(ii,jj)
-            dn = dx2(ii,jj)
-            if (ii-1 > ilo) then
-              df = dx2(ii-1,jj)
-#ifdef UPSTREAM_TS_LAND_CURV
-              if (umask(ii-1,jj) < 0.5_8) df = dn
-#endif
-            else
-              df = dn
-            end if
-            F(ii,jj) = vv*(s(ii-1,jj) + (1._8-c)*((2._8-c)*dn + (1._8+c)*df)*r6)
-          else if (vv < 0._8) then
-            c = cxf(ii,jj)
-            dn = dx2(ii,jj)
-            if (ii+1 <= ihi) then
-              df = dx2(ii+1,jj)
-#ifdef UPSTREAM_TS_LAND_CURV
-              if (umask(ii+1,jj) < 0.5_8) df = dn
-#endif
-            else
-              df = dn
-            end if
-            F(ii,jj) = vv*(s(ii,jj) - (1._8-c)*((2._8-c)*dn + (1._8+c)*df)*r6)
-          else
-            F(ii,jj) = 0._8
-          end if
-        end do
-      end do
-      ! Inflow faces of open boundaries: upwind with the boundary-cell
-      ! value, as the stock scheme (compute_horiz_tracer_fluxes.h). The
-      ! parabola of the boundary cell, whose far slope is extrapolated,
-      ! would carry part of the first interior cell back in (half of it
-      ! as c -> 0). Outflow faces keep the swept flux.
-#ifndef EW_PERIODIC
-# ifdef OBC_WEST
-      if (WESTERN_EDGE) then
-        do jj = j0, j1
-          if (vxf(istr,jj) > 0._8) F(istr,jj) = vxf(istr,jj)*s(istr-1,jj)
-        end do
-      end if
-# endif
-# ifdef OBC_EAST
-      if (EASTERN_EDGE) then
-        do jj = j0, j1
-          if (vxf(iend+1,jj) < 0._8) F(iend+1,jj) = vxf(iend+1,jj)*s(iend+1,jj)
-        end do
-      end if
-# endif
-#endif
-    end subroutine sweep_x
-
-    subroutine sweep_y(s, F, i0, i1)
-      ! as sweep_x for the y-faces jstr..jend+1 of columns i0..i1
-      real(kind=8), intent(in) :: s(istr-2:iend+2,jstr-2:jend+2)
-      real(kind=8), intent(out) :: F(istr-2:iend+2,jstr-2:jend+2)
-      integer(kind=4), intent(in) :: i0, i1
-      integer(kind=4) :: ii, jj
-      real(kind=8) :: c, dn, df, vv
-      do jj = jlo+1, jhi
-        do ii = i0, i1
-          dy2(ii,jj) = (s(ii,jj)-s(ii,jj-1))*vmask(ii,jj)
-        end do
-      end do
-      do jj = jstr, jend+1
-        do ii = i0, i1
-          vv = vyf(ii,jj)
-          if (vv > 0._8) then
-            c = cyf(ii,jj)
-            dn = dy2(ii,jj)
-            if (jj-1 > jlo) then
-              df = dy2(ii,jj-1)
-#ifdef UPSTREAM_TS_LAND_CURV
-              if (vmask(ii,jj-1) < 0.5_8) df = dn
-#endif
-            else
-              df = dn
-            end if
-            F(ii,jj) = vv*(s(ii,jj-1) + (1._8-c)*((2._8-c)*dn + (1._8+c)*df)*r6)
-          else if (vv < 0._8) then
-            c = cyf(ii,jj)
-            dn = dy2(ii,jj)
-            if (jj+1 <= jhi) then
-              df = dy2(ii,jj+1)
-#ifdef UPSTREAM_TS_LAND_CURV
-              if (vmask(ii,jj+1) < 0.5_8) df = dn
-#endif
-            else
-              df = dn
-            end if
-            F(ii,jj) = vv*(s(ii,jj) - (1._8-c)*((2._8-c)*dn + (1._8+c)*df)*r6)
-          else
-            F(ii,jj) = 0._8
-          end if
-        end do
-      end do
-      ! Inflow faces of southern/northern open boundaries: see sweep_x.
-#ifndef NS_PERIODIC
-# ifdef OBC_SOUTH
-      if (SOUTHERN_EDGE) then
-        do ii = i0, i1
-          if (vyf(ii,jstr) > 0._8) F(ii,jstr) = vyf(ii,jstr)*s(ii,jstr-1)
-        end do
-      end if
-# endif
-# ifdef OBC_NORTH
-      if (NORTHERN_EDGE) then
-        do ii = i0, i1
-          if (vyf(ii,jend+1) < 0._8) F(ii,jend+1) = vyf(ii,jend+1)*s(ii,jend+1)
-        end do
-      end if
-# endif
-#endif
-    end subroutine sweep_y
-
     subroutine river_faces(Fu, Fv, i0, i1, j0, j1)
       ! River faces carry the window's river tracer transport (shadow: the
       ! transported volume), distributed over the column like the
@@ -1555,112 +1427,6 @@ contains
     end subroutine hupdate
 
   end subroutine bgcsub_window_tile
-
-! ----------------------------------------------------------------------
-  subroutine vsweep(n, v, q, w, f)
-    ! 1-D swept fluxes through the w-faces of a column: the content of the
-    ! swept thickness |w(m)| upstream of face m, measured in the thicknesses
-    ! v (whole cells exactly, the partial cell from the index-space UP3
-    ! parabola with zero-curvature extrapolation at bottom and top).
-    integer(kind=4), intent(in) :: n
-    real(kind=8), intent(in) :: v(n), q(n), w(0:n)
-    real(kind=8), intent(out) :: f(0:n)
-    real(kind=8) :: dw(0:n), rem, s, c
-    integer(kind=4) :: m, jj
-    do m = 1, n-1
-      dw(m) = q(m+1) - q(m)
-    end do
-    dw(0) = dw(1) ; dw(n) = dw(n-1)
-    f(0) = 0._8 ; f(n) = 0._8
-    do m = 1, n-1
-      if (w(m) > 0._8) then
-        rem = w(m) ; jj = m ; s = 0._8
-        do while (jj >= 1)
-          if (rem >= v(jj)) then
-            s = s + v(jj)*q(jj) ; rem = rem - v(jj) ; jj = jj - 1
-            if (rem <= 0._8) exit
-          else
-            c = rem/v(jj)
-            s = s + rem*(q(jj) + (1._8-c)*((2._8-c)*dw(jj) + (1._8+c)*dw(jj-1))*r6)
-            rem = 0._8
-            exit
-          end if
-        end do
-        if (rem > 0._8) s = s + rem*q(1)
-        f(m) = s
-      else if (w(m) < 0._8) then
-        rem = -w(m) ; jj = m+1 ; s = 0._8
-        do while (jj <= n)
-          if (rem >= v(jj)) then
-            s = s + v(jj)*q(jj) ; rem = rem - v(jj) ; jj = jj + 1
-            if (rem <= 0._8) exit
-          else
-            c = rem/v(jj)
-            s = s + rem*(q(jj) - (1._8-c)*((2._8-c)*dw(jj-1) + (1._8+c)*dw(jj))*r6)
-            rem = 0._8
-            exit
-          end if
-        end do
-        if (rem > 0._8) s = s + rem*q(n)
-        f(m) = -s
-      else
-        f(m) = 0._8
-      end if
-    end do
-  end subroutine vsweep
-
-! ----------------------------------------------------------------------
-  subroutine vfct(n, v, c, w, f)
-    ! Positivity limiter for the vertical swept fluxes f of a column with
-    ! content c (before the vertical step) and pseudo-thickness v: the
-    ! low-order fluxes come from implicit upwind advection (an M-matrix,
-    ! positive for any Courant number); the antidiffusive parts are scaled
-    ! by R of the cell they reduce (Zalesak, positivity only).
-    integer(kind=4), intent(in) :: n
-    real(kind=8), intent(in) :: v(n), c(n), w(0:n)
-    real(kind=8), intent(inout) :: f(0:n)
-    real(kind=8) :: aa(n), bb(n), cu(n), ql(n), fl(0:n), an(0:n), rr(0:n+1), clow, p, g
-    integer(kind=4) :: m
-    do m = 1, n
-      aa(m) = -max(w(m-1),0._8)
-      bb(m) = v(m) - min(w(m),0._8) + max(w(m-1),0._8)
-      cu(m) = min(w(m),0._8)
-    end do
-    ! Thomas algorithm
-    ql(1) = c(1)/bb(1) ; cu(1) = cu(1)/bb(1)
-    do m = 2, n
-      g = bb(m) - aa(m)*cu(m-1)
-      ql(m) = (c(m) - aa(m)*ql(m-1))/g
-      cu(m) = cu(m)/g
-    end do
-    do m = n-1, 1, -1
-      ql(m) = ql(m) - cu(m)*ql(m+1)
-    end do
-    fl(0) = 0._8 ; fl(n) = 0._8
-    do m = 1, n-1
-      fl(m) = max(w(m),0._8)*ql(m) + min(w(m),0._8)*ql(m+1)
-    end do
-    do m = 0, n
-      an(m) = f(m) - fl(m)
-    end do
-    rr(0) = 1._8 ; rr(n+1) = 1._8
-    do m = 1, n
-      clow = c(m) - (fl(m) - fl(m-1))
-      p = max(an(m),0._8) - min(an(m-1),0._8)
-      if (p > 0._8) then
-        rr(m) = min(1._8, max(clow,0._8)/p)
-      else
-        rr(m) = 1._8
-      end if
-    end do
-    do m = 1, n-1
-      if (an(m) >= 0._8) then
-        f(m) = fl(m) + an(m)*rr(m)
-      else
-        f(m) = fl(m) + an(m)*rr(m+1)
-      end if
-    end do
-  end subroutine vfct
 
 ! ----------------------------------------------------------------------
   subroutine bgcsub_t3dbc(istr, iend, jstr, jend, itrc)

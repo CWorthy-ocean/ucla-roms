@@ -7,7 +7,11 @@ the 'modal' open boundary, exact restarts with both, the mode-split precondition
 stop on a diagnostic setting it does not support), imex_corr_adv_vimp = 1 (read and
 reported; equal to 0 where no cell exceeds vertical Courant number 1, as on this grid),
 the stop on removed keys with the template's sed line, and the stops on a group or an
-imex_igw key that is missing or .false. (the build without IMEX_IGW: test_implicit_fs.py, test_imex_igw_key_*).
+imex_igw key that is missing or .false. (the build without IMEX_IGW: test_implicit_fs.py, test_imex_igw_key_*);
+with swept-volume advection (sl_adv) the same output below the thresholds, constancy and
+budgets of the swept fluxes (tracers and momentum), exact restarts with and without hot
+faces, and the stop without imex_corr_adv_vimp = 1 when imex_corr_adv = 1 (none with
+imex_corr_adv = 0).
 
 A second build: the realistic MARBL case of test_bgc.py with IMEX_IGW, run with
 BGC tracer subcycling and the 'fixed' and the 'modal' open boundary
@@ -220,6 +224,151 @@ def test_imex_igw_pc_needs_jacobi(imex_configuration, input_dir, tmp_path):
     log = conf.run(nml, cwd=run_dir, capture_output=True)
     assert_imex_converged(log)
     assert squeezed("imex_pc = 'jacobi'") in squeezed(log)
+
+
+SL_LINE = re.compile(r"^\s*SL\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\d+)",
+                     re.MULTILINE)
+SL_DIAG = re.compile(r"^\s*SL_DIAG\s+\d+\s+(.*)$", re.MULTILINE)
+SL_MDIAG = re.compile(r"^\s*SL_MDIAG\s+\d+\s+(.*)$", re.MULTILINE)
+# thresholds low enough that most wet faces are hot and many fully swept on the test grid
+SL_LOW = {"sl_adv": True, "sl_c_lo": 0.0, "sl_c_hi": 1.0e-5}
+# thresholds above every face's 2-D Courant number on the test grid (sl_cmax must exceed sl_c_hi)
+SL_HIGH = {"sl_adv": True, "sl_c_lo": 2.0, "sl_c_hi": 2.5}
+# the IMEX key sl_adv requires with imex_corr_adv = 1, the default (it stops at start-up otherwise)
+SL_IMEX = {"imex_corr_adv_vimp": 1}
+
+
+def test_sl_adv_below_threshold_changes_nothing(imex_configuration, input_dir, tmp_path):
+    """Swept-volume advection (SL_ADV_SETTINGS) with thresholds above every face's 2-D
+    Courant number: no face is hot, so the output is that of sl_adv off bit for bit, and
+    an SL line is printed every step (ninfo = 1) with no hot face. Both runs set
+    imex_corr_adv_vimp = 1, which sl_adv requires."""
+    conf = imex_configuration
+    nml = imex_namelist(input_dir, "modal", **SL_IMEX)
+    off = tmp_path / "off"
+    off.mkdir()
+    conf.run(nml, cwd=off)
+
+    nml["SL_ADV_SETTINGS"].update(SL_HIGH)
+    on = tmp_path / "on"
+    on.mkdir()
+    log = conf.run(nml, cwd=on, capture_output=True)
+    lines = SL_LINE.findall(log)
+    assert [int(m[0]) for m in lines] == list(range(1, 21)), "one SL line per step"
+    assert max(float(m[1]) for m in lines) == 0.0, "no hot u-face"
+
+    off_val = get_summary_value(off, prefix="roms_his.20100101000000")
+    on_val = get_summary_value(on, prefix="roms_his.20100101000000")
+    assert on_val.variables == off_val.variables
+
+
+def test_sl_adv_swept_tracers(imex_configuration, input_dir, tmp_path):
+    """With most faces hot, T, S, u and v take the swept fluxes: the output changes, the
+    shadow (uniform) tracer stays uniform to 1e-12 and the swept-flux changes conserve
+    T, S and the momentum (every shared face carries the same change on both tiles) to
+    1e-13 (SL_DIAG and SL_MDIAG lines, sl_diag = 1)."""
+    conf = imex_configuration
+    nml = imex_namelist(input_dir, "modal", **SL_IMEX)
+    off = tmp_path / "off"
+    off.mkdir()
+    conf.run(nml, cwd=off)
+
+    nml["SL_ADV_SETTINGS"].update({**SL_LOW, "sl_diag": 1})
+    on = tmp_path / "on"
+    on.mkdir()
+    log = conf.run(nml, cwd=on, capture_output=True)
+    diag = [[float(x) for x in m.split()] for m in SL_DIAG.findall(log)]
+    assert len(diag) == 20, "one SL_DIAG line per step"
+    assert max(d[0] for d in diag) <= 1.0e-12, "shadow tracer constancy"
+    assert max(max(d[5:]) for d in diag) <= 1.0e-13, "budget of the swept-flux changes"
+    mdiag = [[float(x) for x in m.split()] for m in SL_MDIAG.findall(log)]
+    assert len(mdiag) == 20, "one SL_MDIAG line per step"
+    assert max(d[0] for d in mdiag) > 0.0, "hot momentum faces"
+    assert max(max(d[4:6]) for d in mdiag) <= 1.0e-13, "budget of the momentum swept-flux changes"
+
+    off_val = get_summary_value(off, prefix="roms_his.20100101000000")
+    on_val = get_summary_value(on, prefix="roms_his.20100101000000")
+    assert on_val.variables != off_val.variables, "the swept T, S change the solution"
+
+
+def test_sl_adv_exact_restart(imex_configuration, input_dir, tmp_path):
+    """With sl_adv on and most faces hot, the restart file carries the swept-volume state
+    (sl_eu, sl_ev, sl_gd_*, sl_tref_*), the restarted run reads it, and it reproduces
+    the continuous run bit for bit (imex_redu = 1 as in test_imex_igw_exact_restart)."""
+    conf = imex_configuration
+    nml = imex_namelist(input_dir, "modal", imex_redu=1, **SL_IMEX)
+    nml["SL_ADV_SETTINGS"].update(SL_LOW)
+    nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
+    nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})
+
+    run1 = tmp_path / "run_1"
+    run1.mkdir()
+    conf.run(nml, cwd=run1)
+
+    run2 = tmp_path / "run_2"
+    run2.mkdir()
+    nml["INITIAL_CONDITIONS"]["inifile"] = str(run1 / "roms_rst.20100101000640.nc")
+    nml["TIME_STEPPING"]["ntimes"] = 10
+    log = conf.run(nml, cwd=run2, capture_output=True)
+    assert squeezed("SL state read from the initial file") in squeezed(log)
+
+    run1_val = get_summary_value(run1, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
+    run2_val = get_summary_value(run2, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
+    for name in ("sl_eu", "sl_ev", "sl_tref_temp", "sl_tref_salt", "sl_gd_temp", "sl_gd_salt"):
+        assert name in run1_val.variables
+    assert run1_val.variables == run2_val.variables
+
+
+def test_sl_adv_exact_restart_no_hot_face(imex_configuration, input_dir, tmp_path):
+    """With sl_adv on and no hot face (thresholds above every face's 2-D Courant number) the
+    restart reproduces the continuous run bit for bit: the restarted run takes the same paths,
+    since the carried swept state in the restart file is zero (a run after a step with hot
+    faces carries it, as test_sl_adv_exact_restart checks). Both runs set imex_corr_adv_vimp
+    = 1, which sl_adv requires with imex_corr_adv = 1 (the default); with 0 the run stops at
+    start-up. With imex_corr_adv = 0 (no X, and IMEX ignores imex_corr_adv_vimp) it runs with
+    imex_corr_adv_vimp = 0. This grid has no cell above vertical Courant number 1
+    (MAX_VERT_CFL about 1.5e-3 at 40 s), so the estimate of imex_corr_adv_vimp = 1 does not
+    act here."""
+    conf = imex_configuration
+    nml = imex_namelist(input_dir, "modal", imex_redu=1, **SL_IMEX)
+    nml["SL_ADV_SETTINGS"].update(SL_HIGH)
+    nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
+    nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})
+
+    run1 = tmp_path / "run_1"
+    run1.mkdir()
+    log1 = conf.run(nml, cwd=run1, capture_output=True)
+    assert max(float(m[1]) for m in SL_LINE.findall(log1)) == 0.0, "no hot u-face"
+
+    run2 = tmp_path / "run_2"
+    run2.mkdir()
+    nml2 = copy.deepcopy(nml)
+    nml2["INITIAL_CONDITIONS"]["inifile"] = str(run1 / "roms_rst.20100101000640.nc")
+    nml2["TIME_STEPPING"]["ntimes"] = 10
+    log2 = conf.run(nml2, cwd=run2, capture_output=True)
+    assert squeezed("SL state read from the initial file") in squeezed(log2)
+    assert max(float(m[1]) for m in SL_LINE.findall(log2)) == 0.0, "no hot u-face"
+
+    run1_val = get_summary_value(run1, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
+    run2_val = get_summary_value(run2, prefix="roms_rst.20100101001320", vars_to_exclude=["time_step"])
+    assert "sl_gd_temp" in run1_val.variables
+    assert run1_val.variables == run2_val.variables
+
+    nml["IMEX_IGW_SETTINGS"]["imex_corr_adv_vimp"] = 0
+    nml["TIME_STEPPING"]["ntimes"] = 2
+    (tmp_path / "vimp_0").mkdir()
+    assert_run_rejected(
+        conf, nml, tmp_path / "vimp_0", ["sl_adv with imex_corr_adv = 1 requires imex_corr_adv_vimp = 1"],
+        label="sl_vimp_0", absent=["IMEX it pred"],
+    )
+
+    nml["IMEX_IGW_SETTINGS"]["imex_corr_adv"] = 0
+    run3 = tmp_path / "adv_0_vimp_0"
+    run3.mkdir()
+    log3 = conf.run(nml, cwd=run3, capture_output=True)
+    assert squeezed("requires imex_corr_adv_vimp") not in squeezed(log3)
+    assert [int(m[0]) for m in SL_LINE.findall(log3)] == [1, 2], "sl_adv on, one SL line per step"
+    assert_imex_converged(log3)
 
 
 # Keys removed from IMEX_IGW_SETTINGS on 2026-11-13, as old namelists set them;

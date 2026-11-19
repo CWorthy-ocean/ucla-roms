@@ -208,6 +208,7 @@ contains
     use roms_read_write, only: nrrec, frc_time, inifile
 #ifdef SOLVE3D
     use bgc_subcycle_mod, only: bgcsub_init
+    use sl_adv_mod, only: sl_adv_init
 #endif
     use param, only:&
     &mynode, nsub_e, nsub_x, lm, mm,&
@@ -374,6 +375,7 @@ contains
     call set_depth(0)
 #ifdef SOLVE3D
     call bgcsub_init          ! BGC subcycling (no-op unless bgc_physics_subcycle)
+    call sl_adv_init          ! swept-volume advection (no-op unless sl_adv)
 #endif
 
 !----------------------------------------------------------------------
@@ -505,6 +507,9 @@ contains
     use step2d_mod, only: step2d
     use step3d_t_mod, only: step3d_t
     use bgc_subcycle_mod, only: bgc_physics_subcycle, bgcsub_accumulate, bgcsub_step
+#ifdef SOLVE3D
+    use sl_adv_mod, only: sl_adv, sl_adv_weights, sl_ts_prep, sl_uv_carry_in, sl_cfallback
+#endif
     use step3d_uv_mod, only: step3d_uv1, step3d_uv2
 #  ifdef UV_VIS2
     use visc3d_mod, only: visc3d => visc3d_s
@@ -584,6 +589,8 @@ contains
     ! Here, omega corresponds to time n
     ! Should be already available from previous time-step
     call omega
+    ! swept-volume advection: blend weights and hot faces from level n
+    if (sl_adv) call sl_adv_weights
     call reg_toc(rg_huv_omega)
 #endif
 
@@ -616,6 +623,7 @@ contains
 
     !! nnew = n+1
     !! nrhs = n+1/2
+    if (sl_adv) call sl_cfallback   ! swept-volume advection: near-degenerate cells with the corrector transport
     call omega
     call reg_toc(rg_huv1_omega)
 
@@ -665,11 +673,13 @@ contains
 
     ! All of this seems to happen with Hz's from time n
     ! Corrector step
+    if (sl_adv) call sl_uv_carry_in   ! swept-volume advection: the carried n-1 momentum increment into pg_nm1
     call reg_tic(rg_prsgrd)
     call prsgrd
     call reg_toc(rg_prsgrd)
     call reg_tic(rg_uv1_visc)
 #ifdef SOLVE3D
+    if (sl_adv) call sl_ts_prep   ! swept-volume advection: T, S increments, X's swept change
     call step3d_uv1(0)  ! update u/v(nnew) with dt*ru/rv
 #endif
 
@@ -716,6 +726,7 @@ contains
     call reg_tic(rg_uv2_omega)
     call step3d_uv2(0)
 
+    if (sl_adv) call sl_cfallback   ! swept-volume advection: near-degenerate cells with the transport T, S sweep
     call omega
     call reg_toc(rg_uv2_omega)
 

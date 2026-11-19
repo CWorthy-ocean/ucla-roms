@@ -699,3 +699,29 @@ imex_obc_tref = 259200.0             ! 'modal': time scale (s) of the reference 
                                      ! periods at the open edges' lowest |f| and >= 1 d (the first
                                      ! build prints the filter's response at that frequency)
 /
+
+!================================================================================
+!                SWEPT-VOLUME ADVECTION (EXPERIMENTAL, IN DEVELOPMENT)
+!================================================================================
+! Requires IMEX_IGW, and in IMEX_IGW_SETTINGS imex_igw = .true. and, with
+! imex_corr_adv = 1 (the default), imex_corr_adv_vimp = 1 (sl_adv stops at
+! start-up otherwise). Optional group:
+! absent means sl_adv = .false. With sl_adv on, u, v, T, S and the passive
+! tracers of the dynamics step take swept-volume fluxes on faces whose 2-D
+! Courant number exceeds sl_c_lo.
+! See docs/model_settings/swept_volume_advection.md.
+!================================================================================
+&SL_ADV_SETTINGS                                                  !sl_adv_mod.F90
+sl_adv = .false.                     ! Swept-volume advection (T, S, passive tracers, momentum) on
+                                     ! faces whose 2-D Courant number c2d exceeds sl_c_lo
+sl_c_lo = 0.6                        ! c2d where the blend with the swept flux starts
+sl_c_hi = 0.9                        ! c2d from which a face is fully swept
+sl_cmax = 5.0                        ! Stop when the largest c2d of a face that stays swept exceeds it
+sl_diag = 0                          ! 1: SL_DIAG / SL_TRC lines (constancy, budgets)
+sl_mvol = 1                          ! Momentum swept volumes: 1 = dt (U^n + U*)/2 with the closure
+                                     ! of the cells' volume budget, 2 = dt U* (no closure needed)
+sl_defmax = 0.0                      ! sl_mvol = 1: clip the closure defect to +-sl_defmax (0: no limit)
+sl_c2pass = 0.8                      ! At least two T, S (and X) sub-passes on a level with a swept face above this c2d (0: off)
+sl_pred = 2                          ! Predictor on fully swept faces: 0 = the stock Eulerian flux, 1 = semi-Lagrangian for u, v
+                                     ! (the start field at the departure point), 2 = also for the tracers
+/
