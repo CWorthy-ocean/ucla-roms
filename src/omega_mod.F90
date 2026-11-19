@@ -68,7 +68,7 @@ contains
 #endif
     use roms_mpi, only: exchange_xxx
     use ocean_vars, only: wi, flxv, flxu, z_w, we, hz
-    use scalars, only: nz, dt, forw_start, iic, nrhs
+    use scalars, only: nz, dt, forw_start, iic, nrhs, AM3_crv
     use surf_flux, only: swflx
     use pio_roms, only: use_pio
     use instant_output, only: wrt_instant
@@ -83,13 +83,13 @@ contains
 
 # include "compute_auxiliary_bounds.h"
 
+    ! dtau: the step that the stage taking this W advances by
     if (CORR_STAGE) then
-      dtau=dt
+      dtau=dt                    ! corrector (step3d_uv, step3d_t)
     elseif (FIRST_TIME_STEP) then
-      dtau=0.5_8*dt
+      dtau=0.5_8*dt              ! first predictor (pre_step3d)
     else
-      dtau=0.6_8*dt
-!**     dtau=(1._8-1._8/6._8)*dt
+      dtau=(1._8-AM3_crv)*dt     ! predictor (pre_step3d)
     endif
 
     Wi(1:nx,1:ny,0)=0._8

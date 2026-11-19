@@ -80,6 +80,12 @@ module scalars
   real(kind=8) rho0
   real(kind=8), allocatable :: tnu2(:)
 
+! AM3_crv  Curvature of the LF-AM3 predictor: pre_step3d advances the
+!          predictor by (1-AM3_crv)*dt, and omega sizes the predictor's
+!          explicit/implicit split of W for that step. 1/6 unless
+!          IMEX_IGW sets it from imex_am3_crv at start-up.
+  real(kind=8) :: AM3_crv = 1._8/6._8
+
   real(kind=8) :: Akv_bak = 0._8
   real(kind=8), allocatable :: Akt_bak(:)
 

@@ -68,7 +68,7 @@ contains
     use ocean_vars, only: wi, we, flxv, flxu, hz, z_w, u, v
     use scalars, only:&
     &nz, dt, forw_start, iic, nnew, nrhs, nstp, nt,&
-    &rdrg, vonkar, zob, ntstart
+    &rdrg, vonkar, zob, ntstart, AM3_crv
 #ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag, vdiag, icori,&
     &dxdyi_u, dxdyi_v
@@ -81,7 +81,7 @@ contains
     use v3dbc_mod, only: v3dbc_tile
 #endif
 #ifdef IMEX_IGW
-    use imex_igw, only: imex_am3, imex_solve_stage, imex_stage_pred,&
+    use imex_igw, only: imex_solve_stage, imex_stage_pred,&
     &imex_predictor_transport, imex_obc_modal, imex_obc_faces
 #endif
 
@@ -106,18 +106,15 @@ contains
 #endif
 
     real(kind=8) dtau, cf_stp,cf_bak,  cff, FlxDiv
-#ifdef IMEX_IGW
-    real(kind=8) AM3_crv                 ! from IMEX_IGW_SETTINGS (imex_am3_crv)
     real(kind=8), parameter :: epsil=1.D-33
-    integer(kind=4) ipass
-#else
-    real(kind=8), parameter :: AM3_crv=1._8/6._8, epsil=1.D-33
-#endif
     real(kind=8), parameter ::  delta=0.1666666666666667_8 !! delta=0.125_8
 # ifdef UPSTREAM_UV
     real(kind=8), parameter :: gamma=0.3333333333333333_8 !! gamma=0.25_8
 # endif
     integer(kind=4) indx, itrc, iAkt
+#ifdef IMEX_IGW
+    integer(kind=4) ipass
+#endif
 
 # include "compute_auxiliary_bounds.h"
 
@@ -153,9 +150,6 @@ contains
 ! The overall time step will be both conservative and constancy
 ! preserving.
 
-#ifdef IMEX_IGW
-    AM3_crv=imex_am3
-#endif
     indx=3-nstp
 
     if (FIRST_TIME_STEP) then       ! Coefficients for alternative-

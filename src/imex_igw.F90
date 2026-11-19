@@ -412,8 +412,8 @@ module imex_igw
   &  'imex_obc_fref', 'imex_obc_trelax', 'imex_obc_cslow', 'imex_obc_supercrit']
 
 #ifdef IMEX_IGW
-  ! Derived quantities read by the consumers
-  real(kind=8), public, protected :: imex_am3      ! AM3_crv for pre_step3d
+  ! Derived quantities read by the consumers (and scalars' AM3_crv, set from
+  ! imex_am3_crv for pre_step3d and omega)
   real(kind=8), public, protected :: wflx_corr(4)  ! corrector transport weights on
                                                    ! (u^n+1, Flx*, u^n, u^n-1), step3d_uv2
   real(kind=8), public, protected, allocatable, dimension(:,:,:) :: u_nm1  ! u at n-1 [m/s]
@@ -1120,10 +1120,11 @@ contains
   subroutine set_derived_weights
     ! Per-stage weights for a regular step and for the first step of a
     ! run. The consumers get them through imex_begin_step.
+    use scalars, only: AM3_crv
     implicit none
     real(kind=8) :: phi_1st, nu_1st
 
-    imex_am3 = imex_am3_crv
+    AM3_crv = imex_am3_crv      ! the predictor's step (1-AM3_crv)*dt: pre_step3d, omega
 
     wpg_pred_reg  = [imex_theta_p + imex_phi, 1._8 - imex_theta_p - imex_phi]
     wflx_pred_reg = [imex_theta_p, imex_phi, 1._8 - imex_theta_p - imex_phi]
