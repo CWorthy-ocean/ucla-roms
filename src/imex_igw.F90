@@ -266,6 +266,8 @@ module imex_igw
                                                  ! We, then the implicit first-order upwind column solve with Wi).
                                                  ! 0 is the arithmetic before the key, bit for bit. Swept-volume
                                                  ! advection needs 1
+  public :: imex_corr_adv_vimp                   ! SL_ADV (read_nml_sl_adv) stops unless it is 1
+  protected :: imex_corr_adv_vimp
   integer(kind=4) :: imex_warm = 1               ! stage-solve start: 0 zero; 1 the stage's previous solution
   integer(kind=4) :: imex_pcg_start = 3          ! stage solve: 0 imex_pcg_warm/
                                                  ! imex_pcg; 1 imex_pcg_s: rhs scaling, residual of the guess,
@@ -2005,6 +2007,7 @@ contains
         &   + fes(i,kk,s1) - qs(kk)*fvs(i,kk,s1) - fes(i,kk,s0) + qs(kk)*fvs(i,kk,s0)&
         &   + fze(kk) - qs(kk)*wec(kk) - fze(kk-1) + qs(kk)*wec(kk-1)
         b2(kk) = ga*advb_rn(i,j,kk) - cc/Hz(i,j,kk)*ase
+        if (advb_sl) b2(kk) = b2(kk) + dts*advb_slrt(i,j,kk)   ! SL_ADV: the swept-volume change
         tlo(kk) = 0._8 ; tup(kk) = 0._8
         if (kk > 1) tlo(kk) = -cc*max(Wi(i,j,kk-1), 0._8)
         if (kk < nz) tup(kk) = cc*min(Wi(i,j,kk), 0._8)

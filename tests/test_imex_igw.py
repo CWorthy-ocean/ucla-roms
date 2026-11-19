@@ -232,14 +232,17 @@ SL_MDIAG = re.compile(r"^\s*SL_MDIAG\s+\d+\s+(.*)$", re.MULTILINE)
 SL_LOW = {"sl_adv": True, "sl_c_lo": 0.0, "sl_c_hi": 1.0e-5}
 # thresholds above every face's 2-D Courant number on the test grid (sl_cmax must exceed sl_c_hi)
 SL_HIGH = {"sl_adv": True, "sl_c_lo": 2.0, "sl_c_hi": 2.5}
+# the IMEX key sl_adv requires (it stops at start-up otherwise)
+SL_IMEX = {"imex_corr_adv_vimp": 1}
 
 
 def test_sl_adv_below_threshold_changes_nothing(imex_configuration, input_dir, tmp_path):
     """Swept-volume advection (SL_ADV_SETTINGS) with thresholds above every face's 2-D
     Courant number: no face is hot, so the output is that of sl_adv off bit for bit, and
-    an SL line is printed every step (ninfo = 1) with no hot face."""
+    an SL line is printed every step (ninfo = 1) with no hot face. Both runs set
+    imex_corr_adv_vimp = 1, which sl_adv requires."""
     conf = imex_configuration
-    nml = imex_namelist(input_dir, "modal")
+    nml = imex_namelist(input_dir, "modal", **SL_IMEX)
     off = tmp_path / "off"
     off.mkdir()
     conf.run(nml, cwd=off)
@@ -263,7 +266,7 @@ def test_sl_adv_swept_tracers(imex_configuration, input_dir, tmp_path):
     T, S and the momentum (every shared face carries the same change on both tiles) to
     1e-13 (SL_DIAG and SL_MDIAG lines, sl_diag = 1)."""
     conf = imex_configuration
-    nml = imex_namelist(input_dir, "modal")
+    nml = imex_namelist(input_dir, "modal", **SL_IMEX)
     off = tmp_path / "off"
     off.mkdir()
     conf.run(nml, cwd=off)
@@ -291,7 +294,7 @@ def test_sl_adv_exact_restart(imex_configuration, input_dir, tmp_path):
     (sl_eu, sl_ev, sl_gd_*, sl_tref_*), the restarted run reads it, and it reproduces
     the continuous run bit for bit (imex_redu = 1 as in test_imex_igw_exact_restart)."""
     conf = imex_configuration
-    nml = imex_namelist(input_dir, "modal", imex_redu=1)
+    nml = imex_namelist(input_dir, "modal", imex_redu=1, **SL_IMEX)
     nml["SL_ADV_SETTINGS"].update(SL_LOW)
     nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
     nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})

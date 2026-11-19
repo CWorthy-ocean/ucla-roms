@@ -227,6 +227,9 @@ contains
     use namelist_open_mod, only: open_namelist_file
     use error_handling_mod, only: error_log
     use param, only: mynode
+#if defined IMEX_IGW && defined SOLVE3D
+    use imex_igw, only: imex_corr_adv_vimp
+#endif
     implicit none
     integer(kind=4) :: namelist_unit, ios
     character(len=15) :: sr_name = "read_nml_sl_adv"
@@ -250,6 +253,11 @@ contains
     call error_log%raise_global(context=module_name//"/"//sr_name,&
     &info="sl_adv requires the IMEX_IGW and SOLVE3D cppkeys")
     return
+#else
+    if (imex_corr_adv_vimp /= 1) call error_log%raise_global(context=module_name//"/"//sr_name,&
+    &info="sl_adv requires imex_corr_adv_vimp = 1 in IMEX_IGW_SETTINGS (the corrector's X in cells above"&
+    &//" vertical Courant number 1 from the tracer step's estimate; see"&
+    &//" docs/model_settings/implicit_internal_waves.md)")
 #endif
     if (sl_c_lo < 0._8 .or. sl_c_hi <= sl_c_lo) call error_log%raise_global(&
     &context=module_name//"/"//sr_name, info="sl_adv: need 0 <= sl_c_lo < sl_c_hi")
