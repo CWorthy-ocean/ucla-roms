@@ -159,3 +159,20 @@ def test_ana_initial_missing_inifile(box_conf, box_cdr_file, input_dir, tmp_path
         "Cannot find input file",
         "with ANA_INITIAL, leave it empty to start from the analytical state",
     ], label="inifile")
+
+
+def test_cdr_release_tiling(box_conf, box_cdr_file, input_dir, tmp_path):
+    """The multi-cell release B gives bit-identical results with 2x2, 1x1 and
+    uneven 3x2 tiles (its normalization was a sum of per-rank partial sums)."""
+    link_cdr_pieces(box_cdr_file, tmp_path, nranks=6)
+    runs = {}
+    for np_xi, np_eta in ((2, 2), (1, 1), (3, 2)):
+        run_dir = tmp_path / f"t{np_xi}x{np_eta}"
+        run_dir.mkdir()
+        nml = box_namelist(input_dir, box_cdr_file, np_xi, np_eta)
+        nml["FORCING_FILES"] = {"frcfiles": [str(tmp_path / "cdr_box.nc")]}
+        box_conf.run(nml, cwd=run_dir)
+        runs[(np_xi, np_eta)] = get_summary_value(run_dir, his_prefix(run_dir)).variables
+    differ = {tiles: sorted(k for k in v if v[k]["sha256"] != runs[(2, 2)][k]["sha256"])
+              for tiles, v in runs.items()}
+    assert all(not d for d in differ.values()), f"variables differing from 2x2: {differ}"
