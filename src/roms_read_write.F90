@@ -251,9 +251,7 @@ module roms_read_write
   character(len=max_name_size), public :: inifile = ""
   character(len=max_name_size), allocatable, public :: frcfiles(:)
   namelist /SIMULATION_NAME_SETTINGS/ output_root_name, title
-#ifndef ANA_INITIAL
   namelist /INITIAL_CONDITIONS/ inifile
-#endif
   namelist /FORCING_FILES/ frcfiles
   namelist /REFERENCE_DATE_SETTINGS/ reference_date
 
@@ -341,9 +339,18 @@ contains
     instant_reference_date = reference_date
     mpi_master_only write(*,'(/1x,A)') trim(title)
 !==========================================================================================
-#ifndef ANA_INITIAL
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=INITIAL_CONDITIONS, iostat=ios, iomsg=msg)
+#ifdef ANA_INITIAL
+    ! With ANA_INITIAL the group is optional. Without it, or with inifile
+    ! empty, the run starts from ana_init; a file named here is read over the
+    ! analytical state (main.F90), e.g. to restart an analytical case. The
+    ! group used to be skipped, so such a restart silently started again.
+    if (is_iostat_end(ios)) then
+      ios = 0
+      inifile = ''
+    endif
+#endif
 
     if (ios /= 0) then
       call error_log%raise_global(&
@@ -357,6 +364,12 @@ contains
     &module_name//'/'//sr_name, fits)
     if (.not. fits) return
 
+#ifdef ANA_INITIAL
+    if (len_trim(inifile) == 0) then
+      mpi_master_only write(*,'(1x,A)') 'initial condition :: analytical '//&
+      &'(ANA_INITIAL, INITIAL_CONDITIONS inifile empty)'
+    else
+#endif
 
     lstr = lenstr(inifile)
 
@@ -368,8 +381,13 @@ contains
     open(newunit=testunit, file=trim(inifile), status='old',&
     &iostat=ios)
     if (ios /= 0) then
+      error_info = "Cannot find input file '" // trim(inifile) // "'"
+#ifdef ANA_INITIAL
+      error_info = trim(error_info) // " (INITIAL_CONDITIONS inifile; with "//&
+      &"ANA_INITIAL, leave it empty to start from the analytical state)"
+#endif
       call error_log%raise_from_rank(&
-      &info="Cannot find input file '" // trim(inifile) // "'",&
+      &info=trim(error_info),&
       &context=module_name)
       return
     end if
@@ -379,7 +397,11 @@ contains
     &'initial condition :: rec =', nrrec,&
     &'file = ''', trim(inifile), ''''
 
-#endif /*ANA_INITIAL*/
+#ifdef ANA_INITIAL
+    mpi_master_only write(*,'(1x,A)') 'initial condition :: read over '//&
+    &'the analytical state (ANA_INITIAL)'
+    endif   ! inifile given
+#endif
 !==========================================================================================
 !     Read the list into max_frc_files entries; only the files listed are kept (below).
     if (allocated(frcfiles)) deallocate(frcfiles)
