@@ -69,7 +69,7 @@ pio_stride = 1
 !---------------------------
 ! Read the grid and initial/restart files directly with O_DIRECT when they are
 ! classic netCDF (CDF-1, CDF-2, CDF-5): 'on', 'off' (read through PIO), or
-! 'verify' (read both ways and report values that differ)
+! 'verify' (read both ways, report values that differ, run on PIO's values)
 !---------------------------
 pio_direct_read = 'on'
 /
