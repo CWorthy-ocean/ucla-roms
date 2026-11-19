@@ -13,6 +13,9 @@ import xarray as xr
 
 ROMS_ROOT = Path(os.environ["ROMS_ROOT"])
 ADDITIONAL_FILES = ROMS_ROOT / "tests" / "additional_files"
+# The make command of the tests that build their own Fortran (test_cdf_direct.py). CI's ifx job adds
+# COMPILER=intel by rewriting the text "make BUILD_MODE=test" in this file, so keep that literal form.
+MAKE_CMD = "make BUILD_MODE=test"
 
 # --------------------------------------------------------------------------
 # CPP key groups

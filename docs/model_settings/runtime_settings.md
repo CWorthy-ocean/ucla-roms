@@ -89,6 +89,7 @@ Read only with `PARALLEL_IO`.
 | Setting | Description |
 |--------|-------------|
 | `pio_stride` | Stride between the MPI ranks that do parallel I/O: ROMS uses `max(1, ranks / pio_stride)` I/O tasks. The default, `1`, makes every rank an I/O task. |
+| `pio_direct_read` | How the grid file and the initial or restart file are read at start-up. `'on'` (default): ROMS reads them itself with O_DIRECT, instead of through PIO, when they are classic netCDF (CDF-1, CDF-2 or CDF-5). The results are the same bit for bit, and start-up is much faster on Lustre: on 2 Derecho CPU nodes (Pacific MARBL case, measured on `main`), the grid and a 118-GB restart are read in 32 s instead of 75-78 s. A netCDF-4 file, or a variable that cannot be read this way, is read through PIO as before, and rank 0 says why. `'off'`: read through PIO, as before. Use it on a file system that rejects or slows down O_DIRECT reads (the direct reads were tuned on Lustre), or to rule them out while debugging. `'verify'`: read every variable both ways, report how many values differ (there should be none), and run on PIO's values; for checking a new system. Forcing files and all output always go through PIO. |
 
 ### `INITIAL_CONDITIONS`
 (read by module `roms_read_write.F90`)
