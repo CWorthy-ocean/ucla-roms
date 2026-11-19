@@ -7,6 +7,8 @@ several cells around the corner of the 2x2 tiles. Each test says what it
 checks. The tests compare runs with each other, so they need no reference
 hashes.
 """
+import copy
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -17,6 +19,7 @@ from ._helpers import (
     OCEAN_PHYSICS_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
+    assert_run_rejected,
     create_test_namelist_dict,
     get_summary_value,
 )
@@ -116,3 +119,43 @@ def test_cdr_file_without_frcfiles(box_conf, box_cdr_file, input_dir, tmp_path):
         box_conf.run(nml, cwd=run_dir)
         runs[label] = get_summary_value(run_dir, his_prefix(run_dir)).variables
     assert runs["empty"] == runs["listed"]
+
+
+def test_ana_initial_restart(box_conf, box_cdr_file, input_dir, tmp_path):
+    """With ANA_INITIAL, inifile names a restart file that is read over the
+    analytical state: the restarted half reproduces the continuous run (the
+    INITIAL_CONDITIONS group was not read, so the restart started over)."""
+    nml = box_namelist(input_dir, box_cdr_file)
+    half = NSTEPS // 2
+    nml["BASIC_OUTPUT_SETTINGS"].update({
+        "wrt_file_rst": True, "output_period_rst": half * DT, "output_period_his": half * DT,
+    })
+    # precheck: every output file period divides the restart period
+    nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": half * DT, "nrpf_sponge": 1})
+    whole = tmp_path / "whole"
+    whole.mkdir()
+    box_conf.run(nml, cwd=whole)
+    rst = sorted({p.name.rsplit(".", 2)[0] for p in whole.glob("roms_rst.*.0.nc")})
+    assert len(rst) == 2, rst
+
+    restarted = tmp_path / "restarted"
+    restarted.mkdir()
+    nml2 = copy.deepcopy(nml)
+    nml2["INITIAL_CONDITIONS"]["inifile"] = str(whole / f"{rst[0]}.nc")
+    nml2["TIME_STEPPING"]["ntimes"] = half
+    log = box_conf.run(nml2, cwd=restarted, capture_output=True)
+    assert "read over the analytical state" in log
+
+    a = get_summary_value(whole, rst[1], vars_to_exclude=["time_step"]).variables
+    b = get_summary_value(restarted, rst[1], vars_to_exclude=["time_step"]).variables
+    assert a == b
+
+
+def test_ana_initial_missing_inifile(box_conf, box_cdr_file, input_dir, tmp_path):
+    """With ANA_INITIAL, an inifile that does not exist stops the run."""
+    nml = box_namelist(input_dir, box_cdr_file)
+    nml["INITIAL_CONDITIONS"]["inifile"] = str(tmp_path / "no_such_file.nc")
+    assert_run_rejected(box_conf, nml, tmp_path, [
+        "Cannot find input file",
+        "with ANA_INITIAL, leave it empty to start from the analytical state",
+    ], label="inifile")
