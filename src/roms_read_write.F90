@@ -214,6 +214,13 @@ module roms_read_write
   end type frc_file_meta
   type(frc_file_meta), allocatable :: frc_meta(:)
   integer(kind=4) :: n_frc_meta = 0       ! slots in use beyond max_frc (ungridded files)
+  ! Read size (bytes) netCDF uses for the two metadata opens above. A time
+  ! variable along the record dimension has one value per record, a record
+  ! apart (tens of MB in a gridded surface file), so netCDF reads one block per
+  ! value. Its default block is the file system's preferred I/O size (4 MiB on
+  ! Lustre): a 700-record time axis then reads about 3 GB. Classic files only
+  ! (netCDF-4 ignores the hint); the values read are the same.
+  integer(kind=4), parameter :: frc_meta_read_size = 8192
 
   ! Read handles kept open across records by the serial netCDF reads of the
   ! forcing data (every rank without PARALLEL_IO, rank 0 for ungridded data):
@@ -1316,11 +1323,12 @@ contains
     integer(kind=4), intent(in)  :: islot
     character(len=*), intent(in) :: vname
     logical :: has_var
-    integer(kind=4) :: ncid, ierr, nvars, iv
+    integer(kind=4) :: ncid, ierr, nvars, iv, read_size
 
     has_var = .false.
     if (.not. frc_meta(islot)%loaded) then
-      ierr = nf90_open(frc_meta(islot)%fname, nf90_nowrite, ncid)
+      read_size = frc_meta_read_size
+      ierr = nf90_open(frc_meta(islot)%fname, nf90_nowrite, ncid, chunksize=read_size)
       if (ierr/=nf90_noerr) then
         call error_log%check_netcdf_status(&
         &netcdf_status=ierr,&
@@ -1353,7 +1361,7 @@ contains
     character(len=*), intent(in) :: tname
     integer(kind=4) :: itax
     type(frc_time_axis), allocatable :: grown(:)
-    integer(kind=4) :: ncid, tid, ierr, nrec, n
+    integer(kind=4) :: ncid, tid, ierr, nrec, n, read_size
     integer(kind=4), dimension(1) :: dimids
 
     n = size(frc_meta(islot)%tax)
@@ -1367,7 +1375,8 @@ contains
     itax = n + 1
     frc_meta(islot)%tax(itax)%tname = tname
 
-    ierr = nf90_open(frc_meta(islot)%fname, nf90_nowrite, ncid)
+    read_size = frc_meta_read_size
+    ierr = nf90_open(frc_meta(islot)%fname, nf90_nowrite, ncid, chunksize=read_size)
     if (ierr/=nf90_noerr) then
       call error_log%check_netcdf_status(&
       &netcdf_status=ierr,&
