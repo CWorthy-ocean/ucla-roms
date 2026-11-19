@@ -1,0 +1,3 @@
+Builds without ``PARALLEL_IO`` now write their output files (history, averages, restart and the other per-rank files) as classic CDF-5 instead of netCDF-4, as ``PARALLEL_IO`` builds already did; the values in them are unchanged.
+- The per-rank files are no longer compressed, so they are larger: over the test suite, history and BGC files 1.3-1.4 times, restart files 1.1 times. Files joined by ``ncjoin`` are still compressed netCDF-4.
+- In the per-rank extraction files (``_ext``) every set's records now use the one ``time`` dimension instead of a ``time_<set>`` dimension per set (a CDF-5 file has one unlimited dimension), and ``ocean_time`` holds each record's time; ``extract_data_join`` joins them as before.

@@ -8,7 +8,8 @@ module instant_output
   use netcdf, only:&
   &nf90_noerr, nf90_write, nf90_open, nf90_def_dim,&
   &nf90_def_var, nf90_put_att, nf90_close, nf90_double,&
-  &nf90_netcdf4, nf90_create, nf90_global, nf90_inq_dimid
+  &nf90_clobber, nf90_64bit_data, nf90_redef, nf90_enddef,&
+  &nf90_create, nf90_global, nf90_inq_dimid
   use error_handling_mod, only: error_log
   use nc_read_write, only: nccreate
   use param, only: max_name_size
@@ -66,6 +67,7 @@ contains
 
     integer(kind=4) :: ibuff(4), npart
 
+    ierr=nf90_redef(ncid)                      ! a classic-format file opened by the caller: define mode
     npart=4                                    ! Put global attribute 'partition' which identifies subdomain
     ibuff(1)=mynode                            ! within the processor grid individually for each file.
     ibuff(2)=nnodes
@@ -110,8 +112,8 @@ contains
     ierr = nf90_inq_dimid(ncid,'time',did)
     dimid(ndim+1) = did
 
-    ierr=nf90_def_var(ncid,varname,xtype,dimid,varid,&
-    &deflate_level=1, shuffle=.true.)
+    ierr=nf90_def_var(ncid,varname,xtype,dimid,varid)
+    ierr=nf90_enddef(ncid)
 
   end subroutine def_vars_instant  !]
 !----------------------------------------------------------------------
@@ -206,7 +208,7 @@ contains
       call append_date_node(fname)
     endif
 
-    ierr=nf90_create(trim(fname),nf90_netcdf4,ncid)
+    ierr=nf90_create(trim(fname),ior(nf90_clobber, nf90_64bit_data),ncid)   ! classic CDF-5
     if (ierr/=nf90_noerr) then
       call error_log%check_netcdf_status(netcdf_status=ierr,&
       &context=module_name//"/"//sr_name,&

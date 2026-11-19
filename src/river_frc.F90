@@ -212,11 +212,11 @@ contains
     ! subroutine
     use netcdf, only:&
     &nf90_double, nf90_noerr, nf90_nowrite,&
-    &nf90_write, nf90_open, nf90_put_att, nf90_close, nf90_inq_varid
+    &nf90_write, nf90_open, nf90_put_att, nf90_close, nf90_inq_varid,&
+    &nf90_redef, nf90_enddef
     use mpi_f08, only: mpi_double_precision, mpi_max
 #ifdef PARALLEL_IO
     use mpi_f08, only: MPI_Barrier
-    use netcdf, only: nf90_redef, nf90_enddef
     use pio, only: PIO_write
     use dimensions, only: ds_xr, ds_yr
 #endif
@@ -282,8 +282,10 @@ contains
       pio_gtype = gtype_save
 # else
       ierr=nf90_open(ana_grdname,nf90_write,ncid)
+      ierr=nf90_redef(ncid)        ! a classic-format file: define mode
       varid = nccreate(ncid,'river_flux',(/dn_xr,dn_yr/),(/xi_rho,eta_rho/), nf90_double)
       ierr=nf90_put_att(ncid, varid,'long_name','River volume flux')
+      ierr=nf90_enddef(ncid)
       call ncwrite(ncid,'river_flux', rflx(i0:i1,j0:j1))
       ierr=nf90_close(ncid)
 # endif
