@@ -214,7 +214,8 @@ module roms_read_write
   end type frc_file_meta
   type(frc_file_meta), allocatable :: frc_meta(:)
   integer(kind=4) :: n_frc_meta = 0       ! slots in use beyond max_frc (ungridded files)
-  ! Read size (bytes) netCDF uses for the two metadata opens above. A time
+  ! Read size (bytes) netCDF uses when frc_file_has_var and frc_time_axis_index
+  ! open a file to fill this cache (nf90_open's chunksize hint). A time
   ! variable along the record dimension has one value per record, a record
   ! apart (tens of MB in a gridded surface file), so netCDF reads one block per
   ! value. Its default block is the file system's preferred I/O size (4 MiB on
@@ -1328,7 +1329,7 @@ contains
 
     has_var = .false.
     if (.not. frc_meta(islot)%loaded) then
-      read_size = frc_meta_read_size
+      read_size = frc_meta_read_size                 ! chunksize is intent(inout): pass a copy
       ierr = nf90_open(frc_meta(islot)%fname, nf90_nowrite, ncid, chunksize=read_size)
       if (ierr/=nf90_noerr) then
         call error_log%check_netcdf_status(&
@@ -1376,7 +1377,7 @@ contains
     itax = n + 1
     frc_meta(islot)%tax(itax)%tname = tname
 
-    read_size = frc_meta_read_size
+    read_size = frc_meta_read_size                   ! chunksize is intent(inout): pass a copy
     ierr = nf90_open(frc_meta(islot)%fname, nf90_nowrite, ncid, chunksize=read_size)
     if (ierr/=nf90_noerr) then
       call error_log%check_netcdf_status(&
