@@ -21,9 +21,10 @@ module cdf_direct
   ! Only plain POSIX calls (open, pread, lseek, close, posix_memalign, free,
   ! uname) through ISO_C_BINDING; no C file and no new library. The value of
   ! O_DIRECT depends on the architecture and the preprocessors ROMS uses do
-  ! not say which it is, so it is taken from uname() at run time (Linux
-  ! x86-64, aarch64/arm, ppc64); anywhere else cdf_open reports that direct
-  ! reads are not available and the caller reads through netCDF/PIO.
+  ! not say which it is, so it is taken from uname() at run time (Linux on
+  ! little-endian x86-64, aarch64/arm, ppc64le); anywhere else, macOS
+  ! included, cdf_open reports that direct reads are not available and the
+  ! caller reads through netCDF/PIO.
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int8, int32, int64, real32, real64
   implicit none
@@ -101,7 +102,13 @@ module cdf_direct
       import :: c_int, c_char
       character(kind=c_char) :: buf(*)
     end function c_uname
+    ! the address of errno: __errno_location in Linux's C libraries (glibc,
+    ! musl), __error in macOS's
+#ifdef __APPLE__
+    type(c_ptr) function c_errno_location() bind(C, name='__error')
+#else
     type(c_ptr) function c_errno_location() bind(C, name='__errno_location')
+#endif
       import :: c_ptr
     end function c_errno_location
   end interface
@@ -117,11 +124,15 @@ contains
   integer(c_int) function cdf_direct_flag(machine) result(flag)
     ! The value of O_DIRECT on this system, 0 if not known (no direct reads).
     ! Linux's struct utsname is six fields of 65 characters: sysname,
-    ! nodename, release, version, machine, domainname.
+    ! nodename, release, version, machine, domainname. Other systems lay it
+    ! out differently (macOS: five fields of 256), so the buffer is larger
+    ! than any of them and only sysname, the first field, is read before the
+    ! system is known to be Linux. O_DIRECT is used only on little-endian
+    ! machines: cdf_unpack_row swaps bytes as a little-endian host must.
     character(len=*), intent(out), optional :: machine
-    character(kind=c_char) :: u(6 * 65 + 64)
+    character(kind=c_char) :: u(2048)
     character(len=65) :: sysname, mach
-    integer :: i
+    integer :: i, n
     flag = 0
     sysname = ''
     mach = ''
@@ -131,19 +142,22 @@ contains
         if (u(i) == c_null_char) exit
         sysname(i:i) = u(i)
       enddo
-      do i = 1, 64
-        if (u(4 * 65 + i) == c_null_char) exit
-        mach(i:i) = u(4 * 65 + i)
-      enddo
+      if (trim(sysname) == 'Linux') then
+        do i = 1, 64
+          if (u(4 * 65 + i) == c_null_char) exit
+          mach(i:i) = u(4 * 65 + i)
+        enddo
+      endif
     endif
     if (present(machine)) machine = trim(sysname)//' '//trim(mach)
     if (trim(sysname) /= 'Linux') return
+    n = max(1, len_trim(mach))
     if (mach == 'x86_64' .or. mach(1:1) == 'i') then
       flag = 16384                     ! 0o40000
-    elseif (mach(1:7) == 'aarch64' .or. mach(1:3) == 'arm') then
-      flag = 65536                     ! 0o200000
-    elseif (mach(1:5) == 'ppc64') then
-      flag = 131072                    ! 0o400000
+    elseif (mach == 'aarch64' .or. (mach(1:3) == 'arm' .and. mach(n:n) == 'l')) then
+      flag = 65536                     ! 0o200000 (not aarch64_be, armv7b, ...)
+    elseif (mach == 'ppc64le') then
+      flag = 131072                    ! 0o400000 (not big-endian ppc64)
     endif
   end function cdf_direct_flag
 
@@ -160,9 +174,10 @@ contains
   end function xsize
 
   logical function cdf_open(path, f, msg, direct) result(ok)
-    ! Parse the header of a CDF-1/2/5 file (plain reads) and, if direct,
-    ! open it with O_DIRECT for cdf_read. On .false. msg says why (not a
-    ! classic file, an unsupported header, no O_DIRECT); nothing is left open.
+    ! Parse the header of a CDF-1/2/5 file (plain reads) and open it for
+    ! cdf_read: with O_DIRECT if direct, else buffered (cdf_close closes
+    ! either). On .false. msg says why (not a classic file, an unsupported
+    ! header, no O_DIRECT); nothing is left open.
     character(len=*), intent(in) :: path
     type(cdf_file_t), intent(inout) :: f
     character(len=*), intent(out) :: msg
@@ -217,11 +232,17 @@ contains
     enddo
     ierr = c_close(fd0)
     if (.not. ok) return
-    if (.not. direct) return
     f%align = max(4096_int64, int(c_getpagesize(), int64))
-    f%fd = c_open(trim(path)//c_null_char, ior(O_RDONLY, flag))
+    if (direct) then
+      f%fd = c_open(trim(path)//c_null_char, ior(O_RDONLY, flag))
+      if (f%fd < 0) write(msg, '(a,i0)') 'open with O_DIRECT failed, errno ', errno()
+    else
+      ! buffered (the unit test where O_DIRECT is not available): the same
+      ! aligned reads through the page cache
+      f%fd = c_open(trim(path)//c_null_char, O_RDONLY)
+      if (f%fd < 0) write(msg, '(a,i0)') 'open failed, errno ', errno()
+    endif
     if (f%fd < 0) then
-      write(msg, '(a,i0)') 'open with O_DIRECT failed, errno ', errno()
       ok = .false.
       f%fd = -1
     endif
@@ -470,10 +491,11 @@ contains
   end function parse_header
 
   logical function cdf_read(f, off, nbytes, b, dshift, piece) result(ok)
-    ! Bytes off .. off+nbytes-1 of the file into b, read with O_DIRECT as the
-    ! enclosing aligned range in pieces of at most piece bytes; the data start
-    ! at byte dshift (0-based) of b. A short read at the end of the file is
-    ! accepted when the needed bytes are there. .false.: a read failed.
+    ! Bytes off .. off+nbytes-1 of the file into b, read (with O_DIRECT if
+    ! cdf_open opened the file so) as the enclosing aligned range in pieces
+    ! of at most piece bytes; the data start at byte dshift (0-based) of b.
+    ! A short read at the end of the file is accepted when the needed bytes
+    ! are there. .false.: a read failed.
     type(cdf_file_t), intent(in) :: f
     integer(int64), intent(in) :: off, nbytes, piece
     type(cdf_buf_t), intent(inout) :: b

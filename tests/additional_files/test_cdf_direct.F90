@@ -11,7 +11,7 @@ program test_cdf_direct
   ! refused by cdf_open. Prints 'RESULT <file> checks <n> failures <m>
   ! refused <k>' (or 'REFUSED <file>: <why>') and stops with code 1 on any
   ! failure. 'buffered' parses and reads without O_DIRECT (file systems
-  ! without O_DIRECT, such as tmpfs).
+  ! without O_DIRECT, such as tmpfs, and systems without it, such as macOS).
   use netcdf
   use cdf_direct
   use, intrinsic :: iso_fortran_env, only: int64, real64

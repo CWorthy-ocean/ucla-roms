@@ -6,6 +6,7 @@ BULK_FRC, PARALLEL_IO and CDR_FORCING (exact restart, a CDR volume release), and
 the same with MPI_MASKING on a grid with an all-land tile (exact restart).
 """
 import re
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -298,6 +299,52 @@ def test_implicit_fs_bulk_pio_exact_restart(bulk_pio_configuration, tmp_path):
     run2_val = summarize_output(run2 / rst, vars_to_exclude=["time_step"])
     assert "fs_udu" in run1_val.variables
     assert run1_val.variables == run2_val.variables
+
+
+DIRECT_VERIFY = re.compile(
+    r"pio_direct_readverify:'([^']+)':(\d+)variablescomparedwithPIO,(\d+)valuesdiffer"
+)
+DIRECT_SUMMARY = re.compile(r"pio_direct_read:'([^']+)':(\d+)variablesreaddirectly\(.*?\),(\d+)throughPIO")
+
+
+def test_bulk_pio_direct_read_verify(bulk_pio_configuration, tmp_path):
+    """pio_direct_read = 'verify' reads the grid, the initial file and a restart both
+    directly and through PIO, and finds no value that differs.
+
+    3 x 3 ranks on one node give 8 reader ranks (at most 8 per node) and one that
+    only receives, on unequal tiles (39 x 19 points). The initial file comes from
+    roms-tools, whose ocean_time is a fixed dimension of length 1: every variable
+    of it is read directly. Run 2 reads run 1's restart (record variables).
+    """
+    conf = bulk_pio_configuration
+    nml = bulk_pio_namelist(conf)
+    nml["PARAM_SETTINGS"].update({"NP_XI": 3, "NP_ETA": 3})
+    nml["PIO_SETTINGS"]["pio_direct_read"] = "verify"
+    nml["TIME_STEPPING"]["ntimes"] = 10
+    nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
+    nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})
+
+    logs = {}
+    for run in ("run_1", "run_2"):
+        (tmp_path / run).mkdir()
+        if run == "run_2":
+            nml["INITIAL_CONDITIONS"]["inifile"] = str(tmp_path / "run_1" / "roms_rst.20100101000640.nc")
+            nml["TIME_STEPPING"]["ntimes"] = 2
+            nml["BASIC_OUTPUT_SETTINGS"]["wrt_file_rst"] = False
+        logs[run] = squeezed(conf.run(nml, cwd=tmp_path / run, capture_output=True))
+
+    initial = {"run_1": "example_input_bgc_initial_conditions.nc", "run_2": "roms_rst.20100101000640.nc"}
+    for run, log in logs.items():
+        readers = re.search(r"pio_direct_read='verify':(\d+)readerranks", log)
+        assert readers and 0 < int(readers.group(1)) < 9, f"{run}: expected a rank that is not a reader"
+        assert "valuesdifferfromPIO's" not in log, run
+        checked = {Path(f).name: (int(nvar), int(ndiff)) for f, nvar, ndiff in DIRECT_VERIFY.findall(log)}
+        for name in ("example_input_grid.nc", initial[run]):
+            assert name in checked, f"{run}: no verify line for {name}"
+            nvar, ndiff = checked[name]
+            assert nvar > 0 and ndiff == 0, f"{run} {name}: {nvar} variables compared, {ndiff} values differ"
+    through_pio = {Path(f).name: int(npio) for f, _, npio in DIRECT_SUMMARY.findall(logs["run_1"])}
+    assert through_pio.get(initial["run_1"]) == 0, through_pio
 
 
 @pytest.fixture(scope="module")
