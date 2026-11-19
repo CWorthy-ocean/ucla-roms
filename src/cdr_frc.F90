@@ -801,7 +801,7 @@ contains
     integer(kind=4) :: ierr,ncid,i,j,k
     integer(kind=4) :: icdr, cidx, itrc, iarg
     real(kind=8) :: vint, arg
-    real(kind=8), dimension( 1) :: local_int(1), global_int(1)
+    real(kind=8), dimension( 1) :: global_int(1)
     real(kind=8), dimension(nz) :: cdr_flx_dp_remap
     real(kind=8), dimension(nz) :: arg_nz
     real(kind=8) :: local_min_val
@@ -888,10 +888,7 @@ contains
         !   as cdr_vol*T and cdr_vol*S with the same weights, so each cell gets
         !   water at exactly the input T and S, and the total is cdr_vol.
         !   Tracer-flux releases may not carry temp/salt (check_no_ts_flux).
-        local_int(1) = sum(cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),itemp,:))
-        call MPI_Reduce(local_int,global_int,1,&
-        &mpi_double_precision,mpi_sum,0,ocean_grid_comm,ierr)
-        call MPI_Bcast(global_int,1,mpi_double_precision,0,ocean_grid_comm,ierr)
+        global_int(1) = release_weight_sum(cdr_nloc(icdr-1)+1, cdr_nloc(icdr))
         if (global_int(1) /= 0.0_8) then
           cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iTandS+1:nt,:) =&
           &cdr_prf(cdr_nloc(icdr-1)+1:cdr_nloc(icdr),iTandS+1:nt,:)/global_int(1)
@@ -905,6 +902,60 @@ contains
     enddo
 
   end subroutine create_cdr_vertical_structure  !]
+! ----------------------------------------------------------------------
+  function release_weight_sum(c0, c1) result(total)  ![
+
+    ! Global sum of the temp-row weights of one release, whose profiles on
+    ! this rank are cdr_prf(c0:c1,:,:), the same to the last bit in any
+    ! tiling (a sum of per-rank partial sums is not). Each cell's column sum
+    ! goes into an array over the release's global bounding box; every cell
+    ! has one owner, so the MPI sum only adds zeros to it and is exact. Every
+    ! rank then adds the box up in the same (j, i) order. Once per release at
+    ! start-up; the box is about the size of the release's footprint.
+
+    use param, only: iSW_corn, jSW_corn
+    use mpi_f08, only: mpi_allreduce, mpi_min
+    implicit none
+    integer(kind=4), intent(in) :: c0, c1
+    real(kind=8) :: total
+
+    ! local
+    integer(kind=4) :: cidx, i, j, k, ierr
+    integer(kind=4), dimension(4) :: bnd   ! imin, jmin, -imax, -jmax
+    real(kind=8) :: col
+    real(kind=8), dimension(:,:), allocatable :: box
+
+    bnd = huge(1_4)
+    do cidx=c0,c1
+      i = cdr_iloc(cidx) + iSW_corn
+      j = cdr_jloc(cidx) + jSW_corn
+      bnd = min(bnd, [i, j, -i, -j])
+    enddo
+    call mpi_allreduce(mpi_in_place, bnd, 4, mpi_integer, mpi_min,&
+    &ocean_grid_comm, ierr)
+
+    total = 0._8
+    if (bnd(1) > -bnd(3)) return       ! no cells anywhere
+
+    allocate(box(bnd(1):-bnd(3), bnd(2):-bnd(4))); box = 0._8
+    do cidx=c0,c1
+      col = 0._8
+      do k=1,nz
+        col = col + cdr_prf(cidx,itemp,k)
+      enddo
+      box(cdr_iloc(cidx)+iSW_corn, cdr_jloc(cidx)+jSW_corn) = col
+    enddo
+    call mpi_allreduce(mpi_in_place, box, size(box), mpi_double_precision,&
+    &mpi_sum, ocean_grid_comm, ierr)
+
+    do j=bnd(2),-bnd(4)
+      do i=bnd(1),-bnd(3)
+        total = total + box(i,j)
+      enddo
+    enddo
+    deallocate(box)
+
+  end function release_weight_sum  !]
 ! ----------------------------------------------------------------------
   subroutine init_arrays_cdr  ![
 
