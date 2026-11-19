@@ -266,7 +266,7 @@ module imex_igw
                                                  ! We, then the implicit first-order upwind column solve with Wi).
                                                  ! 0 is the arithmetic before the key, bit for bit. Swept-volume
                                                  ! advection needs 1
-  public :: imex_corr_adv_vimp                   ! SL_ADV (read_nml_sl_adv) stops unless it is 1
+  public :: imex_corr_adv_vimp                   ! SL_ADV (read_nml_sl_adv) stops with imex_corr_adv = 1 unless it is 1
   protected :: imex_corr_adv_vimp
   integer(kind=4) :: imex_warm = 1               ! stage-solve start: 0 zero; 1 the stage's previous solution
   integer(kind=4) :: imex_pcg_start = 3          ! stage solve: 0 imex_pcg_warm/

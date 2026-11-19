@@ -703,8 +703,9 @@ imex_obc_tref = 259200.0             ! 'modal': time scale (s) of the reference 
 !================================================================================
 !                SWEPT-VOLUME ADVECTION (EXPERIMENTAL, IN DEVELOPMENT)
 !================================================================================
-! Requires IMEX_IGW, and in IMEX_IGW_SETTINGS imex_igw = .true. and
-! imex_corr_adv_vimp = 1 (sl_adv stops at start-up otherwise). Optional group:
+! Requires IMEX_IGW, and in IMEX_IGW_SETTINGS imex_igw = .true. and, with
+! imex_corr_adv = 1 (the default), imex_corr_adv_vimp = 1 (sl_adv stops at
+! start-up otherwise). Optional group:
 ! absent means sl_adv = .false. With sl_adv on, u, v, T, S and the passive
 ! tracers of the dynamics step take swept-volume fluxes on faces whose 2-D
 ! Courant number exceeds sl_c_lo.

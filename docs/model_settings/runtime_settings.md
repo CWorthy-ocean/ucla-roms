@@ -692,7 +692,7 @@ Keys removed on 2026-11-13 stop ROMS at the read with a message that names them;
 ### `SL_ADV_SETTINGS`
 (read by module `sl_adv_mod.F90`)
 
-Optional: if the group is absent, `sl_adv = .false.`. Experimental and in development: swept-volume (flux-form semi-Lagrangian) advection on the faces where the 2-D Courant number is large, for the `IMEX_IGW` step (requires `IMEX_IGW`, `imex_igw = .true.` and `imex_corr_adv_vimp = 1`; it stops at start-up otherwise). T, S, the passive tracers stepped with the dynamics, u and v take it. A run in which no face is hot is the same as with `sl_adv = .false.` and the same `IMEX_IGW_SETTINGS`. See [Swept-volume advection](swept_volume_advection.md).
+Optional: if the group is absent, `sl_adv = .false.`. Experimental and in development: swept-volume (flux-form semi-Lagrangian) advection on the faces where the 2-D Courant number is large, for the `IMEX_IGW` step (requires `IMEX_IGW`, `imex_igw = .true.` and, with `imex_corr_adv = 1` (the default), `imex_corr_adv_vimp = 1`; it stops at start-up otherwise). T, S, the passive tracers stepped with the dynamics, u and v take it. A run in which no face is hot is the same as with `sl_adv = .false.` and the same `IMEX_IGW_SETTINGS`. See [Swept-volume advection](swept_volume_advection.md).
 
 | Setting | Default | Description |
 |--------|---------|-------------|

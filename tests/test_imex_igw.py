@@ -10,7 +10,8 @@ the stop on removed keys with the template's sed line, and the stops on a group 
 imex_igw key that is missing or .false. (the build without IMEX_IGW: test_implicit_fs.py, test_imex_igw_key_*);
 with swept-volume advection (sl_adv) the same output below the thresholds, constancy and
 budgets of the swept fluxes (tracers and momentum), exact restarts with and without hot
-faces, and the stop without imex_corr_adv_vimp = 1.
+faces, and the stop without imex_corr_adv_vimp = 1 when imex_corr_adv = 1 (none with
+imex_corr_adv = 0).
 
 A second build: the realistic MARBL case of test_bgc.py with IMEX_IGW, run with
 BGC tracer subcycling and the 'fixed' and the 'modal' open boundary
@@ -233,7 +234,7 @@ SL_MDIAG = re.compile(r"^\s*SL_MDIAG\s+\d+\s+(.*)$", re.MULTILINE)
 SL_LOW = {"sl_adv": True, "sl_c_lo": 0.0, "sl_c_hi": 1.0e-5}
 # thresholds above every face's 2-D Courant number on the test grid (sl_cmax must exceed sl_c_hi)
 SL_HIGH = {"sl_adv": True, "sl_c_lo": 2.0, "sl_c_hi": 2.5}
-# the IMEX key sl_adv requires (it stops at start-up otherwise)
+# the IMEX key sl_adv requires with imex_corr_adv = 1, the default (it stops at start-up otherwise)
 SL_IMEX = {"imex_corr_adv_vimp": 1}
 
 
@@ -323,9 +324,11 @@ def test_sl_adv_exact_restart_no_hot_face(imex_configuration, input_dir, tmp_pat
     restart reproduces the continuous run bit for bit: the restarted run takes the same paths,
     since the carried swept state in the restart file is zero (a run after a step with hot
     faces carries it, as test_sl_adv_exact_restart checks). Both runs set imex_corr_adv_vimp
-    = 1, which sl_adv requires; with 0 the run stops at start-up. This grid has no cell above
-    vertical Courant number 1 (MAX_VERT_CFL about 1.5e-3 at 40 s), so the estimate of
-    imex_corr_adv_vimp = 1 does not act here."""
+    = 1, which sl_adv requires with imex_corr_adv = 1 (the default); with 0 the run stops at
+    start-up. With imex_corr_adv = 0 (no X, and IMEX ignores imex_corr_adv_vimp) it runs with
+    imex_corr_adv_vimp = 0. This grid has no cell above vertical Courant number 1
+    (MAX_VERT_CFL about 1.5e-3 at 40 s), so the estimate of imex_corr_adv_vimp = 1 does not
+    act here."""
     conf = imex_configuration
     nml = imex_namelist(input_dir, "modal", imex_redu=1, **SL_IMEX)
     nml["SL_ADV_SETTINGS"].update(SL_HIGH)
@@ -355,9 +358,17 @@ def test_sl_adv_exact_restart_no_hot_face(imex_configuration, input_dir, tmp_pat
     nml["TIME_STEPPING"]["ntimes"] = 2
     (tmp_path / "vimp_0").mkdir()
     assert_run_rejected(
-        conf, nml, tmp_path / "vimp_0", ["sl_adv requires imex_corr_adv_vimp = 1"],
+        conf, nml, tmp_path / "vimp_0", ["sl_adv with imex_corr_adv = 1 requires imex_corr_adv_vimp = 1"],
         label="sl_vimp_0", absent=["IMEX it pred"],
     )
+
+    nml["IMEX_IGW_SETTINGS"]["imex_corr_adv"] = 0
+    run3 = tmp_path / "adv_0_vimp_0"
+    run3.mkdir()
+    log3 = conf.run(nml, cwd=run3, capture_output=True)
+    assert squeezed("requires imex_corr_adv_vimp") not in squeezed(log3)
+    assert [int(m[0]) for m in SL_LINE.findall(log3)] == [1, 2], "sl_adv on, one SL line per step"
+    assert_imex_converged(log3)
 
 
 # Keys removed from IMEX_IGW_SETTINGS on 2026-11-13, as old namelists set them;
