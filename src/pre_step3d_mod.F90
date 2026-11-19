@@ -68,7 +68,7 @@ contains
     use ocean_vars, only: wi, we, flxv, flxu, hz, z_w, u, v
     use scalars, only:&
     &nz, dt, forw_start, iic, nnew, nrhs, nstp, nt,&
-    &rdrg, vonkar, zob, ntstart
+    &rdrg, vonkar, zob, ntstart, AM3_crv
 #ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag, vdiag, icori,&
     &dxdyi_u, dxdyi_v
@@ -101,7 +101,7 @@ contains
 #endif
 
     real(kind=8) dtau, cf_stp,cf_bak,  cff, FlxDiv
-    real(kind=8), parameter :: AM3_crv=1._8/6._8, epsil=1.D-33
+    real(kind=8), parameter :: epsil=1.D-33
     real(kind=8), parameter ::  delta=0.1666666666666667_8 !! delta=0.125_8
 # ifdef UPSTREAM_UV
     real(kind=8), parameter :: gamma=0.3333333333333333_8 !! gamma=0.25_8
