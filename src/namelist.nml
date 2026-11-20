@@ -77,6 +77,8 @@ pio_direct_read = 'on'
 &INITIAL_CONDITIONS                                          !roms_read_write.F90
 !---------------------------
 ! Previously set in `roms.in`
+! With ANA_INITIAL: empty (or no group) starts from the analytical
+! state; a file (e.g. a restart file) is read over it
 !---------------------------
 inifile = "my_initial_conditions.nc" ! Initial conditions (IC) file path
 /

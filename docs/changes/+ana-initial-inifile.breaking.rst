@@ -1,0 +1,1 @@
+With ``ANA_INITIAL``, ``inifile`` in ``INITIAL_CONDITIONS`` is now read, so a namelist that names a file that does not exist (such as the template's ``my_initial_conditions.nc``) stops at start-up: set ``inifile = ""`` to start from the analytical state.

@@ -9,7 +9,7 @@ module roms_read_write
   use add_git_hash_mod, only: add_git_hash, git_hash
   use netcdf, only:&
   &nf90_noerr, nf90_nowrite, nf90_double,&
-  &nf90_netcdf4, nf90_global, nf90_enotatt, nf90_open,&
+  &nf90_global, nf90_enotatt, nf90_open,&
   &nf90_inq_varid, nf90_get_att, nf90_close, nf90_create,&
   &nf90_put_att, nf90_inquire_variable, nf90_inquire_dimension,&
   &nf90_get_var, nf90_clobber, nf90_64bit_data, nf90_max_name, nf90_inquire
@@ -251,9 +251,7 @@ module roms_read_write
   character(len=max_name_size), public :: inifile = ""
   character(len=max_name_size), allocatable, public :: frcfiles(:)
   namelist /SIMULATION_NAME_SETTINGS/ output_root_name, title
-#ifndef ANA_INITIAL
   namelist /INITIAL_CONDITIONS/ inifile
-#endif
   namelist /FORCING_FILES/ frcfiles
   namelist /REFERENCE_DATE_SETTINGS/ reference_date
 
@@ -341,9 +339,18 @@ contains
     instant_reference_date = reference_date
     mpi_master_only write(*,'(/1x,A)') trim(title)
 !==========================================================================================
-#ifndef ANA_INITIAL
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=INITIAL_CONDITIONS, iostat=ios, iomsg=msg)
+#ifdef ANA_INITIAL
+    ! With ANA_INITIAL the group is optional. Without it, or with inifile
+    ! empty, the run starts from ana_init; a file named here is read over the
+    ! analytical state (main.F90), e.g. to restart an analytical case. The
+    ! group used to be skipped, so such a restart silently started again.
+    if (is_iostat_end(ios)) then
+      ios = 0
+      inifile = ''
+    endif
+#endif
 
     if (ios /= 0) then
       call error_log%raise_global(&
@@ -357,6 +364,12 @@ contains
     &module_name//'/'//sr_name, fits)
     if (.not. fits) return
 
+#ifdef ANA_INITIAL
+    if (len_trim(inifile) == 0) then
+      mpi_master_only write(*,'(1x,A)') 'initial condition :: analytical '//&
+      &'(ANA_INITIAL, INITIAL_CONDITIONS inifile empty)'
+    else
+#endif
 
     lstr = lenstr(inifile)
 
@@ -368,8 +381,13 @@ contains
     open(newunit=testunit, file=trim(inifile), status='old',&
     &iostat=ios)
     if (ios /= 0) then
+      error_info = "Cannot find input file '" // trim(inifile) // "'"
+#ifdef ANA_INITIAL
+      error_info = trim(error_info) // " (INITIAL_CONDITIONS inifile; with "//&
+      &"ANA_INITIAL, leave it empty to start from the analytical state)"
+#endif
       call error_log%raise_from_rank(&
-      &info="Cannot find input file '" // trim(inifile) // "'",&
+      &info=trim(error_info),&
       &context=module_name)
       return
     end if
@@ -379,7 +397,11 @@ contains
     &'initial condition :: rec =', nrrec,&
     &'file = ''', trim(inifile), ''''
 
-#endif /*ANA_INITIAL*/
+#ifdef ANA_INITIAL
+    mpi_master_only write(*,'(1x,A)') 'initial condition :: read over '//&
+    &'the analytical state (ANA_INITIAL)'
+    endif   ! inifile given
+#endif
 !==========================================================================================
 !     Read the list into max_frc_files entries; only the files listed are kept (below).
     if (allocated(frcfiles)) deallocate(frcfiles)
@@ -1083,7 +1105,7 @@ contains
     logical :: found_rec                ! is correct record found of var
     logical :: found_var_ever           ! if variable was found in any previous files
     logical :: allow_miss
-    integer(kind=4) :: nfiles                   ! total number of forcing files
+    integer(kind=4) :: nfiles                   ! number of files to search
     integer(kind=4) :: irec_old, ifile_old
     integer(kind=4) :: max_recs                 ! total variable records in file
     integer(kind=4) :: islot, itax              ! cache slot of the file and of its time variable
@@ -1111,9 +1133,15 @@ contains
     found_rec      = .false.
     found_var_ever = .false.
 
+    ! An ungridded variable lives in its one named file, which need not be
+    ! listed in frcfiles: search that file once, whatever max_frc is (with
+    ! frcfiles empty the loop used to end before it started).
+    nfiles = max_frc
+    if (present(ungridded_filename)) nfiles = 1
+
     irec_stride = 0
     ifile_stride = 0
-    do while (.not.found_rec .and. ifile <= max_frc)               ! while record not found & still more files to chec
+    do while (.not.found_rec .and. ifile <= nfiles)                ! while record not found & still more files to chec
 
       found_var = .false.                                          ! reset for new file
       if (present(ungridded_filename)) then
@@ -1139,7 +1167,7 @@ contains
 
         ! Number of records in file
         max_recs = size(frc_meta(islot)%tax(itax)%t)
-        ifile_max_recs(ifile) = max_recs
+        if (.not. present(ungridded_filename)) ifile_max_recs(ifile) = max_recs  ! frcfiles(ifile) only
         do while (irec<max_recs .and. .not. found_rec)             ! Search through the records until correct time is
 
           irec_stride = irec_stride+1
@@ -1175,7 +1203,7 @@ contains
           ! abort the run at the next abort_check(). End the search through the
           ! loop condition rather than 'exit'.
           if (allow_miss .and. .not.found_var_ever) then
-            ifile = max_frc + 1
+            ifile = nfiles + 1
           else
             write(error_info, *)&
             &'find_new_record: Ran out of time records ',&
@@ -2137,12 +2165,9 @@ contains
       call append_date_node(fname)
     endif
 
-#ifdef PARALLEL_IO
+    ! Classic CDF-5 with and without PARALLEL_IO (the per-rank files of a
+    ! build without it used to be netCDF-4)
     ierr = nf90_create(trim(fname), ior(nf90_clobber, nf90_64bit_data), ncid)
-#else
-    ierr = nf90_create(trim(fname), nf90_netcdf4, ncid)
-#endif
-!      ierr=nf90_create(trim(fname),nf90_netcdf4,ncid)
     if (ierr/=nf90_noerr) then
       call error_log%check_netcdf_status(netcdf_status=ierr,&
       &context=module_name//"/"//sr_name,&

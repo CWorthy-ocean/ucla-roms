@@ -17,16 +17,9 @@ module nc_read_write
 
   character(len=13) :: module_name = "nc_read_write"
 
-  integer(kind=4),parameter  :: deflate_level=1 ! Compression level for joined file
   integer(kind=4),parameter :: default_prec = nf90_float
-
-  logical,parameter  :: nccreate_shuffle=.true. ! Shuffle on for extra compression
-#ifdef PARALLEL_IO
-  ! create_file uses nf90_64bit_data (classic CDF-5); no deflate/shuffle
-  logical,parameter :: use_netcdf4_var_opts = .false.
-#else
-  logical,parameter :: use_netcdf4_var_opts = .true.
-#endif
+  ! Output files are classic CDF-5 (create_file uses nf90_64bit_data, with
+  ! and without PARALLEL_IO), so variables have no deflate/shuffle options.
 
   interface ncwrite
     module procedure  ncwrite_1D, ncwrite_2D, ncwrite_3D
@@ -440,13 +433,7 @@ contains
       dimid(i) = did
     enddo
     if (varname /= '') then
-      if (use_netcdf4_var_opts) then
-        ierr=nf90_def_var(ncid,varname,xtype,dimid,varid,&
-        &deflate_level=deflate_level,&
-        &shuffle=nccreate_shuffle)
-      else
-        ierr=nf90_def_var(ncid,varname,xtype,dimid,varid)
-      endif
+      ierr=nf90_def_var(ncid,varname,xtype,dimid,varid)
       if (ierr/=nf90_noerr) then
         call error_log%check_netcdf_status(netcdf_status=ierr,&
         &context=module_name//"/"//fn_name,&
@@ -488,9 +475,11 @@ contains
 !----------------------------------------------------------------------
   subroutine nc_fill_record(ncid, vname, irec)  ![
     ! Write the fill value of record variable vname into record irec, for
-    ! a variable that its file defines but its writer does not write on
-    ! that record (rank 0, serial netCDF). It then reads _FillValue, as it
-    ! did when rank 0 opened the file in fill mode (nc_set_record_nofill).
+    ! a variable that its file defines but its writer does not write (or
+    ! writes only in part) on that record, through serial netCDF: rank 0 on
+    ! a PARALLEL_IO file (nc_set_record_nofill), or each rank on its own
+    ! no-fill file without PARALLEL_IO. Unwritten parts then read
+    ! _FillValue, as they did in fill mode (and in netCDF-4 files).
     use netcdf, only: nf90_inquire_variable, nf90_inquire_dimension,&
     &nf90_get_att, nf90_int, nf90_double, nf90_fill_int, nf90_fill_float,&
     &nf90_fill_double, nf90_max_var_dims

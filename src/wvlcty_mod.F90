@@ -38,9 +38,19 @@ contains
     use ocean_vars, only: w
 #endif
     use scalars, only: nz, nstp
+    use pipe_frc, only: pipe_source, pipe_idx, pipe_flx, pipe_prf
+#ifdef CDR_FORCING
+    use cdr_frc, only: cdr_source, cdr_volume, cdr_nprf, cdr_icdr,&
+    &cdr_iloc, cdr_jloc, cdr_prf, cdr_vol
+    use param, only: itemp
+#endif
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
+#ifdef CDR_FORCING
+    integer(kind=4) cidx, icdr
+    real(kind=8) cff
+#endif
     real(kind=8) Wvlc(GLOBAL_2D_ARRAY,0:nz)
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: Wrk
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: Wxi, Weta
@@ -83,9 +93,32 @@ contains
           Wrk(i,k)=Wrk(i,k-1)-pm(i,j)*pn(i,j)*(&
           &FlxU(i+1,j,k)-FlxU(i,j,k)&
           &+FlxV(i,j+1,k)-FlxV(i,j,k))
+          ! point volume sources, as omega adds them to Wi: pipes ...
+          if (pipe_source) then
+            if (pipe_idx(i,j)>0) then
+              Wrk(i,k)=Wrk(i,k)+pm(i,j)*pn(i,j)*pipe_flx(i,j)&
+              &*pipe_prf(pipe_idx(i,j),k)
+            endif
+          endif
 !**    Wrk(i,k)=0._8!(uncomment to test the second part)
         enddo
       enddo
+#ifdef CDR_FORCING
+      ! ... and CDR volume releases (accumulated bottom-up, temp profile)
+      if (cdr_source .and. cdr_volume) then
+        do cidx=1,cdr_nprf
+          i = cdr_iloc(cidx)
+          if (cdr_jloc(cidx)==j .and. i>=imin .and. i<=imax) then
+            icdr = cdr_icdr(cidx)
+            cff = 0._8
+            do k=1,nz
+              cff = cff + cdr_vol(icdr)*cdr_prf(cidx,itemp,k)
+              Wrk(i,k) = Wrk(i,k) + pm(i,j)*pn(i,j)*cff
+            enddo
+          endif
+        enddo
+      endif
+#endif
       do i=imin,imax
         Wvlc(i,j,nz)=+0.375_8*Wrk(i,nz) +0.75_8*Wrk(i,nz-1)&
         &-0.125_8*Wrk(i,nz-2)

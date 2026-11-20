@@ -770,6 +770,7 @@ contains                  !]
         ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
 
         call ncwrite(ncid,'ocean_time',(/t_avg_ovars/),(/rec_avg/))
+        call nc_fill_record(ncid,'time_step',rec_avg)   ! defined, but no step to record
 
         start=1; start(3)=rec_avg                                    ! back to 2D vars
         if (wrt_avg_Z)   call ncwrite(ncid, vname(1,indxZ),  zeta_avg(i0:i1,j0:j1), start)

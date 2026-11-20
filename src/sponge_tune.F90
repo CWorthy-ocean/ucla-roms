@@ -11,7 +11,7 @@ module sponge_tune
   &nf90_noerr, nf90_write, nf90_inq_varid,&
   &nf90_open, nf90_put_att, nf90_close,&
   &nf90_redef, nf90_enddef
-  use nc_read_write, only: nccreate, ncread, ncwrite
+  use nc_read_write, only: nccreate, ncread, ncwrite, nc_fill_record
   use scalars, only: iic, tdays, time, dt
   use dimensions, only: nx, ny, npx, npy
   use calc_pflx_mod, only: up, vp
@@ -614,17 +614,27 @@ contains
       call ncwrite(ncid,'ub_west' ,ub_west ,(/1,record/),.true.)
     endif
 #else
+    ! The restart file is written without fill (wrt_rst): a side this rank
+    ! does not write gets the fill value, as the netCDF-4 files had.
     if (obc_south.and.(jnode==0)) then
       call ncwrite(ncid,'ub_south',ub_south,(/1,record/))
+    else
+      call nc_fill_record(ncid,'ub_south',record)
     endif
     if (obc_north.and.(jnode==np_eta-1)) then
       call ncwrite(ncid,'ub_north',ub_north,(/1,record/))
+    else
+      call nc_fill_record(ncid,'ub_north',record)
     endif
     if (obc_east.and.(inode==np_xi-1)) then
       call ncwrite(ncid,'ub_east' ,ub_east ,(/1,record/))
+    else
+      call nc_fill_record(ncid,'ub_east',record)
     endif
     if (obc_west.and.(inode==0)) then
       call ncwrite(ncid,'ub_west' ,ub_west ,(/1,record/))
+    else
+      call nc_fill_record(ncid,'ub_west',record)
     endif
 #endif
 
