@@ -1,0 +1,2 @@
+The ``_avg``, ``_bgc_avg`` and ``_bgc_dia_avg`` files have two new variables, ``avg_begin_time`` and ``avg_end_time`` (in seconds, like ``ocean_time``): the start and end of each record's averaging window, as in the ``_cdr``, ``_cdrgas`` and ``_uscl`` files.
+- ``ocean_time`` is unchanged: the window end in ``_bgc_avg`` and ``_bgc_dia_avg``, and the mean of the times of the window's steps in ``_avg`` (half a step after the window's midpoint), so pair ``_avg`` and ``_bgc_avg`` records by ``avg_end_time``.

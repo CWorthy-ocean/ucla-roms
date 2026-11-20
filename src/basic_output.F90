@@ -17,7 +17,7 @@ module basic_output
   &dn_tm, dn_xr, dn_xu,&
   &dn_yr, dn_yv, dn_zr, dn_zw,&
   &avg_output, create_file, sec2date, output_root_name,&
-  &refdatestr, put_global_atts, append_date_node
+  &refdatestr, put_global_atts, append_date_node, def_avg_window_times
   use sponge_tune, only:  wrt_rst_ub, ub_tune
   use calc_pflx_mod, only: wrt_rst_diag_slow, calc_pflx
 #ifdef SOLVE3D
@@ -130,7 +130,8 @@ module basic_output
 
   ! netcdf outputting:
   integer(kind=4) :: ncid=-1, prev_fill_mode
-  real(kind=8)    :: t_avg_ovars=0
+  real(kind=8)    :: t_avg_ovars=0                              ! ocean_time of an average: mean of its steps' times
+  real(kind=8)    :: avg_begin_ovars=0                          ! avg_begin_time of the current window
   integer(kind=4) :: navg_ovars = 0                             ! number of samples in average
   character(len=max_name_size),public :: fname_rst                 ! restart filename needed by diagnostics
   integer(kind=4),public         :: rec_rst=2          ! current file output record needed by diags
@@ -699,6 +700,8 @@ contains                  !]
           ierr=nf90_open(fname_avg,nf90_write,ncid)
           call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/t_avg_ovars/),(/rec_avg/))
+          call ncwrite(ncid,'avg_begin_time',(/avg_begin_ovars/),(/rec_avg/))
+          call ncwrite(ncid,'avg_end_time',(/time/),(/rec_avg/))
           call nc_fill_record(ncid,'time_step',rec_avg)   ! defined, but no step to record
           ierr=nf90_close (ncid)
         endif
@@ -774,6 +777,8 @@ contains                  !]
         ierr=nf90_set_fill(ncid, nf90_nofill, prev_fill_mode)
 
         call ncwrite(ncid,'ocean_time',(/t_avg_ovars/),(/rec_avg/))
+        call ncwrite(ncid,'avg_begin_time',(/avg_begin_ovars/),(/rec_avg/))
+        call ncwrite(ncid,'avg_end_time',(/time/),(/rec_avg/))
         call nc_fill_record(ncid,'time_step',rec_avg)   ! defined, but no step to record
 
         start=1; start(3)=rec_avg                                    ! back to 2D vars
@@ -1309,6 +1314,7 @@ contains                  !]
     varid = nccreate(ncid,'time_step',(/dn_aux,dn_tm/),(/iaux,0/),nf90_int)
     ierr=nf90_put_att (ncid, varid, 'long_name',&
     &'time step and record numbers from initialization')
+    if (avg) call def_avg_window_times(ncid)
 
     if ( (wrt_Z .and. .not. avg) .or. (wrt_avg_Z .and. avg) ) then ! .or. needed for his or avg output selection
       if (.not. avg) text_lname=vname(2,indxZ)
@@ -1636,6 +1642,7 @@ contains                  !]
         if (mynode==0) write(*,'(7x,2A,F9.1)')&
         &'ocean_vars :: started averaging. ',&
         &'output_period_avg (s) =', output_period_avg
+        avg_begin_ovars = time - dt                      ! the window starts at the state of time n
       endif
 
       t_avg_ovars = t_avg_ovars*(1-coef) + time*coef

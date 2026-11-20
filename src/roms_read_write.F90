@@ -273,6 +273,7 @@ module roms_read_write
   public :: refdatestr
   public :: store_string_att
   public :: create_file
+  public :: def_avg_window_times
 
   public :: offset
   public :: sec2date
@@ -2192,6 +2193,25 @@ contains
     endif
 
   end subroutine create_file !]
+! ----------------------------------------------------------------------
+  subroutine def_avg_window_times(ncid)  ![
+    ! Define avg_begin_time and avg_end_time, the bounds of the averaging
+    ! window of each record of an averages file, in define mode. They are in
+    ! the units of ocean_time (seconds since the reference date). Each record
+    ! averages the states at the ends of the model steps in
+    ! (avg_begin_time, avg_end_time].
+    implicit none
+    integer(kind=4), intent(in) :: ncid
+    integer(kind=4) :: ierr, varid
+
+    varid = nccreate(ncid,'avg_begin_time',(/dn_tm/),(/0/),nf90_double)
+    ierr = nf90_put_att(ncid,varid,'long_name','Time at beginning of averaging period')
+    ierr = nf90_put_att(ncid,varid,'units','second')
+    varid = nccreate(ncid,'avg_end_time',(/dn_tm/),(/0/),nf90_double)
+    ierr = nf90_put_att(ncid,varid,'long_name','Time at end of averaging period')
+    ierr = nf90_put_att(ncid,varid,'units','second')
+
+  end subroutine def_avg_window_times !]
 ! ----------------------------------------------------------------------
   subroutine coarse2fine(cdata,fdata,gtype) ![
     ! interpolates from (possibly partitioned) coarse to fine surface forcing data

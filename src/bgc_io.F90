@@ -54,7 +54,7 @@ module bgc_io
   use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill
   use roms_read_write, only:&
   &dn_tm, dn_xr, dn_yr, dn_zr,&
-  &create_file, set_frc_data
+  &create_file, set_frc_data, def_avg_window_times
 
   use netcdf, only:&
   &nf90_write, nf90_open, nf90_close, nf90_redef, nf90_enddef,&
@@ -81,6 +81,10 @@ module bgc_io
   integer(kind=4) :: ncid=-1, prev_fill_mode
   real(kind=8)    :: t_avg_bgc=0
   real(kind=8)    :: t_avg_dia_bgc=0
+  ! avg_begin_time of the current _bgc_avg and _bgc_dia_avg windows (their
+  ! records are stamped, and avg_end_time is, the window end)
+  real(kind=8)    :: avg_begin_bgc=0
+  real(kind=8)    :: avg_begin_dia_bgc=0
   integer(kind=4),save :: navg_bgc = 0               ! number of samples in average
   integer(kind=4),save :: navg_dia_bgc = 0           ! number of samples in average
   ! With MARBL the diagnostics change only on MARBL steps, so they are added
@@ -284,6 +288,8 @@ contains
           ierr=nf90_open(fname_avg,nf90_write,ncid)
           call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/time/),(/record_avg/))
+          call ncwrite(ncid,'avg_begin_time',(/avg_begin_bgc/),(/record_avg/))
+          call ncwrite(ncid,'avg_end_time',(/time/),(/record_avg/))
           ierr=nf90_close(ncid)
         endif
 
@@ -388,6 +394,8 @@ contains
         navg_bgc = 0
         ierr=nf90_open(fname_avg,nf90_write,ncid)
         call ncwrite(ncid,'ocean_time',(/time/),(/record_avg/))
+        call ncwrite(ncid,'avg_begin_time',(/avg_begin_bgc/),(/record_avg/))
+        call ncwrite(ncid,'avg_end_time',(/time/),(/record_avg/))
         do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1, nt
           if (wrt_t_avg(itrc)) then
             if (mynode == 0) then
@@ -519,6 +527,8 @@ contains
           ierr=nf90_open(fname_avg,nf90_write,ncid)
           call nc_set_record_nofill(ncid)
           call ncwrite(ncid,'ocean_time',(/time/),(/record_dia_avg/))
+          call ncwrite(ncid,'avg_begin_time',(/avg_begin_dia_bgc/),(/record_dia_avg/))
+          call ncwrite(ncid,'avg_end_time',(/time/),(/record_dia_avg/))
           ierr=nf90_close(ncid)
         endif
 
@@ -572,6 +582,8 @@ contains
         navg_dia_bgc = 0
         ierr=nf90_open(fname_avg,nf90_write,ncid)
         call ncwrite(ncid,'ocean_time',(/time/),(/record_dia_avg/))
+        call ncwrite(ncid,'avg_begin_time',(/avg_begin_dia_bgc/),(/record_dia_avg/))
+        call ncwrite(ncid,'avg_end_time',(/time/),(/record_dia_avg/))
         do itrc=1,nr_bgc_diag_2d
           if (wrt_bgc_diag_2d(itrc)) then
             idiag = idx_bgc_diag_2d(itrc)
@@ -781,6 +793,7 @@ contains
     character(len=64) :: text_lname
 
     if (avg) then
+      call def_avg_window_times(ncid)
       do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1,NT
         if (wrt_t_avg(itrc)) then
           text_lname='avg_'//t_lname(itrc)
@@ -819,6 +832,7 @@ contains
       if (mynode==0) write(*,'(7x,2A,F9.1)')&
       &'bgc :: started averaging. ',&
       &'output_period_bgc_avg (s) =', output_period_bgc_avg
+      avg_begin_bgc = time - dt                          ! the window starts at the state of time n
     endif
 
     t_avg_bgc = t_avg_bgc*(1-coef) + time*coef
@@ -851,6 +865,7 @@ contains
       if (mynode==0) write(*,'(7x,2A,F9.1)')&
       &'bgc diag :: started averaging. ',&
       &'output_period_bgc_avg_dia (s) =', output_period_bgc_avg_dia
+      avg_begin_dia_bgc = time - dt                      ! the window starts at the state of time n
     endif
 
     t_avg_dia_bgc = t_avg_dia_bgc*(1-coef) + time*coef
@@ -965,6 +980,8 @@ contains
     logical,intent(in) :: avg
     ! local
     integer(kind=4) :: idiag, ierr, varid
+
+    if (avg) call def_avg_window_times(ncid)
 
     ! 2d diagnostics:
     do idiag=1,nr_bgc_diag_2d

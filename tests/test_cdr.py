@@ -316,7 +316,8 @@ class TestCdr:
 
     def test_bgc_averages_survive_restart(self, tmp_path, cdr_conf, input_dir):
         """``_bgc_avg`` windows hold the model steps of each period only, and a
-        restarted run's records equal the uninterrupted run's.
+        restarted run's records equal the uninterrupted run's; so do the
+        physics ``_avg`` records, window bounds included.
 
         With ``wrt_bgc_his`` off, the start-up call used to add the start-up
         state to the first window, so records came one step early, and the
@@ -330,10 +331,18 @@ class TestCdr:
             "output_period_bgc_avg": 200,
             "nrpf_bgc_avg": 2,
         })
+        nml["BASIC_OUTPUT_SETTINGS"].update({
+            "wrt_file_avg": True,
+            "output_period_avg": 200,
+            "nrpf_avg": 2,
+        })
+        nml["TS_OUTPUT_SETTINGS"]["wrt_avg_temp"] = True
         whole, restarted = _run_with_restart(tmp_path, cdr_conf, nml)
 
         compared = _check_restarted_averages(whole, restarted, "bgc_avg")
         assert "DIC" in compared
+        compared = _check_restarted_averages(whole, restarted, "avg")
+        assert {"temp", "u", "avg_begin_time"} <= set(compared)
         # _bgc_dia (nrpf_bgc_his_dia 2) at 0, 200, ..., 800 s; restart at 400 s
         assert _records_per_file(whole, "bgc_dia") == [2, 2, 1]
         assert _records_per_file(restarted, "bgc_dia") == [2, 1]
@@ -387,6 +396,9 @@ class TestCdr:
             stamp = his_time[n::n] if avg_stream == "bgc_avg" else (
                 his_time[1:].reshape(-1, n).mean(axis=1))
             np.testing.assert_allclose(avg["ocean_time"].values, stamp, rtol=0, atol=1e-6)
+            # both carry the window bounds
+            np.testing.assert_array_equal(avg["avg_begin_time"].values, his_time[:-1:n])
+            np.testing.assert_array_equal(avg["avg_end_time"].values, his_time[n::n])
 
 
 def _restart_nml(input_dir, marbl_timestep) -> dict:
@@ -484,10 +496,13 @@ def _check_marbl_diagnostics_are_double(run_dir) -> None:
 def _check_restarted_averages(whole, restarted, stream) -> list[str]:
     """Check the 200 s averages of ``stream`` around the restart at 400 s.
 
-    In the whole run, the records end 200, 400, 600 and 800 s after the start,
-    two per file (``nrpf`` 2), so the files start at 200 and 600 s. The
-    restarted run's two records are bit-identical to the whole run's last two.
-    Returns the names of the variables compared.
+    In the whole run, the windows (``avg_begin_time``, ``avg_end_time``) end
+    200, 400, 600 and 800 s after the start, two records per file (``nrpf``
+    2), so the files start at 200 and 600 s. Each record is stamped at its
+    window end, except ``_avg``'s, stamped at the mean of its steps' times
+    (120, 320, ... s for 5 steps of 40 s). The restarted run's two records are
+    bit-identical to the whole run's last two. Returns the names of the
+    variables compared.
     """
     assert sorted(p.name for p in whole.glob(f"roms_{stream}.*.0.nc")) == [
         f"roms_{stream}.20100101000320.0.nc", f"roms_{stream}.20100101001000.0.nc"
@@ -497,7 +512,10 @@ def _check_restarted_averages(whole, restarted, stream) -> list[str]:
     start = xr.open_dataset(
         whole / "roms_his.20100101000000.0.nc", decode_times=False
     )["ocean_time"].values[0]
-    np.testing.assert_array_equal(ref["ocean_time"] - start, [200, 400, 600, 800])
+    np.testing.assert_array_equal(ref["avg_begin_time"] - start, [0, 200, 400, 600])
+    np.testing.assert_array_equal(ref["avg_end_time"] - start, [200, 400, 600, 800])
+    stamp = [120, 320, 520, 720] if stream == "avg" else [200, 400, 600, 800]
+    np.testing.assert_allclose(ref["ocean_time"] - start, stamp, rtol=0, atol=1e-6)
     np.testing.assert_array_equal(ref["ocean_time"][-2:], new["ocean_time"])
     ref = ref.isel(time=slice(-2, None))
     compared = [v for v in new.data_vars if "time" in new[v].dims]
