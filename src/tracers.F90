@@ -41,8 +41,7 @@ module tracers
   use carbonate_sensitivity, only: compute_surface_beta_eta
 # endif
 #endif
-  use scalars, only: nz, nstp, nrhs, nnew, forw_start, iic, nt
-! for 'FIRST_TIME_STEP' and nstp, only:
+  use scalars, only: nz, nrhs, nnew, forw_start, iic, nt
   use nc_read_write, only: nccreate, ncwrite
   use roms_read_write, only:&
   &ncforce, dn_tm, dn_xr, dn_yr, dn_zr,&
@@ -493,7 +492,7 @@ contains
       if (wrt_t_avg(itrc)) then
         itavg = NT_2_t_avg(itrc)                         ! get respective index for t_avg(itavg) -> t(itrc)
         t_avg(i0:i1,j0:j1,:,itavg) = t_avg(i0:i1,j0:j1,:,itavg)     *(1-coef) +&
-        &t(i0:i1,j0:j1,:,nstp,itrc) * coef
+        &t(i0:i1,j0:j1,:,nnew,itrc) * coef           ! n+1 (calc_avg_ocean_vars)
       endif
     enddo
 
