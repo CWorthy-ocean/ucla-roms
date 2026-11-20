@@ -29,6 +29,9 @@ contains
 ! surface. This computation is done solely for diagnostic/output
 ! purposes and does not have any feedback onto the model.
 ! Unlike W, absolute vertical velocity is defined at RHO-points.
+!  Its callers (history, averages, extracted data) run at the end of a
+! step, where z_r and 'nnew' hold n+1 and 'nstp' still holds time n, so
+! u and v are taken at 'nnew'.
     use dimensions, only: inode, jnode
     use param, only: lm, mm, ieast, iwest, jnorth, jsouth, np_xi, np_eta
     use dimensions, only: npx, npy
@@ -37,7 +40,7 @@ contains
 #ifdef NHMG
     use ocean_vars, only: w
 #endif
-    use scalars, only: nz, nstp
+    use scalars, only: nz, nnew
     use pipe_frc, only: pipe_source, pipe_idx, pipe_flx, pipe_prf
 #ifdef CDR_FORCING
     use cdr_frc, only: cdr_source, cdr_volume, cdr_nprf, cdr_icdr,&
@@ -142,13 +145,13 @@ contains
     do k=1,nz
       do j=jmin,jmax
         do i=imin,imax+1
-          Wxi(i,j)=u(i,j,k,nstp)*(z_r(i,j,k)-z_r(i-1,j,k))&
+          Wxi(i,j)=u(i,j,k,nnew)*(z_r(i,j,k)-z_r(i-1,j,k))&
           &*(pm(i,j)+pm(i-1,j))
         enddo
       enddo
       do j=jmin,jmax+1
         do i=imin,imax
-          Weta(i,j)=v(i,j,k,nstp)*(z_r(i,j,k)-z_r(i,j-1,k))&
+          Weta(i,j)=v(i,j,k,nnew)*(z_r(i,j,k)-z_r(i,j-1,k))&
           &*(pn(i,j)+pn(i,j-1))
         enddo
       enddo
@@ -164,7 +167,7 @@ contains
     do k=1,nz  ! WASTED COMPUTING TO OVERWRITE SOMETHING USE IF ELSE RATHER
       do j=jmin,jmax
         do i=imin,imax
-          Wvlc(i,j,k) =  w(i,j,k,nstp)
+          Wvlc(i,j,k) =  w(i,j,k,nnew)
         enddo
       enddo
     enddo
