@@ -68,7 +68,7 @@ module extract_data
   &nf90_put_att, nf90_inq_varid, nf90_open, nf90_close,&
   &nf90_inquire, nf90_inquire_variable, nf90_inquire_dimension,&
   &nf90_get_att, nf90_clobber, nf90_64bit_data, nf90_create, nf90_def_dim,&
-  &nf90_def_var, nf90_inq_dimid, nf90_noerr
+  &nf90_def_var, nf90_inq_dimid, nf90_noerr, nf90_redef, nf90_enddef
   use tracers, only: t, t_vname, t_lname, t_units, iTandS  ! need to get names of tracers
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u
   use scalars, only: dt, knew, nnew, time, tdays
@@ -959,6 +959,9 @@ contains
       pio_extract_child = ic
 #else
       ierr=nf90_open(fname(1),nf90_write,ncid)
+      ! The sets' records share the file's time dimension (create_edata_vars),
+      ! so every rank stamps each record, with or without points
+      call ncwrite(ncid,'ocean_time',(/time/),(/obj(1)%record+1/))
 #endif
 
 !! We have to update the object records regardless of whether
@@ -1477,8 +1480,10 @@ contains
     call create_file('_ext',fname(1))
 
     ierr=nf90_open(fname(1),nf90_write,ncid)
+    ierr=nf90_redef(ncid)        ! a classic-format file: define mode
 
     call create_edata_vars(ncid)
+    ierr=nf90_enddef(ncid)
     call error_log%abort_check()
 
     ierr = nf90_close(ncid)
@@ -1511,12 +1516,16 @@ contains
       if (obj(i)%np>0) then
         write(label,'(I0.3)') i
         np_label='np'//label
-        time_label='time_'//trim(obj(i)%set)
+        ! Every set's records on the file's one unlimited dimension (a
+        ! classic-format file has only one; all children share
+        ! output_period_extract and nrpf_extract, so the records of all
+        ! objects advance together)
+        time_label=dn_tm
         dname = (/np_label,time_label/)
         dsize = (/ obj(i)%np ,  0/)
         dname3(1) = 'np'//label
         dname3(2) = 's_rho'
-        dname3(3) = 'time_'//trim(obj(i)%set)
+        dname3(3) = dn_tm
         dsize3 = (/ obj(i)%np , N_chd(obj(i)%ichd), 0/)
 
         tname = trim(obj(i)%set)//'_time'

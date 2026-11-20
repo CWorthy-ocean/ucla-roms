@@ -29,9 +29,9 @@ module grid
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort, pio_direct_close
   use pio, only : PIO_closefile, PIO_write
-  use netcdf, only: nf90_redef, nf90_enddef
   use mpi_f08, only: MPI_Bcast, MPI_Barrier, MPI_CHARACTER
 #endif
+  use netcdf, only: nf90_redef, nf90_enddef
   use instant_output, only: wrt_instant
   implicit none
 !
@@ -229,7 +229,9 @@ contains
     call create_file('_grd',ana_grdname,.true.) ! last argument is to skip date label
 
     ierr=nf90_open(ana_grdname,nf90_write,ncid)
+    ierr=nf90_redef(ncid)         ! a classic-format file: define mode for def_grid
     call def_grid(ncid)
+    ierr=nf90_enddef(ncid)
     call wrt_grid(ncid)
     ierr=nf90_close(ncid)
 #endif
