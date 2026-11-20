@@ -338,6 +338,56 @@ class TestCdr:
         assert _records_per_file(whole, "bgc_dia") == [2, 2, 1]
         assert _records_per_file(restarted, "bgc_dia") == [2, 1]
 
+    def test_averages_are_window_means(self, tmp_path, cdr_conf, input_dir):
+        """Each ``_avg`` and ``_bgc_avg`` record is the mean of the states at
+        the ends of its window's steps, which the history files hold when
+        written every step: ``temp`` (``_avg``) and ``DIC`` (``_bgc_avg``)
+        equal the mean of the ``_his`` and ``_bgc`` records after the window's
+        start, up to and including its end.
+
+        The averages run at the end of the step, when time is already n+1;
+        they used to take ``u``, ``v`` and the tracers at nstp (time n), so
+        each record averaged the states one step before its window, which
+        fails here: the mean shifted by one step is checked to differ.
+        """
+        nml = _cdr_parm_nml(input_dir)
+        dt = nml["TIME_STEPPING"]["dt"]
+        steps, window = 10, 200
+        n = window // dt  # steps per window
+        nml["TIME_STEPPING"]["ntimes"] = steps
+        nml["BASIC_OUTPUT_SETTINGS"].update({
+            "output_period_his": dt, "nrpf_his": steps + 1,
+            "wrt_file_avg": True, "output_period_avg": window, "nrpf_avg": steps,
+        })
+        nml["TS_OUTPUT_SETTINGS"].update({"wrt_temp": True, "wrt_avg_temp": True})
+        nml["BGC_SETTINGS"].update({
+            "output_period_bgc_his": dt, "nrpf_bgc_his": steps + 1,
+            "wrt_bgc_avg": True, "output_period_bgc_avg": window, "nrpf_bgc_avg": steps,
+        })
+        cdr_conf.run(nml, cwd=tmp_path)
+
+        for his_stream, avg_stream, var in (("his", "avg", "temp"), ("bgc", "bgc_avg", "DIC")):
+            his = _joined_records(tmp_path, his_stream)
+            avg = _joined_records(tmp_path, avg_stream)
+            his_time = his["ocean_time"].values
+            np.testing.assert_array_equal(his_time - his_time[0], dt * np.arange(steps + 1))
+            assert avg.sizes["time"] == steps // n
+            for w in range(steps // n):
+                name = f"{avg_stream} {var} record {w}"
+                recs = slice(w * n + 1, (w + 1) * n + 1)  # the window's steps
+                mean = his[var].isel(time=recs).values.mean(axis=0)
+                value = avg[var].isel(time=w).values
+                scale = np.nanmax(np.abs(mean))
+                err = np.nanmax(np.abs(value - mean)) / scale
+                assert err <= 1e-12, f"{name}: max relative difference {err:.2e}"
+                early = his[var].isel(time=slice(w * n, (w + 1) * n)).values.mean(axis=0)
+                lag = np.nanmax(np.abs(early - mean)) / scale
+                assert lag > 1e-10, f"{name}: a one-step lag moves the mean by only {lag:.2e}"
+            # _bgc_avg is stamped at the window end, _avg at the mean of its steps' times
+            stamp = his_time[n::n] if avg_stream == "bgc_avg" else (
+                his_time[1:].reshape(-1, n).mean(axis=1))
+            np.testing.assert_allclose(avg["ocean_time"].values, stamp, rtol=0, atol=1e-6)
+
 
 def _restart_nml(input_dir, marbl_timestep) -> dict:
     """Parameterized-release namelist for a 20-step run with a restart at 400 s.

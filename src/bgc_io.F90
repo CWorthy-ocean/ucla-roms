@@ -59,7 +59,7 @@ module bgc_io
   use netcdf, only:&
   &nf90_write, nf90_open, nf90_close, nf90_redef, nf90_enddef,&
   &nf90_double, nf90_put_att
-  use scalars, only: nstp, nt, time, nz, dt, iic, nnew, tdays
+  use scalars, only: nt, time, nz, dt, iic, nnew, tdays
   use dimensions, only: i0, i1, j0, j1, xi_rho, eta_rho&
   &, ds_xr, ds_yr, ds_zr, ds_xu, ds_yv, ds_zw
   use error_handling_mod, only: error_log
@@ -824,11 +824,13 @@ contains
     t_avg_bgc = t_avg_bgc*(1-coef) + time*coef
 
     ! need i0:i1 indices because arrays still GLOBAL_2D therefore wasted margin
+    ! The tracers at 'nnew', as in the history file: wrt_bgc runs at the end
+    ! of the step, where 'nnew' holds n+1 and 'nstp' still holds time n
     do itrc=iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor+1, NT
       if (wrt_t_avg(itrc)) then
         itavg = NT_2_t_avg(itrc)                         ! get respective index for t_avg(itavg) -> t(itrc)
         t_avg(i0:i1,j0:j1,:,itavg) = t_avg(i0:i1,j0:j1,:,itavg)    *(1-coef)&
-        &+     t(i0:i1,j0:j1,:,nstp,itrc)*coef     ! CONFIRM NSTP OR NNEW!!!
+        &+     t(i0:i1,j0:j1,:,nnew,itrc)*coef
       endif
     enddo
 
