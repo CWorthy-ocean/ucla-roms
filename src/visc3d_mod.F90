@@ -32,7 +32,8 @@ contains
 !            the large-scale ocean circulation, JCP, 105, 333-338._8
 
     use coupling, only: rufrc, rvfrc
-    use grid, only: pm, pn, dm_r, dn_r, pmask, dm_p, dn_p, nx,ny
+    use grid, only: pm, pn, dm_r, dn_r, pmask, dm_p, dn_p, dm_u, dn_u,&
+    &dm_v, dn_v, nx,ny
     use dimensions, only: inode, jnode
     use param, only: ieast, iwest, jnorth, jsouth, np_eta, np_xi
     use mixing, only: visc2_r, visc2_p
@@ -97,7 +98,9 @@ contains
 ! Apply viscous terms. Note that at this stage arrays u,v(...,3-nstp)
 ! contain Hz*U and Hz*V with units of [m2/s].   Also compute vertical
 ! integral of viscous terms and add it into coupling terms for the
-! barotropic mode
+! barotropic mode. cff is per unit area [m2/s2], while rufrc/rvfrc are
+! integrated over the cell area [m4/s2], so cff is multiplied by the
+! u- or v-point area dm*dn before it is added.
 
       do j=jstr,jend
         do i=istrU,iend
@@ -105,7 +108,7 @@ contains
           &*( (pn(i-1,j)+pn(i,j))*(UFx(i,j)-UFx(i-1,j))&
           &+(pm(i-1,j)+pm(i,j))*(UFe(i,j+1)-UFe(i,j))&
           &)
-          rufrc(i,j)=rufrc(i,j) + cff
+          rufrc(i,j)=rufrc(i,j) + cff*dm_u(i,j)*dn_u(i,j)
           u(i,j,k,indx)=u(i,j,k,indx) + dt*cff
         enddo
       enddo
@@ -115,7 +118,7 @@ contains
           &*( (pn(i,j-1)+pn(i,j))*(VFx(i+1,j)-VFx(i,j))&
           &+(pm(i,j-1)+pm(i,j))*(VFe(i,j)-VFe(i,j-1))&
           &)
-          rvfrc(i,j)=rvfrc(i,j) + cff
+          rvfrc(i,j)=rvfrc(i,j) + cff*dm_v(i,j)*dn_v(i,j)
           v(i,j,k,indx)=v(i,j,k,indx) + dt*cff
         enddo
       enddo
@@ -501,7 +504,8 @@ contains
 ! Apply viscous terms. Note that at this stage arrays u,v(...,3-nstp)
 ! contain Hz*U and Hz*V with units of [m2/s].   Also compute vertical
 ! integral of viscous terms and add it into coupling terms for the
-! barotropic mode
+! barotropic mode, multiplied by the u- or v-point area dm*dn because
+! rufrc/rvfrc are area-integrated (see visc3d_s_tile).
 
         do j=jstr,jend
           do i=istrU,iend
@@ -509,7 +513,7 @@ contains
             &*( (pn(i-1,j)+pn(i,j))*(UFx(i,j)-UFx(i-1,j))&
             &+(pm(i-1,j)+pm(i,j))*(UFe(i,j+1)-UFe(i,j))&
             &)
-            rufrc(i,j)=rufrc(i,j) + cff
+            rufrc(i,j)=rufrc(i,j) + cff*dm_u(i,j)*dn_u(i,j)
 
             u(i,j,k,indx)=u(i,j,k,indx) + dt*( cff+UFs(i,j,k2)&  ! DevinD indx=nnew here. Not sure why didn't use nnew.
             &                                              -UFs(i,j,k1))
@@ -521,7 +525,7 @@ contains
             &*( (pn(i,j-1)+pn(i,j))*(VFx(i+1,j)-VFx(i,j))&
             &-(pm(i,j-1)+pm(i,j))*(VFe(i,j)-VFe(i,j-1))&
             &)
-            rvfrc(i,j)=rvfrc(i,j) + cff
+            rvfrc(i,j)=rvfrc(i,j) + cff*dm_v(i,j)*dn_v(i,j)
             v(i,j,k,indx)=v(i,j,k,indx) + dt*( cff+VFs(i,j,k2)&
             &-VFs(i,j,k1))
           enddo
