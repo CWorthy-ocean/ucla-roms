@@ -1,0 +1,1 @@
+Averaged ``u``, ``v``, ``temp``, ``salt`` and the passive, CDR and BGC tracers in ``_avg`` and ``_bgc_avg`` change: each record now averages the states at the ends of its window's steps, one step later than before. ``w`` changes slightly in ``_his``, ``_avg`` and extracted boundary data.

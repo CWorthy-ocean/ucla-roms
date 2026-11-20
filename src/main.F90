@@ -511,8 +511,8 @@ contains
 ! time=dt*iic, and "iic" is the step written to "time_step" and printed
 ! by "diag".
 ! The snapshot outputs (history, restart, extracted data) write the
-! fields of n+1 there: the 2D fields at "knew" and the 3D fields at
-! "nnew"; "nstp" still holds time n.
+! fields of n+1 there, and the averages add them: the 2D fields at
+! "knew" and the 3D fields at "nnew"; "nstp" still holds time n.
 
     time=start_time+dt*float(iic-ntstart) !<-- corresp. to "nstp"
     tdays=time*sec2day

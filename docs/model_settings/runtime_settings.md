@@ -173,6 +173,8 @@ Controls setting specifying the output of the basic physical model state (not in
 | `nrpf_avg` | Records per average file |
 | `wrt_avg_*` | Averaged versions of fields above |
 
+Each record of the `_avg` files averages the model state at the end of every step of one window, the states that a history file written every step would hold at the times after `avg_begin_time` up to and including `avg_end_time`. The windows follow each other from the start of the run (or of a restarted run); the start-up state is in none. `avg_begin_time` and `avg_end_time` are in the units of `ocean_time` (seconds since the reference date in its `long_name`). The `_avg` `ocean_time` is not the window end: it is the mean of the times of the window's steps, the window's midpoint plus half a time step (`avg_begin_time + 0.5*(output_period_avg + dt)`). The averaged BGC files (`_bgc_avg`, `_bgc_dia_avg`, see `BGC_SETTINGS`) have the same windows and the same two variables, but their `ocean_time` is the window end, `avg_end_time`.
+
 #### Restart files
 
 | Setting | Description |
@@ -285,13 +287,13 @@ Read only with `MARBL` or `BIOLOGY_BEC2`.
 | `output_period_bgc_his` | Frequency of instantaneous BGC output (s) |
 | `nrpf_bgc_his` | Number of time records per BGC output file |
 | `wrt_bgc_avg` | Write averaged BGC tracers to output |
-| `output_period_bgc_avg` | Output frequency/averaging period (s). Each record averages the model steps of the period ending at its `ocean_time` |
+| `output_period_bgc_avg` | Output frequency/averaging period (s). Each record averages the model steps of the period ending at its `ocean_time`, which is also its `avg_end_time`; `avg_begin_time` is the period's start |
 | `nrpf_bgc_avg` | Number of time records per BGC average file |
 | `wrt_bgc_dia_his` | Write instantaneous BGC diagnostics to output |
 | `output_period_bgc_his_dia` | Frequency of diagnostics output (s) |
 | `nrpf_bgc_his_dia` | Number of time records per BGC diagnostics file |
 | `wrt_bgc_dia_avg` | Write averaged BGC diagnostics to output |
-| `output_period_bgc_avg_dia` | Frequency/period of averaged diagnostic output (s). Each record averages the model steps of the period ending at its `ocean_time`. With MARBL it must be a whole multiple of the MARBL timestep ROMS uses (`marbl_timestep` rounded down to a multiple of `dt`), or ROMS stops at startup: each window then ends on a MARBL step, averages the diagnostics of the MARBL steps within it, and a restarted run's records match an uninterrupted run's bit for bit |
+| `output_period_bgc_avg_dia` | Frequency/period of averaged diagnostic output (s). Each record averages the model steps of the period ending at its `ocean_time`, which is also its `avg_end_time`; `avg_begin_time` is the period's start. With MARBL it must be a whole multiple of the MARBL timestep ROMS uses (`marbl_timestep` rounded down to a multiple of `dt`), or ROMS stops at startup: each window then ends on a MARBL step, averages the diagnostics of the MARBL steps within it, and a restarted run's records match an uninterrupted run's bit for bit |
 | `nrpf_bgc_avg_dia` | Number of time records per BGC diagnostics file |
 | `xco2air_default` | Atmospheric xCO2 (ppm) that MARBL uses when `PCO2AIR_FORCING` is not defined. Default `284.7` (pre-industrial) |
 
