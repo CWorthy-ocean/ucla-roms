@@ -475,9 +475,11 @@ contains
 !----------------------------------------------------------------------
   subroutine nc_fill_record(ncid, vname, irec)  ![
     ! Write the fill value of record variable vname into record irec, for
-    ! a variable that its file defines but its writer does not write on
-    ! that record (rank 0, serial netCDF). It then reads _FillValue, as it
-    ! did when rank 0 opened the file in fill mode (nc_set_record_nofill).
+    ! a variable that its file defines but its writer does not write (or
+    ! writes only in part) on that record, through serial netCDF: rank 0 on
+    ! a PARALLEL_IO file (nc_set_record_nofill), or each rank on its own
+    ! no-fill file without PARALLEL_IO. Unwritten parts then read
+    ! _FillValue, as they did in fill mode (and in netCDF-4 files).
     use netcdf, only: nf90_inquire_variable, nf90_inquire_dimension,&
     &nf90_get_att, nf90_int, nf90_double, nf90_fill_int, nf90_fill_float,&
     &nf90_fill_double, nf90_max_var_dims

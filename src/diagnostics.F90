@@ -16,7 +16,7 @@ module diagnostics
   use scalars, only: nt
   use scalars, only:&
   &dt, iic, tdays, time, nrhs, nz, nnew
-  use nc_read_write, only: ncwrite, ncread
+  use nc_read_write, only: ncwrite, ncread, nc_fill_record
   use roms_read_write, only:&
   &diag_avg_output, diagnostic_opt, bfx,&
   &bfy, dn_xu, dn_yv, dn_zr,&
@@ -990,11 +990,11 @@ contains
     real(kind=8), dimension(:,:,:,:),intent(inout) :: ud,vd
 
     !local
-#ifdef PARALLEL_IO
     character(len=4),dimension(nmd),parameter :: term =&
     &(/'_pgr','_cor','_adv','_dis','_hmx','_vmx','_cpl'/)
-    real(kind=8),dimension(:,:,:),allocatable :: uw, vw
     integer(kind=4) :: it
+#ifdef PARALLEL_IO
+    real(kind=8),dimension(:,:,:),allocatable :: uw, vw
 #else
     integer(kind=4),   dimension(4) :: start    ! start vector for writing
 #endif
@@ -1020,6 +1020,22 @@ contains
       call ncwrite(ncid,'v'//term(it),vw,(/1,1,1,record/),.true.)
     enddo
 #else
+    ! The per-rank file's u (v) records also hold the physical-boundary rows
+    ! and columns of edge tiles, which ud (vd) do not: south and north rows
+    ! and the east column of u, west and east columns and the north row of v.
+    ! The file is written without fill, so set those records to the fill
+    ! value first, as they read in the netCDF-4 files of earlier versions.
+    if (jnode.eq.0 .or. jnode.eq.npy-1 .or. inode.eq.npx-1) then
+      do it=1,nmd
+        call nc_fill_record(ncid,'u'//term(it),record)
+      enddo
+    endif
+    if (inode.eq.0 .or. inode.eq.npx-1 .or. jnode.eq.npy-1) then
+      do it=1,nmd
+        call nc_fill_record(ncid,'v'//term(it),record)
+      enddo
+    endif
+
     start = (/1, bfy, 1, record/)
 
     pio_gtype = '3Duw'
