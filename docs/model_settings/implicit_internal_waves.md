@@ -14,7 +14,7 @@ The IMEX step gives different answers from the explicit step: it damps and slows
 
 ## 2. How to turn it on
 
-1. Add `#define IMEX_IGW` to the case's `cppdefs.opt` (it requires `SOLVE3D` and is not compatible with `NHMG`).
+1. Add `#define IMEX_IGW` to the case's `cppdefs.opt` (it is not compatible with `NHMG`).
 2. Copy the namelist group `IMEX_IGW_SETTINGS` from `$ROMS_ROOT/src/namelist.nml` and set `imex_igw = .true.`. Every namelist has this group: `imex_igw` is required and must match the build (`.true.` with `IMEX_IGW`, `.false.` without), and a run without the group or the key, or with a value that does not match the build, stops at startup. The template's other values are the defaults and the recommended settings.
 3. Use the implicit free surface (`fs_mode = 'implicit'` in `IMPLICIT_FS`, with its default settings). IMEX also runs with the split-explicit fast loop, but that loop's cost grows with `ndtfast`, which must grow with `dt`. The implicit free surface's defaults are the tested combination with IMEX (Pacific basin at 1440-2400 s, the nests); no IMEX-specific free-surface setting is needed. See [Implicit free surface](implicit_free_surface.md).
 4. Choose `dt` (section 3).
@@ -118,7 +118,7 @@ Development keys removed on 2026-11-13 (their former defaults are now fixed) sto
 
 `imex_obc_mode` selects how the normal velocity at the open-boundary faces enters the IMEX step:
 
-- **`'fixed'`**: the open faces are outside the implicit operator; their normal velocity is the explicit value of the boundary conditions (`OBC_M3ORLANSKI`, `OBC_M3SPECIFIED`, ...), as without IMEX, and enters each stage's right-hand side.
+- **`'fixed'`**: the open faces are outside the implicit operator; their normal velocity is the explicit value of the boundary conditions (`OBC_M3ORLANSKI`, ...), as without IMEX, and enters each stage's right-hand side.
 - **`'modal'`**: a characteristic (per-mode Flather) condition on the internal modes, implicit in the stage solves. At each open face column the baroclinic normal velocity is `u_b = u_ext + s Y (p_int - p_ext - m)`: the boundary data's velocity plus the radiation of the baroclinic pressure mismatch between the interior and the boundary data, with the admittance `Y` built from the vertical modes of the operator's stratification in that column (the first `imex_obc_nmodes` modes with `1/c_m`, the rest with the last mode's admittance). Outgoing internal waves leave and the internal tide that the boundary data carry comes in. `m` is a slow reference of the mismatch (time scale `imex_obc_tref`), so a slow child-parent mismatch is held instead of being radiated as a flow through the boundary. The barotropic mode and the tracers keep their usual boundary conditions.
 - **`'auto'`** (default): `'modal'` where it is supported (an open edge, `M3_FRC_BRY` and `T_FRC_BRY`), else `'fixed'`; the startup log prints the choice.
 
@@ -140,7 +140,7 @@ With `imex_rst_state = 1` the restart file holds the stored pressure gradient, t
 
 ## 7. Limitations
 
-- Requires `SOLVE3D`; not compatible with `NHMG`.
+- Not compatible with `NHMG`.
 - Horizontal advection stays explicit and limits `dt` (section 3).
 - Lateral tracer mixing is taken from the state at level n.
 - Results depend on the tiling at the level of the solver tolerances (and of the implicit free surface's solve); `imex_redu = 1` removes the IMEX solves' part where the preconditioner is Jacobi (`imex_pc = 'jacobi'`, or the default `'modes'` where its automatic choice keeps no mode). Where `'modes'` keeps modes, its V-cycle works inside each tile (two tilings agree to the tolerance level; at 1e-12 to rounding).

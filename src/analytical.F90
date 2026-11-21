@@ -78,119 +78,13 @@ contains
 ! between the initial state and side boundary conditions.
 
 
-#  ifdef ANA_BRY
-#   ifdef OBC_WEST
-    if (WESTERN_EDGE) then
-#    ifdef M2_FRC_BRY
-      do j=1,ny                       ! Save perimeter values
-        zeta_west(j)=zeta(0,j,1)      ! of the initial fields
-        ubar_west(j)=ubar(1,j,1)      ! to be used as external
-        vbar_west(j)=vbar(0,j,1)      ! forcing data for side
-      enddo                           ! boundaries.
-#    endif
-#    ifdef SOLVE3D
-      do k=1,nz
-        do j=1,ny
-#     ifdef M3_FRC_BRY
-          u_west(j,k)=u(1,j,k,1)
-          v_west(j,k)=v(0,j,k,1)
-#     endif
-#     ifdef T_FRC_BRY
-          t_west(j,k,:)=t(0,j,k,1,:)
-#     endif
-        enddo
-      enddo
-#    endif
-    endif
-#   endif
-
-#   ifdef OBC_EAST
-    if (EASTERN_EDGE) then
-#    ifdef M2_FRC_BRY
-      do j=1,ny
-        zeta_east(j)=zeta(nx+1,j,1)
-        ubar_east(j)=ubar(nx+1,j,1)
-        vbar_east(j)=vbar(nx+1,j,1)
-      enddo
-#    endif
-#    ifdef SOLVE3D
-      do k=1,nz
-        do j=1,ny
-#     ifdef M3_FRC_BRY
-          u_east(j,k)=u(nx+1,j,k,1)
-          v_east(j,k)=v(nx+1,j,k,1)
-#     endif
-#     ifdef T_FRC_BRY
-          t_east(j,k,:)=t(nx+1,j,k,1,:)
-#     endif
-        enddo
-      enddo
-#    endif
-    endif
-#   endif
 
 
-#   ifdef OBC_SOUTH
-    if (SOUTHERN_EDGE) then
-#    ifdef M2_FRC_BRY
-      do i=1,nx
-        zeta_south(i)=zeta(i,0,1)
-        ubar_south(i)=ubar(i,0,1)
-        vbar_south(i)=vbar(i,1,1)
-      enddo
-#    endif
-#    ifdef SOLVE3D
-      do k=1,nz
-        do i=1,nx
-#     ifdef M3_FRC_BRY
-          u_south(i,k)=u(i,0,k,1)
-          v_south(i,k)=v(i,1,k,1)
-#     endif
-#     ifdef T_FRC_BRY
-          t_south(i,k,:)=t(i,0,k,1,:)
-#     endif
-        enddo
-      enddo
-#    endif
-    endif
-#   endif
-
-#   ifdef OBC_NORTH
-    if (NORTHERN_EDGE) then
-#    ifdef M2_FRC_BRY
-      do i=1,nx
-        zeta_north(i)=zeta(i,ny+1,1)
-        ubar_north(i)=ubar(i,ny+1,1)
-        vbar_north(i)=vbar(i,ny+1,1)
-      enddo
-#    endif
-#    ifdef SOLVE3D
-      do k=1,nz
-        do i=1,nx
-#     ifdef M3_FRC_BRY
-          u_north(i,k)=u(i,ny+1,k,1)
-          v_north(i,k)=v(i,ny+1,k,1)
-#     endif
-#     ifdef T_FRC_BRY
-          t_north(i,k,:)=t(i,ny+1,k,1,:)
-#     endif
-        enddo
-      enddo
-#    endif
-    endif
-#   endif
-#  endif /* ANA_BRY */
-
-
-# ifdef EXCHANGE
     call exchange_xxx(zeta(:,:,1),ubar(:,:,1),vbar(:,:,1))
-#  ifdef SOLVE3D
     call exchange_xxx(u(:,:,:,1),v(:,:,:,1))
     do itrc=1,nt
       call exchange_xxx(t(:,:,:,1,itrc) )
     enddo
-#  endif
-# endif  /* EXCHANGE */
 
 
   end subroutine ana_init_generic !]
@@ -205,14 +99,12 @@ contains
 
 #include "ana_vmix.h"
 
-# ifdef EXCHANGE
     call exchange_xxx(Akv,Akt(:,:,:,itemp))
 
 #  ifdef SALINITY
     call exchange_xxx(Akt(:,:,:,isalt))
 #  endif
 
-# endif  /* EXCHANGE */
 
 
   end subroutine ana_vmix !]

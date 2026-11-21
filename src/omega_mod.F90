@@ -5,7 +5,6 @@ module omega_mod
 
   public :: omega
 
-#ifdef SOLVE3D
   ! SL_ADV (sl_adv_mod sets them every step): with omega_sl, the corrector
   ! stage's explicit budget counts only the stock share (1 - w) of each
   ! face's outflow, w the blend weights omega_wu, omega_wv (SL_PLAN 2.2 F),
@@ -15,11 +14,9 @@ module omega_mod
   logical, public :: omega_sl = .false.
   real(kind=8), parameter, public :: omega_sl_czmax = 0.5_8
   real(kind=8), pointer, dimension(:,:,:), public :: omega_wu => null(), omega_wv => null()
-#endif
 
 contains
 
-#ifdef SOLVE3D
 
   subroutine omega
 
@@ -277,17 +274,11 @@ contains
 !      call wrt_instant(We, 'We')
 !      call wrt_instant(Wi, 'Wi')
 
-# ifdef EXCHANGE
     call exchange_xxx(We,Wi)
-# endif
 
 !      call wrt_instant(We, 'We')
 !      call wrt_instant(Wi, 'Wi')
 
   end subroutine omega_tile
-#else
-  subroutine omega_empty
-  end subroutine omega_empty
-#endif /* SOLVE3D */
 end module omega_mod
 

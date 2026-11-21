@@ -280,11 +280,9 @@ contains
           sst = t(i,j,nz,nrhs,itemp)
           schmidt_nr = a + sst * (b + sst * (c + sst * (d + e * sst)))
           k_gas(i,j) = xkw_coef * (uwnd(i,j)**2 + vwnd(i,j)**2) * sqrt(660.0 / schmidt_nr)
-#ifdef SEA_ICE_NOFLUX
           if( sst .le. -1.8 ) then
               k_gas(i,j)=0.                    ! If SST colder than -1.8 C, assume zero piston velocity due to sea ice
           endif
-#endif
         enddo
       enddo
 
@@ -736,7 +734,6 @@ contains
     integer(kind=4), intent(in) :: tidx
     integer(kind=4), intent(in), optional :: ntr
     integer(kind=4) :: itrc, nrem, n
-# ifdef EXCHANGE
     n = nt
     if (present(ntr)) n = ntr
     do itrc=1,n-3,4
@@ -752,7 +749,6 @@ contains
     elseif (nrem == 1) then
       call exchange_xxx(t(:,:,:,tidx,n))
     endif
-# endif
   end subroutine exchange_tracers  !]
 ! ----------------------------------------------------------------------
   pure logical function tracer_required(itrc)  ![

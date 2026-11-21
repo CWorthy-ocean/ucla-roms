@@ -56,13 +56,11 @@ module precheck
 #if defined LMD_KPP || defined LMD_BKPP
   use lmd_kpp_mod, only: check_kpp_switches
 #endif
-#ifdef SOLVE3D
   use pre_step3d_mod, only: check_pre_step_switches
   use set_depth_mod, only: check_set_huv1_switches
   use step3d_t_mod, only: check_step_t_switches
   use step3d_uv_mod, only: check_step_uv1_switches,&
   &check_step_uv2_switches
-#endif
 
   implicit none
   private
@@ -77,7 +75,6 @@ contains
 
     implicit none
     call check_switches1()
-#ifdef SOLVE3D
     call check_pre_step_switches()
     call check_step_uv1_switches()
     call check_step_uv2_switches()
@@ -87,7 +84,6 @@ contains
     call check_kpp_switches()
 # endif
     call check_switches2()
-#endif
 
     ! File-rollover frequency (nrpf * output_period) must evenly divide
     ! the restart frequency so a restart does not leave a partial file.

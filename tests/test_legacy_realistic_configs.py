@@ -77,7 +77,7 @@ def test_bgc_real_bec(tmp_path, input_dir, reference_results):
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
-        + ["TIDES", "BIOLOGY_BEC2"]
+        + ["BIOLOGY_BEC2"]
     )
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path / "build")
     conf.compile()

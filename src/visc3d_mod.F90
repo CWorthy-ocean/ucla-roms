@@ -3,7 +3,7 @@ module visc3d_mod
   implicit none
   private
 
-# if defined SOLVE3D && defined UV_VIS2
+# ifdef UV_VIS2
   public :: visc3d_s
 contains
 

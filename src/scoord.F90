@@ -36,7 +36,6 @@ module scoord
 ! is sigma-coordinate, -1 < s < 0, while "_w" and "_r" stand for
 ! vertical W- and RHO-point locations.
 
-#ifdef SOLVE3D
   real(kind=8) theta_s,theta_b, hc
   real(kind=8), allocatable :: Cs_w(:), Cs_r(:)
   namelist /S_COORD/ theta_s, theta_b, hc
@@ -83,5 +82,4 @@ contains
     allocate(Cs_r(nz))
 
   end subroutine read_nml_scoord
-#endif
 end module scoord

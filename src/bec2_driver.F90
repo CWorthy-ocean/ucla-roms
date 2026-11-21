@@ -185,9 +185,6 @@ subroutine ecosys_bec2_tile(Istr,Iend,Jstr,Jend)
 !
 ! Gas exchange:
 !
-#ifdef ICEOBS
-# define IFRAC sic /* Ice fraction has different name in this case */
-#endif
   FICE_USED(istr:iend,jstr:jend) = IFRAC(istr:iend,jstr:jend)
 
 # ifdef BULK_FRC

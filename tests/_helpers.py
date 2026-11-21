@@ -21,8 +21,7 @@ MAKE_CMD = "make BUILD_MODE=test"
 # CPP key groups
 # --------------------------------------------------------------------------
 UNIVERSAL_CPP_KEYS = [
-    "SOLVE3D", "UV_ADV", "UV_COR", "UV_VIS2", "TS_DIF2",
-    "MASKING",
+    "UV_ADV", "UV_COR", "UV_VIS2", "TS_DIF2", "MASKING",
 ]
 OCEAN_PHYSICS_CPP_KEYS = [
     "SALINITY", "NONLIN_EOS", "SPLIT_EOS",

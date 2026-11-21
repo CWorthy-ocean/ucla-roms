@@ -123,7 +123,6 @@ module sl_adv_mod
 
   public :: read_nml_sl_adv
 
-#ifdef SOLVE3D
   public :: sl_adv_init, sl_adv_weights, sl_rst_def, sl_rst_wrt, sl_rst_get
   public :: sl_ts_prep, sl_t_prep, sl_hflux, sl_vflux, sl_t_finish, sl_cfallback
   public :: sl_uv_carry_in, sl_uv_hflux, sl_uv_vcol, sl_uv_cor, sl_uv_pred, sl_t_pred, sl_t_pred_add
@@ -216,7 +215,6 @@ module sl_adv_mod
   ! hot u-, v-columns: the smallest pseudo-volume v1/Hz at levels with a hot face and at all levels, and the largest
   ! vertical Courant number dt pm pn |We|/v1 at the interfaces of levels with a hot face
   real(kind=8) :: dm_v1(3) = [huge(1._8), huge(1._8), 0._8]
-#endif
 
 contains
 
@@ -227,7 +225,7 @@ contains
     use namelist_open_mod, only: open_namelist_file
     use error_handling_mod, only: error_log
     use param, only: mynode
-#if defined IMEX_IGW && defined SOLVE3D
+#ifdef IMEX_IGW
     use imex_igw, only: imex_corr_adv, imex_corr_adv_vimp
 #endif
     implicit none
@@ -249,9 +247,9 @@ contains
       return
     end if
     if (.not. sl_adv) return
-#if !defined IMEX_IGW || !defined SOLVE3D
+#ifndef IMEX_IGW
     call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="sl_adv requires the IMEX_IGW and SOLVE3D cppkeys")
+    &info="sl_adv requires the IMEX_IGW cppkey")
     return
 #else
     ! With imex_corr_adv = 0 there is no X and IMEX ignores imex_corr_adv_vimp
@@ -270,10 +268,9 @@ contains
     &context=module_name//"/"//sr_name, info="sl_adv: sl_mvol must be 1 or 2")
     if (sl_pred < 0 .or. sl_pred > 2) call error_log%raise_global(&
     &context=module_name//"/"//sr_name, info="sl_adv: sl_pred must be 0, 1 or 2")
-#if defined ADV_ISONEUTRAL || defined PARABOLIC_SPLINES || defined BIO_1ST_USTREAM_TEST
+#if defined ADV_ISONEUTRAL || defined PARABOLIC_SPLINES
     call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="sl_adv needs the UP3 / U3 tracer corrector (no ADV_ISONEUTRAL, PARABOLIC_SPLINES,"&
-    &//" BIO_1ST_USTREAM_TEST)")
+    &info="sl_adv needs the UP3 / U3 tracer corrector (no ADV_ISONEUTRAL, PARABOLIC_SPLINES)")
 #endif
     if (mynode == 0) write(*,'(/1x,A,3(A,ES10.3),A,I2)') 'SL_ADV: swept-volume advection on'&
     &//' (tracers and momentum):', ' sl_c_lo =', sl_c_lo, ', sl_c_hi =', sl_c_hi,&
@@ -286,7 +283,6 @@ contains
     &//' u, v, 2 also tracers) sl_pred =', sl_pred
   end subroutine read_nml_sl_adv
 
-#ifdef SOLVE3D
 ! ----------------------------------------------------------------------
   subroutine sl_alloc
     ! the module's arrays (at the first of sl_adv_init and sl_rst_get)
@@ -3751,6 +3747,5 @@ contains
     if (mynode == 0) write(*,'(1x,A,I0,A)') 'SL_ADV: SL state read from the initial file (record ', record,&
     &', exact restart)'
   end subroutine sl_rst_get
-#endif /* SOLVE3D */
 
 end module sl_adv_mod

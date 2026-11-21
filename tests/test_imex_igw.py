@@ -42,7 +42,7 @@ from .test_bgc import _bgcsub_lines, _subcycle_nml, _with_restarts
 
 CPP_KEYS = (
     UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-    + ["LMD_CONVEC", "TIDES", "IMEX_IGW"]
+    + ["LMD_CONVEC", "IMEX_IGW"]
 )
 
 IMEX_LINE = re.compile(r"IMEX it pred.*unconverged\s+(\d+)")
@@ -446,7 +446,7 @@ def imex_marbl_configuration(tmp_path_factory) -> ROMSConfiguration:
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
-        + MARBL_CPP_KEYS + ["TIDES", "SFLX_CORR", "CFLX_CORR", "IMEX_IGW"]
+        + MARBL_CPP_KEYS + ["SFLX_CORR", "CFLX_CORR", "IMEX_IGW"]
     )
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path_factory.mktemp("imex_marbl_build"))
     conf.compile()

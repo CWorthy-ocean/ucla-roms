@@ -627,8 +627,8 @@ class TestCdrLite:
         """Compile the no-MARBL CDR_FORCING + CDR_LITE binary once for the class.
 
         The key set of the CI compile-only "CDR_FORCING + CDR_LITE without
-        MARBL" build, minus TIDES (the tests need no tidal input). BULK_FRC
-        is needed so the surface forcing supplies the winds ``k_gas`` uses.
+        MARBL" build. BULK_FRC is needed so the surface forcing supplies the
+        winds ``k_gas`` uses.
         """
         cpp_keys = (
             UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS

@@ -7,7 +7,6 @@ module pre_step3d_mod
   public :: check_pre_step_switches
 
 contains
-#ifdef SOLVE3D
   ! Note that arrays A2d(1,1:4) in
   subroutine pre_step3d (tile)  ! the call just below are repeated
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
@@ -75,11 +74,9 @@ contains
 #endif
     use ext_copy_prv2shr_mod, only: ext_copy_prv2shr_2d_tile
     use sl_adv_mod, only: sl_adv, sl_uv_pred, sl_t_pred, sl_t_pred_add
-#ifdef SOLVE3D
     use t3dbc_mod, only: t3dbc_tile
     use u3dbc_mod, only: u3dbc_tile
     use v3dbc_mod, only: v3dbc_tile
-#endif
 #ifdef IMEX_IGW
     use imex_igw, only: imex_solve_stage, imex_stage_pred,&
     &imex_predictor_transport, imex_obc_modal, imex_obc_faces
@@ -265,14 +262,6 @@ contains
           do i=istr,iend   !! t(..) is Hz*T
             t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)&
             &-dtau*pm(i,j)*pn(i,j)*(FC(i,k)-FC(i,k-1))
-# ifdef PIPE_SOURCEXXX /*only add this during the corrector step */
-            if (pipe_idx(i,j)>0) then
-              pidx = pipe_idx(i,j)
-              t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)&
-              &+dtau*pm(i,j)*pn(i,j)*&
-              &pipe_flx(i,j)*pipe_prf(pidx,k)*pipe_trc(pidx,itrc)
-            endif
-# endif
 
 # ifdef CONST_TRACERS
             t(i,j,k,nnew,itrc)=t(i,j,k,nstp,itrc)
@@ -516,9 +505,7 @@ contains
       do i=istrU,iend
         u(i,j,1,nnew)=( DC(i,1)  +DC(i,2)*(FC(i,1)-min(WC(i,1),0._8))&
         &)/( 0.5_8*(Hz_fwd(i,j,1)+Hz_fwd(i-1,j,1))&
-# ifdef IMPLCT_NO_SLIP_BTTM_BC
         &+0.5_8*dtau*(rd(i,j)+rd(i-1,j))&
-# endif
         &+FC(i,1)+max(WC(i,1),0._8)&
         &-CF(i,1)*(FC(i,1)-min(WC(i,1),0._8))&
         &)
@@ -579,9 +566,7 @@ contains
         do i=istr,iend
           v(i,j,1,nnew)=( DC(i,1)+DC(i,2)*(FC(i,1)-min(WC(i,1),0._8))&
           &)/( 0.5_8*(Hz_fwd(i,j,1)+Hz_fwd(i,j-1,1))&
-# ifdef IMPLCT_NO_SLIP_BTTM_BC
           &+0.5_8*dtau*(rd(i,j)+rd(i,j-1))&
-# endif
           &+FC(i,1)+max(WC(i,1),0._8)&
           &-CF(i,1)*(FC(i,1)-min(WC(i,1),0._8))&
           &)
@@ -741,10 +726,8 @@ contains
           enddo
         enddo
       enddo
-#  ifdef EXCHANGE
       !! try to see if we could avoid this. NHMG only!
       call exchange_xxx(u(:,:,:,nnew),v(:,:,:,nnew))
-#  endif
 
       ! Compute a 'barotropic' correction to w such that it matches
       ! the current ubar,vbar divergence (see Molemaker et al., 2018)
@@ -832,17 +815,10 @@ contains
 
     !! u and v are exchanged in set_depth (set_HUV1)
     !! for neatness, we could move this exchange there as well
-#  ifdef EXCHANGE
     call exchange_xxx(w(:,:,:,nnew))
-#  endif
 
 # endif /* NHMG */
 
-# ifdef OBC_CHECK
-    print *, 'nnew=', nnew
-    print *, '   u(istr  ,10,10,nnew)=', u(istr,10,10,nnew)
-    print *, '   u(iend+1,10,10,nnew)=', u(iend+1,10,10,nnew)
-# endif
 
   end subroutine pre_step3d_tile
 
@@ -881,8 +857,4 @@ contains
     call error_log%abort_check()
   end subroutine check_pre_step_switches
 
-#else
-  subroutine pre_step3d_empty
-  end subroutine pre_step3d_empty
-#endif  /* SOLVE3D */
 end module pre_step3d_mod

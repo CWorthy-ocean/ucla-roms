@@ -1,9 +1,7 @@
       ! CDR release tests (test_cdr_box.py): fluid at rest, stratified T, S = 35.
       integer :: i,j,k
 
-#ifdef EXACT_RESTART
       forw_start=ntstart
-#endif
 
       do j= 1,ny
         do i= 1,nx
@@ -12,7 +10,6 @@
           vbar(i,j,1)=0.
         enddo
       enddo
-# ifdef SOLVE3D
       do k=1,nz
         do j= 1,ny
           do i= 1,nx
@@ -23,7 +20,6 @@
           enddo
         enddo
       enddo
-# endif
       do k=1,nz
         do j= 0,ny+1
           do i= 0,nx+1

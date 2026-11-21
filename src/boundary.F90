@@ -120,14 +120,8 @@ contains
 # ifdef OBC_M3ORLANSKI
     call store_string_att(bc_options,'OBC_M3ORLANSKI, ')
 #  endif
-# ifdef OBC_M3SPECIFIED
-    call store_string_att(bc_options,'OBC_M3SPECIFIED, ')
-#  endif
 # ifdef OBC_TORLANSKI
     call store_string_att(bc_options,'OBC_TORLANSKI, ')
-#  endif
-# ifdef OBC_TSPECIFIED
-    call store_string_att(bc_options,'OBC_TSPECIFIED, ')
 #  endif
 
 
@@ -141,7 +135,6 @@ contains
     allocate( nc_ub_w%vdata(j0:j1,1,2) )
     allocate( nc_vb_w%vdata( 1:j1,1,2) )
 #  endif
-#  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
     allocate( u_west(0:Mm+1,nz), v_west(0:Mm+1,nz) )
     allocate( nc_u_w%vdata(j0:j1,nz,2) )
@@ -159,7 +152,6 @@ contains
       nc_t_w(itrc)%vdata=0._8
     enddo
 #   endif
-#  endif
 # endif
 
 # ifdef OBC_EAST
@@ -172,7 +164,6 @@ contains
     allocate( nc_ub_e%vdata(j0:j1,1,2) )
     allocate( nc_vb_e%vdata( 1:j1,1,2) )
 #  endif
-#  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
     allocate( u_east(0:Mm+1,nz), v_east(0:Mm+1,nz) )
     allocate( nc_u_e%vdata(j0:j1,nz,2) )
@@ -190,7 +181,6 @@ contains
       nc_t_e(itrc)%vdata=0._8
     enddo
 #   endif
-#  endif
 # endif
 
 # ifdef OBC_SOUTH
@@ -203,7 +193,6 @@ contains
     allocate( nc_ub_s%vdata( 1:i1,1,2) )
     allocate( nc_vb_s%vdata(i0:i1,1,2) )
 #  endif
-#  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
     allocate( u_south(0:Lm+1,nz), v_south(0:Lm+1,nz) )
     allocate( nc_u_s%vdata( 1:i1,nz,2) )
@@ -221,7 +210,6 @@ contains
       nc_t_s(itrc)%vdata=0._8
     enddo
 #   endif
-#  endif
 # endif
 
 # ifdef OBC_NORTH
@@ -234,7 +222,6 @@ contains
     allocate( nc_ub_n%vdata( 1:i1,1,2) )
     allocate( nc_vb_n%vdata(i0:i1,1,2) )
 #  endif
-#  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
     allocate( u_north(0:Lm+1,nz), v_north(0:Lm+1,nz) )
     allocate( nc_u_n%vdata( 1:i1,nz,2) )
@@ -252,7 +239,6 @@ contains
       nc_t_n(itrc)%vdata=0._8
     enddo
 #   endif
-#  endif
 # endif
 
   end subroutine init_arrays_boundary !]
@@ -292,9 +278,6 @@ contains
 ! boundary use the result, so the rest pass interp=.false. to skip the
 ! time interpolation.
 
-#  ifdef ANA_BRY
-    return
-#  endif
     if (obc_west) then
 #ifndef PARALLEL_IO
       if (inode==0) then
@@ -311,7 +294,6 @@ contains
         pio_gtype='w1vr'
         call set_frc_data( nc_vb_w, vbar_west( 1:j1), obry=1, interp=on_bry )
 #  endif
-#  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
         pio_gtype='w2ur'
         call set_frc_data( nc_u_w, var2d=u_west(j0:j1,:), obry=1, interp=on_bry )
@@ -328,7 +310,6 @@ contains
           call set_frc_data( nc_t_w(itrc), var2d=t_west(j0:j1,:,itrc), obry=1, interp=on_bry )
         enddo
 #   endif
-#  endif
       endif
 #ifndef PARALLEL_IO
     endif
@@ -349,7 +330,6 @@ contains
         pio_gtype='e1vr'
         call set_frc_data( nc_vb_e, vbar_east( 1:j1), obry=1, interp=on_bry )
 #  endif
-#  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
         pio_gtype='e2ur'
         call set_frc_data( nc_u_e, var2d=u_east(j0:j1,:), obry=1, interp=on_bry )
@@ -366,7 +346,6 @@ contains
           call set_frc_data( nc_t_e(itrc), var2d=t_east(j0:j1,:,itrc), obry=1, interp=on_bry )
         enddo
 #   endif
-#  endif
       endif
 #ifndef PARALLEL_IO
     endif
@@ -387,7 +366,6 @@ contains
         pio_gtype='s1vr'
         call set_frc_data( nc_vb_s, vbar_south(i0:i1), obry=1, interp=on_bry )
 #  endif
-#  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
         pio_gtype='s2ur'
         call set_frc_data( nc_u_s, var2d=u_south( 1:i1,:), obry=1, interp=on_bry )
@@ -404,7 +382,6 @@ contains
           call set_frc_data( nc_t_s(itrc), var2d=t_south(i0:i1,:,itrc), obry=1, interp=on_bry )
         enddo
 #   endif
-#  endif
       endif
 #ifndef PARALLEL_IO
     endif
@@ -425,7 +402,6 @@ contains
         pio_gtype='n1vr'
         call set_frc_data( nc_vb_n, vbar_north(i0:i1), obry=1, interp=on_bry )
 #  endif
-#  ifdef SOLVE3D
 #   ifdef M3_FRC_BRY
         pio_gtype='n2ur'
         call set_frc_data( nc_u_n, var2d=u_north( 1:i1,:), obry=1, interp=on_bry )
@@ -442,7 +418,6 @@ contains
           call set_frc_data( nc_t_n(itrc), var2d=t_north(i0:i1,:,itrc), obry=1, interp=on_bry )
         enddo
 #   endif
-#  endif
       endif
 #ifndef PARALLEL_IO
     endif

@@ -307,10 +307,6 @@ contains
       &//trim(msg)&
       &)
     end if
-#ifndef SOLVE3D
-    if (bgc_physics_subcycle) call error_log%raise_global(&
-    &context=module_name//'/'//sr_name, info='bgc_physics_subcycle requires SOLVE3D')
-#endif
     close(namelist_unit)
 
   end subroutine read_nml_bgc

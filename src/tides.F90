@@ -189,11 +189,6 @@ contains
 
 #  ifdef OBC_WEST
         if (WESTERN_EDGE) THEN
-#   ifdef ANA_BRY
-          zeta_west(jstrR:jendR) = 0
-          ubar_west(jstrR:jendR) = 0
-          vbar_west(jstr :jendR) = 0
-#   endif
           i=istr-1
           do j=jstrR,jendR
             zeta_west(j) =zeta_west(j)&
@@ -214,11 +209,6 @@ contains
 
 #  ifdef OBC_EAST
         if (EASTERN_EDGE) THEN
-#   ifdef ANA_BRY
-          zeta_east(jstrR:jendR) = 0
-          ubar_east(jstrR:jendR) = 0
-          vbar_east(jstr :jendR) = 0
-#   endif
           i = iend+1
           do j=jstrR,jendR
             zeta_east(j) =zeta_east(j)&
@@ -237,11 +227,6 @@ contains
 
 #  ifdef OBC_SOUTH
         if (SOUTHERN_EDGE) THEN
-#   ifdef ANA_BRY
-          zeta_south(istrR:jendR) = 0
-          ubar_south(istr :iendR) = 0
-          vbar_south(istrR:iendR) = 0
-#   endif
           j=jstr-1
           do i=istrR,iendR
             zeta_south(i)=zeta_south(i)&
@@ -261,11 +246,6 @@ contains
 #  endif
 #  ifdef OBC_NORTH
         if (NORTHERN_EDGE) THEN
-#   ifdef ANA_BRY
-          zeta_north(istrR:jendR) = 0
-          ubar_north(istr :iendR) = 0
-          vbar_north(istrR:iendR) = 0
-#   endif
           j=jend+1
           do i=istrR,iendR
             zeta_north(i)=zeta_north(i)&
@@ -287,7 +267,7 @@ contains
 !-----------------------------------------------------------------------
 !  Compute tidal potential (m)
 !  -- > to be applied as a pressure-gradient force
-!       in prsgrd (if SOLVE3D) or step2d (if not SOLVE3D)
+!       in prsgrd
 !-----------------------------------------------------------------------
         if (itide==1) then ! initialize at the first tidal component
           do j=jstrR-1,jendR

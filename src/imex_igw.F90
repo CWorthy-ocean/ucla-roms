@@ -93,9 +93,6 @@ module imex_igw
 # ifdef NHMG
 #  error "IMEX_IGW is not compatible with NHMG"
 # endif
-# ifndef SOLVE3D
-#  error "IMEX_IGW requires SOLVE3D"
-# endif
 #endif
 
   implicit none
@@ -224,7 +221,7 @@ module imex_igw
                                                  ! response, which lets an along-edge mode grow at 'modal' open edges from
                                                  ! v dt/dx^2 ~ 0.09 (hence the rule <= 0.05 for value 1); 2 removes it
                                                  ! (sargasso 3040 s with v_sponge 300: 0.10). The Laplacian's
-                                                 ! own explicit limit remains (v dt/dx^2 ~ 0.25). Not with NHMG or TS_DIF4;
+                                                 ! own explicit limit remains (v dt/dx^2 ~ 0.25). Not with NHMG;
                                                  ! under BGC subcycling only T and S are mixed here (the window is unchanged);
                                                  ! 0 as before (visc3d from u^n added after the implicit
                                                  ! correction). With the additive form the implicit step's stiff-limit eigenvalue
@@ -974,9 +971,9 @@ contains
       write(info,'(A,I0,A)') 'imex_mix_split = ', imex_mix_split, ' must be 0, 1 or 2'
       call error_log%raise_global(context=context, info=trim(info))
     end if
-#if defined NHMG || defined TS_DIF4
+#ifdef NHMG
     if (imex_mix_split == 2) then
-      write(info,'(A)') 'imex_mix_split = 2 is not supported with NHMG or TS_DIF4'
+      write(info,'(A)') 'imex_mix_split = 2 is not supported with NHMG'
       call error_log%raise_global(context=context, info=trim(info))
     end if
 #endif
@@ -2404,9 +2401,7 @@ contains
 #  endif
     use ocean_vars, only: u, v, hz, flxu, flxv
     use coupling, only: du_avg1, du_avg2, dv_avg1, dv_avg2
-#  ifdef EXTRAP_BAR_FLUXES
     use coupling, only: du_avg_bak, dv_avg_bak
-#  endif
     use scalars, only: nnew, nstp, iic, ntstart, forw_start
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
@@ -2424,15 +2419,11 @@ contains
         enddo
       enddo
       do i=istr,iendR
-#  ifdef EXTRAP_BAR_FLUXES
         if (FIRST_TIME_STEP) then
           mis(i) = (sf(i) - DU_avg1(i,j))/sd(i)
         else
           mis(i) = (sf(i) - 3.63_8*DU_avg1(i,j) + 4.47_8*DU_avg2(i,j) - 2.05_8*DU_avg_bak(i,j))/sd(i)
         end if
-#  else
-        mis(i) = (sf(i) - DU_avg1(i,j))/sd(i)
-#  endif
       enddo
       do k=1,nz
         do i=istr,iendR
@@ -2454,15 +2445,11 @@ contains
         enddo
       enddo
       do i=istrR,iendR
-#  ifdef EXTRAP_BAR_FLUXES
         if (FIRST_TIME_STEP) then
           mis(i) = (sf(i) - DV_avg1(i,j))/sd(i)
         else
           mis(i) = (sf(i) - 3.63_8*DV_avg1(i,j) + 4.47_8*DV_avg2(i,j) - 2.05_8*DV_avg_bak(i,j))/sd(i)
         end if
-#  else
-        mis(i) = (sf(i) - DV_avg1(i,j))/sd(i)
-#  endif
       enddo
       do k=1,nz
         do i=istrR,iendR
@@ -5390,9 +5377,7 @@ contains
     use param, only: nz
     use grid, only: dn_u, dm_v
     use coupling, only: du_avg1, du_avg2, dv_avg1, dv_avg2
-#  ifdef EXTRAP_BAR_FLUXES
     use coupling, only: du_avg_bak, dv_avg_bak
-#  endif
 #  ifdef MASKING
     use grid, only: umask, vmask
 #  endif
@@ -5418,26 +5403,18 @@ contains
           enddo
           if (e <= 2) then
             sd = sd*dn_u(fi,fj)
-#  ifdef EXTRAP_BAR_FLUXES
             if (FIRST_TIME_STEP) then
               tr = DU_avg1(fi,fj)
             else
               tr = 3.63_8*DU_avg1(fi,fj) - 4.47_8*DU_avg2(fi,fj) + 2.05_8*DU_avg_bak(fi,fj)
             end if
-#  else
-            tr = DU_avg1(fi,fj)
-#  endif
           else
             sd = sd*dm_v(fi,fj)
-#  ifdef EXTRAP_BAR_FLUXES
             if (FIRST_TIME_STEP) then
               tr = DV_avg1(fi,fj)
             else
               tr = 3.63_8*DV_avg1(fi,fj) - 4.47_8*DV_avg2(fi,fj) + 2.05_8*DV_avg_bak(fi,fj)
             end if
-#  else
-            tr = DV_avg1(fi,fj)
-#  endif
           end if
           ubt = tr/sd
         end if

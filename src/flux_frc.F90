@@ -101,7 +101,6 @@ contains
     call error_log%abort_check()
 
     stflx(:,:,itemp) = stflx(:,:,itemp) /(rho0*Cp)
-#ifdef SEA_ICE_NOFLUX
     do j=j0,j1
       do i=i0,i1
         if( t(i,j,nz,nrhs,itemp) .le. -1.8_8 ) then
@@ -112,7 +111,6 @@ contains
         endif
       enddo
     enddo
-#endif
 
     ! Surface salinity flux
     call set_frc_data(nc_swflux,stflx(:,:,isalt),'r')
@@ -168,52 +166,11 @@ contains
     ! local
     integer(kind=4) i, j, it1, it2
     real(kind=8) tmid, cff, cff1, cff2
-# ifdef DIURNAL_SRFLUX
-    real(kind=8) Ampl, cos_h, dec,cos_d,sin_d, tan_d, phi, csph,snph, h0
-    real(kind=8), parameter :: year2day=365.25_8,  day2year=1.D0/year2day
-# endif
 
     call set_frc_data(nc_swrad,srflx,'r')
     call error_log%abort_check()
     srflx = srflx/(rho0*Cp)
 
-# ifdef DIURNAL_SRFLUX
-
-! DIURNAL CYCLE - USED IN BOTH PHYSICAL AND ECOSYSTEM MODELS
-! Patrick Marchesiello - 1999: Modulate average dayly insolation
-! to get diurnal cycle by:
-!
-!              cos(h)*cos(d)*cos(phi)  +  sin(d)*sin(phi)
-!       pi * ---------------------------------------------
-!             sin(h0)*cos(d)*cos(phi) + h0*sin(d)*sin(phi)
-!
-! where: h, d, phi -- are hour, declination, latitude angles;
-!        h0 is hour angle at sunset and sunrise
-!
-! Yusuke Uchiyama, 2009: UTC correction based on lonr is added.
-!                               ocean_time should be in UTC.
-
-    dec=-0.406_8*cos(deg2rad*(tdays-int(tdays*day2year)*year2day))
-    cos_d=cos(dec) ; sin_d=sin(dec) ; tan_d=tan(dec)
-
-    do j=j0:j1
-    do i=i0:i1
-    cos_h=cos( 2._8*pi*(tdays+0.5_8 -int(tdays+0.5_8))&
-    &+deg2rad*lonr(i,j) )
-    phi=deg2rad*latr(i,j)
-    h0=acos(-tan(phi)*tan_d)
-    csph=cos_d*cos(phi) ; snph=sin_d*sin(phi)
-
-    Ampl=max( 0._8,  pi*(cos_h*csph +  snph)&
-    &/(sin(h0)*csph + h0*snph)&
-    &)
-
-    cff=stflx(i,j,itemp)-srflx(i,j)    ! subtract short-wave
-    srflx(i,j)=srflx(i,j)*Ampl         ! radiating from the net,
-    stflx(i,j,itemp)= cff+srflx(i,j)   ! modulate and add back
-  enddo
-enddo
-# endif
 
 end subroutine set_srflux  !]
 ! ----------------------------------------------------------------------
