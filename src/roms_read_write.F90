@@ -331,8 +331,17 @@ contains
       &info=error_info)
     end if
 !     Read in `reference_date` from the "REFERENCE_DATE_SETTINGS" section of the namelist file
+    ! Optional group: if it is absent (end of file) keep the default
     rewind(namelist_unit)
     read(unit=namelist_unit, nml=REFERENCE_DATE_SETTINGS, iostat=ios, iomsg=msg)
+    if (ios /= 0 .and. .not. is_iostat_end(ios)) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='could not read REFERENCE_DATE_SETTINGS'&
+      &//' section of namelist file: '&
+      &//trim(msg)&
+      &)
+    end if
     output_root_name=trim(output_root_name)
     instant_root_name = output_root_name
     instant_reference_date = reference_date

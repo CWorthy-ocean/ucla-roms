@@ -77,6 +77,13 @@ contains
       &context=module_name//'/'//sr_name, info=&
       &'could not read CALC_PFLX_SETTINGS section of namelist file'&
       &)
+    else
+      if (calc_pflx .and. pflx_timescale <= 0) then  ! init_pflx divides by it
+        call error_log%raise_global(&
+        &context=module_name//'/'//sr_name, info=&
+        &'CALC_PFLX_SETTINGS pflx_timescale must be > 0 (s) when calc_pflx = .true.'&
+        &)
+      end if
     end if
     close(namelist_unit)
 

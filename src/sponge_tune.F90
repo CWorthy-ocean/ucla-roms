@@ -6,7 +6,7 @@ module sponge_tune
 #include "cppdefs.opt"
 
   use calc_pflx_mod, only: calc_pflx
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: open_namelist_file, check_nml_cpp_switch
   use netcdf, only:&
   &nf90_noerr, nf90_write, nf90_inq_varid,&
   &nf90_open, nf90_put_att, nf90_close,&
@@ -112,6 +112,12 @@ contains
       &//' section of namelist file: '&
       &//trim(msg)&
       &)
+#ifndef SPONGE_TUNE
+    else
+      ! Without SPONGE_TUNE the coefficients are never tuned (main.F90)
+      call check_nml_cpp_switch('SPONGE_TUNE_SETTINGS', 'ub_tune', ub_tune,&
+      &.false., 'SPONGE_TUNE', module_name//'/'//sr_name)
+#endif
     end if
     close(namelist_unit)
 

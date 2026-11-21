@@ -30,19 +30,15 @@ contains
     use dimensions, only: read_nml_grid           !GRID_SETTINGS
 #endif
     use bgc_shared_vars, only: read_nml_bgc       !BGC_SETTINGS
-#ifdef CDR_FORCING
+    ! CDR_FRC, CDR_OUTPUT, CDR_GAS_EXCH_OUTPUT, DIAGNOSTICS and UPSCALE
+    ! settings are read whatever their cpp keys: with a key off, the reader
+    ! only stops if the group switches the feature on (gated_nml_found in
+    ! namelist_open_mod).
     use cdr_frc, only: read_nml_cdr_frc           !CDR_FRC_SETTINGS
-#endif
-#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     use cdr_output, only: read_cdr_output_nml     !CDR_OUTPUT_SETTINGS
-#endif
     use cdr_lite_output, only: read_cdr_lite_output_nml  !CDR_LITE_OUTPUT_SETTINGS
-#if defined MARBL && defined CDR_FORCING
     use cdr_gas_exch_output, only: read_cdr_gas_exch_output_nml  !CDR_GAS_EXCH_OUTPUT_SETTINGS
-#endif
-#ifdef DIAGNOSTICS
     use diagnostics, only: read_nml_diagnostics   !DIAGNOSTICS_SETTINGS
-#endif
     use basic_output, only: read_nml_basic_output !BASIC_OUTPUT_SETTINGS
     use calc_pflx_mod, only: read_nml_pflx        !CALC_PFLX_SETTINGS
     use extract_data, only: read_nml_extract      !EXTRACT_DATA_SETTINGS
@@ -56,9 +52,7 @@ contains
     use tides, only: read_nml_tides               !TIDAL_FRC_SETTINGS
     use bulk_frc, only: read_nml_surf_frc         !SURF_FRC_SETTINGS
     use tracers, only: read_nml_tracers           !TS_SETTINGS
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: read_nml_upscale    !UPSCALE_SETTINGS
-#endif
     use zslice_output, only: read_nml_zslice      !ZSLICE_SETTINGS
 #if defined(SOLVE3D) && !defined(NONLIN_EOS)
     use eos_vars, only: read_nml_lin_rho_eos      !LIN_RHO_EOS_SETTINGS
@@ -94,21 +88,13 @@ contains
     ! subcycling of those tracers), and there it is optional
     if (nt_passive + nt_bgc + nt_cdr_oae + nt_cdr_dor > 0) call read_nml_bgc
 #endif
-#ifdef CDR_FORCING
     call read_nml_cdr_frc
-#endif
-#ifdef DIAGNOSTICS
     call read_nml_diagnostics
-#endif
     call read_nml_basic_output
     call read_nml_pflx
-#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
     call read_cdr_output_nml
-#endif
     call read_cdr_lite_output_nml
-#if defined MARBL && defined CDR_FORCING
     call read_cdr_gas_exch_output_nml
-#endif
     call read_nml_extract
     call read_nml_frc_output
     call read_nml_particles
@@ -118,9 +104,7 @@ contains
     call read_nml_sponge_tune
     call read_nml_surf_flx
     call read_nml_tides
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     call read_nml_upscale
-#endif
     call read_nml_zslice
 #if defined(SOLVE3D) && !defined(NONLIN_EOS)
     call read_nml_lin_rho_eos

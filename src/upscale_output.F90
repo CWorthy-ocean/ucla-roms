@@ -1074,9 +1074,47 @@ contains
   private
 
   ! Public functions
-  public init_upscale, wrt_upscale
+  public init_upscale, wrt_upscale, read_nml_upscale
 
 contains
+
+  subroutine read_nml_upscale
+    ! Without MARBL, MARBL_DIAGS and UPSCALING, UPSCALE_SETTINGS is read only
+    ! to stop when do_upscale = .true.; a missing group is fine. Its keys and
+    ! types are those of the group with the keys.
+    use namelist_open_mod, only: open_namelist_file, gated_nml_found,&
+    &check_nml_cpp_switch
+    implicit none
+    integer(kind=4) :: nrpf_uscl
+    real(kind=8)    :: output_period_uscl
+    logical :: do_upscale
+    namelist /UPSCALE_SETTINGS/ nrpf_uscl, output_period_uscl, do_upscale
+    integer(kind=4) :: namelist_unit, ios
+    character(len=20) :: sr_name = "read_nml_upscale"
+    character(len=512) :: msg
+    character(len=40) :: missing
+
+    missing = ''
+#ifndef MARBL
+    missing = trim(missing)//' MARBL'
+#endif
+#ifndef MARBL_DIAGS
+    missing = trim(missing)//' MARBL_DIAGS'
+#endif
+#ifndef UPSCALING
+    missing = trim(missing)//' UPSCALING'
+#endif
+    do_upscale = .false.
+    msg = ''
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=UPSCALE_SETTINGS, iostat=ios, iomsg=msg)
+    close(namelist_unit)
+    if (gated_nml_found(ios, msg, 'UPSCALE_SETTINGS', trim(module_name)//'/'//sr_name)) then
+      call check_nml_cpp_switch('UPSCALE_SETTINGS', 'do_upscale', do_upscale,&
+      &.false., 'MARBL, MARBL_DIAGS and UPSCALING', trim(module_name)//'/'//sr_name, missing)
+    end if
+  end subroutine read_nml_upscale
 
   subroutine init_upscale   ![
     ! Allocate and initialize arrays.
