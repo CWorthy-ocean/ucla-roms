@@ -16,6 +16,8 @@ ADDITIONAL_FILES = ROMS_ROOT / "tests" / "additional_files"
 # The make command of the tests that build their own Fortran (test_cdf_direct.py). CI's ifx job adds
 # COMPILER=intel by rewriting the text "make BUILD_MODE=test" in this file, so keep that literal form.
 MAKE_CMD = "make BUILD_MODE=test"
+# USER_FFLAGS that turn on array bounds checking for the compiler MAKE_CMD selects.
+BOUNDS_CHECK_FFLAGS = "-check bounds" if "COMPILER=intel" in MAKE_CMD else "-fcheck=bounds"
 
 # --------------------------------------------------------------------------
 # CPP key groups
@@ -123,9 +125,10 @@ class ROMSConfiguration:
                 f.write(f"#define {k}\n")
             f.write('#include "set_global_definitions.h"')
 
-    def compile(self):
+    def compile(self, make_args: str = ""):
+        """Compile with the suite's make command; ``make_args`` are appended (e.g. USER_FFLAGS)."""
         subprocess.run(
-            f"cd {self.location} && make BUILD_MODE=test",
+            f"cd {self.location} && make BUILD_MODE=test {make_args}",
             shell=True, text=True, check=True,
         )
 
