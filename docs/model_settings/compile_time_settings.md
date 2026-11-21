@@ -107,22 +107,16 @@ These switches control the model's mixing parameterizations, including vertical 
 
 ### `BIOGEOCHEMICAL OPTIONS`
 
-These switches control the biogeochemical (BGC) model. Two BGC models are available — MARBL and BEC — though they cannot be used simultaneously.
+These switches control the biogeochemical (BGC) model, MARBL. (The BEC2 model was retired; see [Retired keys](#retired-keys).)
 
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
-| `MARBL` | Use the MARBL biogeochemical library | enabled | Cannot be used simultaneously with `BIOLOGY_BEC2` |
+| `MARBL` | Use the MARBL biogeochemical library | enabled | Building needs `MARBL_ROOT` |
 | `MARBL_DIAGS` | Enable the writing of diagnostics and other variables from the MARBL biogeochemical library | enabled | Specific variables are listed in `marbl_diagnostics_to_write` in the `MARBL_BIOGEOCHEMISTRY_SETTINGS` namelist group |
 | `NHY_FORCING` | Use ammonia atmospheric forcing | enabled | |
 | `NOX_FORCING` | Use nitrogen oxide atmospheric forcing | enabled | |
 | `PCO2AIR_FORCING` | Use atmospheric forcing for CO2 | enabled | Without it, MARBL uses `xco2air_default` from the `BGC_SETTINGS` namelist group |
 | `CDR_LITE` | Simulate CDR interventions with passive tracers, without a full BGC model | disabled | Adds air-sea CO2 exchange to the `CDR_LITE` tracers that `nt_cdr_oae` and `nt_cdr_dor` (`PARAM_SETTINGS`) create; works with or without `MARBL`. Settings are in the `CDR_LITE_SETTINGS` namelist group |
-| `BIOLOGY_BEC2` | Enable BEC biogeochemical model | disabled | Only associated with BEC |
-| `BEC2_DIAG` | Enable BEC diagnostics | disabled | Only associated with BEC |
-| `DAILYPAR_BEC` | Use the daily averaged photosynthetically available radiation instead of instantaneous | disabled | Only works with BEC, and only with `BULK_FRC` enabled |
-| `NO3_RESTORE` | Restore to specified concentration of nitrate | disabled | Only works with BEC2. May require an input file (unknown) |
-| `Ncycle_SY` | Nitrogen Cycle with NO2, N2O and N2 tracers | disabled | Only works with BEC2 |
-| `TDEP_REMIN` | Apply temperature dependency for particulate remineralization | disabled | Only used in the BEC2 biogeochemical module |
 
 ### `MISCELLANEOUS`
 
@@ -141,7 +135,7 @@ These switches control the biogeochemical (BGC) model. Two BGC models are availa
 
 ### Retired keys
 
-These keys were removed together with their code: most of them no longer compiled, and `AKIMA_V` and `BBL` had no effect. The build stops with an error that names the key if your `cppdefs.opt` still defines one of them (`#undef` lines are harmless); delete it from the file.
+These keys were removed together with their code: most of them no longer compiled, `AKIMA_V` and `BBL` had no effect, and the BEC2 biogeochemical model was retired in favour of `MARBL`. The build stops with an error that names the key if your `cppdefs.opt` still defines one of them (`#undef` lines are harmless); delete it from the file.
 
 | Switch | What it was |
 |--------|-------------|
@@ -160,3 +154,10 @@ These keys were removed together with their code: most of them no longer compile
 | `OBC_TSPECIFIED` | Specified (clamped) tracers at open boundaries; use `OBC_TORLANSKI` |
 | `ANA_BRY` | Analytical lateral boundary data |
 | `TAU_CORRECTION` | Wind-stress correction toward observations from extra input fields |
+| `BIOLOGY_BEC2` | The BEC2 biogeochemical model; use `MARBL` |
+| `BEC2_DIAG` | Diagnostics of BEC2; use `MARBL_DIAGS` |
+| `DAILYPAR_BEC` | Daily-averaged photosynthetically available radiation in BEC2 |
+| `DAILYPAR_PHOTOINHIBITION` | Daily-averaged photosynthetically available radiation for the photoinhibition of nitrification in BEC2 |
+| `NO3_RESTORE` | Nitrate restoring in BEC2 |
+| `Ncycle_SY` | Nitrogen cycle with NO2, N2O and N2 tracers in BEC2 |
+| `TDEP_REMIN` | Temperature-dependent particulate remineralization in BEC2 |

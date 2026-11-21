@@ -116,7 +116,7 @@ module scalars
   &                   sec2day=1._8/86400._8, Cp=3985._8, vonKar=0.41_8, &
   &                   cmday2ms = 0.01_8/day2sec, &
   &                   g=9.81_8 ! m/s^2
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef MARBL
   real(kind=8) nmol_cm2_to_mmol_m2
   parameter (nmol_cm2_to_mmol_m2 = 0.01_8)
 #endif

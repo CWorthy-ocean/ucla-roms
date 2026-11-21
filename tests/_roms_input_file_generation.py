@@ -177,14 +177,10 @@ def create_roms_bgc_boundary_forcing(grid, target_dir: Path):
                 "path": target_dir / "fake_bgc_3d_data.nc"},
         prefill="2d_lateral_fill",  # roms-tools 5 name for apply_2d_horizontal_fill=True
     )
-    # Add DOFE for BEC:
+    # The reference hashes were made with DOP zero: the retired BEC2 test copied
+    # DOP into a DOFE variable and zeroed the copy, which shares DOP's array.
     for bry in ["west", "north", "south", "east"]:
-        rbf.ds[f"DOFE_{bry}"] = rbf.ds[f"DOP_{bry}"]
-        rbf.ds[f"DOFE_{bry}"][:] = 0.
-        rbf.ds[f"DOFE_{bry}"].attrs = {
-            "long_name": f"{bry}ern boundary dissolved organic iron",
-            "units": "mMol Fe m-3",
-        }
+        rbf.ds[f"DOP_{bry}"][:] = 0.
 
     rbf.save(target_dir / "example_input_bgc_boundary_forcing.nc", group=False)
 
@@ -272,13 +268,8 @@ def create_roms_initial_conditions(grid, target_dir: Path):
         bgc_source={"name": "CESM_REGRIDDED", "path": target_dir / "fake_bgc_3d_data.nc"},
         bgc_model=rt.BGCMarbl,  # required by roms-tools 5 whenever a BGC source is given
     )
-    # Add DOFE for BEC
-    ic.ds["DOFE"] = ic.ds["DOP"]
-    ic.ds["DOFE"][:] = 0.
-    ic.ds["DOFE"].attrs = {
-        "long_name": "Dissolved organic iron",
-        "units": "mMol Fe m-3",
-    }
+    # The reference hashes were made with DOP zero (see create_roms_bgc_boundary_forcing).
+    ic.ds["DOP"][:] = 0.
 
     ic.save(target_dir / "example_input_bgc_initial_conditions.nc")
 

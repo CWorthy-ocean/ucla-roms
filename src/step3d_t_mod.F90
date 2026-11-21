@@ -1117,8 +1117,6 @@ if (is_marbl_step(tstep)) then
   call marbldrv_column_physics(istr,iend,jstr,jend,t)
   call reg_toc(rg_marbl)
 end if
-# elif defined(BIOLOGY_BEC2)
-call ecosys_bec2_tile(istr,iend,jstr,jend) ! BEC, 2014
 # endif
 
 # ifndef TS_DIF2

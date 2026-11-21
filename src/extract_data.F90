@@ -702,11 +702,11 @@ contains
           &context=module_name//"/"//sr_name,&
           &info="calc_pflx is not set for vp extraction")
         endif
-#if                             !defined(BIOLOGY_BEC2) && !defined(MARBL)
+#ifndef MARBL
         if (obj(iobj)%bgc) then
           call error_log%raise_global(&
           &context=module_name//"/"//sr_name,&
-          &info="MARBL or BIOLOGY_BEC2 cpp key is not "//&
+          &info="MARBL cpp key is not "//&
           &"set for BGC extraction")
         endif
 #endif

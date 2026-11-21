@@ -233,31 +233,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_merge_overlap = .false.
 #endif
-#ifdef BEC2_DIAG
-  logical, parameter, public :: key_bec2_diag = .true.
-#else
-  logical, parameter, public :: key_bec2_diag = .false.
-#endif
-#ifdef DAILYPAR_BEC
-  logical, parameter, public :: key_dailypar_bec = .true.
-#else
-  logical, parameter, public :: key_dailypar_bec = .false.
-#endif
-#ifdef DAILYPAR_PHOTOINHIBITION
-  logical, parameter, public :: key_dailypar_photoinhibition = .true.
-#else
-  logical, parameter, public :: key_dailypar_photoinhibition = .false.
-#endif
-#ifdef NO3_RESTORE
-  logical, parameter, public :: key_no3_restore = .true.
-#else
-  logical, parameter, public :: key_no3_restore = .false.
-#endif
-#ifdef TDEP_REMIN
-  logical, parameter, public :: key_tdep_remin = .true.
-#else
-  logical, parameter, public :: key_tdep_remin = .false.
-#endif
 #ifdef DIAGNOSTICS_NHMG
   logical, parameter, public :: key_diagnostics_nhmg = .true.
 #else
@@ -356,16 +331,6 @@ module cpp_keys_mod
   logical, parameter, public :: key_salinity = .true.
 #else
   logical, parameter, public :: key_salinity = .false.
-#endif
-#ifdef BIOLOGY_BEC2
-  logical, parameter, public :: key_biology_bec2 = .true.
-#else
-  logical, parameter, public :: key_biology_bec2 = .false.
-#endif
-#ifdef Ncycle_SY
-  logical, parameter, public :: key_ncycle_sy = .true.
-#else
-  logical, parameter, public :: key_ncycle_sy = .false.
 #endif
 
   ! (d) Link and build: select libraries or fixed build properties.

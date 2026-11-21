@@ -37,7 +37,7 @@ subroutine set_forces
   use tracers, only: set_surf_tracer_flx, iTandS
   use river_frc, only:  set_river_frc, river_source
   use pipe_frc, only: set_pipe_frc, pipe_source
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef MARBL
   use bgc_io, only: set_bgc_surf_frc
 #endif
   use dimensions, only: jnode, inode
@@ -123,7 +123,7 @@ subroutine set_forces
   if(nt>iTandS) call set_surf_tracer_flx
   ! BGC surface flux:
 
-# if defined(BIOLOGY_BEC2) || defined(MARBL)
+# ifdef MARBL
   call set_bgc_surf_frc(istr,iend,jstr,jend)
 # endif
 

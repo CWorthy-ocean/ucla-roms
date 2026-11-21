@@ -21,7 +21,7 @@ program main              ! Open MP version of ROMS driver
 # else
   use flux_frc, only: interp_flux_frc
 # endif
-# if defined(BIOLOGY_BEC2) || defined(MARBL)
+# ifdef MARBL
   use bgc_shared_vars, only: interp_bgc_frc
 # endif
 #endif
@@ -64,7 +64,7 @@ program main              ! Open MP version of ROMS driver
 # else
   coarse_frc = interp_flux_frc
 # endif
-# if defined(BIOLOGY_BEC2) || defined(MARBL)
+# ifdef MARBL
   coarse_frc = coarse_frc .or. interp_bgc_frc
 # endif
   call find_optimal_tiling(coarse_frc)
@@ -185,12 +185,9 @@ contains
 #ifdef DIAGNOSTICS
     use diagnostics, only: init_diagnostics, diag_uv, diag_trc
 #endif
-# if defined(BIOLOGY_BEC2) || defined(MARBL)
+# ifdef MARBL
     use bgc_io, only: wrt_bgc
 # endif
-# if defined(BIOLOGY_BEC2)
-    use bec2_params, only: ecosys2_init
-#endif
 #ifdef MARBL
     use marbl_driver, only: marbldrv_impose_constant_fe_all
     use tracers, only: t
@@ -308,9 +305,6 @@ contains
 !$  OMP BARRIER                          ! slope parameters "rx0", "rx1".
 !R      write(*,*) ' -6' MYID
 
-# if defined(BIOLOGY_BEC2)
-    call ecosys2_init
-# endif /*BIOLOGY_BEC2*/
 
 #ifdef ANA_INITIAL
 
@@ -387,7 +381,7 @@ contains
     ! blowup if true, and initial if false.
 ! Come up with a better name!
     call wrt_his_ocean_vars(.false.)
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef MARBL
     call wrt_bgc(.true.)
 #endif
     if (do_random) call init_random
@@ -459,7 +453,7 @@ contains
 # ifdef TS_DIF2
     use t3dmix_mod, only: t3dmix => t3dmix_s
 #endif
-# if defined(BIOLOGY_BEC2) || defined(MARBL)
+# ifdef MARBL
     use bgc_io, only: wrt_bgc
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
@@ -745,7 +739,7 @@ contains
     if (do_zslice) call wrt_zslice
     if (wrt_frc)    call wrt_frc_output
 
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef MARBL
     call wrt_bgc
 #endif
     call reg_toc(rg_output)

@@ -26,7 +26,7 @@ contains
 #ifndef ANA_GRID
     use dimensions, only: read_nml_grid           !GRID_SETTINGS
 #endif
-#if defined(MARBL) || defined(BIOLOGY_BEC2)
+#ifdef MARBL
     use bgc_shared_vars, only: read_nml_bgc       !BGC_SETTINGS
 #endif
     ! CDR_FRC, CDR_OUTPUT, CDR_GAS_EXCH_OUTPUT, DIAGNOSTICS and UPSCALE
@@ -76,7 +76,7 @@ contains
 #ifndef ANA_GRID
     call read_nml_grid
 #endif
-#if defined(MARBL) || defined(BIOLOGY_BEC2)
+#ifdef MARBL
     call read_nml_bgc
 #endif
     call read_nml_cdr_frc

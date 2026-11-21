@@ -286,7 +286,7 @@ trc2zsc = 1, 2        ! Indices of tracers to include
 !================================================================================
 !                              BIOGEOCHEMISTRY (BGC)
 !================================================================================
-! Requires MARBL or BIOLOGY_BEC2 cpp keys
+! Requires the MARBL cpp key
 !================================================================================
 &BGC_SETTINGS                                                !bgc_shared_vars.F90
 !------------

@@ -533,7 +533,7 @@ contains
         call exchange_xxx(t(:,:,:,tindx,itrc))
       else
 
-        ! temperature, salt(s) and the BGC (MARBL/BEC2) tracers always require
+        ! temperature, salt(s) and the BGC (MARBL) tracers always require
         ! an initial condition; passive and CDR tracers start at zero
         if (tracer_required(itrc)) then
           ! One record: error_info is a scalar internal file, so a '/' in a
