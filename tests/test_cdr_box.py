@@ -300,8 +300,9 @@ def test_tracer_diagnostics_on_unequal_tiles(box_diag_bounds_conf, box_cdr_file,
     """The tracer diagnostics (diag_trc) on tiles wider than tall (32 x 8) and taller
     than wide (8 x 32). diag_t_adv_hc4 copied grd(1,1:nx) into grd(0,1:ny) at the west
     and east edges: on wide tiles that wrote past the end of grd, heap corruption that
-    could crash the run as late as MPI_Finalize; on tall tiles it left rows ny-nx of the
-    edge unset. Built with bounds checking, either run stops there."""
+    could crash the run as late as MPI_Finalize; on tall tiles it left rows nx+1:ny of the
+    edge unset. Built with bounds checking, the wide-tile run stops there (an index out of
+    range); gfortran's check also stops the tall-tile run (an array bound mismatch)."""
     for np_xi, np_eta in ((1, 4), (4, 1)):
         nml = box_namelist(input_dir, box_cdr_file, np_xi, np_eta)
         nml["TIME_STEPPING"]["ntimes"] = 2
