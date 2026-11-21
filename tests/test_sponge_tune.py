@@ -3,7 +3,7 @@
 With ``ub_tune`` ROMS nudges the Orlanski boundary coefficients ``ub_*`` toward
 matching the parent's baroclinic pressure flux, read from the boundary file
 (``up_west``/``up_east``/``vp_south``/``vp_north``), with the child's own flux
-from ``calc_pflx`` (``DIAGNOSTICS``). The test parent has no parent, so its
+from ``calc_pflx``. The test parent has no parent, so its
 boundary file gets synthetic fluxes: smooth along each edge, varying in time.
 
 Each build, with and without PARALLEL_IO, runs the case on 2x2 ranks with

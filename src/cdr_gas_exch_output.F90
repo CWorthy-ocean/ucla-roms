@@ -508,6 +508,42 @@ contains
   public :: init_cdr_gas_exch_output, wrt_cdr_gas, read_cdr_gas_exch_output_nml
 contains
   subroutine read_cdr_gas_exch_output_nml
+    ! Without MARBL and CDR_FORCING, CDR_GAS_EXCH_OUTPUT_SETTINGS is read only
+    ! to stop when do_cdr_gas_exch_output = .true.; a missing group is fine.
+    ! Its keys and types are those of the group with the keys, read into
+    ! local variables (the module's keep their defaults).
+    use namelist_open_mod, only: open_namelist_file, gated_nml_found,&
+    &check_nml_cpp_switch
+    implicit none
+    real(kind=8)    :: output_period_cdr_gas
+    integer(kind=4) :: nrpf_cdr_gas
+    logical :: wrt_cdr_gas_avg, cdr_gas_monthly_averages, do_cdr_gas_exch_output
+    namelist /CDR_GAS_EXCH_OUTPUT_SETTINGS/ output_period_cdr_gas, nrpf_cdr_gas,&
+    &wrt_cdr_gas_avg, cdr_gas_monthly_averages, do_cdr_gas_exch_output
+    integer(kind=4) :: namelist_unit, ios
+    character(len=28) :: sr_name = "read_cdr_gas_exch_output_nml"
+    character(len=512) :: msg
+    character(len=40) :: missing
+
+    missing = ''
+#ifndef MARBL
+    missing = trim(missing)//' MARBL'
+#endif
+#ifndef CDR_FORCING
+    missing = trim(missing)//' CDR_FORCING'
+#endif
+    do_cdr_gas_exch_output = .false.
+    msg = ''
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=CDR_GAS_EXCH_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+    close(namelist_unit)
+    if (gated_nml_found(ios, msg, 'CDR_GAS_EXCH_OUTPUT_SETTINGS',&
+    &trim(module_name)//'/'//sr_name)) then
+      call check_nml_cpp_switch('CDR_GAS_EXCH_OUTPUT_SETTINGS',&
+      &'do_cdr_gas_exch_output', do_cdr_gas_exch_output, .false.,&
+      &'MARBL and CDR_FORCING', trim(module_name)//'/'//sr_name, missing)
+    end if
   end subroutine read_cdr_gas_exch_output_nml
   subroutine init_cdr_gas_exch_output
     implicit none

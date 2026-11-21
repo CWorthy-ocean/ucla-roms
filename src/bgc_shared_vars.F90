@@ -132,8 +132,6 @@ module bgc_shared_vars
   real(kind=8)    :: output_period_bgc_avg_dia = 0._8    ! output period in seconds
   integer(kind=4) :: nrpf_bgc_avg_dia          = 0              ! total recs per file
 
-  integer(kind=4) :: nbgc_flx = 0                   ! number of surface bgc flux forcings
-
   logical, public :: wrt_bgc_his, wrt_bgc_avg,&
   &wrt_bgc_dia_his, wrt_bgc_dia_avg,&
   &interp_bgc_frc
@@ -145,7 +143,6 @@ module bgc_shared_vars
   &output_period_bgc_avg, nrpf_bgc_avg,&
   &output_period_bgc_his_dia, nrpf_bgc_his_dia,&
   &output_period_bgc_avg_dia, nrpf_bgc_avg_dia,&
-  &nbgc_flx,&
   &xco2air_default,&
   &bgc_physics_subcycle, bgc_physics_timestep,&
   &bgc_subcycle_pos, bgc_subcycle_diag   ! testing/expert keys, not in the template
@@ -314,14 +311,6 @@ contains
     if (bgc_physics_subcycle) call error_log%raise_global(&
     &context=module_name//'/'//sr_name, info='bgc_physics_subcycle requires SOLVE3D')
 #endif
-    nbgc_flx = 0+ &
-#ifdef PCO2AIR_FORCING
-    &+1&
-#endif
-#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
-    &+1 &
-#endif
-    & + nbgc_flx
     close(namelist_unit)
 
   end subroutine read_nml_bgc
