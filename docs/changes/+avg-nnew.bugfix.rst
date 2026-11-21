@@ -1,2 +1,0 @@
-The averages (``_avg``, ``_bgc_avg``) add ``u``, ``v`` and the tracers as they are at the end of each step, as the history files write them; they used to add the state of the step before, so each record averaged its window shifted back by one step.
-- ``w`` (history, averages and extracted data) took ``u`` and ``v`` of the step before with the depths of the end of the step; it now takes both at the end of the step.

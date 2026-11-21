@@ -1,1 +1,0 @@
-The CDR forcing file (``cdr_file``) is now found when ``frcfiles`` in ``FORCING_FILES`` is empty. Before, such a run stopped because ``cdr_volume`` (or another CDR variable) was not found, unless the CDR file was also listed in ``frcfiles``.

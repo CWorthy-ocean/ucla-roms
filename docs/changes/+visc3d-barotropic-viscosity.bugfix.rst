@@ -1,2 +1,0 @@
-Lateral viscosity (``UV_VIS2``, including the sponge viscosity ``v_sponge``) now acts on the depth-averaged flow: ``visc3d`` added its depth-integrated term to the barotropic forcing ``rufrc``/``rvfrc`` without multiplying it by the cell area, so ``ubar`` and ``zeta`` received the viscous term divided by the cell area in square metres (1e5 to 1e8 at typical resolutions), and the sponge damped only the depth-varying flow.
-- The same fix as upstream CESR-lab/ucla-roms commit 3db2036f ("Bug fix to horizontal viscosity").

@@ -1,1 +1,0 @@
-Parameterized and depth-profile CDR releases (``cdr_forcing_parameterized``, ``cdr_forcing_depth_profiles``) now stop at start-up with a message in a build without ``SPHERICAL``, instead of crashing: they are placed by ``cdr_lon`` and ``cdr_lat``, which needs the grid's longitude and latitude.
