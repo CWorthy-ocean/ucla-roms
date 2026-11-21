@@ -1,0 +1,1 @@
+``calc_pflx = .true.`` now computes the baroclinic pressure fluxes without the ``DIAGNOSTICS`` CPP key. Before, a build without ``DIAGNOSTICS`` (such as every C-Star Forge build) never computed them, so the ``up`` and ``vp`` fluxes extracted for child grids were zero, and so were the slow fields in restart files.

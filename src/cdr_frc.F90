@@ -1095,9 +1095,41 @@ contains
   character(len=9) :: module_name="cdr_frc"
 
   ! Public functions
-  public set_cdr_frc
+  public set_cdr_frc, read_nml_cdr_frc
 
 contains
+
+  subroutine read_nml_cdr_frc
+    ! Without CDR_FORCING, CDR_FRC_SETTINGS is read only to stop when
+    ! cdr_source = .true.; a missing group is fine. Its keys and types are
+    ! those of the group with CDR_FORCING, so the same group reads here.
+    use namelist_open_mod, only: open_namelist_file, gated_nml_found,&
+    &check_nml_cpp_switch
+    use param, only: max_name_size
+    implicit none
+    character(len=max_name_size) :: cdr_file
+    integer(kind=4) :: cdr_ncdr_parm, cdr_nz_chd
+    logical :: cdr_source,&
+    &cdr_forcing_depth_profiles, cdr_forcing_3d, cdr_forcing_parameterized,&
+    &cdr_time_interpolation, cdr_relocate_to_wet_pts, cdr_volume
+    namelist /CDR_FRC_SETTINGS/ cdr_file, cdr_ncdr_parm, cdr_nz_chd, cdr_source,&
+    &cdr_forcing_depth_profiles, cdr_forcing_3d, cdr_forcing_parameterized,&
+    &cdr_time_interpolation, cdr_relocate_to_wet_pts, cdr_volume
+    integer(kind=4) :: namelist_unit, ios
+    character(len=17) :: sr_name = "read_nml_cdr_frc"
+    character(len=512) :: msg
+
+    cdr_source = .false.
+    msg = ''
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=CDR_FRC_SETTINGS, iostat=ios, iomsg=msg)
+    close(namelist_unit)
+    if (gated_nml_found(ios, msg, 'CDR_FRC_SETTINGS', trim(module_name)//'/'//sr_name)) then
+      call check_nml_cpp_switch('CDR_FRC_SETTINGS', 'cdr_source', cdr_source,&
+      &.false., 'CDR_FORCING', trim(module_name)//'/'//sr_name)
+    end if
+  end subroutine read_nml_cdr_frc
 
   subroutine set_cdr_frc    ![
 ! Allocate and initialize arrays.
