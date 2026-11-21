@@ -17,7 +17,6 @@ module calc_pflx_mod
   use eos_vars, only: rho
 #endif
   use nc_read_write, only: ncwrite, ncread
-  use diagnostics, only: dxdyi
   use roms_mpi, only: exchange_xxx
   use pio_roms, only: pio_gtype
 
@@ -34,7 +33,6 @@ module calc_pflx_mod
 
   real(kind=8),allocatable,dimension(:,:),public :: up,vp         ! u'p' (at upoint) and v'p' (at v_point)
 
-  real(kind=8),public,allocatable,dimension(:,:)  :: dzt ! dzeta/dt
   real(kind=8),public,allocatable,dimension(:,:)  :: Uflx,Vflx
 
   ! work arrays of calc_pressure_flux
@@ -138,10 +136,6 @@ contains
       allocate(Vflx(GLOBAL_2D_ARRAY))
       Vflx = 0
 
-      ! strictly speaking for barotropic/baroclinic balance only
-!        allocate( dzt(nx,ny) )
-      allocate(dzt(GLOBAL_2D_ARRAY))
-
       allocate(zscl(GLOBAL_2D_ARRAY)); zscl = 0
       allocate(p_lev(GLOBAL_2D_ARRAY)); p_lev = 0
       allocate(r_lev(GLOBAL_2D_ARRAY)); r_lev = 0
@@ -196,13 +190,10 @@ contains
 # endif
 
     if (calc_pflx) then
-      Uflx =  sum(Flxu(1:nx+1,1:ny,:),dim=3)
-      Vflx =  sum(Flxv(1:nx,1:ny+1,:),dim=3)
-
-      ! Strictly speaking only neccesary for barotropic/baroclinic
-      ! balance
-      dzt  = -dxdyi*( Uflx(2:nx+1,:)-Uflx(1:nx,:) +&
-      &Vflx(:,2:ny+1)-Vflx(:,1:ny) )
+      ! Assign the interior only: a whole-array assignment from these
+      ! smaller expressions would reallocate the halo-sized arrays.
+      Uflx(1:nx+1,1:ny) =  sum(Flxu(1:nx+1,1:ny,:),dim=3)
+      Vflx(1:nx,1:ny+1) =  sum(Flxv(1:nx,1:ny+1,:),dim=3)
 
       ! Divide the barotropic fluxes into velocities [m/s]
       do j=1,ny
