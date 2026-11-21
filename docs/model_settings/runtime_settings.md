@@ -79,7 +79,7 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `nt_passive` | Number of passive tracers |
 | `nt_cdr_oae` | Number of OAE `CDR_LITE` tracer pairs. Each pair is an ALK-mimicking and a DIC-mimicking passive tracer (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`), so it adds two tracers. The `CDR_LITE` CPP key adds their air-sea CO2 exchange. |
 | `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`) |
-| `nt_bgc` | Number of biogeochemical tracers: 32 for default `MARBL`, 26 for `BIOLOGY_BEC2` (29 with `Ncycle_SY`), 0 if neither is defined |
+| `nt_bgc` | Number of biogeochemical tracers: 32 for default `MARBL`, 0 without `MARBL` |
 
 ### `PIO_SETTINGS`
 (read by module `pio_roms.F90`)
@@ -281,7 +281,7 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 ### `BGC_SETTINGS`
 (read by module `bgc_shared_vars.F90`)
 
-Required with `MARBL` or `BIOLOGY_BEC2`. Without them it is read only when there are tracers beyond temperature and salinity (passive or CDR_LITE tracers), and is optional there: if it is absent, `bgc_physics_subcycle = .false.`.
+Required with `MARBL`. Without it it is read only when there are tracers beyond temperature and salinity (passive or CDR_LITE tracers), and is optional there: if it is absent, `bgc_physics_subcycle = .false.`.
 
 | Setting | Description |
 |--------|-------------|

@@ -146,9 +146,9 @@ contains
         call error_log%raise_global(context=module_name//"/"//sr_name, info=info)
       end if
     end if
-#if defined ADV_ISONEUTRAL || defined BIOLOGY_BEC2 || defined CONST_TRACERS
+#if defined ADV_ISONEUTRAL || defined CONST_TRACERS
     call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_physics_subcycle does not support ADV_ISONEUTRAL, BIOLOGY_BEC2 or CONST_TRACERS")
+    &info="bgc_physics_subcycle does not support ADV_ISONEUTRAL or CONST_TRACERS")
 #endif
 #ifdef DIAGNOSTICS
     if (diag_trc) then

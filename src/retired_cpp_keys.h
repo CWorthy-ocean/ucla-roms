@@ -1,5 +1,6 @@
 /* Retired CPP keys.  The code of these keys was removed (most of it no
- longer compiled, and AKIMA_V and BBL had no effect), see "Retired keys"
+ longer compiled, AKIMA_V and BBL had no effect, and the BEC2
+ biogeochemical model was retired in favour of MARBL), see "Retired keys"
  in docs/model_settings/compile_time_settings.md.  Stop the build rather
  than silently ignore a key that a cppdefs.opt still defines.  An #undef
  line for one of them is harmless.  Included by set_global_definitions.h. */
@@ -57,4 +58,25 @@
 #endif
 #ifdef TAU_CORRECTION
 # error "CPP key TAU_CORRECTION was retired (wind-stress correction): remove it from cppdefs.opt"
+#endif
+#ifdef BIOLOGY_BEC2
+# error "CPP key BIOLOGY_BEC2 was retired (BEC2 biogeochemical model; use MARBL): remove it from cppdefs.opt"
+#endif
+#ifdef BEC2_DIAG
+# error "CPP key BEC2_DIAG was retired (BEC2 diagnostics; use MARBL_DIAGS): remove it from cppdefs.opt"
+#endif
+#ifdef DAILYPAR_BEC
+# error "CPP key DAILYPAR_BEC was retired (daily-averaged PAR in BEC2): remove it from cppdefs.opt"
+#endif
+#ifdef DAILYPAR_PHOTOINHIBITION
+# error "CPP key DAILYPAR_PHOTOINHIBITION was retired (daily-averaged PAR for BEC2 photoinhibition): remove it from cppdefs.opt"
+#endif
+#ifdef NO3_RESTORE
+# error "CPP key NO3_RESTORE was retired (nitrate restoring in BEC2): remove it from cppdefs.opt"
+#endif
+#ifdef Ncycle_SY
+# error "CPP key Ncycle_SY was retired (nitrogen-cycle tracers of BEC2): remove it from cppdefs.opt"
+#endif
+#ifdef TDEP_REMIN
+# error "CPP key TDEP_REMIN was retired (temperature-dependent remineralization in BEC2): remove it from cppdefs.opt"
 #endif

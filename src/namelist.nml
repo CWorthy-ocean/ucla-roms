@@ -286,11 +286,11 @@ trc2zsc = 1, 2        ! Indices of tracers to include
 !================================================================================
 !                              BIOGEOCHEMISTRY (BGC)
 !================================================================================
-! Requires MARBL or BIOLOGY_BEC2 cpp keys
+! Requires the MARBL cpp key
 !================================================================================
 &BGC_SETTINGS                                                !bgc_shared_vars.F90
 !------------
-! Previously set in `bgc.opt`. Required with MARBL or BEC2; otherwise read
+! Previously set in `bgc.opt`. Required with MARBL; otherwise read
 ! only when there are tracers beyond T and S, and optional.
 !------------
 interp_bgc_frc = .false.    ! Interpolate forcing from coarser input grid if T

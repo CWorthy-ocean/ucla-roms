@@ -277,7 +277,7 @@
 !!!!!!!!!!!!!!!!!!!!!!!!! BIOGEOCHEMICAL OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! Use the MARBL biogeochemical library
-! Usage notes: Cannot be used simultaneously with BIOLOGY_BEC2
+! Usage notes: Set MARBL_ROOT to the MARBL installation when building
 #define MARBL
 
 ! Enable the writing of diagnostics and other variables from the MARBL biogeochemical library
@@ -298,32 +298,6 @@
 
 ! Simulate CDR interventions using passive tracers w/o BGC
 #undef CDR_LITE
-
-!----------------------------------------------------------
-
-! Enable BEC biogeochemical model
-! Usage notes: Only associated with BEC
-#undef BIOLOGY_BEC2
-
-! Enable BEC diagnostics
-! Usage notes: Only associated with BEC
-#undef BEC2_DIAG
-
-! Use the daily averaged photosynthetically available radiation instead of instantaneous
-! Usage notes: Only works with BEC, and only with BULK_FRC enabled
-#undef DAILYPAR_BEC
-
-! Restore to specified concentration of nitrate
-! Usage notes: Only works with BEC2. May require an input file (unknown)
-#undef NO3_RESTORE
-
-! Nitrogen Cycle with NO2, N2O and N2 tracers
-! Usage notes: Only works with BEC2
-#undef Ncycle_SY
-
-! Apply temperature dependency for particulate remineralization
-! Usage notes: Only used in the BEC2 biogeochemical module.
-#undef TDEP_REMIN
 
 !!!!!!!!!!!!!!!!!!!!!!!!! MISCELLANEOUS !!!!!!!!!!!!!!!!!!!!!!!!!
 

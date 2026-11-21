@@ -7,7 +7,7 @@ module precheck
   use netcdf, only: nf90_double
   use extract_data, only:&
   &do_extract, output_period_extract, nrpf_extract
-#if defined(MARBL) || defined(BIOLOGY_BEC2)
+#ifdef MARBL
   use bgc_shared_vars, only: bgc_precheck,&
   &wrt_bgc_his, wrt_bgc_avg, wrt_bgc_dia_his, wrt_bgc_dia_avg,&
   &output_period_bgc_his, nrpf_bgc_his,&
@@ -123,7 +123,7 @@ contains
     call check_output_divides_rst(do_upscale,&
     &output_period_uscl, nrpf_uscl, 'upscale')
 #endif
-#if defined(MARBL) || defined(BIOLOGY_BEC2)
+#ifdef MARBL
     call check_output_divides_rst(wrt_bgc_his,&
     &output_period_bgc_his, nrpf_bgc_his, 'bgc_his')
     call check_output_divides_rst(wrt_bgc_avg,&
@@ -144,7 +144,7 @@ contains
 #endif
     call error_log%abort_check()
 
-#if defined(MARBL) || defined(BIOLOGY_BEC2)
+#ifdef MARBL
     call bgc_precheck
 #endif
   end subroutine do_precheck

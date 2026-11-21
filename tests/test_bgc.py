@@ -1,4 +1,4 @@
-"""Realistic BGC tests (BEC and MARBL).
+"""Realistic BGC tests (MARBL).
 
 The MARBL tests share one binary, built once per module, and each runs in its
 own tmp_path. ``test_bgc_real_marbl`` is checked against the reference hashes;
