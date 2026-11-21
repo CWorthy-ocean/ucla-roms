@@ -13,8 +13,8 @@ its run alone bit for bit: with PARALLEL_IO each child's joined
 ``<extract_root_name>_bry`` file, without it every variable of the per-rank
 ``_ext`` files (which extract_data_join would split by prefix). The
 PARALLEL_IO two-child output is also checked against the reference hashes;
-the interpolation and remapping are the same code in both builds. Both
-builds define DIAGNOSTICS, so that calc_pflx computes the pressure fluxes;
+the interpolation and remapping are the same code in both builds. Neither
+build defines DIAGNOSTICS: calc_pflx computes the pressure fluxes without it;
 the runs that do not ask for them leave calc_pflx off. Child A is also run
 with the pressure fluxes up and vp, which must be written, non-zero, equal
 to the reference hashes in both builds, and with PARALLEL_IO independent of
@@ -122,11 +122,11 @@ def pio_input_dir(input_dir, tmp_path_factory) -> Path:
 
 @pytest.fixture(scope="module", params=[False, True], ids=["per_rank", "parallel_io"])
 def extract_conf(request, tmp_path_factory) -> ROMSConfiguration:
-    """Physics-only realistic build, without and with PARALLEL_IO. DIAGNOSTICS
-    lets calc_pflx compute up and vp (test_pressure_fluxes); with calc_pflx off,
-    as in the other tests, it does not change the model."""
+    """Physics-only realistic build, without and with PARALLEL_IO, and without
+    DIAGNOSTICS: calc_pflx computes up and vp without it (test_pressure_fluxes),
+    as in the C-Star Forge builds."""
     pio = request.param
-    cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS + ["DIAGNOSTICS"]
+    cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
     if pio:
         cpp_keys = cpp_keys + ["PARALLEL_IO"]
     build_dir = tmp_path_factory.mktemp("extract_build_pio" if pio else "extract_build")
@@ -361,8 +361,8 @@ def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesti
     """The pressure fluxes up and vp (roms-tools include_pressure_fluxes) are
     written for every boundary, in both builds (PARALLEL_IO used to abort on
     up), and are non-zero at every point of child A, which lies in open water
-    (they are all zero when calc_pressure_flux does not run, as without
-    DIAGNOSTICS). With PARALLEL_IO, which reads the joined inputs, the 2x2
+    (they are all zero when calc_pressure_flux does not run). With
+    PARALLEL_IO, which reads the joined inputs, the 2x2
     run gives the same values as a run on one rank. The values are checked
     against the reference hashes in both builds, so that a change to
     calc_pressure_flux or to how extract_data copies up and vp into its buffer

@@ -55,7 +55,27 @@ module bulk_frc
 
   real(kind=8),public,allocatable,dimension(:,:) :: wspd_used  ! wind speed at rho point (also used in BGC routines)
   logical, public :: interp_bulk_frc, check_bulk_frc_units
-  namelist /SURF_FRC_SETTINGS/ interp_bulk_frc, check_bulk_frc_units, interp_flux_frc
+  ! The surface restoring terms, named as in the GPU code's namelist. Here
+  ! the cpp keys SFLX_CORR, QCORRECTION and CFLX_CORR still decide them, so
+  ! the keys are optional and may only repeat the build (read_nml_surf_frc).
+  logical :: sflx_corr, qcorrection, cflx_corr
+  namelist /SURF_FRC_SETTINGS/ interp_bulk_frc, check_bulk_frc_units, interp_flux_frc,&
+  &sflx_corr, qcorrection, cflx_corr
+#ifdef SFLX_CORR
+  logical, parameter :: sflx_corr_cpp = .true.
+#else
+  logical, parameter :: sflx_corr_cpp = .false.
+#endif
+#ifdef QCORRECTION
+  logical, parameter :: qcorrection_cpp = .true.
+#else
+  logical, parameter :: qcorrection_cpp = .false.
+#endif
+#ifdef CFLX_CORR
+  logical, parameter :: cflx_corr_cpp = .true.
+#else
+  logical, parameter :: cflx_corr_cpp = .false.
+#endif
 
   public init_arrays_bulk_frc
   public set_bulk_frc
@@ -65,11 +85,15 @@ contains
 !     ----------------------------------------------------------------------
   subroutine read_nml_surf_frc
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file
+    use namelist_open_mod, only: open_namelist_file, check_nml_cpp_switch
 !     Read the "SURF_FRC_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_surf_frc"
     character(len=512) :: msg = ""
+    ! Left out, the restoring switches take the build's cpp keys
+    sflx_corr = sflx_corr_cpp
+    qcorrection = qcorrection_cpp
+    cflx_corr = cflx_corr_cpp
     ! Read namelist
     call open_namelist_file(namelist_unit)
     read (unit=namelist_unit, nml=SURF_FRC_SETTINGS, iostat=ios, iomsg=msg)
@@ -81,6 +105,13 @@ contains
       &//' section of namelist file: '&
       &//trim(msg)&
       &)
+    else
+      call check_nml_cpp_switch('SURF_FRC_SETTINGS', 'sflx_corr', sflx_corr,&
+      &sflx_corr_cpp, 'SFLX_CORR', module_name//'/'//sr_name)
+      call check_nml_cpp_switch('SURF_FRC_SETTINGS', 'qcorrection', qcorrection,&
+      &qcorrection_cpp, 'QCORRECTION', module_name//'/'//sr_name)
+      call check_nml_cpp_switch('SURF_FRC_SETTINGS', 'cflx_corr', cflx_corr,&
+      &cflx_corr_cpp, 'CFLX_CORR', module_name//'/'//sr_name)
     end if
     close(namelist_unit)
 

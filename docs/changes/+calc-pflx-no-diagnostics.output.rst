@@ -1,0 +1,1 @@
+In builds without ``DIAGNOSTICS``, runs with ``calc_pflx = .true.`` now write non-zero pressure fluxes ``up`` and ``vp`` to extracted child boundary files and non-zero slow fields to restart files (see Bug Fixes); the parent run's own results are unchanged.
