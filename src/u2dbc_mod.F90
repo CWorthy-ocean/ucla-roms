@@ -29,26 +29,14 @@ contains
     real(kind=8) grad(PRIVATE_2D_SCRATCH_ARRAY), cx,cy, cext, cff,&
     &dft,dfx,dfy, zx,hx
     real(kind=8), parameter :: eps=1.D-33
-#ifdef OBC_FLUX_CORR
-    real(kind=8) uv_crss
-#endif
 
 #include "compute_auxiliary_bounds.h"
 
-#ifdef OBC_FLUX_CORR
-    uv_crss=ubar_xs*dtfast/tau_obc
-#endif
 
 #ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
 # ifdef OBC_WEST
-#  ifdef ISWAKE_XXX
-      do j=jstr,jend ! constant flux prescribed at inflow side
-        ubar(istr,j,knew)=ubar_west(j)*(h(istr,j)+zeta_west(j))&
-        &/(h(istr,j)+zeta(istr,j,knew))
-      enddo
-
-#  elif defined OBC_M2FLATHER
+#  if defined OBC_M2FLATHER
       do j=jstr,jend
         cff=0.5_8*(h(istr-1,j)+h(istr,j))
         hx=sqrt(g/cff)
@@ -74,84 +62,6 @@ contains
 #   endif
       enddo
 
-#  elif defined OBC_M2ORLANSKI
-      do j=jstr,jend+1
-        grad(istr  ,j)=(ubar(istr  ,j,kstp)-ubar(istr  ,j-1,kstp))&
-#   ifdef MASKING
-        &*pmask(istr,j)
-#   endif
-        grad(istr+1,j)=(ubar(istr+1,j,kstp)-ubar(istr+1,j-1,kstp))&
-#   ifdef MASKING
-        &*pmask(istr+1,j)
-#   endif
-      enddo
-      do j=jstr,jend
-        dft=ubar(istr+1,j,kstp)-ubar(istr+1,j,knew)
-        dfx=ubar(istr+1,j,knew)-ubar(istr+2,j,knew)
-
-#   ifdef OBC_RAD_NORMAL
-        cy=0._8 ; cff=max(dfx*dfx, eps)
-#   else
-        if (dft*(grad(istr+1,j)+grad(istr+1,j+1)) > 0._8) then
-          dfy=grad(istr+1,j  )
-        else
-          dfy=grad(istr+1,j+1)
-        endif
-        cff=max(dfx*dfx+dfy*dfy, eps)
-#    ifdef OBC_RAD_NPO
-        cy=0._8
-#    else
-        cy=min(cff,max(dft*dfy,-cff))
-#    endif
-#   endif
-
-        cx=dft*dfx
-        if (cx < 0._8) then       !--> cancel, if inflow
-          cx=0._8 ; cy=0._8
-#   if defined M2_FRC_BRY || defined M2NUDGING
-          cext=dtfast*ubind * 0.5_8*(pm(istr-1,j)+pm(istr,j))
-        else
-          cext=0._8
-#   endif
-        endif
-
-        ubar(istr,j,knew)=( cff*ubar(istr,j,kstp)&
-        &+cx*ubar(istr+1,j,knew)&
-        &-max(cy,0._8)*grad(istr,j  )&
-        &-min(cy,0._8)*grad(istr,j+1)&
-        &)/(cff+cx)&
-#   ifdef OBC_FLUX_CORR
-        &-uv_crss
-#   endif
-
-! The "attnM2" term below introduces gentle restoring of free surface
-! toward externally-specified "zeta_west" by applying attenuated
-! pressure gradient term, which tends to change "ubar" at the boundary
-! in such a way that it reduces the mismatch between "zeta_west" and
-! the nearest internal free surface value. The attenuation coefficient
-! [typical value attnM2=0.01 or less, nondimensional] is choosen to be
-! sufficiently small to not interfere with the radiation boundary
-! algorithm, but at the same time provide restoring.
-
-#   if defined M2_FRC_BRY || defined M2NUDGING
-        ubar(istr,j,knew)=(1._8-cext)*ubar(istr,j,knew)&
-#    ifdef M2_FRC_BRY
-        &+cext*ubar_west(j)
-#    else
-        &+cext*ubclm(istr,j)&
-#    endif
-        &-attnM2*dtfast*g*0.5_8*(pm(istr-1,j)+pm(istr,j))&
-#    ifdef M2_FRC_BRY
-        &*(zeta(istr,j,knew) -zeta_west(j))
-#    else
-        &*(zeta(istr,j,knew)-ssh(istr-1,j))
-#    endif
-#   endif
-#   ifdef MASKING
-        ubar(istr,j,knew)=ubar(istr,j,knew)*umask(istr,j)
-#   endif
-      enddo
-
 #  elif defined OBC_M2SPECIFIED
       do j=jstr,jend
         ubar(istr,j,knew)=ubar_west(j)
@@ -173,10 +83,6 @@ contains
       enddo                                   !  (no-flux, default)
 # endif           /* OBC_WEST */
     endif     !<-- WESTERN_EDGE
-
-!--#ifdef ISWAKE_XXX
-!--# define OBC_M2ORLANSKI
-!--#endif
 
     if (EASTERN_EDGE) then
 # ifdef OBC_EAST
@@ -206,74 +112,6 @@ contains
 #   endif
       enddo
 
-#  elif defined OBC_M2ORLANSKI
-      do j=jstr,jend+1
-        grad(iend  ,j)=(ubar(iend  ,j,kstp)-ubar(iend  ,j-1,kstp))&
-#   ifdef MASKING
-        &*pmask(iend,j)
-#   endif
-        grad(iend+1,j)=(ubar(iend+1,j,kstp)-ubar(iend+1,j-1,kstp))&
-#   ifdef MASKING
-        &*pmask(iend+1,j)
-#   endif
-      enddo
-      do j=jstr,jend
-        dft=ubar(iend,j,kstp)-ubar(iend  ,j,knew)
-        dfx=ubar(iend,j,knew)-ubar(iend-1,j,knew)
-
-#   ifdef OBC_RAD_NORMAL
-        cy=0._8 ; cff=max(dfx*dfx, eps)
-#   else
-        if (dft*(grad(iend,j)+grad(iend,j+1)) > 0._8) then
-          dfy=grad(iend,j)
-        else
-          dfy=grad(iend,j+1)
-        endif
-        cff=max(dfx*dfx+dfy*dfy, eps)
-#    ifdef OBC_RAD_NPO
-        cy=0._8
-#    else
-        cy=min(cff,max(dft*dfy,-cff))
-#    endif
-#   endif
-
-        cx=dft*dfx
-        if (cx < 0._8) then       !--> cancel, if inflow
-          cx=0._8 ; cy=0
-#   if defined M2_FRC_BRY || defined M2NUDGING
-          cext=dtfast*ubind * 0.5_8*(pm(iend,j)+pm(iend+1,j))
-        else
-          cext=0._8
-#   endif
-        endif
-
-        ubar(iend+1,j,knew)=( cff*ubar(iend+1,j,kstp)&
-        &+cx*ubar(iend,j,knew)&
-        &-max(cy,0._8)*grad(iend+1,j  )&
-        &-min(cy,0._8)*grad(iend+1,j+1)&
-        &)/(cff+cx)&
-#   if defined OBC_FLUX_CORR
-        &+uv_crss
-#   endif
-#   if defined M2_FRC_BRY || defined M2NUDGING
-        ubar(iend+1,j,knew)=(1._8-cext)*ubar(iend+1,j,knew)&
-#    ifdef M2_FRC_BRY
-        &+cext*ubar_east(j)
-#    else
-        &+cext*ubclm(iend+1,j)&
-#    endif
-        &+attnM2*dtfast*g*0.5_8*(pm(iend,j)+pm(iend+1,j))&
-#    ifdef M2_FRC_BRY
-        &*(zeta(iend,j,knew)-zeta_east(j))
-#    else
-        &*(zeta(iend,j,knew)-ssh(iend+1,j))
-#    endif
-#   endif
-#   ifdef MASKING
-        ubar(iend+1,j,knew)=ubar(iend+1,j,knew)*umask(iend+1,j)
-#   endif
-      enddo
-
 #  elif defined OBC_M2SPECIFIED
       do j=jstr,jend
         ubar(iend+1,j,knew)=ubar_east(j)
@@ -297,19 +135,13 @@ contains
     endif         !<-- EASTERN_EDGE
 #endif              /* !EW_PERIODIC */
 
-
-
-!****
-#ifdef OBC_M2FLATHER
-# undef OBC_M2FLATHER
-# define OBC_M2ORLANSKI
-#endif
-
+! Tangential edges (south, north): with OBC_M2FLATHER, ubar there uses
+! the Orlanski radiation scheme.
 
 #ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
 # ifdef OBC_SOUTH
-#  if defined OBC_M2ORLANSKI
+#  ifdef OBC_M2FLATHER
       do i=istrU-1,iend
         grad(i,jstr-1)=ubar(i+1,jstr-1,kstp)-ubar(i,jstr-1,kstp)
         grad(i,jstr  )=ubar(i+1,jstr  ,kstp)-ubar(i,jstr  ,kstp)
@@ -338,7 +170,7 @@ contains
         cx=dft*dfx
         if (cx < 0._8) then       !--> cancel, if inflow
           cx=0._8 ; cy=0._8
-#    if defined M2_FRC_BRY || defined M2NUDGING
+#    ifdef M2_FRC_BRY
           cext=dtfast*ubind * 0.5_8*(pn(i-1,jstr-1)+pn(i,jstr-1))
         else
           cext=0._8
@@ -376,13 +208,9 @@ contains
         &)
 #   endif /* LEGACY_ORLANSKI */
 
-#   if defined M2_FRC_BRY || defined M2NUDGING
+#   ifdef M2_FRC_BRY
         ubar(i,jstr-1,knew)=(1._8-cext)*ubar(i,jstr-1,knew)&
-#    ifdef M2_FRC_BRY
         &+cext*ubar_south(i)
-#    else
-        &+cext*ubclm(i,jstr-1)
-#    endif
 #   endif
 #   ifdef MASKING
         ubar(i,jstr-1,knew)=ubar(i,jstr-1,knew)*umask(i,jstr-1)
@@ -390,13 +218,7 @@ contains
       enddo
 #  else          /* alternative open: Chapman, specified, gradient */
       do i=istrU,iend
-#   if defined OBC_M2FLATHER
-        cx=dtfast*0.5_8*(pn(i-1,jstr-1)+pn(i,jstr-1))&
-        &*sqrt(0.5_8*g*(h(i-1,jstr-1)+h(i,jstr-1)))
-
-        ubar(i,jstr-1,knew)=( ubar(i,jstr-1,kstp)&
-        &+cx*ubar(i,jstr,knew) )/(1._8+cx)
-#   elif defined OBC_M2SPECIFIED
+#   if defined OBC_M2SPECIFIED
         ubar(i,jstr-1,knew)=ubar_south(i)
 #   else
         ubar(i,jstr-1,knew)=ubar(i,jstr,knew)
@@ -427,7 +249,7 @@ contains
 
   if (NORTHERN_EDGE) then
 # ifdef OBC_NORTH
-#  if defined OBC_M2ORLANSKI
+#  ifdef OBC_M2FLATHER
     do i=istrU-1,iend
       grad(i,jend  )=ubar(i+1,jend  ,kstp)-ubar(i,jend,kstp  )
       grad(i,jend+1)=ubar(i+1,jend+1,kstp)-ubar(i,jend+1,kstp)
@@ -457,7 +279,7 @@ contains
       cx=dft*dfx
       if (cx < 0._8) then       !--> cancel, if inflow
         cx=0._8 ; cy=0._8
-#    if defined M2_FRC_BRY || defined M2NUDGING
+#    ifdef M2_FRC_BRY
         cext=dtfast*ubind * 0.5_8*(pn(i-1,jend+1)+pn(i,jend+1))
       else
         cext=0._8
@@ -494,13 +316,9 @@ contains
       &)
 #   endif /* LEGACY_ORLANSKI */
 
-#   if defined M2_FRC_BRY || defined M2NUDGING
+#   ifdef M2_FRC_BRY
       ubar(i,jend+1,knew)=(1._8-cext)*ubar(i,jend+1,knew)&
-#    ifdef M2_FRC_BRY
       &+cext*ubar_north(i)
-#    else
-      &+cext*ubclm(i,jend+1)
-#    endif
 #   endif
 #   ifdef MASKING
       ubar(i,jend+1,knew)=ubar(i,jend+1,knew)*umask(i,jend+1)
@@ -508,13 +326,7 @@ contains
     enddo
 #  else          /* alternative open: Chapman, specified, gradient */
     do i=istrU,iend
-#   if defined OBC_M2FLATHER
-      cx=dtfast*sqrt(0.5_8*g*(h(i-1,jend+1)+h(i,jend+1)))&
-      &*0.5_8*(pn(i-1,jend+1)+pn(i,jend+1))
-
-      ubar(i,jend+1,knew)=( ubar(i,jend+1,kstp)&
-      &+cx*ubar(i,jend,knew))/(1._8+cx)
-#   elif defined OBC_M2SPECIFIED
+#   if defined OBC_M2SPECIFIED
       ubar(i,jend+1,knew)=ubar_north(i)
 #   else
       ubar(i,jend+1,knew)=ubar(i,jend,knew)

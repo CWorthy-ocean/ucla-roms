@@ -8,7 +8,6 @@ module prsgrd_mod
 contains
 
 #include "cppdefs.opt"
-#ifdef SOLVE3D
 
   subroutine prsgrd
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
@@ -60,9 +59,7 @@ contains
     use diagnostics, only: calc_diag, udiag,&
     &vdiag, ipgr, dxdyi_u, dxdyi_v, diag_uv
 #endif
-#ifdef EXCHANGE
     use roms_mpi, only: exchange_xxx
-#endif
     use calc_pflx_mod, only: calc_pressure_flux, calc_pflx
 
     implicit none
@@ -324,8 +321,6 @@ contains
         r0g=rho0/g
         do j=jstr,jend
           do i=istr,iendR
-#define ISO
-#  ifdef ISO
 !              dRdx(i,j,k)=-0.5_8*(pm(i,j)+pm(i-1,j))*rx(i,j)
 
             dRdx(i,j,k)=0.5_8*(pm(i,j)+pm(i-1,j))*(&
@@ -343,10 +338,6 @@ contains
 !    &        -0.75_8*rx(i,j)-0.125_8*(rx(i-1,j)+rx(i+1,j))
 
             &)*umask(i,j)
-#  else
-            dRdx(i,j,k)=0.5_8*(pm(i,j)+pm(i-1,j))&
-            &*(z_r(i,j,k)-z_r(i-1,j,k))*umask(i,j)
-#  endif
           enddo
         enddo
       endif
@@ -441,7 +432,6 @@ contains
         r0g=rho0/g
         do j=jstr,jendR
           do i=istr,iend
-#ifdef ISO
 !              dRde(i,j,k)=-0.5_8*(pn(i,j)+pn(i,j-1))*rx(i,j)
 
             dRde(i,j,k)=0.5_8*(pn(i,j)+pn(i,j-1))*(&
@@ -459,10 +449,6 @@ contains
 !    &            -0.75_8*rx(i,j)-0.125_8*(rx(i,j-1)+rx(i,j+1))
 
             &)*vmask(i,j)
-#else
-            dRde(i,j,k)=0.5_8*(pn(i,j)+pn(i,j-1))&
-            &*(z_r(i,j,k)-z_r(i,j-1,k))*vmask(i,j)
-#endif
           enddo
         enddo
       endif
@@ -529,8 +515,4 @@ contains
   end subroutine prsgrd_tile
 
 
-#else
-  subroutine prsgrd_empty
-  end subroutine prsgrd_empty
-#endif /* SOLVE3D */
 end module prsgrd_mod

@@ -113,7 +113,7 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
     def _build_and_run(build: str) -> dict[str, Path]:
         pio = build == "parallel_io"
         cpp_keys = (UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-                    + ["SPONGE_TUNE", "EXACT_RESTART"])
+                    + ["SPONGE_TUNE"])
         if pio:
             cpp_keys = cpp_keys + ["PARALLEL_IO"]
         conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path_factory.mktemp(f"sponge_build_{build}"))

@@ -13,34 +13,6 @@
 ! twice, in predictor and corrector substeps for tracer variables.
 
 
-!#define BIO_1ST_USTREAM_TEST
-#ifdef  BIO_1ST_USTREAM_TEST
-if (itrc>isalt) then       ! biological tracer components:
-!       if (itrc>0) then       ! biological tracer components:
-  if (nrhs==3) then         ! compute fluxes during corrector
-    do j=jstr,jend            ! stage only
-      do i=istr,iend+1
-        FX(i,j)=t(i-1,j,k,nstp,itrc)*max(FlxU(i,j,k),0._8)&
-        &+t(i  ,j,k,nstp,itrc)*min(FlxU(i,j,k),0._8)
-      enddo
-    enddo
-    do j=jstr,jend+1
-      do i=istr,iend
-        FE(i,j)=t(i,j-1,k,nstp,itrc)*max(FlxV(i,j,k),0._8)&
-        &+t(i,j  ,k,nstp,itrc)*min(FlxV(i,j,k),0._8)
-      enddo
-    enddo
-  else                         ! there is no need to compute
-    do j=jstr,jend+1           ! fluxes during predictor stage
-      do i=istr,iend+1         ! because there is no use for
-        FX(i,j)=0._8             ! t(:,:,:,:,n+1/2) in the case
-        FE(i,j)=0._8             ! of 1st-order upsteam (note
-      enddo                    ! index "nstp" instead of
-    enddo                      ! "nrhs" above.
-  endif
-else       !--> standard code applies for T,S
-#endif
-
 
 #ifdef UPSTREAM_TS
 # define curv wrk1
@@ -131,7 +103,7 @@ else       !--> standard code applies for T,S
 ! becomes (11/12 g + 1/6 c1 - 1/12 c2)*Q; AKIMA gives other weights.
 ! g is what t3dbc left in the ghost cell: on inflow, OBC_TORLANSKI with
 ! T_FRC_BRY relaxes it toward the boundary data by the Courant number
-! each step, and OBC_TSPECIFIED sets it to the data.  Outflow faces
+! each step.  Outflow faces
 ! keep the scheme's flux.  Open-boundary sides only (as in t3dbc):
 ! never at a periodic seam or a wall.
 #ifndef EW_PERIODIC
@@ -243,9 +215,6 @@ else       !--> standard code applies for T,S
 # endif
 #endif
 
-#ifdef BIO_1ST_USTREAM_TEST
-endif  !<-- itrc>isalt, bio-components only.
-#endif
 
 if (river_source) then
   ! Loop over the river faces only (lists built in calc_river_flux)

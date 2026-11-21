@@ -468,7 +468,6 @@ Read only with `TS_DIF2`.
 |--------|-------------|
 | `akv_bak` | Vertical viscosity (m2/s) |
 | `akt_bak` | List of vertical mixing coefficients (m2/s) for each tracer |
-| `akq_bak` | Background vertical mixing for turbulent kinetic energy (m2/s); read only with `MY25_MIXING` (commented out in the template) |
 
 ### `LATERAL_VISC_SETTINGS`
 (read by module `scalars.F90`)
@@ -482,7 +481,7 @@ Read only with `UV_VIS2`.
 ### `UBIND_SETTINGS`
 (read by module `scalars.F90`)
 
-Read only with boundary forcing or nudging (`T_FRC_BRY`, `M2_FRC_BRY`, `M3_FRC_BRY`, `Z_FRC_BRY`, `TNUDGING`, `M2NUDGING` or `M3NUDGING`).
+Read only with boundary forcing (`T_FRC_BRY`, `M2_FRC_BRY`, `M3_FRC_BRY` or `Z_FRC_BRY`).
 
 | Setting | Description |
 |--------|-------------|
@@ -510,7 +509,7 @@ Read only with `SFLX_CORR` and `SALINITY`, and without `ANA_SSFLUX`.
 ### `SST_CORRECTION`
 (read by module `surf_flux.F90`)
 
-Read only with `QCORRECTION`, and without `ANA_SST`.
+Read only with `QCORRECTION`.
 
 | Setting | Description |
 |--------|-------------|
@@ -606,7 +605,7 @@ Solver and development settings. They can be added to the group and keep their d
 
 | Setting | Default | Description |
 |--------|---------|-------------|
-| `fs_pg_rho` | `.true.` | `.true.`: the implicit pressure-gradient operator carries the density weighting of the depth-integrated 3-D pressure gradient (`rhoS`, `rhoA`, as the split loop's 2-D pressure gradient does). Without it a fraction `rhoS` (about 0.027 with `rho0 = 1000`) of the barotropic pressure gradient stays explicit, which amplifies tides slightly and makes `fs_rho_inf > 0.6` (or sub-steps with `fs_rho_inf > 0.3`) unstable on large basins. No extra cost. Needs `VAR_RHO_2D` (defined by default); without it the key is set to `.false.` with a log line |
+| `fs_pg_rho` | `.true.` | `.true.`: the implicit pressure-gradient operator carries the density weighting of the depth-integrated 3-D pressure gradient (`rhoS`, `rhoA`, as the split loop's 2-D pressure gradient does). Without it a fraction `rhoS` (about 0.027 with `rho0 = 1000`) of the barotropic pressure gradient stays explicit, which amplifies tides slightly and makes `fs_rho_inf > 0.6` (or sub-steps with `fs_rho_inf > 0.3`) unstable on large basins. No extra cost |
 | `fs_flather_zghost` | `.true.` | Open (Flather) boundary faces: `.true.`: the sea level of the condition is the mean of the first interior and the boundary point, as in the split loop, so that tides forced through the open boundaries agree with the split loop's as `dt` goes to zero; `.false.`: the first interior value (the boundary-forced tide is then later by about `dx/(2 sqrt(g h))`, see [the Flather sea level](implicit_free_surface.md#sea-level-of-the-flather-condition-fs_flather_zghost)). No extra cost |
 | `fs_theta`, `fs_theta_div` | `0.5`, `0.5` | Extra off-centring (0.5 to 1) of the free-surface pressure gradient and of the divergence; 0.5 = none |
 | `fs_maxit` | `1000` | Iteration cap of the solve. A solve that reaches it without meeting `fs_tol` stops the run with an error naming the step, the sub-step, the iterations and the relative residual (the run is unstable, or `fs_tol` is below what rounding allows) |

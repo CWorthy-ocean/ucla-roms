@@ -30,16 +30,12 @@ module scalars
   real(kind=4) cpu_init, cpu_net
   real(kind=8) WallClock, time, tdays
   integer(kind=4) proc(2), numthreads, iic, kstp, knew, priv_count(16)
-#ifdef SOLVE3D
   integer(kind=4) iif, nstp, nnew, nrhs
-#endif
   logical synchro_flag, diag_sync
 !$OMP THREADPRIVATE( WallClock, cpu_init, cpu_net )
 !$OMP THREADPRIVATE( proc, time, tdays, numthreads, iic,  kstp, knew )
 !$OMP THREADPRIVATE( priv_count, synchro_flag, diag_sync )
-#ifdef SOLVE3D
 !$OMP THREADPRIVATE( iif, nstp, nnew, nrhs )
-#endif
 ! Slowly changing variables: these are typically set in the beginning
 ! of the run and either remain unchanged, or are changing only in
 ! association with the I/0._8
@@ -76,7 +72,6 @@ module scalars
   real(kind=8) rdrg,rdrg2,Zob, visc2,gamma2
 !     real :: xl,el
 
-#ifdef SOLVE3D
   real(kind=8) rho0
   real(kind=8), allocatable :: tnu2(:)
 
@@ -89,41 +84,26 @@ module scalars
   real(kind=8) :: Akv_bak = 0._8
   real(kind=8), allocatable :: Akt_bak(:)
 
-# ifdef MY25_MIXING
-  real(kind=8) :: Akq_bak = 0._8
-  real(kind=8) q2nu2,   q2nu4
-# endif
-#endif
 #ifdef SPONGE
   real(kind=8) v_sponge, v_sponge_trc
 #endif
 
-# if defined OBC_M2ORLANSKI && ( defined M2_FRC_BRY \
-                               || defined M2NUDGING )
-  real(kind=8) attnM2
-# endif
 
 
 
-#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
-  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
-                                             || defined M3NUDGING
+#if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
   real(kind=8) ubind
 
 
   /* --> OBSOLETE
   real(kind=8) tauM2_in, tauM2_out
-# ifdef SOLVE3D
   real(kind=8) tauM3_in, tauM3_out,  tauT_in, tauT_out
-# endif
   */
 #endif
 
   integer(kind=4) ntstart, ntimes, ndtfast, nfast, ninfo, &
   &                                                barr_count(16)
-#ifdef EXACT_RESTART
   integer(kind=4) forw_start
-#endif
 
 ! Physical constants:  Earth radius [m]; Aceleration of gravity
 !--------- ----------  duration of the day in seconds; Specific
@@ -145,28 +125,19 @@ module scalars
 #if !defined EW_PERIODIC || !defined NS_PERIODIC
   namelist /GAMMA2_SETTINGS/ gamma2
 #endif
-#if defined SOLVE3D && defined TS_DIF2
+#ifdef TS_DIF2
   namelist /TRACER_DIFF2/ tnu2
 #endif
   namelist /BOTTOM_DRAG_SETTINGS/ &
-#ifdef SOLVE3D
   &     zob, &
-#endif
   & rdrg, rdrg2
-#ifdef SOLVE3D
   namelist /VERTICAL_MIXING_SETTINGS/ &
-#ifdef MY25_MIXING
-  &     akq_bak, &
-#endif
       &  akv_bak, akt_bak
-#endif
 #ifdef UV_VIS2
   namelist /LATERAL_VISC_SETTINGS/ visc2
 #endif
   namelist /TIME_STEPPING/ dt, ndtfast, ntimes, ninfo
-#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
-  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
-                                             || defined M3NUDGING
+#if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
   namelist /UBIND_SETTINGS/ ubind
 #endif
 #ifdef SPONGE
@@ -211,7 +182,7 @@ contains
 !     set `tnu2`
     allocate(tnu2(NT))
     tnu2(:) = 0._8
-#if defined SOLVE3D && defined TS_DIF2
+#ifdef TS_DIF2
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=TRACER_DIFF2, iostat=ios, iomsg=msg)
     if (ios /= 0) then
@@ -259,16 +230,13 @@ contains
     mpi_master_only write(*,'(6x,A,ES10.3,2x,A)') &
     &    'rdrg2 =', rdrg2, &
     &    'quadratic bottom drag coefficient, nondim'
-#ifdef SOLVE3D
     mpi_master_only write(*,'(8x,A,ES10.3,2x,A)') &
     &    'Zob =', Zob, &
     &    'bottom roughness height [m]'
-#endif
 
 
 !================================================================================
 !Akv_bak, Akt_bak
-#ifdef SOLVE3D
     allocate(Akt_bak(NT))
     akt_bak(:) = 0._8
     rewind(namelist_unit)
@@ -282,7 +250,7 @@ contains
       &        //trim(msg) &
       &      )
     end if
-#if !defined LMD_MIXING && !defined MY25_MIXING
+#ifndef LMD_MIXING
     mixing_type = "background"
 #else
     mixing_type = "additional"
@@ -298,12 +266,6 @@ contains
       &       mixing_type,' vertical mixing [m^2/s] for tracer #', &
       &       itrc
     end do
-#ifdef MY25_MIXING
-    mpi_master_only write(*,'(1x,A,ES10.3,1x,A)') &
-    &    'Akq_bak =', Akq_bak, &
-    &    'Background vertical mixing for TKE, [m^2/s]'
-#endif
-#endif
 !===============================================================================
 !visc2
 #ifdef UV_VIS2
@@ -346,9 +308,7 @@ contains
     dtfast = dt/dble(ndtfast)
 !===============================================================================
 ! ubind
-#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
-  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
-                                             || defined M3NUDGING
+#if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=UBIND_SETTINGS, iostat=ios, iomsg=msg)
 

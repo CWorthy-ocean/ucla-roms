@@ -53,7 +53,7 @@ contains
     use tracers, only: read_nml_tracers           !TS_SETTINGS
     use upscale_output, only: read_nml_upscale    !UPSCALE_SETTINGS
     use zslice_output, only: read_nml_zslice      !ZSLICE_SETTINGS
-#if defined(SOLVE3D) && !defined(NONLIN_EOS)
+#ifndef NONLIN_EOS
     use eos_vars, only: read_nml_lin_rho_eos      !LIN_RHO_EOS_SETTINGS
 #endif
     use roms_read_write, only: read_nml_roms_read_write  ! SIMULATION_NAME_SETTINGS,
@@ -65,9 +65,7 @@ contains
     !                                    VERTICAL_MIXING_SETTINGS, LATERAL_VISC_SETTINGS,
     !                                    TIME_STEPPING, UBIND_SETTINGS, V_SPONGE_SETTINGS,
     !                                    RHO0_SETTINGS
-#ifdef SOLVE3D
     use scoord, only: read_nml_scoord !SCOORD_SETTINGS
-#endif
 #ifdef PARALLEL_IO
     use pio_roms, only: read_nml_pio              !PIO_SETTINGS
 #endif
@@ -99,7 +97,7 @@ contains
     call read_nml_tides
     call read_nml_upscale
     call read_nml_zslice
-#if defined(SOLVE3D) && !defined(NONLIN_EOS)
+#ifndef NONLIN_EOS
     call read_nml_lin_rho_eos
 #endif
     call read_nml_roms_read_write
@@ -107,9 +105,7 @@ contains
     call read_nml_marbl
 #endif
     call read_nml_scalars
-#ifdef SOLVE3D
    call read_nml_scoord
-#endif
    call read_nml_surf_frc
    call read_nml_tracers
 #ifdef PARALLEL_IO

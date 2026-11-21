@@ -10,7 +10,6 @@ module eos_vars
 ! Tcoef, T0   Coefficients for linear Equation of State
 ! Scoef, S0     rho = Tcoef*(T-T0) + Scoef*(S-S0)
 !
-#ifdef SOLVE3D
 # ifndef NONLIN_EOS
   real(kind=8) Tcoef, T0
 #  ifdef SALINITY
@@ -43,7 +42,6 @@ module eos_vars
   real(kind=8),allocatable,dimension(:,:,:) :: dRde
   real(kind=8),allocatable,dimension(:,:,:) :: idRz
 # endif
-#endif
   character(len=8) :: module_name = "eos_vars"
 
   public :: read_nml_lin_rho_eos
@@ -52,7 +50,7 @@ contains
 
 !----------------------------------------------------------------------
   subroutine read_nml_lin_rho_eos
-#if defined(SOLVE3D) && !defined(NONLIN_EOS)
+#ifndef NONLIN_EOS
     use error_handling_mod, only: error_log
     use namelist_open_mod, only: open_namelist_file
 !     Read the "LIN_RHO_EOS_SETTINGS" section of the namelist file
@@ -81,7 +79,6 @@ contains
     use scalars, only: nz, init
     implicit none
 
-#ifdef SOLVE3D
 # ifdef SPLIT_EOS
     allocate(  rho1(GLOBAL_2D_ARRAY,nz) ); rho1=0._8
     allocate( qp1(GLOBAL_2D_ARRAY,nz) ); qp1=0._8
@@ -93,7 +90,6 @@ contains
     allocate( dRde(GLOBAL_2D_ARRAY,nz) ); dRde=init
     allocate( idRz(GLOBAL_2D_ARRAY,0:nz) ); idRz=0._8       ! -> loop ranges need fixing before init will work
 # endif
-#endif
 
   ! averaging variables allocated in ocean_vars to prevent circular reference from wrt_* logicals
 

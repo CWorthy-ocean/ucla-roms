@@ -11,17 +11,9 @@
 ! Usage notes:
 #define SALINITY
 
-! Solve the governing equations in three dimensions
-! Usage notes: We have never tested what happens if this is undefined
-#define SOLVE3D
-
 ! Use an equation of state that ensures that monotonically increasing density is equivalent to stable stratification
 ! Usage notes:
 #define SPLIT_EOS
-
-! Apply tidal forcing
-! Usage notes:
-#define TIDES
 
 ! Use advection in horizontal momentum equations
 ! Usage notes:
@@ -36,10 +28,6 @@
 ! Rotate the advection and diffusion operators so they are oriented in the isoneutral direction
 ! Usage notes:
 #undef ADV_ISONEUTRAL
-
-! Switch to allow mixed [tiled + single-block] execution in OpenMP.
-!Usage notes: Useful for debugging purposes only. Normally should be kept undefined.
-#undef ALLOW_SINGLE_BLOCK_MODE
 
 ! Keep tracer values constant in time and space
 ! Usage notes: At each timestep the tracer tendencies will be calculated, but in the end it will just keep the value it had at the previous timestep
@@ -61,10 +49,6 @@
 ! Write momentum equation diagnostics for non-hydrostatic mode
 ! Usage notes:
 #undef NHMGDIAG
-
-! Make each MPI rank print the size of its local subdomain
-! Usage notes:
-#undef PRINT_TILE_RANGES
 
 ! Enable special forcing for marine CO2 removal
 ! Usage notes: Settings in CDR_FRC_SETTINGS (namelist). Parameterized and
@@ -112,10 +96,6 @@
 ! Usage notes: This has not been tested or used, so it is unclear whether it would induce conflicts with more recent code
 #undef EW_PERIODIC
 
-! Use horizontal components of Coriolis force
-! Usage notes: Presently only affects density calculation (possibly incomplete implementation?)
-#undef NON_TRADITIONAL
-
 ! Make the domain periodic in the north-south direction
 ! Usage notes: This has not been tested or used, so it is unclear whether it would induce conflicts with more recent code
 #undef NS_PERIODIC
@@ -145,10 +125,6 @@
 ! Usage notes: Hardcoded in analytical.F
 #undef ANA_STFLUX
 
-! Modulate daily-averaged shortwave radiation to simulate a diurnal cycle
-! Usage notes: This seems to be an artifact from a time before hourly swrad was available.  Likely obsolete for this reason.
-#undef DIURNAL_SRFLUX
-
 ! Apply restoring to sea surface temperature
 ! Usage notes:
 #undef QCORRECTION
@@ -160,10 +136,6 @@
 ! Apply restoring to sea surface DIC/ALK
 ! Usage notes:
 #undef CFLX_CORR
-
-! Apply a correction to the wind stress to bring it closer to observations
-! Usage notes: Only used in conjunction with the BULK_FORCING module. Requires additional fields in the input file.
-#undef TAU_CORRECTION
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!! NUMERICAL ALGORITHMS !!!!!!!!!!!!!!!!!!!!!!!!!
@@ -185,19 +157,15 @@
 ! Define PARABOLIC_SPLINES to restore the old spline reconstruction.
 #undef PARABOLIC_SPLINES
 
-! Use the fourth-order Akima scheme for vertical advection
-! Usage notes: Unused; vertical fluxes come from module advection.
-#undef AKIMA_V
-
 
 !!!!!!!!!!!!!!!!!!!!!!!!! BOUNDARY CONDITIONS !!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! Apply barotropic (2D) momentum forcing at the open boundaries
-! Usage notes: Can be combined with other keys (M2NUDGING, OBC_M2SPECIFIED) to have different effects. Requires inputs for ubar and vbar.
+! Usage notes: Can be combined with OBC_M2SPECIFIED to have a different effect. Requires inputs for ubar and vbar.
 #define M2_FRC_BRY
 
 ! Apply baroclinic (3D) momentum forcing at the open boundaries
-! Usage notes: Can be combined with other keys (SPONGE_TUNE, OBC_M3SPECIFIED) to have different effects. Requires inputs for u and v (and w, if non-hydrostatic).
+! Usage notes: Can be combined with SPONGE_TUNE. Requires inputs for u and v (and w, if non-hydrostatic).
 #define M3_FRC_BRY
 
 ! Use an open boundary on the "east" side of the domain
@@ -238,29 +206,13 @@
 
 !----------------------------------------------------------
 
-! Analytically prescribe the lateral boundary conditions
-! Usage notes:  Hardcoded in analytical.F
-#undef ANA_BRY
-
-! Use the Orlanski scheme for the 2D dynamical fields at open boundaries
-! Usage notes: Designed to allow waves to exit the domain with minimal reflection
-#undef OBC_M2ORLANSKI
-
-! Use "clamped" boundary conditions for the 3D dynamical fields at open boundaries
-! Usage notes:
-#undef OBC_M3SPECIFIED
-
 ! Calculate radiation for the Orlanski scheme using only the normal component of the velocity
-! Usage notes: Only has an effect if OBC_M2ORLANSKI or OBC_M3ORLANSKI is enabled
+! Usage notes: Only has an effect with OBC_M3ORLANSKI, or with OBC_M2FLATHER and LEGACY_ORLANSKI
 #undef OBC_RAD_NORMAL
 
 ! Explicitly set radiation for the Orlanski scheme to be zero for the velocity parallel to the boundary
 ! Usage notes: Only has an effect if OBC_RAD_NORMAL is enabled
 #undef OBC_RAD_NPO
-
-! Use "clamped" boundary conditions for the thermodynamical fields at open boundaries
-! Usage notes:
-#undef OBC_TSPECIFIED
 
 ! Add baroclinic pressure fluxes at open boundaries
 ! Usage notes: Used in the child domain during downscaling of nested simulations. Requires pressure fluxes to be saved in the parent simulation. Use is optional.
@@ -307,33 +259,9 @@
 ! Usage notes: Hardcoded in analytical.F
 #undef ANA_VMIX
 
-! Treat the eastern boundary as if it is a "wall" in the calculation of the biharmonic viscosity
-! Usage notes: Only affects how the biharm viscosity is computed; has no other effect
-#undef EASTERN_WALL
-
 ! If surface and bottom boundary layers overlap, set them both to be the entire depth of the water column
 ! Usage notes: Unclear whether this is needed for physical or numerical reasons; disabled by default
 #undef MERGE_OVERLAP
-
-! Mellor-Yamada second-order vertical mixing scheme
-! Usage notes:
-#undef MY25_MIXING
-
-! Treat the northern boundary as if it is a "wall" in the calculation of the biharmonic viscosity
-! Usage notes: Only affects how the biharm viscosity is computed; has no other effect
-#undef NORTHERN_WALL
-
-! Treat the southern boundary as if it is a "wall" in the calculation of the biharmonic viscosity
-! Usage notes: Only affects how the biharm viscosity is computed; has no other effect
-#undef SOUTHERN_WALL
-
-! Apply biharmonic diffusion along sigma-surfaces
-! Usage notes: Currently not fully implemented (do not use)
-#undef TS_DIF4
-
-! Treat the western boundary as if it is a "wall" in the calculation of the biharmonic viscosity
-! Usage notes: Only affects how the biharm viscosity is computed; has no other effect
-#undef WESTERN_WALL
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!! BIOGEOCHEMICAL OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!
@@ -374,14 +302,6 @@
 ! Use the daily averaged photosynthetically available radiation instead of instantaneous
 ! Usage notes: Only works with BEC, and only with BULK_FRC enabled
 #undef DAILYPAR_BEC
-
-! Use a 1st-order advection scheme only for BGC tracers
-! Usage notes: Likely for testing purposes only
-#undef BIO_1ST_USTREAM_TEST
-
-! Use a bottom boundary layer formulation in updating sediment thickness
-! Usage notes: Only used in the "sediment" module associated with BEC
-#undef BBL
 
 ! Restore to specified concentration of nitrate
 ! Usage notes: Only works with BEC2. May require an input file (unknown)

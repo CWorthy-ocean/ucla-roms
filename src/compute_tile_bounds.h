@@ -20,26 +20,6 @@
      &                    margin_E=(NSUB_E*size_E-Mm)/2
 #endif
 
-! 2021/03: currently ALLOW_SINGLE_BLOCK_MODE is not defined.
-#ifdef ALLOW_SINGLE_BLOCK_MODE
-C$    integer trd, omp_get_thread_num
-      if (tile==NSUB_X*NSUB_E) then
-C$      trd=omp_get_thread_num()
-C$      if (trd>0) return !--> just return, if not master thread
-# ifdef MPI
-        istr=iwest      ! MONOBLOCK VERSION:
-        iend=ieast      ! Do not divide grid
-        jstr=jsouth     ! into tiles.
-        jend=jnorth
-# else
-        istr=1
-        iend=Lm
-        jstr=1
-        jend=Mm
-      else
-# endif
-#endif
-
         j_E=tile/NSUB_X
         i_X=tile-j_E*NSUB_X
         if (mod(j_E,2)==1) i_X=NSUB_X-1 -i_X   !<-- sweep reversal
@@ -78,7 +58,4 @@ C$      if (trd>0) return !--> just return, if not master thread
 #endif
 
 
-#ifdef ALLOW_SINGLE_BLOCK_MODE
-      endif
-#endif
 

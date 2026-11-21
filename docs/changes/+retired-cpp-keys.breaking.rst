@@ -1,0 +1,3 @@
+Eighteen unfinished CPP keys are retired and their code removed: most of them no longer compiled, and ``AKIMA_V`` and ``BBL`` had no effect. A ``cppdefs.opt`` that defines one now stops the build with an error that names the key; delete the line (an ``#undef`` line is harmless).
+- ``TS_DIF4`` with ``EASTERN_WALL``, ``WESTERN_WALL``, ``NORTHERN_WALL`` and ``SOUTHERN_WALL``; ``MY25_MIXING``; ``NON_TRADITIONAL``; ``DIURNAL_SRFLUX``; ``ALLOW_SINGLE_BLOCK_MODE``; ``PRINT_TILE_RANGES``; ``BIO_1ST_USTREAM_TEST``; ``AKIMA_V``; ``BBL``; ``ANA_BRY``; ``TAU_CORRECTION``.
+- The boundary schemes ``OBC_M2ORLANSKI`` (use ``OBC_M2FLATHER`` or ``OBC_M2SPECIFIED``), ``OBC_M3SPECIFIED`` (use ``OBC_M3ORLANSKI``) and ``OBC_TSPECIFIED`` (use ``OBC_TORLANSKI``).

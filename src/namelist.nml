@@ -457,8 +457,6 @@ S0 = 1.0         ! Reference salinity               (psu)
 
 &RHO0_SETTINGS                                                       !scalars.F90
 !-------------
-! Requires SOLVE3D cppkey
-!-------------
 rho0 = 1027.5    ! Boussinesq reference density (kg/m3)
 /
 
@@ -469,7 +467,7 @@ gamma2 = 1.0 ! Slipperiness parameter (free-slip = +1, no-slip = -1)
 
 &TRACER_DIFF2                                                        !scalars.F90
 !------------
-! Requires SOLVE3D and TS_DIF2 cppkeys
+! Requires TS_DIF2 cppkey
 !------------
 tnu2=0.0 0.0 ! Horizontal Laplacian diffusion (m2/s) for each tracer
 /
@@ -483,11 +481,8 @@ zob = 1.e-2    ! Bottom roughness height (m)
 
 &VERTICAL_MIXING_SETTINGS                                            !scalars.F90
 !------------------------
-!Requires SOLVE3D cppkey (and MY25_MIXING cppkey for akq_bak)
-!------------------------
 akv_bak = 0.0        ! Vertical viscosity (m2/s)
 akt_bak = 0.0 0.0    ! Vertical mixing (m2/s) for each tracer
-!akq_bak = 0.        ! Background vertical mixing for TKE (m2/s, if MY25_MIXING)
 /
 
 &LATERAL_VISC_SETTINGS                                               !scalars.F90
@@ -499,8 +494,7 @@ visc2 = 0. ! Horizontal Laplacian kinematic viscosity (m2/s)
 
 &UBIND_SETTINGS                                                      !scalars.F90
 !--------------
-!Requires T_FRC_BRY, M2_FRC_BRY, Z_FRC_BRY, M3_FRC_BRY, TNUDGING, M2NUDGING,
-!or M3NUDGING cppkeys
+!Requires T_FRC_BRY, M2_FRC_BRY, Z_FRC_BRY or M3_FRC_BRY cppkeys
 !--------------
 ubind = 0.1 ! Open boundary binding velocity (m/s)
 /

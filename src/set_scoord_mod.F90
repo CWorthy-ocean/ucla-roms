@@ -3,7 +3,6 @@ module set_scoord_mod
   implicit none
   private
 
-#ifdef SOLVE3D
   public ::set_scoord
 contains
   !     Setup S-coordinate system:
@@ -71,9 +70,4 @@ contains
     endif                                   ! article published in
   end function CSF                                     ! J. Comput. Phys.
 
-#else
-contains
-  subroutine set_scoord_empty
-  end subroutine set_scoord_empty
-#endif /* SOLVE3D */
 end module set_scoord_mod

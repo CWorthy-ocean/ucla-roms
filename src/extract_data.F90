@@ -78,9 +78,7 @@ module extract_data
   use scoord, only: theta_s, theta_b, hc
   use calc_pflx_mod, only:  up, vp
   use basic_output, only: &
-#ifdef SOLVE3D
   &indxt, indxu, indxv, indxw,&
-#endif
   &indxvb, indxub,indxz,&
 #ifdef SALINITY
   &indxs,&
@@ -927,9 +925,7 @@ contains
       if (calc_pflx) then
         upe(1:nx,1:ny) = up(1:nx,1:ny)
         vpe(1:nx,1:ny) = vp(1:nx,1:ny)
-# ifdef EXCHANGE
         call exchange_xxx(upe,vpe)
-# endif
       endif
 
 #ifdef PARALLEL_IO

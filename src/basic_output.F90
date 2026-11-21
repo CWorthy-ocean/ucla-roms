@@ -20,9 +20,7 @@ module basic_output
   &refdatestr, put_global_atts, append_date_node, def_avg_window_times
   use sponge_tune, only:  wrt_rst_ub, ub_tune
   use calc_pflx_mod, only: wrt_rst_diag_slow, calc_pflx
-#ifdef SOLVE3D
   use implicit_fs_mod, only: fs_rst_def, fs_rst_wrt, fs_rst_wrt_scal
-#endif
   use scalars, only:&
   &NT, iic, knew, nstp, time,&
   &nz, dt, start_time, nnew, tdays
@@ -72,7 +70,6 @@ module basic_output
 
 
   character(len=12) :: module_name = "basic_output"
-# ifdef SOLVE3D
   real(kind=8),allocatable,dimension(:,:,:) :: akv_avg
   real(kind=8),allocatable,dimension(:,:,:) :: akt_avg
 #  ifdef SALINITY
@@ -85,11 +82,9 @@ module basic_output
   real(kind=8),allocatable,dimension(:,:) :: hbbl_avg
 #  endif
   real(kind=8),allocatable,dimension(:,:,:) :: rho_avg
-# endif
 
   ![   Taken from old ncvars (should be improved eventually):
   integer(kind=4), parameter, public :: &
-#ifdef SOLVE3D
   & indxU=5, indxV=6, indxO=7, indxW=8&
   &, indxR=9, indxT=10,&
 # ifdef SALINITY
@@ -116,7 +111,6 @@ module basic_output
 # endif
 # endif
   & indxAkt, indxAkv
-#endif
   !]
 
   character(len=42), public ::  vname(3, 180) ! DevinD 180 copied from old code only
@@ -154,7 +148,6 @@ contains                  !]
     ! initialize indxAkv
     indxAkv = indxT + NT
 
-#ifdef SOLVE3D
     indxAkv = indxT + NT
     indxAkt = indxAkv + 1
 # ifdef SALINITY
@@ -174,7 +167,6 @@ contains                  !]
     indxHbbl = indxAks + 1
 # endif
 # endif
-#endif
 
     ! Read namelist
     call open_namelist_file(namelist_unit)
@@ -320,7 +312,6 @@ contains                  !]
     vname(2,indxVb)='vertically averaged v-momentum component'
     vname(3,indxVb)='meter second-1'
 
-#ifdef SOLVE3D
     vname(1,indxU)='u'
     vname(2,indxU)='u-momentum component'
     vname(3,indxU)='meter second-1'
@@ -373,7 +364,6 @@ contains                  !]
     vname(2,indxHbbl)='Thickness of KPP bottom boundary layer'
     vname(3,indxHbbl)='meter'
 # endif
-#endif
 
     ! NOTE: call this here to prevent output in between timesteps which would break code
 ! checking script.
@@ -491,7 +481,6 @@ contains                  !]
         pio_gtype = '2Dvw'
         if (wrt_Vb) call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start, .true.)
 
-#ifdef SOLVE3D
 ! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_his runs
 ! after initialization and at the end of each step, where 'nnew' holds the
 ! time of the record (n+1 at the end of a step) and 'nstp' still holds time n.
@@ -552,7 +541,6 @@ contains                  !]
         pio_gtype = '2Drw'
         if (wrt_Hbbl) call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start, .true.)
 # endif
-#endif
         output_time_his=0
         call PIO_closefile(pio_FileDesc)
       endif
@@ -576,7 +564,6 @@ contains                  !]
         if (wrt_Ub) call ncwrite(ncid,vname(1,indxUb),ubar( 1:i1,j0:j1,knew),start)
         if (wrt_Vb) call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start)
 
-#ifdef SOLVE3D
 ! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_his runs
 ! after initialization and at the end of each step, where 'nnew' holds the
 ! time of the record (n+1 at the end of a step) and 'nstp' still holds time n.
@@ -622,7 +609,6 @@ contains                  !]
 # ifdef LMD_BKPP
         if (wrt_Hbbl) call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start)
 # endif
-#endif
         ierr=nf90_close(ncid)
         if (mynode == 0) then
           write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
@@ -713,7 +699,6 @@ contains                  !]
         if (wrt_avg_Ub)  call ncwrite(ncid, vname(1,indxUb), ubar_avg( 1:i1,j0:j1), start,.true.)
         pio_gtype = '2Dvw'
         if (wrt_avg_Vb)  call ncwrite(ncid, vname(1,indxVb), vbar_avg(i0:i1, 1:j1), start,.true.)
-# ifdef SOLVE3D
         start(3)=1; start(4)=rec_avg
         pio_gtype = '3Duw'
         if (wrt_avg_U)   call ncwrite(ncid, vname(1,indxU),     u_avg( 1:i1,j0:j1,:), start,.true.)
@@ -750,7 +735,6 @@ contains                  !]
         pio_gtype = '2Drw'
         if (wrt_avg_Hbbl) call ncwrite(ncid, vname(1,indxHbbl), hbbl_avg(i0:i1,j0:j1), start,.true.)
 #  endif
-# endif /* SOLVE3D */
 
         navg_ovars=0
         output_time_avg=0
@@ -781,7 +765,6 @@ contains                  !]
         if (wrt_avg_Z)   call ncwrite(ncid, vname(1,indxZ),  zeta_avg(i0:i1,j0:j1), start)
         if (wrt_avg_Ub)  call ncwrite(ncid, vname(1,indxUb), ubar_avg( 1:i1,j0:j1), start)
         if (wrt_avg_Vb)  call ncwrite(ncid, vname(1,indxVb), vbar_avg(i0:i1, 1:j1), start)
-# ifdef SOLVE3D
         start(3)=1; start(4)=rec_avg
         if (wrt_avg_U)   call ncwrite(ncid, vname(1,indxU),     u_avg( 1:i1,j0:j1,:), start)
         if (wrt_avg_V)   call ncwrite(ncid, vname(1,indxV),     v_avg(i0:i1, 1:j1,:), start)
@@ -808,7 +791,6 @@ contains                  !]
 #  ifdef LMD_BKPP
         if (wrt_avg_Hbbl) call ncwrite(ncid, vname(1,indxHbbl), hbbl_avg(i0:i1,j0:j1), start)
 #  endif
-# endif /* SOLVE3D */
 
         navg_ovars=0
         output_time_avg=0
@@ -864,10 +846,8 @@ contains                  !]
         output_time_rst = output_time_rst + dt
 
         if (output_time_rst    >=output_period_rst&
-#ifdef EXACT_RESTART
         &.or.&
         &output_time_rst+dt >=output_period_rst&         ! timestep before
-#endif
         &) then
           call wrt_restart_file
           if (output_time_rst>=output_period_rst) then
@@ -912,13 +892,9 @@ contains                  !]
 
 #ifdef PARALLEL_IO
     if (rec_rst==2) then
-#ifdef EXACT_RESTART
       time = time + dt
-#endif
       call create_file_rst_ocean_vars(fname_rst)
-#ifdef EXACT_RESTART
       time = time - dt
-#endif
       rec_rst = 0
     endif
     total_rec_rst = total_rec_rst +1
@@ -931,9 +907,7 @@ contains                  !]
       call ncwrite(ncid,'ocean_time',(/time/),(/rec_rst/))
 
       call write_time_step( ncid, rec_rst, total_rec_rst)
-#ifdef SOLVE3D
       call fs_rst_wrt_scal(ncid, rec_rst)      ! fs_mode = 'implicit': restart scalars
-#endif
 #ifdef SPONGE_TUNE
       if (ub_tune) then                        ! wrt_rst_ub writes the open sides only
         if (.not. obc_west)  call nc_fill_record(ncid,'ub_west',rec_rst)
@@ -956,7 +930,6 @@ contains                  !]
     call ncwrite(ncid,vname(1,indxUb),ubar( 1:i1,j0:j1,knew),start,.true.)
     pio_gtype = '2Dvw'
     call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start,.true.)
-#ifdef SOLVE3D
 ! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_rst runs
 ! at the end of the step, where 'nnew' holds time n+1 (the time of the
 ! record) and 'nstp' still holds time n.
@@ -971,8 +944,6 @@ contains                  !]
 
     start(3)=rec_rst                                      ! back to 2D vars
 
-# ifdef EXACT_RESTART
-#  ifdef EXTRAP_BAR_FLUXES
     ! Zero true land (incl. NetCDF fill) but keep river-face transports
     DU_avg1 = DU_avg1*(umask+riv_umask)
     DV_avg1 = DV_avg1*(vmask+riv_vmask)
@@ -994,13 +965,6 @@ contains                  !]
     call ncwrite(ncid,'DV_avg_bak', DV_avg_bak(i0:i1, 1:j1),start,.true.)
     call fs_rst_wrt(ncid, start)   ! fs_mode = 'implicit': generalized-alpha rates, delta
 
-#  elif defined PRED_COUPLED_MODE
-    pio_gtype = '2Duw'
-    call ncwrite(ncid,'rufrc',rufrc_bak( 1:i1,j0:j1,nstp),start,.true.)
-    pio_gtype = '2Dvw'
-    call ncwrite(ncid,'rvfrc',rvfrc_bak(i0:i1, 1:j1,nstp),start,.true.)
-#  endif
-# endif
 
 
 # ifdef LMD_KPP
@@ -1011,7 +975,6 @@ contains                  !]
     pio_gtype = '2Drw'
     call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start,.true.)
 # endif
-#endif
     ! Added for perfect restart reasons
 !       start(3)=1; start(4)=rec_rst
 !       call ncwrite(ncid,'Akv',Akv(i0:i1,j0:j1,:),start)
@@ -1045,13 +1008,9 @@ contains                  !]
 #else ! PARALLEL_IO
 
     if (rec_rst==2) then
-#ifdef EXACT_RESTART
       time = time + dt
-#endif
       call create_file_rst_ocean_vars(fname_rst)
-#ifdef EXACT_RESTART
       time = time - dt
-#endif
       rec_rst = 0
     endif
     total_rec_rst = total_rec_rst +1
@@ -1063,15 +1022,12 @@ contains                  !]
     call ncwrite(ncid,'ocean_time',(/time/),(/rec_rst/))
 
     call write_time_step( ncid, rec_rst, total_rec_rst )
-#ifdef SOLVE3D
     call fs_rst_wrt_scal(ncid, rec_rst)      ! fs_mode = 'implicit': restart scalars
-#endif
 
     start=1; start(3)=rec_rst                                    ! back to 2D vars
     call ncwrite(ncid,vname(1,indxZ), zeta(i0:i1,j0:j1,knew),start)
     call ncwrite(ncid,vname(1,indxUb),ubar( 1:i1,j0:j1,knew),start)
     call ncwrite(ncid,vname(1,indxVb),vbar(i0:i1, 1:j1,knew),start)
-#ifdef SOLVE3D
 ! 3D momentum components in XI- and ETA-directions, at 'nnew': wrt_rst runs
 ! at the end of the step, where 'nnew' holds time n+1 (the time of the
 ! record) and 'nstp' still holds time n.
@@ -1084,8 +1040,6 @@ contains                  !]
 
     start(3)=rec_rst                                      ! back to 2D vars
 
-# ifdef EXACT_RESTART
-#  ifdef EXTRAP_BAR_FLUXES
     ! Zero true land (incl. NetCDF fill) but keep river-face transports
     DU_avg1 = DU_avg1*(umask+riv_umask)
     DV_avg1 = DV_avg1*(vmask+riv_vmask)
@@ -1101,11 +1055,6 @@ contains                  !]
     call ncwrite(ncid,'DV_avg_bak', DV_avg_bak(i0:i1, 1:j1),start)
     call fs_rst_wrt(ncid, start)   ! fs_mode = 'implicit': generalized-alpha rates, delta
 
-#  elif defined PRED_COUPLED_MODE
-    call ncwrite(ncid,'rufrc',rufrc_bak( 1:i1,j0:j1,nstp),start)
-    call ncwrite(ncid,'rvfrc',rvfrc_bak(i0:i1, 1:j1,nstp),start)
-#  endif
-# endif
 
 
 # ifdef LMD_KPP
@@ -1114,7 +1063,6 @@ contains                  !]
 # ifdef LMD_BKPP
     call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start)
 # endif
-#endif
     ! Added for perfect restart reasons
 !       start(3)=1; start(4)=rec_rst
 !       call ncwrite(ncid,'Akv',Akv(i0:i1,j0:j1,:),start)
@@ -1319,7 +1267,6 @@ contains                  !]
       ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
       ierr = nf90_put_att(ncid,varid,'units',vname(3,indxVb))
     endif
-#ifdef SOLVE3D
     if ( (wrt_U .and. .not. avg) .or. (wrt_avg_U .and. avg) ) then
       if (.not. avg) text_lname=vname(2,indxU)
       if (      avg) text_lname='averaged '//vname(2,indxU)
@@ -1410,7 +1357,6 @@ contains                  !]
       ierr = nf90_put_att(ncid,varid,'units',vname(3,indxHbbl))
     endif
 # endif
-#endif /* SOLVE3D */
 
   end subroutine def_vars_ocean_vars  !]
 ! ----------------------------------------------------------------------
@@ -1459,7 +1405,6 @@ contains                  !]
 #ifdef MARBL
     call marbldrv_create_ss_vars_in_rst(ncid)
 #endif
-#ifdef SOLVE3D
     varid = nccreate(ncid,vname(1,indxU),(/dn_xu,dn_yr,dn_zr,dn_tm/),&
     &(/ds_xu,ds_yr,nz,0/),nf90_double)
     ierr = nf90_put_att(ncid,varid,'long_name',vname(2,indxU))
@@ -1477,8 +1422,6 @@ contains                  !]
       ierr=nf90_put_att (ncid, varid, 'units', t_units(itrc))
     enddo
 
-# ifdef EXACT_RESTART
-#  ifdef EXTRAP_BAR_FLUXES
     varid = nccreate(ncid,'DU_avg1',(/dn_xu,dn_yr,dn_tm/),(/ds_xu,ds_yr,0/),nf90_double)
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'<<fast-time averaged uflx>>')
@@ -1503,15 +1446,6 @@ contains                  !]
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'<back-step mixed fast-time-averaged vbar(:,:,n-1)>')
     call fs_rst_def(ncid)   ! fs_mode = 'implicit': generalized-alpha rates, delta
-#  elif defined PRED_COUPLED_MODE
-    varid = nccreate(ncid,'rufrc_bak',(/dn_xu,dn_yr,dn_tm/),(/ds_xu,ds_yr,0/),nf90_double)
-    ierr=nf90_put_att(ncid, varid, 'long_name',&
-    &'3D-to-2D forcing, XI-component')
-    varid = nccreate(ncid,'rvfrc_bak',(/dn_xr,dn_yv,dn_tm/),(/ds_xr,ds_yv,0/),nf90_double)
-    ierr=nf90_put_att(ncid, varid, 'long_name',&
-    &'3D-to-2D forcing, ETA-component')
-#  endif
-# endif  /* EXACT_RESTART */
 
 # ifdef LMD_KPP
     varid = nccreate(ncid,vname(1,indxHbls),&
@@ -1580,7 +1514,6 @@ contains                  !]
     &'river mask at v points')
     ierr = nf90_put_att(ncid,varid,'units','nondim')
 
-#endif /* SOLVE3D */
 
   end subroutine def_vars_rst_ocean_vars  !]
 ! ----------------------------------------------------------------------
@@ -1629,7 +1562,6 @@ contains                  !]
       if (wrt_avg_Z)  zeta_avg(i0:i1,j0:j1) = zeta_avg(i0:i1,j0:j1)*(1-coef) + zeta(i0:i1,j0:j1,knew)*coef
       if (wrt_avg_Ub) ubar_avg( 1:i1,j0:j1) = ubar_avg( 1:i1,j0:j1)*(1-coef) + ubar( 1:i1,j0:j1,knew)*coef
       if (wrt_avg_Vb) vbar_avg(i0:i1, 1:j1) = vbar_avg(i0:i1, 1:j1)*(1-coef) + vbar(i0:i1, 1:j1,knew)*coef
-# ifdef SOLVE3D
       ! 3D fields at 'nnew', like the 2D fields at 'knew': this runs at the
       ! end of the step, where 'nnew' holds n+1 and 'nstp' still holds time n
       if (wrt_avg_U)   u_avg( 1:i1,j0:j1,:) = u_avg( 1:i1,j0:j1,:)*(1-coef) + u( 1:i1,j0:j1,:,nnew)*coef
@@ -1665,7 +1597,6 @@ contains                  !]
 #  ifdef LMD_BKPP
       if (wrt_avg_Hbbl) hbbl_avg(i0:i1,j0:j1) = hbbl_avg(i0:i1,j0:j1)*(1-coef) + hbbl(i0:i1,j0:j1)*coef
 #  endif
-# endif /* SOLVE3D */
 
 !     endif  ! <-- .not. first_step
 
@@ -1729,7 +1660,6 @@ contains                  !]
       &'zeta',   wrt_Z,    vname(2,indxZ)&
       &, 'ubar',   wrt_Ub,   vname(2,indxUb)&
       &, 'vbar',   wrt_Vb,   vname(2,indxVb)&
-#ifdef SOLVE3D
       &, 'u',      wrt_U,    vname(2,indxU)&
       &, 'v',      wrt_V,    vname(2,indxV)&
 
@@ -1755,7 +1685,6 @@ contains                  !]
       enddo
       write(*,'(9x,A)')  repeat('-',62)
       end if
-#endif /* SOLVE3D */
 
     end subroutine display_output_settings_to_terminal_his  !]
 
@@ -1783,7 +1712,6 @@ contains                  !]
         &'zeta',   wrt_avg_Z,    vname(2,indxZ)&
         &, 'ubar',   wrt_avg_Ub,   vname(2,indxUb)&
         &, 'vbar',   wrt_avg_Vb,   vname(2,indxVb)&
-#ifdef SOLVE3D
         &, 'u',      wrt_avg_U,    vname(2,indxU)&
         &, 'v',      wrt_avg_V,    vname(2,indxV)&
 
@@ -1809,7 +1737,6 @@ contains                  !]
         enddo
         write(*,'(9x,A)')  repeat('-',62)
         end if ! (mynode==0)
-#endif /* SOLVE3D */
 
       end subroutine display_output_settings_to_terminal_avg  !]
 

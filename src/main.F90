@@ -1,6 +1,5 @@
 program main              ! Open MP version of ROMS driver
 #include "cppdefs.opt"
-#if !defined GRID_LEVEL || GRID_LEVEL == 1
   use add_git_hash_mod, only: git_hash, print_jobid
   use param, only: mynode, ocean_grid_comm, nsize, read_nml_param
   use check_switches_mod, only: print_switches
@@ -150,7 +149,6 @@ contains
     call stop_timers()
     return
   end subroutine roms_thread
-#endif
 
   subroutine roms_init
 
@@ -208,12 +206,10 @@ contains
     use precheck, only: do_precheck
     use error_handling_mod, only: error_log
     use calc_pflx_mod, only: init_pflx
-#ifdef SOLVE3D
     use omega_mod, only: omega
     use rho_eos_mod, only: rho_eos
     use set_depth_mod, only: set_depth, set_HUV, set_HUV1
     use set_scoord_mod, only: set_scoord
-#endif
 #ifdef SPONGE
     use set_nudgcof_mod, only: set_nudgcof
 #endif
@@ -246,10 +242,8 @@ contains
     call error_log%abort_check()
     ! NOTE: This code is written
     iic=0  ; kstp=1 ; knew=1         ! under an assumption that all
-#ifdef SOLVE3D
     iif=1  ; nstp=1                  ! the scalar variables assigned
     nnew=1 ; nrhs=1                  ! on the left here are placed
-#endif
     synchro_flag=.true.              ! into a THREADPRIVATE common
     diag_sync=.false.                ! block so each thread must
     priv_count=0                     ! assign them to same values.
@@ -264,12 +258,10 @@ contains
     enddo                              ! are just set to to zero).
 !$  OMP BARRIER
 
-#ifdef SOLVE3D
 !$  OMP MASTER                           ! Setup vertical stretching
     call set_scoord                  ! functions for S-coordinate
 !$  OMP END MASTER                       ! system
 !$  OMP BARRIER
-#endif
 
     call do_precheck
     call get_grid                  ! can be analytic or from netcdf
@@ -306,7 +298,6 @@ contains
 
 !R      write(*,*) ' -8' MYID
 
-#ifdef SOLVE3D
     do tile=my_last,my_first,-1      ! Create three-dimensional
       call set_depth(tile)           ! S-coordinate system, which
     enddo                            ! may be needed by ana_init.
@@ -316,7 +307,6 @@ contains
     enddo                            ! extremal values of topographic
 !$  OMP BARRIER                          ! slope parameters "rx0", "rx1".
 !R      write(*,*) ' -6' MYID
-#endif
 
 # if defined(BIOLOGY_BEC2)
     call ecosys2_init
@@ -331,10 +321,8 @@ contains
     if (len_trim(inifile) > 0) then   ! only read IC file if one was supplied
 #endif
 
-#ifdef EXACT_RESTART
       call get_init(nrrec-1,2)
       call set_depth(0)
-#endif
       call get_init(nrrec, 1)
 
       call init_restarts
@@ -374,7 +362,6 @@ contains
 #endif
 
 
-#ifdef SOLVE3D
 !R      write(*,*)  ' -4' MYID
     do tile=my_last,my_first,-1
       call set_HUV
@@ -385,7 +372,6 @@ contains
     call omega
 
     call rho_eos(nrhs)
-#endif
 !R      write(*,*)  ' -2' MYID
 
     if (floats) then
@@ -465,15 +451,13 @@ contains
     use boundary, only: set_bry_all
     use tides, only: set_tides, pot_tides, bry_tides
     use roms_read_write, only: frc_time, frc_restart_exact
-#ifdef SOLVE3D
     use omega_mod, only: omega
     use pre_step3d_mod, only: pre_step3d
     use prsgrd_mod, only: prsgrd
     use rho_eos_mod, only: rho_eos
     use set_depth_mod, only: set_huv, set_huv1
-# if defined TS_DIF2 || defined TS_DIF4
+# ifdef TS_DIF2
     use t3dmix_mod, only: t3dmix => t3dmix_s
-#endif
 #endif
 # if defined(BIOLOGY_BEC2) || defined(MARBL)
     use bgc_io, only: wrt_bgc
@@ -541,7 +525,6 @@ contains
     if (bry_tides.or.pot_tides) call set_tides(0, pot_phase=fs_pot_phase)
     call reg_toc(rg_set_bry)
 
-#ifdef SOLVE3D
     ! currently, rho_eos works with t(nrhs), nrhs==nstp => time n.
     ! On every step but the first, this is the same state the previous
     ! step's closing rho_eos(nnew) evaluated (same t index, and z_r/Hz are
@@ -560,7 +543,6 @@ contains
     ! Should be already available from previous time-step
     call omega
     call reg_toc(rg_huv_omega)
-#endif
 
 # if defined LMD_MIXING
     call reg_tic(rg_lmd_vmix)
@@ -579,7 +561,6 @@ contains
 
     !! nnew ==n+1/2
 
-#ifdef SOLVE3D
     !! set_HUV1 is like set_HUV, but first removes the barotr/barocl mismatch
     !! set_HUV1 works with nnew, which here is time n+1/2
     ! It's using the Hz from time n though
@@ -597,7 +578,6 @@ contains
     call reg_tic(rg_rho_eos)
     call rho_eos(nrhs)  !!! use the right time index
     call reg_toc(rg_rho_eos)
-#endif
     call reg_tic(rg_set_forces)
     call set_forces   ! get for time n+1/2
     call reg_toc(rg_set_forces)
@@ -644,9 +624,7 @@ contains
     call prsgrd
     call reg_toc(rg_prsgrd)
     call reg_tic(rg_uv1_visc)
-#ifdef SOLVE3D
     call step3d_uv1(0)  ! update u/v(nnew) with dt*ru/rv
-#endif
 
 #  ifdef UV_VIS2
     call visc3d
@@ -678,7 +656,6 @@ contains
     enddo
     endif
     call reg_toc(rg_step2d)
-#ifdef SOLVE3D
     if (fs_srcdiag) call fs_src_diag   ! IMPLICIT_FS fs_verbose >= 2: FS_SRC line (both fs_mode values)
     ! step3d_uv2 re-computes FlxU,FlV but still for n+1/2
     call reg_tic(rg_uv2_omega)
@@ -690,9 +667,8 @@ contains
     call reg_tic(rg_step3d_t)
     call step3d_t(0, tstep=iic)
     call reg_toc(rg_step3d_t)
-#endif
 !GOOD
-# if defined TS_DIF2 || defined TS_DIF4
+# ifdef TS_DIF2
     call reg_tic(rg_t3dmix)
     call t3dmix
     call reg_toc(rg_t3dmix)

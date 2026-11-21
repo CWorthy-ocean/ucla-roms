@@ -3,7 +3,6 @@ module u3dbc_mod
   implicit none
   private
 
-#ifdef SOLVE3D
   public :: u3dbc_tile
 contains
   subroutine u3dbc_tile (istr,iend,jstr,jend, grad)
@@ -15,9 +14,7 @@ contains
     use dimensions, only: inode, jnode
     use ocean_vars, only: u, v
     use scalars, only: dt, nz, nnew, nrhs, nstp, gamma2
-#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
-  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
-                                             || defined M3NUDGING
+#if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
     use scalars, only: ubind
 #endif
     use sponge_tune, only:&
@@ -112,11 +109,7 @@ contains
 #   else            /* alternative open */
       do k=1,nz
         do j=jstr,jend
-#    ifdef OBC_M3SPECIFIED
-          u(istr,j,k,nnew)=u_west(j,k)         ! specified
-#    else
           u(istr,j,k,nnew)=u(istr+1,j,k,nnew)&  ! Gradient: default
-#    endif
 #    ifdef MASKING
           &*umask(istr,j)
 #    endif
@@ -201,11 +194,7 @@ contains
 #   else                /* alternative open */
       do k=1,nz
         do j=jstr,jend
-#    ifdef OBC_M3SPECIFIED
-          u(iend+1,j,k,nnew)=u_east(j,k)       ! specified
-#    else
           u(iend+1,j,k,nnew)=u(iend,j,k,nnew)&  ! gradient (default)
-#    endif
 #    ifdef MASKING
           &*umask(iend+1,j)
 #    endif
@@ -273,11 +262,7 @@ contains
 #   else
       do k=1,nz
         do i=istrU,iend
-#    ifdef OBC_M3SPECIFIED
-          u(i,jstr-1,k,nnew)=u_south(i,k)      ! specified
-#    else
           u(i,jstr-1,k,nnew)=u(i,jstr,k,nnew)&  ! gradient (default)
-#    endif
 #    ifdef MASKING
           &*umask(i,jstr-1)
 #    endif
@@ -352,11 +337,7 @@ contains
 #   else               /* alternative open */
     do k=1,nz
       do i=istrU,iend
-#    ifdef OBC_M3SPECIFIED
-        u(i,jend+1,k,nnew)=u_north(i,k)      ! specified
-#    else
         u(i,jend+1,k,nnew)=u(i,jend,k,nnew)&  ! gradient (default)
-#    endif
 #    ifdef MASKING
         &*umask(i,jend+1)
 #    endif
@@ -418,9 +399,4 @@ endif
 # endif
 
 end subroutine u3dbc_tile
-#else
-contains
-  subroutine u3dbc_empty
-  end subroutine u3dbc_empty
-#endif /* SOLVE3D */
 end module u3dbc_mod

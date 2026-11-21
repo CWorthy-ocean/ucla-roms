@@ -23,12 +23,7 @@ contains
 ! and, finally, MPI reduction to compute global integrals.
 
 
-#define SUM_BY_PAIRS
-#define MAX_ADV_CFL
-!--#define MAX_BY_VERT_CFL_ONLY
 
-#define REPORT_MAX_UV
-#define REPORT_POTEN_ENRG
 
   subroutine read_nml_stdout_diag
     use error_handling_mod, only: error_log
@@ -77,17 +72,13 @@ contains
     enddo
     if (mod(iic,min(i,ninfo)) == 0) then
       call diag_tile (istr,iend,jstr,jend, A2d(1,1),A2d(1,2),A2d(1,3)&
-#ifdef SOLVE3D
       &, A2d(1,4), A2d(1,5), A2d(1,6), A2d(1,7), A2d(1,8)&
-#endif
       &)
     endif
   end subroutine diag
 
   subroutine diag_tile (istr,iend,jstr,jend, dVol, ke,pe&
-#ifdef SOLVE3D
   &, ke2b, ke3bc, kesrf, ub,vb&
-#endif
   &)
     use comm_vars, only: area, first_time, tile_count, volume
     use diag_vars, only:&
@@ -116,51 +107,30 @@ contains
     integer(kind=4) istr,iend,jstr,jend
     real(kind=8) :: walltime0 = 0._8
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: dVol, ke, pe&
-#ifdef SOLVE3D
     &, ke2b, ke3bc, kesrf, ub, vb
-#endif
 #ifdef MPI
-# if QUAD==16
-#  define MPI_BUFF_TYPE MPI_REAL16
-# else
-#  define MPI_BUFF_TYPE MPI_REAL8
-# endif
+# define MPI_BUFF_TYPE MPI_REAL8
     integer(kind=4) size, step, itag, status(MPI_STATUS_SIZE)
     real(kind=QUAD) buff(15)
 #endif
 
     real(kind=8) cff, dA, v2, my_v2d_max
     real(kind=QUAD) my_avzeta, my_ke,   my_pe&
-#ifdef SOLVE3D
     &, my_ke3bc,  my_ke2b, my_kesrf
-#endif
     integer(kind=4) i,j,k, nsubs, ierr, is,ie
 
-#ifdef SOLVE3D
     real(kind=8) v2bc
-# ifdef MAX_ADV_CFL
     real(kind=8) my_Cu_Adv, my_Cu_W, ciV, cx, cw
     integer(kind=4) my_i_cmax, my_j_cmax, my_k_cmax
-# else
-    real(kind=8) my_v3d_max, my_v3bc_max
-# endif
-#endif
-#ifdef SUM_BY_PAIRS
     integer(kind=4) isize,itg, js,jsize,jtg
-#endif
     integer(kind=4), parameter :: max_check_line=512
     character(len=max_check_line) check_line
     character(len=18) tstring
 
     ierr=0
     my_v2d_max=0._8
-#ifdef SOLVE3D
-# ifdef MAX_ADV_CFL
     my_Cu_Adv=0._8  ;  my_Cu_W=0._8
     my_i_cmax=0   ;  my_j_cmax=0  ;  my_k_cmax=0
-# else
-    my_v3d_max=0._8 ;  my_v3bc_max=0._8
-# endif
     do j=jstr,jend+1
       do i=istr,iend+1
         ub(i,j)=(Hz(i,j,nz)+Hz(i-1,j,nz))*u(i,j,nz,nstp)
@@ -215,34 +185,21 @@ contains
 ! coordinates where its maximum occurs;  "Cu_W" is contribution into
 ! "Cu_Adv" due to vertical velocity.
 
-# ifdef MAX_ADV_CFL
 #  ifdef MASKING
           ciV=dt*rmask(i,j)*pm(i,j)*pn(i,j)/Hz(i,j,k)
 #  else
           ciV=dt*pm(i,j)*pn(i,j)/Hz(i,j,k)
 #  endif
-#  ifdef VERT_EXPL_ONLY
-          cw=ciV*( max(We(i,j,k), 0._8) -min(We(i,j,k-1), 0._8) )
-#  else
           cw=ciV*( max(We(i,j,k)+Wi(i,j,k), 0._8)&
           &-min(We(i,j,k-1)+Wi(i,j,k-1), 0._8) )
-#  endif
 
           cx=cw+ciV*( max(FlxU(i+1,j,k), 0._8) -min(FlxU(i,j,k), 0._8)&
           &+max(FlxV(i,j+1,k), 0._8) -min(FlxV(i,j,k), 0._8))
 
-#  ifdef MAX_BY_VERT_CFL_ONLY
-          if (cw > my_Cu_W) then
-#  else
           if (cx > my_Cu_Adv) then
-#  endif
             my_Cu_Adv=cx ; my_Cu_W=cw
             my_i_cmax=i  ; my_j_cmax=j ; my_k_cmax=k
           endif
-# else
-          my_v3d_max  = max(my_v3d_max,  v2  )
-          my_v3bc_max = max(my_v3bc_max, v2bc)
-# endif
           ke(i,j)=ke(i,j) + 0.5_8*v2*Hz(i,j,k)
 
           pe(i,j)=pe(i,j) + cff*Hz(i,j,k)&
@@ -270,25 +227,6 @@ contains
         kesrf(i,j)= dA * kesrf(i,j)
       enddo
     enddo
-#else
-    cff=0.5_8*g
-    do j=jstr,jend
-      do i=istr,iend
-        v2=0.5_8*( ubar(i,j,kstp)**2+ubar(i+1,j,kstp)**2&
-        &+vbar(i,j,kstp)**2+vbar(i,j+1,kstp)**2)
-        my_v2d_max=max(my_v2d_max, v2)
-# ifdef MASKING
-        dA=rmask(i,j)/(pm(i,j)*pn(i,j))
-# else
-        dA=1._8/(pm(i,j)*pn(i,j))
-# endif
-        dVol(i,j)=dA*zeta(i,j,kstp)
-        ke(i,j)=dA*0.5_8*(zeta(i,j,kstp)+h(i,j))*v2
-        pe(i,j)=cff*dVol(i,j)*zeta(i,j,kstp)
-      enddo
-    enddo
-#endif /* SOLVE3D */
-#ifdef SUM_BY_PAIRS
 
     isize=iend-istr                  ! Horizontal summation within
     jsize=jend-jstr                  ! the tile: compute partial sums
@@ -302,11 +240,9 @@ contains
             dVol(i,jtg) =  dVol(i,jtg+j) +  dVol(i,jtg+j+1)
             ke(i,jtg) =    ke(i,jtg+j) +    ke(i,jtg+j+1)
             pe(i,jtg) =    pe(i,jtg+j) +    pe(i,jtg+j+1)
-# ifdef SOLVE3D
             ke2b(i,jtg) =  ke2b(i,jtg+j) +  ke2b(i,jtg+j+1)
             ke3bc(i,jtg) = ke3bc(i,jtg+j) + ke3bc(i,jtg+j+1)
             kesrf(i,jtg) = kesrf(i,jtg+j) + kesrf(i,jtg+j+1)
-# endif
           enddo
         enddo
         if (2*js+1 < jsize) then     ! carry-over points which do not
@@ -316,11 +252,9 @@ contains
             dVol(i,jtg) =  dVol(i,jtg+js)
             ke(i,jtg) =    ke(i,jtg+js)
             pe(i,jtg) =    pe(i,jtg+js)
-# ifdef SOLVE3D
             ke2b(i,jtg) =  ke2b(i,jtg+js)
             ke3bc(i,jtg) = ke3bc(i,jtg+js)
             kesrf(i,jtg) = kesrf(i,jtg+js)
-# endif
           enddo
         endif
         jsize=js
@@ -334,11 +268,9 @@ contains
             dVol(itg,j) =  dVol(itg+i,j) +  dVol(itg+i+1,j)
             ke(itg,j) =    ke(itg+i,j) +    ke(itg+i+1,j)
             pe(itg,j) =    pe(itg+i,j) +    pe(itg+i+1,j)
-# ifdef SOLVE3D
             ke2b(itg,j) =  ke2b(itg+i,j) +  ke2b(itg+i+1,j)
             ke3bc(itg,j) = ke3bc(itg+i,j) + ke3bc(itg+i+1,j)
             kesrf(itg,j) = kesrf(itg+i,j) + kesrf(itg+i+1,j)
-# endif
           enddo
         enddo
         if (2*is+1 < isize) then
@@ -348,52 +280,21 @@ contains
             dVol(itg,j) =  dVol(itg+is,j)
             ke(itg,j) =    ke(itg+is,j)
             pe(itg,j) =    pe(itg+is,j)
-# ifdef SOLVE3D
             ke2b(itg,j) =  ke2b(itg+is,j)
             ke3bc(itg,j) = ke3bc(itg+is,j)
             kesrf(itg,j) = kesrf(itg+is,j)
-# endif
           enddo
         endif
         isize=is
       endif
     enddo  !<-- while()
-#else
-! Alternative: a two-stage (one for each direction) straightforward
-! summation algorithm as an effort to mitigate roundoff errors.
-
-    do j=jstr+1,jend
-      do i=istr,iend
-        dVol(i,jstr)  = dVol(i,jstr)  + dVol(i,j)
-        ke(i,jstr)    = ke(i,jstr)    + ke(i,j)
-        pe(i,jstr)    = pe(i,jstr)    + pe(i,j)
-# ifdef SOLVE3D
-        ke2b(i,jstr)  = ke2b(i,jstr)  + ke2b(i,j)
-        ke3bc(i,jstr) = ke3bc(i,jstr) + ke3bc(i,j)
-        kesrf(i,jstr) = kesrf(i,jstr) + kesrf(i,j)
-# endif
-      enddo
-    enddo
-    do i=istr+1,iend
-      dVol(istr,jstr)  = dVol(istr,jstr)  + dVol(i,jstr)
-      ke(istr,jstr)    = ke(istr,jstr)    + ke(i,jstr)
-      pe(istr,jstr)    = pe(istr,jstr)    + pe(i,jstr)
-# ifdef SOLVE3D
-      ke2b(istr,jstr)  = ke2b(istr,jstr)  + ke2b(i,jstr)
-      ke3bc(istr,jstr) = ke3bc(istr,jstr) + ke3bc(i,jstr)
-      kesrf(istr,jstr) = kesrf(istr,jstr) + kesrf(i,jstr)
-# endif
-    enddo
-#endif /* SUM_BY_PAIRS */
 
     my_avzeta=dVol(istr,jstr)
     my_ke=ke(istr,jstr)
     my_pe=pe(istr,jstr)
-#ifdef SOLVE3D
     my_ke2b=ke2b(istr,jstr)
     my_ke3bc=ke3bc(istr,jstr)
     my_kesrf=kesrf(istr,jstr)
-#endif
     if (SINGLE_TILE_MODE) then
       nsubs=1
     else
@@ -412,47 +313,29 @@ contains
       avke=my_ke                           ! the threads within the
       avpe=my_pe                           ! shared-memory group
       v2d_max=my_v2d_max                   ! (within MPI process).
-#ifdef SOLVE3D
       avke2b=my_ke2b
       avke3bc=my_ke3bc
       avkesrf=my_kesrf
-# ifdef MAX_ADV_CFL
       Cu_Adv=my_Cu_Adv
       Cu_W=my_Cu_W
       i_cx_max=my_i_cmax
       j_cx_max=my_j_cmax
       k_cx_max=my_k_cmax
-# else
-      v3d_max=my_v3d_max
-      v3bc_max=my_v3bc_max
-# endif
-#endif
     else                                   ! Perform global summation
       avzeta=avzeta+my_avzeta              ! among the threads within
       avke=avke+my_ke                      ! MPI process.
       avpe=avpe+my_pe
       v2d_max=max(v2d_max, my_v2d_max)
-#ifdef SOLVE3D
       avke2b=avke2b+my_ke2b
       avke3bc=avke3bc+my_ke3bc
       avkesrf=avkesrf+my_kesrf
-# ifdef MAX_ADV_CFL
-#  ifdef MAX_BY_VERT_CFL_ONLY
-      if (my_Cu_W > Cu_W) then
-#  else
       if (my_Cu_Adv > Cu_Adv) then
-#  endif
         Cu_Adv=my_Cu_Adv
         Cu_W=my_Cu_W
         i_cx_max=my_i_cmax
         j_cx_max=my_j_cmax
         k_cx_max=my_k_cmax
       endif
-# else
-      v3d_max=max(v3d_max, my_v3d_max)
-      v3bc_max=max(v3bc_max,my_v3bc_max)
-# endif
-#endif
     endif
     ! This counter identifies
     tile_count=tile_count+1                ! the last thread entering
@@ -460,12 +343,8 @@ contains
     if (tile_count == nsubs) then          ! ever it happens to be,
       tile_count=0                         ! not necessarily master.
 #ifdef MPI
-# ifdef SOLVE3D
-#  ifdef MAX_ADV_CFL
       i_cx_max=i_cx_max + iSW_corn         ! convert to absolute
       j_cx_max=j_cx_max + jSW_corn         ! indices
-#  endif
-# endif
       if (NNODES>1) then                   ! Perform global summation
         size=NNODES                        ! among all MPI processes
         do while (size>1)
@@ -478,18 +357,11 @@ contains
             buff(5)=avke3bc                ! complicated function.
             buff(6)=avkesrf
             buff(7)=v2d_max
-# ifdef SOLVE3D
-#  ifdef MAX_ADV_CFL
             buff(8)=Cu_Adv
             buff(9)=Cu_W
             buff(10)=i_cx_max
             buff(11)=j_cx_max
             buff(12)=k_cx_max
-#  else
-            buff(8)=v3d_max
-            buff(9)=v3bc_max
-#  endif
-# endif
 
 !**     write(*,*) 'sending  ',mynode,'->',mynode-step,' size=',size
 !**     write(*,*) 'sending  avke =', buff(3)/volume
@@ -513,26 +385,13 @@ contains
             avkesrf=avkesrf+buff(6)        ! is 16-Byte, while
             v2=buff(7)                     ! "v2", "v2d_max", etc
             v2d_max=max(v2d_max, v2)       ! are only 8-byte long.
-# ifdef SOLVE3D
-#  ifdef MAX_ADV_CFL
-#   ifdef MAX_BY_VERT_CFL_ONLY
-            if (buff(9) > Cu_W) then
-#   else
             if (buff(8) > Cu_Adv) then
-#   endif
               Cu_Adv=buff(8)
               Cu_W=buff(9)
               i_cx_max=buff(10) +0.0001_8
               j_cx_max=buff(11) +0.0001_8
               k_cx_max=buff(12) +0.0001_8
             endif
-#  else
-            v2=buff(8)
-            v3d_max=max(v3d_max, v2)
-            v2=buff(18)
-            v3bc_max=max(v3bc_max, v2)
-#  endif
-# endif
           endif
           size=step
         enddo  !<-- while (size>1)
@@ -547,15 +406,7 @@ contains
         avkesrf=avkesrf/area                 ! only).
         v2d_max=sqrt(v2d_max)
         avzeta=avzeta/area
-#ifdef SOLVE3D
-# ifndef MAX_ADV_CFL
-        v3d_max=sqrt(v3d_max)
-        v3bc_max=sqrt(v3bc_max)
-# endif
-#endif
 
-#ifdef SOLVE3D
-# if defined MAX_ADV_CFL
 
         !WALLTIME0 is MPI_Wtime() on node 0
         walltime0 = MPI_Wtime()-tstart
@@ -585,58 +436,6 @@ contains
 2       format(ES18.11, ES17.10, 2F16.12, 2I7,I5, F12.3)
 3       format(/2x,A,1x,A,5x,A,8x,A,2(5x,A),3x,A,2(1x,A),10x,A)
 4       format(I2,1x,4ES23.16,F12.3)
-# elif defined REPORT_MAX_UV && defined REPORT_POTEN_ENRG
-
-        if (first_time==0) then
-          first_time=1
-          write(*,1) 'STEP', 'time[DAYS]', 'KINETIC_ENRG',&
-          &'BAROTR_KE', 'MAX_U3D', 'MAX_UBAR',&
-          &'MAX_UBCL', 'POTEN_ENRG'&
-!$        &, 'trd'
-        endif
-        write(check_line,2,iostat=ierr)  avke,    avke2b,&
-        &v3d_max, v2d_max, v3bc_max, avpe&
-!$      &, proc(2)
-1       format(/1x,A,2x,A,1x,A,5x,A,6x,A,7x,A,6x,A,7x,A,3x,A)
-2       format(ES18.11, ES16.9, 3(ES15.8), ES16.8,I3)
-
-# elif defined REPORT_MAX_UV
-        if (first_time==0) then
-          first_time=1
-          write(*,1) 'STEP', 'time[DAYS]', 'KINETIC_ENRG',&
-          &'BAROTR_ENRG', 'MAX_U3D', 'MAX_UBAR',&
-          &'MAX_UBCL', 'FREE_SURFACE'&
-!$        &, 'trd'
-        endif
-        write(check_line,2,iostat=ierr)  avke, avke2b, v3d_max,&
-        &v2d_max, v3bc_max, avzeta&
-!$      &, proc(2)
-1       format(/1x,A,2x,A,1x,A,5x,A,4x,A,7x,A,6x,A,7x,A,1x,A)
-2       format(ES18.11,ES16.9,3(ES15.8),ES16.8,I3)
-# else
-        if (first_time == 0) then
-          first_time=1
-          write(*,'(1x,A,2x,A,1x,A,5x,A,4x,A,4x,A,1x,A)')&
-          &'STEP',       'time[DAYS]', 'KINETIC_ENRG',&
-          &'SURFACE_KE', 'POTEN_ENRG', 'FREE_SURFACE'&
-!$        &,'trd'
-        endif
-        write(check_line,'(ES18.11,3(ES15.8),I3)',iostat=ierr)&
-        &avke, avkesrf, avpe, avzeta&
-!$      &, proc(2)
-# endif
-#else
-        if (first_time == 0) then
-          first_time=1
-          write(*,'(1x,A,2x,A,1x,A,5x,A,4x,A,9x,A,1x,A)')&
-          &'STEP',    'time[DAYS]', 'KINETIC_ENRG',&
-          &'POTEN_ENRG', 'KE+PE',   'FREE_SURFACE'&
-!$        &, 'trd'
-        endif
-        write(check_line,'(ES18.11,3(ES15.8),I3)',iostat=ierr)&
-        &avke, avpe, avke+avpe, avzeta&
-!$      &, proc(2)
-#endif /* SOLVE3D */
         if (.not.code_check_mode) then
           ie=max_check_line
           do while (check_line(ie:ie)==' ' .and. ie>0)

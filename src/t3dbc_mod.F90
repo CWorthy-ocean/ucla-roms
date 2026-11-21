@@ -2,7 +2,6 @@ module t3dbc_mod
 #include "cppdefs.opt"
   implicit none
   private
-#ifdef SOLVE3D
   public :: t3dbc_tile
 contains
   subroutine t3dbc_tile (istr,iend,jstr,jend, itrc, grad)
@@ -96,11 +95,7 @@ contains
 #  else
       do k=1,nz
         do j=jstr,jend
-#   if defined OBC_WEST && defined OBC_TSPECIFIED
-          t(istr-1,j,k,nnew,itrc)=t_west(j,k,itrc)
-#   else
           t(istr-1,j,k,nnew,itrc)=t(istr,j,k,nnew,itrc)&
-#   endif
 #   ifdef MASKING
           &*rmask(istr-1,j)
 #   endif
@@ -162,15 +157,7 @@ contains
 #  else
       do k=1,nz
         do j=jstr,jend
-#   if defined OBC_EAST && defined OBC_TSPECIFIED
-#    ifdef T_FRC_BRY
-          t(iend+1,j,k,nnew,itrc)=t_east(j,k,itrc)
-#    else
-          t(iend+1,j,k,nnew,itrc)=tclm(iend+1,j,k,itrc)
-#    endif
-#   else
           t(iend+1,j,k,nnew,itrc)=t(iend,j,k,nnew,itrc)&
-#   endif
 #   ifdef MASKING
           &*rmask(iend+1,j)
 #   endif
@@ -237,15 +224,7 @@ contains
 #  else
       do k=1,nz
         do i=istr,iend
-#   if defined OBC_SOUTH && defined OBC_TSPECIFIED
-#    ifdef T_FRC_BRY
-          t(i,jstr-1,k,nnew,itrc)=t_south(i,k,itrc)
-#    else
-          t(i,jstr-1,k,nnew,itrc)=tclm(i,jstr-1,k,itrc)
-#    endif
-#   else
           t(i,jstr-1,k,nnew,itrc)=t(i,jstr,k,nnew,itrc)&
-#   endif
 #   ifdef MASKING
           &*rmask(i,jstr-1)
 #   endif
@@ -305,15 +284,7 @@ contains
 #  else
       do k=1,nz
         do i=istr,iend
-#   if defined OBC_NORTH && defined OBC_TSPECIFIED
-#    ifdef T_FRC_BRY
-          t(i,jend+1,k,nnew,itrc)=t_north(i,k,itrc)
-#    else
-          t(i,jend+1,k,nnew,itrc)=tclm(i,jend+1,k,itrc)
-#    endif
-#   else
           t(i,jend+1,k,nnew,itrc)=t(i,jend,k,nnew,itrc)&
-#   endif
 #   ifdef MASKING
           &*rmask(i,jend+1)
 #   endif
@@ -427,9 +398,4 @@ contains
 #  endif
 # endif
   end subroutine t3dbc_tile
-#else
-contains
-  subroutine t3dbc_empty
-  end subroutine t3dbc_empty
-#endif /* SOLVE3D */
 end module t3dbc_mod

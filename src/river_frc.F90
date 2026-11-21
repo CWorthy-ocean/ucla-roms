@@ -307,12 +307,10 @@ contains
         call PIO_closefile(pio_FileDesc)
 #endif
         ierr = nf90_close(ncid)
-#ifdef EXCHANGE
         ! calc_river_flux also looks at the halo cells, because a river cell
         ! on a neighbouring rank can discharge into this rank's edge cells.
         ! Fill them from the neighbours (without PARALLEL_IO they are not read).
         call exchange_xxx(ridx_real, rfrc)
-#endif
 
         ! Check if any river indices are greater than the chosen
         ! value for nriv, in which case we could get a segfault
@@ -368,9 +366,7 @@ contains
           call PIO_closefile(pio_FileDesc)
 #endif
           ierr = nf90_close(ncid)
-#ifdef EXCHANGE
           call exchange_xxx(rflx)      ! halo cells too, as for river_index above
-#endif
           where (rflx > 0)
             ridx = floor(rflx - 1e-5)
             rfrc = rflx - ridx

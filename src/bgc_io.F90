@@ -189,7 +189,6 @@ contains
       do i=istrR,iendR
         swrad_avg(i,j)= swrad_avg(i,j)/(rho0*Cp)
 
-#ifdef SEA_ICE_NOFLUX
         if( t(i,j,nz,nrhs,itemp) .le. -1.8_8 ) then    ! Restrict stflx to prevent surface temperature to go below -2 d
 #   if defined LMD_KPP
 #if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
@@ -197,7 +196,6 @@ contains
 #endif
 #   endif
         endif
-#endif
       enddo !<- istrR
     enddo   !<- jstrR
 #endif /* DAILYPAR_PHOTOINHIBITION */

@@ -93,9 +93,7 @@ contains
         enddo
       enddo
     enddo
-# ifdef EXCHANGE
     call exchange_xxx(swr_frac)
-# endif
   end subroutine swr_frac_tile
 #else
 contains
