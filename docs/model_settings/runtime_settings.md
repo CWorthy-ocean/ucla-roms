@@ -35,7 +35,7 @@ This page describes every setting in `src/namelist.nml`, one section per group.
 ### `REFERENCE_DATE_SETTINGS`
 (read by module `roms_read_write.F90`)
 
-Optional: if the group is missing, or ROMS cannot read it (a misspelled key, for example), the reference date is 2000-01-01, with no warning.
+Optional: if the group is missing, the reference date is 2000-01-01. ROMS stops if the group is there but cannot be read (a misspelled key, for example).
 
 | Setting | Description |
 |--------|-------------|
@@ -116,6 +116,9 @@ Not read with `ANA_INITIAL`.
 | `interp_bulk_frc` | Interpolate forcing from coarser input grid if .true. |
 | `check_bulk_frc_units` | Perform a check that input files have expected units if .true.  |
 | `interp_flux_frc` | Interpolate forcing from coarser input grid if .true. |
+| `sflx_corr` | Optional. Restore surface salinity (`SSS_CORRECTION`). The CPP key `SFLX_CORR` decides it: left out, it takes the key; set, it must match the key, or ROMS stops |
+| `qcorrection` | Optional. Restore surface temperature (`SST_CORRECTION`). The CPP key `QCORRECTION` decides it, as for `sflx_corr` |
+| `cflx_corr` | Optional. Restore surface DIC and ALK (`DIC_ALK_CORRECTION`). The CPP key `CFLX_CORR` decides it, as for `sflx_corr` |
 
 ### `RIVER_FRC_SETTINGS`
 (read by module `river_frc.F90`)
@@ -237,7 +240,7 @@ Sponge tuning tunes the sponge values near the boundaries to attempt to match th
 
 | Setting | Description |
 |--------|-------------|
-| `ub_tune` | Tune boundary sponge layer if `.true.` (default `.false.`) |
+| `ub_tune` | Tune boundary sponge layer if `.true.` (default `.false.`). Needs the `SPONGE_TUNE` CPP key: ROMS stops if it is `.true.` without it |
 | `sponge_timescale` | Filtering timescale (s) |
 | `wrt_sponge` | Output sponge tuning fields if `.true.` (default `.false.`) |
 | `sponge_avg` | Sponge tuning output averaged if `.true.` or instantaneous if `.false.` (default `.true.`) |
@@ -252,8 +255,8 @@ These settings control the calculation of baroclinic pressure fluxes, e.g. at ne
 
 | Setting | Description |
 |--------|-------------|
-| `calc_pflx` | Enable baroclinic pressure flux calculation |
-| `pflx_timescale` |  Timescale for filtering pressure fluxes (s)  |
+| `calc_pflx` | Enable baroclinic pressure flux calculation (no CPP key needed) |
+| `pflx_timescale` |  Timescale for filtering pressure fluxes (s); must be > 0 when `calc_pflx` is `.true.` |
 
 
 ### `ZSLICE_SETTINGS`
@@ -314,7 +317,7 @@ Read only with `MARBL`.
 ### `CDR_FRC_SETTINGS`
 (read by module `cdr_frc.F90`)
 
-Read only with `CDR_FORCING`.
+Used only with `CDR_FORCING`. Without it the group is optional, and ROMS stops if it sets `cdr_source = .true.`
 
 Settings controlling Carbon Dioxide Removal (CDR) forcing: tracer releases read from `cdr_file`. Parameterized releases can target any tracer (passive, `CDR_LITE` or BGC) and work with or without MARBL; 3D forcing supplies ALK and DIC and needs MARBL.
 
@@ -334,7 +337,7 @@ Settings controlling Carbon Dioxide Removal (CDR) forcing: tracer releases read 
 ### `CDR_OUTPUT_SETTINGS`
 (read by module `cdr_output.F90`)
 
-Read only with `MARBL`, `MARBL_DIAGS` and `CDR_FORCING`.
+Used only with `MARBL`, `MARBL_DIAGS` and `CDR_FORCING`. Without them the group is optional, and ROMS stops if it sets `do_cdr_output = .true.`
 
 Write an output file containing CDR-relevant fields.
 
@@ -383,7 +386,7 @@ Output of the `CDR_LITE` tracers (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`, `CDR_DOR_D
 ### `CDR_GAS_EXCH_OUTPUT_SETTINGS`
 (read by module `cdr_gas_exch_output.F90`)
 
-Read only with `MARBL` and `CDR_FORCING`.
+Used only with `MARBL` and `CDR_FORCING`. Without them the group is optional, and ROMS stops if it sets `do_cdr_gas_exch_output = .true.`
 
 Output of the carbonate sensitivities `ddic_dco2` (beta) and `ddic_dalk` (eta), in a form a `CDR_LITE` run can read from its `frcfiles` (with `cdr_online_carbonate_sensitivity = .false.`). Each run writes an instantaneous record at its start and end time, in addition to the `nrpf_cdr_gas` regular records, so each chunk of a chain of restarted runs is self-contained. Averaged records average 1/beta and eta/beta, as the gas exchange uses them, and are stamped at the window midpoint. The run that reads them must use the same `reference_date` and start at or after the first record.
 
@@ -398,7 +401,7 @@ Output of the carbonate sensitivities `ddic_dco2` (beta) and `ddic_dalk` (eta), 
 ### `UPSCALE_SETTINGS`
 (read by module `upscale_output.F90`)
 
-Read only with `UPSCALING`, `MARBL` and `MARBL_DIAGS`.
+Used only with `UPSCALING`, `MARBL` and `MARBL_DIAGS`. Without them the group is optional, and ROMS stops if it sets `do_upscale = .true.`
 
 Settings controlling CDR upscaling: recording the fluxes of CDR-relevant tracers through the open boundaries of a child domain, so that its parent domain can be re-run with them as CDR forcing to follow their further propagation. The fluxes cover advection and horizontal mixing, for the ALK and DIC perturbations (relative to their ALT_CO2 analogues) and for any `CDR_LITE` tracers.
 
@@ -525,7 +528,7 @@ Read only with `CFLX_CORR` and `MARBL`.
 ### `DIAGNOSTICS_SETTINGS`
 (read by module `diagnostics.F90`)
 
-Read only with `DIAGNOSTICS`.
+Used only with `DIAGNOSTICS`. Without it the group is optional, and ROMS stops if it sets `diag_uv` or `diag_trc` to `.true.`
 
 Controls output of diagnostics concerning the physical ocean state.
 

@@ -1,0 +1,4 @@
+ROMS now stops at start-up, with a message naming the switch and the CPP key it needs, when a namelist switch is ``.true.`` but the build lacks that CPP key; before, the switch was silently ignored. Set the switch to ``.false.`` or define the key in ``cppdefs.opt``.
+- ``cdr_source`` (``CDR_FORCING``), ``do_cdr_output`` (``MARBL``, ``MARBL_DIAGS``, ``CDR_FORCING``), ``do_cdr_gas_exch_output`` (``MARBL``, ``CDR_FORCING``), ``do_upscale`` (``MARBL``, ``MARBL_DIAGS``, ``UPSCALING``), ``diag_uv`` and ``diag_trc`` (``DIAGNOSTICS``), ``ub_tune`` (``SPONGE_TUNE``).
+- These groups are now read even when their CPP key is off: a missing group is still fine, but an unknown or misspelled key in one now stops the run.
+- ROMS also stops when ``calc_pflx = .true.`` and ``pflx_timescale`` <= 0, and on an unreadable ``REFERENCE_DATE_SETTINGS`` group (such as a misspelled key); a missing ``REFERENCE_DATE_SETTINGS`` group still means 2000-01-01.
