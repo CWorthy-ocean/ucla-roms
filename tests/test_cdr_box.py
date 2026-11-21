@@ -255,8 +255,9 @@ def test_output_is_cdf5(box_conf, box_cdr_file, input_dir, tmp_path):
 
 @pytest.fixture(scope="module")
 def box_diag_conf(tmp_path_factory) -> ROMSConfiguration:
-    """The box with DIAGNOSTICS."""
-    return _box_configuration(tmp_path_factory, "cdr_box_diag_build", ["DIAGNOSTICS"])
+    """The box with DIAGNOSTICS, compiled with array bounds checking."""
+    return _box_configuration(tmp_path_factory, "cdr_box_diag_build", ["DIAGNOSTICS"],
+                              make_args=f'USER_FFLAGS="{BOUNDS_CHECK_FFLAGS}"')
 
 
 def test_momentum_diagnostics_edges_are_fill(box_diag_conf, box_cdr_file, input_dir, tmp_path):
@@ -289,14 +290,7 @@ def test_momentum_diagnostics_edges_are_fill(box_diag_conf, box_cdr_file, input_
             assert not np.any(interior(values) == fill), f"{name}: fill value inside the domain"
 
 
-@pytest.fixture(scope="module")
-def box_diag_bounds_conf(tmp_path_factory) -> ROMSConfiguration:
-    """The box with DIAGNOSTICS, compiled with array bounds checking."""
-    return _box_configuration(tmp_path_factory, "cdr_box_diag_bounds_build", ["DIAGNOSTICS"],
-                              make_args=f'USER_FFLAGS="{BOUNDS_CHECK_FFLAGS}"')
-
-
-def test_tracer_diagnostics_on_unequal_tiles(box_diag_bounds_conf, box_cdr_file, input_dir, tmp_path):
+def test_tracer_diagnostics_on_unequal_tiles(box_diag_conf, box_cdr_file, input_dir, tmp_path):
     """The tracer diagnostics (diag_trc) on tiles wider than tall (32 x 8) and taller
     than wide (8 x 32). diag_t_adv_hc4 copied grd(1,1:nx) into grd(0,1:ny) at the west
     and east edges: on wide tiles that wrote past the end of grd, heap corruption that
@@ -313,5 +307,5 @@ def test_tracer_diagnostics_on_unequal_tiles(box_diag_bounds_conf, box_cdr_file,
         nml["TS_OUTPUT_SETTINGS"].update({"wrt_temp_dia": True, "wrt_salt_dia": True})
         run_dir = tmp_path / f"t{np_xi}x{np_eta}"
         run_dir.mkdir()
-        box_diag_bounds_conf.run(nml, cwd=run_dir)
+        box_diag_conf.run(nml, cwd=run_dir)
         assert list(run_dir.glob("roms_dia.*.0.nc")), f"{np_xi}x{np_eta}: no diagnostics file"
