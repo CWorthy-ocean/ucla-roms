@@ -1,0 +1,1 @@
+The tracer diagnostics (``diag_trc``) no longer write past the end of an array on tiles three or more cells wider than tall; the corrupted memory could crash a run, even in ``MPI_Finalize`` after it finished.
