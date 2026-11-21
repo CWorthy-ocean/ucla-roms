@@ -1,1 +1,0 @@
-The vertical velocity ``w`` in history, averages and extracted boundary output now includes the water added by point volume sources (pipes, and CDR releases with ``cdr_volume``), as ``omega`` already did, so ``w`` changes above such sources.

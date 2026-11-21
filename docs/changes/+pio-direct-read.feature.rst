@@ -1,3 +1,0 @@
-``pio_direct_read`` in ``PIO_SETTINGS`` (default ``'on'``): ``PARALLEL_IO`` runs read the grid file and the initial or restart file directly with O_DIRECT when they are classic netCDF (CDF-1, CDF-2, CDF-5), instead of through PIO; results are unchanged.
-- On a Pacific MARBL run on 2 Derecho CPU nodes (measured on ``main``), reading the grid and the 118-GB restart takes 32 s instead of 75-78 s, and start-up drops from 117-121 s to 74 s.
-- ``'off'`` reads through PIO as before: use it on a file system that rejects or slows down O_DIRECT reads, or to rule them out while debugging. ``'verify'`` reads both ways, reports values that differ and runs on PIO's values. netCDF-4 files, forcing files and all output still go through PIO. Builds without ``PARALLEL_IO`` are unchanged.
