@@ -21,6 +21,8 @@ module namelist_open_mod
 
   public :: open_namelist_file
   public :: check_nml_string
+  public :: gated_nml_found
+  public :: check_nml_cpp_switch
 
 contains
 
@@ -115,5 +117,85 @@ contains
          "ROMS can hold, so it was probably cut off: '"//value//"'. "//&
          "Use a shorter path, e.g. one relative to the run directory.")
   end subroutine check_nml_string
+
+  !-----------------------------------------------------------------------
+  ! A namelist switch and the cpp key(s) that decide the same feature.
+  ! Until the cpp keys are retired, a group whose cpp key is off is still
+  ! read (into local variables, in the #else branch of its reader), only to
+  ! stop on a switch this build cannot honour. Delete gated_nml_found and
+  ! check_nml_cpp_switch together with the last of those cpp keys.
+  !-----------------------------------------------------------------------
+
+  logical function gated_nml_found(ios, msg, group, context)
+    !-----------------------------------------------------------------------
+    !     FUNCTION: gated_nml_found
+    !     DESCRIPTION:
+    !     For the read of a group whose cpp key is off: .true. when the
+    !     group was read. A missing group (end of file) is .false. with no
+    !     error, as before the group was read at all; any other read error
+    !     (an unknown key, a bad value) raises one, as with the key on.
+    !-----------------------------------------------------------------------
+    use, intrinsic :: iso_fortran_env, only: iostat_end
+    implicit none
+    integer, intent(in) :: ios
+    character(len=*), intent(in) :: msg      ! iomsg of the read
+    character(len=*), intent(in) :: group    ! e.g. "CDR_FRC_SETTINGS"
+    character(len=*), intent(in) :: context
+
+    gated_nml_found = (ios == 0)
+    if (ios /= 0 .and. ios /= iostat_end) then
+      call error_log%raise_global(context=context,&
+           info="could not read "//group//" section of namelist file: "//trim(msg))
+    end if
+  end function gated_nml_found
+
+  subroutine check_nml_cpp_switch(group, key, value, cpp_on, cpp_keys, context, missing)
+    !-----------------------------------------------------------------------
+    !     SUBROUTINE: check_nml_cpp_switch
+    !     DESCRIPTION:
+    !     Raise an error when the namelist switch `key` disagrees with the
+    !     cpp key(s) that turn the same feature on in this build.
+    !     cpp_on   : whether this build defines all of cpp_keys
+    !     cpp_keys : the key(s), as text, e.g. "MARBL, MARBL_DIAGS and CDR_FORCING"
+    !     missing  : for several keys, those this build does not define
+    !-----------------------------------------------------------------------
+    implicit none
+    character(len=*), intent(in) :: group, key
+    logical, intent(in) :: value, cpp_on
+    character(len=*), intent(in) :: cpp_keys
+    character(len=*), intent(in) :: context
+    character(len=*), intent(in), optional :: missing
+
+    character(len=:), allocatable :: rest, listed
+    integer :: i
+
+    if (value .eqv. cpp_on) return
+    if (value .and. present(missing)) then
+      ! missing is a blank-separated list: print it comma-separated
+      rest = trim(adjustl(missing))
+      listed = ''
+      do
+        i = index(rest, ' ')
+        if (i == 0) exit
+        listed = listed//rest(1:i-1)//', '
+        rest = trim(adjustl(rest(i+1:)))
+      end do
+      listed = listed//rest
+      call error_log%raise_global(context=context,&
+           info=group//" "//key//" = .true. needs the cpp keys "//cpp_keys//&
+           ", but this build does not define "//listed//&
+           ". Define them in cppdefs.opt and rebuild, or set "//key//" = .false.")
+    else if (value) then
+      call error_log%raise_global(context=context,&
+           info=group//" "//key//" = .true. needs the cpp key "//cpp_keys//&
+           ", which this build does not define. Define it in cppdefs.opt and "//&
+           "rebuild, or set "//key//" = .false.")
+    else
+      call error_log%raise_global(context=context,&
+           info=group//" "//key//" = .false., but this build defines the cpp key "//&
+           cpp_keys//", which turns it on. Set "//key//" = .true. or leave it out, "//&
+           "or undefine "//cpp_keys//" in cppdefs.opt and rebuild.")
+    end if
+  end subroutine check_nml_cpp_switch
 
   end module namelist_open_mod

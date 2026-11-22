@@ -497,11 +497,10 @@ contains
           Vdiag(:,:,k,ipgr) = rv(1:nx,1:ny,k)*dxdyi_v*vmask(1:nx,1:ny)
         enddo
       endif
-      if (calc_pflx) then
-        call calc_pressure_flux
-      endif
     endif
 # endif
+    ! baroclinic pressure fluxes for nesting and sponge tuning (no cpp key needed)
+    if (CORR_STAGE .and. calc_pflx) call calc_pressure_flux
 
 # ifdef NHMG
 !

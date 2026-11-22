@@ -1,0 +1,1 @@
+The ``ERROR_HANDLING_SETTINGS`` group, whose reader was never called, is removed; a namelist that still has it runs as before. The template's comments no longer say that tides and data extraction need the ``TIDES`` and ``EXTRACT_DATA`` CPP keys, which nothing reads.

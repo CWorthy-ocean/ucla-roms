@@ -103,6 +103,9 @@ frcfiles =
 interp_bulk_frc = .true.       ! Interpolate forcing from coarser input grid if T
 check_bulk_frc_units = .false. ! Check units of input vars if T
 interp_flux_frc = .true.       ! Interpolate forcing from coarser input grid if T
+! Optional: sflx_corr, qcorrection and cflx_corr (logical) switch the surface
+! restoring terms. The cpp keys SFLX_CORR, QCORRECTION and CFLX_CORR still
+! decide them: left out, each takes its key; set, it must match its key.
 /
 
 !================================================================================
@@ -120,7 +123,7 @@ nriv = 1                            ! Number of rivers
 !                            TIDAL FORCING PARAMETERS
 !================================================================================
 ! Previously set in `tides.opt`
-! Requires TIDES cppkey
+! Tidal forcing is on when bry_tides or pot_tides is T (no cpp key needed)
 !================================================================================
 &TIDAL_FRC_SETTINGS                                                    !tides.F90
 bry_tides = .false.                ! Barotropic tides at domain boundaries
@@ -209,8 +212,8 @@ nrpf_frc = 4                    ! Number of time records in forcing files
 !================================================================================
 &EXTRACT_DATA_SETTINGS                                          !extract_data.F90
 !---------------------
-! Previously set in `extract_data.opt`,
-! require EXTRACT_DATA cppkey
+! Previously set in `extract_data.opt`
+! Extraction is on when do_extract is T (no cpp key needed)
 !---------------------
 ! Up to 8 child domains: give extract_file, N_chd, theta_s_chd,
 ! theta_b_chd, hc_chd and extract_root_name one entry per child, in the
@@ -252,8 +255,11 @@ output_period_sponge = 86400  ! Output frequency of sponge tuning file
 &CALC_PFLX_SETTINGS                                            !calc_pflx_mod.F90
 !---------------------
 ! Previously set in `calc_pflx.opt`
+! calc_pflx = T requires pflx_timescale > 0 (no cpp key needed). Turn it on
+! only where it is used: in a parent whose children extract the pressure
+! fluxes up/vp, and with SPONGE_TUNE ub_tune; both stop if it is off.
 !---------------------
-calc_pflx = .true.     ! Enable baroclinic pressure flux calculation
+calc_pflx = .false.    ! Enable baroclinic pressure flux calculation
 pflx_timescale = 86400      ! timescale for filtering pressure fluxes (s)
 /
 

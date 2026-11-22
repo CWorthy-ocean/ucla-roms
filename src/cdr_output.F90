@@ -1507,9 +1507,50 @@ contains
 !#include "cdr_output.opt"
 
       ! Public functions
-      public init_cdr_output, wrt_cdr
+      public init_cdr_output, wrt_cdr, read_cdr_output_nml
 
       contains
+
+      subroutine read_cdr_output_nml
+!     Without MARBL, MARBL_DIAGS and CDR_FORCING, CDR_OUTPUT_SETTINGS is
+!     read only to stop when do_cdr_output = .true.; a missing group is
+!     fine. Its keys and types are those of the group with the keys.
+      use namelist_open_mod, only: open_namelist_file, gated_nml_found,&
+     &  check_nml_cpp_switch
+      implicit none
+      real(kind=8)    :: output_period_cdr
+      integer(kind=4) :: nrpf_cdr
+      logical :: wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
+      namelist /CDR_OUTPUT_SETTINGS/ output_period_cdr, nrpf_cdr,&
+     &  wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
+      integer(kind=4) :: namelist_unit, ios
+      character(len=20) :: sr_name = "read_cdr_output_nml"
+      character(len=512) :: msg
+      character(len=40) :: missing
+
+      missing = ''
+#ifndef MARBL
+      missing = trim(missing)//' MARBL'
+#endif
+#ifndef MARBL_DIAGS
+      missing = trim(missing)//' MARBL_DIAGS'
+#endif
+#ifndef CDR_FORCING
+      missing = trim(missing)//' CDR_FORCING'
+#endif
+      do_cdr_output = .false.
+      msg = ''
+      call open_namelist_file(namelist_unit)
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=CDR_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+      close(namelist_unit)
+      if (gated_nml_found(ios, msg, 'CDR_OUTPUT_SETTINGS',&
+     &    trim(module_name)//'/'//sr_name)) then
+        call check_nml_cpp_switch('CDR_OUTPUT_SETTINGS', 'do_cdr_output',&
+     &    do_cdr_output, .false., 'MARBL, MARBL_DIAGS and CDR_FORCING',&
+     &    trim(module_name)//'/'//sr_name, missing)
+      end if
+      end subroutine read_cdr_output_nml
 
       subroutine init_cdr_output ![
 !     Allocate and initialize arrays.
