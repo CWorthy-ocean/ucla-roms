@@ -283,7 +283,8 @@ do k=nz,1,-1
 
 !--         Vtsq=Vtc*ws*sqrt(max(0._8, 0.5_8*(bvf(i,j,k)+bvf(i,j,k-1)) ))
 
-  Vtsq=1.8_8*Vtc*ws*sqrt(max(1.D-5, bvf(i,j,k-1) ))  !<-- fix by Jeroen
+  ! KPP sensitivity test: pre-March-2026 form (no extra 1.8, no N^2 floor); 0.12.0 has 1.8_8*Vtc*ws*sqrt(max(1.D-5, ...))
+  Vtsq=Vtc*ws*sqrt(max(0._8, bvf(i,j,k-1) ))
 
   Cr(i,k)=FC(i,k)+Vtsq
 
@@ -474,7 +475,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
 
 #  ifdef LMD_NONLOCAL
         if (Bfsfc < 0._8) then
-          ghat(i,j,k)=-Cg * ssgm*(1._8-ssgm)**2
+          ghat(i,j,k)=Cg * ssgm*(1._8-ssgm)**2   ! KPP sensitivity test: pre-March-2026 sign (0.12.0 has -Cg)
         else
           ghat(i,j,k)=0._8
         endif
