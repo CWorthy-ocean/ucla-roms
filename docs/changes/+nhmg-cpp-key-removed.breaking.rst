@@ -1,0 +1,1 @@
+The CPP key ``NHMG`` is removed: a ``cppdefs.opt`` that defines it now stops the build with an error; delete the line (an ``#undef NHMG`` line is harmless) and set ``nhmg = .true.`` in the namelist group ``NHMG_SETTINGS`` instead.

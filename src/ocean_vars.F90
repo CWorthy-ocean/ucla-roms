@@ -6,6 +6,7 @@ module ocean_vars
 
   use param, only: lm, mm
   use scalars, only: init, nz
+  use nhmg_settings_mod, only: nhmg_on
   implicit none
   private
 
@@ -17,23 +18,21 @@ module ocean_vars
   real(kind=8),public,allocatable,dimension(:,:) :: zeta_avg
   real(kind=8),public,allocatable,dimension(:,:) :: ubar_avg
   real(kind=8),public,allocatable,dimension(:,:) :: vbar_avg
-#ifdef NHMG
+  ! NHMG (non-hydrostatic) arrays, allocated only with nhmg = .true.
   real(kind=8),public,allocatable,dimension(:,:) :: nh_ubar
   real(kind=8),public,allocatable,dimension(:,:) :: nh_vbar
   real(kind=8),public,allocatable,dimension(:,:) :: nh_wcor
-#endif
 
   ! 3D - taken from what was ocean2d.F
   real(kind=8),public,allocatable,dimension(:,:,:,:) :: u
   real(kind=8),public,allocatable,dimension(:,:,:,:) :: v
   real(kind=8),public,allocatable,dimension(:,:,:)   :: u_avg
   real(kind=8),public,allocatable,dimension(:,:,:)   :: v_avg
-# if defined NHMG
+  ! NHMG only (nhmg = .true.):
   real(kind=8),public,allocatable,dimension(:,:,:,:) :: w
   real(kind=8),public,allocatable,dimension(:,:,:,:) :: nhdu
   real(kind=8),public,allocatable,dimension(:,:,:,:) :: nhdv
   real(kind=8),public,allocatable,dimension(:,:,:,:) :: nhdw
-# endif
 
   real(kind=8),public,allocatable,dimension(:,:,:) :: FlxU
   real(kind=8),public,allocatable,dimension(:,:,:) :: FlxV
@@ -51,10 +50,9 @@ module ocean_vars
   real(kind=8),public,allocatable,dimension(:,:,:) :: Hz0     ! height of rho-cell with zero SSH
   real(kind=8),public,allocatable,dimension(:,:,:) :: z_r0    ! depth at rho-points with zero SSH
   real(kind=8),public,allocatable,dimension(:,:,:) :: z_w0     ! depth at w-points with zero SSH
-# ifdef NHMG
+  ! NHMG only (nhmg = .true.):
   real(kind=8),public,allocatable,dimension(:,:,:) :: dzdxi
   real(kind=8),public,allocatable,dimension(:,:,:) :: dzdeta
-# endif
 
 
   public :: init_arrays_ocean
@@ -69,11 +67,11 @@ contains  !]
     allocate( ubar(GLOBAL_2D_ARRAY,4) ); ubar=0._8         ! since knew can change if exact restart or not
     allocate( vbar(GLOBAL_2D_ARRAY,4) ); vbar=0._8         ! set all zeta = 0._8
 
-#ifdef NHMG
-    allocate( nh_ubar(GLOBAL_2D_ARRAY) )
-    allocate( nh_vbar(GLOBAL_2D_ARRAY) )
-    allocate( nh_wcor(GLOBAL_2D_ARRAY) )
-#endif
+    if (nhmg_on) then
+      allocate( nh_ubar(GLOBAL_2D_ARRAY) )
+      allocate( nh_vbar(GLOBAL_2D_ARRAY) )
+      allocate( nh_wcor(GLOBAL_2D_ARRAY) )
+    endif
 
 
     allocate( u(GLOBAL_2D_ARRAY,nz,3) )
@@ -85,12 +83,12 @@ contains  !]
     v(:,:,:,2)=0.0_8                             ! index 2 used on rhs v(indx) in pre_step for DC.
     v(:,:,:,3)=init                            ! multiplied by zero but can't be a nan.
 
-# if defined NHMG
-    allocate( w(GLOBAL_2D_ARRAY,0:nz,3) )
-    allocate( nhdu(GLOBAL_2D_ARRAY,1:nz,2) )
-    allocate( nhdv(GLOBAL_2D_ARRAY,1:nz,2) )
-    allocate( nhdw(GLOBAL_2D_ARRAY,0:nz,2) )
-# endif
+    if (nhmg_on) then
+      allocate( w(GLOBAL_2D_ARRAY,0:nz,3) )
+      allocate( nhdu(GLOBAL_2D_ARRAY,1:nz,2) )
+      allocate( nhdv(GLOBAL_2D_ARRAY,1:nz,2) )
+      allocate( nhdw(GLOBAL_2D_ARRAY,0:nz,2) )
+    endif
 
     allocate( FlxU(GLOBAL_2D_ARRAY,nz) ) ; FlxU=init
     allocate( FlxV(GLOBAL_2D_ARRAY,nz) ) ; FlxV=init
@@ -105,10 +103,10 @@ contains  !]
     allocate( Hz0(GLOBAL_2D_ARRAY,nz) )   ; Hz0=init      ! height of rho-cell with zero SSH
     allocate( z_r0(GLOBAL_2D_ARRAY,nz) )  ; z_r0=init     ! depth at rho-points with zero SSH
     allocate( z_w0(GLOBAL_2D_ARRAY,0:nz) ); z_w0=init     ! depth at w-points with zero SSH
-# ifdef NHMG
-    allocate( dzdxi(GLOBAL_2D_ARRAY,1:nz)  )
-    allocate( dzdeta(GLOBAL_2D_ARRAY,1:nz) )
-# endif
+    if (nhmg_on) then
+      allocate( dzdxi(GLOBAL_2D_ARRAY,1:nz)  )
+      allocate( dzdeta(GLOBAL_2D_ARRAY,1:nz) )
+    endif
 
 
   end subroutine init_arrays_ocean  !]

@@ -633,3 +633,17 @@ fs_tol = 1.0e-8                      ! Relative residual of the elliptic solve (
 fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost table at the end; 2 + FS_VOL
                                      ! volume budget and FS_SRC source volumes (FS_SRC also with fs_mode = 'split')
 /
+
+!================================================================================
+!                     NON-HYDROSTATIC SOLVER (NHMG)
+!================================================================================
+! Optional group: if it is absent, nhmg = .false. The NHMG library is always
+! built; nhmg = .true. switches it on. WARNING: untested and unmaintained; may
+! break features such as exact restarts. Its solver settings are read from the
+! optional file nhmg_namelist (group &nhparam) in the run directory. Stops with
+! fs_mode = 'implicit' or MPI_MASKING. The cpp keys DIAGNOSTICS_NHMG and
+! NHMGDIAG need nhmg = .true. See docs/model_settings/runtime_settings.md.
+!================================================================================
+&NHMG_SETTINGS                                              !nhmg_settings_mod.F90
+nhmg = .false.          ! Non-hydrostatic solver on (T) or off (F)
+/

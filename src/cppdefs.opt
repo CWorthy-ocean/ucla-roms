@@ -38,16 +38,13 @@
 #undef DIAGNOSTICS
 
 ! Enable the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation
-! Usage notes:
+! Usage notes: needs nhmg = .true. in the namelist group NHMG_SETTINGS (the run stops otherwise).
+! The non-hydrostatic solver (NHMG) itself is no longer a cpp key: it is always built and the
+! namelist key nhmg switches it on.
 #undef DIAGNOSTICS_NHMG
 
-! Use non-hydrostatic momentum equations
-! Usage notes: Solves prognostically for the vertical velocity. Apprximately doubles the cost of the model.
-! WARNING: Presently untested and unmaintained by [C]Worthy. May break important features like exact restarts, and may require extra inputs to work successfully (unknown).
-#undef NHMG
-
 ! Write momentum equation diagnostics for non-hydrostatic mode
-! Usage notes:
+! Usage notes: needs nhmg = .true. in the namelist group NHMG_SETTINGS (the run stops otherwise).
 #undef NHMGDIAG
 
 ! Enable special forcing for marine CO2 removal

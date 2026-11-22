@@ -103,10 +103,9 @@ else ifeq ($(BUILD_MODE),grof)
    KEEP_PPSRC=true
 endif
 
-#Check whether we're compiling with MARBL or NHMG:
+#Check whether we're compiling with MARBL or PARALLEL_IO (NHMG is always built, see Makefile):
 ifeq ($(wildcard cppdefs.opt),cppdefs.opt)
 	USEMARBL := $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*MARBL' cppdefs.opt && echo true || echo false )
-	USENHMG :=  $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*NHMG' cppdefs.opt && echo true || echo false )
         USEPIO := $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*PARALLEL_IO' cppdefs.opt && echo true || echo false )
 endif
 
@@ -131,15 +130,11 @@ endif
 #   /lib/cpp -traditional -D__IFC -P main$(UPF77_ext) | ./mpc > main.$(PPF77_ext)
 
 
-# Path names (non-hydrostatic & NetCDF libraries):
-	NHMG_ROOT = $(ROMS_ROOT)/NHMG
-	NHMG_LIB  = -L$(NHMG_ROOT)/lib -lnhmg
-	NHMG_INC  = -I$(NHMG_ROOT)/include
-
-	VPATH = ${MPIHOME}/include:${NHMG_INC}
+# Path names (NetCDF libraries; the NHMG library is built and linked by Makefile):
+	VPATH = ${MPIHOME}/include
 	# CPATH is set but never exported, so it does not reach the compiler;
 	# includes are handled explicitly via -I flags (CPPFLAGS/NETCDF*_INC/etc).
-	CPATH = ${MPIHOME}/include:${NHMG_INC}
+	CPATH = ${MPIHOME}/include
 
 # Get netCDF paths and options ('shell' is needed to use command)
 # Some systems return empty strings for `n{c,f}-config --args`, so using $(or as a fallback
@@ -279,9 +274,6 @@ endif
 ifeq ($(USEMARBL),true)
 	LCDF += $(MARBL_LIB)
 endif
-ifeq ($(USENHMG),true)
-	LCDF += $(NHMG_LIB)
-endif
 # PIO_INC must precede the netcdf includes: conda envs (e.g. via esmf) ship a
 # stock parallelio whose pio.mod sits in the same include dir as netcdf, and
 # gfortran searches -I paths in order — the fork's modules must win.
@@ -294,9 +286,6 @@ ifeq ($(USEPIO),true)
 endif
 ifeq ($(USEMARBL),true)
 	LCDF += $(MARBL_INC)
-endif
-ifeq ($(USENHMG),true)
-	LCDF += $(NHMG_INC)
 endif
 
 ifeq ($(USEPIO),true)

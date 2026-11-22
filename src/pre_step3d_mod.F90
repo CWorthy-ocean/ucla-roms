@@ -19,33 +19,26 @@ contains
     call pre_step3d_tile (istr,iend,jstr,jend,   A3d(1,1),A3d(1,2),&
     &A3d(1,3),A3d(1,4), A2d(1,1),A2d(1,2),A2d(1,3),A2d(1,4),&
     &A2d(1,1),A2d(1,2),A2d(1,3),A2d(1,4),&
-    &A2d(1,5),A2d(1,6)&
-# ifdef NHMG
-    &,A3d(1,5)&
-# endif
-    &)
+    &A2d(1,5),A2d(1,6), A3d(1,5))
   end subroutine pre_step3d
 
   subroutine pre_step3d_tile (istr,iend,jstr,jend, ru,rv, Hz_bak,&
   &Hz_fwd,   WC,FC,CF,DC,&
-  &UFx,UFe,VFx,VFe, wrk1,wrk2&
-# ifdef NHMG
-  &,rw&
-# endif
-  &)
+  &UFx,UFe,VFx,VFe, wrk1,wrk2, rw)
     use diagnostics, only: diag_uv
     use dimensions, only: inode, jnode, npx, npy
     use river_frc, only:&
     &iriver, riv_depth, riv_uvel, riv_vvel,&
     &riv_uflx, riv_vol, riv_trc, riv_vflx, river_source,&
     &nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
-#ifdef NHMG
+    ! NHMG (nhmg = .true. only):
+    use nhmg_settings_mod, only: nhmg_on
     use ocean_vars, only:&
     &nhdu, nhdv, nhdw,&
     &nh_ubar, nh_vbar, nh_wcor, w
     use nhmg, only: iprec1, iprec2, halo, nhmg_solve
     use mg_grids, only: mggrid => grid
-#endif
+    use mg_namelist, only: surface_neumann
     use surf_flux, only: sustr, svstr
     use tracers, only: iTandS, t, exchange_tracers
     use advection, only: t_vadv_pre, t_vadv_cor
@@ -61,9 +54,6 @@ contains
     use param, only:&
     &ieast, iwest, jnorth, jsouth, lm, mm, padd_e, padd_x,&
     &np_eta, np_xi
-#ifdef NHMG
-    use mg_namelist, only: surface_neumann
-#endif
     use ocean_vars, only: wi, we, flxv, flxu, hz, z_w, u, v
     use scalars, only:&
     &nz, dt, forw_start, iic, nnew, nrhs, nstp, nt,&
@@ -71,6 +61,9 @@ contains
 #ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag, vdiag, icori,&
     &dxdyi_u, dxdyi_v
+#endif
+#ifdef DIAGNOSTICS_NHMG
+    use diagnostics, only: Wdiag, iwprsgr, iwhoriadv
 #endif
     use ext_copy_prv2shr_mod, only: ext_copy_prv2shr_2d_tile
     use t3dbc_mod, only: t3dbc_tile
@@ -89,13 +82,10 @@ contains
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY)      :: pd_top
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: UFx,UFe,VFx,VFe,&
     &wrk1,wrk2
-#ifdef NHMG
+    ! NHMG only:
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: rw
     real(kind=8)  Flxw,Uflxw,Vflxw
     real(kind=8)  div,dmax
-    real(kind=8)  ub,ut
-!     integer :: ierr !,imx,jmx,kmx
-#endif
 
     real(kind=8) dtau, cf_stp,cf_bak,  cff, FlxDiv
     real(kind=8), parameter :: epsil=1.D-33
@@ -186,9 +176,9 @@ contains
       enddo !<-- itrc                      ! also at "nstp" before
       ! it is owerwritten by
 
-# ifdef NHMG
-#  include "compute_horiz_rhs_w_terms.h"
-# endif
+      if (nhmg_on) then
+# include "compute_horiz_rhs_w_terms.h"
+      endif
 
 # undef FE                                /* ! barotropic mode. */
 # undef FX
@@ -327,9 +317,9 @@ contains
 
 # include "compute_vert_rhs_uv_terms.h"
 
-# ifdef NHMG
+      if (nhmg_on) then  ! ---- NHMG: w equation
 
-#  include "compute_vert_rhs_w_terms.h"
+# include "compute_vert_rhs_w_terms.h"
 
       do i=istr,iend
         DC(i,0) =dtau*pm(i,j)*pn(i,j)
@@ -409,7 +399,7 @@ contains
         enddo
       enddo
       !------- end computing of w(:,:,:,nnew) -----
-# endif /* NHMG */
+      endif  ! ---- nhmg_on
 
       do i=istrU,iend
         DC(i,0)=dtau*0.25_8*(pm(i,j)+pm(i-1,j))*(pn(i,j)+pn(i-1,j))
@@ -581,7 +571,7 @@ contains
     enddo
     call exchange_tracers(nnew)   ! four tracers per MPI exchange
 
-# ifdef NHMG
+    if (nhmg_on) then
 !======================================================================
 ! Non-hydro projection of momentum
 !======================================================================
@@ -761,7 +751,7 @@ contains
     !! for neatness, we could move this exchange there as well
     call exchange_xxx(w(:,:,:,nnew))
 
-# endif /* NHMG */
+    endif  ! ---- nhmg_on
 
 
   end subroutine pre_step3d_tile

@@ -70,7 +70,8 @@ contains
     use pio_roms, only: read_nml_pio              !PIO_SETTINGS
 #endif
     use diag_mod, only: read_nml_stdout_diag
-    use implicit_fs_mod, only: read_nml_implicit_fs !IMPLICIT_FS (optional)
+    use implicit_fs_mod, only: read_nml_implicit_fs, fs_on !IMPLICIT_FS (optional)
+    use nhmg_settings_mod, only: read_nml_nhmg, nhmg_on  !NHMG_SETTINGS (optional)
     implicit none
     call read_nml_param
 #ifndef ANA_GRID
@@ -113,6 +114,9 @@ contains
 #endif
    call read_nml_stdout_diag
    call read_nml_implicit_fs
+   call read_nml_nhmg
+   if (nhmg_on .and. fs_on) call error_log%raise_global(context=trim(module_name)//"/read_namelists",&
+   &info="nhmg = .true. (NHMG_SETTINGS) does not work with fs_mode = 'implicit' (IMPLICIT_FS)")
 
    ! Stop on any namelist error before the values are used (a path cut off
    ! by the read, a missing input file, ...)
