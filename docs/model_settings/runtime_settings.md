@@ -116,9 +116,9 @@ Not read with `ANA_INITIAL`.
 | `interp_bulk_frc` | Interpolate forcing from coarser input grid if .true. |
 | `check_bulk_frc_units` | Perform a check that input files have expected units if .true.  |
 | `interp_flux_frc` | Interpolate forcing from coarser input grid if .true. |
-| `sflx_corr` | Optional. Restore surface salinity (`SSS_CORRECTION`). The CPP key `SFLX_CORR` decides it: left out, it takes the key; set, it must match the key, or ROMS stops |
-| `qcorrection` | Optional. Restore surface temperature (`SST_CORRECTION`). The CPP key `QCORRECTION` decides it, as for `sflx_corr` |
-| `cflx_corr` | Optional. Restore surface DIC and ALK (`DIC_ALK_CORRECTION`). The CPP key `CFLX_CORR` decides it, as for `sflx_corr` |
+| `sflx_corr` | Optional. Restore surface salinity (coefficient `dSSSdt` in `SSS_CORRECTION`). The CPP key `SFLX_CORR` decides it: left out, it takes the key; set, it must match the key, or ROMS stops |
+| `qcorrection` | Optional. Restore surface temperature (coefficient `dSSTdt` in `SST_CORRECTION`). The CPP key `QCORRECTION` decides it, as for `sflx_corr` |
+| `cflx_corr` | Optional. Restore surface DIC and ALK (coefficient `dCdt` in `DIC_ALK_CORRECTION`). The CPP key `CFLX_CORR` decides it, as for `sflx_corr` |
 
 ### `RIVER_FRC_SETTINGS`
 (read by module `river_frc.F90`)
@@ -255,7 +255,7 @@ These settings control the calculation of baroclinic pressure fluxes, e.g. at ne
 
 | Setting | Description |
 |--------|-------------|
-| `calc_pflx` | Enable baroclinic pressure flux calculation (no CPP key needed) |
+| `calc_pflx` | Enable baroclinic pressure flux calculation (no CPP key needed). Needed only by a parent whose children extract `up`/`vp`, and by `ub_tune`; both stop if it is off. It costs time every step, so leave it off otherwise (the template does) |
 | `pflx_timescale` |  Timescale for filtering pressure fluxes (s); must be > 0 when `calc_pflx` is `.true.` |
 
 
