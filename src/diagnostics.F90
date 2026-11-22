@@ -40,6 +40,10 @@ module diagnostics
   use pio, only: PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, mpi_bcast, MPI_Barrier
+#if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
+  use ocean_vars, only: w
+  use param, only: np_xi, np_eta
+#endif
 
   implicit none
   private
@@ -133,7 +137,9 @@ module diagnostics
   ! -----------
 
   ! NOTE: u & v are 1:N in z, but w is 0:N hence different variables needed
-# ifdef NHMGDIAG
+  ! (NHMGDIAG and DIAGNOSTICS_NHMG; these arrays are never allocated yet)
+# if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
+  real(kind=8),allocatable,dimension(:,:,:) :: w_prev, wdz_old, w_dif
   integer(kind=4), public, parameter                         :: nwd = 5    ! number of 'w' momentum diag terms (for
   real(kind=8),allocatable,dimension(:,:,:,:),public :: Wdiag
 
@@ -144,7 +150,7 @@ module diagnostics
   &iwuv2     = 4,&
   &iwbc      = 5
 
-  character (len=20), dimension(nwd) :: wvname = (/&
+  character (len=20), dimension(nwd) :: wvname = (/character(len=20) ::&
   &'w_prsgrd',&
   &'w_horiz_flx',&
   &'w_vert_adv',&
@@ -152,7 +158,7 @@ module diagnostics
   &'w_3dbc'&
   &/)
 
-  character (len=60), dimension(nwd) :: wlname = (/&
+  character (len=60), dimension(nwd) :: wlname = (/character(len=60) ::&
   &'prsgrd.F',&
   &'compute_horiz_rhs_w_terms.h',&
   &'compute_vert_rhs_w_terms.h',&
@@ -167,7 +173,7 @@ module diagnostics
   public set_diags_w_at_uv2
   public set_diags_w_at_uv2_end
   public set_diags_w_at_bc
-# endif /* NHMGDIAG */
+# endif /* NHMGDIAG || DIAGNOSTICS_NHMG */
 
   public init_diagnostics
   public do_diagnostics
@@ -498,7 +504,7 @@ contains
 
   end subroutine set_diags_v_4th_adv  !]
 ! ----------------------------------------------------------------------
-# ifdef NHMGDIAG
+# if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
   subroutine set_diags_w_at_uv1( istr, iend, jstr, jend, DC, rw )  ![
     ! Set the diagnostic terms for prsgrd, horiz & vert advection.
     ! Prsgrd and horiz adv still need to also be convert to dz * w
@@ -639,7 +645,7 @@ contains
     enddo
 
   end subroutine set_diags_w_at_uv2_end  !]
-# endif /* NHMGDIAG */
+# endif /* NHMGDIAG || DIAGNOSTICS_NHMG */
 
 ! ----------------------------------------------------------------------
   subroutine set_diags_t_h_mix(itrc)  ![

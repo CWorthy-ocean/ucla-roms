@@ -36,9 +36,8 @@ contains
     use dimensions, only: npx, npy
     use grid, only:  pn, pm
     use ocean_vars, only: flxv, flxu, z_r, u, v
-#ifdef NHMG
-    use ocean_vars, only: w
-#endif
+    use ocean_vars, only: w   ! NHMG only
+    use nhmg_settings_mod, only: nhmg_on
     use scalars, only: nz, nnew
     use pipe_frc, only: pipe_source, pipe_idx, pipe_flx, pipe_prf
 #ifdef CDR_FORCING
@@ -161,16 +160,16 @@ contains
         enddo
       enddo
     enddo
-# ifdef NHMG
-    ! overwrite with w var
-    do k=1,nz  ! WASTED COMPUTING TO OVERWRITE SOMETHING USE IF ELSE RATHER
-      do j=jmin,jmax
-        do i=imin,imax
-          Wvlc(i,j,k) =  w(i,j,k,nnew)
+    if (nhmg_on) then
+      ! overwrite with w var
+      do k=1,nz  ! WASTED COMPUTING TO OVERWRITE SOMETHING USE IF ELSE RATHER
+        do j=jmin,jmax
+          do i=imin,imax
+            Wvlc(i,j,k) =  w(i,j,k,nnew)
+          enddo
         enddo
       enddo
-    enddo
-# endif
+    endif
 
 !  Set lateral boundary conditions: gradient only.
 

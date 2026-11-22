@@ -2,13 +2,14 @@ module w3dbc_mod
 #include "cppdefs.opt"
   implicit none
   private
-#ifdef NHMG
+  ! Boundary conditions for w; called only with nhmg = .true. (NHMG)
   public :: w3dbc_tile
 contains
   subroutine w3dbc_tile (istr,iend,jstr,jend,grad)
 
-    use param, only: ieast, iwest, jnorth, jsouth
-    use boundary, only: w_west
+    use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
+    use dimensions, only: inode, jnode
+    use boundary, only: w_west, w_east, w_south, w_north
     use grid, only: pm, pn, rmask
     use ocean_vars, only: w, u, v
     use scalars, only: dt, gamma2, nz, nnew, nrhs, nstp
@@ -345,10 +346,4 @@ contains
 # endif
   end subroutine w3dbc_tile
 
-#else
-contains
-  subroutine w3dbc_empty
-  end subroutine w3dbc_empty
-
-#endif /* NHMG */
 end module w3dbc_mod

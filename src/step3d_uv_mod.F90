@@ -18,22 +18,15 @@ contains
     call step3d_uv1_tile( istr,iend,jstr,jend,    A3d(1,1),A3d(1,2),&
     &A2d(1,1),A2d(1,2),A2d(1,3),A2d(1,4),&
     &A2d(1,1),A2d(1,2),A2d(1,3),A2d(1,4),&
-    &A2d(1,5),A2d(1,6)&
-# ifdef NHMG
-    &,A3d(1,5)&
-# endif
-    &)
+    &A2d(1,5),A2d(1,6), A3d(1,5))
   end subroutine step3d_uv1
 
   subroutine step3d_uv1_tile( istr,iend,jstr,jend, ru,rv,&
   &WC,FC,CF,DC,&
-  &UFx,UFe,VFx,VFe, wrk1,wrk2&
-# ifdef NHMG
-  &,rw&
-# endif
-  &)
+  &UFx,UFe,VFx,VFe, wrk1,wrk2, rw)
     use dimensions, only: inode, jnode, i0,j0,i1,j1
-# ifdef NHMG
+    ! NHMG (nhmg = .true. only):
+    use nhmg_settings_mod, only: nhmg_on
     use ocean_vars, only:&
     &nh_ubar, nh_vbar, nh_wcor, nhdu,&
     &nhdv, nhdw, w
@@ -41,10 +34,12 @@ contains
     &nhmg_solve,  iprec1, iprec2, halo
     use mg_namelist, only: surface_neumann
     use mg_grids, only: mggrid => grid
-# endif
     use diagnostics, only: u_prev, v_prev, calc_diag, udiag,&
     &vdiag, icori, dxdyi_u, dxdyi_v, idiss, ipgr, iadv, ivmix,&
     &set_diags_u_4th_adv, set_diags_v_4th_adv, diag_uv
+#if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
+    use diagnostics, only: Wdiag, iwprsgr, iwhoriadv, set_diags_w_at_uv1
+#endif
     use surf_flux, only: sustr, svstr
     use coupling, only: r_d, rufrc, rvfrc
     use grid, only:&
@@ -79,13 +74,9 @@ contains
 # ifdef UPSTREAM_UV
     &, gamma=0.3333333333333333_8 ! gamma=0.25_8
 # endif
-# ifdef NHMG
+    ! NHMG only:
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: rw
     real(kind=8)  Flxw,Uflxw,Vflxw
-    real(kind=8)  ub,ut
-    real(kind=8)  div,dmax
-
-#endif
 
 # include "compute_auxiliary_bounds.h"
 
@@ -97,35 +88,35 @@ contains
 #  endif
 # endif
 
-# ifdef NHMG
+    if (nhmg_on) then
 
-#  define FX UFx
-#  define FE VFe
+# define FX UFx
+# define FE VFe
 
-    do k=1,nz
-#  include "compute_horiz_rhs_w_terms.h"
-    enddo
-
-#  undef FE
-#  undef FX
-
-    do j=jstr,jend
-
-#  include "compute_vert_rhs_w_terms.h"
-      do i=istr,iend
-        DC(i,0)=dt*pm(i,j)*pn(i,j)
+      do k=1,nz
+# include "compute_horiz_rhs_w_terms.h"
       enddo
-      do k=1,nz           !! w is dz*w after this
+
+# undef FE
+# undef FX
+
+      do j=jstr,jend
+
+# include "compute_vert_rhs_w_terms.h"
         do i=istr,iend
-          w(i,j,k,nnew)=w(i,j,k,nnew) +DC(i,0)*rw(i,j,k)
+          DC(i,0)=dt*pm(i,j)*pn(i,j)
         enddo
-      enddo
+        do k=1,nz           !! w is dz*w after this
+          do i=istr,iend
+            w(i,j,k,nnew)=w(i,j,k,nnew) +DC(i,0)*rw(i,j,k)
+          enddo
+        enddo
 
-    enddo
-#  ifdef DIAGNOSTICS_NHMG
-    if (calc_diag) call set_diags_w_at_uv1( istr, iend, jstr, jend, DC, rw )
-#  endif
-# endif  /* NHMG */
+      enddo
+# ifdef DIAGNOSTICS_NHMG
+      if (calc_diag) call set_diags_w_at_uv1( istr, iend, jstr, jend, DC, rw )
+# endif
+    endif  ! nhmg_on
 
     do k=1,nz
 # include "compute_horiz_rhs_uv_terms.h"
@@ -317,7 +308,7 @@ contains
     if (imex_mix_split /= 2) call imex_solve_stage(imex_stage_corr)
 #endif
 
-# if defined NHMG
+    if (nhmg_on) then  ! ---- NHMG: non-hydrostatic projection
 
 #  ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
@@ -476,7 +467,7 @@ contains
     iprec1 = 1+mod(iprec1,2)
     iprec2 = 1+mod(iprec2,2)
 
-# endif /* NHMG */
+    endif  ! ---- nhmg_on
 
 
     !!!! JM not clear what this does either
@@ -557,11 +548,7 @@ contains
     use grid, only:&
     &nx,ny,nz, dn_u, umask, dm_v, vmask, dm_u, dn_v, f,&
     &dm_r, pn, pm
-    use ocean_vars, only: &
-#ifdef NHMG
-    & w,&
-#endif
-    z_r, wi
+    use ocean_vars, only: w, z_r, wi   ! w: NHMG only
     use mixing, only: &
 #ifdef ADV_ISONEUTRAL
     &diff3u, diff3v,&
@@ -576,14 +563,17 @@ contains
 #ifdef DIAGNOSTICS
     use diagnostics, only: diag_uv, calc_diag, udiag, vdiag, icoup
 #endif
+#if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
+    use diagnostics, only: diag_uv, calc_diag, set_diags_w_at_uv2, set_diags_w_at_bc,&
+    &set_diags_w_at_uv2_end
+#endif
     use ocean_vars, only: u, ubar, v, vbar, hz, flxu, flxv, z_w
     use scalars, only: nz, knew, nnew, nstp, g, rho0, dt
     use roms_mpi, only: exchange_xxx
     use u3dbc_mod, only: u3dbc_tile
     use v3dbc_mod, only: v3dbc_tile
-#ifdef NHMG
     use w3dbc_mod, only: w3dbc_tile
-#endif
+    use nhmg_settings_mod, only: nhmg_on
 #ifdef IMEX_IGW
     use imex_igw, only: wflx_corr, u_nm1, v_nm1, imex_obc_modal, imex_obc_faces
 #endif
@@ -693,7 +683,7 @@ contains
 
       endif  !<-- j>=jstrV
 
-# ifdef NHMG
+      if (nhmg_on) then  ! ---- NHMG: implicit vertical viscosity for w
       !!! JM fix this wrt to IMPLICIT BOTTOM STRESS
       do i=istr,iend
         DC(i,0) =dt*pm(i,j)*pn(i,j)
@@ -744,7 +734,7 @@ contains
       enddo
       !------- end computing of w(:,:,:,nnew) -----
 
-# endif /* NHMG */
+      endif  ! ---- nhmg_on
 
     enddo      ! <-- j
 
@@ -1023,7 +1013,7 @@ call exchange_xxx(idRz,diff3u,diff3v)
 #  endif
 
 
-# ifdef NHMG
+if (nhmg_on) then  ! ---- NHMG
 !--------------------------------------------------------------------
 ! Coupling w
 !--------------------------------------------------------------------
@@ -1063,11 +1053,11 @@ if (calc_diag) call set_diags_w_at_bc( istr, iend, jstr, jend )
 !--------------------------------------------------------------------
 call exchange_xxx(w(:,:,:,nnew))
 
-# endif /* NHMG */
+endif  ! ---- nhmg_on
 
 # ifdef DIAGNOSTICS
 #  ifdef NHMGDIAG
-if (calc_diag.and.diag_uv)  call set_diags_w_at_uv2_end
+if (calc_diag.and.diag_uv)  call set_diags_w_at_uv2_end(istrR, iendR, jstrR, jendR)
 #  endif
 # endif
 

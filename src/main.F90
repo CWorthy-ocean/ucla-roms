@@ -3,9 +3,8 @@ program main              ! Open MP version of ROMS driver
   use add_git_hash_mod, only: git_hash, print_jobid
   use param, only: mynode, ocean_grid_comm, nsize, read_nml_param
   use check_switches_mod, only: print_switches
-#ifdef NHMG
   use nhmg, only: nhmg_clean
-#endif
+  use nhmg_settings_mod, only: nhmg_on
   use tracers, only: init_tracers
   use mpi_f08, only: mpi_wtime, mpi_comm_world
   use timers, only: tstart, tend, print_region_timers
@@ -92,10 +91,8 @@ program main              ! Open MP version of ROMS driver
   call roms_thread          ! for barotropic mode, and
 !$ OMP END PARALLEL                       ! launch the model in OpenMP
   ! parallel regime.
-#ifdef NHMG
   ! write nhmg statistics to fort.10
-  call nhmg_clean()
-#endif
+  if (nhmg_on) call nhmg_clean()
 # ifdef MPI
 
   call MPI_Barrier(ocean_grid_comm, ierr)
@@ -159,10 +156,8 @@ contains
 
   subroutine roms_init
 
-#ifdef NHMG
     use nhmg, only: nhmg_matrices, nhmg_init, halo
     use ocean_vars, only: dzdeta, dzdxi, hz
-#endif
     use diag_mod, only: diag
     use basic_output, only: init_restarts, wrt_his_ocean_vars
     use scalars, only:&
@@ -277,9 +272,7 @@ contains
     call init_diagnostics
 #endif
 
-#ifdef NHMG
-    call nhmg_init(Lm,Mm,nz,NP_XI,NP_ETA)
-#endif
+    if (nhmg_on) call nhmg_init(Lm,Mm,nz,NP_XI,NP_ETA)
 #ifdef SPONGE_TUNE
     if (ub_tune) call init_orlanski_tune
 #endif
@@ -360,11 +353,11 @@ contains
 !  Set NHMG horizontal and vertical grids
 !  then set matrices coefficients for the elliptic problem
 !----------------------------------------------------------------------
-#ifdef NHMG
-    call nhmg_matrices(Lm,Mm,nz,halo,padd_X,padd_E,dzdxi,dzdeta,Hz,&
-    &dm_r(0:Lm+1,0:Mm+1),&
-    &dn_r(0:Lm+1,0:Mm+1)    )
-#endif
+    if (nhmg_on) then
+      call nhmg_matrices(Lm,Mm,nz,halo,padd_X,padd_E,dzdxi,dzdeta,Hz,&
+      &dm_r(0:Lm+1,0:Mm+1),&
+      &dn_r(0:Lm+1,0:Mm+1)    )
+    endif
 
 
 !R      write(*,*)  ' -4' MYID

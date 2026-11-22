@@ -727,3 +727,17 @@ sl_c2pass = 0.8                      ! At least two T, S (and X) sub-passes on a
 sl_pred = 2                          ! Predictor on fully swept faces: 0 = the stock Eulerian flux, 1 = semi-Lagrangian for u, v
                                      ! (the start field at the departure point), 2 = also for the tracers
 /
+
+!================================================================================
+!                     NON-HYDROSTATIC SOLVER (NHMG)
+!================================================================================
+! Optional group: if it is absent, nhmg = .false. The NHMG library is always
+! built; nhmg = .true. switches it on. WARNING: untested and unmaintained; may
+! break features such as exact restarts. Its solver settings are read from the
+! optional file nhmg_namelist (group &nhparam) in the run directory. Stops with
+! fs_mode = 'implicit', IMEX_IGW or MPI_MASKING. The cpp keys DIAGNOSTICS_NHMG and
+! NHMGDIAG need nhmg = .true. See docs/model_settings/runtime_settings.md.
+!================================================================================
+&NHMG_SETTINGS                                              !nhmg_settings_mod.F90
+nhmg = .false.          ! Non-hydrostatic solver on (T) or off (F)
+/

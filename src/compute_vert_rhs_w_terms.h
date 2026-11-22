@@ -45,3 +45,4 @@ do i=istr,iend
   rw(i,j,nz) = rw(i,j,nz)   + FC(i,nz)
 enddo
 #endif
+#undef curv

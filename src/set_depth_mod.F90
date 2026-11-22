@@ -40,10 +40,9 @@ contains
     use roms_mpi, only: exchange_xxx
     use dimensions, only: inode, jnode, npx,npy, i0, i1, j0, j1
     use ocean_vars, only:&
-# ifdef NHMG
-    &dzdxi, dzdeta,&
-#endif
+    &dzdxi, dzdeta,&   ! NHMG only
     &ubar, zeta, vbar, z_w, z_r, hz, z_w0, z_r0, hz0
+    use nhmg_settings_mod, only: nhmg_on
     use scalars, only: iic, knew
     use scoord, only: hc, iwest, jsouth, nz, cs_w, cs_r
     use pio_roms, only: use_pio
@@ -163,8 +162,8 @@ contains
     call exchange_xxx(z_w,z_r,Hz)
 #  endif
 
-#ifdef NHMG
-!     Compute slopes
+    if (nhmg_on) then
+!     Compute slopes (NHMG)
     do k = 1, nz
       do j = 0,Mm+1
         do i = 0,Lm+1
@@ -219,7 +218,7 @@ contains
     endif
 # endif
 
-#endif /* NHMG */
+    endif  ! nhmg_on
 
 
   end subroutine set_depth_tile
