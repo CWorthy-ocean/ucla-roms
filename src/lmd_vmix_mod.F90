@@ -95,7 +95,8 @@ contains
     real(kind=8), dimension(istr:iend) :: Kv_km1, Kt_km1, Ks_km1
     real(kind=8) tmp_v, tmp_t, tmp_s
     real(kind=8), parameter ::&     ! Critical gradient Richardson number
-    &Ri0=0.7_8,&         ! below which shear instabilty occurs.
+    ! KPP sensitivity test: interior shear-mixing threshold Ri0 lowered from 0.7 (LMD94, 0.12.0) to 0.25.
+    &Ri0=0.25_8,&         ! below which shear instabilty occurs.
 
     &nu0m= 1.D-2,&     ! Maximum viscosity and diffusivity
     &nu0s= 1.D-2,&     ! due to shear instability [m^2/s];
