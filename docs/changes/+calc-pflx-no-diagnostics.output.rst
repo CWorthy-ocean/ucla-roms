@@ -1,2 +1,3 @@
-In builds without ``DIAGNOSTICS``, runs with ``calc_pflx = .true.`` now write non-zero pressure fluxes ``up`` and ``vp`` to extracted child boundary files and non-zero slow fields to restart files (see Bug Fixes).
+In builds without ``DIAGNOSTICS``, runs with ``calc_pflx = .true.`` now write non-zero pressure fluxes ``up`` and ``vp`` to extracted child boundary files and evolving slow fields to restart files (see Bug Fixes).
 - Runs with sponge tuning (``SPONGE_TUNE`` and ``ub_tune``) but without ``DIAGNOSTICS`` change: the tuning now uses the real fluxes instead of zeros. Other runs' own results are unchanged.
+- A run restarted from a file written before this change starts from those stale slow fields, so its ``up`` and ``vp`` carry a spin-up transient of about ``pflx_timescale`` (one day by default); for nested runs, allow for that period in the child boundary data.
