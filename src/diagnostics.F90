@@ -180,6 +180,7 @@ contains
 
   subroutine read_nml_diagnostics
 !     Read the "DIAGNOSTICS_SETTINGS" section of the namelist file
+#ifdef DIAGNOSTICS
 
     integer(kind=4) ::  namelist_unit, ios
     character(len=21) :: sr_name = "read_nml_diagnostics"
@@ -195,6 +196,33 @@ contains
     end if
     close(namelist_unit)
     record = nrpf_diag
+#else
+    ! Without DIAGNOSTICS the group is read only to stop when diag_uv or
+    ! diag_trc is .true.; a missing group is fine. The keys and types are
+    ! the module's, read into local variables (the module's are not set).
+    use namelist_open_mod, only: gated_nml_found, check_nml_cpp_switch
+    integer(kind=4) :: output_period_diag, nrpf_diag
+    logical :: diag_avg, diag_uv, diag_trc
+    namelist /DIAGNOSTICS_SETTINGS/ output_period_diag, nrpf_diag,&
+    &diag_avg, diag_uv, diag_trc
+    integer(kind=4) :: namelist_unit, ios
+    character(len=21) :: sr_name = "read_nml_diagnostics"
+    character(len=512) :: msg
+
+    diag_uv = .false.
+    diag_trc = .false.
+    msg = ''
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=DIAGNOSTICS_SETTINGS, iostat=ios, iomsg=msg)
+    close(namelist_unit)
+    if (gated_nml_found(ios, msg, 'DIAGNOSTICS_SETTINGS', trim(module_name)//'/'//sr_name)) then
+      call check_nml_cpp_switch('DIAGNOSTICS_SETTINGS', 'diag_uv', diag_uv,&
+      &.false., 'DIAGNOSTICS', trim(module_name)//'/'//sr_name)
+      call check_nml_cpp_switch('DIAGNOSTICS_SETTINGS', 'diag_trc', diag_trc,&
+      &.false., 'DIAGNOSTICS', trim(module_name)//'/'//sr_name)
+    end if
+#endif
   end subroutine read_nml_diagnostics
 
 ! ----------------------------------------------------------------------

@@ -1,0 +1,1 @@
+``SURF_FRC_SETTINGS`` accepts ``sflx_corr``, ``qcorrection`` and ``cflx_corr`` (logical), the names the GPU model uses for the surface restoring terms. For now each must agree with its CPP key (``SFLX_CORR``, ``QCORRECTION``, ``CFLX_CORR``), or ROMS stops; leaving them out changes nothing.
