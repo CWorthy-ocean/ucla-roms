@@ -3,7 +3,7 @@
 With ``ub_tune`` ROMS nudges the Orlanski boundary coefficients ``ub_*`` toward
 matching the parent's baroclinic pressure flux, read from the boundary file
 (``up_west``/``up_east``/``vp_south``/``vp_north``), with the child's own flux
-from ``calc_pflx``. The test parent has no parent, so its
+from ``calc_pflx`` (built without ``DIAGNOSTICS``, as C-Star Forge builds are). The test parent has no parent, so its
 boundary file gets synthetic fluxes: smooth along each edge, varying in time.
 
 Each build, with and without PARALLEL_IO, runs the case on 2x2 ranks with
@@ -113,7 +113,7 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
     def _build_and_run(build: str) -> dict[str, Path]:
         pio = build == "parallel_io"
         cpp_keys = (UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-                    + ["DIAGNOSTICS", "SPONGE_TUNE", "EXACT_RESTART"])
+                    + ["SPONGE_TUNE", "EXACT_RESTART"])
         if pio:
             cpp_keys = cpp_keys + ["PARALLEL_IO"]
         conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path_factory.mktemp(f"sponge_build_{build}"))

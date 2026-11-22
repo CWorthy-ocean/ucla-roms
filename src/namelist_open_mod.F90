@@ -166,11 +166,24 @@ contains
     character(len=*), intent(in) :: context
     character(len=*), intent(in), optional :: missing
 
+    character(len=:), allocatable :: rest, listed
+    integer :: i
+
     if (value .eqv. cpp_on) return
     if (value .and. present(missing)) then
+      ! missing is a blank-separated list: print it comma-separated
+      rest = trim(adjustl(missing))
+      listed = ''
+      do
+        i = index(rest, ' ')
+        if (i == 0) exit
+        listed = listed//rest(1:i-1)//', '
+        rest = trim(adjustl(rest(i+1:)))
+      end do
+      listed = listed//rest
       call error_log%raise_global(context=context,&
            info=group//" "//key//" = .true. needs the cpp keys "//cpp_keys//&
-           ", but this build does not define "//trim(adjustl(missing))//&
+           ", but this build does not define "//listed//&
            ". Define them in cppdefs.opt and rebuild, or set "//key//" = .false.")
     else if (value) then
       call error_log%raise_global(context=context,&
