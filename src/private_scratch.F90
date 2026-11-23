@@ -17,22 +17,16 @@ module private_scratch
 ! Note that "sse-ssz" below are to make N2d=size_XI*max(size_ETA,N+1)
 ! without using "max" function inside parameter statement.
 
-#ifdef ALLOW_SINGLE_BLOCK_MODE
-  integer(kind=4) :: size_XI, size_ETA
-#else
   integer(kind=4) :: size_XI,&
   &size_ETA,&
-#endif
   &sse, ssz,&
   &N2d,&
   &N3d
 
 
   real(kind=8),allocatable,dimension(:,:) :: A2d
-#ifdef SOLVE3D
   real(kind=8),allocatable,dimension(:,:) :: A3d
   integer(kind=4),allocatable,dimension(:,:) :: iA2d
-#endif
 !$ OMP THREADPRIVATE( A3d, A2d, iA2d, A2d )
 
 contains
@@ -42,12 +36,8 @@ contains
     use scalars, only: nz
     implicit none
 
-#ifdef ALLOW_SINGLE_BLOCK_MODE
-    size_XI=6+Lm; size_ETA=6+Mm
-#else
     size_XI=7+(Lm+NSUB_X-1)/NSUB_X
     size_ETA=7+(Mm+NSUB_E-1)/NSUB_E
-#endif
     sse=size_ETA/(nz+1);  ssz=(nz+1)/size_ETA
     N2d=size_XI*(sse*size_ETA+ssz*(nz+1))/(sse+ssz)
     N3d=size_XI*size_ETA*(nz+1)
@@ -55,10 +45,8 @@ contains
     ! Initialize (first touch) private
     ! scratch arrays in parallel by each thread.
     allocate( A2d(N2d,32) ); A2d=0._8
-#ifdef SOLVE3D
     allocate( A3d(N3d,6)  ); A3d=0._8            ! if private scratch not set to zero result changes
     allocate( iA2d(N2d,2) ); iA2d=0._8           ! this hasn't been followed to see why
-#endif
 
   end subroutine init_arrays_private_scratch  !]
 

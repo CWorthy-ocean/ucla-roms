@@ -78,9 +78,7 @@ module extract_data
   use scoord, only: theta_s, theta_b, hc
   use calc_pflx_mod, only:  up, vp
   use basic_output, only: &
-#ifdef SOLVE3D
   &indxt, indxu, indxv, indxw,&
-#endif
   &indxvb, indxub,indxz,&
 #ifdef SALINITY
   &indxs,&
@@ -704,11 +702,11 @@ contains
           &context=module_name//"/"//sr_name,&
           &info="calc_pflx is not set for vp extraction")
         endif
-#if                             !defined(BIOLOGY_BEC2) && !defined(MARBL)
+#ifndef MARBL
         if (obj(iobj)%bgc) then
           call error_log%raise_global(&
           &context=module_name//"/"//sr_name,&
-          &info="MARBL or BIOLOGY_BEC2 cpp key is not "//&
+          &info="MARBL cpp key is not "//&
           &"set for BGC extraction")
         endif
 #endif
@@ -927,9 +925,7 @@ contains
       if (calc_pflx) then
         upe(1:nx,1:ny) = up(1:nx,1:ny)
         vpe(1:nx,1:ny) = vp(1:nx,1:ny)
-# ifdef EXCHANGE
         call exchange_xxx(upe,vpe)
-# endif
       endif
 
 #ifdef PARALLEL_IO

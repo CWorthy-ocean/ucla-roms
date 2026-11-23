@@ -1,23 +1,15 @@
 ! Compute horizontal fluxes for vertical flux w. Essentially interpolate
 ! tracer values from their native locations on C grid to horizontal
 ! velocity points with simultaneous translation from grid-box-averages
-! to instantaneous values at interface location.  2 options an be
-! selected: 3-point upstream-biased parabolic interpolation (UPSTREAM_W);
-!  4-point symmetric fourth-order method (undefined state of both CPP
-! switches);
+! to instantaneous values at interface location, by 3-point
+! upstream-biased parabolic interpolation.
 
 ! This code is extracted into a special module because it is used
 ! twice, in predictor and corrector substeps for w
 
 #ifdef UV_ADV
-# define UPSTREAM_W
 
-
-#ifdef UPSTREAM_W
 # define curv wrk1
-#else
-# define grad wrk1
-#endif
 #ifndef EW_PERIODIC
 if (WESTERN_EDGE) then       ! Determine extended index
   imin=istr                  ! range for computation of
@@ -55,11 +47,7 @@ endif
 #endif
 do j=jstr,jend
   do i=istr-1,iend+1
-#if defined UPSTREAM_W
     curv(i,j)=FX(i+1,j)-FX(i,j)
-#else
-    grad(i,j)=0.5_8*(FX(i+1,j)+FX(i,j))
-#endif
   enddo
 enddo             !--> discard FX
 do j=jstr,jend
@@ -69,7 +57,6 @@ do j=jstr,jend
     else
       Uflxw= 0.5_8*(FlxU(i,j,k)              )
     endif
-#ifdef UPSTREAM_W
     FX(i,j)=0.5_8*(w(i,j,k,nrhs)+w(i-1,j,k,nrhs))&
     &*Uflxw&
     &-0.1666666666666666_8*( curv(i-1,j)*max(Uflxw,0._8)&
@@ -78,11 +65,6 @@ do j=jstr,jend
 !              TruncFX(i,j)=0.04166666666666667_8*(curv(i,j)-curv(i-1,j))
 !     &                                               *abs(Uflxw)
 !# endif
-#else
-    FX(i,j)=0.5_8*( w(i,j,k,nrhs)+w(i-1,j,k,nrhs)&
-    &-0.3333333333333333_8*(grad(i,j)-grad(i-1,j))&
-    &)*Uflxw
-#endif
   enddo           !--> discard curv,grad, keep FX
 enddo
 
@@ -123,11 +105,7 @@ endif
 #endif
 do j=jstr-1,jend+1
   do i=istr,iend
-#if defined UPSTREAM_W
     curv(i,j)=FE(i,j+1)-FE(i,j)
-#else
-    grad(i,j)=0.5_8*(FE(i,j+1)+FE(i,j))
-#endif
   enddo
 enddo            !--> discard FE
 
@@ -138,7 +116,6 @@ do j=jstr,jend+1
     else
       Vflxw= 0.5_8*(FlxV(i,j,k)              )
     endif
-#ifdef UPSTREAM_W
     FE(i,j)=0.5_8*(w(i,j,k,nrhs)+w(i,j-1,k,nrhs))&
     &*Vflxw&
     &-0.1666666666666666_8*( curv(i,j-1)*max(Vflxw,0._8)&
@@ -147,11 +124,6 @@ do j=jstr,jend+1
 !              TruncFE(i,j)=0.04166666666666667_8*(curv(i,j)-curv(i-1,j))
 !     &                                               *abs(Vflxw)
 !# endif
-#else
-    FE(i,j)=0.5_8*( w(i,j,k,nrhs)+w(i,j-1,k,nrhs)&
-    &-0.3333333333333333_8*(grad(i,j)-grad(i,j-1))&
-    &)*Vflxw
-#endif
   enddo
 enddo             !--> discard curv,grad, keep FE
 

@@ -125,21 +125,21 @@ module marbl_driver
   integer(kind=4), public :: diag_cnt_3d_tot ! Total number of MARBL 3D diagnostic vars
   integer(kind=4), public :: diag_cnt_tot    ! Total number of MARBL diagnostic vars
 
-!     Making local versions of these "bec2" arrays for bgc diagnostic output control
+!     Local pointers to the bgc_shared_vars arrays for bgc diagnostic output control
   logical, dimension(:), pointer, public :: wrt_marbl_diag_2d
   logical, dimension(:), pointer, public :: wrt_marbl_diag_3d
   integer(kind=4), dimension(:), pointer, public :: idx_marbl_diag_2d
   integer(kind=4), dimension(:), pointer, public :: idx_marbl_diag_3d
 
-  real(kind=8),dimension(:,:,:,:),pointer, public :: marbl_diag_3d ! points to bec2_diag_3d
-  real(kind=8),dimension(:,:,:)  ,pointer, public :: marbl_diag_2d ! points to bec2_diag_2d
+  real(kind=8),dimension(:,:,:,:),pointer, public :: marbl_diag_3d ! points to bgc_diag_3d
+  real(kind=8),dimension(:,:,:)  ,pointer, public :: marbl_diag_2d ! points to bgc_diag_2d
 
   ! Pre-computed 2D/3D flags: avoids repeated trim()/string compare in the hot per-column loop
   logical, allocatable :: surface_flux_diag_is_2d(:)
   logical, allocatable :: interior_tendency_diag_is_2d(:)
 
 #endif
-!     Saved state variables: (mimicking structure of bgc_shared_vars for bec2_diag arrays)
+!     Saved state variables: (mimicking structure of bgc_shared_vars for bgc_diag arrays)
   integer(kind=4), public                         :: nr_marbl_ss_2d,nr_marbl_ss_3d       ! No. of saved_state vars
   parameter( nr_marbl_ss_2d=3, nr_marbl_ss_3d=2)                             ! Hardcode no. of vars (error if wrong)
 
@@ -1008,10 +1008,10 @@ contains
 !
 !     METHOD:
 !     1. Verify ROMS' hardcoded number of diagnostics variables
-!        (nr_bec2_diag_2d,nr_bec2_diag_3d in bgc_shared_vars.F)
+!        (nr_marbl_diag_2d,nr_marbl_diag_3d in marbl_driver.F90)
 !        corresponds to the number of diags in the MARBL instance
 !     2. Populate ROMS BGC diagnostics metadata arrays
-!        (vname_bec2_diag_2d,vname_bec2_diag_3d) using information
+!        (vname_marbl_diag_2d,vname_marbl_diag_3d) using information
 !        provided by the MARBL instance
 !
 !     INPUT/OUTPUT:
@@ -1080,9 +1080,9 @@ contains
       &,size(vname_marbl_diag_2d(1,:))&
       &,' does not match no. expected by MARBL: '&
       &,(diag_cnt_sf_2d+diag_cnt_it_2d)&
-      &,'. Set nr_bec2_diag_2d = '&
+      &,'. Set nr_marbl_diag_2d = '&
       &,(diag_cnt_sf_2d+diag_cnt_it_2d)&
-      &,' in bgc_shared_vars.F and recompile'
+      &,' in marbl_driver.F90 and recompile'
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info=error_info)
@@ -1096,15 +1096,15 @@ contains
       &,size(vname_marbl_diag_3d(1,:))&
       &,' does not match no. expected by MARBL: '&
       &,(diag_cnt_sf_3d+diag_cnt_it_3d)&
-      &,'. Set nr_bec2_diag_3d = '&
+      &,'. Set nr_marbl_diag_3d = '&
       &,(diag_cnt_sf_3d+diag_cnt_it_3d)&
-      &,' in bgc_shared_vars.F and recompile'
+      &,' in marbl_driver.F90 and recompile'
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info=error_info)
 
     end if
-    ! Abort now: the loops below write into vname_marbl_diag_2d/3d sized by nr_bec2_diag_2d/3d.
+    ! Abort now: the loops below write into vname_marbl_diag_2d/3d sized by nr_marbl_diag_2d/3d.
     call error_log%abort_check()
 
 !     2. Fill BGC diagnostics metadata arrays in ROMS from MARBL instance
@@ -1274,13 +1274,13 @@ contains
 !-----------------------------------------------------------------------
 !     SUBROUTINE: marbldrv_read_diagnostic_output_list
 !     DESCRIPTION: Read "marbl_diagnostic_output_list" file and set
-!                  wrt_bec2_diag logical array entries accordingly
+!                  wrt_marbl_diag logical array entries accordingly
 !
 !     METHOD:
 !     1. Read the "marbl_diagnostic_output_list" file line-by-line
 !     2. For each line not beginning with "!", compare that line with
-!         every entry in "vname_bec2_diag" (diagnostic shortname list)
-!     3. If there is a match, set "wrt_bec2_diag" to true for that diag
+!         every entry in "vname_marbl_diag" (diagnostic shortname list)
+!     3. If there is a match, set "wrt_marbl_diag" to true for that diag
 !     4. If there are no matches, default to writing out  all diagnostics
 !
 !     NOTES:

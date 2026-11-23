@@ -237,7 +237,7 @@ module roms_read_write
   integer(kind=8) :: open_frc_used(max_open_frc) = 0
   integer(kind=8) :: open_frc_clock = 0
 
-#if defined MPI && defined PARALLEL_FILES
+#ifdef MPI
 !      integer, public ::  xi_rho, xi_u, eta_rho, eta_v
 #else
 !      integer, parameter, public :: xi_rho=LLm+2, eta_rho=MMm+2,
@@ -381,7 +381,7 @@ contains
 
     lstr = lenstr(inifile)
 
-# if defined MPI && defined PARALLEL_FILES
+# ifdef MPI
 #ifndef PARALLEL_IO
     call insert_node(inifile, lstr, mynode, nsize)
 #endif
@@ -451,7 +451,7 @@ contains
       if (.not. fits) return
       fname = trim(frcfiles(max_frc+1))
       lstr = lenstr(trim(fname))
-# if defined MPI && defined PARALLEL_FILES
+# ifdef MPI
 #ifndef PARALLEL_IO
       call insert_node(fname, lstr, mynode, nsize)
 #endif
@@ -472,9 +472,7 @@ contains
       max_frc = max_frc + 1
       frcfiles(max_frc) = trim(fname)
 ! Write file info to output stream
-# ifdef MPI_SILENT_MODE
       if (mynode == 0) then
-# endif
         if (max_frc == 1) then
           write(*,'(1x,2A)') 'forcing data file(s): ',&
           &trim(frcfiles(max_frc))
@@ -483,9 +481,7 @@ contains
         endif
 
 ! Add to attributes
-# ifdef MPI_SILENT_MODE
       end if
-# endif
       call store_string_att(force_files,&
       &frcfiles(max_frc)(1:lstr))
     end do      ! filename loop
@@ -2465,7 +2461,7 @@ contains
     endif
 
     if (.not. present(nonode)) then
-#if defined MPI && defined PARALLEL_FILES
+#ifdef MPI
       if (nnodes<10) then
         write(indxstr,'(A,I0.1)') '.',mynode
       elseif (nnodes<100) then
@@ -2522,7 +2518,7 @@ contains
       &info="no .nc in file name")
     endif
 
-#if defined MPI && defined PARALLEL_FILES
+#ifdef MPI
     if (nnodes<10) then
       write(indxstr,'(A,I0.1)') '.',mynode
     elseif (nnodes<100) then
@@ -2607,9 +2603,7 @@ contains
   subroutine put_global_atts (ncid, ierr)  ![
 
     use scalars, only:&
-#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
-  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
-                                             || defined M3NUDGING
+#if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
     &ubind,&
 #endif
 #ifdef SPONGE
@@ -2635,7 +2629,7 @@ contains
     integer(kind=4) :: ncid, ierr, dimid
 
 
-#if defined MPI && defined PARALLEL_FILES
+#ifdef MPI
     integer(kind=4) :: ibuff(4), npart
 
     npart=4                                    ! Put global attribute 'partition' which identifies subdomain
@@ -2703,7 +2697,6 @@ contains
 ! Vertical coordinate type, control parameters "theta_s", "theta_b",
 ! "hc", and stretching curves "Cs_w", "Cs_r" at W- and RHO-points.
 
-#ifdef SOLVE3D
 
     ierr=nf90_put_att(ncid, nf90_global, 'theta_s', theta_s)
     ierr=nf90_put_att(ncid, nf90_global, 'theta_b', theta_b)
@@ -2730,7 +2723,6 @@ contains
     ierr=nf90_put_att (ncid, nf90_global, 'S0_units', 'PSU')
 #  endif
 # endif
-#endif /* SOLVE3D */
 
 #ifdef UV_VIS2
     ierr=nf90_put_att(ncid,nf90_global, 'visc2', visc2)            ! Horizontal viscosity and mixing coefficients.
@@ -2738,22 +2730,11 @@ contains
 
     ierr=nf90_put_att(ncid, nf90_global, 'gamma2', gamma2)         ! Lateral slipperiness parameter
 #endif
-#ifdef SOLVE3D
 # ifdef TS_DIF2
     ierr=nf90_put_att(ncid,nf90_global, 'tnu2', tnu2)
     ierr=nf90_put_att (ncid,nf90_global, 'tnu2_units', 'm^2/s')
 # endif
-# ifdef MY25_MIXING
-#  ifdef Q2_DIF2
-    ierr=nf90_put_att(ncid,nf90_global, 'q2nu2', q2nu2)
-    ierr=nf90_put_att (ncid,nf90_global, 'q2nu2_units', 'm^2/s')
-#  endif
-#  ifdef Q2_DIF4
-    ierr=nf90_put_att(ncid,nf90_global,'q2nu4', q2nu4)
-    ierr=nf90_put_att (ncid,nf90_global,'q2nu4_units', 'm^4/s')
-#  endif
-# endif
-# if !defined LMD_MIXING && !defined BVF_MIXING
+# ifndef LMD_MIXING
 
     ierr=nf90_put_att(ncid, nf90_global, 'Akv_bak', Akv_bak)       ! Background vertical viscosity tracer mixing
     ierr=nf90_put_att (ncid, nf90_global, 'Akv_bak_units', 'm^2/s')
@@ -2761,11 +2742,6 @@ contains
     ierr=nf90_put_att(ncid, nf90_global, 'Akt_bak', Akt_bak)
     ierr=nf90_put_att (ncid, nf90_global, 'Akt_bak_units', 'm^2/s')
 # endif
-# ifdef MY25_MIXING
-    ierr=nf90_put_att(ncid, nf90_global, 'Akq_bak',Akq_bak)
-    ierr=nf90_put_att (ncid, nf90_global, 'Akq_bak_units', 'm^2/s')
-# endif
-#endif
 
 #if  defined T_FRC_BRY || defined M2_FRC_BRY || defined M3_FRC_BRY
     ierr=nf90_put_att(ncid, nf90_global, 'ubind', ubind) ! Binding velocity for external data forcing at open boundari
@@ -2785,10 +2761,8 @@ contains
     ierr=nf90_put_att(ncid,nf90_global, 'rdrg2',rdrg2)
     ierr=nf90_put_att (ncid,nf90_global, 'rdrg2_units',&
     &'nondimensional')
-#ifdef SOLVE3D
     ierr=nf90_put_att(ncid,nf90_global, 'Zob', Zob)
     ierr=nf90_put_att (ncid,nf90_global, 'Zob_units', 'm')
-#endif
 
     ierr=nf90_put_att (ncid, nf90_global, 'SRCS', srcs)  ! List of source-code file names and activated CPP-switches
     ierr=nf90_put_att (ncid, nf90_global, 'CPPS', cpps)

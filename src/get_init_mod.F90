@@ -55,9 +55,7 @@ contains
     use roms_mpi, only: exchange_xxx
     use error_handling_mod, only: error_log
     use calc_pflx_mod, only : get_init_slow, calc_pflx
-#ifdef SOLVE3D
     use implicit_fs_mod, only: fs_rst_get
-#endif
 #ifdef IMEX_IGW
     use imex_igw, only: imex_rst_get
     use sl_adv_mod, only: sl_rst_get
@@ -79,23 +77,15 @@ contains
     real(kind=8)    :: time_scale
     integer(kind=4) :: init_type, tile=0 ! set tile to zero for compute_tile_bounds.h below. Needed to fixed closed bo
     integer(kind=4), parameter :: init_run=1,  rst_run=2&
-#ifdef EXACT_RESTART
     &, apprx_rst=3, exact_rst=4
     real(kind=8) time_bak
     logical :: exact_succes
-#endif
 #define time illegal
 #define tdays illegal
 #define nrrec illegal
 
 ! needed for istr, iend, etc in order to fix closed boundaries to u(istr)=0, etc
 # include "compute_tile_bounds.h"
-
-!--#define VERBOSE
-#ifdef VERBOSE
-    write(*,'(3(2x,A,I3))') 'enter get_init: req_rec =', req_rec,&
-    &'tindx =', tindx
-#endif
 
 
 ! Open conditions netCDF file for reading.  Check that all spatial
@@ -260,7 +250,6 @@ contains
     start_time=start_time*time_scale
 !     start_time=start_time*time_scale + 288
 
-#ifdef EXACT_RESTART
     if (tindx == 2) then
       iic = 1 ! Hack to not re-compute DU/DV_avg1 but use the version loaded here
       forw_start=0
@@ -269,10 +258,6 @@ contains
         ierr=nf90_get_var(ncid, varid, start_time, start=(/record+1/))
         if (ierr == nf90_noerr) then
           start_time=start_time*time_scale
-# ifdef VERBOSE
-          write(*,'(3(1x,A,F16.6))') 'time_bak =', time_bak,&
-          &'start_time =', start_time, 'dt =', dt
-# endif
 
 ! Note that expression "abs(start_time-time_bak-dt) < 0.001*dt" below
 ! is a roundoff-error tolerant version of "start_time == time_bak+dt".
@@ -310,7 +295,6 @@ contains
       if (forw_start /= 1) return
       forw_start=0
     endif
-#endif
     if (ierr /= nf90_noerr) then
       call error_log%check_netcdf_status(&
       &netcdf_status=ierr,&
@@ -352,7 +336,6 @@ contains
       end if
       ntstart=ibuff(1)+1
 
-#ifdef EXACT_RESTART
       if (tindx == 2 .and. record < max_rec) then
         start(2)=record+1
         ierr=nf90_get_var(ncid, varid, ibuff, start, count)
@@ -362,9 +345,6 @@ contains
           &context=sr_name,&
           &info="Cannot read second time_step")
         end if
-# ifdef VERBOSE
-        write(*,*) 'ibuff(1),ntstart =', ibuff(1), ntstart
-# endif
         if (ibuff(1) == ntstart) then
           forw_start=1
         else
@@ -385,9 +365,6 @@ contains
           init_type=apprx_rst
         endif
       endif
-#else
-      init_type=rst_run
-#endif
       if (ierr/=0) then
         call error_log%check_netcdf_status(&
         &netcdf_status=ierr,&
@@ -403,13 +380,7 @@ contains
 
       ierr=0                                                       ! DevinD added to not trigger break later
     endif
-#ifdef EXACT_RESTART
     if (tindx == 1 .and. forw_start == 0) forw_start=ntstart
-#endif
-#ifdef VERBOSE
-    write(*,'(1x,2A,F12.4,1x,A,I4)')   'get_init: reading initial ',&
-    &'fields for time =', start_time*sec2day, 'record =', record
-#endif
     call error_log%abort_check()
 ! Read initial fields:
 !---------------------
@@ -443,7 +414,7 @@ contains
         &'to zero.'
       endif
     endif
-    ! MASK_LAND_DATA may store NetCDF fill on land.  riv_*mask enters
+    ! The file may store NetCDF fill on land.  riv_*mask enters
     ! (umask+riv_umask) below, so fill on land would turn land ubar/u
     ! into ~1e73 and blow up kinetic energy on restart.  Clamp only;
     ! do not multiply by umask/vmask here or river faces (umask=0,
@@ -483,9 +454,6 @@ contains
 ! again, adopting "soft policy" with respect to their presense/absence
 ! in the file: if not found use forward step instead of exact restart.
 
-#ifdef SOLVE3D
-# ifdef EXACT_RESTART
-#  ifdef EXTRAP_BAR_FLUXES
     exact_succes = .true.
     ierr=nf90_inq_varid(ncid, 'DU_avg1', varid)
     if (ierr /= nf90_noerr) exact_succes = .false.
@@ -533,32 +501,6 @@ contains
       iic = 0 ! set back to zero
     endif
 
-#  elif defined PRED_COUPLED_MODE
-    ierr=nf90_inq_varid(ncid, 'rufrc_bak', varid)
-    if (ierr == nf90_noerr) then
-      ierr=nf90_inq_varid(ncid,  'rvfrc_bak', varid)
-      if (ierr == nf90_noerr) then
-
-        pio_gtype = '2Dur'
-        call ncread(ncid,'rufrc_bak',rufrc_bak(x_:x1,y0:y1,tindx),start=start)!,fname=inifile)
-        pio_gtype = '2Dvr'
-        call ncread(ncid,'rvfrc_bak',rvfrc_bak(x0:x1,y_:y1,tindx),start=start)!,fname=inifile)
-        if (ierr/=nf90_noerr) then
-          call error_log%check_netcdf_status(&
-          &netcdf_status=ierr,&
-          &context=sr_name,&
-          &info="Cause of termination: netCDF input.")
-        end if
-
-      else
-        forw_start=ntstart    !--> cancel exact restart
-      endif
-    else
-      forw_start=ntstart    !--> cancel exact restart
-    endif
-    call error_log%abort_check()
-#  endif
-# endif /*EXACT_RESTART*/
 
 ! 3D momentum components in XI- and ETA-directions
 
@@ -595,7 +537,7 @@ contains
         call exchange_xxx(t(:,:,:,tindx,itrc))
       else
 
-        ! temperature, salt(s) and the BGC (MARBL/BEC2) tracers always require
+        ! temperature, salt(s) and the BGC (MARBL) tracers always require
         ! an initial condition; passive and CDR tracers start at zero
         if (tracer_required(itrc)) then
           ! One record: error_info is a scalar internal file, so a '/' in a
@@ -658,11 +600,10 @@ contains
     call marbldrv_read_ss_vars_from_rst(ncid,record)
 #endif /* MARBL */
 
-#endif /* SOLVE3D */
 
     if (calc_pflx) call get_init_slow(ncid,record,tindx)
     if (ub_tune)   call get_init_ub(ncid,record)
-#if defined IMEX_IGW && defined EXACT_RESTART
+#ifdef IMEX_IGW
     call imex_rst_get(ncid, record, tindx)   ! IMEX_IGW: the state carried across steps (exact restart)
     call sl_rst_get(ncid, record, tindx)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
 #endif
@@ -671,14 +612,11 @@ contains
 ! on the the type of initial/restart procedure performed above.
 
     ierr=nf90_close(ncid)
-#ifdef MPI_SILENT_MODE
     if (mynode == 0) then
-#endif
       if (tindx == 1) then
         if (init_type == init_run) then
           write(*,'(6x,2A,F12.4,1x,A,I4)') 'get_init :: Read initial ',&
           &'conditions for day =', start_time*sec2day, 'record =',record
-#ifdef EXACT_RESTART
         elseif (init_type == exact_rst) then
           write(*,'(6x,A,F12.4,1x,A,I4,A)')&
           &'get_init :: Exact restart from day =',  start_time*sec2day,&
@@ -687,21 +625,13 @@ contains
           write(*,'(6x,A,F12.4,1x,A,I4,A)')&
           &'get_init :: Approximate, single-step restart from day =',&
           &start_time*sec2day,   'rec =', record, '.'
-#else
-        elseif (init_type == rst_run) then
-          write(*,'(6x,A,F12.4,1x,A,I4,A)')&
-          &'get_init: Restarted from day =', start_time*sec2day,&
-          &'rec =', record, '.'
-#endif
         else
           call error_log%raise_from_rank(&
           &context=sr_name,&
           &info="Unknown Error.")
         endif
       endif  !<-- tindex==1
-#ifdef MPI_SILENT_MODE
     endif
-#endif
 
 #ifdef PARALLEL_IO
     call pio_direct_close
@@ -745,18 +675,8 @@ contains
     endif
 #endif
 
-#if defined ANA_BRY
-    call ana_init_generic(1,nx,1,ny)
-#endif
 
 
-#ifdef VERBOSE
-    write(*,'(1x,3(1x,A,I6))') 'return from get_init, ntstart =',&
-    &ntstart&
-# ifdef EXACT_RESTART
-    &,   'forw_start =', forw_start
-# endif
-#endif
     return
   end subroutine get_init
 

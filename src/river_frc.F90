@@ -307,12 +307,10 @@ contains
         call PIO_closefile(pio_FileDesc)
 #endif
         ierr = nf90_close(ncid)
-#ifdef EXCHANGE
         ! calc_river_flux also looks at the halo cells, because a river cell
         ! on a neighbouring rank can discharge into this rank's edge cells.
         ! Fill them from the neighbours (without PARALLEL_IO they are not read).
         call exchange_xxx(ridx_real, rfrc)
-#endif
 
         ! Check if any river indices are greater than the chosen
         ! value for nriv, in which case we could get a segfault
@@ -368,9 +366,7 @@ contains
           call PIO_closefile(pio_FileDesc)
 #endif
           ierr = nf90_close(ncid)
-#ifdef EXCHANGE
           call exchange_xxx(rflx)      ! halo cells too, as for river_index above
-#endif
           where (rflx > 0)
             ridx = floor(rflx - 1e-5)
             rfrc = rflx - ridx
@@ -448,13 +444,11 @@ contains
       enddo
     enddo
     call error_log%abort_check()
-#ifdef EXCHANGE
     ! The scan above does not reach a river cell at -1 (west or south halo),
     ! so the halo face 0 it discharges into is still empty, but step2d forms
     ! the free surface of the halo cell 0 from DUon/DVom on that face. Take
     ! the halo faces from the rank that owns them.
     call exchange_xxx(riv_uflx, riv_vflx)
-#endif
 
     ! List the river faces (same test as the loops that use them)
     nriv_u = count(abs(riv_uflx) > 1e-3)

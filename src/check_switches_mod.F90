@@ -151,17 +151,6 @@ contains
     end if
     cpps(is:ie)='<set_global_definitions.h>'
     cpps(ie+1:ie+1)=' '
-#ifdef PRED_COUPLED_MODE
-    is=ie+2 ; ie=is+16
-    if (ie >= max_opt_size) then
-      call error_log%raise_global( &
-      &        context=sr_name, &
-      &        info=error_info)
-    end if
-    cpps(is:ie)='PRED_COUPLED_MODE'
-    cpps(ie+1:ie+1)=' '
-#endif
-#ifdef CORR_COUPLED_MODE
     is=ie+2 ; ie=is+16
     if (ie >= max_opt_size) then
       call error_log%raise_global( &
@@ -170,8 +159,6 @@ contains
     end if
     cpps(is:ie)='CORR_COUPLED_MODE'
     cpps(ie+1:ie+1)=' '
-#endif
-#ifdef EXTRAP_BAR_FLUXES
     is=ie+2 ; ie=is+16
     if (ie >= max_opt_size) then
       call error_log%raise_global( &
@@ -180,7 +167,6 @@ contains
     end if
     cpps(is:ie)='EXTRAP_BAR_FLUXES'
     cpps(ie+1:ie+1)=' '
-#endif
 #ifdef KEEP_CORIOLIS
     is=ie+2 ; ie=is+12
     if (ie >= max_opt_size) then
@@ -191,7 +177,6 @@ contains
     cpps(is:ie)='KEEP_CORIOLIS'
     cpps(ie+1:ie+1)=' '
 #endif
-#ifdef IMPLCT_NO_SLIP_BTTM_BC
     is=ie+2 ; ie=is+21
     if (ie >= max_opt_size) then
       call error_log%raise_global( &
@@ -200,8 +185,6 @@ contains
     end if
     cpps(is:ie)='IMPLCT_NO_SLIP_BTTM_BC'
     cpps(ie+1:ie+1)=' '
-#endif
-#ifdef VAR_RHO_2D
     is=ie+2 ; ie=is+9
     if (ie >= max_opt_size) then
       call error_log%raise_global( &
@@ -210,19 +193,13 @@ contains
     end if
     cpps(is:ie)='VAR_RHO_2D'
     cpps(ie+1:ie+1)=' '
-#endif
 
 ! <<<<<<<<-- end of copy-pasted section.
 
 ! Checking correctness of coupling flags:
 
     ncoupl=0
-#ifdef PRED_COUPLED_MODE
     ncoupl=ncoupl+1
-#endif
-#ifdef CORR_COUPLED_MODE
-    ncoupl=ncoupl+1
-#endif
     if (ncoupl==0) then
       write(error_info, *) 'neither PRED_COUPLED_MODE '// &
       &                       'nor CORR_COUPLED_MODE are defined in '// &
@@ -307,19 +284,7 @@ contains
 #ifdef ANA_VMIX
     nAk=nAk+1
 #endif
-#ifdef BVF_MIXING
-    nAk=nAk+1
-#endif
 #ifdef LMD_MIXING
-    nAk=nAk+1
-#endif
-#ifdef MY2_MIXING
-    nAk=nAk+1
-#endif
-#ifdef MY25_MIXING
-    nAk=nAk+1
-#endif
-#ifdef PP_MIXING
     nAk=nAk+1
 #endif
     if (nAk>1) then
@@ -348,16 +313,6 @@ contains
 ! Signal to quit if explicit time-step splitting on shallow water
 ! set-up.
 
-#ifndef SOLVE3D
-    if (ndtfast>1) then
-      write(error_info, *)  'NDTFAST =', &
-      &         ndtfast, 'is greater than unity for a shallow water', &
-      &        'configuration.','Change it to unity in startup file.'
-      call error_log%raise_global( &
-      &        context=sr_name, &
-      &        info=error_info)
-    endif
-#endif
 
   end subroutine check_switches2
 end module check_switches_mod

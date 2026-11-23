@@ -21,9 +21,7 @@ real(kind=8) :: L           = 2000.0_8   ! m
  ! necessary for FIRST_TIME_STEP flag to work, as per
  ! set_global_definitions.h
  ! this had no value for analytical examples previously.
-#ifdef EXACT_RESTART
 forw_start=ntstart
-#endif
 
 
  ! Calculate temperature from buoyancy:

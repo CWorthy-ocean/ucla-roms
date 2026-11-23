@@ -84,7 +84,7 @@ module tracers
   ! Surface tracer flux lives in 'stflx' in surf_flux.F module.
   type (ncforce), allocatable    :: nc_t( : )                                   ! array of ncvs for each tracer
   integer(kind=4),public :: iTandS                                       ! combined index of temperature and salinit
-  integer(kind=4),public :: ibgc0 = 0  ! tracers before the BGC ones: BGC (MARBL/BEC2) tracers are ibgc0+1..nt
+  integer(kind=4),public :: ibgc0 = 0  ! tracers before the BGC ones: BGC (MARBL) tracers are ibgc0+1..nt
   ! Tracers 1..nt_step are transported every step (pre_step3d, step3d_t,
   ! t3dmix, their boundary conditions and exchanges): nt, or iTandS when
   ! the others (passive, CDR and BGC tracers) are subcycled (bgc_physics_subcycle).
@@ -105,9 +105,6 @@ module tracers
   logical, public :: wrt_avg_temp = .false., wrt_avg_salt = .false.  ! .false. if absent from namelist
   namelist /TS_OUTPUT_SETTINGS/ wrt_temp, wrt_salt, wrt_avg_temp, wrt_avg_salt,&
   &wrt_temp_dia, wrt_salt_dia
-#if defined(BIOLOGY_BEC2) && !defined(MARBL)
-# include "BEC_tracers_indx.h"
-#endif
 
   public set_surf_tracer_flx
   public init_tracers
@@ -280,11 +277,9 @@ contains
           sst = t(i,j,nz,nrhs,itemp)
           schmidt_nr = a + sst * (b + sst * (c + sst * (d + e * sst)))
           k_gas(i,j) = xkw_coef * (uwnd(i,j)**2 + vwnd(i,j)**2) * sqrt(660.0 / schmidt_nr)
-#ifdef SEA_ICE_NOFLUX
           if( sst .le. -1.8 ) then
               k_gas(i,j)=0.                    ! If SST colder than -1.8 C, assume zero piston velocity due to sea ice
           endif
-#endif
         enddo
       enddo
 
@@ -529,12 +524,12 @@ contains
     character(len=8) :: passive_tracer_num
     character(len=12) :: sr_name = "init_tracers"
 
-#if !defined(MARBL) && !defined(BIOLOGY_BEC2)
-    ! Only MARBL or BEC2 name the nt_bgc tracer slots; without either they
+#ifndef MARBL
+    ! Only MARBL names the nt_bgc tracer slots; without it they
     ! would stay uninitialized and forcing/output lookups would use garbage names.
     if (nt_bgc /= 0) then
       write(error_info,*) "nt_bgc = ", nt_bgc, " in PARAM_SETTINGS, but",&
-      &" neither MARBL nor BIOLOGY_BEC2 is defined in cppdefs.opt;",&
+      &" MARBL is not defined in cppdefs.opt;",&
       &" set nt_bgc = 0."
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
@@ -629,23 +624,6 @@ contains
     enddo
 
     ! Additional passive tracers:
-#ifdef BIOLOGY_BEC2
-    ! BEC_tracers.h names a fixed set of tracers; check nt_bgc before writing them.
-# ifdef Ncycle_SY
-    if (nt_bgc /= 29) then
-# else
-    if (nt_bgc /= 26) then
-# endif
-      write(error_info,*) "nt_bgc = ", nt_bgc, " in PARAM_SETTINGS, but",&
-      &" BIOLOGY_BEC2 defines 26 tracers (29 with Ncycle_SY);",&
-      &" set nt_bgc accordingly."
-      call error_log%raise_global(&
-      &context=module_name//"/"//sr_name,&
-      &info=error_info)
-      call error_log%abort_check()
-    end if
-#include "BEC_tracers.h"
-#endif
 
 #ifdef MARBL
     call marbldrv_configure_tracers(&
@@ -736,7 +714,6 @@ contains
     integer(kind=4), intent(in) :: tidx
     integer(kind=4), intent(in), optional :: ntr
     integer(kind=4) :: itrc, nrem, n
-# ifdef EXCHANGE
     n = nt
     if (present(ntr)) n = ntr
     do itrc=1,n-3,4
@@ -752,12 +729,11 @@ contains
     elseif (nrem == 1) then
       call exchange_xxx(t(:,:,:,tidx,n))
     endif
-# endif
   end subroutine exchange_tracers  !]
 ! ----------------------------------------------------------------------
   pure logical function tracer_required(itrc)  ![
     ! Must tracer itrc be in the initial and boundary files? Temp, salt and
-    ! the BGC (MARBL/BEC2) tracers must; passive and CDR tracers may be
+    ! the BGC (MARBL) tracers must; passive and CDR tracers may be
     ! absent and then start, or stay, at zero.
     implicit none
     integer(kind=4), intent(in) :: itrc

@@ -3,7 +3,6 @@ module set_depth_mod
   implicit none
   private
 
-#ifdef SOLVE3D
   public :: set_HUV
   public :: set_HUV1
   public :: set_depth
@@ -41,7 +40,7 @@ contains
     use roms_mpi, only: exchange_xxx
     use dimensions, only: inode, jnode, npx,npy, i0, i1, j0, j1
     use ocean_vars, only:&
-# if defined NHMG || defined NONTRAD_COR
+# ifdef NHMG
     &dzdxi, dzdeta,&
 #endif
     &ubar, zeta, vbar, z_w, z_r, hz, z_w0, z_r0, hz0
@@ -85,10 +84,6 @@ contains
         enddo
       enddo
 
-# ifdef OBC_CHECK
-      print *, 'set_depth_tile:'
-      print *, 'DU_avg1(istr,10)=',DU_avg1(istr,10)
-# endif
 
     endif  ! first time
 
@@ -149,7 +144,6 @@ contains
 !            call wrt_instant(z_r(i0:i1,j0:j1,:), 'zr')
 !           stop
 !!! SKIP = USE_PIO ??
-# ifdef EXCHANGE
 !      if (iic == 0) then
 !        call exchange_xxx(hinv, skip=use_pio)
 !              call exchange_xxx(z_w0,z_r0,Hz0, skip=use_pio)
@@ -168,9 +162,8 @@ contains
 #  else
     call exchange_xxx(z_w,z_r,Hz)
 #  endif
-# endif
 
-#if defined NHMG || defined NONTRAD_COR
+#ifdef NHMG
 !     Compute slopes
     do k = 1, nz
       do j = 0,Mm+1
@@ -311,9 +304,7 @@ contains
 !      call wrt_instant(FlxU, 'FlxU')
 !      call wrt_instant(FlxV, 'FlxV')
 
-# ifdef EXCHANGE
     call exchange_xxx(FlxU,FlxV)
-# endif
 !      call wrt_instant(Hz, 'Hz')
 
 !      call wrt_instant(FlxU, 'FlxU')
@@ -350,14 +341,14 @@ contains
     integer(kind=4) istr,iend,jstr,jend, i,j,k
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: DC,FC
 
-# if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
+# ifdef KEEP_CORIOLIS
     real(kind=8) cff
     integer(kind=4) kbak
 # endif
 
 # include "compute_auxiliary_bounds.h"
 
-# if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
+# ifdef KEEP_CORIOLIS
     kbak=knew-1
     if (kbak < 1) kbak=4
 # endif
@@ -378,16 +369,12 @@ contains
       enddo
 
 
-# ifdef CORR_COUPLED_MODE
-#  ifdef EXTRAP_BAR_FLUXES
       if (FIRST_TIME_STEP) then
-#  endif
         do i=istr,iendR
           FC(i,0)=(FC(i,0)-DU_avg1(i,j))/DC(i,0)
         enddo
         !! JM: Very first time step only
 
-#  ifdef EXTRAP_BAR_FLUXES
 ! PAC23 verified setting with theoretical alpha_max=1.0877_8._8
 ! This should match the simlar-labelled setting in step2d_FB.F.
 ! All the other settings below  are to be considered as
@@ -418,13 +405,7 @@ contains
 #   endif
         enddo
       endif
-#  endif
       !! now FC(i,0) => mismatch between  int(U*dz)/int(dz) and ubar
-# else
-      do i=istr,iendR
-        FC(i,0)=(FC(i,0)-DU_avg2(i,j))/DC(i,0) ! FC(i,0) is mismatch in [m/s]
-      enddo
-# endif
 
       do k=1,nz
         do i=istr,iendR
@@ -449,15 +430,11 @@ contains
             FC(i,0)=FC(i,0)+DC(i,k)*v(i,j,k,nnew)
           enddo
         enddo
-# ifdef CORR_COUPLED_MODE
-#  ifdef EXTRAP_BAR_FLUXES
         if (FIRST_TIME_STEP) then
-#  endif
           do i=istrR,iendR
             FC(i,0)=(FC(i,0)-DV_avg1(i,j))/DC(i,0)
           enddo
 
-#  ifdef EXTRAP_BAR_FLUXES
         else
           do i=istrR,iendR
 #   ifdef KEEP_CORIOLIS
@@ -475,12 +452,6 @@ contains
 #   endif
           enddo
         endif
-#  endif
-# else
-        do i=istrR,iendR
-          FC(i,0)=(FC(i,0)-DV_avg2(i,j))/DC(i,0)
-        enddo
-# endif
         do k=1,nz
           do i=istrR,iendR
             v(i,j,k,nnew)=(v(i,j,k,nnew)-FC(i,0))&
@@ -493,14 +464,12 @@ contains
       endif
     enddo  ! <-- j-loop
 
-# ifdef EXCHANGE
-#  if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
+#  ifdef KEEP_CORIOLIS
     call exchange_xxx(FlxU,u(:,:,:,nnew),ubar)
     call exchange_xxx(FlxV,v(:,:,:,nnew),vbar)
 #  else
     call exchange_xxx(FlxU,FlxV,u(:,:,:,nnew),v(:,:,:,nnew))
 #  endif
-# endif
 !      call wrt_instant(FlxU, 'FlxU')
 !      call wrt_instant(FlxV, 'FlxV')
 !      call wrt_instant(u(:,:,:,nnew), 'u')
@@ -597,10 +566,4 @@ contains
     cpps(is:ie)='(N-M+B-1)/B='//tmpstr(1:lstr)
 # endif
   end subroutine check_set_HUV1_switches
-#else
-contains
-
-  subroutine set_depth_empty
-  end subroutine set_depth_empty
-#endif /* SOLVE3D */
 end module set_depth_mod

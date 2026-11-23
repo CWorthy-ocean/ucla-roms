@@ -37,7 +37,7 @@ subroutine set_forces
   use tracers, only: set_surf_tracer_flx, iTandS
   use river_frc, only:  set_river_frc, river_source
   use pipe_frc, only: set_pipe_frc, pipe_source
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef MARBL
   use bgc_io, only: set_bgc_surf_frc
 #endif
   use dimensions, only: jnode, inode
@@ -68,19 +68,6 @@ subroutine set_forces
 #include "compute_tile_bounds.h"
 
   ierr=0
-! External data to supply at open boundaries. Note that there are
-! two mutually exclusive mechanisms for each variable: either _BRY
-
-#if  !defined OBC_NONE &&                         \
-     (defined T_FRC_BRY  || defined M2_FRC_BRY || \
-      defined M3_FRC_BRY || defined Z_FRC_BRY )
-# ifdef ANA_BRY
-!***              no code here
-# else
-!     call set_bry_all_tile(istr,iend,jstr,jend, ierr)
-!     call set_bry_all
-# endif
-#endif
 
   !--> Surface fluxes
 
@@ -98,7 +85,6 @@ subroutine set_forces
 ! and, finally, add it back to total -- hence it must be called after.
 
 
-#ifdef SOLVE3D
 
 #if defined QCORRECTION || defined SFLX_CORR || defined CFLX_CORR
   call set_surf_field_corr
@@ -137,7 +123,7 @@ subroutine set_forces
   if(nt>iTandS) call set_surf_tracer_flx
   ! BGC surface flux:
 
-# if defined(BIOLOGY_BEC2) || defined(MARBL)
+# ifdef MARBL
   call set_bgc_surf_frc(istr,iend,jstr,jend)
 # endif
 
@@ -149,23 +135,9 @@ subroutine set_forces
 #ifdef CDR_FORCING
   if (cdr_source) call set_cdr_frc
 #endif
-#endif  /* SOLVE3D */
 
 !--> Bottom boundary fluxes [Styles and Glenn (1996) bottom
 !    boundary layer formulation.  Not implemented in this code]
 
-#if defined ANA_BMFLUX
-  call ana_bmflux ILLEGAL
-#elif defined SG_BBL96
-# ifdef ANA_WWAVE
-  call ana_wwave ILLEGAL
-# else
-  call set_wwave_tile(istr,iend,jstr,jend)
-# endif
-  call sg_bbl96 ILLEGAL
-#endif
 
-#ifdef ANA_PSOURCE
-  if (ZEROTH_TILE) call ana_psource
-#endif
 end subroutine set_forces

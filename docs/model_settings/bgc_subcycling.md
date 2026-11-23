@@ -13,7 +13,7 @@ With `bgc_physics_subcycle = .false.` (the default, also when the key or, withou
 
 ## 2. Settings
 
-Both keys are in the namelist group `BGC_SETTINGS`. With MARBL or BEC2 that group is required; without them it is read only when there are tracers beyond temperature and salinity (passive or CDR_LITE tracers), and may be absent (subcycling off).
+Both keys are in the namelist group `BGC_SETTINGS`. With MARBL that group is required; without it it is read only when there are tracers beyond temperature and salinity (passive or CDR_LITE tracers), and may be absent (subcycling off).
 
 | Setting | Default | Description |
 |--------|---------|-------------|
@@ -64,7 +64,7 @@ The swept fluxes are not positivity-preserving. The stock model makes negative v
 - **Start and end of a run.** A run that starts inside a window has a shorter first window (consistent and conservative). If the run ends inside a window, the BGC transport of its last steps is not applied; both are noted in the startup log. Choose `ntimes` as a multiple of `k`.
 - **Free surface.** The window uses the transports of the step whatever the barotropic mode (`fs_mode = 'split'` or `'implicit'`).
 
-Not supported with `bgc_physics_subcycle` (ROMS stops at startup): `ADV_ISONEUTRAL`, `TS_DIF4`, `BIOLOGY_BEC2`, `CONST_TRACERS`, per-step tracer diagnostics (`DIAGNOSTICS` with `diag_trc`) of BGC tracers, `UPSCALING` output, and `SPONGE_TUNE` with `ub_tune`.
+Not supported with `bgc_physics_subcycle` (ROMS stops at startup): `ADV_ISONEUTRAL`, `CONST_TRACERS`, per-step tracer diagnostics (`DIAGNOSTICS` with `diag_trc`) of BGC tracers, `UPSCALING` output, and `SPONGE_TUNE` with `ub_tune`.
 
 ## 5. Cost
 

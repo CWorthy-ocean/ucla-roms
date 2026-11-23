@@ -47,7 +47,6 @@ module bgc_subcycle_mod
   integer(kind=4), public :: bgc_subcycle_diag = 0      ! testing/expert key
   integer(kind=4), public :: bgcsub_k = 1
 
-#ifdef SOLVE3D
   public :: bgcsub_init, bgcsub_accumulate, bgcsub_step
 
   character(len=12) :: module_name = "bgc_subcycle"
@@ -147,9 +146,9 @@ contains
         call error_log%raise_global(context=module_name//"/"//sr_name, info=info)
       end if
     end if
-#if defined ADV_ISONEUTRAL || defined TS_DIF4 || defined BIOLOGY_BEC2 || defined CONST_TRACERS
+#if defined ADV_ISONEUTRAL || defined CONST_TRACERS
     call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_physics_subcycle does not support ADV_ISONEUTRAL, TS_DIF4, BIOLOGY_BEC2 or CONST_TRACERS")
+    &info="bgc_physics_subcycle does not support ADV_ISONEUTRAL or CONST_TRACERS")
 #endif
 #ifdef DIAGNOSTICS
     if (diag_trc) then
@@ -1476,10 +1475,6 @@ contains
 #  endif
           t(istr-1,j,k,nnew,itrc) = t(istr-1,j,k,nnew,itrc)*rmask(istr-1,j)
         end do
-# elif defined OBC_WEST && defined OBC_TSPECIFIED && defined T_FRC_BRY
-        do j = jstr, jend
-          t(istr-1,j,k,nnew,itrc) = t_west(j,k,itrc)*rmask(istr-1,j)
-        end do
 # else
         do j = jstr, jend
           t(istr-1,j,k,nnew,itrc) = t(istr,j,k,nnew,itrc)*rmask(istr-1,j)
@@ -1513,10 +1508,6 @@ contains
           t(iend+1,j,k,nnew,itrc) = (1._8-cext)*t(iend+1,j,k,nnew,itrc) + cext*t_east(j,k,itrc)
 #  endif
           t(iend+1,j,k,nnew,itrc) = t(iend+1,j,k,nnew,itrc)*rmask(iend+1,j)
-        end do
-# elif defined OBC_EAST && defined OBC_TSPECIFIED && defined T_FRC_BRY
-        do j = jstr, jend
-          t(iend+1,j,k,nnew,itrc) = t_east(j,k,itrc)*rmask(iend+1,j)
         end do
 # else
         do j = jstr, jend
@@ -1554,10 +1545,6 @@ contains
 #  endif
           t(i,jstr-1,k,nnew,itrc) = t(i,jstr-1,k,nnew,itrc)*rmask(i,jstr-1)
         end do
-# elif defined OBC_SOUTH && defined OBC_TSPECIFIED && defined T_FRC_BRY
-        do i = istr, iend
-          t(i,jstr-1,k,nnew,itrc) = t_south(i,k,itrc)*rmask(i,jstr-1)
-        end do
 # else
         do i = istr, iend
           t(i,jstr-1,k,nnew,itrc) = t(i,jstr,k,nnew,itrc)*rmask(i,jstr-1)
@@ -1591,10 +1578,6 @@ contains
           t(i,jend+1,k,nnew,itrc) = (1._8-cext)*t(i,jend+1,k,nnew,itrc) + cext*t_north(i,k,itrc)
 #  endif
           t(i,jend+1,k,nnew,itrc) = t(i,jend+1,k,nnew,itrc)*rmask(i,jend+1)
-        end do
-# elif defined OBC_NORTH && defined OBC_TSPECIFIED && defined T_FRC_BRY
-        do i = istr, iend
-          t(i,jend+1,k,nnew,itrc) = t_north(i,k,itrc)*rmask(i,jend+1)
         end do
 # else
         do i = istr, iend
@@ -1630,5 +1613,4 @@ contains
       end do
     end subroutine corner
   end subroutine bgcsub_t3dbc
-#endif /* SOLVE3D */
 end module bgc_subcycle_mod

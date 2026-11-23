@@ -7,25 +7,21 @@ This page describes every switch in `src/cppdefs.opt`, one section per section o
 
 ### `MODEL SETUP OPTIONS`
 
-These switches control fundamental aspects of the model setup, including the equation of state, dimensionality, and core physical processes.
+These switches control fundamental aspects of the model setup, including the equation of state and core physical processes. The model is always three-dimensional, and tidal forcing is set at run time in the `TIDAL_FRC_SETTINGS` namelist group: the former keys `SOLVE3D` and `TIDES` are no longer needed (defining them does nothing).
 
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
 | `NONLIN_EOS` | Use Jackett and McDougall (1995) nonlinear equation of state | enabled | Without it, set the linear equation of state in `LIN_RHO_EOS_SETTINGS` |
 | `SALINITY` | Use salinity as a thermodynamic variable | enabled | |
-| `SOLVE3D` | Solve the governing equations in three dimensions | enabled | We have never tested what happens if this is undefined |
 | `SPLIT_EOS` | Use an equation of state that ensures that monotonically increasing density is equivalent to stable stratification | enabled | |
-| `TIDES` | Apply tidal forcing | enabled | |
 | `UV_ADV` | Use advection in horizontal momentum equations | enabled | |
 | `UV_COR` | Use Coriolis term in horizontal momentum equations | enabled | |
 | `ADV_ISONEUTRAL` | Rotate the advection and diffusion operators so they are oriented in the isoneutral direction | disabled | |
-| `ALLOW_SINGLE_BLOCK_MODE` | Switch to allow mixed [tiled + single-block] execution in OpenMP | disabled | Useful for debugging purposes only. Normally should be kept undefined. |
 | `CONST_TRACERS` | Keep tracer values constant in time and space | disabled | At each timestep the tracer tendencies will be calculated, but in the end it will just keep the value it had at the previous timestep |
 | `DIAGNOSTICS` | Enable the calculation and writing of "diagnostics" (term-by-term momentum and tracer budgets) | disabled | Options are set in the `DIAGNOSTICS_SETTINGS` namelist group |
 | `DIAGNOSTICS_NHMG` | Enable the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation | disabled | |
 | `NHMG` | Use non-hydrostatic momentum equations | disabled | Solves prognostically for the vertical velocity. Approximately doubles the cost of the model. WARNING: Presently untested and unmaintained by [C]Worthy. May break important features like exact restarts, and may require extra inputs to work successfully (unknown). |
 | `NHMGDIAG` | Write momentum equation diagnostics for non-hydrostatic mode | disabled | |
-| `PRINT_TILE_RANGES` | Make each MPI rank print the size of its local subdomain | disabled | |
 | `CDR_FORCING` | Enable special forcing for marine CO2 removal | disabled | Settings are in the `CDR_FRC_SETTINGS` namelist group |
 | `UPSCALING` | Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications | disabled | Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any `CDR_LITE` tracers. Requires `MARBL` and `MARBL_DIAGS` to be enabled. Settings are in the `UPSCALE_SETTINGS` namelist group |
 
@@ -42,7 +38,6 @@ These switches control the configuration of the model grid, including geometry, 
 | `MPI_MASKING` | Choose the MPI tiling at runtime from the land mask, skipping tiles that are entirely land | disabled | Requires `PARALLEL_IO` (a joined grid file). `NP_XI` and `NP_ETA` from the namelist are overwritten. Launch with at least as many ranks as the selected tiling needs; extra ranks exit at startup. No `partit` step is needed. |
 | `ANA_GRID` | Analytically prescribe the grid | disabled | Hardcoded in `ana_grid.h` |
 | `EW_PERIODIC` | Make the domain periodic in the east-west direction | disabled | This has not been tested or used, so it is unclear whether it would induce conflicts with more recent code |
-| `NON_TRADITIONAL` | Use horizontal components of Coriolis force | disabled | Presently only affects density calculation (possibly incomplete implementation?) |
 | `NS_PERIODIC` | Make the domain periodic in the north-south direction | disabled | This has not been tested or used, so it is unclear whether it would induce conflicts with more recent code |
 
 ### `ATMOSPHERIC FORCING`
@@ -56,11 +51,9 @@ These switches control the application of atmospheric forcing to the model surfa
 | `ANA_SRFLUX` | Analytically prescribe surface shortwave radiative flux (with flux forcing) | disabled | Hardcoded in `analytical.F90` |
 | `ANA_SSFLUX` | Analytically prescribe surface salinity flux (with flux forcing) | disabled | Hardcoded in `analytical.F90` |
 | `ANA_STFLUX` | Analytically prescribe surface heat flux (with flux forcing) | disabled | Hardcoded in `analytical.F90` |
-| `DIURNAL_SRFLUX` | Modulate daily-averaged shortwave radiation to simulate a diurnal cycle | disabled | This seems to be an artifact from a time before hourly swrad was available. Likely obsolete for this reason. |
 | `QCORRECTION` | Apply restoring to sea surface temperature | disabled | The rate is `dSSTdt` in the `SST_CORRECTION` namelist group |
 | `SFLX_CORR` | Apply restoring to sea surface salinity | disabled | The rate is `dSSSdt` in the `SSS_CORRECTION` namelist group |
 | `CFLX_CORR` | Apply restoring to sea surface DIC and ALK | disabled | Requires `MARBL`. The rate is `dCdt` in the `DIC_ALK_CORRECTION` namelist group; the targets are `sDIC` and `sALK` in the forcing files |
-| `TAU_CORRECTION` | Apply a correction to the wind stress to bring it closer to observations | disabled | Only used in conjunction with the `BULK_FRC` module. Requires additional fields in the input file. |
 
 ### `NUMERICAL ALGORITHMS`
 
@@ -71,21 +64,20 @@ These switches control the numerical schemes used by the model for tracer advect
 | `AKIMA` | Use the fourth-order Akima scheme for horizontal tracer advection in the predictor step | disabled | Replaces the C4 interpolation of the predictor step; the corrector step stays third-order upstream |
 | `UPSTREAM_TS_LAND_CURV` | Drop the curvature (third-order) correction of upstream horizontal tracer advection at faces whose stencil touches land, falling back to second-order centered there | disabled | Masked differences are zero, which otherwise inflates the curvature at the first wet point and produces large overshoots. Affects the corrector step, and only with `MASKING` |
 | `PARABOLIC_SPLINES` | Use parabolic splines for vertical tracer advection | disabled | Restores the spline reconstruction that was the default before the thickness-aware U3 scheme |
-| `AKIMA_V` | Unused | disabled | Vertical tracer fluxes come from the `advection` module, which this key does not affect |
-| `IMEX_IGW` | Treat the internal-wave terms (baroclinic pressure gradient and the buoyancy response to the transport divergence) implicitly in both baroclinic stages, with one elliptic solve per stage | disabled | Experimental. The time step is then limited by horizontal advection instead of internal waves. Settings are in the `IMEX_IGW_SETTINGS` namelist group, which every namelist needs: `imex_igw = .true.` with this key, `.false.` without it; see [Implicit internal waves (IMEX)](implicit_internal_waves.md). Requires `SOLVE3D`; not compatible with `NHMG` |
+| `IMEX_IGW` | Treat the internal-wave terms (baroclinic pressure gradient and the buoyancy response to the transport divergence) implicitly in both baroclinic stages, with one elliptic solve per stage | disabled | Experimental. The time step is then limited by horizontal advection instead of internal waves. Settings are in the `IMEX_IGW_SETTINGS` namelist group, which every namelist needs: `imex_igw = .true.` with this key, `.false.` without it; see [Implicit internal waves (IMEX)](implicit_internal_waves.md). Not compatible with `NHMG` |
 
 ### `BOUNDARY CONDITIONS`
 
 These switches control the configuration of the open boundaries, including which sides are open and which schemes are used to apply forcing and allow waves to exit.
 
-Tracer advection through an open-boundary face is upwind on inflow: the corrector step uses the ghost-cell value, which the tracer boundary condition relaxes toward the boundary data while water flows in (`OBC_TORLANSKI` with `T_FRC_BRY`) or sets to the boundary data (`OBC_TSPECIFIED`). Outflow faces use the interior advection scheme. This needs no key and applies to every tracer on every open side.
+Tracer advection through an open-boundary face is upwind on inflow: the corrector step uses the ghost-cell value, which the tracer boundary condition relaxes toward the boundary data while water flows in (`OBC_TORLANSKI` with `T_FRC_BRY`). Outflow faces use the interior advection scheme. This needs no key and applies to every tracer on every open side.
 
 The Orlanski radiation updates (`OBC_M3ORLANSKI`, `OBC_TORLANSKI`, and the tangential barotropic velocity) form the new boundary value as a weighted average of the old boundary value, its neighbour along the edge, the first interior value and the boundary data, with weights from Courant numbers of the flow across the edge, along it, and of the inflow nudging. Each of these Courant numbers is capped at 1, so the weights stay between 0 and 1 and the update cannot overshoot when a long time step or a fast flow along the edge would otherwise take it above 1.
 
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
-| `M2_FRC_BRY` | Apply barotropic (2D) momentum forcing at the open boundaries | enabled | Can be combined with other keys (`M2NUDGING`, `OBC_M2SPECIFIED`) to have different effects. Requires inputs for `ubar` and `vbar`. |
-| `M3_FRC_BRY` | Apply baroclinic (3D) momentum forcing at the open boundaries | enabled | Can be combined with other keys (`SPONGE_TUNE`, `OBC_M3SPECIFIED`) to have different effects. Requires inputs for `u` and `v` (and `w`, if non-hydrostatic). |
+| `M2_FRC_BRY` | Apply barotropic (2D) momentum forcing at the open boundaries | enabled | Can be combined with `OBC_M2SPECIFIED` to have a different effect. Requires inputs for `ubar` and `vbar`. |
+| `M3_FRC_BRY` | Apply baroclinic (3D) momentum forcing at the open boundaries | enabled | Can be combined with `SPONGE_TUNE`. Requires inputs for `u` and `v` (and `w`, if non-hydrostatic). |
 | `OBC_EAST` | Use an open boundary on the "east" side of the domain | enabled | "East" in this context refers to MPI nodes with i-rank = `NP_XI-1` |
 | `OBC_M2FLATHER` | Use the Flather scheme for the 2D dynamical fields at open boundaries | enabled | |
 | `OBC_M3ORLANSKI` | Use the Orlanski scheme for the 3D dynamical fields at open boundaries | enabled | Designed to allow waves to exit the domain with minimal reflection |
@@ -95,12 +87,8 @@ The Orlanski radiation updates (`OBC_M3ORLANSKI`, `OBC_TORLANSKI`, and the tange
 | `OBC_WEST` | Use an open boundary on the "west" side of the domain | enabled | "West" in this context refers to MPI nodes with i-rank = 0 |
 | `T_FRC_BRY` | Apply tracer forcing at the open boundaries | enabled | Requires inputs for each thermodynamic and biogeochemical tracer. |
 | `Z_FRC_BRY` | Apply SSH forcing at the open boundaries | enabled | Requires inputs for SSH. |
-| `ANA_BRY` | Analytically prescribe the lateral boundary conditions | disabled | Hardcoded in `analytical.F90` |
-| `OBC_M2ORLANSKI` | Use the Orlanski scheme for the 2D dynamical fields at open boundaries | disabled | Designed to allow waves to exit the domain with minimal reflection |
-| `OBC_M3SPECIFIED` | Use "clamped" boundary conditions for the 3D dynamical fields at open boundaries | disabled | |
-| `OBC_RAD_NORMAL` | Calculate radiation for the Orlanski scheme using only the normal component of the velocity | disabled | Only has an effect if `OBC_M2ORLANSKI` or `OBC_M3ORLANSKI` is enabled |
+| `OBC_RAD_NORMAL` | Calculate radiation for the Orlanski scheme using only the normal component of the velocity | disabled | Only has an effect with `OBC_M3ORLANSKI`, or with `OBC_M2FLATHER` and `LEGACY_ORLANSKI` (the tangential barotropic velocities) |
 | `OBC_RAD_NPO` | Explicitly set radiation for the Orlanski scheme to be zero for the velocity parallel to the boundary | disabled | Only has an effect if `OBC_RAD_NORMAL` is enabled |
-| `OBC_TSPECIFIED` | Use "clamped" boundary conditions for the thermodynamical fields at open boundaries | disabled | |
 | `SPONGE_TUNE` | Add baroclinic pressure fluxes at open boundaries | disabled | Used in the child domain during downscaling of nested simulations. Requires pressure fluxes to be saved in the parent simulation. Use is optional. |
 
 ### `MIXING OPTIONS`
@@ -118,34 +106,20 @@ These switches control the model's mixing parameterizations, including vertical 
 | `UV_VIS2` | Apply Laplacian viscosity along sigma-surfaces | enabled | Viscosity is `visc2` in the `LATERAL_VISC_SETTINGS` namelist group |
 | `LMD_DDMIX` | Compute double-diffusive mixing (Large et al., 1994) | disabled | |
 | `ANA_VMIX` | Analytically prescribe vertical mixing coefficient | disabled | Hardcoded in `ana_vmix.h` |
-| `EASTERN_WALL` | Treat the eastern boundary as if it is a "wall" in the calculation of the biharmonic viscosity | disabled | Only affects how the biharm viscosity is computed; has no other effect |
 | `MERGE_OVERLAP` | If surface and bottom boundary layers overlap, set them both to be the entire depth of the water column | disabled | Unclear whether this is needed for physical or numerical reasons; disabled by default |
-| `MY25_MIXING` | Mellor-Yamada second-order vertical mixing scheme | disabled | |
-| `NORTHERN_WALL` | Treat the northern boundary as if it is a "wall" in the calculation of the biharmonic viscosity | disabled | Only affects how the biharm viscosity is computed; has no other effect |
-| `SOUTHERN_WALL` | Treat the southern boundary as if it is a "wall" in the calculation of the biharmonic viscosity | disabled | Only affects how the biharm viscosity is computed; has no other effect |
-| `TS_DIF4` | Apply biharmonic diffusion along sigma-surfaces | disabled | Currently not fully implemented (do not use) |
-| `WESTERN_WALL` | Treat the western boundary as if it is a "wall" in the calculation of the biharmonic viscosity | disabled | Only affects how the biharm viscosity is computed; has no other effect |
 
 ### `BIOGEOCHEMICAL OPTIONS`
 
-These switches control the biogeochemical (BGC) model. Two BGC models are available — MARBL and BEC — though they cannot be used simultaneously.
+These switches control the biogeochemical (BGC) model, MARBL. (The BEC2 model was retired; see [Retired keys](#retired-keys).)
 
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
-| `MARBL` | Use the MARBL biogeochemical library | enabled | Cannot be used simultaneously with `BIOLOGY_BEC2` |
+| `MARBL` | Use the MARBL biogeochemical library | enabled | Building needs `MARBL_ROOT` |
 | `MARBL_DIAGS` | Enable the writing of diagnostics and other variables from the MARBL biogeochemical library | enabled | Specific variables are listed in `marbl_diagnostics_to_write` in the `MARBL_BIOGEOCHEMISTRY_SETTINGS` namelist group |
 | `NHY_FORCING` | Use ammonia atmospheric forcing | enabled | |
 | `NOX_FORCING` | Use nitrogen oxide atmospheric forcing | enabled | |
 | `PCO2AIR_FORCING` | Use atmospheric forcing for CO2 | enabled | Without it, MARBL uses `xco2air_default` from the `BGC_SETTINGS` namelist group |
 | `CDR_LITE` | Simulate CDR interventions with passive tracers, without a full BGC model | disabled | Adds air-sea CO2 exchange to the `CDR_LITE` tracers that `nt_cdr_oae` and `nt_cdr_dor` (`PARAM_SETTINGS`) create; works with or without `MARBL`. Settings are in the `CDR_LITE_SETTINGS` namelist group |
-| `BIOLOGY_BEC2` | Enable BEC biogeochemical model | disabled | Only associated with BEC |
-| `BEC2_DIAG` | Enable BEC diagnostics | disabled | Only associated with BEC |
-| `DAILYPAR_BEC` | Use the daily averaged photosynthetically available radiation instead of instantaneous | disabled | Only works with BEC, and only with `BULK_FRC` enabled |
-| `BIO_1ST_USTREAM_TEST` | Use a 1st-order advection scheme only for BGC tracers | disabled | Likely for testing purposes only |
-| `BBL` | Use a bottom boundary layer formulation in updating sediment thickness | disabled | Only used in the "sediment" module associated with BEC |
-| `NO3_RESTORE` | Restore to specified concentration of nitrate | disabled | Only works with BEC2. May require an input file (unknown) |
-| `Ncycle_SY` | Nitrogen Cycle with NO2, N2O and N2 tracers | disabled | Only works with BEC2 |
-| `TDEP_REMIN` | Apply temperature dependency for particulate remineralization | disabled | Only used in the BEC2 biogeochemical module |
 
 ### `MISCELLANEOUS`
 
@@ -161,3 +135,35 @@ These switches control the biogeochemical (BGC) model. Two BGC models are availa
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
 | `PARALLEL_IO` | Read and write NetCDF files with the ParallelIO (PIO) library | not defined | Input files are read whole, so skip `partit`, and output is written to joined files, so skip `ncjoin` (particle output is the exception: it stays one file per rank). Write input files in a classic NetCDF format (for example `NETCDF3_64BIT_OFFSET`): PIO reads input through PnetCDF, which cannot read NetCDF-4 files. Building needs `PIO_ROOT` and `PNETCDFHOME` (see [Installing ParallelIO](../installation/dependencies.md#installing-parallelio)). Settings are in the `PIO_SETTINGS` namelist group |
+
+### Retired keys
+
+These keys were removed together with their code: most of them no longer compiled, `AKIMA_V` and `BBL` had no effect, `BULK_DIFFERENCE` and `INT_AT_W_POINTS` were broken, `TR` and `ISWAKE_XXX` were experiments that changed the results, and the BEC2 biogeochemical model was retired in favour of `MARBL`. The build stops with an error that names the key if your `cppdefs.opt` still defines one of them (`#undef` lines are harmless); delete it from the file.
+
+| Switch | What it was |
+|--------|-------------|
+| `TS_DIF4` | Biharmonic tracer diffusion along sigma-surfaces |
+| `EASTERN_WALL`, `WESTERN_WALL`, `NORTHERN_WALL`, `SOUTHERN_WALL` | Treat a boundary as a wall in the biharmonic diffusion of `TS_DIF4` |
+| `MY25_MIXING` | Mellor-Yamada level 2.5 vertical mixing (only its arrays and the `akq_bak` namelist key existed) |
+| `NON_TRADITIONAL` | Horizontal components of the Coriolis force |
+| `DIURNAL_SRFLUX` | Diurnal modulation of daily-averaged shortwave radiation |
+| `ALLOW_SINGLE_BLOCK_MODE` | Mixed tiled and single-block OpenMP execution |
+| `PRINT_TILE_RANGES` | Print the subdomain bounds of each MPI rank |
+| `BIO_1ST_USTREAM_TEST` | First-order upstream advection of the biogeochemical tracers |
+| `AKIMA_V` | Unused (vertical tracer fluxes come from the `advection` module) |
+| `BBL` | Unused (bottom boundary layer of the BEC sediment module) |
+| `OBC_M2ORLANSKI` | Orlanski scheme for the normal barotropic velocity; use `OBC_M2FLATHER` or `OBC_M2SPECIFIED` |
+| `OBC_M3SPECIFIED` | Specified (clamped) baroclinic velocities at open boundaries; use `OBC_M3ORLANSKI` |
+| `OBC_TSPECIFIED` | Specified (clamped) tracers at open boundaries; use `OBC_TORLANSKI` |
+| `ANA_BRY` | Analytical lateral boundary data |
+| `TAU_CORRECTION` | Wind-stress correction toward observations from extra input fields |
+| `TR` | Experimental weights of the fluxes that couple the baroclinic and barotropic velocities |
+| `ISWAKE_XXX` | Constant-flux inflow condition for the barotropic velocity at the western boundary |
+| `BULK_DIFFERENCE`, `INT_AT_W_POINTS` | Alternative forms of the KPP bulk Richardson number; no code was left for them, so defining one skipped the integral |
+| `BIOLOGY_BEC2` | The BEC2 biogeochemical model; use `MARBL` |
+| `BEC2_DIAG` | Diagnostics of BEC2; use `MARBL_DIAGS` |
+| `DAILYPAR_BEC` | Daily-averaged photosynthetically available radiation in BEC2 |
+| `DAILYPAR_PHOTOINHIBITION` | Daily-averaged photosynthetically available radiation for the photoinhibition of nitrification in BEC2 |
+| `NO3_RESTORE` | Nitrate restoring in BEC2 |
+| `Ncycle_SY` | Nitrogen cycle with NO2, N2O and N2 tracers in BEC2 |
+| `TDEP_REMIN` | Temperature-dependent particulate remineralization in BEC2 |

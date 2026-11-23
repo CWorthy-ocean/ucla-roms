@@ -8,7 +8,7 @@ module bgc_io
   ! by Pierre Damien to run full pacific models.
 #include "cppdefs.opt"
 
-#if defined BIOLOGY_BEC2 || defined MARBL
+#ifdef MARBL
 
   ! param needed for GLOBAL_2D_array to work. NT = number tracer from param
   use param, only: ieast, itemp, iwest, jnorth, jsouth, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
@@ -25,9 +25,7 @@ module bgc_io
        & nrpf_bgc_his_dia, t, nc_dust, nc_iron,&
 #ifdef PCO2AIR_FORCING
        & nc_xco2air,&
-#ifdef MARBL
        & nc_xco2air_alt,&
-#endif
 #endif
        & bgc_idx, t_idx, lm, mm, itands,&
        & mynode, nt_passive, output_period_bgc_avg, output_period_bgc_his,&
@@ -39,10 +37,7 @@ module bgc_io
   use bgc_shared_vars, only: nc_nhy
 #endif
 
-#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
-  use bgc_shared_vars, only: nc_swrad_avg
-#endif
-#if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
+#ifdef MARBL_DIAGS
   use bgc_shared_vars, only: bgc_diag_2d_avg, bgc_diag_3d_avg,&
        &bgc_diag_2d, bgc_diag_3d, nr_bgc_diag_2d, nr_bgc_diag_3d,&
        &nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d, output_period_bgc_avg_dia,&
@@ -122,25 +117,20 @@ contains
     ! Since bgc is set up such that iron and dust have flux at surface but
     ! are not directly bgc tracers, I have separated them into set_bgc_frc
 
-    ! this routine is called by # if defined BIOLOGY_BEC2 in set_forces.F of ETH code
+    ! this routine is called by set_forces (with MARBL)
 
     use scalars, only: cp, nrhs, rho0
     use dimensions, only: inode, jnode
     use bgc_forces, only: &
 #ifdef PCO2AIR_FORCING
     & xco2air, &
-#ifdef MARBL
     & xco2air_alt, &
-#endif
 #endif
 #ifdef NOX_FORCING
     & nox, &
 #endif
 #ifdef NHY_FORCING
     & nhy,&
-#endif
-#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
-    & swrad_avg, &
 #endif
     & dust, iron
     use dimensions, only: npx, npy
@@ -155,9 +145,6 @@ contains
     ! local
     integer(kind=4) :: i, j
 
-#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
-# include "compute_extended_bounds.h"
-#endif
 
 #ifdef PARALLEL_IO
     pio_file_is_open = 0
@@ -168,9 +155,7 @@ contains
 
 #ifdef PCO2AIR_FORCING
     call set_frc_data(nc_xco2air,xco2air,'r')
-#ifdef MARBL
     call set_frc_data(nc_xco2air_alt,xco2air_alt,'r')
-#endif
 #endif /* PCO2AIR_FORCING */
 
 #ifdef NOX_FORCING
@@ -181,26 +166,6 @@ contains
 #endif /* NHY_FORCING */
 
     call error_log%abort_check()
-#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
-    ! Daily average Short wave radiation
-    call set_frc_data(nc_swrad_avg,swrad_avg,'r')
-    call error_log%abort_check()
-    do j=jstrR,jendR
-      do i=istrR,iendR
-        swrad_avg(i,j)= swrad_avg(i,j)/(rho0*Cp)
-
-#ifdef SEA_ICE_NOFLUX
-        if( t(i,j,nz,nrhs,itemp) .le. -1.8_8 ) then    ! Restrict stflx to prevent surface temperature to go below -2 d
-#   if defined LMD_KPP
-#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
-          swrad_avg(i,j)=0._8
-#endif
-#   endif
-        endif
-#endif
-      enddo !<- istrR
-    enddo   !<- jstrR
-#endif /* DAILYPAR_PHOTOINHIBITION */
 
 #ifdef PARALLEL_IO
     if (pio_file_is_open == 1) then
@@ -465,7 +430,7 @@ contains
     implicit none
     ! import/export
     logical, intent(in) :: init   ! .true. for the start-up call (wrt_bgc(init))
-#if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
+#ifdef MARBL_DIAGS
 ! local
     character(len=13) :: sr_name = "wrt_bgc_diags"
     character(len=max_name_size),save :: fname_his,fname_avg
@@ -502,16 +467,12 @@ contains
       if (.not. init) then          ! the start-up state is not a step of any window
         call calc_avg_dia_bgc
         output_time_dia_avg = output_time_dia_avg + dt
-#ifdef MARBL_DIAGS
         ! add the MARBL diagnostics this step computed (see accumulate_dia_bgc)
         if (is_marbl_step(iic)) call accumulate_dia_bgc
-#endif
       endif
 
       if (output_time_dia_avg>=output_period_bgc_avg_dia) then  ! time for an output
-#ifdef MARBL_DIAGS
         call finalize_dia_bgc                            ! sums -> averages
-#endif
         if (mod(record_dia_avg,nrpf_bgc_avg_dia)==0) then
           if (mynode == 0) then
             call create_bgc_dia_file(fname_avg,.true.)
@@ -563,16 +524,12 @@ contains
       if (.not. init) then          ! the start-up state is not a step of any window
         call calc_avg_dia_bgc
         output_time_dia_avg = output_time_dia_avg + dt
-#ifdef MARBL_DIAGS
         ! add the MARBL diagnostics this step computed (see accumulate_dia_bgc)
         if (is_marbl_step(iic)) call accumulate_dia_bgc
-#endif
       endif
 
       if (output_time_dia_avg>=output_period_bgc_avg_dia) then  ! time for an output
-#ifdef MARBL_DIAGS
         call finalize_dia_bgc                            ! sums -> averages
-#endif
         if (mod(record_dia_avg,nrpf_bgc_avg_dia)==0) then
           call create_bgc_dia_file(fname_avg,.true.)
           record_dia_avg = 0
@@ -710,7 +667,7 @@ contains
 
     endif
 
-#endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
+#endif /* MARBL_DIAGS */
 
   end subroutine wrt_bgc_diags  !]
 !----------------------------------------------------------------------
@@ -746,7 +703,7 @@ contains
     ierr = nf90_close(ncid)
   end subroutine create_bgc_file !]
 !----------------------------------------------------------------------
-#if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
+#ifdef MARBL_DIAGS
   subroutine create_bgc_dia_file(fname,avg)  ![
     implicit none
 
@@ -778,7 +735,7 @@ contains
     ierr = nf90_enddef(ncid)
     ierr = nf90_close(ncid)
   end subroutine create_bgc_dia_file !]
-#endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
+#endif /* MARBL_DIAGS */
 ! ----------------------------------------------------------------------
   subroutine def_vars_bgc( ncid, avg )  ![
     ! define output variable & attributes in netcdf results file
@@ -850,7 +807,7 @@ contains
 
   end subroutine calc_avg_bgc  !]
 ! ----------------------------------------------------------------------
-#if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
+#ifdef MARBL_DIAGS
   subroutine calc_avg_dia_bgc  ![
     implicit none
 
@@ -870,28 +827,14 @@ contains
 
     t_avg_dia_bgc = t_avg_dia_bgc*(1-coef) + time*coef
 
-# ifdef MARBL_DIAGS
     ! MARBL diagnostics are added in accumulate_dia_bgc; just count the step.
     if (navg_dia_bgc == 1) then
       nheld_dia = 0
       dia_first = .true.
     endif
     nheld_dia = nheld_dia + 1
-# else
-    do itrc=1,nr_bgc_wrdiag_2d
-      bgc_diag_2d_avg(i0:i1,j0:j1,itrc) = bgc_diag_2d_avg(i0:i1,j0:j1,itrc) *(1-coef)&
-      &+ bgc_diag_2d(i0:i1,j0:j1,itrc)     *coef
-    end do
-    do itrc=1,nr_bgc_wrdiag_3d
-      do k=1,nz
-        bgc_diag_3d_avg(i0:i1,j0:j1,k,itrc) = bgc_diag_3d_avg(i0:i1,j0:j1,k,itrc) *(1-coef)&
-        &+ bgc_diag_3d(i0:i1,j0:j1,k,itrc)     *coef
-      end do
-    end do
-# endif
 
   end subroutine calc_avg_dia_bgc  !]
-# ifdef MARBL_DIAGS
 ! ----------------------------------------------------------------------
   subroutine accumulate_dia_bgc  ![
     ! Add the MARBL diagnostics to the averaging sums once, weighted by the
@@ -963,13 +906,12 @@ contains
       enddo
     enddo
   end subroutine finalize_dia_bgc  !]
-# endif
-#endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
+#endif /* MARBL_DIAGS */
 ! ----------------------------------------------------------------------
-#if defined (BEC2_DIAG) || defined (MARBL_DIAGS)
+#ifdef MARBL_DIAGS
   subroutine def_bgc_diag(ncid,avg)  ![
 
-    ! Define history/avg file variables for BEC2_DIAG
+    ! Define history/avg file variables for MARBL_DIAGS
     ! Taken from def_his.F of ETH code.
     ! Called from def_his.F
 
@@ -1004,7 +946,7 @@ contains
     enddo
 
   end subroutine def_bgc_diag  !]
-#endif /* (BEC2_DIAG) || defined (MARBL_DIAGS) */
+#endif /* MARBL_DIAGS */
 ! ----------------------------------------------------------------------
   subroutine init_arrays_bgc_frc  ![
     implicit none
@@ -1017,10 +959,8 @@ contains
 #ifdef PCO2AIR_FORCING
     allocate( nc_xco2air%vdata( GLOBAL_2D_ARRAY,2) )
     if (interp_bgc_frc) nc_xco2air%coarse = 1
-#ifdef MARBL
     allocate( nc_xco2air_alt%vdata( GLOBAL_2D_ARRAY,2) )
     if (interp_bgc_frc) nc_xco2air_alt%coarse = 1
-#endif
 #endif
 
 #ifdef NOX_FORCING
@@ -1032,10 +972,6 @@ contains
     if (interp_bgc_frc) nc_nhy%coarse = 1
 #endif
 
-#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
-    allocate( nc_swrad_avg%vdata( GLOBAL_2D_ARRAY,2) )
-    if (interp_bgc_frc) nc_swrad_avg%coarse = 1
-#endif
 
   end subroutine init_arrays_bgc_frc !]
 ! ----------------------------------------------------------------------
@@ -1056,18 +992,16 @@ contains
     ! the start-up state is not a step of any averaging window
     if (wrt_bgc_avg .and. .not. present(init)) call wrt_bgc_tracers(.true.)
 
-#if defined BEC2_DIAG || defined MARBL_DIAGS
-#if defined MARBL
+#ifdef MARBL_DIAGS
     if (present(init)) then
       call marbldrv_compute_init_diagnostics(istr,iend,jstr,jend,t)
     end if
-#endif
     call wrt_bgc_diags(present(init))
 #endif
 
 
   end subroutine wrt_bgc  !]
 ! ----------------------------------------------------------------------
-#endif /*(BIOLOGY_BEC2 || MARBL)*/
+#endif /* MARBL */
 
 end module bgc_io

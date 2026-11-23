@@ -116,7 +116,7 @@ contains
     ni = size(temp, 1)
     nj = size(temp, 2)
     ! mmol/m3 -> mol/kg: c/(1000*rho).  (Do NOT use 1e6*rho_sw here —
-    ! that factor expects rho_sw in g/cm3 ~1.025, as in bec2_driver.)
+    ! that factor expects rho_sw in g/cm3 ~1.025, as in the former BEC2 driver.)
     vol_to_mass = 1.0_8 / (1.0e3_8 * rho_sw)
     beta = 0.0_8
     eta = 0.0_8
@@ -185,7 +185,7 @@ contains
   &k1p, k2p, k3p, ksi, bt, st, ft)
     ! MARBL-consistent formulations (marbl_co2calc_mod.F90).  Everything
     ! except K1/K2 is the shared Millero (1995) / DOE (1994) set common to
-    ! MARBL, bec2_driver and kei_CO2.
+    ! MARBL, the former BEC2 driver and kei_CO2.
     implicit none
     real(kind=8), intent(in) :: t_c, s
     real(kind=8), intent(out) :: k0, k1, k2, kw, kb, ks, kf

@@ -49,9 +49,7 @@ contains
     use surf_flux, only: swflx
     use u2dbc_mod, only: u2dbc_tile
     use v2dbc_mod, only: v2dbc_tile
-#ifdef SOLVE3D
     use set_depth_mod, only: set_depth_tile
-#endif
     use zetabc_mod, only: zetabc_tile
 
     implicit none
@@ -191,12 +189,8 @@ contains
         zwrk(i,j)=bkw_new*zeta_new(i,j) +bkw*zeta(i,j,kstp)&
         &+bkw1*zeta(i,j,kbak) +bkw2*zeta(i,j,kold)
 
-#if defined VAR_RHO_2D
         rzeta(i,j)=(1._8+rhoS(i,j))*zwrk(i,j)
         rzetaSA(i,j)=zwrk(i,j)*(rhoS(i,j)-rhoA(i,j))
-#else
-        rzeta(i,j)=zwrk(i,j)
-#endif
         rzeta2(i,j)=rzeta(i,j)*zwrk(i,j) !! zeta^2
       enddo
     enddo
@@ -220,13 +214,11 @@ contains
 ! physical boundary points, but not periodic ghost points or
 ! computation  MPI computational margins.
 
-#ifdef SOLVE3D
     cff1=weight(1,iif) ; cff2=weight(2,iif)
 
     if (FIRST_2D_STEP) then
       do j=jstrR,jendR
         do i=istrR,iendR
-# ifdef EXTRAP_BAR_FLUXES
 ! PAC23 verified setting with theoretical alpha_max=1.0877_8._8
 ! the number 0.1024390._8.. is the ratio of delta/gamma=0.21_8/2.05_8
 ! this should match the simlarly-labelled setting of NOW MID BAK
@@ -239,7 +231,6 @@ contains
           &-0.1024390243902439D0*DV_avg2(i,j)
 
 
-# endif
           Zt_avg1(i,j)=cff1*zeta(i,j,knew)
           DU_avg1(i,j)=0._8 ; DV_avg1(i,j)=0._8
           DU_avg2(i,j)=cff2*DUon(i,j)
@@ -255,7 +246,6 @@ contains
         enddo
       enddo
     endif
-#endif
 
 ! Compute pressure-gradient terms:  NOTE that "rubar" and "rvbar" are
 !-------- -------- -------- ------  computed within the same fused loop
@@ -272,21 +262,17 @@ contains
         rubar(i,j)=cff*dn_u(i,j)*( (h(i-1,j)+h(i,j))*(rzeta(i-1,j)&
         &-rzeta(i,j)) +rzeta2(i-1,j)-rzeta2(i,j)&
 
-#if defined VAR_RHO_2D
         &+(h(i-1,j)-h(i,j))*( rzetaSA(i-1,j)+rzetaSA(i,j)&
         &+0.333333333333_8*(rhoA(i-1,j)-rhoA(i,j))&
         &*(zwrk(i-1,j)-zwrk(i,j)) )&
-#endif
         &)
 !>
         rvbar(i,j)=cff*dm_v(i,j)*( (h(i,j-1)+h(i,j))*(rzeta(i,j-1)&
         &-rzeta(i,j)) +rzeta2(i,j-1)-rzeta2(i,j)&
 
-#if defined VAR_RHO_2D
         &+(h(i,j-1)-h(i,j))*( rzetaSA(i,j-1)+rzetaSA(i,j)&
         &+0.333333333333_8*(rhoA(i,j-1)-rhoA(i,j))&
         &*(zwrk(i,j-1)-zwrk(i,j)) )&
-#endif
         &)
       enddo
     enddo            !--> discard  zwrk, rzeta, rzeta2, rzetaSA
@@ -304,13 +290,7 @@ contains
 ! between recomputing them at every barotropic step, or keeping
 ! them "frozen" in fast time.
 
-# ifdef CORR_COUPLED_MODE
-#  ifdef EXTRAP_BAR_FLUXES
 #   undef UV_ADV
-#  endif
-# else
-#  undef UV_ADV
-# endif
 
 
 ! Coupling between 2D and 3D parts.
@@ -333,7 +313,6 @@ contains
 ! remain constant during  the fast-time stepping and will added to
 ! "rubar" and "rvbar" during all subsequent barotropic steps.
 
-#ifdef SOLVE3D
     if (FIRST_2D_STEP) then
 
       do j=jstr,jend
@@ -367,14 +346,9 @@ contains
       do j=jstrV-1,jend
         do i=istrU-1,iend
           zwrk(i,j)=zeta_new(i,j)-zeta(i,j,kstp)
-# if defined VAR_RHO_2D
           rzeta(i,j)=(1._8+rhoS(i,j))*zwrk(i,j)
           rzeta2(i,j)=rzeta(i,j)*(zeta_new(i,j)+zeta(i,j,kstp))
           rzetaSA(i,j)=zwrk(i,j)*(rhoS(i,j)-rhoA(i,j))
-# else
-          rzeta(i,j)=zwrk(i,j)
-          rzeta2(i,j)=zwrk(i,j)*(zeta_new(i,j)+zeta(i,j,kstp))
-# endif
         enddo
       enddo
 
@@ -383,20 +357,16 @@ contains
         do i=istr,iend
           rubar(i,j)=rubar(i,j) +cff*dn_u(i,j)*( (h(i-1,j)+h(i,j))&
           &*(rzeta(i-1,j)-rzeta(i,j)) +rzeta2(i-1,j)-rzeta2(i,j)&
-# if defined VAR_RHO_2D
           &+(h(i-1,j)-h(i,j))*( rzetaSA(i-1,j)+rzetaSA(i,j)&
           &+0.333333333333_8*(rhoA(i-1,j)-rhoA(i,j))&
           &*(zwrk(i-1,j)-zwrk(i,j)) )&
-# endif
           &)
 !>
           rvbar(i,j)=rvbar(i,j) +cff*dm_v(i,j)*( (h(i,j-1)+h(i,j))&
           &*(rzeta(i,j-1)-rzeta(i,j)) +rzeta2(i,j-1)-rzeta2(i,j)&
-# if defined VAR_RHO_2D
           &+(h(i,j-1)-h(i,j))*( rzetaSA(i,j-1)+rzetaSA(i,j)&
           &+0.333333333333_8*(rhoA(i,j-1)-rhoA(i,j))&
           &*(zwrk(i,j-1)-zwrk(i,j)) )&
-# endif
           &)
         enddo
       enddo            !--> discard  zwrk, rzeta, rzeta2, rzetaSA
@@ -406,7 +376,6 @@ contains
 # undef rzeta
 # undef zwrk
     endif   !<-- FIRST_2D_STEP
-#endif
 
 ! Advance 2D momentum components while simultaneously adding them to
 ! accumulate fast-time-averages to compute barotropic fluxes. Doing so
@@ -470,7 +439,6 @@ contains
 
 ! Fast-time-averaged barotropic fluxes along physical boundaries.
 
-#ifdef SOLVE3D
 # ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do j=jstr-1,jendR
@@ -550,7 +518,6 @@ contains
       enddo
     endif
 # endif
-#endif
 
     if (river_source) then
       do iface=1,nriv_u
@@ -588,9 +555,7 @@ contains
       enddo
     endif
 
-#ifdef EXCHANGE
     call exchange_xxx(zeta(:,:,knew),ubar(:,:,knew),vbar(:,:,knew))
-#endif
 
 ! Exchange zeta first: set_depth then fills z_w, z_r, Hz in the halos
 ! itself (PARALLEL_IO) instead of exchanging all three 3D arrays.

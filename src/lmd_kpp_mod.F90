@@ -6,15 +6,13 @@ module lmd_kpp_mod
   implicit none
   private
 
-#if defined SOLVE3D && (defined LMD_KPP || defined LMD_BKPP)
+#if defined LMD_KPP || defined LMD_BKPP
 
   public :: lmd_kpp_tile
   public :: check_kpp_switches
 
 contains
 
-# define INT_AT_RHO_POINTS
-# define SMOOTH_HBL
 
   subroutine lmd_kpp_tile (istr,iend,jstr,jend,       Kv,Kt,Ks,&
   &ustar, Bo,Bosol, hbl,bbl, FX,FE,FE1,&
@@ -36,9 +34,7 @@ contains
     use param, only: isalt
 #endif
     use mixing, only: akt, akv
-# if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
-  || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
-  || defined LMD_BKPP
+# if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
     use mixing, only: bvf
 #endif
 #ifdef LMD_KPP
@@ -58,11 +54,7 @@ contains
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: Kv, Kt, Ks
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: ustar, Bo, Bosol&
     &, hbl, bbl&
-# ifdef SMOOTH_HBL
     &, FX, FE, FE1
-# else
-    real(kind=8) FX, FE, FE1  !<-- not in use, except as arguments
-# endif
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: Cr,FC, wrk1,wrk2
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY) ::  Bfsfc_bl,&
     &Gm1,dGm1dS, Gt1,dGt1dS, Gs1,dGs1dS
@@ -104,7 +96,6 @@ contains
     !! When smoothing hbl, we try to not
     !! smooth over the mask and the domain
     !! boundaries
-# ifdef SMOOTH_HBL
     integer(kind=4) imin,imax,jmin,jmax
 #  ifdef EW_PERIODIC
     imin=istr-1
@@ -138,10 +129,6 @@ contains
 #  endif
 #  define I_EXT_RANGE imin,imax
 #  define J_EXT_RANGE jmin,jmax
-# else
-#  define I_EXT_RANGE istr,iend
-#  define J_EXT_RANGE jstr,jend
-# endif
 # ifdef LMD_KPP
 ! Nondimensional constants for computing non-local flux and convective
 ! deepening of surface boundary layer. The only reason why they are not
@@ -210,11 +197,6 @@ contains
 
 
 
-# if defined BULK_DIFFERENCE
-
-# elif defined INT_AT_W_POINTS
-
-# elif defined INT_AT_RHO_POINTS
 
 !/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
 
@@ -339,16 +321,12 @@ bbl(i,j)=bbl(i,j)*rmask(i,j)
 #   endif
 enddo     !--> discard FC, Cr and kbbl
 #  endif   /* LMD_BKPP */
-# else
-  ERROR: Algorithm for Bulk Richardson number is not specified.
-# endif
 
 !/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
 !\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 !/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
 !\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 
-# ifdef SMOOTH_HBL
 enddo  !<-- break j-loop if smoothing of hbl or bbl takes place
 
 #  ifdef LMD_KPP
@@ -363,7 +341,6 @@ enddo  !<-- break j-loop if smoothing of hbl or bbl takes place
 #  endif
 
 do j=jstr,jend   !--> restart j-loop till the very end
-# endif /* SMOOTH_HBL */
 # undef I_EXT_RANGE
 # undef J_EXT_RANGE
 # define imin illegal
@@ -668,7 +645,6 @@ endif
 #  endif
 # endif   /* LMD_BKPP */
 
-# ifdef EXCHANGE
 ! Pack the mixing coefficients into as few exchanges as possible.
 #  ifdef SALINITY
 call exchange_xxx(Akv, Akt(:,:,:,itemp), Akt(:,:,:,isalt))
@@ -682,7 +658,6 @@ call exchange_xxx(hbls(:,:))
 #  else
 call exchange_xxx(hbbl(:,:))
 #  endif
-# endif
 end subroutine lmd_kpp_tile
 
 
@@ -716,7 +691,6 @@ subroutine check_kpp_switches
     &context=sr_name)
   end if
   cpps(is:ie)='<lmd_kpp.F>'
-# ifdef INT_AT_RHO_POINTS
   is=ie+2 ; ie=is+16
   if (ie > max_opt_size) then
     call error_log%raise_global(&
@@ -724,8 +698,6 @@ subroutine check_kpp_switches
     &context=sr_name)
   end if
   cpps(is:ie)='INT_AT_RHO_POINTS'
-# endif
-# ifdef SMOOTH_HBL
   is=ie+2 ; ie=is+9
   if (ie > max_opt_size) then
     call error_log%raise_global(&
@@ -733,7 +705,6 @@ subroutine check_kpp_switches
     &context=sr_name)
   end if
   cpps(is:ie)='SMOOTH_HBL'
-# endif
 # ifdef MERGE_OVERLAP
   is=ie+2 ; ie=is+13
   if (ie > max_opt_size) then

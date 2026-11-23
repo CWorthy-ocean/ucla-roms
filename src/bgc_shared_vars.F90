@@ -5,77 +5,19 @@ module bgc_shared_vars
 
 #include "cppdefs.opt"
   ! The namelist group BGC_SETTINGS and its reader are in every build: with
-  ! MARBL or BIOLOGY_BEC2 the group is required; otherwise it is read only
+  ! MARBL the group is required; otherwise it is read only
   ! when there are tracers beyond T and S, and is optional (namelist_read_mod).
   use namelist_open_mod, only: open_namelist_file
   use error_handling_mod, only: error_log
   use bgc_forces, only: xco2air_default   ! declared in bgc_forces; read here via BGC_SETTINGS
   use bgc_subcycle_mod, only: bgc_physics_subcycle, bgc_physics_timestep,&
   &                           bgc_subcycle_pos, bgc_subcycle_diag   ! BGC tracer subcycling
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef MARBL
   use param, only: mynode, nt_passive, nt_bgc, lm, mm, nz, nt_cdr_oae, nt_cdr_dor
   use roms_read_write, only: ncforce
   use tracers, only: itands, t_vname, wrt_t, t_lname, t
-#if defined(BIOLOGY_BEC2)
-  use tracers, only: ialk, idic, ife, io2, ipo4, isio3, idoc,&
-       &idofe, idon, idonr, idop, idopr, inh4, ino3, izooc, idiatc,&
-       &idiatchl, idiatfe, idiatsi, idiazc, idiazchl, idiazfe, ispc,&
-       &ispcaco3, ispchl, ispfe
-#endif
 
 
-#if defined(BIOLOGY_BEC2)
-  use bec2_vars, only:&
-#if defined(BEC2_DIAG)
-       &nr_bec2_diag_2d, nr_bec2_diag_3d,&
-       &vname_bec2_diag_2d, wrt_bec2_diag_2d, vname_bec2_diag_3d,&
-       &wrt_bec2_diag_3d, bec2_diag_2d, bec2_diag_3d,&
-       &ammox_idx_t, anammox_idx_t, atmpress_idx_t, caco3fluxin_idx_t,&
-       &caco3fluxtosed_idx_t, caco3prod_idx_t, caco3remin_idx_t,&
-       &caco3sedloss_idx_t, co2star_idx_t, dco2star_idx_t,&
-       &denitrif1_idx_t, denitrif2_idx_t, denitrif3_idx_t,&
-       &denitrif_idx_t, diatagg_idx_t, diatczero_idx_t,&
-       &diatfeuptake_idx_t, diatlightlim_idx_t, diatloss_idx_t,&
-       &diatnh4uptake_idx_t, diatnlim_idx_t, diatno2uptake_idx_t,&
-       &diatno3uptake_idx_t, diatphotoacc_idx_t, diatplim_idx_t,&
-       &diatpo4uptake_idx_t, diatsio3uptake_idx_t, diatsiuptake_idx_t,&
-       &diazagg_idx_t, diazczero_idx_t, diazfeuptake_idx_t,&
-       &diazlightlim_idx_t, diazloss_idx_t, diaznfix_idx_t,&
-       &diaznh4uptake_idx_t, diazno2uptake_idx_t, diazno3uptake_idx_t,&
-       &diazphotoacc_idx_t, diazplim_idx_t, diazpo4uptake_idx_t,&
-       &docprod_idx_t, docremin_idx_t, doczero_idx_t, dofeprod_idx_t,&
-       &doferemin_idx_t, donprod_idx_t, donremin_idx_t, donrremin_idx_t,&
-       &dopprod_idx_t, dopremin_idx_t, dustfluxin_idx_t,&
-       &dustfluxtosed_idx_t, dustremin_idx_t, fescavenge_idx_t,&
-       &fescavengerate_idx_t, fesedflux_idx_t, fgco2_idx_t, fgn2_idx_t,&
-       &fgn2o_idx_t, fgo2_idx_t, fluxtosed_idx_t, grazediat_idx_t,&
-       &grazediatzoo_idx_t, grazediaz_idx_t, grazediazzoo_idx_t,&
-       &grazedicdiat_idx_t, grazedicdiaz_idx_t, grazedicsp_idx_t,&
-       &grazesp_idx_t, grazespzoo_idx_t, idx_bec2_diag_2d,&
-       &idx_bec2_diag_3d, ironflux_idx_t, ironuptakediat_idx_t,&
-       &ironuptakediaz_idx_t, ironuptakesp_idx_t, lossdicdiat_idx_t,&
-       &lossdicdiaz_idx_t, lossdicsp_idx_t, n2oammox_idx_t,&
-       &n2osat_idx_t, n2sat_idx_t, nitrif_idx_t, nitrox_idx_t,&
-       &o2cons_idx_t, o2prod_idx_t, o2sat_idx_t, otherremin_idx_t,&
-       &par_idx_t, parinc_idx_t, pcaco3prod_idx_t, xco2_idx_t,&
-       &xco2air_idx_t, xco2oc_idx_t, ph_idx_t, photocdiat_idx_t,&
-       &photocdiaz_idx_t, photocsp_idx_t, pironfluxin_idx_t,&
-       &pironfluxtosed_idx_t, pironprod_idx_t, pironremin_idx_t,&
-       &pocfluxin_idx_t, pocprod_idx_t, pocremin_idx_t,&
-       &pocsedloss_idx_t, pvco2_idx_t, pvn2_idx_t, pvn2o_idx_t,&
-       &pvo2_idx_t, schmidt_n2_idx_t, schmidt_n2o_idx_t,&
-       &schmidtco2_idx_t, schmidto2_idx_t, seddenitrif_idx_t,&
-       &sio2fluxin_idx_t, sio2fluxtosed_idx_t, sio2prod_idx_t,&
-       &sio2remin_idx_t, sio2sedloss_idx_t, spagg_idx_t,&
-       &spcaco3zero_idx_t, spczero_idx_t, spfeuptake_idx_t,&
-       &splightlim_idx_t, sploss_idx_t, spnh4uptake_idx_t, spnlim_idx_t,&
-       &spno2uptake_idx_t, spno3uptake_idx_t, spphotoacc_idx_t,&
-       &spplim_idx_t, sppo4uptake_idx_t, spqcaco3_idx_t, totchl_idx_t,&
-       &totphytoc_idx_t, totprod_idx_t, ws10m_idx_t, xkw_idx_t,&
-       &zooczero_idx_t, zooloss_idx_t, zoolossdic_idx_t, &
-#endif
-       &init_arrays_bec2_vars
-#elif defined(MARBL)
   use marbl_driver, only: &
 # ifdef MARBL_DIAGS
        & marbldrv_configure_diagnostics&
@@ -85,12 +27,11 @@ module bgc_shared_vars
        &,wrt_marbl_diag_2d,wrt_marbl_diag_3d, &
 # endif
        marbldrv_configure_saved_state
-#endif
-#endif /* BIOLOGY_BEC2 || MARBL */
+#endif /* MARBL */
 
   implicit none
   character(len=18) :: module_name = "bgc_shared_vars.F"
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef MARBL
 ! BGC forcing file settings
   type (ncforce) :: nc_dust = ncforce(&
   &vname='dust', tname='dust_time' ) ! dust forcing
@@ -99,14 +40,8 @@ module bgc_shared_vars
 #ifdef PCO2AIR_FORCING
   type (ncforce) :: nc_xco2air = ncforce(&
   &vname='xco2_air',   tname='xco2_time' )
-#ifdef MARBL
   type (ncforce) :: nc_xco2air_alt = ncforce(&
   &vname='xco2_air_alt',   tname='xco2_time' )
-#endif
-#endif
-#if defined DAILYPAR_PHOTOINHIBITION || defined DAILYPAR_BEC
-  type (ncforce) :: nc_swrad_avg = ncforce(&
-  &vname='swrad_davg', tname='srf_davg_time' )
 #endif
 #ifdef NOX_FORCING
   type (ncforce) :: nc_nox = ncforce(&
@@ -116,7 +51,7 @@ module bgc_shared_vars
   type (ncforce) :: nc_nhy = ncforce(&
   &vname='nhy', tname='nhy_time' )
 #endif
-#endif /* BIOLOGY_BEC2 || MARBL */
+#endif /* MARBL */
 
   ! note: choice of bgc tracers to output is still selected in tracers.opt.
 
@@ -146,26 +81,21 @@ module bgc_shared_vars
   &xco2air_default,&
   &bgc_physics_subcycle, bgc_physics_timestep,&
   &bgc_subcycle_pos, bgc_subcycle_diag   ! testing/expert keys, not in the template
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
-#if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
+#ifdef MARBL
+#ifdef MARBL_DIAGS
 !
 ! Diagnostic variables appearing in average and history files:
 !
   integer(kind=4) :: nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d, nr_bgc_wrdiag
-#if defined(BEC2_DIAG)
-  integer(kind=4), parameter :: nr_bgc_diag_2d = nr_bec2_diag_2d
-  integer(kind=4), parameter :: nr_bgc_diag_3d = nr_bec2_diag_3d
-#elif defined(MARBL_DIAGS)
   ! Just hardcoding this for now but would be nice to obtain it dynamically
   integer(kind=4), parameter ::  nr_bgc_diag_3d = nr_marbl_diag_3d
   integer(kind=4), parameter ::  nr_bgc_diag_2d = nr_marbl_diag_2d
-#endif
   integer(kind=4), parameter :: nr_bgc_diag = nr_bgc_diag_2d + nr_bgc_diag_3d
 
   real(kind=8),allocatable,dimension(:,:,:,:),target   :: bgc_diag_3d
   real(kind=8),allocatable,dimension(:,:,:)  ,target   :: bgc_diag_2d
 
-! Control BEC2_DIAG Output vars
+! Control MARBL_DIAGS Output vars
   logical, target :: wrt_bgc_diag_2d(nr_bgc_diag_2d)
   logical, target :: wrt_bgc_diag_3d(nr_bgc_diag_3d)
   integer(kind=4), target :: idx_bgc_diag_2d(nr_bgc_diag_2d)
@@ -177,15 +107,15 @@ module bgc_shared_vars
   real(kind=8),allocatable,dimension(:,:,:,:),target :: bgc_diag_3d_avg
   real(kind=8),allocatable,dimension(:,:,:)  ,target :: bgc_diag_2d_avg
 
-#endif /* BEC2_DIAG  || MARBL_DIAGS */
+#endif /* MARBL_DIAGS */
 
   public bgc_precheck
-#endif /* BIOLOGY_BEC2 || MARBL */
+#endif /* MARBL */
   public read_nml_bgc
 
 contains
 
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef MARBL
 
   subroutine bgc_precheck
 
@@ -194,15 +124,6 @@ contains
     character(len=12) :: sr_name = "bgc_precheck"
     character(len=1024) :: error_info
 
-#if defined MARBL && defined BIOLOGY_BEC2
-    write(error_info,*) "Both MARBL and BEC2 have been enabled"&
-    &" in cppdefs.opt, but only one (or none) may be used in any"&
-    &" given run."
-    call error_log%raise_global(&
-    &context=module_name//"/"//sr_name,&
-    &info=error_info)
-    call error_log%abort_check()
-#endif
 
   end subroutine bgc_precheck
 
@@ -225,12 +146,11 @@ contains
   end function t_idx
 
 
-#if defined(BEC2_DIAG) || defined(MARBL_DIAGS)
+#ifdef MARBL_DIAGS
   subroutine find_write_bgc_diag
     implicit none
 
     integer(kind=4) idiag
-#if defined(MARBL_DIAGS)
 
     wrt_marbl_diag_2d => wrt_bgc_diag_2d
     wrt_marbl_diag_3d => wrt_bgc_diag_3d
@@ -242,19 +162,6 @@ contains
     &vname_bgc_diag_2d,vname_bgc_diag_3d&
     &)
 
-#elif defined(BEC2_DIAG)
-
-    wrt_bec2_diag_2d => wrt_bgc_diag_2d
-    wrt_bec2_diag_3d => wrt_bgc_diag_3d
-    idx_bec2_diag_2d => idx_bgc_diag_2d
-    idx_bec2_diag_3d => idx_bgc_diag_3d
-    vname_bec2_diag_2d => vname_bgc_diag_2d
-    vname_bec2_diag_3d => vname_bgc_diag_3d
-
-#include "BEC_2Ddiagnostics.h"
-#include "BEC_3Ddiagnostics.h"
-
-#endif /* MARBL_DIAGS */
 
 
     nr_bgc_wrdiag_2d=0
@@ -279,13 +186,13 @@ contains
 
 
   end subroutine find_write_bgc_diag  !]
-#endif /* BEC2_DIAG || MARBL_DIAGS */
-#endif /* BIOLOGY_BEC2 || MARBL */
+#endif /* MARBL_DIAGS */
+#endif /* MARBL */
 
   subroutine read_nml_bgc
 
 !     Read the "BGC_SETTINGS" section of the namelist file: required with
-!     MARBL or BIOLOGY_BEC2, optional otherwise (absent: BGC subcycling off)
+!     MARBL, optional otherwise (absent: BGC subcycling off)
     use, intrinsic :: iso_fortran_env, only: iostat_end
     integer(kind=4) ::  namelist_unit, ios
     character(len=13) :: sr_name = "read_nml_bgc"
@@ -296,7 +203,7 @@ contains
 
     read (unit=namelist_unit, nml=BGC_SETTINGS, iostat=ios, iomsg=msg)
 
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef MARBL
     if (ios /= 0) then
 #else
     if (ios /= 0 .and. ios /= iostat_end) then
@@ -307,20 +214,16 @@ contains
       &//trim(msg)&
       &)
     end if
-#ifndef SOLVE3D
-    if (bgc_physics_subcycle) call error_log%raise_global(&
-    &context=module_name//'/'//sr_name, info='bgc_physics_subcycle requires SOLVE3D')
-#endif
     close(namelist_unit)
 
   end subroutine read_nml_bgc
-#if defined(BIOLOGY_BEC2) || defined(MARBL)
+#ifdef MARBL
 
 
   subroutine init_arrays_bgc_shared_vars
     implicit none
 
-#if defined(BEC2_DIAG) || defined (MARBL_DIAGS)
+#ifdef MARBL_DIAGS
     call find_write_bgc_diag
     call display_bgc_output_settings_to_terminal
 
@@ -329,13 +232,8 @@ contains
 
     bgc_diag_2d=0.0_8
     bgc_diag_3d=0.0_8
-#if defined(MARBL_DIAGS)
     marbl_diag_2d => bgc_diag_2d
     marbl_diag_3d => bgc_diag_3d
-#elif defined(BEC2_DIAG)
-    bec2_diag_2d => bgc_diag_2d
-    bec2_diag_3d => bgc_diag_3d
-#endif
 
     if (wrt_bgc_dia_avg) then
       allocate( bgc_diag_3d_avg(GLOBAL_2D_ARRAY,nz,nr_bgc_wrdiag_3d) )
@@ -349,14 +247,10 @@ contains
       &nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d
     endif
 
-#endif /* BEC2_DIAG || MARBL_DIAGS */
+#endif /* MARBL_DIAGS */
 
-#if defined(MARBL)
 !     Allocate arrays for MARBL saved state variables
     call marbldrv_configure_saved_state
-#elif defined(BIOLOGY_BEC2)
-    call init_arrays_bec2_vars ! bec2 version
-#endif
 
   end subroutine init_arrays_bgc_shared_vars
 
@@ -368,9 +262,9 @@ contains
 
     n_bgc_fields = nt_bgc
     n_bgc_wrt_fields = 0
-#if defined(MARBL_DIAGS) || defined(BEC2_DIAG)
+#ifdef MARBL_DIAGS
     n_bgc_fields=n_bgc_fields+nr_bgc_diag_2d+nr_bgc_diag_3d
-#endif /* BEC2_DIAG || MARBL_DIAGS */
+#endif /* MARBL_DIAGS */
     allocate(stdoutlines(n_bgc_fields))
     stdoutlines=''
     lineidx=1
@@ -387,7 +281,7 @@ contains
       lineidx=lineidx+1
     end do
 
-#if defined(MARBL_DIAGS) || defined(BEC2_DIAG)
+#ifdef MARBL_DIAGS
     ! BGC 2D diagnostics
     do idx = 1, nr_bgc_diag_2d
       write(stdoutline, '(11X, A, T50, L1, 4X, A)')&
@@ -409,7 +303,7 @@ contains
       stdoutlines(lineidx) = stdoutline
       lineidx=lineidx+1
     end do
-#endif /* BEC2_DIAG || MARBL_DIAGS */
+#endif /* MARBL_DIAGS */
 
     if (mynode==0) then
       if (wrt_bgc_his) then
@@ -441,5 +335,5 @@ contains
     deallocate(stdoutlines)
 
   end subroutine display_bgc_output_settings_to_terminal
-#endif  /* BIOLOGY_BEC2 || MARBL  */
+#endif  /* MARBL  */
 end module bgc_shared_vars

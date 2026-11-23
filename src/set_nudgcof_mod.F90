@@ -2,7 +2,7 @@ module set_nudgcof_mod
 #include "cppdefs.opt"
   implicit none
   private
-#if defined SPONGE || defined TCLIMATOLOGY
+#ifdef SPONGE
 
   public :: set_nudgcof
 contains
@@ -105,7 +105,7 @@ contains
     enddo
 #   endif
 
-#   if defined SOLVE3D && defined TS_DIF2
+#   ifdef TS_DIF2
     do itrc=1,NT           ! diffusivity for the tracers
       do j=jstrR,jendR
         do i=istrR,iendR

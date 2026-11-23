@@ -23,7 +23,7 @@ contains
 
     use error_handling_mod, only: error_log
     use param, only: read_nml_param
-#if !defined(MARBL) && !defined(BIOLOGY_BEC2)
+#ifndef MARBL
     use param, only: nt_passive, nt_bgc, nt_cdr_oae, nt_cdr_dor
 #endif
 #ifndef ANA_GRID
@@ -54,7 +54,7 @@ contains
     use tracers, only: read_nml_tracers           !TS_SETTINGS
     use upscale_output, only: read_nml_upscale    !UPSCALE_SETTINGS
     use zslice_output, only: read_nml_zslice      !ZSLICE_SETTINGS
-#if defined(SOLVE3D) && !defined(NONLIN_EOS)
+#ifndef NONLIN_EOS
     use eos_vars, only: read_nml_lin_rho_eos      !LIN_RHO_EOS_SETTINGS
 #endif
     use roms_read_write, only: read_nml_roms_read_write  ! SIMULATION_NAME_SETTINGS,
@@ -66,9 +66,7 @@ contains
     !                                    VERTICAL_MIXING_SETTINGS, LATERAL_VISC_SETTINGS,
     !                                    TIME_STEPPING, UBIND_SETTINGS, V_SPONGE_SETTINGS,
     !                                    RHO0_SETTINGS
-#ifdef SOLVE3D
     use scoord, only: read_nml_scoord !SCOORD_SETTINGS
-#endif
 #ifdef PARALLEL_IO
     use pio_roms, only: read_nml_pio              !PIO_SETTINGS
 #endif
@@ -81,10 +79,10 @@ contains
 #ifndef ANA_GRID
     call read_nml_grid
 #endif
-#if defined(MARBL) || defined(BIOLOGY_BEC2)
+#ifdef MARBL
     call read_nml_bgc
 #else
-    ! Without MARBL/BEC2, only runs with tracers beyond T and S read it (BGC
+    ! Without MARBL, only runs with tracers beyond T and S read it (BGC
     ! subcycling of those tracers), and there it is optional
     if (nt_passive + nt_bgc + nt_cdr_oae + nt_cdr_dor > 0) call read_nml_bgc
 #endif
@@ -106,7 +104,7 @@ contains
     call read_nml_tides
     call read_nml_upscale
     call read_nml_zslice
-#if defined(SOLVE3D) && !defined(NONLIN_EOS)
+#ifndef NONLIN_EOS
     call read_nml_lin_rho_eos
 #endif
     call read_nml_roms_read_write
@@ -114,9 +112,7 @@ contains
     call read_nml_marbl
 #endif
     call read_nml_scalars
-#ifdef SOLVE3D
    call read_nml_scoord
-#endif
    call read_nml_surf_frc
    call read_nml_tracers
 #ifdef PARALLEL_IO

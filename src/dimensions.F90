@@ -88,7 +88,7 @@ contains
 
     lstr = lenstr(grdname)
 
-# if defined(MPI) && defined(PARALLEL_FILES) && !defined(PARALLEL_IO)
+# if defined MPI && !defined PARALLEL_IO
     call insert_node(grdname, lstr, mynode, nsize)
 # endif
     open(newunit=testunit, file=trim(grdname), status='old',&

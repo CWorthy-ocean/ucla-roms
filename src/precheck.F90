@@ -7,7 +7,7 @@ module precheck
   use netcdf, only: nf90_double
   use extract_data, only:&
   &do_extract, output_period_extract, nrpf_extract
-#if defined(MARBL) || defined(BIOLOGY_BEC2)
+#ifdef MARBL
   use bgc_shared_vars, only: bgc_precheck,&
   &wrt_bgc_his, wrt_bgc_avg, wrt_bgc_dia_his, wrt_bgc_dia_avg,&
   &output_period_bgc_his, nrpf_bgc_his,&
@@ -56,13 +56,11 @@ module precheck
 #if defined LMD_KPP || defined LMD_BKPP
   use lmd_kpp_mod, only: check_kpp_switches
 #endif
-#ifdef SOLVE3D
   use pre_step3d_mod, only: check_pre_step_switches
   use set_depth_mod, only: check_set_huv1_switches
   use step3d_t_mod, only: check_step_t_switches
   use step3d_uv_mod, only: check_step_uv1_switches,&
   &check_step_uv2_switches
-#endif
 
   implicit none
   private
@@ -77,7 +75,6 @@ contains
 
     implicit none
     call check_switches1()
-#ifdef SOLVE3D
     call check_pre_step_switches()
     call check_step_uv1_switches()
     call check_step_uv2_switches()
@@ -87,7 +84,6 @@ contains
     call check_kpp_switches()
 # endif
     call check_switches2()
-#endif
 
     ! File-rollover frequency (nrpf * output_period) must evenly divide
     ! the restart frequency so a restart does not leave a partial file.
@@ -127,7 +123,7 @@ contains
     call check_output_divides_rst(do_upscale,&
     &output_period_uscl, nrpf_uscl, 'upscale')
 #endif
-#if defined(MARBL) || defined(BIOLOGY_BEC2)
+#ifdef MARBL
     call check_output_divides_rst(wrt_bgc_his,&
     &output_period_bgc_his, nrpf_bgc_his, 'bgc_his')
     call check_output_divides_rst(wrt_bgc_avg,&
@@ -148,7 +144,7 @@ contains
 #endif
     call error_log%abort_check()
 
-#if defined(MARBL) || defined(BIOLOGY_BEC2)
+#ifdef MARBL
     call bgc_precheck
 #endif
   end subroutine do_precheck

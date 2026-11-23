@@ -6,7 +6,6 @@ module rho_eos_mod
   private
 
   public :: rho_eos
-#ifdef SOLVE3D
   public :: rho_eos_point
 # ifdef NONLIN_EOS
 
@@ -38,12 +37,9 @@ module rho_eos_mod
     &E10=-2.595994D-7,   E11=-1.248266D-9,   E12=-3.508914D-9
 #  endif
 # endif /* NONLIN_EOS */
-#endif
 
 contains
 
-#ifdef SOLVE3D
-# define DUKO_2001
 
 
   subroutine rho_eos(tidx)
@@ -182,9 +178,7 @@ contains
     use grid, only: rmask
     use param, only: ieast, isalt, itemp, iwest, jnorth, jsouth
 
-# if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
-  || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
-  || defined LMD_BKPP
+# if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
     use mixing, only: bvf
 #endif
     use ocean_vars, only: z_r, hz, z_w
@@ -201,9 +195,7 @@ contains
     real(kind=8) K1, K2
     real(kind=8) dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: K_up,K_dw
 #  endif
-#  ifdef DUKO_2001
     real(kind=8) K0_Duk  !, rho1_0
-#  endif
 # endif /* NONLIN_EOS */
     real(kind=8) cff,cff1
 # ifdef SPLIT_EOS
@@ -214,12 +206,10 @@ contains
 
 # ifdef NONLIN_EOS
     Tt=3.8D0 ; Ts=34.5D0 ; sqrtTs=sqrt(Ts)
-#  ifdef DUKO_2001
     K0_Duk= Tt*( K01+Tt*( K02+Tt*( K03+Tt*K04 )))&
     &+Ts*( K10+Tt*( K11+Tt*( K12+Tt*K13 ))&
     &+sqrtTs*( KS0+Tt*( KS1+Tt*KS2 )))
 
-#  endif
     dr00=r00-rho0
 # endif
 
@@ -246,13 +236,8 @@ contains
           &+sqrtTs*( KS0+Tt*( KS1+Tt*KS2 )))
 
 #  ifdef SPLIT_EOS
-#   ifdef DUKO_2001
           qp1(i,j,k)= 0.1D0*(rho0+rho1(i,j,k))*(K0_Duk-K0)&
           &/((K00+K0)*(K00+K0_Duk))
-#   else
-          qp1(i,j,k)=( 0.000649D0 +0.1D0*( K00*rho1(i,j,k)&
-          &-rho0*K0)/(K00*(K00+K0)) )
-#   endif
 #   ifdef MASKING
           qp1(i,j,k)=qp1(i,j,k)*rmask(i,j)
 #   endif
@@ -272,7 +257,7 @@ contains
           rho(i,j,k)=rho(i,j,k)*rmask(i,j)
 #   endif
 #  endif
-#  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP
+#  if defined LMD_MIXING || defined LMD_KPP
 #   ifndef SPLIT_EOS
           dpth=-z_w(i,j,k)
           K_up(i,k)=K0+dpth*(K1+K2*dpth)
@@ -316,8 +301,7 @@ contains
 #  endif
         enddo
       enddo
-#  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
-   || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING
+#  if defined LMD_MIXING || defined LMD_KPP
       do i=istrR,iendR
         bvf(i,j,nz)=bvf(i,j,nz-1)
         bvf(i,j,0)=bvf(i,j,  1)
@@ -355,8 +339,7 @@ contains
 #  endif
         enddo
       enddo
-#  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
-   || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING
+#  if defined LMD_MIXING || defined LMD_KPP
       cff=g/rho0
       do k=1,nz-1
         do i=istrR,iendR
@@ -383,7 +366,6 @@ contains
 ! column with uniform density rho0.  Hence both "rhoA" and "rhoS"
 ! are nondimensional quantities of comparable value.
 
-# ifdef VAR_RHO_2D
       do i=istrR,iendR
 #  ifdef SPLIT_EOS
 !**       dpth=z_w(i,j,N)-z_r(i,j,N)
@@ -414,18 +396,6 @@ contains
         rhoA(i,j)=cff*cff1*rhoA(i,j)
         rhoS(i,j)=2._8*cff*cff*cff1*rhoS(i,j)
       enddo
-# endif         /* VAR_RHO_2D */
-# ifdef NON_TRADITIONAL
-      cff=0.5_8*rho0/g
-      do k=1,nz
-        do i=istrR,iendR
-          rho1(i,j,k)=rho1(i,j,k) +cff*(&
-          &f_XI(i,j)*(v(i,j,k,tidx)+v(i,j+1,k,tidx))&
-          &-f_ETA(i,j)*(u(i,j,k,tidx)+u(i+1,j,k,tidx))&
-          &)
-        enddo
-      enddo
-# endif
     enddo    ! <-- j
 
   end subroutine rho_eos_tile
@@ -435,7 +405,7 @@ contains
     ! The density of rho_eos_tile at one point, unmasked: potential temperature tt, salinity ts
     ! (34.5 without SALINITY), depth dpth = -z [m]. SPLIT_EOS: rho1 + qp1 dpth (1 - qp2 dpth), the
     ! in-situ density prsgrd uses; otherwise rho; linear EOS: rho1 (rho). The same coefficients and
-    ! branches (DUKO_2001) as rho_eos_tile, so it equals the model's density to rounding.
+    ! branches as rho_eos_tile, so it equals the model's density to rounding.
 # ifdef NONLIN_EOS
     use eos_vars, only: K00
 #  ifdef SPLIT_EOS
@@ -454,9 +424,7 @@ contains
     real(kind=8) :: sq, r1, k0
 #  ifdef SPLIT_EOS
     real(kind=8) :: qp
-#   ifdef DUKO_2001
     real(kind=8) :: k0d
-#   endif
 #  else
     real(kind=8) :: k1, k2, cff, cff1
 #  endif
@@ -466,13 +434,9 @@ contains
     k0 = tt*( K01+tt*( K02+tt*( K03+tt*K04 ))) + ts*( K10+tt*( K11+tt*( K12+tt*K13 ))&
     &  + sq*( KS0+tt*( KS1+tt*KS2 )))
 #  ifdef SPLIT_EOS
-#   ifdef DUKO_2001
     k0d = 3.8_8*( K01+3.8_8*( K02+3.8_8*( K03+3.8_8*K04 ))) + 34.5_8*( K10+3.8_8*( K11+3.8_8*( K12&
     &   + 3.8_8*K13 )) + sqrt(34.5_8)*( KS0+3.8_8*( KS1+3.8_8*KS2 )))
     qp = 0.1_8*(rho0 + r1)*(k0d - k0)/((K00 + k0)*(K00 + k0d))
-#   else
-    qp = 0.000649_8 + 0.1_8*(K00*r1 - rho0*k0)/(K00*(K00 + k0))
-#   endif
     rh = r1 + qp*dpth*(1._8 - qp2*dpth)
 #  else
     k1 = B00+tt*(B01+tt*(B02+tt*B03)) + ts*( B10+tt*( B11+tt*B12 )+sq*BS1 )
@@ -489,8 +453,4 @@ contains
 #  endif
 # endif
   end function rho_eos_point
-#else
-  subroutine rho_eos_empty
-  end subroutine rho_eos_empty
-#endif /* SOLVE3D */
 end module rho_eos_mod

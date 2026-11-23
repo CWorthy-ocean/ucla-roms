@@ -182,7 +182,7 @@ contains
     real(kind=8)  :: drho_ddepth
 # endif
 
-# if defined EXTRAP_BAR_FLUXES && defined KEEP_CORIOLIS
+# ifdef KEEP_CORIOLIS
     integer(kind=4) :: kbak
 
     kbak=knew-1

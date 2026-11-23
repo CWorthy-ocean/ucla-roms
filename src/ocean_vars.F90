@@ -24,7 +24,6 @@ module ocean_vars
 #endif
 
   ! 3D - taken from what was ocean2d.F
-#ifdef SOLVE3D
   real(kind=8),public,allocatable,dimension(:,:,:,:) :: u
   real(kind=8),public,allocatable,dimension(:,:,:,:) :: v
   real(kind=8),public,allocatable,dimension(:,:,:)   :: u_avg
@@ -52,11 +51,10 @@ module ocean_vars
   real(kind=8),public,allocatable,dimension(:,:,:) :: Hz0     ! height of rho-cell with zero SSH
   real(kind=8),public,allocatable,dimension(:,:,:) :: z_r0    ! depth at rho-points with zero SSH
   real(kind=8),public,allocatable,dimension(:,:,:) :: z_w0     ! depth at w-points with zero SSH
-# if defined NHMG || defined NONTRAD_COR
+# ifdef NHMG
   real(kind=8),public,allocatable,dimension(:,:,:) :: dzdxi
   real(kind=8),public,allocatable,dimension(:,:,:) :: dzdeta
 # endif
-#endif  /* SOLVE3D */
 
 
   public :: init_arrays_ocean
@@ -78,7 +76,6 @@ contains  !]
 #endif
 
 
-#ifdef SOLVE3D
     allocate( u(GLOBAL_2D_ARRAY,nz,3) )
     u(:,:,:,1)=init
     u(:,:,:,2)=0.0_8                             ! index 2 used on rhs u(indx) in pre_step for DC.
@@ -108,11 +105,10 @@ contains  !]
     allocate( Hz0(GLOBAL_2D_ARRAY,nz) )   ; Hz0=init      ! height of rho-cell with zero SSH
     allocate( z_r0(GLOBAL_2D_ARRAY,nz) )  ; z_r0=init     ! depth at rho-points with zero SSH
     allocate( z_w0(GLOBAL_2D_ARRAY,0:nz) ); z_w0=init     ! depth at w-points with zero SSH
-# if defined NHMG || defined NONTRAD_COR
+# ifdef NHMG
     allocate( dzdxi(GLOBAL_2D_ARRAY,1:nz)  )
     allocate( dzdeta(GLOBAL_2D_ARRAY,1:nz) )
 # endif
-#endif  /* SOLVE3D */
 
 
   end subroutine init_arrays_ocean  !]

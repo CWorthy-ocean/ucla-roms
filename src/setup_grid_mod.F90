@@ -44,11 +44,6 @@ contains
       do i=istrR,iendR
         f(i,j)=cff1*sin(deg2rad*latr(i,j))
         fomn(i,j)=f(i,j)/(pm(i,j)*pn(i,j))
-# ifdef NON_TRADITIONAL
-        cff2=cff1*cos(deg2rad*latr(i,j))
-        f_XI(i,j)= cff2*sin(angler(i,j))
-        f_ETA(i,j)=cff2*cos(angler(i,j))
-# endif
       enddo
     enddo
 #else
@@ -197,7 +192,6 @@ contains
       enddo
     enddo
 
-#ifdef EXCHANGE
     call exchange_xxx(dm_r,dn_r,dm_p)
     call exchange_xxx(dn_p)
     call exchange_xxx(dm_u, dn_u, iA_u)
@@ -212,10 +206,8 @@ contains
     call exchange_xxx(rmask,umask)
     call exchange_xxx(vmask,pmask)
 # endif
-#endif /* EXCHANGE */
   end subroutine setup_grid1_tile
 
-#define SUM_BY_PAIRS
 
   subroutine setup_grid2 (tile)
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
@@ -255,7 +247,6 @@ contains
     real(kind=QUAD)  my_area,  my_volume,  my_crss
     real(kind=8) my_hmax, my_grdmax, my_Cu_max, cff,&
     &my_hmin, my_grdmin, my_Cu_min, my_Cu_Cor
-#ifdef SUM_BY_PAIRS
     integer(kind=4) is,isize,itg, js,jsize,jtg
 # if defined OBC_WEST || defined OBC_EAST
     integer(kind=4) :: jnc
@@ -263,13 +254,8 @@ contains
 # if defined OBC_SOUTH || defined OBC_NORTH
     integer(kind=4) :: inc
 # endif
-#endif
 #ifdef MPI
-# if QUAD==16
-#  define MPI_BUFF_TYPE MPI_REAL16
-# else
-#  define MPI_BUFF_TYPE MPI_REAL8
-# endif
+# define MPI_BUFF_TYPE MPI_REAL8
     integer(kind=4) size, step, itag, status(MPI_STATUS_SIZE), ierr
     real(kind=QUAD) buff(16)
 #endif
@@ -320,7 +306,6 @@ contains
       enddo
     enddo
 
-#ifdef SUM_BY_PAIRS
 ! Perform summation of all dA within the tile using split-directional
 ! reduction-by-pairs algorithm to avoid accumulation of roundoff errors.
 
@@ -371,16 +356,6 @@ contains
     my_area  =dA(istr,jstr)
     my_volume=dV(istr,jstr)
 
-#else
-    my_area=QuadZero                  ! Straightforward summation:
-    my_volume=QuadZero                ! this should produce the same
-    do j=jstr,jend                    ! result as the above with the
-      do i=istr,iend                  ! only difference is due to
-        my_area  =my_area  +dA(i,j)   ! roundoff errors.
-        my_volume=my_volume+dV(i,j)
-      enddo
-    enddo
-#endif
     ! Compute integral crossection
     my_crss=QuadZero                  ! of all open boundaries...
 #ifdef OBC_WEST
@@ -390,11 +365,7 @@ contains
 # ifdef MASKING
         &*umask(istr,j)
 # endif
-# ifndef SUM_BY_PAIRS
-        my_crss=my_crss + dA(istr,j)
-# endif
       enddo
-# ifdef SUM_BY_PAIRS
       jnc=1
       do while(jstr<=jend-jnc)
         js=2*jnc
@@ -404,7 +375,6 @@ contains
         jnc=js
       enddo
       my_crss=my_crss + dA(istr,jstr)
-# endif
     endif
 #endif
 #ifdef OBC_EAST
@@ -414,11 +384,7 @@ contains
 # ifdef MASKING
         &*umask(iend+1,j)
 # endif
-# ifndef SUM_BY_PAIRS
-        my_crss=my_crss + dA(iend,j)
-# endif
       enddo
-# ifdef SUM_BY_PAIRS
       jnc=1
       do while(jstr<=jend-jnc)
         js=2*jnc
@@ -428,7 +394,6 @@ contains
         jnc=js
       enddo
       my_crss=my_crss + dA(iend,jstr)
-# endif
     endif
 #endif
 #ifdef OBC_SOUTH
@@ -438,11 +403,7 @@ contains
 # ifdef MASKING
         &*vmask(i,jstr)
 # endif
-# ifndef SUM_BY_PAIRS
-        my_crss=my_crss + dA(i,jstr)
-# endif
       enddo
-# ifdef SUM_BY_PAIRS
       inc=1
       do while(istr<=iend-inc)
         is=2*inc
@@ -452,7 +413,6 @@ contains
         inc=is
       enddo
       my_crss=my_crss + dA(istr,jstr)
-# endif
     endif
 #endif
 #ifdef OBC_NORTH
@@ -462,11 +422,7 @@ contains
 # ifdef MASKING
         &*vmask(i,jend+1)
 # endif
-# ifndef SUM_BY_PAIRS
-        my_crss=my_crss + dA(i,jend)
-# endif
       enddo
-# ifdef SUM_BY_PAIRS
       inc=1
       do while(istr<=iend-inc)
         is=2*inc
@@ -476,7 +432,6 @@ contains
         inc=is
       enddo
       my_crss=my_crss + dA(istr,jend)
-# endif
     endif
 #endif
 

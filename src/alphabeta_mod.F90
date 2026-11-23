@@ -1,5 +1,5 @@
 #include "cppdefs.opt"
-#if defined SOLVE3D && defined LMD_KPP
+#ifdef LMD_KPP
 
 module alphabeta_mod
 

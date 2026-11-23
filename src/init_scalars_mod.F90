@@ -23,9 +23,7 @@ contains
     &kstp, nfast, nnew, nrhs, nstp, ntstart, start_time
     use roms_read_write, only: init_output_indices
     use dimensions, only: init_dimensions
-#ifdef SOLVE3D
     use set_weights_mod, only: set_weights
-#endif
     use, intrinsic :: ieee_arithmetic, only: IEEE_Value, IEEE_QUIET_NAN
     use, intrinsic :: iso_fortran_env, only: real32
 
@@ -35,7 +33,6 @@ contains
     nan = IEEE_VALUE(nan, IEEE_QUIET_NAN)
     init = 0 ! nan  ! for checking no bad inits
 
-#define ALL_DATA
 
 !      integer size, kmp_get_stacksize_s
 !      size=kmp_get_stacksize_s()
@@ -45,10 +42,8 @@ contains
     nfast=1       ; kstp=1         ! stepping indices to their
     ntstart=1     ; knew=1         ! initial values needed for
 
-#ifdef SOLVE3D
     iif=1   ; nstp=1               ! proper logical initialization
     nrhs=1  ; nnew=1               ! of model fields.
-#endif
     ! Reset intra-thread
     ! communication signal
     trd_count=0                    ! variables and counters.
@@ -66,9 +61,7 @@ contains
     hmin=+1.D+20   ; hmax=-1.D+20     ! Set extreme values to large
     grdmin=+1.D+20 ; grdmax=-1.D+20   ! unrealistic numbers, positive
     Cg_min=+1.D+20 ; Cg_max=-1.D+20   ! or negative, depending on the
-#ifdef SOLVE3D
     rx0=-1.D+20    ; rx1=-1.D+20      ! context.
-#endif
     bc_crss=QuadZero
     ! Set slipperness parameter to "free slip"
     gamma2=1._8              ! along the straight boundaries: this may
@@ -77,9 +70,7 @@ contains
     call init_dimensions                                 ! needs to come before init_output_indices
     call init_output_indices      ! retire this soon (the bfx, bfy thing)
 
-#ifdef SOLVE3D
     call set_weights
-#endif
 
   end subroutine init_scalars
 
