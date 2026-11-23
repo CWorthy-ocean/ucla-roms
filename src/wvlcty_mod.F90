@@ -40,18 +40,14 @@ contains
     use nhmg_settings_mod, only: nhmg_on
     use scalars, only: nz, nnew
     use pipe_frc, only: pipe_source, pipe_idx, pipe_flx, pipe_prf
-#ifdef CDR_FORCING
     use cdr_frc, only: cdr_source, cdr_volume, cdr_nprf, cdr_icdr,&
     &cdr_iloc, cdr_jloc, cdr_prf, cdr_vol
     use param, only: itemp
-#endif
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
-#ifdef CDR_FORCING
     integer(kind=4) cidx, icdr
     real(kind=8) cff
-#endif
     real(kind=8) Wvlc(GLOBAL_2D_ARRAY,0:nz)
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: Wrk
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: Wxi, Weta
@@ -104,7 +100,6 @@ contains
 !**    Wrk(i,k)=0._8!(uncomment to test the second part)
         enddo
       enddo
-#ifdef CDR_FORCING
       ! ... and CDR volume releases (accumulated bottom-up, temp profile)
       if (cdr_source .and. cdr_volume) then
         do cidx=1,cdr_nprf
@@ -119,7 +114,6 @@ contains
           endif
         enddo
       endif
-#endif
       do i=imin,imax
         Wvlc(i,j,nz)=+0.375_8*Wrk(i,nz) +0.75_8*Wrk(i,nz-1)&
         &-0.125_8*Wrk(i,nz-2)

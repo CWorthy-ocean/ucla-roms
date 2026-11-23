@@ -21,6 +21,7 @@ module param
   integer(kind=4), parameter, public :: NSUB_X = 1, NSUB_E = 1  ! shared-memory tiling: hardcoded, no longer namelist-configurable
   integer(kind=4), public :: nt = 1
   integer(kind=4), public :: nt_cdr_oae = 0, nt_cdr_dor = 0
+  logical, public :: cdr_lite_on = .false.   ! the run has CDR_LITE tracers (read_nml_param)
   integer(kind=4), public :: nt_passive = 0, nt_bgc = 0
   namelist /PARAM_SETTINGS/ NP_XI, NP_ETA, LLm, MMm,&
   &nz, nt_passive, nt_cdr_oae, nt_cdr_dor, nt_bgc
@@ -163,6 +164,8 @@ contains
     nt = nt+ 1
 #endif
 
+
+    cdr_lite_on = nt_cdr_oae > 0 .or. nt_cdr_dor > 0
 
   end subroutine read_nml_param
 

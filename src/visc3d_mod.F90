@@ -58,10 +58,8 @@ contains
     use grid, only: umask, vmask
 #  endif
 #endif
-#ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag, vdiag,&
     &dxdyi_u, dxdyi_v, ihmix, diag_uv
-#endif
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k, indx
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: UFx,UFe,VFx,VFe, Uk,Vk, dUb,dVb
@@ -300,7 +298,6 @@ contains
           v(i,j,k,indx)=v(i,j,k,indx) + dt*cff
         enddo
       enddo
-# ifdef DIAGNOSTICS
       if (diag_uv .and. calc_diag) then
         do j=1,ny
           do i=1,nx
@@ -313,7 +310,6 @@ contains
           enddo
         enddo
       endif
-# endif
     enddo ! k loop
 
   end subroutine visc3d_s_tile
@@ -379,10 +375,8 @@ contains
     use ocean_vars, only: z_r, u, v, hz
     use scalars, only: dt, nstp
     use dimensions, only: inode, jnode
-#ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag, vdiag,&
     &dxdyi_u, dxdyi_v, ihmix, diag_uv
-#endif
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k, k1,k2, indx
@@ -711,14 +705,12 @@ contains
       endif
     enddo
 
-# ifdef DIAGNOSTICS
     if (diag_uv .and. calc_diag) then
 !       Udiag(:,:,:,ihmix) = (u(1:nx+1,1:ny,:,nnew)-u_prev)/ dt
 !       Vdiag(:,:,:,ihmix) = (v(1:nx,1:ny+1,:,nnew)-v_prev)/ dt
 !       u_prev = u(1:nx+1,1:ny,:,nnew)
 !       v_prev = v(1:nx,1:ny+1,:,nnew)
     endif
-# endif
 
   end subroutine visc3d_GP_tile
 

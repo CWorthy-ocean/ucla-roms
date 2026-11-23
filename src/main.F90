@@ -117,10 +117,8 @@ contains
     use roms_read_write, only: close_frc_read_files
     use zslice_output, only: close_zslice_file
     use extract_data, only: close_extract_files
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: wrt_upscale_final, do_upscale
-#endif
-#if defined MARBL && defined CDR_FORCING
+#ifdef MARBL
     use cdr_gas_exch_output, only: wrt_cdr_gas_final, do_cdr_gas_exch_output
 #endif
     implicit none
@@ -138,12 +136,10 @@ contains
     enddo
 
 ! This is where we might put a generic "final write" subroutine
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     if (do_upscale) then
       call wrt_upscale_final
     endif
-#endif
-#if defined MARBL && defined CDR_FORCING
+#ifdef MARBL
     if (do_cdr_gas_exch_output) call wrt_cdr_gas_final
 #endif
     call close_frc_read_files
@@ -165,15 +161,13 @@ contains
     &nnew, nrhs, nstp, numthreads, priv_count, sec2day,&
     &start_time, synchro_flag, tdays, time, proc
     use particles, only: init_particles, floats
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only:  init_upscale, do_upscale
-#endif
     use random_output, only:  init_random, do_random, wrt_random
-#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+#if defined MARBL && defined MARBL_DIAGS
     use cdr_output, only:  init_cdr_output, do_cdr_output
 #endif
     use cdr_lite_output, only: init_cdr_lite_output, do_cdr_lite_output
-#if defined MARBL && defined CDR_FORCING
+#ifdef MARBL
     use cdr_gas_exch_output, only: init_cdr_gas_exch_output, do_cdr_gas_exch_output
 #endif
     use frc_output, only: init_frc_output, wrt_frc
@@ -184,9 +178,7 @@ contains
     ana_vmix
     use get_init_mod, only: get_init
     use grid_stiffness_mod, only: grid_stiffness
-#ifdef DIAGNOSTICS
     use diagnostics, only: init_diagnostics, diag_uv, diag_trc
-#endif
 # ifdef MARBL
     use bgc_io, only: wrt_bgc
 # endif
@@ -201,9 +193,7 @@ contains
     use param, only:&
     &mynode, nsub_e, nsub_x, lm, mm,&
     &nz, np_eta, np_xi, padd_e, padd_x
-#ifdef SPONGE_TUNE
-    use sponge_tune, only: init_orlanski_tune, ub_tune
-#endif
+    use sponge_tune, only: init_orlanski_tune, apply_sponge_tune
     use precheck, only: do_precheck
     use error_handling_mod, only: error_log
     use calc_pflx_mod, only: init_pflx
@@ -267,14 +257,10 @@ contains
     call get_grid                  ! can be analytic or from netcdf
 
 
-#ifdef DIAGNOSTICS
-    call init_diagnostics
-#endif
+    if (diag_uv .or. diag_trc) call init_diagnostics
 
     if (nhmg_on) call nhmg_init(Lm,Mm,nz,NP_XI,NP_ETA)
-#ifdef SPONGE_TUNE
-    if (ub_tune) call init_orlanski_tune
-#endif
+    if (apply_sponge_tune) call init_orlanski_tune
     call init_pflx
 
 !--#define CR
@@ -386,18 +372,16 @@ contains
     call wrt_bgc(.true.)
 #endif
     if (do_random) call init_random
-#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+#if defined MARBL && defined MARBL_DIAGS
     if (do_cdr_output)  call init_cdr_output
 #endif
     if (do_cdr_lite_output) call init_cdr_lite_output
-#if defined MARBL && defined CDR_FORCING
+#ifdef MARBL
     if (do_cdr_gas_exch_output) call init_cdr_gas_exch_output
 #endif
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     if (do_upscale) then
       call init_upscale
     endif
-#endif
     if (wrt_frc) call init_frc_output
 
     mpi_master_only write(*,'(/1x,A/)')&
@@ -423,7 +407,7 @@ contains
     &dt, iic, iif, knew, kstp, nfast, nnew, nrhs,&
     &nstp, ntstart, sec2day, start_time, tdays, time
 
-    use sponge_tune, only: adjust_orlanski, ub_tune
+    use sponge_tune, only: adjust_orlanski, apply_sponge_tune
     use particles, only: do_particles, floats
     use surf_flux, only: wrt_sflux, do_sflx
     use random_output, only: wrt_random, do_random
@@ -431,11 +415,11 @@ contains
     use marbl_driver, only: marbl_timestep_ratio, marbldrv_impose_constant_fe_all
     use tracers, only: t
 #endif
-#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+#if defined MARBL && defined MARBL_DIAGS
     use cdr_output, only:  wrt_cdr, do_cdr_output
 #endif
     use cdr_lite_output, only: wrt_cdr_lite, do_cdr_lite_output
-#if defined MARBL && defined CDR_FORCING
+#ifdef MARBL
     use cdr_gas_exch_output, only: wrt_cdr_gas, do_cdr_gas_exch_output
 #endif
     use frc_output, only:  wrt_frc_output, wrt_frc
@@ -455,13 +439,9 @@ contains
 # ifdef MARBL
     use bgc_io, only: wrt_bgc
 #endif
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: wrt_upscale, do_upscale
-#endif
     use implicit_fs_mod, only: fs_on, fs_step, fs_srcdiag, fs_src_diag, fs_bry_phase, fs_pot_phase
-#ifdef DIAGNOSTICS
     use diagnostics, only: do_diagnostics, diag_uv, diag_trc
-#endif
     use roms_read_write, only: frc_time
 #ifdef LMD_MIXING
     use lmd_vmix_mod, only: lmd_vmix
@@ -707,12 +687,9 @@ contains
 #  endif
       call reg_toc(rg_t3dmix)
     endif
-
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     ! After t3dmix, so the boundary rates hold this step's advective flux
     ! (stored by step3d_t) plus its horizontal mixing flux (added by t3dmix)
     if (do_upscale) call wrt_upscale
-#endif
 
 #ifdef MARBL
     ! use_constant_Fe (no-op otherwise): reset Fe after its last update of
@@ -749,11 +726,9 @@ contains
     call reg_toc(rg_avg_diag)
 
     call reg_tic(rg_output)
-#ifdef SPONGE_TUNE
     ! Before the outputs, so that a restart holds the coefficients that
     ! the next step uses and a restarted run continues exactly
-    if (ub_tune)    call adjust_orlanski
-#endif
+    if (apply_sponge_tune)    call adjust_orlanski
 
     call wrt_his_ocean_vars
     call wrt_rst_ocean_vars
@@ -764,16 +739,14 @@ contains
 
     if (do_sflx) call wrt_sflux
 
-#ifdef DIAGNOSTICS
     if (diag_uv.or.diag_trc) call do_diagnostics
-#endif
 
     if (do_random) call wrt_random
-#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+#if defined MARBL && defined MARBL_DIAGS
     if (do_cdr_output)  call wrt_cdr
 #endif
     if (do_cdr_lite_output) call wrt_cdr_lite
-#if defined MARBL && defined CDR_FORCING
+#ifdef MARBL
     if (do_cdr_gas_exch_output) call wrt_cdr_gas
 #endif
     if (do_zslice) call wrt_zslice

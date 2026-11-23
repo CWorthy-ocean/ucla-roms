@@ -6,7 +6,7 @@ module sponge_tune
 #include "cppdefs.opt"
 
   use calc_pflx_mod, only: calc_pflx
-  use namelist_open_mod, only: open_namelist_file, check_nml_cpp_switch
+  use namelist_open_mod, only: open_namelist_file
   use netcdf, only:&
   &nf90_noerr, nf90_write, nf90_inq_varid,&
   &nf90_open, nf90_put_att, nf90_close,&
@@ -50,11 +50,11 @@ module sponge_tune
 
   integer(kind=4), public :: nrpf_sponge = 7              ! Number of records per file
   real(kind=8), public    :: output_period_sponge = 24*3600 ! time between outputs in seconds
-  logical, public :: ub_tune    = .false. ! tune the boundary coefficients ub
+  logical, public :: apply_sponge_tune    = .false. ! tune the boundary coefficients ub
   logical, public :: wrt_sponge = .false. ! write the _spn file
   logical, public :: sponge_avg = .true.  ! _spn holds averages (else instantaneous values)
   namelist /SPONGE_TUNE_SETTINGS/ sponge_timescale, nrpf_sponge, output_period_sponge,&
-  &ub_tune, wrt_sponge, sponge_avg
+  &apply_sponge_tune, wrt_sponge, sponge_avg
 
   logical   :: tune_init = .true.
 
@@ -95,6 +95,7 @@ contains
 !     ----------------------------------------------------------------------
   subroutine read_nml_sponge_tune
 
+    use, intrinsic :: iso_fortran_env, only: iostat_end
 !     Read the "SPONGE_TUNE_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_sponge_tun"
@@ -105,23 +106,26 @@ contains
 
     read (unit=namelist_unit, nml=SPONGE_TUNE_SETTINGS, iostat=ios, iomsg=msg)
 
-    if (ios /= 0) then
+    if (ios /= 0 .and. ios /= iostat_end) then   ! optional group: without it, no tuning
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
       &info='could not read SPONGE_TUNE_SETTINGS'&
-      &//' section of namelist file: '&
+      &//' section of namelist file (its key ub_tune is now named apply_sponge_tune): '&
       &//trim(msg)&
       &)
-#ifndef SPONGE_TUNE
-    else
-      ! Without SPONGE_TUNE the coefficients are never tuned (main.F90)
-      call check_nml_cpp_switch('SPONGE_TUNE_SETTINGS', 'ub_tune', ub_tune,&
-      &.false., 'SPONGE_TUNE', module_name//'/'//sr_name)
-#endif
     end if
     close(namelist_unit)
 
     record = nrpf_sponge
+
+    if (apply_sponge_tune .and. .not.calc_pflx) then   ! CALC_PFLX_SETTINGS is read before
+      call error_log%raise_global(context=module_name//'/'//sr_name,&
+      &info='SPONGE_TUNE_SETTINGS apply_sponge_tune = .true. needs calc_pflx = .true. (CALC_PFLX_SETTINGS)')
+    endif
+    if (apply_sponge_tune .and. sponge_timescale <= 0._8) then
+      call error_log%raise_global(context=module_name//'/'//sr_name,&
+      &info='SPONGE_TUNE_SETTINGS sponge_timescale must be > 0 with apply_sponge_tune = .true.')
+    endif
 
   end subroutine read_nml_sponge_tune
 
@@ -132,11 +136,6 @@ contains
     ! local
     integer(kind=4) :: i
 
-    if (.not.calc_pflx.and.mynode==0) then
-      print *,'For Orlanski tuning,'
-      print *,'pflx diagnostics must be turned on!'
-      stop
-    endif
 
     call store_string_att(bc_options,'UB_TUNING, ')
 

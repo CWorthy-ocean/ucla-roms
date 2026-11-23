@@ -4265,7 +4265,7 @@ contains
   !   boundary data have no internal tide, keeps the stock value. With imex_mix_split = 2 (default) keep
   !   v_sponge dt/dx^2 below the explicit Laplacian's own limit, about 0.25 (a NOTE above 0.2); with 0 or 1
   !   keep it <= 0.05 (a NOTE above 0.1);
-  ! - SPONGE_TUNE's ub_tune has no effect on the normal velocity under 'modal': leave it off;
+  ! - apply_sponge_tune has no effect on the normal velocity under 'modal': leave it off;
   ! - start: a run that does not begin from the state its boundary data come from (a nest not initialised
   !   from its parent) should take its first ~10 days with imex_obc_mode = 'fixed' and switch to 'modal'
   !   at a restart (inexact by design: m restarts from the mismatch of that day); see obm_startnote;
@@ -4497,9 +4497,7 @@ contains
     use scalars, only: iic, dt
     use param, only: lm, mm, nz, mynode, ocean_grid_comm
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_min, mpi_integer, mpi_sum
-#  ifdef SPONGE_TUNE
-    use sponge_tune, only: ub_tune
-#  endif
+    use sponge_tune, only: apply_sponge_tune
     use mixing, only: visc2_r
     implicit none
     real(kind=8) :: hf(nz), gk(0:nz), y(nz), hh, dz, n2, q, ym, yrem,&
@@ -4640,12 +4638,10 @@ contains
         &//' the near-inertial band at the lowest |f| of the open edges: a longer imex_obc_tref'&
         &//' radiates it; see the key description'
       end if
-#  ifdef SPONGE_TUNE
-      if (mynode == 0 .and. ub_tune) write(*,'(1x,A)') "IMEX_IGW NOTE: SPONGE_TUNE ub_tune is active with"&
+      if (mynode == 0 .and. apply_sponge_tune) write(*,'(1x,A)') "IMEX_IGW NOTE: apply_sponge_tune is active with"&
       &//" imex_obc_mode 'modal': the modal condition sets the normal velocity at the open faces, so the"&
       &//" tuned nudging acts on the tangential velocity and the tracers only (ub may drift to its clamp);"&
-      &//" ub_tune = .false. is recommended"
-#  endif
+      &//" apply_sponge_tune = .false. is recommended"
     end if
   end subroutine obm_build
 

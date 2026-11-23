@@ -12,10 +12,7 @@ from ._helpers import (
 )
 
 def test_rivers_real(tmp_path, input_dir, reference_results):
-    cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-        + ["SPONGE_TUNE"]
-    )
+    cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path / "build")
     conf.compile()
 

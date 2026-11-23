@@ -91,15 +91,9 @@ contains
 #ifdef MARBL
     use marbl_driver, only: marbl_timestep_ratio
 #endif
-#ifdef DIAGNOSTICS
     use diagnostics, only: diag_trc
-#endif
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: do_upscale
-#endif
-#ifdef SPONGE_TUNE
-    use sponge_tune, only: ub_tune
-#endif
+    use sponge_tune, only: apply_sponge_tune
     implicit none
     character(len=11) :: sr_name = "bgcsub_init"
     character(len=512) :: info
@@ -150,21 +144,15 @@ contains
     call error_log%raise_global(context=module_name//"/"//sr_name,&
     &info="bgc_physics_subcycle does not support ADV_ISONEUTRAL or CONST_TRACERS")
 #endif
-#ifdef DIAGNOSTICS
     if (diag_trc) then
       if (any(wrt_t_dia(it0+1:nt))) call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info="bgc_physics_subcycle: per-step tracer diagnostics of BGC tracers are not available")
     end if
-#endif
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     if (do_upscale) call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_physics_subcycle does not support UPSCALING output")
-#endif
-#ifdef SPONGE_TUNE
-    if (ub_tune) call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_physics_subcycle does not support SPONGE_TUNE ub_tune")
-#endif
+    &info="bgc_physics_subcycle does not support upscaling output (do_upscale)")
+    if (apply_sponge_tune) call error_log%raise_global(context=module_name//"/"//sr_name,&
+    &info="bgc_physics_subcycle does not support apply_sponge_tune")
     call error_log%abort_check()
 
     allocate(VX(GLOBAL_2D_ARRAY,nz), VY(GLOBAL_2D_ARRAY,nz))
@@ -287,13 +275,11 @@ contains
     use river_frc, only: river_source, riv_vol, riv_trc, riv_uflx, riv_vflx,&
     &                    nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
     use pipe_frc, only: pipe_source, pipe_idx, pipe_flx, pipe_trc
-#ifdef CDR_FORCING
     use cdr_frc, only: cdr_source, cdr_nprf, cdr_icdr, cdr_prf, cdr_flx,&
     &                  cdr_vol, cdr_volume
 # ifdef MARBL
     use cdr_frc, only: cdr_forcing_3d, cdr_flx_3d_ALK, cdr_flx_3d_DIC
 # endif
-#endif
     use param, only: itemp, Lm, Mm
     implicit none
     integer(kind=4) :: k, ib, itrc, iface, i, j, ir, pid, cidx, icdr
@@ -356,7 +342,6 @@ contains
       end do
     end if
 
-#ifdef CDR_FORCING
     if (cdr_source) then
 # ifdef MARBL
       if (cdr_forcing_3d) then
@@ -392,7 +377,6 @@ contains
       end if
 # endif
     end if
-#endif
     call reg_toc(rg_bgcsub_acc)
   end subroutine bgcsub_accumulate
 
@@ -425,13 +409,11 @@ contains
     use mixing, only: diff2
     use scalars, only: diff_on
     use pipe_frc, only: pipe_source, pipe_idx, pipe_prf
-#ifdef CDR_FORCING
     use cdr_frc, only: cdr_source, cdr_nprf, cdr_iloc, cdr_jloc, cdr_icdr
 # ifdef MARBL
     use cdr_frc, only: cdr_forcing_3d
     use marbl_driver, only: iALK, iDIC
 # endif
-#endif
 #ifdef MARBL
     use marbl_driver, only: marbldrv_column_physics, marbldrv_impose_constant_fe,&
     &                       is_marbl_step
@@ -856,7 +838,6 @@ contains
             end do
           end do
         end if
-#ifdef CDR_FORCING
         if (allocated(CPA)) then
           do cidx = 1, cdr_nprf
             if (cdr_icdr(cidx) == 0) cycle
@@ -872,7 +853,6 @@ contains
           if (it0+ib == iDIC) bud(4,ib) = bud(4,ib) + sum(C3D(istr:iend,jstr:jend,:))
         end if
 # endif
-#endif
       end do
       call mpi_allreduce(bud, gbud, 6*(nb+1), mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
       gmin(1) = -lmin(2) ; gmin(2) = 0._8
@@ -1250,7 +1230,7 @@ contains
             end do
           end if
         end if
-#if defined CDR_FORCING && defined MARBL
+#ifdef MARBL
         if (allocated(C3A)) then
           if (itrc == iALK) cc(:) = cc(:) + pm(i,j)*pn(i,j)*C3A(i,j,:)
           if (itrc == iDIC) cc(:) = cc(:) + pm(i,j)*pn(i,j)*C3D(i,j,:)
@@ -1271,7 +1251,6 @@ contains
         c3(i,j,k) = cc(k)
       end do
     end do
-#ifdef CDR_FORCING
     if (allocated(CPA)) then        ! parameterized releases in this row
       do cidx = 1, cdr_nprf
         if (cdr_jloc(cidx) /= j .or. cdr_icdr(cidx) == 0) cycle
@@ -1284,7 +1263,6 @@ contains
         end if
       end do
     end if
-#endif
     if (diag) then
       do i = istr, iend
         if (ib > 0) bud(3,ib) = bud(3,ib) + SFA(i,j,ib)/(pm(i,j)*pn(i,j))*rmask(i,j)

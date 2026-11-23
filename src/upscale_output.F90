@@ -6,15 +6,15 @@ module upscale_output
 ! (CDR_OAE_ALK<n>, CDR_OAE_DIC<n>, CDR_DOR_DIC<n>) have no ALT_CO2 analogue, so their
 ! boundary fluxes are saved and time-averaged directly, one slot per tracer, and written
 ! as <t_vname>_add_<side>: the name the parent's cdr_frc looks up in cdr_trc_name.
+! ALK/DIC additionality needs the MARBL tracers, the CDR_LITE fluxes do not: a run
+! without MARBL writes the CDR_LITE tracers only.
 
 #include "cppdefs.opt"
-
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
 
   use dimensions, only: i0, i1, j0, j1, inode, jnode, npx, npy, ds_xr, ds_yr, ds_zr
   use param, only: max_name_size
   use param, only: jnorth, jsouth, ieast, iwest, nsub_e, nsub_x, np_xi, np_eta&
-  &,mynode, ocean_grid_comm, nt_passive, nt_cdr_oae, nt_cdr_dor, lm, mm
+  &,mynode, ocean_grid_comm, nt_passive, nt_bgc, nt_cdr_oae, nt_cdr_dor, lm, mm
   use namelist_open_mod, only: open_namelist_file
   use error_handling_mod, only: error_log
   use tracers, only: t_units, t_vname, iTandS
@@ -24,7 +24,9 @@ module upscale_output
   use netcdf, only:&
   &nf90_double, nf90_noerr, nf90_write, nf90_put_att,&
   &nf90_open, nf90_close, nf90_redef, nf90_enddef
+#ifdef MARBL
   use marbl_driver, only: iALK, iDIC, iALK_alt, iDIC_alt
+#endif
   use ocean_vars, only: hz
   use basic_output, only: vn=>vname
   use scalars, only: nz, dt, time
@@ -38,10 +40,16 @@ module upscale_output
   implicit none
   private
 
+#ifndef MARBL
+  ! No MARBL tracers in this build: no tracer has index 0
+  integer(kind=4), parameter :: iALK = 0, iDIC = 0, iALK_alt = 0, iDIC_alt = 0
+#endif
+  logical :: marbl_add = .false.   ! write ALK/DIC additionality (the run has the MARBL tracers)
+
   integer(kind=4), public :: nrpf_uscl = 48                  ! number of records per output file
   real(kind=8), public    :: output_period_uscl = 100         ! output period in seconds
 
-  logical, public :: do_upscale
+  logical, public :: do_upscale = .false.
   namelist /UPSCALE_SETTINGS/ nrpf_uscl, output_period_uscl, do_upscale
   integer(kind=4) :: uscl_prec = nf90_double  ! Precision of output variables (nf90_float/nf90_double)
   character(len=15) :: module_name = "upscale_output"
@@ -143,17 +151,19 @@ contains
 !     ----------------------------------------------------------------------
   subroutine read_nml_upscale
 
+    use, intrinsic :: iso_fortran_env, only: iostat_end
 !     Read the "UPSCALE_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_upscale"
     character(len=512) :: msg = ""
-    ! Read namelist
+    logical :: marbl_run
+    ! Read namelist (optional group: without it, no upscaling output)
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
 
     read (unit=namelist_unit, nml=UPSCALE_SETTINGS, iostat=ios, iomsg=msg)
 
-    if (ios /= 0) then
+    if (ios /= 0 .and. ios /= iostat_end) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
       &info='could not read UPSCALE_SETTINGS'&
@@ -163,6 +173,25 @@ contains
     end if
     close(namelist_unit)
     record_uscl = nrpf_uscl  ! the first window opens a new file
+    if (.not. do_upscale) return
+
+#ifdef MARBL
+    marbl_run = nt_bgc > 0
+#else
+    marbl_run = .false.
+#endif
+    if (.not. marbl_run .and. nt_cdr_oae + nt_cdr_dor == 0) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info='UPSCALE_SETTINGS do_upscale = .true. needs MARBL tracers (cpp key MARBL and nt_bgc > 0)'&
+      &//' or CDR_LITE tracers (nt_cdr_oae or nt_cdr_dor > 0)')
+    end if
+#ifndef SPHERICAL
+    call error_log%raise_global(&
+    &context = module_name//'/'//sr_name,&
+    &info='UPSCALE_SETTINGS do_upscale = .true. needs the cpp key SPHERICAL'&
+    &//' (the output holds the longitudes and latitudes of the boundaries)')
+#endif
   end subroutine read_nml_upscale
 
   subroutine init_upscale ![
@@ -187,6 +216,7 @@ contains
 
     icdr0 = iTandS + nt_passive
     ncdr_lite = 2*nt_cdr_oae + nt_cdr_dor
+    marbl_add = min(iALK, iDIC, iALK_alt, iDIC_alt) > 0
 
 #ifdef OBC_NORTH
 #ifdef PARALLEL_IO
@@ -620,8 +650,8 @@ contains
 
 #ifdef OBC_NORTH
       pio_gtype = 'n2rw'
-      call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-      call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+      if (marbl_add) call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+      if (marbl_add) call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
       call wrt_cdr_uscl(ncid,'north',cdr_add_north_avg(i0:i1,:,:),.true.)
       call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
       if (jnode==npy-1) then
@@ -634,8 +664,8 @@ contains
 
 #ifdef OBC_SOUTH
       pio_gtype = 's2rw'
-      call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-      call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+      if (marbl_add) call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+      if (marbl_add) call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
       call wrt_cdr_uscl(ncid,'south',cdr_add_south_avg(i0:i1,:,:),.true.)
       call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
       if (jnode==0) then
@@ -648,8 +678,8 @@ contains
 
 #ifdef OBC_EAST
       pio_gtype = 'e2rw'
-      call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-      call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+      if (marbl_add) call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+      if (marbl_add) call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
       call wrt_cdr_uscl(ncid,'east',cdr_add_east_avg(j0:j1,:,:),.true.)
       call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
       if (inode==npx-1) then
@@ -662,8 +692,8 @@ contains
 
 #ifdef OBC_WEST
       pio_gtype = 'w2rw'
-      call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-      call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+      if (marbl_add) call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+      if (marbl_add) call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
       call wrt_cdr_uscl(ncid,'west',cdr_add_west_avg(j0:j1,:,:),.true.)
       call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
       if (inode==0) then
@@ -690,8 +720,8 @@ contains
 
 #ifdef OBC_NORTH
       if (jnode==npy-1) then
-        call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/))
-        call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/))
+        if (marbl_add) call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/))
+        if (marbl_add) call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/))
         call wrt_cdr_uscl(ncid,'north',cdr_add_north_avg(i0:i1,:,:),.false.)
         call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/))
         ALK_add_north_avg(:,:) = 0
@@ -703,8 +733,8 @@ contains
 
 #ifdef OBC_SOUTH
       if (jnode==0) then
-        call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/))
-        call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/))
+        if (marbl_add) call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/))
+        if (marbl_add) call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/))
         call wrt_cdr_uscl(ncid,'south',cdr_add_south_avg(i0:i1,:,:),.false.)
         call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/))
         ALK_add_south_avg(:,:) = 0
@@ -716,8 +746,8 @@ contains
 
 #ifdef OBC_EAST
       if (inode==npx-1) then
-        call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/))
-        call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/))
+        if (marbl_add) call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/))
+        if (marbl_add) call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/))
         call wrt_cdr_uscl(ncid,'east',cdr_add_east_avg(j0:j1,:,:),.false.)
         call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/))
         ALK_add_east_avg(:,:) = 0
@@ -729,8 +759,8 @@ contains
 
 #ifdef OBC_WEST
       if (inode==0) then
-        call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/))
-        call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/))
+        if (marbl_add) call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/))
+        if (marbl_add) call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/))
         call wrt_cdr_uscl(ncid,'west',cdr_add_west_avg(j0:j1,:,:),.false.)
         call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/))
         ALK_add_west_avg(:,:) = 0
@@ -821,15 +851,17 @@ contains
 
 #ifdef OBC_NORTH
     if (all_boundaries .or. jnode==npy-1) then
-    varid = nccreate(ncid,'ALK_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'ALK additionality on northern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
+    if (marbl_add) then
+      varid = nccreate(ncid,'ALK_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'ALK additionality on northern boundary')
+      ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
-    varid = nccreate(ncid,'DIC_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'DIC additionality on northern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+      varid = nccreate(ncid,'DIC_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'DIC additionality on northern boundary')
+      ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+    endif
 
     call def_cdr_uscl_vars(ncid,'north','northern',dn_xr,ds_xr)
 
@@ -852,15 +884,17 @@ contains
 
 #ifdef OBC_SOUTH
     if (all_boundaries .or. jnode==0) then
-    varid = nccreate(ncid,'ALK_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'ALK additionality on southern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
+    if (marbl_add) then
+      varid = nccreate(ncid,'ALK_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'ALK additionality on southern boundary')
+      ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
-    varid = nccreate(ncid,'DIC_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'DIC additionality on southern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+      varid = nccreate(ncid,'DIC_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'DIC additionality on southern boundary')
+      ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+    endif
 
     call def_cdr_uscl_vars(ncid,'south','southern',dn_xr,ds_xr)
 
@@ -883,15 +917,17 @@ contains
 
 #ifdef OBC_EAST
     if (all_boundaries .or. inode==npx-1) then
-    varid = nccreate(ncid,'ALK_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'ALK additionality on eastern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
+    if (marbl_add) then
+      varid = nccreate(ncid,'ALK_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'ALK additionality on eastern boundary')
+      ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
-    varid = nccreate(ncid,'DIC_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'DIC additionality on eastern boundary')
-    ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+      varid = nccreate(ncid,'DIC_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'DIC additionality on eastern boundary')
+      ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+    endif
 
     call def_cdr_uscl_vars(ncid,'east','eastern',dn_yr,ds_yr)
 
@@ -914,15 +950,17 @@ contains
 
 #ifdef OBC_WEST
     if (all_boundaries .or. inode==0) then
-    varid = nccreate(ncid,'ALK_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'ALK additionality on western boundary')
-    ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
+    if (marbl_add) then
+      varid = nccreate(ncid,'ALK_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'ALK additionality on western boundary')
+      ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
-    varid = nccreate(ncid,'DIC_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'DIC additionality on western boundary')
-    ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+      varid = nccreate(ncid,'DIC_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'DIC additionality on western boundary')
+      ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+    endif
 
     call def_cdr_uscl_vars(ncid,'west','western',dn_yr,ds_yr)
 
@@ -1057,90 +1095,5 @@ contains
     enddo
   end subroutine def_cdr_uscl_vars  !]
 ! ----------------------------------------------------------------------
-#else /* MARBL && MARBL_DIAGS && UPSCALING */
-
-!----------------------------------------------------------------------
-  use netcdf, only: nf90_double
-  use error_handling_mod, only: error_log
-  implicit none
-  character(len=15) :: module_name = "upscale_output"
-  private
-
-  ! Public functions
-  public init_upscale, wrt_upscale, read_nml_upscale
-
-contains
-
-  subroutine read_nml_upscale
-    ! Without MARBL, MARBL_DIAGS and UPSCALING, UPSCALE_SETTINGS is read only
-    ! to stop when do_upscale = .true.; a missing group is fine. Its keys and
-    ! types are those of the group with the keys.
-    use namelist_open_mod, only: open_namelist_file, gated_nml_found,&
-    &check_nml_cpp_switch
-    implicit none
-    integer(kind=4) :: nrpf_uscl
-    real(kind=8)    :: output_period_uscl
-    logical :: do_upscale
-    namelist /UPSCALE_SETTINGS/ nrpf_uscl, output_period_uscl, do_upscale
-    integer(kind=4) :: namelist_unit, ios
-    character(len=20) :: sr_name = "read_nml_upscale"
-    character(len=512) :: msg
-    character(len=40) :: missing
-
-    missing = ''
-#ifndef MARBL
-    missing = trim(missing)//' MARBL'
-#endif
-#ifndef MARBL_DIAGS
-    missing = trim(missing)//' MARBL_DIAGS'
-#endif
-#ifndef UPSCALING
-    missing = trim(missing)//' UPSCALING'
-#endif
-    do_upscale = .false.
-    msg = ''
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=UPSCALE_SETTINGS, iostat=ios, iomsg=msg)
-    close(namelist_unit)
-    if (gated_nml_found(ios, msg, 'UPSCALE_SETTINGS', trim(module_name)//'/'//sr_name)) then
-      call check_nml_cpp_switch('UPSCALE_SETTINGS', 'do_upscale', do_upscale,&
-      &.false., 'MARBL, MARBL_DIAGS and UPSCALING', trim(module_name)//'/'//sr_name, missing)
-    end if
-  end subroutine read_nml_upscale
-
-  subroutine init_upscale   ![
-    ! Allocate and initialize arrays.
-    implicit none
-    character(len=13) :: sr_name
-
-#ifndef MARBL
-    call error_log%raise_global(&
-    &context=module_name//"/"//sr_name,&
-    &info="upscale module must have MARBL cpp key enabled")
-#endif
-
-#ifndef MARBL_DIAGS
-    call error_log%raise_global(&
-    &context=module_name//"/"//sr_name,&
-    &info="upscale module must have MARBL_DIAGS cpp key enabled.")
-#endif
-
-#ifndef UPSCALING
-    call error_log%raise_global(&
-    &context=module_name//"/"//sr_name,&
-    &info="upscale module must have UPSCALING cpp key enabled.")
-#endif
-    call error_log%abort_check()
-  end subroutine init_upscale !]
-
-  subroutine wrt_upscale   ![
-
-    implicit none
-
-  end subroutine wrt_upscale
-!----------------------------------------------------------------------
-
-#endif /* MARBL && MARBL_DIAGS */
 
 end module upscale_output

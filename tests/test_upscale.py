@@ -1,7 +1,6 @@
 """Upscaling output (``upscale_output.F90``) and its CDR converter.
 
-The child configuration of the nested upscaling chain (MARBL + CDR_FORCING +
-UPSCALING, a parameterized ALK release in the last column of cells inside the
+The child configuration of the nested upscaling chain (MARBL, a parameterized ALK release in the last column of cells inside the
 eastern open boundary, so the export is not zero) is built once and run twice
 over the
 same 800 s (20 steps of 40 s), with 200 s windows (four, in one file) and with
@@ -15,6 +14,7 @@ bounds (ucla-roms <= 0.12.0). Everything is checked directly, so the module
 needs no reference hashes.
 """
 import importlib.util
+import shutil
 import subprocess
 import sys
 
@@ -32,7 +32,7 @@ from ._helpers import (
     ROMSConfiguration,
     join_output,
 )
-from .test_cdr import _cdr_base_nml, _cdr_parm_nml
+from .test_cdr import _cdr_base_nml, _cdr_lite_parm_nml, _cdr_parm_nml
 
 RUN_LENGTH = 800  # s: the 20 steps of 40 s of _cdr_parm_nml
 BOUNDARIES = ("north", "east", "south", "west")  # the converter's column order
@@ -53,16 +53,32 @@ uscl_to_cdr = _load_uscl_to_cdr()
 
 @pytest.fixture(scope="module")
 def uscl_conf(tmp_path_factory) -> ROMSConfiguration:
-    """Compile the child (MARBL + CDR_FORCING + UPSCALING) binary once."""
+    """Compile the child (MARBL) binary once."""
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
-        + MARBL_CPP_KEYS + ["CDR_FORCING", "UPSCALING"]
+        + MARBL_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("uscl_build")
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
     conf.compile()
     return conf
+
+
+@pytest.fixture(scope="module")
+def cdrgas_run(tmp_path_factory, uscl_conf, input_dir):
+    """The parameterized release with ``_cdrgas`` output, which the CDR_LITE run reads.
+
+    Same settings as test_cdr.py's fixture of this name.
+    """
+    run_dir = tmp_path_factory.mktemp("uscl_cdrgas_run")
+    nml = _cdr_parm_nml(input_dir)
+    nml["CDR_GAS_EXCH_OUTPUT_SETTINGS"].update({
+        "do_cdr_gas_exch_output": True, "wrt_cdr_gas_avg": True,
+        "cdr_gas_monthly_averages": False, "output_period_cdr_gas": 200, "nrpf_cdr_gas": 10,
+    })
+    uscl_conf.run(nml, cwd=run_dir)
+    return run_dir
 
 
 @pytest.fixture(scope="module")
@@ -291,3 +307,99 @@ class TestUsclToCdr:
             assert ds.sizes["time"] == 3  # 0, 400 and 800 s: the run reached its end
             added = (ds["ALK"] - ds["ALK_ALT_CO2"]).isel(time=-1).values
         assert np.abs(added).max() > 0  # ALT_CO2 gets no CDR forcing
+
+
+class TestUsclCdrLite:
+    """Upscaling of CDR_LITE tracers in a build without MARBL.
+
+    The release is the CDR_LITE one, moved beside the eastern open boundary as
+    ``boundary_release`` is. No analytical or file forcing acts on
+    ``CDR_OAE_ALK1`` (the gas exchange acts on its DIC partner only), so its
+    interior inventory changes by the released amount minus the export.
+    """
+
+    @pytest.fixture(scope="class")
+    def cdr_lite_run(self, tmp_path_factory, input_dir, cdrgas_run):
+        conf = ROMSConfiguration(
+            cpp_keys=UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS + ["BULK_FRC"],
+            location=tmp_path_factory.mktemp("uscl_cdr_lite_build"),
+        )
+        conf.compile()
+        run_dir = tmp_path_factory.mktemp("uscl_cdr_lite")
+        for piece in sorted(cdrgas_run.glob("roms_cdrgas.20100101000000.?.nc")):
+            shutil.copy(piece, run_dir / piece.name)
+
+        with xr.open_dataset(input_dir / "example_input_grid.nc") as grid:
+            lon = float(grid["lon_rho"][10, 39]) - 360
+            lat = float(grid["lat_rho"][10, 39])
+        with xr.open_dataset(
+            input_dir / "cdr_forcing_parm_cdr_lite.nc", decode_timedelta=False
+        ) as ds:
+            ds = ds.load()
+        ds["cdr_trcflx"] = 1e9 * ds["cdr_trcflx"]
+        ds["cdr_lon"][:] = lon
+        ds["cdr_lat"][:] = lat
+        release = run_dir / "cdr_forcing_lite_east.nc"
+        ds.to_netcdf(release)
+
+        nml = _cdr_lite_parm_nml(input_dir)
+        nml["CDR_FRC_SETTINGS"]["cdr_file"] = str(release)
+        nml["CDR_LITE_OUTPUT_SETTINGS"].update({
+            "output_period_cdr_lite": 40, "nrpf_cdr_lite": 100, "wrt_gas_exchange": False,
+        })
+        nml["UPSCALE_SETTINGS"].update({
+            "do_upscale": True, "output_period_uscl": 40, "nrpf_uscl": 100,
+        })
+        conf.run(nml, cwd=run_dir)
+        return run_dir
+
+    def test_only_cdr_lite_variables(self, cdr_lite_run):
+        """The file holds the CDR_LITE fluxes and no ALK or DIC."""
+        ds = _open(join_output(cdr_lite_run, "roms_uscl.20100101000000"))
+        for bry in BOUNDARIES:
+            for tracer in ("CDR_OAE_ALK1", "CDR_OAE_DIC1"):
+                values = ds[f"{tracer}_add_{bry}"].values
+                assert np.isfinite(values).all(), (tracer, bry)
+            assert f"ALK_add_{bry}" not in ds
+            assert f"DIC_add_{bry}" not in ds
+        assert np.abs(ds["CDR_OAE_ALK1_add_east"].values).max() > 1e-3  # the release is exported
+
+    def test_budget_closes(self, cdr_lite_run, input_dir):
+        """Inventory change = released amount - export, over the steps between records."""
+        tracer = "CDR_OAE_ALK1"
+        pieces = sorted(cdr_lite_run.glob("roms_cdrtrc.*.0.nc"))
+        trc = _open(join_output(cdr_lite_run, pieces[0].name[:-5]))
+        with xr.open_dataset(input_dir / "example_input_grid.nc") as grid:
+            area = 1.0 / (grid["pm"].values * grid["pn"].values)
+        interior = (slice(None), slice(1, -1), slice(1, -1))
+        times = trc["ocean_time"].values
+        inventory = (trc[f"int_z_{tracer}"].values * area)[interior].sum(axis=(1, 2))
+        source = trc[f"{tracer}_source"]
+        rate = source.sum([d for d in source.dims if d != source.dims[0]]).values
+
+        uscl = _open(join_output(cdr_lite_run, "roms_uscl.20100101000000"))
+        begin, end = uscl["avg_begin_time"].values, uscl["avg_end_time"].values
+        inside = (begin >= times[0] - 1e-6) & (end <= times[-1] + 1e-6)
+        assert inside.sum() == len(times) - 1
+        export = sum(
+            (np.nansum(uscl[f"{tracer}_add_{bry}"].values, axis=(1, 2)) * (end - begin))[inside].sum()
+            for bry in BOUNDARIES
+        )
+        released = rate[0] * (times[-1] - times[0])
+        assert abs(export) > 1e-8 * released
+        np.testing.assert_allclose(inventory[-1] - inventory[0], released - export, rtol=1e-6)
+
+    def test_converter(self, cdr_lite_run, tmp_path):
+        """``uscl_to_cdr.py`` names the two CDR_LITE columns and needs no ALK or DIC."""
+        path = join_output(cdr_lite_run, "roms_uscl.20100101000000")
+        uscl = _open(path)
+        cdr = _convert(path, tmp_path / "cdr_lite.nc")
+        names = [n.decode().strip() if isinstance(n, bytes) else str(n).strip()
+                 for n in cdr["cdr_trc_name"].values]
+        assert names == ["CDR_OAE_ALK1", "CDR_OAE_DIC1"]
+        flux = cdr["cdr_trcflx_profile"].values
+        for i_trc, tracer in enumerate(names):
+            expected = np.concatenate(
+                [uscl[f"{tracer}_add_{bry}"].values for bry in BOUNDARIES], axis=-1
+            )
+            np.testing.assert_array_equal(flux[:-1, :, i_trc, :], expected, err_msg=tracer)

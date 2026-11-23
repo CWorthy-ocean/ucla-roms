@@ -18,7 +18,7 @@ module basic_output
   &dn_yr, dn_yv, dn_zr, dn_zw,&
   &avg_output, create_file, sec2date, output_root_name,&
   &refdatestr, put_global_atts, append_date_node, def_avg_window_times
-  use sponge_tune, only:  wrt_rst_ub, ub_tune
+  use sponge_tune, only:  wrt_rst_ub, apply_sponge_tune
   use calc_pflx_mod, only: wrt_rst_diag_slow, calc_pflx
   use implicit_fs_mod, only: fs_rst_def, fs_rst_wrt, fs_rst_wrt_scal
 #ifdef IMEX_IGW
@@ -915,14 +915,12 @@ contains                  !]
 #ifdef IMEX_IGW
       call imex_rst_wrt_scal(ncid, rec_rst)    ! IMEX_IGW: restart scalars
 #endif
-#ifdef SPONGE_TUNE
-      if (ub_tune) then                        ! wrt_rst_ub writes the open sides only
+      if (apply_sponge_tune) then                        ! wrt_rst_ub writes the open sides only
         if (.not. obc_west)  call nc_fill_record(ncid,'ub_west',rec_rst)
         if (.not. obc_east)  call nc_fill_record(ncid,'ub_east',rec_rst)
         if (.not. obc_north) call nc_fill_record(ncid,'ub_north',rec_rst)
         if (.not. obc_south) call nc_fill_record(ncid,'ub_south',rec_rst)
       endif
-#endif
       ierr=nf90_close (ncid)
     endif
     call error_log%abort_check()
@@ -992,9 +990,7 @@ contains                  !]
 !       call ncwrite(ncid,'Akt',Akt(i0:i1,j0:j1,:,itemp),start)
 !       call ncwrite(ncid,'Aks',Akt(i0:i1,j0:j1,:,isalt),start)
 
-#ifdef SPONGE_TUNE
-    if (ub_tune)   call wrt_rst_ub(ncid,rec_rst)
-#endif
+    if (apply_sponge_tune)   call wrt_rst_ub(ncid,rec_rst)
     if (calc_pflx) call wrt_rst_diag_slow(ncid,rec_rst)
 
     where (riv_umask < 0._8 .or. riv_umask > 1._8) riv_umask = 0._8
@@ -1087,9 +1083,7 @@ contains                  !]
 !       call ncwrite(ncid,'Akt',Akt(i0:i1,j0:j1,:,itemp),start)
 !       call ncwrite(ncid,'Aks',Akt(i0:i1,j0:j1,:,isalt),start)
 
-#ifdef SPONGE_TUNE
-    if (ub_tune)   call wrt_rst_ub(ncid,rec_rst)
-#endif
+    if (apply_sponge_tune)   call wrt_rst_ub(ncid,rec_rst)
     if (calc_pflx) call wrt_rst_diag_slow(ncid,rec_rst)
 
     where (riv_umask < 0._8 .or. riv_umask > 1._8) riv_umask = 0._8
@@ -1500,8 +1494,7 @@ contains                  !]
       ierr = nf90_put_att(ncid,varid,'units','Pa??')
     endif
 
-#ifdef SPONGE_TUNE
-    if (ub_tune) then
+    if (apply_sponge_tune) then
       varid = nccreate(ncid,'ub_west',&
       &(/dn_yr,dn_tm/),&
       &(/ds_yr,0/),nf90_double)
@@ -1523,7 +1516,6 @@ contains                  !]
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'south bc tuning coeff')
     endif
-#endif
     varid = nccreate(ncid,'riv_umask',(/dn_xu,dn_yr,dn_tm/),&
     &(/ds_xu,ds_yr,0/),nf90_double)
     ierr = nf90_put_att(ncid,varid,'long_name',&

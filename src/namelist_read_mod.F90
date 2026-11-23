@@ -30,10 +30,9 @@ contains
     use dimensions, only: read_nml_grid           !GRID_SETTINGS
 #endif
     use bgc_shared_vars, only: read_nml_bgc       !BGC_SETTINGS
-    ! CDR_FRC, CDR_OUTPUT, CDR_GAS_EXCH_OUTPUT, DIAGNOSTICS and UPSCALE
-    ! settings are read whatever their cpp keys: with a key off, the reader
-    ! only stops if the group switches the feature on (gated_nml_found in
-    ! namelist_open_mod).
+    ! CDR_OUTPUT and CDR_GAS_EXCH_OUTPUT settings are read whatever their cpp
+    ! keys: with a key off, the reader only stops if the group switches the
+    ! feature on (gated_nml_found in namelist_open_mod).
     use cdr_frc, only: read_nml_cdr_frc           !CDR_FRC_SETTINGS
     use cdr_output, only: read_cdr_output_nml     !CDR_OUTPUT_SETTINGS
     use cdr_lite_output, only: read_cdr_lite_output_nml  !CDR_LITE_OUTPUT_SETTINGS

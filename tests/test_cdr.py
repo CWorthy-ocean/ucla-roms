@@ -1,7 +1,7 @@
 """Carbon Dioxide Removal forcing tests.
 
 All three CDR variants (3D, depth-profile, parameterized) share a single
-MARBL+CDR_FORCING binary, built once per module, but each runs in its own
+MARBL binary, built once per module, but each runs in its own
 tmp_path so their output files cannot collide. The module-scoped
 ``cdrgas_run`` fixture runs the parameterized case once more with the
 ``_cdrgas`` gas-exchange output on; ``TestCdr`` checks that output and
@@ -66,11 +66,11 @@ def _cdr_parm_nml(input_dir) -> dict:
 
 @pytest.fixture(scope="module")
 def cdr_conf(tmp_path_factory) -> ROMSConfiguration:
-    """Compile the MARBL+CDR_FORCING binary once for the whole module."""
+    """Compile the MARBL binary once for the whole module."""
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
-        + MARBL_CPP_KEYS + ["CDR_FORCING"]
+        + MARBL_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("cdr_build")
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
@@ -623,16 +623,14 @@ class TestCdrLite:
 
     @pytest.fixture(scope="class")
     def cdr_lite_conf(self, tmp_path_factory) -> ROMSConfiguration:
-        """Compile the no-MARBL CDR_FORCING + CDR_LITE binary once for the class.
+        """Compile the no-MARBL binary once for the class.
 
-        The key set of the CI compile-only "CDR_FORCING + CDR_LITE without
-        MARBL" build. BULK_FRC is needed so the surface forcing supplies the
+        The key set of the CI compile-only "BULK_FRC without MARBL" build. BULK_FRC is needed so the surface forcing supplies the
         winds ``k_gas`` uses.
         """
         cpp_keys = (
             UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-            + ["BULK_FRC", "SPONGE_TUNE"]
-            + ["CDR_FORCING", "CDR_LITE"]
+            + ["BULK_FRC"]
         )
         build_dir = tmp_path_factory.mktemp("cdr_lite_build")
         conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)

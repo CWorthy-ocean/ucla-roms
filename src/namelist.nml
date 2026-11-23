@@ -244,9 +244,9 @@ extract_root_name = "child"       ! Output file root(s) (PARALLEL_IO)
 &SPONGE_TUNE_SETTINGS                                            !sponge_tune.F90
 !--------------------
 ! Previously set in `sponge_tune.opt`
-! Require SPONGE_TUNE cppkey
+! Optional group
 !--------------------
-ub_tune = .false.      ! Tune boundary "sponge" to match parent bry conditions
+apply_sponge_tune = .false. ! Tune boundary "sponge" to match parent bry conditions (needs calc_pflx)
 sponge_timescale = 86400    ! Filtering time scale (s)
 wrt_sponge = .true.    ! Write out sponge tuning values
 sponge_avg = .true.       ! Sponge tuning output averaged (T) or instantaneous (F)
@@ -259,7 +259,7 @@ output_period_sponge = 86400  ! Output frequency of sponge tuning file
 ! Previously set in `calc_pflx.opt`
 ! calc_pflx = T requires pflx_timescale > 0 (no cpp key needed). Turn it on
 ! only where it is used: in a parent whose children extract the pressure
-! fluxes up/vp, and with SPONGE_TUNE ub_tune; both stop if it is off.
+! fluxes up/vp, and apply_sponge_tune; both stop if it is off.
 !---------------------
 calc_pflx = .false.    ! Enable baroclinic pressure flux calculation
 pflx_timescale = 86400      ! timescale for filtering pressure fluxes (s)
@@ -344,7 +344,7 @@ marbl_balance = .false.           ! Ship MARBL columns from ranks with more wet 
 &CDR_FRC_SETTINGS                                                    !cdr_frc.F90
 !----------------
 ! Previously set in `cdr_frc.opt`
-! Requires CDR_FORCING cppkey. Parameterized releases can target any tracer
+! Optional group. Parameterized releases can target any tracer
 ! (passive, CDR_LITE or BGC) and work with or without MARBL. Depth-profile
 ! releases (upscaling) apply each column of cdr_trcflx_profile to the tracer
 ! named in cdr_trc_name (columns for tracers the run lacks are skipped); files
@@ -404,7 +404,7 @@ cdr_carbonate_sensitivity_time_interpolation = .true.
 !--------------------------
 ! Output for CDR_OAE_ALK/DIC and CDR_DOR_DIC
 ! Requires nt_cdr_oae or nt_cdr_dor > 0 (PARAM_SETTINGS); works with or
-! without MARBL. The *_source fields need CDR_FORCING (cdr_frc).
+! without MARBL. The *_source fields need cdr_source (CDR_FRC_SETTINGS).
 !--------------------------
 do_cdr_lite_output = .false.         ! Output CDR_LITE tracers
 wrt_cdr_lite_avg = .true.            ! Write averaged (T) or instantaneous (F)
@@ -423,7 +423,7 @@ wrt_gas_exchange = .false.           ! Write FG_CDR_*_DIC: air-sea CO2 flux into
 &CDR_GAS_EXCH_OUTPUT_SETTINGS                            !cdr_gas_exch_output.F90
 !----------------------------
 ! Output for ddic_dco2 (beta) and ddic_dalk (eta)
-! Requires MARBL and CDR_FORCING cppkeys
+! Requires MARBL cppkey
 ! The files carry ddic_dco2_time / ddic_dalk_time (days since the reference
 ! date; averaged records are stamped at the window midpoint), so they can be
 ! listed in `frcfiles` of a CDR_LITE run with cdr_online_carbonate_sensitivity
@@ -446,7 +446,8 @@ nrpf_cdr_gas = 4                     ! Time records per output file
 &UPSCALE_SETTINGS                                             !upscale_output.F90
 !----------------
 ! Previously set in `upscale_output.opt`
-! Requires UPSCALING cppkey
+! Optional group. Needs MARBL tracers (ALK and DIC additionality) or CDR_LITE
+! tracers (their own boundary fluxes), or both
 !----------------
 do_upscale = .false.           ! Record CDR tracer fluxes thru domain boundaries
 nrpf_uscl = 48                 ! Number of records per file
@@ -553,7 +554,7 @@ dCdt = 7.777 ! DIC/ALK correction co-efficient as piston velocity (cm/day)
 &DIAGNOSTICS_SETTINGS                                            !diagnostics.F90
 !--------------------
 ! Previously set in `diagnostics.opt`
-! Requires DIAGNOSTICS cppkey
+! Optional group
 !--------------------
 diag_avg = .false.          ! Output physics diags as avgs (T) or snapshots (F)
 diag_uv = .false.          ! Output momentum diagnostics
@@ -693,7 +694,7 @@ imex_obc_mode = 'auto'               ! Normal velocity at open faces: 'modal' ch
                                      ! runs best with a quarter of the v_sponge used with the stock
                                      ! boundary (an outermost domain keeps the stock value); keep
                                      ! v_sponge dt/dx^2 <= 0.2 (<= 0.05 with imex_mix_split = 1;
-                                     ! see the IMEX docs page); leave ub_tune off. A run that does not
+                                     ! see the IMEX docs page); leave apply_sponge_tune off. A run that does not
                                      ! start from the state its boundary data come from should take its
                                      ! first ~10 days with 'fixed' and switch to 'modal' at a restart.
                                      ! The step is limited by horizontal advection: keep MAX_ADV_CFL -

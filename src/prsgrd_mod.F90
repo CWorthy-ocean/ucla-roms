@@ -49,10 +49,8 @@ contains
 #endif
     use dimensions, only:  nx, ny, nz, inode, jnode,i0,i1,j0,j1
     use scalars, only: nz, g, rho0, nrhs
-#ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag,&
     &vdiag, ipgr, dxdyi_u, dxdyi_v, diag_uv
-#endif
     use roms_mpi, only: exchange_xxx
     use calc_pflx_mod, only: calc_pressure_flux, calc_pflx
 #ifdef IMEX_IGW
@@ -470,7 +468,6 @@ contains
     endif
 # endif
 
-# ifdef DIAGNOSTICS
     if (CORR_STAGE) then
       if ((calc_diag.and.diag_uv)) then
         do k=1,nz
@@ -479,7 +476,6 @@ contains
         enddo
       endif
     endif
-# endif
     ! baroclinic pressure fluxes for nesting and sponge tuning (no cpp key needed)
     if (CORR_STAGE .and. calc_pflx) call calc_pressure_flux
 

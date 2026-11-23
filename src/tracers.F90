@@ -28,19 +28,17 @@ module tracers
 #error "CDR_TRACER was renamed to CDR_LITE: replace it in cppdefs.opt"
 #endif
   use param, only: isalt, itemp, lm, mm, mynode, nt_passive, nt_cdr_oae, nt_cdr_dor&
-  &,ieast, iwest, jnorth, jsouth, nt_bgc
+  &,ieast, iwest, jnorth, jsouth, nt_bgc, cdr_lite_on
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: cflx_corr
   use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rath
-#ifdef CDR_LITE
   use surf_flux, only: ddic_dco2, ddic_dalk, k_gas, uwnd, vwnd,&
   &cdr_online_carbonate_sensitivity
   use grid, only: rmask
-# ifdef MARBL
+#ifdef MARBL
   use marbl_driver, only: iALK_alt, iDIC_alt
   use carbonate_sensitivity, only: compute_surface_beta_eta
-# endif
 #endif
   use scalars, only: nz, nrhs, nnew, forw_start, iic, nt
   use nc_read_write, only: nccreate, ncwrite
@@ -159,11 +157,11 @@ contains
 
 #include "compute_tile_bounds.h"
 
-#ifdef CDR_LITE
+    if (cdr_lite_on) then
       call exchange_xxx(t(:,:,nz,nrhs,itemp) )
       call set_gas_transfer_velocity(istr,iend,jstr,jend)
       if (cdr_online_carbonate_sensitivity) call set_online_carbonate_sensitivity
-#endif
+    endif
 
 #ifdef PARALLEL_IO
     pio_file_is_open = 0
@@ -179,15 +177,13 @@ contains
 
         call set_ana_surf_tracer_flx(itrc)
 
-#ifdef CDR_LITE
-      elseif (t_ana_frc(itrc)==2) then
+      elseif (t_ana_frc(itrc)==2) then   ! CDR_LITE DIC tracer
             call set_frc_data(nc_t(itrc), stflx(:,:,itrc), 'r' )
             call exchange_xxx(stflx(:,:,itrc))
 
             call exchange_xxx(t(:,:,nz,nrhs,itrc) )
             call subtract_gas_exchange_from_tracer_flx(itrc,istr,iend,jstr,jend)
             call exchange_xxx(stflx(:,:,itrc))
-#endif
 
       else
 
@@ -261,7 +257,6 @@ contains
       implicit none
       integer istr, iend, jstr, jend
 
-#if defined CDR_LITE
       ! coefficients to compute Schmidt number
       real, parameter :: a = 2116.8
       real, parameter :: b = -136.25
@@ -284,7 +279,6 @@ contains
         enddo
       enddo
 
-#endif /* defined CDR_LITE */
 
       end subroutine set_gas_transfer_velocity  !]
 ! ----------------------------------------------------------------------
@@ -301,7 +295,7 @@ contains
       implicit none
       character(len=32) :: sr_name = "set_online_carbonate_sensitivity"
 
-#if defined CDR_LITE && defined MARBL
+#ifdef MARBL
       ! local
       integer(kind=4), save :: iPO4 = 0, iSiO3 = 0
       integer(kind=4) :: itrc
@@ -348,8 +342,6 @@ contains
       integer itrc ! Current tracer index number
       integer istr, iend, jstr, jend
 
-#ifdef CDR_LITE
-
       ! local
       integer i, j, iALK
       real beta, eta, cALK
@@ -380,7 +372,6 @@ contains
           stflx(i,j,itrc) = stflx(i,j,itrc) + cdr_gas_flx(i,j,itrc)
         enddo
       enddo
-#endif
       end subroutine subtract_gas_exchange_from_tracer_flx  !]
 ! ----------------------------------------------------------------------
   subroutine def_his_trc( ncid )  ![
@@ -656,10 +647,10 @@ contains
 
     allocate( t(GLOBAL_2D_ARRAY,nz,3,NT) )
     t=0._8
-#ifdef CDR_LITE
-    allocate( cdr_gas_flx(GLOBAL_2D_ARRAY,NT) )
-    cdr_gas_flx=0._8
-#endif
+    if (cdr_lite_on) then
+      allocate( cdr_gas_flx(GLOBAL_2D_ARRAY,NT) )
+      cdr_gas_flx=0._8
+    endif
 
     ! remove averages flag above but do wrt_file_avg flag over this to avoid any allocation
     ! Allocate memory for only the tracer averages required for output

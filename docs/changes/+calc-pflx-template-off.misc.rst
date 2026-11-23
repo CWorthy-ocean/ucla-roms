@@ -1,1 +1,1 @@
-The template namelist now sets ``calc_pflx = .false.``: the pressure fluxes cost time every step and are needed only by a parent whose children extract ``up`` and ``vp``, and by sponge tuning (``ub_tune``). Both stop with a message when ``calc_pflx`` is off, so turn it on there.
+The template namelist now sets ``calc_pflx = .false.``: the pressure fluxes cost time every step and are needed only by a parent whose children extract ``up`` and ``vp``, and by sponge tuning (``apply_sponge_tune``). Both stop with a message when ``calc_pflx`` is off, so turn it on there.
