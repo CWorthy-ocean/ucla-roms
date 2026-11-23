@@ -5,7 +5,7 @@ module cdr_gas_exch_output
 
 #include "cppdefs.opt"
 
-#if defined MARBL && defined CDR_FORCING
+#ifdef MARBL
   use namelist_open_mod, only: open_namelist_file
   use tracers, only: t_vname
   use param, only: itemp, isalt, nt, max_name_size
@@ -35,7 +35,8 @@ module cdr_gas_exch_output
 
   real(kind=8), public    :: output_period_cdr_gas = 3600
   integer(kind=4), public :: nrpf_cdr_gas = 4
-  logical, public :: wrt_cdr_gas_avg, cdr_gas_monthly_averages, do_cdr_gas_exch_output
+  logical, public :: wrt_cdr_gas_avg = .false., cdr_gas_monthly_averages = .false.,&
+  &do_cdr_gas_exch_output = .false.
   namelist /CDR_GAS_EXCH_OUTPUT_SETTINGS/ output_period_cdr_gas, nrpf_cdr_gas,&
   &wrt_cdr_gas_avg, cdr_gas_monthly_averages, do_cdr_gas_exch_output
 
@@ -75,15 +76,17 @@ module cdr_gas_exch_output
 contains
 
   subroutine read_cdr_gas_exch_output_nml
+    use, intrinsic :: iso_fortran_env, only: iostat_end
     integer(kind=4) :: namelist_unit, ios
+    character(len=512) :: msg = ""
     character(len=28) :: sr_name = "read_cdr_gas_exch_output_nml"
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
-    read (unit=namelist_unit, nml=CDR_GAS_EXCH_OUTPUT_SETTINGS, iostat=ios)
-    if (ios /= 0) then
+    read (unit=namelist_unit, nml=CDR_GAS_EXCH_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+    if (ios /= 0 .and. ios /= iostat_end) then
       call error_log%raise_global(&
       &context=module_name//'/'//sr_name, info=&
-      &'could not read CDR_GAS_EXCH_OUTPUT_SETTINGS section of namelist file')
+      &'could not read CDR_GAS_EXCH_OUTPUT_SETTINGS section of namelist file: '//trim(msg))
     end if
     close(namelist_unit)
   end subroutine read_cdr_gas_exch_output_nml
@@ -497,7 +500,7 @@ contains
     end if
   end subroutine display_cdr_gas_output_settings
 
-#else /* MARBL && CDR_FORCING */
+#else
   use error_handling_mod, only: error_log
   implicit none
   character(len=20) :: module_name = "cdr_gas_exch_output"
@@ -508,7 +511,7 @@ contains
   public :: init_cdr_gas_exch_output, wrt_cdr_gas, read_cdr_gas_exch_output_nml
 contains
   subroutine read_cdr_gas_exch_output_nml
-    ! Without MARBL and CDR_FORCING, CDR_GAS_EXCH_OUTPUT_SETTINGS is read only
+    ! Without MARBL, CDR_GAS_EXCH_OUTPUT_SETTINGS is read only
     ! to stop when do_cdr_gas_exch_output = .true.; a missing group is fine.
     ! Its keys and types are those of the group with the keys, read into
     ! local variables (the module's keep their defaults).
@@ -529,9 +532,6 @@ contains
 #ifndef MARBL
     missing = trim(missing)//' MARBL'
 #endif
-#ifndef CDR_FORCING
-    missing = trim(missing)//' CDR_FORCING'
-#endif
     do_cdr_gas_exch_output = .false.
     msg = ''
     call open_namelist_file(namelist_unit)
@@ -542,7 +542,7 @@ contains
     &trim(module_name)//'/'//sr_name)) then
       call check_nml_cpp_switch('CDR_GAS_EXCH_OUTPUT_SETTINGS',&
       &'do_cdr_gas_exch_output', do_cdr_gas_exch_output, .false.,&
-      &'MARBL and CDR_FORCING', trim(module_name)//'/'//sr_name, missing)
+      &'MARBL', trim(module_name)//'/'//sr_name, missing)
     end if
   end subroutine read_cdr_gas_exch_output_nml
   subroutine init_cdr_gas_exch_output
@@ -553,14 +553,9 @@ contains
    &  context=module_name//'/'//sr_name,&
    &  info='cdr_gas_exch_output must have MARBL enabled.')
 #endif
-#ifndef CDR_FORCING
-    call error_log%raise_global(&
-   &  context=module_name//'/'//sr_name,&
-   &  info='cdr_gas_exch_output must have CDR_FORCING enabled.')
-#endif
   end subroutine init_cdr_gas_exch_output
   subroutine wrt_cdr_gas
   end subroutine wrt_cdr_gas
-#endif /* MARBL && CDR_FORCING */
+#endif
 
 end module cdr_gas_exch_output

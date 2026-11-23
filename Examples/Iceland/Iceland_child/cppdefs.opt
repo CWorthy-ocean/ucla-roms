@@ -33,10 +33,6 @@
 ! Usage notes: At each timestep the tracer tendencies will be calculated, but in the end it will just keep the value it had at the previous timestep
 #undef CONST_TRACERS
 
-! Enable the calculation and writing of "diagnostics" (term-by-term momentum and tracer budgets)
-! Usage notes: Options are set in diagnostics.opt
-#undef DIAGNOSTICS
-
 ! Enable the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation
 ! Usage notes: needs nhmg = .true. in the namelist group NHMG_SETTINGS (the run stops otherwise).
 ! The non-hydrostatic solver (NHMG) itself is no longer a cpp key: it is always built and the
@@ -46,16 +42,6 @@
 ! Write momentum equation diagnostics for non-hydrostatic mode
 ! Usage notes: needs nhmg = .true. in the namelist group NHMG_SETTINGS (the run stops otherwise).
 #undef NHMGDIAG
-
-! Enable special forcing for marine CO2 removal
-! Usage notes: Settings in CDR_FRC_SETTINGS (namelist). Parameterized and
-! depth-profile releases work with or without MARBL (e.g. for CDR_LITE
-! tracers); 3D forcing needs MARBL.
-#define CDR_FORCING
-
-! Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications.
-! Usage notes: Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any CDR_LITE tracers. Requires MARBL and MARBL_DIAGS to be enabled.
-#define UPSCALING
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!! GRID OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!
@@ -126,7 +112,7 @@
 #define M2_FRC_BRY
 
 ! Apply baroclinic (3D) momentum forcing at the open boundaries
-! Usage notes: Can be combined with SPONGE_TUNE. Requires inputs for u and v (and w, if non-hydrostatic).
+! Usage notes: Can be combined with apply_sponge_tune (namelist). Requires inputs for u and v (and w, if non-hydrostatic).
 #define M3_FRC_BRY
 
 ! Use an open boundary on the "east" side of the domain
@@ -174,10 +160,6 @@
 ! Explicitly set radiation for the Orlanski scheme to be zero for the velocity parallel to the boundary
 ! Usage notes: Only has an effect if OBC_RAD_NORMAL is enabled
 #undef OBC_RAD_NPO
-
-! Add baroclinic pressure fluxes at open boundaries
-! Usage notes: Used in the child domain during downscaling of nested simulations. Requires pressure fluxes to be saved in the parent simulation. Use is optional.
-#define SPONGE_TUNE
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!! MIXING OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!

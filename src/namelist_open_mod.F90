@@ -156,7 +156,7 @@ contains
     !     Raise an error when the namelist switch `key` disagrees with the
     !     cpp key(s) that turn the same feature on in this build.
     !     cpp_on   : whether this build defines all of cpp_keys
-    !     cpp_keys : the key(s), as text, e.g. "MARBL, MARBL_DIAGS and CDR_FORCING"
+    !     cpp_keys : the key(s), as text, e.g. "MARBL and MARBL_DIAGS"
     !     missing  : for several keys, those this build does not define
     !-----------------------------------------------------------------------
     implicit none

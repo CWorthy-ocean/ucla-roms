@@ -58,10 +58,8 @@ contains
     use scalars, only:&
     &nz, dt, forw_start, iic, nnew, nrhs, nstp, nt,&
     &rdrg, vonkar, zob, ntstart, AM3_crv
-#ifdef DIAGNOSTICS
     use diagnostics, only: calc_diag, udiag, vdiag, icori,&
     &dxdyi_u, dxdyi_v
-#endif
 #ifdef DIAGNOSTICS_NHMG
     use diagnostics, only: Wdiag, iwprsgr, iwhoriadv
 #endif

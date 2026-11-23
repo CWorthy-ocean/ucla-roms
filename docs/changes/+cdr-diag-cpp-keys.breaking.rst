@@ -1,0 +1,3 @@
+The CPP keys ``SPONGE_TUNE``, ``DIAGNOSTICS``, ``CDR_FORCING``, ``CDR_LITE`` and ``UPSCALING`` are now namelist settings: ``apply_sponge_tune``, ``diag_uv`` and ``diag_trc``, ``cdr_source``, ``nt_cdr_oae`` or ``nt_cdr_dor`` above 0, and ``do_upscale`` decide. A ``cppdefs.opt`` that defines one stops the build with an error that names the setting; delete the line (an ``#undef`` line is harmless).
+- ``ub_tune`` (``SPONGE_TUNE_SETTINGS``) is renamed ``apply_sponge_tune``; a namelist with the old name stops the run. It also stops without ``calc_pflx`` and with a ``sponge_timescale`` that is not positive.
+- The groups of these features are optional, and an unknown or misspelled key in one stops the run.

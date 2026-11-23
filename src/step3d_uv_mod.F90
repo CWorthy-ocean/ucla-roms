@@ -76,13 +76,11 @@ contains
 
 # include "compute_auxiliary_bounds.h"
 
-# ifdef DIAGNOSTICS
 #  ifdef NHMGDIAG
     if (diag_uv.and.calc_diag) then
       Wdiag(istr:iend,jstr:jend,:,iwprsgr) =rw(istr:iend,jstr:jend,:)
     endif
 #  endif
-# endif
 
     if (nhmg_on) then
 
@@ -118,23 +116,19 @@ contains
 # include "compute_horiz_rhs_uv_terms.h"
     enddo
 
-# ifdef DIAGNOSTICS
     if (diag_uv .and. calc_diag) then
       call set_diags_u_4th_adv
       call set_diags_v_4th_adv
     endif
-# endif
 
     do j=jstr,jend
 
 # include "compute_vert_rhs_uv_terms.h"
 
-#ifdef DIAGNOSTICS
       if (diag_uv) then
         u_prev = u(1:nx,j,:,nnew)
         v_prev = v(1:nx,j,:,nnew)
       endif
-#endif
       do i=istrU,iend
         DC(i,0)=dt*0.25_8*(pm(i,j)+pm(i-1,j))*(pn(i,j)+pn(i-1,j))
 
@@ -196,7 +190,6 @@ contains
           rufrc(i,j)=rufrc(i,j) +ru(i,j,k)
         enddo
       enddo
-# ifdef DIAGNOSTICS
       if (diag_uv.and.calc_diag) then
         do k=1,nz
           do i=1,nx
@@ -209,7 +202,6 @@ contains
           enddo
         enddo
       endif
-# endif
 
       if (j >= jstrV) then
         do i=istr,iend
@@ -271,7 +263,6 @@ contains
           enddo
         enddo
 
-# ifdef DIAGNOSTICS
         if (diag_uv.and.calc_diag) then
           do k=1,nz
             do i=1,nx
@@ -284,7 +275,6 @@ contains
             enddo
           enddo
         endif
-# endif
 
       endif   !<-- j >= jstrV
 
@@ -543,9 +533,7 @@ contains
     &hbbl,&
 #endif
     akv
-#ifdef DIAGNOSTICS
     use diagnostics, only: diag_uv, calc_diag, udiag, vdiag, icoup
-#endif
 #if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
     use diagnostics, only: diag_uv, calc_diag, set_diags_w_at_uv2, set_diags_w_at_bc,&
     &set_diags_w_at_uv2_end
@@ -610,7 +598,6 @@ contains
 #  endif
         enddo
       enddo
-#  ifdef DIAGNOSTICS
       if (diag_uv .and. calc_diag) then
         do k=1,nz
           do i=1,nx
@@ -619,7 +606,6 @@ contains
           enddo
         enddo
       endif
-#  endif
 
 
       if (j>=jstrV) then
@@ -650,7 +636,6 @@ contains
 #  endif
           enddo
         enddo       !--> discard DC,CF(:,0)
-#  ifdef DIAGNOSTICS
         if (diag_uv .and. calc_diag) then
           do k=1,nz
             do i=1,nx
@@ -659,7 +644,6 @@ contains
             enddo
           enddo
         endif
-#  endif
 
       endif  !<-- j>=jstrV
 
@@ -1020,11 +1004,9 @@ call exchange_xxx(w(:,:,:,nnew))
 
 endif  ! ---- nhmg_on
 
-# ifdef DIAGNOSTICS
 #  ifdef NHMGDIAG
 if (calc_diag.and.diag_uv)  call set_diags_w_at_uv2_end(istrR, iendR, jstrR, jendR)
 #  endif
-# endif
 
 end subroutine step3d_uv2_tile
 

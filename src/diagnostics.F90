@@ -1,7 +1,7 @@
 module diagnostics
 
-  ! Set DIAGNOSTICS flag in cppdefs.opt to activate diagnostics.
-  ! Define options in diagnostics.opt
+  ! Momentum and tracer budget diagnostics: diag_uv and diag_trc in the namelist
+  ! group DIAGNOSTICS_SETTINGS.
 
 #include "cppdefs.opt"
   use namelist_open_mod, only : open_namelist_file
@@ -51,7 +51,7 @@ module diagnostics
   character(len=11) :: module_name = "diagnostics"
   integer(kind=4), public  :: output_period_diag =  0       ! output period
   integer(kind=4), public  :: nrpf_diag          =  0        ! total recs per file
-  logical, public  :: diag_avg, diag_uv, diag_trc
+  logical, public  :: diag_avg = .false., diag_uv = .false., diag_trc = .false.
   namelist /DIAGNOSTICS_SETTINGS/ output_period_diag, nrpf_diag,&
   &diag_avg, diag_uv, diag_trc
 
@@ -186,49 +186,23 @@ contains
 
   subroutine read_nml_diagnostics
 !     Read the "DIAGNOSTICS_SETTINGS" section of the namelist file
-#ifdef DIAGNOSTICS
+    use, intrinsic :: iso_fortran_env, only: iostat_end
 
     integer(kind=4) ::  namelist_unit, ios
     character(len=21) :: sr_name = "read_nml_diagnostics"
-    ! Read namelist
+    character(len=512) :: msg = ""
+    ! Read namelist (optional group: without it, no diagnostics)
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
-    read (unit=namelist_unit, nml=DIAGNOSTICS_SETTINGS, iostat=ios)
-    if (ios /= 0) then
+    read (unit=namelist_unit, nml=DIAGNOSTICS_SETTINGS, iostat=ios, iomsg=msg)
+    if (ios /= 0 .and. ios /= iostat_end) then
       call error_log%raise_global(&
       &context=module_name//'/'//sr_name, info=&
-      &'could not read DIAGNOSTICS_SETTINGS section of namelist file'&
+      &'could not read DIAGNOSTICS_SETTINGS section of namelist file: '//trim(msg)&
       &)
     end if
     close(namelist_unit)
     record = nrpf_diag
-#else
-    ! Without DIAGNOSTICS the group is read only to stop when diag_uv or
-    ! diag_trc is .true.; a missing group is fine. The keys and types are
-    ! the module's, read into local variables (the module's are not set).
-    use namelist_open_mod, only: gated_nml_found, check_nml_cpp_switch
-    integer(kind=4) :: output_period_diag, nrpf_diag
-    logical :: diag_avg, diag_uv, diag_trc
-    namelist /DIAGNOSTICS_SETTINGS/ output_period_diag, nrpf_diag,&
-    &diag_avg, diag_uv, diag_trc
-    integer(kind=4) :: namelist_unit, ios
-    character(len=21) :: sr_name = "read_nml_diagnostics"
-    character(len=512) :: msg
-
-    diag_uv = .false.
-    diag_trc = .false.
-    msg = ''
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=DIAGNOSTICS_SETTINGS, iostat=ios, iomsg=msg)
-    close(namelist_unit)
-    if (gated_nml_found(ios, msg, 'DIAGNOSTICS_SETTINGS', trim(module_name)//'/'//sr_name)) then
-      call check_nml_cpp_switch('DIAGNOSTICS_SETTINGS', 'diag_uv', diag_uv,&
-      &.false., 'DIAGNOSTICS', trim(module_name)//'/'//sr_name)
-      call check_nml_cpp_switch('DIAGNOSTICS_SETTINGS', 'diag_trc', diag_trc,&
-      &.false., 'DIAGNOSTICS', trim(module_name)//'/'//sr_name)
-    end if
-#endif
   end subroutine read_nml_diagnostics
 
 ! ----------------------------------------------------------------------

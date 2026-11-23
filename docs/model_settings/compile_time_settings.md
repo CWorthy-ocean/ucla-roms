@@ -18,11 +18,8 @@ These switches control fundamental aspects of the model setup, including the equ
 | `UV_COR` | Use Coriolis term in horizontal momentum equations | enabled | |
 | `ADV_ISONEUTRAL` | Rotate the advection and diffusion operators so they are oriented in the isoneutral direction | disabled | |
 | `CONST_TRACERS` | Keep tracer values constant in time and space | disabled | At each timestep the tracer tendencies will be calculated, but in the end it will just keep the value it had at the previous timestep |
-| `DIAGNOSTICS` | Enable the calculation and writing of "diagnostics" (term-by-term momentum and tracer budgets) | disabled | Options are set in the `DIAGNOSTICS_SETTINGS` namelist group |
 | `DIAGNOSTICS_NHMG` | Enable the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation | disabled | Not finished: compiles, but ROMS stops at startup, whether `nhmg` (`NHMG_SETTINGS`) is on or off, because its arrays are never allocated |
 | `NHMGDIAG` | Write momentum equation diagnostics for non-hydrostatic mode | disabled | As `DIAGNOSTICS_NHMG` |
-| `CDR_FORCING` | Enable special forcing for marine CO2 removal | disabled | Settings are in the `CDR_FRC_SETTINGS` namelist group |
-| `UPSCALING` | Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications | disabled | Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any `CDR_LITE` tracers. Requires `MARBL` and `MARBL_DIAGS` to be enabled. Settings are in the `UPSCALE_SETTINGS` namelist group |
 
 ### `GRID OPTIONS`
 
@@ -69,7 +66,7 @@ Tracer advection through an open-boundary face is upwind on inflow: the correcto
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
 | `M2_FRC_BRY` | Apply barotropic (2D) momentum forcing at the open boundaries | enabled | Can be combined with `OBC_M2SPECIFIED` to have a different effect. Requires inputs for `ubar` and `vbar`. |
-| `M3_FRC_BRY` | Apply baroclinic (3D) momentum forcing at the open boundaries | enabled | Can be combined with `SPONGE_TUNE`. Requires inputs for `u` and `v` (and `w`, if non-hydrostatic). |
+| `M3_FRC_BRY` | Apply baroclinic (3D) momentum forcing at the open boundaries | enabled | Can be combined with `apply_sponge_tune` (namelist). Requires inputs for `u` and `v` (and `w`, if non-hydrostatic). |
 | `OBC_EAST` | Use an open boundary on the "east" side of the domain | enabled | "East" in this context refers to MPI nodes with i-rank = `NP_XI-1` |
 | `OBC_M2FLATHER` | Use the Flather scheme for the 2D dynamical fields at open boundaries | enabled | |
 | `OBC_M3ORLANSKI` | Use the Orlanski scheme for the 3D dynamical fields at open boundaries | enabled | Designed to allow waves to exit the domain with minimal reflection |
@@ -81,7 +78,6 @@ Tracer advection through an open-boundary face is upwind on inflow: the correcto
 | `Z_FRC_BRY` | Apply SSH forcing at the open boundaries | enabled | Requires inputs for SSH. |
 | `OBC_RAD_NORMAL` | Calculate radiation for the Orlanski scheme using only the normal component of the velocity | disabled | Only has an effect with `OBC_M3ORLANSKI`, or with `OBC_M2FLATHER` and `LEGACY_ORLANSKI` (the tangential barotropic velocities) |
 | `OBC_RAD_NPO` | Explicitly set radiation for the Orlanski scheme to be zero for the velocity parallel to the boundary | disabled | Only has an effect if `OBC_RAD_NORMAL` is enabled |
-| `SPONGE_TUNE` | Add baroclinic pressure fluxes at open boundaries | disabled | Used in the child domain during downscaling of nested simulations. Requires pressure fluxes to be saved in the parent simulation. Use is optional. |
 
 ### `MIXING OPTIONS`
 
@@ -109,7 +105,6 @@ These switches control the biogeochemical (BGC) model, MARBL. (The BEC2 model wa
 | `NHY_FORCING` | Use ammonia atmospheric forcing | enabled | |
 | `NOX_FORCING` | Use nitrogen oxide atmospheric forcing | enabled | |
 | `PCO2AIR_FORCING` | Use atmospheric forcing for CO2 | enabled | Without it, MARBL uses `xco2air_default` from the `BGC_SETTINGS` namelist group |
-| `CDR_LITE` | Simulate CDR interventions with passive tracers, without a full BGC model | disabled | Adds air-sea CO2 exchange to the `CDR_LITE` tracers that `nt_cdr_oae` and `nt_cdr_dor` (`PARAM_SETTINGS`) create; works with or without `MARBL`. Settings are in the `CDR_LITE_SETTINGS` namelist group |
 
 ### `MISCELLANEOUS`
 
@@ -166,5 +161,10 @@ These keys are no longer keys because the namelist now decides what they decided
 | `UV_VIS2` | `visc2` in [`LATERAL_VISC_SETTINGS`](runtime_settings.md#lateral_visc_settings) (`0` for none), and the boundary sponge |
 | `TS_DIF2` | `tnu2` in [`TRACER_DIFF2`](runtime_settings.md#tracer_diff2) (`0` for none), and the boundary sponge |
 | `SPONGE` | `use_boundary_sponge` in [`V_SPONGE_SETTINGS`](runtime_settings.md#v_sponge_settings) (default `.true.`) |
+| `SPONGE_TUNE` | `apply_sponge_tune` in [`SPONGE_TUNE_SETTINGS`](runtime_settings.md#sponge_tune_settings) (default `.false.`) |
+| `DIAGNOSTICS` | `diag_uv` and `diag_trc` in [`DIAGNOSTICS_SETTINGS`](runtime_settings.md#diagnostics_settings) (default `.false.`) |
+| `CDR_FORCING` | `cdr_source` in [`CDR_FRC_SETTINGS`](runtime_settings.md#cdr_frc_settings) (default `.false.`) |
+| `CDR_LITE` | `nt_cdr_oae` or `nt_cdr_dor` above 0 in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default 0) |
+| `UPSCALING` | `do_upscale` in [`UPSCALE_SETTINGS`](runtime_settings.md#upscale_settings) (default `.false.`) |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

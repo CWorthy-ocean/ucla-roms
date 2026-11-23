@@ -10,7 +10,8 @@ import numpy as np
 import xarray as xr
 from pathlib import Path
 
-# Tracers always written to cdr_trcflx_profile (MARBL additionality vs ALT_CO2)
+# Tracers written to cdr_trcflx_profile if the files hold them (MARBL additionality
+# vs ALT_CO2; a run without MARBL writes the CDR_LITE tracers only)
 BASE_TRACER_NAMES = ("ALK", "DIC")
 
 # `_uscl` variables holding the boundary fluxes of dedicated CDR_LITE tracers
@@ -80,9 +81,10 @@ class CDRUpscaler:
     """
     Class for transforming CDR-relevant boundary tracers to CDR forcing profiles.
 
-    ALK and DIC additionality are always written to `cdr_trcflx_profile`. If the
-    `_uscl` files also hold dedicated CDR_LITE tracers (`CDR_OAE_ALK*`,
-    `CDR_OAE_DIC*`, `CDR_DOR_DIC*`), their fluxes follow along the tracer axis,
+    ALK and DIC additionality are written to `cdr_trcflx_profile` if the `_uscl`
+    files hold them (a run without MARBL does not write them). If the files hold
+    dedicated CDR_LITE tracers (`CDR_OAE_ALK*`, `CDR_OAE_DIC*`, `CDR_DOR_DIC*`),
+    their fluxes follow along the tracer axis,
     and `cdr_trc_name` records which tracer each column is. ROMS uses the names
     to apply each column to the tracer of that name, skipping tracers the parent
     run does not have (e.g. ALK and DIC without MARBL).
@@ -140,7 +142,7 @@ class CDRUpscaler:
         self.child_boundaries: dict = {}
         self.n_profiles: int = 0
         for bry in ["north","south","east","west"]:
-            v = f"ALK_add_{bry}"
+            v = f"h_{bry}"   # written for every open boundary
             if v in self.uscl_dataset.variables:
                 self.child_boundaries[bry] = True
                 rho_var = "eta_rho" if bry.endswith("st") else "xi_rho"
@@ -148,7 +150,11 @@ class CDRUpscaler:
         print(f"Found {self.n_profiles} boundary tracer profiles to convert to CDR forcing profiles")
 
         cdr_tracer_names = discover_cdr_tracer_names(self.uscl_dataset, self.child_boundaries)
-        self.tracer_names: list = list(BASE_TRACER_NAMES) + cdr_tracer_names
+        base_names = [n for n in BASE_TRACER_NAMES if any(
+            f"{n}_add_{bry}" in self.uscl_dataset.variables for bry in self.child_boundaries)]
+        self.tracer_names: list = base_names + cdr_tracer_names
+        if not self.tracer_names:
+            raise ValueError("No ALK, DIC or CDR_LITE boundary fluxes in the `_uscl` files")
         if cdr_tracer_names:
             print("Found CDR tracers in `_uscl` files: " + ", ".join(cdr_tracer_names))
 
@@ -203,7 +209,7 @@ class CDRUpscaler:
 
         Creates the following variables:
         - cdr_trcflx_profile: Series of time-evolving tracer flux profiles flux(time,depth,tracer,profile no.)
-          ALK and DIC are the first two tracers; CDR_LITE tracers, if any, follow.
+          ALK and DIC, if in the files, are the first two tracers; CDR_LITE tracers, if any, follow.
         - cdr_trc_name: Tracer names along the tracer axis (only with CDR_LITE tracers)
         - cdr_lon, cdr_lat: 1D arrays specifying where each tracer flux profile is located
         - cdr_layer_thickness: Series of time-evolving layer heights used to remap the profiles onto the parent grid
@@ -213,7 +219,8 @@ class CDRUpscaler:
 
         ds = xr.Dataset()
         n_trc = len(self.tracer_names)
-        trc_dim = "two" if n_trc == 2 else "ntrc"
+        alk_dic_only = self.tracer_names == list(BASE_TRACER_NAMES)
+        trc_dim = "two" if alk_dic_only else "ntrc"
 
         ds["cdr_trcflx_profile"] = xr.DataArray(
             np.zeros((self.n_windows + 1, len(self.s_rho), n_trc, self.n_profiles)),
@@ -223,7 +230,7 @@ class CDRUpscaler:
                 "units": "mmol/s",
             },
         )
-        if n_trc > 2:
+        if not alk_dic_only:
             ds["cdr_trc_name"] = xr.DataArray(
                 np.array(self.tracer_names),
                 dims=(trc_dim,),
