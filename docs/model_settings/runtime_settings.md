@@ -719,7 +719,7 @@ Optional: if the group is absent, `nhmg = .false.`. Switches on the non-hydrosta
 |--------|---------|-------------|
 | `nhmg` | `.false.` | Non-hydrostatic solver on (`.true.`) or off (`.false.`) |
 
-With `nhmg = .true.`, the solver's own settings (tolerance, iterations, relaxation method, surface condition, periodicity, ...) are read from the optional file `nhmg_namelist` in the run directory (group `&nhparam`, see `NHMG/src/mg_namelist.f90`); without the file they keep their defaults. ROMS stops at startup if `nhmg = .true.` is combined with `fs_mode = 'implicit'` (`IMPLICIT_FS`), with the cpp key `IMEX_IGW`, or with the cpp key `MPI_MASKING` (NHMG needs an MPI rank for every tile), and if the cpp key `DIAGNOSTICS_NHMG` or `NHMGDIAG` is defined while `nhmg = .false.`.
+With `nhmg = .true.`, the solver's own settings (tolerance, iterations, relaxation method, surface condition, periodicity, ...) are read from the optional file `nhmg_namelist` in the run directory (group `&nhparam`, see `NHMG/src/mg_namelist.f90`); without the file they keep their defaults. ROMS stops at startup if `nhmg = .true.` is combined with `fs_mode = 'implicit'` (`IMPLICIT_FS`), with the cpp key `IMEX_IGW`, or with the cpp key `MPI_MASKING` (NHMG needs an MPI rank for every tile), and, whatever `nhmg` is, if the cpp key `DIAGNOSTICS_NHMG` or `NHMGDIAG` (not finished) is defined.
 
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)

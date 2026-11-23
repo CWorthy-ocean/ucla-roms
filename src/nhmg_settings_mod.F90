@@ -51,8 +51,10 @@ contains
     nhmg_on = nhmg
 
 #if defined DIAGNOSTICS_NHMG || defined NHMGDIAG
-    if (.not. nhmg_on) call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
-    &info="the cpp keys DIAGNOSTICS_NHMG and NHMGDIAG need nhmg = .true. in NHMG_SETTINGS")
+    ! their arrays (Wdiag, w_prev, wdz_old, w_dif in diagnostics.F90) are never allocated
+    call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
+    &info="the cpp keys DIAGNOSTICS_NHMG and NHMGDIAG are not finished, with nhmg on or off: "//&
+    &"remove them from cppdefs.opt")
 #endif
     if (.not. nhmg_on) return
 
