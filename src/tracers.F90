@@ -31,6 +31,7 @@ module tracers
   &,ieast, iwest, jnorth, jsouth, nt_bgc
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
+  use surf_flux, only: cflx_corr
   use surf_flux, only: stflx                          ! surface tracer flux should possibly live in this module rath
 #ifdef CDR_LITE
   use surf_flux, only: ddic_dco2, ddic_dalk, k_gas, uwnd, vwnd,&
@@ -222,12 +223,12 @@ contains
     integer(kind=4) i,j
     real(kind=8)    u_pist
 
-#if defined(CFLX_CORR) && defined(MARBL) && defined(BULK_FRC)
     ! calc_all_bulk_forces (called before this routine) sets the DIC and ALK
     ! restoring flux every step, so it must not be zeroed on the first step
-    if (trim(t_vname(itrc))=='DIC' .or. trim(t_vname(itrc))=='ALK' .or. &
-      & trim(t_vname(itrc))=='DIC_ALT_CO2' .or. trim(t_vname(itrc))=='ALK_ALT_CO2') return
-#endif
+    if (cflx_corr) then
+      if (trim(t_vname(itrc))=='DIC' .or. trim(t_vname(itrc))=='ALK' .or. &
+        & trim(t_vname(itrc))=='DIC_ALT_CO2' .or. trim(t_vname(itrc))=='ALK_ALT_CO2') return
+    endif
 
     ! Currently set up for zero surface tracer flux
     ! Also, time invariant so only set once for efficiency (doesn't change each timestep)

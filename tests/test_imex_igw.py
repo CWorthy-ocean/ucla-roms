@@ -66,6 +66,7 @@ def imex_namelist(input_dir, obc_mode="fixed", **imex):
     template's 'auto' selects 'modal' on this grid).
     """
     nml = create_test_namelist_dict(input_dir)
+    nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["TIDAL_FRC_SETTINGS"].update({"pot_tides": True, "ntides": 2})
     nml["FORCING_FILES"]["frcfiles"].append(str(input_dir / "example_input_tides.nc"))
@@ -446,7 +447,7 @@ def imex_marbl_configuration(tmp_path_factory) -> ROMSConfiguration:
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
-        + MARBL_CPP_KEYS + ["SFLX_CORR", "CFLX_CORR", "IMEX_IGW"]
+        + MARBL_CPP_KEYS + ["IMEX_IGW"]
     )
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path_factory.mktemp("imex_marbl_build"))
     conf.compile()

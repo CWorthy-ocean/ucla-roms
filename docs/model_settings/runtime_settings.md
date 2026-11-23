@@ -116,9 +116,9 @@ Not read with `ANA_INITIAL`.
 | `interp_bulk_frc` | Interpolate forcing from coarser input grid if .true. |
 | `check_bulk_frc_units` | Perform a check that input files have expected units if .true.  |
 | `interp_flux_frc` | Interpolate forcing from coarser input grid if .true. |
-| `sflx_corr` | Optional. Restore surface salinity (coefficient `dSSSdt` in `SSS_CORRECTION`). The CPP key `SFLX_CORR` decides it: left out, it takes the key; set, it must match the key, or ROMS stops |
-| `qcorrection` | Optional. Restore surface temperature (coefficient `dSSTdt` in `SST_CORRECTION`). The CPP key `QCORRECTION` decides it, as for `sflx_corr` |
-| `cflx_corr` | Optional. Restore surface DIC and ALK (coefficient `dCdt` in `DIC_ALK_CORRECTION`). The CPP key `CFLX_CORR` decides it, as for `sflx_corr` |
+| `sflx_corr` | Restore surface salinity toward `sss` if `.true.` (default `.false.`; coefficient `dSSSdt` in `SSS_CORRECTION`). ROMS stops if it is `.true.` without `BULK_FRC` and `SALINITY`, or with `ANA_SSFLUX` |
+| `qcorrection` | Restore surface temperature toward `sst` if `.true.` (default `.false.`; coefficient `dSSTdt` in `SST_CORRECTION`). ROMS stops if it is `.true.` without `BULK_FRC` |
+| `cflx_corr` | Restore surface DIC and ALK toward `sDIC` and `sALK` if `.true.` (default `.false.`; coefficient `dCdt` in `DIC_ALK_CORRECTION`). ROMS stops if it is `.true.` without `BULK_FRC` and `MARBL`, or if a tracer it needs (`DIC`, `DIC_ALT_CO2`, `ALK`, `ALK_ALT_CO2`) is missing |
 
 ### `RIVER_FRC_SETTINGS`
 (read by module `river_frc.F90`)
@@ -449,11 +449,11 @@ Not read when the domain is periodic in both directions (`EW_PERIODIC` and `NS_P
 ### `TRACER_DIFF2`
 (read by module `scalars.F90`)
 
-Read only with `TS_DIF2`.
+Optional: without the group `tnu2` is 0.
 
 | Setting | Description |
 |--------|-------------|
-| `tnu2` | List of horizontal Laplacian diffusion (m2/s) for each tracer |
+| `tnu2` | List of horizontal Laplacian diffusion (m2/s) for each tracer (`0` for none). Values beyond the number of tracers are ignored |
 
 ### `BOTTOM_DRAG_SETTINGS`
 (read by module `scalars.F90`)
@@ -470,16 +470,16 @@ Read only with `TS_DIF2`.
 | Setting | Description |
 |--------|-------------|
 | `akv_bak` | Vertical viscosity (m2/s) |
-| `akt_bak` | List of vertical mixing coefficients (m2/s) for each tracer |
+| `akt_bak` | List of vertical mixing coefficients (m2/s) for each tracer. Values beyond the number of tracers are ignored |
 
 ### `LATERAL_VISC_SETTINGS`
 (read by module `scalars.F90`)
 
-Read only with `UV_VIS2`.
+Optional: without the group `visc2` is 0.
 
 | Setting | Description |
 |--------|-------------|
-| `visc2` | Horizontal Laplacian kinematic viscosity (m2/s) |
+| `visc2` | Horizontal Laplacian kinematic viscosity (m2/s; `0` for none) |
 
 ### `UBIND_SETTINGS`
 (read by module `scalars.F90`)
@@ -493,17 +493,18 @@ Read only with boundary forcing (`T_FRC_BRY`, `M2_FRC_BRY`, `M3_FRC_BRY` or `Z_F
 ### `V_SPONGE_SETTINGS`
 (read by module `scalars.F90`)
 
-Read only with `SPONGE`.
+Optional: without the group `v_sponge` is 0, so there is no sponge.
 
 | Setting | Description |
 |--------|-------------|
-| `v_sponge` | Maximum viscosity in sponge layer (m2/s); also the tracer diffusivity unless `v_sponge_trc` is set |
+| `use_boundary_sponge` | Increase the viscosity and diffusivity near the open boundaries if `.true.` (the default), by `v_sponge` and `v_sponge_trc` |
+| `v_sponge` | Maximum viscosity in sponge layer (m2/s), not negative; also the tracer diffusivity unless `v_sponge_trc` is set |
 | `v_sponge_trc` | Maximum tracer diffusivity in sponge layer (m2/s). `0` gives a sponge on currents only; negative (the template's `-1.0`) or absent means the same as `v_sponge` |
 
 ### `SSS_CORRECTION`
 (read by module `surf_flux.F90`)
 
-Read only with `SFLX_CORR` and `SALINITY`, and without `ANA_SSFLUX`.
+Required, and read, only if `sflx_corr = .true.` (`SURF_FRC_SETTINGS`).
 
 | Setting | Description |
 |--------|-------------|
@@ -512,7 +513,7 @@ Read only with `SFLX_CORR` and `SALINITY`, and without `ANA_SSFLUX`.
 ### `SST_CORRECTION`
 (read by module `surf_flux.F90`)
 
-Read only with `QCORRECTION`.
+Required, and read, only if `qcorrection = .true.` (`SURF_FRC_SETTINGS`).
 
 | Setting | Description |
 |--------|-------------|
@@ -521,7 +522,7 @@ Read only with `QCORRECTION`.
 ### `DIC_ALK_CORRECTION`
 (read by module `surf_flux.F90`)
 
-Read only with `CFLX_CORR` and `MARBL`.
+Required, and read, only if `cflx_corr = .true.` (`SURF_FRC_SETTINGS`).
 
 | Setting | Description |
 |--------|-------------|
@@ -572,7 +573,7 @@ Controls the output of model surface fluxes.
 |--------|-------------|
 | `wrt_smflx` | Output surface momentum flux if `.true.`|
 | `wrt_stflx` | Output surface tracer flux if `.true.`|
-| `wrt_rstflx` | Output the surface restoring fluxes of the compiled-in restoring terms if `.true.` (`shflx_rst` with `QCORRECTION`, `ssflx_rst` with `SFLX_CORR`, `dicflx_rst` and `alkflx_rst` with `CFLX_CORR` and `MARBL`; `BULK_FRC` only). ROMS stops at startup if none is compiled in |
+| `wrt_rstflx` | Output the surface restoring fluxes of the restoring terms that are on if `.true.` (`shflx_rst` with `qcorrection`, `ssflx_rst` with `sflx_corr`, `dicflx_rst` and `alkflx_rst` with `cflx_corr`). ROMS stops at startup if none is on |
 | `wrt_swflx` | Output surface water flux (P-E) if `.true.` |
 | `sflx_avg` | Output average (if `.true`) or instantaneous (if `.false`) fields |
 | `output_period_sflx` | Frequency of surface flux output (s) |

@@ -60,6 +60,7 @@ def implicit_fs_configuration(tmp_path_factory) -> ROMSConfiguration:
 def implicit_fs_namelist(input_dir, **implicit_fs):
     """The test namelist with the tidal potential and the implicit free surface."""
     nml = create_test_namelist_dict(input_dir)
+    nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["TIDAL_FRC_SETTINGS"].update({"pot_tides": True, "ntides": 2})
     nml["FORCING_FILES"]["frcfiles"].append(str(input_dir / "example_input_tides.nc"))
@@ -261,6 +262,7 @@ def bulk_pio_configuration(input_dir, tmp_path_factory) -> ROMSConfiguration:
 def bulk_pio_namelist(conf: ROMSConfiguration, **implicit_fs) -> dict:
     """The test namelist with bulk surface forcing and the implicit free surface."""
     nml = create_test_namelist_dict(conf.inputs)
+    nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["FORCING_FILES"]["frcfiles"] = [
         str(conf.inputs / "example_input_boundary_forcing.nc"),

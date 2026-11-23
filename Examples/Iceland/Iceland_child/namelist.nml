@@ -388,7 +388,7 @@ gamma2 = 1.0 ! Slipperiness parameter (free-slip = +1, no-slip = -1)
 
 &TRACER_DIFF2                                                          !scalars.F
 !------------
-! Requires TS_DIF2 cppkey
+! Optional group; values beyond the number of tracers are ignored
 !------------
 tnu2=0.0 0.0 ! Horizontal Laplacian diffusion (m2/s) for each tracer
 /
@@ -408,7 +408,7 @@ akt_bak = 0.0        ! Vertical mixing (m2/s) for each tracer
 
 &LATERAL_VISC_SETTINGS                                                 !scalars.F
 !---------------------
-! Requires UV_VIS2 cppkey
+! Optional group
 !---------------------
 visc2 = 0. ! Horizontal Laplacian kinematic viscosity (m2/s)
 /
@@ -422,8 +422,9 @@ ubind = 0.1 ! Open boundary binding velocity (m/s)
 
 &V_SPONGE_SETTINGS                                                     !scalars.F
 !-----------------
-!Requires SPONGE cppkey
+! Optional group; without it there is no sponge (v_sponge = 0)
 !-----------------
+use_boundary_sponge = .true. ! Extra viscosity and diffusivity along the open boundaries if T (the default)
 v_sponge = 1.0 ! Maximum viscosity in sponge layer (m2/s)
 v_sponge_trc = -1.0 ! Maximum tracer diffusivity in sponge layer (m2/s); 0 for a sponge on currents only, negative for the same as v_sponge
 /
@@ -435,14 +436,14 @@ v_sponge_trc = -1.0 ! Maximum tracer diffusivity in sponge layer (m2/s); 0 for a
 !================================================================================
 &SSS_CORRECTION                                                       !surf_flx.F
 !--------------
-! Requires SFLX_CORR and SALINITY cppkeys
+! Required if sflx_corr = .true. (SURF_FRC_SETTINGS)
 !--------------
 dSSSdt = 0. ! SSS correction co-efficient as piston velocity (cm/day)
 /
 
 &SST_CORRECTION                                                       !surf_flx.F
 !--------------
-! Requires QCORRECTION cppkey
+! Required if qcorrection = .true. (SURF_FRC_SETTINGS)
 !--------------
 dSSTdt = 0. ! SST correction co-efficient as piston velocity (cm/day)
 /

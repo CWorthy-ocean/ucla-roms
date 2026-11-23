@@ -2,7 +2,6 @@ module set_nudgcof_mod
 #include "cppdefs.opt"
   implicit none
   private
-#ifdef SPONGE
 
   public :: set_nudgcof
 contains
@@ -26,10 +25,7 @@ contains
     use dimensions, only: npx, npy
     use mixing, only:  sponge_size, visc2_r,&
     &visc2_p, diff2
-    use scalars, only: nt&
-#ifdef SPONGE
-    &, v_sponge, v_sponge_trc
-#endif
+    use scalars, only: nt, pi, v_sponge, v_sponge_trc
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend
@@ -89,8 +85,6 @@ contains
       enddo
     enddo
 
-#  ifdef SPONGE
-#   ifdef UV_VIS2
     do j=jstrR,jendR
       do i=istrR,iendR
         visc2_r(i,j)=visc2_r(i,j)+v_sponge*wrk(i,j)
@@ -103,9 +97,7 @@ contains
         &+wrk(i-1,j)+wrk(i,j-1)+wrk(i-1,j-1))
       enddo
     enddo
-#   endif
 
-#   ifdef TS_DIF2
     do itrc=1,NT           ! diffusivity for the tracers
       do j=jstrR,jendR
         do i=istrR,iendR
@@ -113,12 +105,5 @@ contains
         enddo
       enddo
     enddo
-#   endif
-#  endif
   end subroutine set_nudgcof_tile
-#else
-contains
-  subroutine set_nudgcof_empty
-  end subroutine set_nudgcof_empty
-#endif
 end module set_nudgcof_mod

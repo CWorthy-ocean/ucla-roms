@@ -72,10 +72,6 @@
 ! Usage notes: The model will look for coordinates based on latitude and longitude instead of distance
 #define SPHERICAL
 
-! Increase viscosity and diffusivity for momentum and tracers near the lateral boundaries
-! Usage notes: The magnitude is set by v_sponge (and v_sponge_trc for tracers) in the V_SPONGE_SETTINGS namelist group
-#define SPONGE
-
 !----------------------------------------------------------
 
 ! Analytically prescribe the grid
@@ -114,14 +110,6 @@
 ! Analytically prescribe surface heat flux (with flux forcing)
 ! Usage notes: Hardcoded in analytical.F
 #undef ANA_STFLUX
-
-! Apply restoring to sea surface temperature
-! Usage notes:
-#undef QCORRECTION
-
-! Apply restoring to sea surface salinity
-! Usage notes:
-#undef SFLX_CORR
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!! NUMERICAL ALGORITHMS !!!!!!!!!!!!!!!!!!!!!!!!!
@@ -227,14 +215,6 @@
 ! Compute mixing due to breaking internal waves
 ! Usage notes: Designed only to have an effect where local gradient Richardson number is small
 #define LMD_RIMIX
-
-! Apply Laplacian diffusion along sigma-surfaces
-! Usage notes: Diffusivities are specified under the "tracer_diff2" header in the runtime .in file
-#define TS_DIF2
-
-! Apply Laplacian viscosity along sigma-surfaces
-! Usage notes: Viscosities are specified under the "lateral_visc" header in the runtime .in file
-#define UV_VIS2
 
 !----------------------------------------------------------
 
