@@ -642,7 +642,7 @@ fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost ta
 ! break features such as exact restarts. Its solver settings are read from the
 ! optional file nhmg_namelist (group &nhparam) in the run directory. Stops with
 ! fs_mode = 'implicit' or MPI_MASKING. The cpp keys DIAGNOSTICS_NHMG and
-! NHMGDIAG need nhmg = .true. See docs/model_settings/runtime_settings.md.
+! NHMGDIAG always stop the run (not finished). See docs/model_settings/runtime_settings.md.
 !================================================================================
 &NHMG_SETTINGS                                              !nhmg_settings_mod.F90
 nhmg = .false.          ! Non-hydrostatic solver on (T) or off (F)

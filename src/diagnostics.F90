@@ -574,6 +574,7 @@ contains
     ! local
     integer(kind=4) :: i, j, k
 
+#ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       i=istr-1
       do k=1,nz-1            ! N-1 because of k+1
@@ -593,7 +594,9 @@ contains
       enddo
       Wdiag(i,j,nz,iwbc) = w(i,j,nz,nnew) * Hz(i,j,nz) - wdz_old(i,j,nz)
     endif
+#endif
 
+#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       j=jstr-1
       do k=1,nz-1
@@ -613,6 +616,7 @@ contains
       enddo
       Wdiag(i,j,nz,iwbc) = w(i,j,nz,nnew) * Hz(i,j,nz) - wdz_old(i,j,nz)
     endif
+#endif
 
   end subroutine set_diags_w_at_bc  !]
 ! ----------------------------------------------------------------------
