@@ -695,8 +695,8 @@ contains
     ! For non-periodic domains, we extrapolate the gradients at the
     ! domain boundaries because the buffer is only 1 point wide.
     if (.not.ew_periodic) then
-      if (inode.eq.0)     grd(0   ,1:ny) = grd(1   ,1:nx)
-      if (inode.eq.npx-1) grd(nx+2,1:ny) = grd(nx+1,1:nx)
+      if (inode.eq.0)     grd(0   ,1:ny) = grd(1   ,1:ny)
+      if (inode.eq.npx-1) grd(nx+2,1:ny) = grd(nx+1,1:ny)
     endif
     do j= 1,ny
       do i= 0,nx+1

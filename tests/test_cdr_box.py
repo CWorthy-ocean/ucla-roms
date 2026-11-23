@@ -17,6 +17,7 @@ import xarray as xr
 from ._helpers import (
     ADDITIONAL_FILES,
     ANALYTICAL_CPP_KEYS,
+    BOUNDS_CHECK_FFLAGS,
     OCEAN_PHYSICS_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -43,12 +44,12 @@ CPP_KEYS = (
 )
 
 
-def _box_configuration(tmp_path_factory, name, extra_keys=()) -> ROMSConfiguration:
+def _box_configuration(tmp_path_factory, name, extra_keys=(), make_args="") -> ROMSConfiguration:
     build_dir = tmp_path_factory.mktemp(name)
     conf = ROMSConfiguration(cpp_keys=CPP_KEYS + list(extra_keys), location=build_dir)
     (build_dir / "ana_grid.h").symlink_to(ADDITIONAL_FILES / "cdr_box_ana_grid.h")
     (build_dir / "ana_init.h").symlink_to(ADDITIONAL_FILES / "cdr_box_ana_init.h")
-    conf.compile()
+    conf.compile(make_args)
     return conf
 
 
@@ -254,8 +255,9 @@ def test_output_is_cdf5(box_conf, box_cdr_file, input_dir, tmp_path):
 
 @pytest.fixture(scope="module")
 def box_diag_conf(tmp_path_factory) -> ROMSConfiguration:
-    """The box with DIAGNOSTICS."""
-    return _box_configuration(tmp_path_factory, "cdr_box_diag_build", ["DIAGNOSTICS"])
+    """The box with DIAGNOSTICS, compiled with array bounds checking."""
+    return _box_configuration(tmp_path_factory, "cdr_box_diag_build", ["DIAGNOSTICS"],
+                              make_args=f'USER_FFLAGS="{BOUNDS_CHECK_FFLAGS}"')
 
 
 def test_momentum_diagnostics_edges_are_fill(box_diag_conf, box_cdr_file, input_dir, tmp_path):
@@ -286,3 +288,24 @@ def test_momentum_diagnostics_edges_are_fill(box_diag_conf, box_cdr_file, input_
             for edge in edges(values):
                 assert np.all(edge == fill), f"{name}: an edge cell is not the fill value"
             assert not np.any(interior(values) == fill), f"{name}: fill value inside the domain"
+
+
+def test_tracer_diagnostics_on_unequal_tiles(box_diag_conf, box_cdr_file, input_dir, tmp_path):
+    """The tracer diagnostics (diag_trc) on tiles wider than tall (32 x 8) and taller
+    than wide (8 x 32). diag_t_adv_hc4 copied grd(1,1:nx) into grd(0,1:ny) at the west
+    and east edges: on wide tiles that wrote past the end of grd, heap corruption that
+    could crash the run as late as MPI_Finalize; on tall tiles it left rows nx+1:ny of the
+    edge unset. Built with bounds checking, the wide-tile run stops there (an index out of
+    range); gfortran's check also stops the tall-tile run (an array bound mismatch)."""
+    for np_xi, np_eta in ((1, 4), (4, 1)):
+        nml = box_namelist(input_dir, box_cdr_file, np_xi, np_eta)
+        nml["TIME_STEPPING"]["ntimes"] = 2
+        nml["DIAGNOSTICS_SETTINGS"] = {
+            "diag_avg": False, "diag_uv": False, "diag_trc": True,
+            "output_period_diag": int(DT), "nrpf_diag": 10,   # integers in diagnostics.F90
+        }
+        nml["TS_OUTPUT_SETTINGS"].update({"wrt_temp_dia": True, "wrt_salt_dia": True})
+        run_dir = tmp_path / f"t{np_xi}x{np_eta}"
+        run_dir.mkdir()
+        box_diag_conf.run(nml, cwd=run_dir)
+        assert list(run_dir.glob("roms_dia.*.0.nc")), f"{np_xi}x{np_eta}: no diagnostics file"
