@@ -141,6 +141,7 @@ def _nml(conf, input_dir, pio_input_dir, children: list[dict], scalars=()) -> di
     plus ``file`` and ``root``). One child is written as scalars, as before;
     so are the settings named in ``scalars`` (child 1's value only)."""
     nml = create_test_namelist_dict(pio_input_dir if conf.pio else input_dir)
+    nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     settings = {
         "extract_file": [str(c["file"]) for c in children],
         "extract_root_name": [c["root"] for c in children],

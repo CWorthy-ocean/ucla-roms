@@ -245,6 +245,8 @@ contains
     if (diag_uv) then
       allocate(Udiag(nx,ny,nz,nmd) )
       allocate(Vdiag(nx,ny,nz,nmd) )
+      Udiag = 0   ! the hmix term is set only by visc3d, called only with viscosity
+      Vdiag = 0
       allocate(u_prev(nx,nz) )
       allocate(v_prev(nx,nz) )
       if (diag_avg) then

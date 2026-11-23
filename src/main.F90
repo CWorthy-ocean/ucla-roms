@@ -202,9 +202,8 @@ contains
     use rho_eos_mod, only: rho_eos
     use set_depth_mod, only: set_depth, set_HUV, set_HUV1
     use set_scoord_mod, only: set_scoord
-#ifdef SPONGE
     use set_nudgcof_mod, only: set_nudgcof
-#endif
+    use scalars, only: use_boundary_sponge
     use setup_grid_mod, only: setup_grid1, setup_grid2
 
     implicit none
@@ -367,9 +366,7 @@ contains
 
     ! we should have a grid and z_r by now
 
-#if defined SPONGE
-    call set_nudgcof(0)
-#endif
+    if (use_boundary_sponge) call set_nudgcof(0)
     ! The optional argument refers to
     ! blowup if true, and initial if false.
 ! Come up with a better name!
@@ -443,9 +440,7 @@ contains
     use prsgrd_mod, only: prsgrd
     use rho_eos_mod, only: rho_eos
     use set_depth_mod, only: set_huv, set_huv1
-# ifdef TS_DIF2
     use t3dmix_mod, only: t3dmix => t3dmix_s
-#endif
 # ifdef MARBL
     use bgc_io, only: wrt_bgc
 #endif
@@ -463,9 +458,8 @@ contains
     use step2d_mod, only: step2d
     use step3d_t_mod, only: step3d_t
     use step3d_uv_mod, only: step3d_uv1, step3d_uv2
-#  ifdef UV_VIS2
     use visc3d_mod, only: visc3d => visc3d_s
-#endif
+    use scalars, only: visc_on, diff_on
     use timers, only: reg_tic, reg_toc,&
     &  rg_set_forces, rg_set_bry, rg_rho_eos, rg_huv_omega, rg_lmd_vmix,&
     &  rg_prsgrd, rg_pre_step3d, rg_huv1_omega, rg_uv1_visc, rg_step2d,&
@@ -613,9 +607,7 @@ contains
     call reg_tic(rg_uv1_visc)
     call step3d_uv1(0)  ! update u/v(nnew) with dt*ru/rv
 
-#  ifdef UV_VIS2
-    call visc3d
-#  endif
+    if (visc_on) call visc3d
     call reg_toc(rg_uv1_visc)
 
 
@@ -655,11 +647,11 @@ contains
     call step3d_t(0, tstep=iic)
     call reg_toc(rg_step3d_t)
 !GOOD
-# ifdef TS_DIF2
-    call reg_tic(rg_t3dmix)
-    call t3dmix
-    call reg_toc(rg_t3dmix)
-# endif
+    if (diff_on) then
+      call reg_tic(rg_t3dmix)
+      call t3dmix
+      call reg_toc(rg_t3dmix)
+    endif
 
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     ! After t3dmix, so the boundary rates hold this step's advective flux

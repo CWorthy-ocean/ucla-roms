@@ -3,7 +3,6 @@ module t3dmix_mod
   implicit none
   private
 
-#ifdef TS_DIF2
   public :: t3dmix_s, t3dmix_gp
 contains
 
@@ -51,7 +50,6 @@ contains
 
     do k=1,nz
 
-# ifdef TS_DIF2
 
 ! Add in horizontal Laplacian diffusion along constant S-surfaces.
 !--------------------------------------------------------------------
@@ -107,7 +105,6 @@ contains
       ! FX,FE here are minus the flux in the +xi/+eta direction
       if (do_upscale) call add_mixing_rates(itrc,k,FX,FE,istr,iend,jstr,jend,-1._8)
 #  endif
-# endif /* TS_DIF2 */
 
     enddo
   end subroutine t3dmix_s_tile
@@ -160,7 +157,6 @@ contains
 # else
 #  define SWITCH !
 # endif
-# ifdef TS_DIF2
 
     !!! WARNING: RECURSIVE
 ! Compute horizontal (along geopotential     !!!   BLOCKING SEQUENCE
@@ -271,12 +267,6 @@ contains
         enddo
       endif  ! <-- k>0
     enddo   ! --> k
-# endif /* TS_DIF2 */
   end subroutine t3dmix_gp_tile
 
-#else
-contains
-  subroutine t3dmix_empty
-  end subroutine t3dmix_empty
-#endif
 end module t3dmix_mod

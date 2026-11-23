@@ -3,7 +3,7 @@
 A group whose cpp key is off is still read, only to stop when it switches its
 feature on (gated_nml_found and check_nml_cpp_switch in namelist_open_mod).
 Every case runs one physics-only build, without MARBL, CDR_FORCING, UPSCALING,
-DIAGNOSTICS, SPONGE_TUNE or SFLX_CORR, against a mutated test namelist.
+DIAGNOSTICS, SPONGE_TUNE or BULK_FRC, against a mutated test namelist.
 
 A stop is an MPI_Abort after read_namelists collects the errors: mpirun exits
 non-zero and the message goes to stderr, so it never reaches "Git hash:",
@@ -74,7 +74,16 @@ STOPS = {
     "ub_tune": ("SPONGE_TUNE_SETTINGS", {"ub_tune": True},
                 ["SPONGE_TUNE_SETTINGS ub_tune = .true. needs the cpp key SPONGE_TUNE"]),
     "sflx_corr": ("SURF_FRC_SETTINGS", {"sflx_corr": True},
-                  ["SURF_FRC_SETTINGS sflx_corr = .true. needs the cpp key SFLX_CORR"]),
+                  ["SURF_FRC_SETTINGS sflx_corr = .true. needs the cpp key BULK_FRC"]),
+    "qcorrection": ("SURF_FRC_SETTINGS", {"qcorrection": True},
+                    ["SURF_FRC_SETTINGS qcorrection = .true. needs the cpp key BULK_FRC"]),
+    "cflx_corr": ("SURF_FRC_SETTINGS", {"cflx_corr": True},
+                  ["SURF_FRC_SETTINGS cflx_corr = .true. needs the cpp key BULK_FRC",
+                   "SURF_FRC_SETTINGS cflx_corr = .true. needs the cpp key MARBL"]),
+    "negative_v_sponge": ("V_SPONGE_SETTINGS", {"v_sponge": -1.0},
+                          ["V_SPONGE_SETTINGS v_sponge must not be negative"]),
+    "v_sponge_misspelled": ("V_SPONGE_SETTINGS", {"use_boundary_spong": True},
+                            ["could not read V_SPONGE_SETTINGS"]),
     "calc_pflx_without_timescale": ("CALC_PFLX_SETTINGS", {"calc_pflx": True, "pflx_timescale": 0},
                                     ["pflx_timescale must be > 0"]),
     # the group holds only the misspelled key
@@ -112,7 +121,20 @@ def _add_error_handling(nml):
     nml["ERROR_HANDLING_SETTINGS"] = {"gather_errors_on_main_rank": False}
 
 
+def _drop_mixing_groups(nml):
+    for group in ("TRACER_DIFF2", "LATERAL_VISC_SETTINGS", "V_SPONGE_SETTINGS"):
+        del nml[group]
+
+
+def _extra_tracer_values(nml):
+    # two tracers in this build: the extra values are ignored
+    nml["TRACER_DIFF2"]["tnu2"] = [1.0, 2.0, 3.0, 4.0]
+    nml["VERTICAL_MIXING_SETTINGS"]["akt_bak"] = [1.0e-5, 1.0e-5, 1.0, 1.0]
+
+
 NO_STOPS = {
+    "mixing_groups_missing": _drop_mixing_groups,
+    "extra_tracer_values": _extra_tracer_values,
     "gated_groups_missing": _drop_gated_groups,
     "reference_date_missing": _drop_reference_date,
     "error_handling_leftover": _add_error_handling,

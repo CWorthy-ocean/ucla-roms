@@ -185,7 +185,7 @@ def budget_run(tmp_path_factory, uscl_conf, input_dir):
 def test_export_closes_perturbation_budget(budget_run, v_sponge_trc):
     """Interior ALK-perturbation inventory changes by minus the ``_uscl`` export.
 
-    With SPONGE the boundary-row diffusivity is v_sponge (``v_sponge_trc``
+    With the boundary sponge the boundary-row diffusivity is v_sponge (``v_sponge_trc``
     when set), so much of what leaves goes by mixing; an export of the
     advective flux alone misses it. Nothing else in the run separates ALK
     from ALK_ALT_CO2 (no CDR source, no rivers, equal boundary values), so

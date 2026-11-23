@@ -69,7 +69,8 @@ module scalars
 ! levbfrc                                stress as as bodyforce.
 
   real(kind=8) start_time, dt, dtfast, time_avg
-  real(kind=8) rdrg,rdrg2,Zob, visc2,gamma2
+  real(kind=8) rdrg,rdrg2,Zob, gamma2
+  real(kind=8) :: visc2 = 0._8
 !     real :: xl,el
 
   real(kind=8) rho0
@@ -84,9 +85,12 @@ module scalars
   real(kind=8) :: Akv_bak = 0._8
   real(kind=8), allocatable :: Akt_bak(:)
 
-#ifdef SPONGE
-  real(kind=8) v_sponge, v_sponge_trc
-#endif
+  logical :: use_boundary_sponge = .true.   ! sponge along the open boundaries (V_SPONGE_SETTINGS)
+  real(kind=8) :: v_sponge = 0._8, v_sponge_trc = -1._8
+
+  ! Horizontal mixing is done only where the namelist asks for some (read_nml_scalars):
+  ! viscosity from visc2 or the sponge, tracer diffusion from tnu2 or the sponge
+  logical, protected :: visc_on = .false., diff_on = .false.
 
 
 
@@ -125,25 +129,18 @@ module scalars
 #if !defined EW_PERIODIC || !defined NS_PERIODIC
   namelist /GAMMA2_SETTINGS/ gamma2
 #endif
-#ifdef TS_DIF2
-  namelist /TRACER_DIFF2/ tnu2
-#endif
   namelist /BOTTOM_DRAG_SETTINGS/ &
   &     zob, &
   & rdrg, rdrg2
-  namelist /VERTICAL_MIXING_SETTINGS/ &
-      &  akv_bak, akt_bak
-#ifdef UV_VIS2
   namelist /LATERAL_VISC_SETTINGS/ visc2
-#endif
   namelist /TIME_STEPPING/ dt, ndtfast, ntimes, ninfo
 #if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
   namelist /UBIND_SETTINGS/ ubind
 #endif
-#ifdef SPONGE
-  namelist /V_SPONGE_SETTINGS/ v_sponge, v_sponge_trc
-#endif
+  namelist /V_SPONGE_SETTINGS/ use_boundary_sponge, v_sponge, v_sponge_trc
   namelist /RHO0_SETTINGS/ rho0
+  ! tnu2 and akt_bak lists may hold values for this many tracers, as in the GPU code
+  integer(kind=4), parameter :: max_nml_tracers = 512
   public read_nml_scalars
 contains
 
@@ -151,6 +148,7 @@ contains
     use param, only: itemp
     use error_handling_mod, only: error_log
     use namelist_open_mod, only: open_namelist_file
+    use, intrinsic :: iso_fortran_env, only: iostat_end
     implicit none
 !     Read the "FRC_OUTPUT_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios, itrc
@@ -181,11 +179,8 @@ contains
 !================================================================================
 !     set `tnu2`
     allocate(tnu2(NT))
-    tnu2(:) = 0._8
-#ifdef TS_DIF2
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=TRACER_DIFF2, iostat=ios, iomsg=msg)
-    if (ios /= 0) then
+    call read_tracer_diff2(namelist_unit, tnu2, ios, msg)
+    if (ios /= 0 .and. ios /= iostat_end) then
       call error_log%raise_global( &
       &   context = module_name//'/'//sr_name, &
       &   info='could not read TRACER_DIFF2' &
@@ -209,7 +204,6 @@ contains
       end if
     end do
 
-#endif
 !================================================================================
 ! set rdrg, rdrg2
     rewind(namelist_unit)
@@ -238,9 +232,7 @@ contains
 !================================================================================
 !Akv_bak, Akt_bak
     allocate(Akt_bak(NT))
-    akt_bak(:) = 0._8
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=VERTICAL_MIXING_SETTINGS, iostat=ios, iomsg=msg)
+    call read_vertical_mixing(namelist_unit, Akv_bak, Akt_bak, ios, msg)
 
     if (ios /= 0) then
       call error_log%raise_global( &
@@ -267,12 +259,11 @@ contains
       &       itrc
     end do
 !===============================================================================
-!visc2
-#ifdef UV_VIS2
+!visc2 (optional group: 0, no viscosity)
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=LATERAL_VISC_SETTINGS, iostat=ios, iomsg=msg)
 
-    if (ios /= 0) then
+    if (ios /= 0 .and. ios /= iostat_end) then
       call error_log%raise_global( &
       &   context = module_name//'/'//sr_name, &
       &   info='could not read LATERAL_VISC_SETTINGS' &
@@ -283,7 +274,6 @@ contains
     mpi_master_only write(*,'(6x,A,ES10.3,2x,A)') &
     &    'visc2 =', visc2, &
     &    'horizontal Laplacian kinematic viscosity [m^2/s]'
-#endif
 !===============================================================================
 !dt, dtfast, ndtfast, ntimes ninfo
     rewind(namelist_unit)
@@ -325,13 +315,12 @@ contains
     &    'open boundary binding velcity [m/s]'
 #endif
 !===============================================================================
-!v_sponge
-#ifdef SPONGE
+!v_sponge (optional group: v_sponge = 0, no sponge)
     v_sponge_trc = -1._8   ! negative (or absent): tracers get the same sponge as momentum
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=V_SPONGE_SETTINGS, iostat=ios, iomsg=msg)
 
-    if (ios /= 0) then
+    if (ios /= 0 .and. ios /= iostat_end) then
       call error_log%raise_global(&
       &   context = module_name//'/'//sr_name,&
       &   info='could not read V_SPONGE_SETTINGS'&
@@ -339,6 +328,15 @@ contains
       &        //trim(msg)&
       &      )
     end if
+    if (v_sponge < 0._8) then
+      call error_log%raise_global(&
+      &   context = module_name//'/'//sr_name,&
+      &   info='V_SPONGE_SETTINGS v_sponge must not be negative'&
+      &      )
+    end if
+    mpi_master_only write(*,'(3x,A,L1,2x,A)')&
+    &      'use_boundary_sponge = ', use_boundary_sponge,&
+    &      'sponge layer along the open boundaries'
     mpi_master_only write(*,'(3x,A,F10.2,2x,A)')&
     &      'v_sponge =', v_sponge,&
     &      'maximum viscosity in sponge layer [m^2/s]'
@@ -348,7 +346,8 @@ contains
     &      'v_sponge_trc =', v_sponge_trc,&
     &      'maximum tracer diffusivity in sponge layer [m^2/s]'
 
-#endif
+    visc_on = visc2 /= 0._8 .or. (use_boundary_sponge .and. v_sponge /= 0._8)
+    diff_on = any(tnu2 /= 0._8) .or. (use_boundary_sponge .and. v_sponge_trc /= 0._8)
 !===============================================================================
 ! rho0
     rewind(namelist_unit)
@@ -370,6 +369,47 @@ contains
 
     close(namelist_unit)
   end subroutine read_nml_scalars
+
+  subroutine read_tracer_diff2(namelist_unit, tnu2_nt, ios, msg)
+!     Read tnu2 from the optional TRACER_DIFF2 group (absent: 0). The list
+!     may be longer than the run's number of tracers (up to max_nml_tracers);
+!     the extra values are ignored, as in the GPU code.
+    implicit none
+    integer(kind=4), intent(in) :: namelist_unit
+    real(kind=8), intent(out) :: tnu2_nt(:)
+    integer(kind=4), intent(out) :: ios
+    character(len=*), intent(inout) :: msg
+    real(kind=8), allocatable :: tnu2(:)
+    namelist /TRACER_DIFF2/ tnu2
+
+    allocate(tnu2(max(max_nml_tracers, size(tnu2_nt))))
+    tnu2 = 0._8
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=TRACER_DIFF2, iostat=ios, iomsg=msg)
+    tnu2_nt = tnu2(1:size(tnu2_nt))
+  end subroutine read_tracer_diff2
+
+  subroutine read_vertical_mixing(namelist_unit, akv, akt, ios, msg)
+!     Read akv_bak and akt_bak from VERTICAL_MIXING_SETTINGS. As for tnu2,
+!     akt_bak values beyond the run's number of tracers are ignored.
+    implicit none
+    integer(kind=4), intent(in) :: namelist_unit
+    real(kind=8), intent(inout) :: akv
+    real(kind=8), intent(out) :: akt(:)
+    integer(kind=4), intent(out) :: ios
+    character(len=*), intent(inout) :: msg
+    real(kind=8) :: akv_bak
+    real(kind=8), allocatable :: akt_bak(:)
+    namelist /VERTICAL_MIXING_SETTINGS/ akv_bak, akt_bak
+
+    akv_bak = akv
+    allocate(akt_bak(max(max_nml_tracers, size(akt))))
+    akt_bak = 0._8
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=VERTICAL_MIXING_SETTINGS, iostat=ios, iomsg=msg)
+    akv = akv_bak
+    akt = akt_bak(1:size(akt))
+  end subroutine read_vertical_mixing
 
 
 end module scalars

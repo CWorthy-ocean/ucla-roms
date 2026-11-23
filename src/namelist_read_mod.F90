@@ -94,6 +94,7 @@ contains
     call read_nml_random
     call read_nml_river
     call read_nml_sponge_tune
+    call read_nml_surf_frc   ! before surf_flx, which needs the restoring switches
     call read_nml_surf_flx
     call read_nml_tides
     call read_nml_upscale
@@ -107,7 +108,6 @@ contains
 #endif
     call read_nml_scalars
    call read_nml_scoord
-   call read_nml_surf_frc
    call read_nml_tracers
 #ifdef PARALLEL_IO
    call read_nml_pio

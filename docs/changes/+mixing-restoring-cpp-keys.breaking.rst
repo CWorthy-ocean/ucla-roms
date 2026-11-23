@@ -1,0 +1,5 @@
+The CPP keys ``SFLX_CORR``, ``QCORRECTION``, ``CFLX_CORR``, ``UV_VIS2``, ``TS_DIF2`` and ``SPONGE`` are now namelist settings. A ``cppdefs.opt`` that defines one stops the build with an error that names the setting; delete the line (an ``#undef`` line is harmless).
+- Surface restoring: set ``sflx_corr``, ``qcorrection`` or ``cflx_corr`` to ``.true.`` in ``SURF_FRC_SETTINGS`` (default ``.false.``). ROMS stops if the build cannot apply the term (no ``BULK_FRC``, ``SALINITY`` or ``MARBL``, or ``ANA_SSFLUX`` with ``sflx_corr``), where it was silently ignored, or if its coefficient group is missing.
+- Viscosity and diffusion: ``visc2`` and ``tnu2`` decide them, ``0`` for none.
+- Boundary sponge: ``use_boundary_sponge`` in ``V_SPONGE_SETTINGS`` (default ``.true.``). A setup that was built without ``SPONGE``, has open boundaries and a nonzero ``v_sponge`` (the template's is 1 m2/s) must set it to ``.false.`` to run as before.
+- ``TRACER_DIFF2``, ``LATERAL_VISC_SETTINGS`` and ``V_SPONGE_SETTINGS`` are now read in every build (a missing group is fine, an unknown or misspelled key stops the run), and a negative ``v_sponge`` stops the run.
