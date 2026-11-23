@@ -47,7 +47,7 @@ copy_to_Work_dir:
 	cp -p *.F *.h *.in *.sh ../../Work 2>/dev/null || :
 
 nhmg:
-	cd $(ROMS_ROOT)/NHMG/src; make clean; make
+	@echo "Nothing to do: every ROMS build compiles the NHMG library (in Compile/nhmg) and links it"
 
 tools-roms:
 	cd $(ROMS_ROOT)/Tools-Roms/; make ;

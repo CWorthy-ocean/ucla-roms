@@ -1,13 +1,13 @@
 step2d_mod.o : step2d_mod.F90 cppdefs.opt param.o private_scratch.o compute_tile_bounds.h dimensions.o river_frc.o pipe_frc.o cdr_frc.o coupling.o grid.o ocean_vars.o scalars.o roms_mpi.o surf_flux.o u2dbc_mod.o v2dbc_mod.o set_depth_mod.o zetabc_mod.o compute_auxiliary_bounds.h
-step3d_uv_mod.o : step3d_uv_mod.F90 cppdefs.opt param.o private_scratch.o dimensions.o ocean_vars.o diagnostics.o surf_flux.o coupling.o grid.o mixing.o scalars.o roms_mpi.o eos_vars.o instant_output.o imex_igw.o strings.o error_handling_mod.o utils_mod.o river_frc.o u3dbc_mod.o v3dbc_mod.o w3dbc_mod.o sl_adv_mod.o
-namelist_read_mod.o : namelist_read_mod.F90 cppdefs.opt error_handling_mod.o param.o dimensions.o bgc_shared_vars.o cdr_frc.o cdr_output.o cdr_lite_output.o cdr_gas_exch_output.o diagnostics.o basic_output.o calc_pflx_mod.o extract_data.o frc_output.o particles.o pipe_frc.o random_output.o river_frc.o sponge_tune.o surf_flux.o tides.o bulk_frc.o tracers.o upscale_output.o zslice_output.o eos_vars.o roms_read_write.o marbl_driver.o scalars.o scoord.o pio_roms.o diag_mod.o imex_igw.o implicit_fs_mod.o sl_adv_mod.o
+step3d_uv_mod.o : step3d_uv_mod.F90 cppdefs.opt param.o private_scratch.o dimensions.o nhmg_settings_mod.o ocean_vars.o diagnostics.o surf_flux.o coupling.o grid.o mixing.o scalars.o roms_mpi.o eos_vars.o instant_output.o imex_igw.o strings.o error_handling_mod.o utils_mod.o river_frc.o u3dbc_mod.o v3dbc_mod.o w3dbc_mod.o sl_adv_mod.o
+namelist_read_mod.o : namelist_read_mod.F90 cppdefs.opt error_handling_mod.o param.o dimensions.o bgc_shared_vars.o cdr_frc.o cdr_output.o cdr_lite_output.o cdr_gas_exch_output.o diagnostics.o basic_output.o calc_pflx_mod.o extract_data.o frc_output.o particles.o pipe_frc.o random_output.o river_frc.o sponge_tune.o surf_flux.o tides.o bulk_frc.o tracers.o upscale_output.o zslice_output.o eos_vars.o roms_read_write.o marbl_driver.o scalars.o scoord.o pio_roms.o diag_mod.o imex_igw.o implicit_fs_mod.o nhmg_settings_mod.o sl_adv_mod.o
 lmd_vmix_mod.o : lmd_vmix_mod.F90 cppdefs.opt param.o private_scratch.o lmd_kpp_mod.o lmd_swr_frac_mod.o scalars.o tracers.o grid.o mixing.o roms_mpi.o ocean_vars.o dimensions.o
 analytical.o : analytical.F90 cppdefs.opt ocean_vars.o grid.o roms_mpi.o dimensions.o tracers.o mixing.o scalars.o param.o eos_vars.o ana_init.h boundary.o ana_vmix.h surf_flux.o
 set_nudgcof_mod.o : set_nudgcof_mod.F90 cppdefs.opt param.o private_scratch.o dimensions.o mixing.o scalars.o
 u3dbc_mod.o : u3dbc_mod.F90 cppdefs.opt param.o boundary.o dimensions.o ocean_vars.o scalars.o sponge_tune.o grid.o
 alphabeta_mod.o : alphabeta_mod.F90 cppdefs.opt tracers.o scalars.o param.o eos_vars.o
 add_git_hash_mod.o : add_git_hash_mod.F90 cppdefs.opt error_handling_mod.o param.o
-prsgrd_mod.o : prsgrd_mod.F90 cppdefs.opt param.o private_scratch.o grid.o tides.o ocean_vars.o eos_vars.o dimensions.o scalars.o diagnostics.o roms_mpi.o calc_pflx_mod.o imex_igw.o
+prsgrd_mod.o : prsgrd_mod.F90 cppdefs.opt param.o private_scratch.o grid.o tides.o ocean_vars.o nhmg_settings_mod.o eos_vars.o dimensions.o scalars.o diagnostics.o roms_mpi.o calc_pflx_mod.o imex_igw.o
 private_scratch.o : private_scratch.F90 cppdefs.opt param.o scalars.o
 advection.o : advection.F90 cppdefs.opt dimensions.o ocean_vars.o tracers.o scalars.o param.o
 strings.o : strings.F90
@@ -22,7 +22,7 @@ bgc_forces.o : bgc_forces.F90 cppdefs.opt param.o
 cdr_lite_output.o : cdr_lite_output.F90 cppdefs.opt namelist_open_mod.o tracers.o param.o dimensions.o roms_read_write.o nc_read_write.o scalars.o ocean_vars.o error_handling_mod.o cdr_frc.o pio_roms.o
 diagnostics.o : diagnostics.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o tracers.o ocean_vars.o scalars.o nc_read_write.o roms_read_write.o dimensions.o param.o grid.o roms_mpi.o pio_roms.o
 cdr_gas_exch_output.o : cdr_gas_exch_output.F90 cppdefs.opt namelist_open_mod.o tracers.o param.o marbl_driver.o bgc_shared_vars.o dimensions.o roms_read_write.o nc_read_write.o scalars.o grid.o error_handling_mod.o carbonate_sensitivity.o pio_roms.o
-init_arrays.o : init_arrays.F90 cppdefs.opt param.o private_scratch.o compute_tile_bounds.h dimensions.o surf_flux.o tracers.o coupling.o eos_vars.o grid.o mixing.o ocean_vars.o basic_output.o work_mod.o boundary.o buffer.o mess_buffers.o flux_frc.o pipe_frc.o bgc_shared_vars.o bgc_forces.o bgc_io.o bulk_frc.o advection.o imex_igw.o
+init_arrays.o : init_arrays.F90 cppdefs.opt param.o private_scratch.o compute_tile_bounds.h dimensions.o surf_flux.o tracers.o coupling.o eos_vars.o grid.o mixing.o ocean_vars.o nhmg_settings_mod.o basic_output.o work_mod.o boundary.o buffer.o mess_buffers.o flux_frc.o pipe_frc.o bgc_shared_vars.o bgc_forces.o bgc_io.o bulk_frc.o advection.o imex_igw.o
 precheck.o : precheck.F90 cppdefs.opt error_handling_mod.o extract_data.o bgc_shared_vars.o basic_output.o frc_output.o random_output.o zslice_output.o surf_flux.o particles.o sponge_tune.o diagnostics.o cdr_output.o scalars.o marbl_driver.o cdr_lite_output.o cdr_gas_exch_output.o upscale_output.o check_switches_mod.o lmd_kpp_mod.o pre_step3d_mod.o set_depth_mod.o step3d_t_mod.o step3d_uv_mod.o
 comm_vars.o : comm_vars.F90 cppdefs.opt param.o
 error_handling_mod.o : error_handling_mod.F90 cppdefs.opt param.o utils_mod.o
@@ -44,7 +44,7 @@ mixing.o : mixing.F90 cppdefs.opt param.o scalars.o tracers.o
 ext_copy_prv2shr_mod.o : ext_copy_prv2shr_mod.F90 cppdefs.opt param.o dimensions.o
 diag_mod.o : diag_mod.F90 cppdefs.opt error_handling_mod.o namelist_open_mod.o param.o dimensions.o private_scratch.o scalars.o compute_tile_bounds.h comm_vars.o diag_vars.o eos_vars.o grid.o ocean_vars.o timers.o
 namelist_open_mod.o : namelist_open_mod.F90 error_handling_mod.o param.o
-set_depth_mod.o : set_depth_mod.F90 cppdefs.opt param.o coupling.o grid.o roms_mpi.o dimensions.o ocean_vars.o scalars.o scoord.o pio_roms.o instant_output.o river_frc.o private_scratch.o strings.o error_handling_mod.o utils_mod.o
+set_depth_mod.o : set_depth_mod.F90 cppdefs.opt param.o coupling.o grid.o roms_mpi.o dimensions.o ocean_vars.o nhmg_settings_mod.o scalars.o scoord.o pio_roms.o instant_output.o river_frc.o private_scratch.o strings.o error_handling_mod.o utils_mod.o
 calc_pflx_mod.o : calc_pflx_mod.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o dimensions.o scalars.o param.o grid.o ocean_vars.o eos_vars.o nc_read_write.o roms_mpi.o pio_roms.o
 v3dbc_mod.o : v3dbc_mod.F90 cppdefs.opt param.o dimensions.o boundary.o grid.o ocean_vars.o scalars.o sponge_tune.o
 check_switches_mod.o : check_switches_mod.F90 cppdefs.opt error_handling_mod.o param.o dimensions.o compute_tile_bounds.h strings.o utils_mod.o
@@ -64,24 +64,24 @@ random_output.o : random_output.F90 cppdefs.opt param.o namelist_open_mod.o dime
 cdr_frc.o : cdr_frc.F90 cppdefs.opt namelist_open_mod.o roms_read_write.o scalars.o grid.o roms_mpi.o dimensions.o ocean_vars.o param.o tracers.o nc_read_write.o pio_roms.o marbl_driver.o vertical_remapping.o error_handling_mod.o
 u2dbc_mod.o : u2dbc_mod.F90 cppdefs.opt param.o dimensions.o boundary.o grid.o ocean_vars.o scalars.o compute_auxiliary_bounds.h
 bulk_frc.o : bulk_frc.F90 cppdefs.opt param.o roms_read_write.o dimensions.o error_handling_mod.o pio_roms.o instant_output.o flux_frc.o namelist_open_mod.o surf_flux.o tracers.o grid.o mixing.o ocean_vars.o scalars.o
-pre_step3d_mod.o : pre_step3d_mod.F90 cppdefs.opt param.o private_scratch.o diagnostics.o dimensions.o river_frc.o ocean_vars.o surf_flux.o tracers.o advection.o coupling.o roms_mpi.o grid.o mixing.o scalars.o ext_copy_prv2shr_mod.o sl_adv_mod.o t3dbc_mod.o u3dbc_mod.o v3dbc_mod.o imex_igw.o strings.o error_handling_mod.o utils_mod.o
+pre_step3d_mod.o : pre_step3d_mod.F90 cppdefs.opt param.o private_scratch.o diagnostics.o dimensions.o river_frc.o nhmg_settings_mod.o ocean_vars.o surf_flux.o tracers.o advection.o coupling.o roms_mpi.o grid.o mixing.o scalars.o ext_copy_prv2shr_mod.o sl_adv_mod.o t3dbc_mod.o u3dbc_mod.o v3dbc_mod.o imex_igw.o strings.o error_handling_mod.o utils_mod.o
 pipe_frc.o : pipe_frc.F90 cppdefs.opt namelist_open_mod.o dimensions.o roms_read_write.o nc_read_write.o param.o error_handling_mod.o roms_mpi.o pio_roms.o ana_pipe_frc.h
 bgc_shared_vars.o : bgc_shared_vars.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o bgc_forces.o bgc_subcycle_mod.o param.o roms_read_write.o tracers.o marbl_driver.o
 set_scoord_mod.o : set_scoord_mod.F90 cppdefs.opt param.o comm_vars.o scoord.o scalars.o
 nc_read_write.o : nc_read_write.F90 cppdefs.opt error_handling_mod.o pio_roms.o param.o
-main.o : main.F90 cppdefs.opt add_git_hash_mod.o param.o check_switches_mod.o tracers.o timers.o roms_mpi.o init_scalars_mod.o namelist_read_mod.o marbl_driver.o bgc_subcycle_mod.o mpi_masking_mod.o bulk_frc.o flux_frc.o bgc_shared_vars.o pio_roms.o basic_output.o scalars.o error_handling_mod.o roms_read_write.o upscale_output.o cdr_gas_exch_output.o ocean_vars.o diag_mod.o particles.o random_output.o cdr_output.o cdr_lite_output.o frc_output.o analytical.o get_init_mod.o grid_stiffness_mod.o diagnostics.o bgc_io.o grid.o sl_adv_mod.o sponge_tune.o precheck.o calc_pflx_mod.o omega_mod.o rho_eos_mod.o set_depth_mod.o set_scoord_mod.o set_nudgcof_mod.o setup_grid_mod.o extract_data.o surf_flux.o zslice_output.o boundary.o tides.o pre_step3d_mod.o prsgrd_mod.o t3dmix_mod.o implicit_fs_mod.o lmd_vmix_mod.o step2d_mod.o step3d_t_mod.o step3d_uv_mod.o visc3d_mod.o imex_igw.o
+main.o : main.F90 cppdefs.opt add_git_hash_mod.o param.o check_switches_mod.o nhmg_settings_mod.o tracers.o timers.o roms_mpi.o init_scalars_mod.o namelist_read_mod.o marbl_driver.o bgc_subcycle_mod.o mpi_masking_mod.o bulk_frc.o flux_frc.o bgc_shared_vars.o pio_roms.o basic_output.o scalars.o error_handling_mod.o roms_read_write.o upscale_output.o cdr_gas_exch_output.o ocean_vars.o diag_mod.o particles.o random_output.o cdr_output.o cdr_lite_output.o frc_output.o analytical.o get_init_mod.o grid_stiffness_mod.o diagnostics.o bgc_io.o grid.o sl_adv_mod.o sponge_tune.o precheck.o calc_pflx_mod.o omega_mod.o rho_eos_mod.o set_depth_mod.o set_scoord_mod.o set_nudgcof_mod.o setup_grid_mod.o extract_data.o surf_flux.o zslice_output.o boundary.o tides.o pre_step3d_mod.o prsgrd_mod.o t3dmix_mod.o implicit_fs_mod.o lmd_vmix_mod.o step2d_mod.o step3d_t_mod.o step3d_uv_mod.o visc3d_mod.o imex_igw.o
 t3dbc_mod.o : t3dbc_mod.F90 cppdefs.opt param.o tracers.o boundary.o dimensions.o grid.o ocean_vars.o scalars.o sponge_tune.o
 dimensions.o : dimensions.F90 cppdefs.opt param.o insert_node_mod.o pio_roms.o error_handling_mod.o namelist_open_mod.o utils_mod.o
-w3dbc_mod.o : w3dbc_mod.F90 cppdefs.opt param.o boundary.o grid.o ocean_vars.o scalars.o
+w3dbc_mod.o : w3dbc_mod.F90 cppdefs.opt param.o dimensions.o boundary.o grid.o ocean_vars.o scalars.o
 param.o : param.F90 cppdefs.opt
 pio_roms.o : pio_roms.F90 pio_config.h cppdefs.opt cdf_direct.o param.o timers.o namelist_open_mod.o error_handling_mod.o
 cdf_direct.o : cdf_direct.F90
 zslice_output.o : zslice_output.F90 cppdefs.opt namelist_open_mod.o grid.o param.o roms_mpi.o dimensions.o roms_read_write.o nc_read_write.o scalars.o ocean_vars.o tracers.o error_handling_mod.o pio_roms.o
 instant_output.o : instant_output.F90 cppdefs.opt nc_read_write.o error_handling_mod.o param.o scalars.o dimensions.o roms_mpi.o
 set_forces.o : set_forces.F90 cppdefs.opt param.o flux_frc.o surf_flux.o tracers.o river_frc.o pipe_frc.o bgc_io.o dimensions.o boundary.o scalars.o cdr_frc.o bulk_frc.o analytical.o compute_tile_bounds.h
-wvlcty_mod.o : wvlcty_mod.F90 cppdefs.opt param.o private_scratch.o dimensions.o grid.o ocean_vars.o scalars.o pipe_frc.o cdr_frc.o
+wvlcty_mod.o : wvlcty_mod.F90 cppdefs.opt param.o private_scratch.o dimensions.o grid.o ocean_vars.o nhmg_settings_mod.o scalars.o pipe_frc.o cdr_frc.o
 coupling.o : coupling.F90 cppdefs.opt param.o scalars.o
-boundary.o : boundary.F90 cppdefs.opt param.o roms_read_write.o dimensions.o error_handling_mod.o pio_roms.o tracers.o
+boundary.o : boundary.F90 cppdefs.opt param.o roms_read_write.o dimensions.o error_handling_mod.o pio_roms.o nhmg_settings_mod.o tracers.o
 omega_mod.o : omega_mod.F90 cppdefs.opt param.o private_scratch.o dimensions.o grid.o pipe_frc.o cdr_frc.o roms_mpi.o ocean_vars.o scalars.o surf_flux.o pio_roms.o instant_output.o
 upscale_output.o : upscale_output.F90 cppdefs.opt dimensions.o param.o namelist_open_mod.o error_handling_mod.o tracers.o grid.o nc_read_write.o roms_read_write.o marbl_driver.o ocean_vars.o basic_output.o scalars.o pio_roms.o
 v2dbc_mod.o : v2dbc_mod.F90 cppdefs.opt param.o dimensions.o boundary.o grid.o ocean_vars.o scalars.o compute_auxiliary_bounds.h
@@ -97,10 +97,11 @@ check_switches1.o : check_switches1.F cppdefs.opt param.o scalars.o strings.o er
 surf_flux.o : surf_flux.F90 cppdefs.opt namelist_open_mod.o param.o dimensions.o roms_read_write.o nc_read_write.o scalars.o pio_roms.o error_handling_mod.o
 rho_eos_mod.o : rho_eos_mod.F90 cppdefs.opt param.o private_scratch.o dimensions.o tracers.o coupling.o eos_vars.o grid.o mixing.o ocean_vars.o scalars.o
 checkdims_mod.o : checkdims_mod.F90 cppdefs.opt utils_mod.o param.o dimensions.o error_handling_mod.o scoord.o
-ocean_vars.o : ocean_vars.F90 cppdefs.opt param.o scalars.o
+ocean_vars.o : ocean_vars.F90 cppdefs.opt param.o scalars.o nhmg_settings_mod.o
 lmd_kpp_mod.o : lmd_kpp_mod.F90 cppdefs.opt alphabeta_mod.o surf_flux.o grid.o roms_mpi.o dimensions.o param.o mixing.o ocean_vars.o scalars.o strings.o error_handling_mod.o utils_mod.o
 grid.o : grid.F90 cppdefs.opt param.o nc_read_write.o dimensions.o roms_read_write.o scalars.o roms_mpi.o pio_roms.o instant_output.o pipe_frc.o ana_grid.h error_handling_mod.o checkdims_mod.o
 imex_igw.o : imex_igw.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o param.o scalars.o ocean_vars.o timers.o dimensions.o compute_auxiliary_bounds.h roms_mpi.o grid.o coupling.o eos_vars.o omega_mod.o river_frc.o compute_tile_bounds.h nc_read_write.o roms_read_write.o pio_roms.o mixing.o u3dbc_mod.o v3dbc_mod.o sponge_tune.o tracers.o rho_eos_mod.o boundary.o implicit_fs_mod.o
 swept_flux_mod.o : swept_flux_mod.F90 cppdefs.opt grid.o dimensions.o param.o
 sl_adv_mod.o : sl_adv_mod.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o param.o imex_igw.o dimensions.o tracers.o timers.o scalars.o ocean_vars.o omega_mod.o grid.o roms_mpi.o swept_flux_mod.o river_frc.o eos_vars.o rho_eos_mod.o mixing.o coupling.o nc_read_write.o roms_read_write.o pio_roms.o
 cpp_keys_mod.o : cpp_keys_mod.F90 cppdefs.opt
+nhmg_settings_mod.o : nhmg_settings_mod.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o param.o

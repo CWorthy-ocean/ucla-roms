@@ -89,11 +89,6 @@ module imex_igw
   !     (settings, time step, open boundaries, restarts, limitations).
   !-----------------------------------------------------------------------
 #include "cppdefs.opt"
-#ifdef IMEX_IGW
-# ifdef NHMG
-#  error "IMEX_IGW is not compatible with NHMG"
-# endif
-#endif
 
   implicit none
   private
@@ -971,12 +966,6 @@ contains
       write(info,'(A,I0,A)') 'imex_mix_split = ', imex_mix_split, ' must be 0, 1 or 2'
       call error_log%raise_global(context=context, info=trim(info))
     end if
-#ifdef NHMG
-    if (imex_mix_split == 2) then
-      write(info,'(A)') 'imex_mix_split = 2 is not supported with NHMG'
-      call error_log%raise_global(context=context, info=trim(info))
-    end if
-#endif
     if (imex_corr_adv < 0 .or. imex_corr_adv > 1) then
       write(info,'(A,I0,A)') 'imex_corr_adv = ', imex_corr_adv, ' must be 0 or 1'
       call error_log%raise_global(context=context, info=trim(info))

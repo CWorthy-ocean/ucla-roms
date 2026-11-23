@@ -19,9 +19,8 @@ These switches control fundamental aspects of the model setup, including the equ
 | `ADV_ISONEUTRAL` | Rotate the advection and diffusion operators so they are oriented in the isoneutral direction | disabled | |
 | `CONST_TRACERS` | Keep tracer values constant in time and space | disabled | At each timestep the tracer tendencies will be calculated, but in the end it will just keep the value it had at the previous timestep |
 | `DIAGNOSTICS` | Enable the calculation and writing of "diagnostics" (term-by-term momentum and tracer budgets) | disabled | Options are set in the `DIAGNOSTICS_SETTINGS` namelist group |
-| `DIAGNOSTICS_NHMG` | Enable the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation | disabled | |
-| `NHMG` | Use non-hydrostatic momentum equations | disabled | Solves prognostically for the vertical velocity. Approximately doubles the cost of the model. WARNING: Presently untested and unmaintained by [C]Worthy. May break important features like exact restarts, and may require extra inputs to work successfully (unknown). |
-| `NHMGDIAG` | Write momentum equation diagnostics for non-hydrostatic mode | disabled | |
+| `DIAGNOSTICS_NHMG` | Enable the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation | disabled | Not finished: compiles, but ROMS stops at startup, whether `nhmg` (`NHMG_SETTINGS`) is on or off, because its arrays are never allocated |
+| `NHMGDIAG` | Write momentum equation diagnostics for non-hydrostatic mode | disabled | As `DIAGNOSTICS_NHMG` |
 | `CDR_FORCING` | Enable special forcing for marine CO2 removal | disabled | Settings are in the `CDR_FRC_SETTINGS` namelist group |
 | `UPSCALING` | Save tracer fluxes (advective and horizontal mixing) through the open boundaries for use in upscaling applications | disabled | Meant to be used in child domains when forcing will be subsequently applied to parent domains. Saves ALK and DIC perturbations, and the boundary fluxes of any `CDR_LITE` tracers. Requires `MARBL` and `MARBL_DIAGS` to be enabled. Settings are in the `UPSCALE_SETTINGS` namelist group |
 
@@ -64,7 +63,7 @@ These switches control the numerical schemes used by the model for tracer advect
 | `AKIMA` | Use the fourth-order Akima scheme for horizontal tracer advection in the predictor step | disabled | Replaces the C4 interpolation of the predictor step; the corrector step stays third-order upstream |
 | `UPSTREAM_TS_LAND_CURV` | Drop the curvature (third-order) correction of upstream horizontal tracer advection at faces whose stencil touches land, falling back to second-order centered there | disabled | Masked differences are zero, which otherwise inflates the curvature at the first wet point and produces large overshoots. Affects the corrector step, and only with `MASKING` |
 | `PARABOLIC_SPLINES` | Use parabolic splines for vertical tracer advection | disabled | Restores the spline reconstruction that was the default before the thickness-aware U3 scheme |
-| `IMEX_IGW` | Treat the internal-wave terms (baroclinic pressure gradient and the buoyancy response to the transport divergence) implicitly in both baroclinic stages, with one elliptic solve per stage | disabled | Experimental. The time step is then limited by horizontal advection instead of internal waves. Settings are in the `IMEX_IGW_SETTINGS` namelist group, which every namelist needs: `imex_igw = .true.` with this key, `.false.` without it; see [Implicit internal waves (IMEX)](implicit_internal_waves.md). Not compatible with `NHMG` |
+| `IMEX_IGW` | Treat the internal-wave terms (baroclinic pressure gradient and the buoyancy response to the transport divergence) implicitly in both baroclinic stages, with one elliptic solve per stage | disabled | Experimental. The time step is then limited by horizontal advection instead of internal waves. Settings are in the `IMEX_IGW_SETTINGS` namelist group, which every namelist needs: `imex_igw = .true.` with this key, `.false.` without it; see [Implicit internal waves (IMEX)](implicit_internal_waves.md). Not compatible with `nhmg = .true.` in `NHMG_SETTINGS` (ROMS stops at startup) |
 
 ### `BOUNDARY CONDITIONS`
 
@@ -167,3 +166,5 @@ These keys were removed together with their code: most of them no longer compile
 | `NO3_RESTORE` | Nitrate restoring in BEC2 |
 | `Ncycle_SY` | Nitrogen cycle with NO2, N2O and N2 tracers in BEC2 |
 | `TDEP_REMIN` | Temperature-dependent particulate remineralization in BEC2 |
+
+`NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

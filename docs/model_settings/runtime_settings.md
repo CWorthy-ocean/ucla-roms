@@ -710,6 +710,17 @@ Optional: if the group is absent, `sl_adv = .false.`. Experimental and in develo
 | `sl_c2pass` | `0.8` | T, S and the key's X take at least two sub-passes on a level where a face that stays swept has `c2d` above it (0: off): one pass at `c2d` 0.8-1 keeps most of a two-cell pattern, two passes damp it |
 | `sl_pred` | `2` | Predictor on fully swept faces: 0 = the stock Eulerian flux everywhere (results before the key was added); 1 = semi-Lagrangian for u and v (the predictor's start field taken at the departure point); 2 = also for the tracers of the dynamics step |
 
+### `NHMG_SETTINGS`
+(read by module `nhmg_settings_mod.F90`)
+
+Optional: if the group is absent, `nhmg = .false.`. Switches on the non-hydrostatic solver (the NHMG library in `NHMG/src`, which every build compiles and links), which solves prognostically for the vertical velocity. WARNING: untested and unmaintained by [C]Worthy; it may break important features such as exact restarts, may need extra inputs, and roughly doubles the cost of the model. With `nhmg = .false.` none of its code runs and none of its arrays is allocated.
+
+| Setting | Default | Description |
+|--------|---------|-------------|
+| `nhmg` | `.false.` | Non-hydrostatic solver on (`.true.`) or off (`.false.`) |
+
+With `nhmg = .true.`, the solver's own settings (tolerance, iterations, relaxation method, surface condition, periodicity, ...) are read from the optional file `nhmg_namelist` in the run directory (group `&nhparam`, see `NHMG/src/mg_namelist.f90`); without the file they keep their defaults. ROMS stops at startup if `nhmg = .true.` is combined with `fs_mode = 'implicit'` (`IMPLICIT_FS`), with the cpp key `IMEX_IGW`, or with the cpp key `MPI_MASKING` (NHMG needs an MPI rank for every tile), and, whatever `nhmg` is, if the cpp key `DIAGNOSTICS_NHMG` or `NHMGDIAG` (not finished) is defined.
+
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)
 

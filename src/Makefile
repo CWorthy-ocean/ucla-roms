@@ -39,14 +39,62 @@ include Makedefs.inc
  LROMS3 = 2/$(LROMS) 3/$(LROMS)
  LROMS4 = 2/$(LROMS) 3/$(LROMS) 4/$(LROMS)
 
+# Non-hydrostatic solver library (NHMG): always compiled and linked, and
+# switched on at run time by the namelist key nhmg (group NHMG_SETTINGS).
+# It is built in the subdirectory nhmg/ with this build's compiler and flags,
+# so the source tree is never written to and every build has its own copy.
+   NHMG_SRC   = $(abspath $(ROMS_ROOT)/NHMG/src)
+   NHMG_BUILD = nhmg
+   NHMG_LIB   = $(NHMG_BUILD)/libnhmg.a
+   NHMG_NAMES = mg_cst mg_tictoc mg_mpi mg_namelist mg_netcdf_out mg_grids\
+                mg_mpi_exchange mg_gather mg_intergrids mg_relax mg_horiz_grids\
+                mg_vert_grids mg_projection mg_solvers mg_autotune nhmg_debug nhmg
+   NHMG_OBJS  = $(addprefix $(NHMG_BUILD)/, $(addsuffix .o, $(NHMG_NAMES)))
+# ROMS sources that use an NHMG module, which must wait for the library
+   NHMG_USERS = $(addsuffix .o, $(basename $(shell grep -liE \
+                '^[[:space:]]*use[[:space:]]+(nhmg|mg_[a-z_]+)[[:space:]]*(,|$$)' $(SRCS) 2>/dev/null)))
+   LCDF += -I$(NHMG_BUILD)
+
 ###########
 # TARGETS #
 ###########
 
 # ROMS excutable (This is the first target and hence the default):
-$(SBIN): $(OBJS)
-	$(LDR) $(FFLAGS) $(LDFLAGS) -o a.out $(OBJS) $(LCDF) $(LMPI)
+$(SBIN): $(OBJS) $(NHMG_LIB)
+	$(LDR) $(FFLAGS) $(LDFLAGS) -o a.out $(OBJS) $(NHMG_LIB) $(LCDF) $(LMPI)
 	mv a.out $(SBIN)
+
+# NHMG library. A compiler writes its .mod files to the directory it runs in,
+# so each file is compiled from inside $(NHMG_BUILD). Every object waits for
+# that directory (it is on the include path); the NHMG users wait for the library.
+$(OBJS): | $(NHMG_BUILD)
+ifneq ($(strip $(NHMG_USERS)),)
+$(NHMG_USERS): | $(NHMG_LIB)
+endif
+
+$(NHMG_BUILD):
+	mkdir -p $@
+
+$(NHMG_LIB): $(NHMG_OBJS)
+	/bin/rm -f $@
+	ar rcs $@ $(NHMG_OBJS)
+
+$(NHMG_BUILD)/%.o: $(NHMG_SRC)/%.f90 | $(NHMG_BUILD)
+	cd $(NHMG_BUILD) && $(CFT) -c $(FFLAGS) -o $(@F) $<
+
+# Module dependencies within NHMG (NHMG/src/depend.mk)
+NHMG_DEP = $(addprefix $(NHMG_BUILD)/, $(addsuffix .o, $(1)))
+$(call NHMG_DEP, mg_mpi mg_namelist mg_netcdf_out): $(call NHMG_DEP, mg_cst)
+$(call NHMG_DEP, mg_namelist mg_grids): $(call NHMG_DEP, mg_tictoc)
+$(call NHMG_DEP, mg_grids nhmg_debug): $(call NHMG_DEP, mg_mpi)
+$(call NHMG_DEP, mg_grids): $(call NHMG_DEP, mg_namelist)
+$(call NHMG_DEP, mg_mpi_exchange mg_gather): $(call NHMG_DEP, mg_grids)
+$(call NHMG_DEP, mg_intergrids mg_horiz_grids mg_vert_grids mg_projection): $(call NHMG_DEP, mg_gather mg_mpi_exchange)
+$(call NHMG_DEP, mg_relax): $(call NHMG_DEP, mg_mpi_exchange)
+$(call NHMG_DEP, mg_vert_grids mg_projection mg_solvers nhmg_debug nhmg): $(call NHMG_DEP, mg_netcdf_out)
+$(call NHMG_DEP, mg_solvers): $(call NHMG_DEP, mg_relax mg_intergrids)
+$(call NHMG_DEP, mg_autotune): $(call NHMG_DEP, mg_solvers mg_projection)
+$(call NHMG_DEP, nhmg): $(call NHMG_DEP, mg_autotune mg_horiz_grids mg_vert_grids)
 
 
 # Multilevel libraries
@@ -58,7 +106,7 @@ $(LROMS): $(OBJS)
 
 check_forces: check_forces$(OBJ_ext) $(SBIN)
 	cp -pv check_forces$(OBJ_ext) main$(OBJ_ext)
-	$(LDR) $(FFLAGS) $(LDFLAGS) -o a.out $(OBJS) $(LCDF) $(LMPI)
+	$(LDR) $(FFLAGS) $(LDFLAGS) -o a.out $(OBJS) $(NHMG_LIB) $(LCDF) $(LMPI)
 	mv a.out check_forces
 
 # Everything
@@ -116,7 +164,7 @@ tarfile: clean
 # -------- -------
 .PHONY: clean
 clean:
-	/bin/rm -rf *$(PPF77_ext) *$(OBJ_ext) *.a *.s *.mod *.trace *~ $(COMP_FILES)
+	/bin/rm -rf *$(PPF77_ext) *$(OBJ_ext) *.a *.s *.mod *.trace *~ $(COMP_FILES) $(NHMG_BUILD)
 
 .PHONY: allclean
 allclean: clean

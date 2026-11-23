@@ -44,9 +44,12 @@ defined.
 - Never edit `src/` to set up a simulation. Per-case Makefiles rsync `src/`
   into a local `Compile/` and overlay the case's own `*.h`, `*.F`, `*.F90`,
   and `*.opt` files.
-- `Makedefs.inc` greps the case's `cppdefs.opt` for `MARBL`, `NHMG`, and
+- `Makedefs.inc` greps the case's `cppdefs.opt` for `MARBL` and
   `PARALLEL_IO` to choose link dependencies, so the file must exist before
   `make`.
+- Every build compiles the NHMG library from `NHMG/src` into `Compile/nhmg/`
+  (rules in `src/Makefile`) and links it; the namelist key `nhmg`
+  (`NHMG_SETTINGS`) switches the solver on at run time.
 - `src/Make.depend` is tracked but derived. Never hand-edit it. When a change
   adds, removes, or reorders `use` statements, regenerate it with `make depend`
   (in a scratch rsync copy of `src/`, then strip trailing whitespace) and
