@@ -56,10 +56,8 @@ contains
     character(len=*) fname
     character(len=16) dname
 
-#ifdef SOLVE3D
     integer(kind=4) chk_Cs_wr
     chk_Cs_wr=0
-#endif
 
 
     lname=lenstr(fname)
@@ -122,7 +120,6 @@ contains
               &info=error_info)
               icount=icount+1
             endif
-#ifdef SOLVE3D
           elseif (ldim == 3 .and. dname(1:ldim) == 's_w') then
             chk_Cs_wr=chk_Cs_wr+1
             if (dsize /= nz+1) then
@@ -142,7 +139,6 @@ contains
               &info=error_info)
               icount=icount+1
             endif
-#endif
           elseif (id==recdim) then
             max_rec=dsize
           endif
@@ -168,11 +164,9 @@ contains
 
       icount=icount+1
     endif
-#ifdef SOLVE3D
     if (chk_Cs_wr>0) then
       icount=icount+check_scoord(ncid, fname, chk_Cs_wr)
     endif
-#endif
 
 #else
     ierr=nf90_inquire(ncid, ndimensions = ndims)
@@ -188,7 +182,6 @@ contains
 
   end function checkdims  !]
 
-#ifdef SOLVE3D
 
 ! Check whether S-coordinate parameter hc, and Cs_w- Cs_r-curves found
 ! in netCDF file "fname" match their counterparts in the running model.
@@ -237,10 +230,6 @@ contains
         &context=fn_name,&
         &info=error_info)
         icount=icount+1
-# ifdef VERBOSE
-      else
-        write(*,*) 'check_scoord :: checking hc:  OK'
-# endif
       endif
     endif
 
@@ -260,10 +249,6 @@ contains
           &context=fn_name,&
           &info=error_info)
           icount=icount+1
-# ifdef VERBOSE
-        else
-          write(*,*) 'check_scoord :: checking Cs_w: OK'
-# endif
         endif
       endif
     endif
@@ -284,10 +269,6 @@ contains
           &context=fn_name,&
           &info=error_info)
           icount=icount+1
-# ifdef VERBOSE
-        else
-          write(*,*) 'check_scoord :: checking Cs_r: OK'
-# endif
         endif
       endif
     endif
@@ -302,10 +283,6 @@ contains
           call error_log%raise_from_rank(&
           &context=fn_name,&
           &info=error_info)
-# ifdef VERBOSE
-        else
-          write(*,*) 'check_scoord :: checking theta_s: OK'
-# endif
         endif
       endif
       ierr=read_nc1dat(ncid, fname, 'theta_b', 1,  tst_val)
@@ -318,10 +295,6 @@ contains
           &context=fn_name,&
           &info=error_info)
 
-# ifdef VERBOSE
-        else
-          write(*,*) 'check_scoord :: checking theta_b: OK'
-# endif
         endif
       endif
     endif
@@ -329,7 +302,6 @@ contains
     check_scoord=icount
 
   end function check_scoord  !]
-#endif
 
 
 

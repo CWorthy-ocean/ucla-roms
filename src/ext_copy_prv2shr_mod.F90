@@ -29,7 +29,6 @@ contains
     enddo
   end subroutine ext_copy_prv2shr_2d_tile
 
-#ifdef SOLVE3D
   subroutine ext_copy_prv2shr_tile (istr,iend,jstr,jend, A,B,nmax)
     use param, only: lm, mm, ieast, iwest, jnorth, jsouth
     use dimensions, only: inode, jnode
@@ -69,6 +68,5 @@ contains
     enddo
   end subroutine ext_copy_prv2shr_1Dslb_tile
 # undef XI_ONLY
-#endif
 
 end module ext_copy_prv2shr_mod

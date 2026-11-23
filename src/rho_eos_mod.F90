@@ -9,8 +9,6 @@ module rho_eos_mod
 
 contains
 
-#ifdef SOLVE3D
-# define DUKO_2001
 
 
   subroutine rho_eos(tidx)
@@ -149,9 +147,7 @@ contains
     use grid, only: rmask
     use param, only: ieast, isalt, itemp, iwest, jnorth, jsouth
 
-# if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
-  || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING\
-  || defined LMD_BKPP
+# if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
     use mixing, only: bvf
 #endif
     use ocean_vars, only: z_r, hz, z_w
@@ -195,9 +191,7 @@ contains
     &E00=+1.045941D-5,   E01=-5.782165D-10,  E02=+1.296821D-7,&
     &E10=-2.595994D-7,   E11=-1.248266D-9,   E12=-3.508914D-9
 #  endif
-#  ifdef DUKO_2001
     real(kind=8) K0_Duk  !, rho1_0
-#  endif
 # endif /* NONLIN_EOS */
     real(kind=8) cff,cff1
 # ifdef SPLIT_EOS
@@ -208,12 +202,10 @@ contains
 
 # ifdef NONLIN_EOS
     Tt=3.8D0 ; Ts=34.5D0 ; sqrtTs=sqrt(Ts)
-#  ifdef DUKO_2001
     K0_Duk= Tt*( K01+Tt*( K02+Tt*( K03+Tt*K04 )))&
     &+Ts*( K10+Tt*( K11+Tt*( K12+Tt*K13 ))&
     &+sqrtTs*( KS0+Tt*( KS1+Tt*KS2 )))
 
-#  endif
     dr00=r00-rho0
 # endif
 
@@ -240,13 +232,8 @@ contains
           &+sqrtTs*( KS0+Tt*( KS1+Tt*KS2 )))
 
 #  ifdef SPLIT_EOS
-#   ifdef DUKO_2001
           qp1(i,j,k)= 0.1D0*(rho0+rho1(i,j,k))*(K0_Duk-K0)&
           &/((K00+K0)*(K00+K0_Duk))
-#   else
-          qp1(i,j,k)=( 0.000649D0 +0.1D0*( K00*rho1(i,j,k)&
-          &-rho0*K0)/(K00*(K00+K0)) )
-#   endif
 #   ifdef MASKING
           qp1(i,j,k)=qp1(i,j,k)*rmask(i,j)
 #   endif
@@ -266,7 +253,7 @@ contains
           rho(i,j,k)=rho(i,j,k)*rmask(i,j)
 #   endif
 #  endif
-#  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP
+#  if defined LMD_MIXING || defined LMD_KPP
 #   ifndef SPLIT_EOS
           dpth=-z_w(i,j,k)
           K_up(i,k)=K0+dpth*(K1+K2*dpth)
@@ -310,8 +297,7 @@ contains
 #  endif
         enddo
       enddo
-#  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
-   || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING
+#  if defined LMD_MIXING || defined LMD_KPP
       do i=istrR,iendR
         bvf(i,j,nz)=bvf(i,j,nz-1)
         bvf(i,j,0)=bvf(i,j,  1)
@@ -349,8 +335,7 @@ contains
 #  endif
         enddo
       enddo
-#  if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_KPP \
-   || defined MY2_MIXING || defined MY25_MIXING || defined PP_MIXING
+#  if defined LMD_MIXING || defined LMD_KPP
       cff=g/rho0
       do k=1,nz-1
         do i=istrR,iendR
@@ -373,7 +358,6 @@ contains
 ! column with uniform density rho0.  Hence both "rhoA" and "rhoS"
 ! are nondimensional quantities of comparable value.
 
-# ifdef VAR_RHO_2D
       do i=istrR,iendR
 #  ifdef SPLIT_EOS
 !**       dpth=z_w(i,j,N)-z_r(i,j,N)
@@ -404,23 +388,7 @@ contains
         rhoA(i,j)=cff*cff1*rhoA(i,j)
         rhoS(i,j)=2._8*cff*cff*cff1*rhoS(i,j)
       enddo
-# endif         /* VAR_RHO_2D */
-# ifdef NON_TRADITIONAL
-      cff=0.5_8*rho0/g
-      do k=1,nz
-        do i=istrR,iendR
-          rho1(i,j,k)=rho1(i,j,k) +cff*(&
-          &f_XI(i,j)*(v(i,j,k,tidx)+v(i,j+1,k,tidx))&
-          &-f_ETA(i,j)*(u(i,j,k,tidx)+u(i+1,j,k,tidx))&
-          &)
-        enddo
-      enddo
-# endif
     enddo    ! <-- j
 
   end subroutine rho_eos_tile
-#else
-  subroutine rho_eos_empty
-  end subroutine rho_eos_empty
-#endif /* SOLVE3D */
 end module rho_eos_mod

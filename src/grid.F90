@@ -67,10 +67,6 @@ module grid
   real(kind=8),allocatable,dimension(:,:) :: hinv
   real(kind=8),allocatable,dimension(:,:) :: f
   real(kind=8),allocatable,dimension(:,:) :: fomn
-# ifdef NON_TRADITIONAL
-  real(kind=8),allocatable,dimension(:,:) :: f_XI
-  real(kind=8),allocatable,dimension(:,:) :: f_ETA
-# endif
 
   real(kind=8),allocatable,dimension(:,:) :: angler
 
@@ -143,10 +139,6 @@ contains
     allocate( hinv(GLOBAL_2D_ARRAY) ) ; hinv=init        ! before only rmask was set in init_arrays...
     allocate( f(GLOBAL_2D_ARRAY) )    ; f=init
     allocate( fomn(GLOBAL_2D_ARRAY) ) ; fomn=init
-# ifdef NON_TRADITIONAL
-    allocate( f_XI(GLOBAL_2D_ARRAY) )  ; f_XI=init
-    allocate( f_ETA(GLOBAL_2D_ARRAY) ) ; f_ETA=init
-# endif
 
 # ifdef CURVGRID
     allocate( angler(GLOBAL_2D_ARRAY) ) ; angler=init
@@ -375,9 +367,6 @@ contains
     integer(kind=4) :: varid, ierr, ncdf_write
     character(len=8) :: sr_name = "wrt_grid"
 
-#if defined MPI && !defined PARALLEL_FILES
-    if (mynode == 0) then
-#endif
 
 ! Grid type switch: Spherical or Cartesian.
 
@@ -437,9 +426,6 @@ contains
       endif
 #endif
 
-#if defined MPI && !defined PARALLEL_FILES
-    endif
-#endif
 
   end subroutine wrt_grid_scalars  !]
 !----------------------------------------------------------------------
@@ -479,13 +465,9 @@ contains
 #ifdef MASKING
     call put2d('mask_rho', rmask(i0:i1,j0:j1))         ! masking fields at RHO-points.
 #endif
-#ifdef MPI_SILENT_MODE
     if (mynode == 0) then
-#endif
       write(*,'(6x,A)')  'wrt_grid :: wrote grid data '
-#ifdef MPI_SILENT_MODE
     endif
-#endif
 #ifdef PARALLEL_IO
     pio_gtype = gtype_save
 #endif
@@ -593,14 +575,10 @@ contains
 # endif
     ierr=nf90_close(ncid)
     if (ierr==nf90_noerr) then
-#ifdef MPI_SILENT_MODE
       if (mynode==0) then
-#endif
         write(*,'(6x,4A,1x,A,I4)') 'get_grid :: read grid data ',&
         &'from file ''',  trim(grdname), '''.' MYID
-#ifdef MPI_SILENT_MODE
       endif
-#endif
     else
       write(error_info, *)&
       &'Cannot close file ''', trim(grdname), '''.',&

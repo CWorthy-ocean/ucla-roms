@@ -2,7 +2,6 @@ module wvlcty_mod
 #include "cppdefs.opt"
   implicit none
   private
-#ifdef SOLVE3D
   public :: wvlcty, wvlcty_tile
 
 contains
@@ -230,9 +229,4 @@ contains
 #  endif
 # endif
   end subroutine wvlcty_tile
-#else
-contains
-  subroutine wvlcty_empty
-  end subroutine wvlcty_empty
-#endif /* SOLVE3D */
 end module wvlcty_mod

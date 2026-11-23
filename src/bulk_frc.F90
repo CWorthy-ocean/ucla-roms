@@ -35,10 +35,6 @@ module bulk_frc
   type (ncforce) :: nc_swrad = ncforce(&
   &vname='swrad',tname='time' ) ! net shortwave radiation [W/m^2]
 
-#if defined TAU_CORRECTION
-  type (ncforce)  :: nc_taux = ncforce(vname='TauX_corr',tname='time'  )  ! The TAU_CORRECTION flag is used to activ
-  type (ncforce)  :: nc_tauy = ncforce(vname='TauY_corr',tname='time'  )  ! bring bulk force field closer to that of
-#endif
 
   character(len=8) :: module_name = "bulk_frc"
   real(kind=8),allocatable,public,dimension(:,:) ::  tair             ! air temp, used in step3d_t to add the heat o
@@ -48,10 +44,6 @@ module bulk_frc
   real(kind=8),allocatable,public,dimension(:,:) :: lwrad             ! Long wave radiation - get_bulk_rad.F & set_b
   !real:: srflx(GLOBAL_2D_ARRAY)                       ! short wave radiation: srflx stored in surf_flux.F module as
 
-#if defined TAU_CORRECTION
-  real(kind=8),allocatable,public,dimension(:,:) :: taux              ! The TAU_CORRECTION flag is used to active a
-  real(kind=8),allocatable,public,dimension(:,:) :: tauy              ! bring bulk force field closer to that of the
-#endif
 
   real(kind=8),public,allocatable,dimension(:,:) :: wspd_used  ! wind speed at rho point (also used in BGC routines)
   logical, public :: interp_bulk_frc, check_bulk_frc_units
@@ -138,13 +130,6 @@ contains
     allocate( nc_lwrad%vdata(GLOBAL_2D_ARRAY,2) )
     allocate( nc_swrad%vdata(GLOBAL_2D_ARRAY,2) )
 
-#if defined TAU_CORRECTION
-    allocate( taux(GLOBAL_2D_ARRAY) )
-    allocate( tauy(GLOBAL_2D_ARRAY) )
-
-    allocate( nc_taux%vdata(GLOBAL_2D_ARRAY,2) )
-    allocate( nc_tauy%vdata(GLOBAL_2D_ARRAY,2) )
-#endif
 
     if (interp_bulk_frc) then
       nc_uwnd%coarse = 1
@@ -198,11 +183,6 @@ contains
     ! Possibly check units of Q and others
 
     call set_frc_data(nc_prate,prate,'r')
-#if defined TAU_CORRECTION
-    call set_frc_data(nc_taux,taux,'r')
-    call set_frc_data(nc_tauy,tauy,'r')
-!     call exchange_xxx(taux,tauy)
-#endif
     call error_log%abort_check()
 !     call exchange_xxx(srflx,lwrad)
 !     call exchange_xxx(uwnd,vwnd)
@@ -281,7 +261,7 @@ contains
     use surf_flux, only:&
     &sss, dSSSdt, ssflx_rst, wrt_rstflx
 #endif
-#if defined(QCORRECTION) && !defined(ANA_SST)
+#ifdef QCORRECTION
     use surf_flux, only:&
     &sst, dSSTdt, shflx_rst, wrt_rstflx
 #endif
@@ -406,20 +386,13 @@ contains
     real(kind=8) tmid, cff1,cff2, cff3,cff4, cff5,cff6, cff7,cff8,&
     &cff9,cff10, cff
 # ifdef QCORRECTION
-#  define SST_DATA
     integer(kind=4) it13,it14, it11,it12
     real(kind=8) cff13,cff14, cff11,cff12
 # endif
 # ifdef SFLX_CORR
-#  define SSS_DATA
     integer(kind=4) it15,it16
     real(kind=8) cff15,cff16
 # endif
-# define WIND_DATA
-# define TAIR_DATA
-# define RHUM_DATA
-# define PRATE_DATA
-# define LWRAD_DATA
 
 ! Extended bounds needed since u2rho and rho2u averaging occurs, and
 ! lmd_kpp has SMOOTH_HBL which requires extended loop ranges for smoothing.
@@ -434,12 +407,6 @@ contains
 !      implicit none
 !      integer istr,iend,jstr,jend, ierr, i,j, it1,it2
 !      real tmid, cff, cff1, cff2
-!# ifdef DIURNAL_SRFLUX
-!      real Ampl, cos_h, dec,cos_d,sin_d, tan_d, phi, csph,snph, h0
-!      real, parameter :: year2day=365.25_8,  day2year=1.D0/year2day
-!# elif defined ROBUST_DIURNAL_SRFLUX
-!      real Ampl, dtau, tau1,tau2
-!# endif
 !# include "param.h"
 !# include "scalars"
 !# include "grid"
@@ -466,59 +433,14 @@ contains
 !        cff=1._8/(rho0*Cp*(cff1+cff2))
 !        cff1=cff1*cff ; cff2=cff2*cff
 !
-# ifdef DIURNAL_SRFLUX
-
-! DIURNAL CYCLE - USED IN BOTH PHYSICAL AND ECOSYSTEM MODELS
-! Patrick Marchesiello - 1999: Modulate average dayly insolation
-! to get diurnal cycle by:
-!
-!              cos(h)*cos(d)*cos(phi)  +  sin(d)*sin(phi)
-!       pi * ---------------------------------------------
-!             sin(h0)*cos(d)*cos(phi) + h0*sin(d)*sin(phi)
-!
-! where: h, d, phi -- are hour, declination, latitude angles;
-!        h0 is hour angle at sunset and sunrise
-!
-! Yusuke Uchiyama, 2009: UTC correction based on lonr is added.
-!                               ocean_time should be in UTC.
-#  define UTC_CORRECTION
-
-#  ifndef UTC_CORRECTION
-    cos_h=cos(2._8*pi*(tdays+0.5_8-int(tdays+0.5_8)))
-#  endif
-    dec=-0.406_8*cos(deg2rad*(tdays-int(tdays*day2year)*year2day))
-    cos_d=cos(dec) ; sin_d=sin(dec) ; tan_d=tan(dec)
-# endif
 
     do j=jstrR,jendR
       do i=istrR,iendR
-# ifdef DIURNAL_SRFLUX
-#  ifdef UTC_CORRECTION
-        cos_h=cos( 2._8*pi*(tdays+0.5_8 -int(tdays+0.5_8))&
-        &+deg2rad*lonr(i,j) )
-#  endif
-        phi=deg2rad*latr(i,j)
-        h0=acos(-tan(phi)*tan_d)
-        csph=cos_d*cos(phi) ; snph=sin_d*sin(phi)
-
-        Ampl=max( 0._8,  pi*(cos_h*csph +  snph)&
-        &/(sin(h0)*csph + h0*snph)&
-        &)
-# endif
         ! DevinD - time interp not needed but convert
         ! convert [Watts/m^2] into kinematic flux [degC*m/s]
 !            srflx(i,j)=cff1*swrad_data(i,j,it1)+cff2*swradg(i,j,it2)
         srflx(i,j)= srflx(i,j)/(rho0*Cp)
 
-# if defined DIURNAL_SRFLUX || defined ROBUST_DIURNAL_SRFLUX
-#  ifdef BULK_FRC
-        srflx(i,j)=srflx(i,j)*Ampl         ! just modulate
-#  else
-        cff=stflx(i,j,itemp)-srflx(i,j)    ! subtract short-wave
-        srflx(i,j)=srflx(i,j)*Ampl         ! radiatin from the net,
-        stflx(i,j,itemp)= cff+srflx(i,j)   ! modulate and add back
-#  endif
-# endif
       enddo
     enddo
 !
@@ -897,14 +819,12 @@ contains
 #  ifdef MASKING
         &*rmask(i,j)
 #  endif
-#  ifndef ANA_SST
         if (wrt_rstflx) then
           shflx_rst(i,j)= -dSSTdt*(t(i,j,nz,nrhs,itemp) - sst(i,j))
 #   ifdef MASKING
           shflx_rst(i,j)=shflx_rst(i,j)*rmask(i,j)
 #   endif
         endif
-#  endif
 # endif /* QCORRECTION */
 
 !
@@ -976,17 +896,15 @@ contains
 ! Restrict stflx to prevent surface temperature to go below -1.8_8
 ! degrees C.
 !---------------------------------------------------------------
-#ifdef SEA_ICE_NOFLUX
         if( t(i,j,nz,nrhs,itemp) .le. -1.8_8 ) then
           stflx(i,j,itemp)=0._8
-#   if defined(QCORRECTION) && !defined(ANA_SST)
+#   ifdef QCORRECTION
           if (wrt_rstflx) shflx_rst(i,j)=0._8  ! the correction actually applied
 #   endif
 #   if defined LMD_KPP
           srflx(i,j)=0._8
 #    endif
         endif
-#endif
 
       enddo
     enddo
@@ -1045,10 +963,6 @@ contains
         !! This rho0 should be worked into the coefficients
         !! Do a mask multiply at reading time for input vars ?
 
-# ifdef TAU_CORRECTION
-        ! Correction to bring bulk forcing towards observed fluxes. taux at rho-point.
-        sustr_r(i,j)=sustr_r(i,j) + taux(i,j) / rho0
-# endif
         ! rmask applies to tau_correction if on, else svstr_r above that.
         ! either way end result is that svstr_r is rmask'ed.
 
@@ -1083,10 +997,6 @@ contains
         ! v values averaged to rho points as svstr still at rho-point
         svstr_r(i,j)=svstr_r(i,j) + cff*0.5_8*(v(i,j,nz,nrhs)+v(i,j+1,nz,nrhs))/rho0
 
-# ifdef TAU_CORRECTION
-        ! Correction to bring bulk forcing towards observed fluxes.
-        svstr_r(i,j)=svstr_r(i,j) + tauy(i,j) /rho0
-# endif
         ! rmask applies to tau_correction if on, else svstr_r above that.
         ! either way end result is that svstr_r is rmask'ed.
 

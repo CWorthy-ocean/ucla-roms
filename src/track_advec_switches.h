@@ -62,16 +62,6 @@ end if
 
 cpps(is:ie)='UPSTREAM_TS'
 # endif
-# ifdef AKIMA_V
-is=ie+2 ; ie=is+6
-if (ie>max_opt_size) then
-  call error_log%raise_global(&
-  &info=error_info,&
-  &context=sr_name)
-end if
-
-cpps(is:ie)='AKIMA_V'
-# endif
 # ifdef PARABOLIC_SPLINES
 is=ie+2 ; ie=is+16
 if (ie>max_opt_size) then
@@ -81,24 +71,4 @@ if (ie>max_opt_size) then
 end if
 
 cpps(is:ie)='PARABOLIC_SPLINES'
-# endif
-# ifdef SPLINE_TS
-is=ie+2 ; ie=is+8
-if (ie>max_opt_size) then
-  call error_log%raise_global(&
-  &info=error_info,&
-  &context=sr_name)
-end if
-
-cpps(is:ie)='SPLINE_TS'
-# endif
-# ifdef NEUMANN_TS
-is=ie+2 ; ie=is+9
-if (ie>max_opt_size) then
-  call error_log%raise_global(&
-  &info=error_info,&
-  &context=sr_name)
-end if
-
-cpps(is:ie)='NEUMANN_TS'
 # endif

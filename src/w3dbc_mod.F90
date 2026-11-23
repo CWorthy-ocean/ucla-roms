@@ -2,7 +2,7 @@ module w3dbc_mod
 #include "cppdefs.opt"
   implicit none
   private
-#if defined SOLVE3D && defined NHMG
+#ifdef NHMG
   public :: w3dbc_tile
 contains
   subroutine w3dbc_tile (istr,iend,jstr,jend,grad)
@@ -28,7 +28,6 @@ contains
 
 # define dt illegal
 
-# define OBC_M3SPECIFIEDW
 
 # ifndef EW_PERIODIC
 
@@ -69,11 +68,7 @@ contains
       ! not orlanski, can be either no gradient, or specified
       do k=1,nz
         do j=jstr,jend
-#    if defined OBC_M3SPECIFIED
-          w(istr-1,j,k,nnew)=w_west(j,k)
-#    else
           w(istr-1,j,k,nnew)=w(istr,j,k,nnew)  ! no gradient
-#    endif
         enddo
       enddo
 #   endif /* OBC_M3ORLANSKI or SPECIFIED/NO-GRAD*/
@@ -122,11 +117,7 @@ contains
 #   else  /* not ORLANSKI  (Spec or no grad)*/
       do k=1,nz
         do j=jstr,jend
-#    if defined OBC_M3SPECIFIED
-          w(iend+1,j,k,nnew)=w_east(j,k)
-#    else
           w(iend+1,j,k,nnew)=w(iend,j,k,nnew)
-#    endif
         enddo
       enddo
 #   endif /* orlanski,spec, or no-grad */
@@ -230,11 +221,7 @@ contains
 #   else  /* not orlanski, spec or non-grad instead */
       do k=1,nz
         do i=istr,iend
-#    if defined OBC_M3SPECIFIED
-          w(i,jend+1,k,nnew)=w_north(i,k)
-#    else
           w(i,jend+1,k,nnew)=w(i,jend,k,nnew)
-#    endif
         enddo
       enddo
 #   endif  /* orlanski, spec, or non-grad */
@@ -359,5 +346,5 @@ contains
   subroutine w3dbc_empty
   end subroutine w3dbc_empty
 
-#endif /* SOLVE3D && NHMG */
+#endif /* NHMG */
 end module w3dbc_mod

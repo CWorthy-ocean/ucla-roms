@@ -4,7 +4,6 @@ module step3d_t_mod
   implicit none
   private
 
-#ifdef SOLVE3D
   public :: step3d_t, check_step_t_switches
 contains
 #ifndef ADV_ISONEUTRAL
@@ -13,15 +12,9 @@ contains
 !--# define AKIMA
 !--# define CONST_TRACERS
 
-! The following two CPPs activate switching triad and stabilizing
-! algorithms.  They must always be defined whenever the isoneutral
-! hyperdiffusion is selected.
+! The isoneutral hyperdiffusion (ADV_ISONEUTRAL) always uses the
+! switching-triad and stabilizing algorithms.
 
-
-# ifdef ADV_ISONEUTRAL
-#  define SW_TRIADS
-#  define STABILIZE
-# endif
   ! Note that arrays A2d(1,1:4) within
   subroutine step3d_t(tile,tstep)   ! the list of agruments in call below
 
@@ -41,9 +34,7 @@ contains
 # ifdef ADV_ISONEUTRAL
     &, A2d(1,4), A2d(1,6), A2d(1,8), A2d(1,10)&
     &, A3d(1,1)&
-#  ifdef STABILIZE
     &, A3d(1,2)&
-#  endif
 # endif
     &,   tstep&
     &)
@@ -54,9 +45,7 @@ contains
 # ifdef ADV_ISONEUTRAL
   &, FSC,dTdz,dTdx,dTde&
   &, LapT&
-#  ifdef STABILIZE
   &,  Akz&
-#  endif
 # endif
   &, tstep&
   &)
@@ -124,9 +113,7 @@ contains
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,2) :: FSC,  dTdz,&
   &dTdx, dTde
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,nz) :: LapT
-#  ifdef STABILIZE
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: Akz
-#  endif
 # endif
   real(kind=8) cff
   real(kind=8), parameter :: epsil=1.D-33
@@ -134,15 +121,11 @@ contains
 # ifdef ADV_ISONEUTRAL
   integer(kind=4) k1,k2
   real(kind=8) sumX,sumE
-#  ifdef SW_TRIADS
   integer(kind=4) idx,ide
   real(kind=8), dimension(0:4), parameter :: wgt=(/ 0._8, 1._8, 0.5_8,&
   &0.3333333333333333_8, 0.25_8 /)
-#  endif
-#  ifdef  STABILIZE
   real(kind=8) cff2, cffX, s2_XLU,s2_XRU, s2_ELU,s2_ERU,&
   &cffE, s2_XLL,s2_XRL, s2_ELL,s2_ERL
-#  endif
 # endif
   integer(kind=4), intent(in) :: tstep
 
@@ -395,13 +378,8 @@ contains
           FX(i,j)=diff3u(i,j,k)*0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))&
           &*dn_u(i,j)*(&
           &dTdx(i,j,k1)&
-#  ifdef SW_TRIADS
           &-0.5_8*( min(dRdx(i,j,k),0._8)*(dTdz(i-1,j,k1)+dTdz(i,j,k2))&
           &+max(dRdx(i,j,k),0._8)*(dTdz(i-1,j,k2)+dTdz(i,j,k1)) &
-#  else
-          &-0.25_8*dRdx(i,j,k)*( dTdz(i-1,j,k1)+dTdz(i,j,k2)&
-          &+dTdz(i-1,j,k2)+dTdz(i,j,k1)&
-#  endif
           &) )
         enddo
       enddo
@@ -411,13 +389,8 @@ contains
           FE(i,j)=diff3v(i,j,k)*0.5_8*(Hz(i,j,k)+Hz(i,j-1,k))&
           &*dm_v(i,j)*(&
           &dTde(i,j,k1)&
-#  ifdef SW_TRIADS
           &-0.5_8*(min(dRde(i,j,k),0._8)*(dTdz(i,j-1,k1)+dTdz(i,j,k2))&
           &+max(dRde(i,j,k),0._8)*(dTdz(i,j-1,k2)+dTdz(i,j,k1)))&
-#  else
-          &-0.25_8*dRde(i,j,k)*(dTdz(i,j-1,k1)+dTdz(i,j,k2)&
-          &+dTdz(i,j-1,k2)+dTdz(i,j,k1))&
-#  endif
           &)
         enddo
       enddo  !--> keep dTdx,dTde
@@ -427,7 +400,6 @@ contains
       if (k < nz) then
         do j=jmin,jmax
           do i=imin,imax
-#  ifdef SW_TRIADS
             sumX=0._8 ; idx=0
 
             if (dRdx(i,j,k) < 0._8) then
@@ -456,21 +428,7 @@ contains
               &-dTdx(i+1,j,k1) )
               idx=idx+1
             endif
-#  else
-            sumX=diff3u(i,j,k)*dRdx(i,j,k)*(&
-            &dRdx(i,j,k)*dTdz(i,j,k2)-dTdx(i,j,k1) )&
 
-            &+diff3u(i,j,k+1)*dRdx(i,j,k+1)*(&
-            &dRdx(i,j,k+1)*dTdz(i,j,k2)-dTdx(i,j,k2) )&
-
-            &+diff3u(i+1,j,k+1)*dRdx(i+1,j,k+1)*(&
-            &dRdx(i+1,j,k+1)*dTdz(i,j,k2)-dTdx(i+1,j,k2) )&
-
-            &+diff3u(i+1,j,k)*dRdx(i+1,j,k)*(&
-            &dRdx(i+1,j,k)*dTdz(i,j,k2)-dTdx(i+1,j,k1) )
-#  endif
-
-#  ifdef SW_TRIADS
             sumE=0._8 ; ide=0
 
             if (dRde(i,j,k) < 0._8) then
@@ -502,21 +460,6 @@ contains
             endif
 
             FSC(i,j,k2)=FSC(i,j,k2)*(sumX*wgt(idx)+sumE*wgt(ide))
-#  else
-            sumE=diff3v(i,j,k)*dRde(i,j,k)*(&
-            &dRde(i,j,k)*dTdz(i,j,k2)-dTde(i,j,k1) )&
-
-            &+diff3v(i,j,k+1)*dRde(i,j,k+1)*(&
-            &dRde(i,j,k+1)*dTdz(i,j,k2)-dTde(i,j,k2) )&
-
-            &+diff3v(i,j+1,k+1)*dRde(i,j+1,k+1)*(&
-            &dRde(i,j+1,k+1)*dTdz(i,j,k2)-dTde(i,j+1,k2) )&
-
-            &+diff3v(i,j+1,k)*dRde(i,j+1,k)*(&
-            &dRde(i,j+1,k)*dTdz(i,j,k2)-dTde(i,j+1,k1) )
-
-            FSC(i,j,k2)=FSC(i,j,k2)*0.25_8*(sumX+sumE)
-#  endif
           enddo
         enddo
       endif     !<--   k < N
@@ -641,13 +584,8 @@ contains
           FX(i,j)=-diff3u(i,j,k)*0.5_8*(Hz(i,j,k)+Hz(i-1,j,k))&
           &*dn_u(i,j)*(&
           &dTdx(i,j,k1)&
-#  ifdef SW_TRIADS
           &-0.5_8*(min(dRdx(i,j,k),0._8)*(dTdz(i-1,j,k1)+dTdz(i,j,k2))&
           &+max(dRdx(i,j,k),0._8)*(dTdz(i-1,j,k2)+dTdz(i,j,k1)))&
-#  else
-          &-0.25_8*dRdx(i,j,k)*(dTdz(i-1,j,k1)+dTdz(i,j,k2)&
-          &+dTdz(i-1,j,k2)+dTdz(i,j,k1))&
-#  endif
           &)
         enddo
       enddo
@@ -657,13 +595,8 @@ contains
           FE(i,j)=-diff3v(i,j,k)*0.5_8*(Hz(i,j,k)+Hz(i,j-1,k))&
           &*dm_v(i,j)*(&
           &dTde(i,j,k1)&
-#  ifdef SW_TRIADS
           &-0.5_8*(min(dRde(i,j,k),0._8)*(dTdz(i,j-1,k1)+dTdz(i,j,k2))&
           &+max(dRde(i,j,k),0._8)*(dTdz(i,j-1,k2)+dTdz(i,j,k1)))&
-#  else
-          &-0.25_8*dRde(i,j,k)*(dTdz(i,j-1,k1)+dTdz(i,j,k2)&
-          &+dTdz(i,j-1,k2)+dTdz(i,j,k1))&
-#  endif
           &)
         enddo
       enddo
@@ -672,7 +605,6 @@ contains
         do j=jstr,jend
           do i=istr,iend
 
-#  ifdef STABILIZE
 
             s2_XLL=(FSC(i,j,k2)*dRdx(i,j,  k  ))**2
             s2_XLU=(FSC(i,j,k2)*dRdx(i,j,  k+1))**2
@@ -691,7 +623,6 @@ contains
             cffX=pm(i,j)**2
             cffE=pn(i,j)**2
 
-#   ifdef SW_TRIADS
             Akz(i,j,k) = 15._8*(  max( diff3u(i  ,j,k  )*s2_XLL,&
             &diff3u(i+1,j,k  )*s2_XRL,&
             &diff3u(i  ,j,k+1)*s2_XLU,&
@@ -712,33 +643,9 @@ contains
             &diff3v(i,j+1,k+1)*(cffE + cff2*s2_ERU),&
             &diff3v(i,j+1,k  )*(cffE + cff2*s2_ERL))&
             &)
-#   else
-            Akz(i,j,k) = 0.5_8*(  diff3u(i  ,j,k  )*s2_XLL&
-            &+diff3u(i+1,j,k  )*s2_XRL&
-            &+diff3u(i  ,j,k+1)*s2_XLU&
-            &+diff3u(i+1,j,k+1)*s2_XRU&
-
-            &+diff3v(i,j,k  )*s2_ELL&
-            &+diff3v(i,j+1,k)*s2_ERL&
-            &+diff3v(i,j,k+1)*s2_ELU&
-            &+diff3v(i,j+1,k+1)*s2_ERU&
-            &)*(&
-            &diff3u(i  ,j,k  )*(cffX + cff2*s2_XLL)&
-            &+diff3u(i  ,j,k+1)*(cffX + cff2*s2_XLU)&
-            &+diff3u(i+1,j,k+1)*(cffX + cff2*s2_XRU)&
-            &+diff3u(i+1,j,k  )*(cffX + cff2*s2_XRL)&
-
-            &+diff3v(i,j  ,k  )*(cffE + cff2*s2_ELL)&
-            &+diff3v(i,j  ,k+1)*(cffE + cff2*s2_ELU)&
-            &+diff3v(i,j+1,k+1)*(cffE + cff2*s2_ERU)&
-            &+diff3v(i,j+1,k  )*(cffE + cff2*s2_ERL)&
-            &)
-#   endif
-#  endif  /* STABILIZE */
 
 
 
-#  ifdef SW_TRIADS
             sumX=0._8 ; idx=0
 
             if (dRdx(i,j,k) < 0._8) then
@@ -768,17 +675,6 @@ contains
               &-dTdx(i+1,j,k1) )
               idx=idx+1
             endif
-#  else
-            sumX=diff3u(i  ,j,k  )*dRdx(i  ,j,k  )&
-            &*(dRdx(i  ,j,k  )*dTdz(i  ,j,k2 )-dTdx(i  ,j,k1))&
-            &+diff3u(i  ,j,k+1)*dRdx(i  ,j,k+1)&
-            &*(dRdx(i  ,j,k+1)*dTdz(i  ,j,k2 )-dTdx(i  ,j,k2))&
-            &+diff3u(i+1,j,k+1)*dRdx(i+1,j,k+1)&
-            &*(dRdx(i+1,j,k+1)*dTdz(i  ,j,k2 )-dTdx(i+1,j,k2))&
-            &+diff3u(i+1,j,k  )*dRdx(i+1,j,k  )&
-            &*(dRdx(i+1,j,k  )*dTdz(i  ,j,k2 )-dTdx(i+1,j,k1))
-#  endif
-#  ifdef SW_TRIADS
             sumE=0._8 ; ide=0
 
             if (dRde(i,j,k) < 0._8) then
@@ -808,29 +704,11 @@ contains
               &-dTde(i,j+1,k1) )
               ide=ide+1
             endif
-#  else
-            sumE=diff3v(i,j  ,k  )*dRde(i,j  ,k  )&
-            &*(dRde(i,j  ,k  )*dTdz(i,j  ,k2 )-dTde(i,j ,k1))&
-            &+diff3v(i,j  ,k+1)*dRde(i,j  ,k+1)&
-            &*(dRde(i,j  ,k+1)*dTdz(i,j  ,k2 )-dTde(i,j ,k2))&
-            &+diff3v(i,j+1,k+1)*dRde(i,j+1,k+1)&
-            &*(dRde(i,j+1,k+1)*dTdz(i,j  ,k2)-dTde(i,j+1,k2))&
-            &+diff3v(i,j+1,k  )*dRde(i,j+1,k )&
-            &*(dRde(i,j+1,k  )*dTdz(i,j  ,k2)-dTde(i,j+1,k1))
-#  endif
 
 
-#  ifdef SW_TRIADS
             FSC(i,j,k2)=-FSC(i,j,k2)*(sumX*wgt(idx)+sumE*wgt(ide))&
-#  else
-            FSC(i,j,k2)=-FSC(i,j,k2)*0.25_8*(sumX+sumE)&
-#  endif
-#  ifdef STABILIZE
             &-cff*Akz(i,j,k)*( t(i,j,k+1,ntdf,itrc)&
             &-t(i,j,k,ntdf,itrc))
-# else
-            &+0
-#  endif
 
           enddo
         enddo
@@ -1087,7 +965,7 @@ enddo     !<-- itrc (horizontal advection and sources)
     do i=istr,iend
       DC(i,0)=dt*pm(i,j)*pn(i,j) !<--horizontal metric
 
-# if defined ADV_ISONEUTRAL && defined STABILIZE
+# ifdef ADV_ISONEUTRAL
       FC(i,1)=2._8*dt*(Akt(i,j,1,iAkt)+Akz(i,j,1))&
 # else
       FC(i,1)=2._8*dt* Akt(i,j,1,iAkt)&
@@ -1106,7 +984,7 @@ enddo     !<-- itrc (horizontal advection and sources)
     enddo
     do k=2,nz-1,+1
       do i=istr,iend
-# if defined ADV_ISONEUTRAL && defined STABILIZE
+# ifdef ADV_ISONEUTRAL
         FC(i,k)=2._8*dt*(Akt(i,j,k,iAkt)+Akz(i,j,k))&
 # else
         FC(i,k)=2._8*dt* Akt(i,j,k,iAkt)&
@@ -1239,12 +1117,10 @@ if (is_marbl_step(tstep)) then
   call marbldrv_column_physics(istr,iend,jstr,jend,t)
   call reg_toc(rg_marbl)
 end if
-# elif defined(BIOLOGY_BEC2)
-call ecosys_bec2_tile(istr,iend,jstr,jend) ! BEC, 2014
 # endif
 
-# if !defined TS_DIF2 && !defined TS_DIF4
-  ! With TS_DIF2/TS_DIF4, t3dmix runs next: it reads only the t(nrhs) halo,
+# ifndef TS_DIF2
+  ! With TS_DIF2, t3dmix runs next: it reads only the t(nrhs) halo,
   ! updates the t(nnew) interior and exchanges t(nnew) itself, so an
   ! exchange here would be overwritten unused.
   call exchange_tracers(nnew)
@@ -1287,9 +1163,4 @@ subroutine check_step_t_switches
 # include "track_advec_switches.h"
 
 end subroutine check_step_t_switches
-#else
-contains
-  subroutine step3d_t_empty
-  end subroutine step3d_t_empty
-#endif  /* SOLVE3D */
 end module step3d_t_mod

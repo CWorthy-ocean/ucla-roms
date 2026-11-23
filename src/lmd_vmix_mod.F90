@@ -3,13 +3,12 @@ module lmd_vmix_mod
   implicit none
   private
 
-#if defined SOLVE3D && defined LMD_MIXING
+#ifdef LMD_MIXING
 
   public :: lmd_vmix
 
 contains
 
-# define SMOOTH_RIG  /* local Ri number smoothing */
 
   subroutine lmd_vmix(tind)
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
@@ -73,9 +72,7 @@ contains
     use mixing, only: bvf
 # if !defined LMD_KPP && !defined LMD_BKPP
     use mixing, only: akv, akt
-#  ifdef EXCHANGE
     use roms_mpi, only: exchange_xxx
-#  endif
 # endif
     use param, only:&
     &ieast, isalt, itemp, iwest, jnorth, jsouth, np_xi, np_eta
@@ -137,7 +134,6 @@ contains
 
 # ifdef LMD_RIMIX
 !----#  define tind nstp
-#  ifdef SMOOTH_RIG
 #   ifdef EW_PERIODIC
 #    define I_EXT_RANGE istr-1,iend+1
 #   else
@@ -174,10 +170,6 @@ contains
       jmax=jend+1
     endif
 #   endif
-#  else
-#   define I_EXT_RANGE istr,iend
-#   define J_EXT_RANGE jstr,jend
-#  endif  /* SMOOTH_RIG */
 # endif  /* LMD_RIMIX */
 
 !                                    ! Compute horizontal velocity
@@ -199,7 +191,6 @@ contains
     enddo
   enddo
 
-#  ifdef SMOOTH_RIG
 #   ifndef EW_PERIODIC
   if (WESTERN_EDGE) then
     do j=J_EXT_RANGE
@@ -273,7 +264,6 @@ do j=jstr,jend
   enddo
 enddo              !--> discard FX,FE,FE1
 
-#  endif /* SMOOTH_RIG */
 #  undef I_EXT_RANGE
 #  undef J_EXT_RANGE
 # endif /* LMD_RIMIX */
@@ -487,13 +477,11 @@ do k=1,nz-1
 enddo
 
  !! Do we really need to exchange the mixing coefficients?
-#  ifdef EXCHANGE
 #   ifdef SALINITY
 call exchange_xxx(Akv,Akt(:,:,:,itemp),Akt(:,:,:,isalt))
 #   else
 call exchange_xxx(Akv,Akt(:,:,:,itemp))
 #   endif
-#  endif
 # endif /* LMD_KPP || LMD_BKPP */
 end subroutine lmd_vmix_tile
 #else

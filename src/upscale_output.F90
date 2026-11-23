@@ -180,13 +180,6 @@ contains
     if (done) then
       return
     else
-#ifndef OBC_TSPECIFIED
-      if (mynode == 0) then
-        print *, 'WARNING: Upscale output is requested, but ',&
-        &'OBC_TSPECIFIED is not defined in cppdefs.opt. Upscaling ',&
-        &'without OBC_TSPECIFIED is not recommended.'
-      endif
-#endif
       done = .true.
     endif
 

@@ -56,10 +56,6 @@ module frc_output
   real(kind=8),allocatable,dimension(:,:) :: vwnd_avg
   real(kind=8),allocatable,dimension(:,:) :: ssflx_avg
   real(kind=8),allocatable,dimension(:,:) :: prate_ms ! prate (precipitation rate in m/s)
-#ifdef TAU_CORRECTION
-  real(kind=8),allocatable,dimension(:,:) :: taux_avg
-  real(kind=8),allocatable,dimension(:,:) :: tauy_avg
-#endif
 #ifdef MARBL
   real(kind=8),allocatable,dimension(:,:) :: vflux_ALK_avg
   real(kind=8),allocatable,dimension(:,:) :: vflux_DIC_avg
@@ -135,12 +131,6 @@ contains
         vwnd_avg(:,:)=0
         allocate(ssflx_avg(GLOBAL_2D_ARRAY) )
         ssflx_avg(:,:)=0
-#ifdef TAU_CORRECTION
-        allocate(taux_avg(GLOBAL_2D_ARRAY) )
-        taux_avg(:,:)=0
-        allocate(tauy_avg(GLOBAL_2D_ARRAY) )
-        tauy_avg(:,:)=0
-#endif
 #if defined MARBL
         allocate(vflux_ALK_avg(GLOBAL_2D_ARRAY) )
         vflux_ALK_avg(:,:)=0
@@ -195,10 +185,6 @@ contains
     vwnd_avg(:,:)  = vwnd_avg(:,:)*(1-coef)  + vwnd(:,:)*coef
     ssflx_avg(:,:) = ssflx_avg(:,:)*(1-coef) + stflx(:,:,isalt)*coef
     swflx_avg(:,:) = swflx_avg(:,:)*(1-coef) + swflx(:,:)*coef
-#ifdef TAU_CORRECTION
-    taux_avg(:,:)  = taux_avg(:,:)*(1-coef)  + taux(:,:)*coef
-    tauy_avg(:,:)  = tauy_avg(:,:)*(1-coef)  + tauy(:,:)*coef
-#endif
 #if defined MARBL
     vflux_ALK_avg(:,:)  = vflux_ALK_avg(:,:)*(1-coef)  + stflx(:,:,iALK)*coef
     vflux_DIC_avg(:,:)  = vflux_DIC_avg(:,:)*(1-coef)  + stflx(:,:,iDIC)*coef
@@ -277,12 +263,6 @@ contains
         vwnd_avg(:,:) = 0
         call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
         ssflx_avg(:,:) = 0
-#ifdef TAU_CORRECTION
-        call ncwrite(ncid,'taux',taux_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
-        taux_avg(:,:) = 0
-        call ncwrite(ncid,'tauy',tauy_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
-        tauy_avg(:,:) = 0
-#endif
 #ifdef MARBL
         call ncwrite(ncid,'vflux_ALK',vflux_ALK_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
         vflux_ALK_avg(:,:) = 0
@@ -319,10 +299,6 @@ contains
         call ncwrite(ncid,'vwnd',vwnd(i0:i1,j0:j1),(/1,1,record/),.true.)
         call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/),.true.)
         call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),(/1,1,record/),.true.)
-#ifdef TAU_CORRECTION
-        call ncwrite(ncid,'taux',taux(i0:i1,j0:j1),(/1,1,record/),.true.)
-        call ncwrite(ncid,'tauy',tauy(i0:i1,j0:j1),(/1,1,record/),.true.)
-#endif
 #else
         pio_gtype = '2Drw'
         call ncwrite(ncid,'swflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/),.true.)
@@ -360,12 +336,6 @@ contains
         vwnd_avg(:,:) = 0
         call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/))
         ssflx_avg(:,:) = 0
-#ifdef TAU_CORRECTION
-        call ncwrite(ncid,'taux',taux_avg(i0:i1,j0:j1),(/1,1,record/))
-        taux_avg(:,:) = 0
-        call ncwrite(ncid,'tauy',tauy_avg(i0:i1,j0:j1),(/1,1,record/))
-        tauy_avg(:,:) = 0
-#endif
 #ifdef MARBL
         call ncwrite(ncid,'vflux_ALK',vflux_ALK_avg(i0:i1,j0:j1),(/1,1,record/))
         vflux_ALK_avg(:,:) = 0
@@ -398,10 +368,6 @@ contains
         call ncwrite(ncid,'vwnd',vwnd(i0:i1,j0:j1),(/1,1,record/))
         call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/))
         call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),(/1,1,record/))
-#ifdef TAU_CORRECTION
-        call ncwrite(ncid,'taux',taux(i0:i1,j0:j1),(/1,1,record/))
-        call ncwrite(ncid,'tauy',tauy(i0:i1,j0:j1),(/1,1,record/))
-#endif
 #else
         call ncwrite(ncid,'swflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/))
 #endif
@@ -526,21 +492,6 @@ contains
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'evaporation rate')
     ierr = nf90_put_att(ncid,varid,'units','m s-1')
-#ifdef TAU_CORRECTION
-    ! Input comes in units of:         N (kg m-1 s-2)
-    ! Output is written in units of:   N (kg m-1 s-2)
-    varid = nccreate(ncid,'taux',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
-    ierr=nf90_put_att(ncid, varid, 'long_name',&
-    &'wind stress correction term (x)')
-    ierr = nf90_put_att(ncid,varid,'units','kg m-1 s-2')
-
-    ! Input comes in units of:         N (kg m-1 s-2)
-    ! Output is written in units of:   N (kg m-1 s-2)
-    varid = nccreate(ncid,'tauy',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
-    ierr=nf90_put_att(ncid, varid, 'long_name',&
-    &'wind stress correction term (y)')
-    ierr = nf90_put_att(ncid,varid,'units','kg m-1 s-2')
-#endif
     ! Input comes in units of:         W m-2
     ! Output is written in units of:   W m-2
     varid = nccreate(ncid,'srflx',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)

@@ -2,9 +2,7 @@
 
       ! necessary for FIRST_TIME_STEP flag to work, as per set_global_definitions.h
       ! this had no value for analytical examples previously.
-#ifdef EXACT_RESTART
       forw_start=ntstart
-#endif
 
 
       do j=0,ny+1              ! Set everything (except temperature
@@ -14,7 +12,6 @@
           vbar(i,j,1)=0.       ! Note: A code to initialize T [and S]
         enddo                  ! must always be supplied for 3D
       enddo                    ! applications.
-# ifdef SOLVE3D
       do k=1,nz
         do j=0,ny+1
           do i=0,nx+1
@@ -25,9 +22,7 @@
           enddo
         enddo
       enddo
-# endif
 
-#  ifdef SOLVE3D
       do k=1,nz
         do j=0,ny+1
           do i=0,nx+1
@@ -38,4 +33,3 @@
           enddo
         enddo
       enddo
-#  endif

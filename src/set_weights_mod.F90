@@ -5,9 +5,6 @@ module set_weights_mod
   implicit none
   private
 
-#ifdef SOLVE3D
-# define POWER_FUNCTION
-!--# define TEST_WEIGHTS
   public :: set_weights
 
 contains
@@ -21,15 +18,7 @@ contains
     implicit none
 
     integer(kind=4) i,j, iter
-# ifdef POWER_FUNCTION
     real(kind=8) p,q,r, scale
-# else
-    real(kind=8) arg
-# endif
-# ifdef TEST_WEIGHTS
-    integer(kind=4) next_kstp
-    real(kind=8) zeta(4), DUon, Zt_av1, DU_av2, cff1,cff2,cff3
-# endif
     real(kind=QUAD) sum, shft, cff
     ! The loops below fill weight(:,1:2*ndtfast), so size the array from
     ! ndtfast (read from the namelist before this call) instead of a fixed
@@ -42,7 +31,6 @@ contains
        weight(2,i)=0._8
     enddo
 
-# ifdef POWER_FUNCTION
     ! Possible settings of
     ! Power-function shaped filters            ! parameters to yield the
     !                                          ! second-order accuracy:
@@ -102,22 +90,7 @@ contains
           shft=shft+weight(1,i)*dble(i)    ! exactly at "ndtfast".
        enddo
        scale=scale * shft/(sum*dble(ndtfast))
-#  ifdef TEST_WEIGHTS
-       write(*,*) shft/sum, ndtfast
-#  endif
     enddo
-# else
-    cff=pi/dble(ndtfast)                   ! cos**2 shaped filter
-    do i=1,2*ndtfast
-       arg=cff*dble(i-ndtfast)
-       if (2._8*abs(arg) < pi) then
-          weight(1,i)=(cos(arg))**2 +0.0882_8  ! <--- Hamming Window
-
-          !**       weight(1,i)=1._8                   !<-- FLAT
-          nfast=i
-       endif
-    enddo
-# endif
 
     ! Post-processing of primary weights:   Although it is assumed that
     ! the initial settings of the primary weights has its center of gravity
@@ -137,10 +110,6 @@ contains
        enddo
        shft=shft/sum
        cff=dble(ndtfast)-shft
-# ifdef TEST_WEIGHTS
-       mpi_master_only write(*,'(A,2I4,2F22.18)')&
-            &'centering weights:', iter, ndtfast, shft, cff
-# endif
        if (cff > 1._8) then              ! Apply advection step
           nfast=nfast+1                    ! using either whole, or
           do i=nfast,2,-1                  ! fractional shifts.
@@ -189,171 +158,9 @@ contains
 
     mpi_master_only write(*,'(/1x,A,I3,4x,A,I4,8x,A,2F5.1,F9.4/)')&
          &'Mode splitting: ndtfast =', ndtfast, 'nfast =', nfast&
-# ifdef POWER_FUNCTION
          &,'p,q,r =', p,q,r
-# endif
 
 
 
-# ifdef TEST_WEIGHTS
-    mpi_master_only write(*,'(/1x,A,I3,4x,A,I3/4x,A,2(12x,A))')&
-         &'Mode Splitting weights: ndtfast =', ndtfast,&
-         &'nfast =',  nfast,   'primary',  'secondary',&
-         &'accumulated-to-current-step'
-    cff=0._8
-    cff1=0._8
-    cff2=0._8
-    cff3=0._8
-    sum=0._8
-    shft=0._8
-    do i=1,nfast
-       cff=cff   + weight(1,i)
-       cff1=cff1 + weight(1,i)*dble(i)
-       cff2=cff2 + weight(1,i)*dble(i*i)
-       cff3=cff3 + weight(1,i)*dble(i*i*i)
-       sum=sum+weight(2,i)
-       shft=shft + weight(2,i)*(dble(i)-0.5_8)
-       mpi_master_only write(*,'(I3,4F19.15)')&
-            &i, weight(1,i), weight(2,i), cff, sum
-    enddo
-    cff1=cff1/dble(ndtfast)
-    cff2=cff2/dble(ndtfast*ndtfast)
-    cff3=cff3/dble(ndtfast*ndtfast*ndtfast)
-    shft=shft/dble(ndtfast)
-
-    mpi_master_only write(*,'(3(/A,2F14.10),F14.10/A,2I4,F8.4)')&
-         &'  Checking integrals (must be 1, 1)', cff,  sum,&
-         &'        centroid  (must be 1, ~0.5)', cff1, shft,&
-         &' second and third moments (>~1, ~1)', cff2, cff3,&
-         &cff3-(3*cff2-2._8),&
-         &'     ndtfast, nfast, nfast/ndtfast ',&
-         &ndtfast, nfast, dble(nfast)/dble(ndtfast)
-
-    if (cff2 < 1.000000000001_8) then
-       mpi_master_only write(*,'(/1x,A/)')&
-            &'WARNING: unstable weights, reduce parameter "r".'
-    endif
-
-    mpi_master_only write(*,'(/A/A,1x,A,15x,A,7x,A/)')&
-         &'Checking consistency of primary and secondary weights...',&
-         &'step',  'zeta_avr1', 'dt*divVBAR_avr2',&
-         &'zeta_avr1-dt*divVBAR_avr2'
-
-    do j=1,nfast              !--> Loop over realizations
-       next_kstp=1
-       kstp=1                  ! set initial conditions
-       knew=1                  ! for each realization.
-       zeta(1)=0._8
-       zeta(2)=0._8
-       do iif=1,nfast
-          if (iif==j) then
-             DUon=1._8
-          else                  ! Set up delta function over
-             DUon=0._8             ! over ensemble of individual
-          endif                 ! realizations j.
-
-#  define FORW_BAK
-#  ifdef FORW_BAK
-          kstp=knew
-          knew=kstp+1
-          if (knew>4) knew=1
-          call step2d_FB_imitator (zeta, DUon, Zt_av1, DU_av2)
-#  else
-          kstp=next_kstp
-          knew=3
-          call step2d_LFAM3_imitator (zeta, DUon, Zt_av1, DU_av2)
-
-          knew=3-kstp
-          next_kstp=knew
-          call step2d_LFAM3_imitator (zeta, DUon, Zt_av1, DU_av2)
-#  endif
-       enddo
-       write(*,'(I4,2F24.18,F24.20)') j, Zt_av1, dt*DU_av2,&
-            &Zt_av1-dt*DU_av2
-    enddo
-
-    iif=1                                ! Reset the time indices
-    kstp=1                               ! back to their default
-    knew=1                               ! initial values as were
-  end subroutine set_weights                                  ! set by "init_scalars".
-
-
-#  ifdef FORW_BAK
-  subroutine step2d_FB_imitator (zeta, DUon, Zt_av1, DU_av2)
-
-
-    implicit none
-    real(kind=8) zeta(4), DUon, Zt_av1, DU_av2, cff1,cff2
-
-    zeta(knew)=zeta(kstp) + dtfast*DUon
-
-    cff1=weight(1,iif)
-    cff2=weight(2,iif)
-    if (FIRST_2D_STEP) then
-       Zt_av1=cff1*zeta(knew)
-       DU_av2=cff2*DUon
-    else
-       Zt_av1=Zt_av1+cff1*zeta(knew)
-       DU_av2=DU_av2+cff2*DUon
-    endif
-  end subroutine step2d_FB_imitator
-
-#  else
-
-  subroutine step2d_LFAM3_imitator (zeta, DUon, Zt_av1, DU_av2)
-
-
-    implicit none
-    logical PREDICTOR_2D_STEP
-    integer(kind=4) krhs
-    real(kind=8) zeta(3), DUon, Zt_av1, DU_av2
-
-    if (knew==3) then
-       krhs=kstp
-       PREDICTOR_2D_STEP=.true.
-    else
-       krhs=3
-       PREDICTOR_2D_STEP=.false.
-    endif
-
-    ! Imitate fast time averaging procedure. This module MUST BE
-    ! consistent (to every minor detail, including startup process)
-    ! with the fast-time-averaging procedure in step2d_tile (see
-    ! file "step2D_LF_AM3.F").
-
-    if (PREDICTOR_2D_STEP) then
-       if (FIRST_2D_STEP) then
-          Zt_av1=0._8
-          DU_av2=0._8
-       else
-          Zt_av1=Zt_av1 + weight(1,iif-1)*zeta(krhs)
-       endif
-    else
-       DU_av2=DU_av2 + weight(2,iif)*DUon
-    endif
-
-    ! Imitate the actual fast-time stepping for free-surface elevation.
-    ! This module must be consistent with the time stepping in step2d,
-    ! see file "step2d_LF_AM3.F".
-
-    if (PREDICTOR_2D_STEP) then
-
-    else
-       zeta(knew)=zeta(kstp) + dtfast*DUon
-    endif
-
-    ! Finalize computation of barotropic mode averages.
-
-    if (iif==nfast .and. .not.PREDICTOR_2D_STEP) then
-       Zt_av1=Zt_av1 + weight(1,iif)*zeta(knew)
-    endif
-  end subroutine step2d_LFAM3_imitator
-
-#  endif   /* FORW_BAK */
-# endif   /* TEST_WEIGHTS */
-#else
-  subroutine set_weights_empty
-  end subroutine set_weights_empty
-#endif     /* SOLVE3D */
 end
 end module set_weights_mod

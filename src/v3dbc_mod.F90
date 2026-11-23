@@ -3,7 +3,6 @@ module v3dbc_mod
 #include "cppdefs.opt"
   implicit none
   private
-#ifdef SOLVE3D
   public :: v3dbc_tile
 
 contains
@@ -18,9 +17,7 @@ contains
     use grid, only: pmask, pn, vmask, pm
     use ocean_vars, only: v, u
     use scalars, only: dt, nz, nnew, nrhs, nstp, gamma2
-#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined TNUDGING \
-  || defined Z_FRC_BRY || defined M3_FRC_BRY || defined M2NUDGING \
-                                             || defined M3NUDGING
+#if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
     use scalars, only: ubind
 #endif
     use sponge_tune, only:&
@@ -114,11 +111,7 @@ contains
 #   else           /* alternative open */
       do k=1,nz
         do i=istr,iend
-#    ifdef OBC_M3SPECIFIED
-          v(i,jstr,k,nnew)=v_south(i,k)        ! specified
-#    else
           v(i,jstr,k,nnew)=v(i,jstr+1,k,nnew)&  ! gradient (default)
-#    endif
 #    ifdef MASKING
           &*vmask(i,jstr)
 #    endif
@@ -173,7 +166,7 @@ contains
           cx=dft*dfx
           if (cx < 0._8) then     !--> cancel, if inflow
             cx=0._8 ; cy=0._8
-#    if defined M3_FRC_BRY || defined M3NUDGING
+#    ifdef M3_FRC_BRY
             if (v_north(i,k) < 0._8) then
               cext=-v_north(i,k)
             else
@@ -205,15 +198,7 @@ contains
 #   else                /* alternative open */
       do k=1,nz
         do i=istr,iend
-#    ifdef OBC_M3SPECIFIED
-#     ifdef M3_FRC_BRY
-          v(i,jend+1,k,nnew)=v_north(i,k)      ! specified
-#     else
-          v(i,jend+1,k,nnew)=vclm(i,jend+1,k)
-#     endif
-#    else
           v(i,jend+1,k,nnew)=v(i,jend,k,nnew)&  ! gradient (default)
-#    endif
 #    ifdef MASKING
           &*vmask(i,jend+1)
 #    endif
@@ -280,15 +265,7 @@ contains
 #   else
       do k=1,nz
         do j=jstrV,jend
-#    ifdef OBC_M3SPECIFIED
-#     ifdef M3_FRC_BRY
-          v(istr-1,j,k,nnew)=v_west(j,k)       ! specified
-#     else
-          v(istr-1,j,k,nnew)=vclm(istr-1,j,k)
-#     endif
-#    else
           v(istr-1,j,k,nnew)=v(istr,j,k,nnew)&  ! gradient (default)
-#    endif
 #    ifdef MASKING
           &*vmask(istr-1,j)
 #    endif
@@ -360,15 +337,7 @@ contains
 #   else               /* alternative open */
     do k=1,nz
       do j=jstr,jend
-#    ifdef OBC_M3SPECIFIED
-#     ifdef M3_FRC_BRY
-        v(iend+1,j,k,nnew)=v_east(j,k)       ! specified
-#     else
-        v(iend+1,j,k,nnew)=vclm(iend+1,j,k)
-#     endif
-#    else
         v(iend+1,j,k,nnew)=v(iend,j,k,nnew)&  ! gradient (default)
-#    endif
 #    ifdef MASKING
         &*vmask(iend+1,j)
 #    endif
@@ -431,9 +400,4 @@ endif
 # endif
 
 end subroutine v3dbc_tile
-#else
-contains
-  subroutine v3dbc_empty
-  end subroutine v3dbc_empty
-#endif /* SOLVE3D */
 end module v3dbc_mod

@@ -45,10 +45,6 @@ y0=SizeY/2._8
 do j=-1,ny+2
   do i=-1,nx+2
     f(i,j)=f0+beta*( yr(i,j)-y0 )
-# if defined NONTRAD_COR
-!         feta(i,j) = f0*cos(pi/4)
-!         fxi(i,j)  = f0*sin(pi/4)
-# endif
   enddo
 enddo
 

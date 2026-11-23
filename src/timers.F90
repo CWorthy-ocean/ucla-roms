@@ -32,7 +32,6 @@ module timers
   real(kind=8) :: reg_t(nreg) = 0._8, reg_t0(nreg) = 0._8
   public :: reg_tic, reg_toc, print_region_timers
 #include "cppdefs.opt"
-#ifndef NO_COMPILER_SUPPORT_FOR_TIMING
 ! Most modern compilers recognize "cpu_time" and OpenMP "omp_get_wtime"
 ! functions as intrinsics, so the above switch should never be defined.
 ! Otherwise, stub functions for start/stop_timers are provided for
@@ -49,13 +48,7 @@ module timers
 ! not be implemented on some platforms, so its use is conditionally
 ! avoided.
 
-# undef KERNEL_THREADS
 
-# if defined SGI || defined PGI
-#  undef OMP_GET_WTIME
-# else
-#  define OMP_GET_WTIME
-# endif
 
 contains
 
@@ -99,18 +92,14 @@ contains
     implicit none
     integer(kind=4) getpid, trd
 
-# ifdef OMP_GET_WTIME
 !$  real*8 omp_get_wtime
-# endif
 !$  integer omp_get_thread_num, omp_get_num_threads
 
     numthreads=1     ; trd=0
 !$  numthreads=omp_get_num_threads() ; trd=omp_get_thread_num()
     proc(1)=getpid() ; proc(2)=trd
 
-# ifdef OMP_GET_WTIME
 !$  WallClock=omp_get_wtime()
-# endif
     call cpu_time(cpu_init)
 
 !$  OMP CRITICAL (start_timers_cr_rgn)
@@ -130,10 +119,6 @@ contains
     endif
     trd_count=trd_count+1
 # ifdef MPI
-#  ifndef MPI_SILENT_MODE
-    write(*,'(4x,A,I4,1x,A,I3,1x,A,I10,A)') 'Process', mynode,&
-    &'thread', proc(2), '(pid=', proc(1), ') is active.'
-#  endif
 # else
     write(*,'(8x,A,I3,1x,A,i10,A)') 'Thread #', proc(2),&
     &'(pid=', proc(1), ') is active.'
@@ -153,55 +138,33 @@ contains
 
     implicit none                       ! for all threads.
 
-# ifdef OMP_GET_WTIME
 !$  real*8 omp_get_wtime
-# endif
     if (proc(1) /= 0) then
       proc(1)=0
-# ifdef OMP_GET_WTIME
 !$    WallClock=omp_get_wtime()-WallClock
-# endif
       call cpu_time(cpu_net) ; cpu_net=cpu_net-cpu_init
 
 !$    OMP CRITICAL (stop_timers_cr_rgn)
 # ifdef MPI
-#  ifdef MPI_SILENT_MODE
       if (mynode == 0) then
-#  endif
         write(*,'(1x,A,I5,2x,A,I3,2x,A,F12.2,1x,A)') 'Process',&
         &mynode, 'thread', proc(2), 'cpu time =', cpu_net, 'sec'
-#  ifdef MPI_SILENT_MODE
       endif
-#  endif
 # else
       if (trd_count == 0) write(*,*)
       write(*,'(13x,A,I3,2x,A,F12.2,1x,A)') 'thread #', proc(2),&
       &'cpu time =', cpu_net, 'sec'
 # endif
-# ifdef KERNEL_THREADS
-      cpu_all(1)=cpu_all(1)      +cpu_net
-# else
       cpu_all(1)=max(cpu_all(1), cpu_net)
-# endif
       trd_count=trd_count+1
       if (trd_count == numthreads) then
         trd_count=0
-# ifdef MPI_SILENT_MODE
         if (mynode == 0) then
-# endif
-# ifdef KERNEL_THREADS
-!$        write(*,'(29x,A,F14.2)')   'total', cpu_all(1)
-# else
 !$        write(*,'(27x,A,F14.2)') 'maximum', cpu_all(1)
-# endif
-# ifdef OMP_GET_WTIME
 !$        write(*,'(11x,A,F12.2,1x,A,F6.2,A)')&
 !$        &'Wall Clock elapsed time =', WallClock, 'sec (',&
 !$        &100.D0*cpu_all(1)/(WallClock*dble(numthreads)), '% CPUs)'
-# endif
-# ifdef MPI_SILENT_MODE
         endif
-# endif
       endif
 !$    OMP END CRITICAL (stop_timers_cr_rgn)
     endif
@@ -242,17 +205,4 @@ contains
 !$  OMP END CRITICAL(trap_cr_rgn)
   end subroutine sync_trap
 
-#else
-  ! These are stub-routines for
-  subroutine start_timers          ! compatibility with compilers
-    implicit none                    ! without OpenMP support.
-
-    mpi_master_only write(*,'(/2(1x,A,I3),4x,2(1x,A,I4)/)')&
-    &'BLOCKING:', NSUB_X, 'x', NSUB_E,&
-    &'HORIZ. GRID SIZE:', Lm, 'x', Mm
-  end subroutine start_timers
-
-  subroutine stop_timers()
-  end subroutine stop_timers
-#endif
   end module /*timers*/

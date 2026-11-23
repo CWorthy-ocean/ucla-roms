@@ -104,8 +104,7 @@ module implicit_fs_mod
                                                ! s = (alpha_f + (fs_nsub-1)/2)/fs_nsub of the step
   logical :: fs_pg_rho = .true.                ! .true. (default): the implicit pressure-gradient operator carries
                                                ! the density weighting of the depth-integrated 3-D pressure
-                                               ! gradient (rhoS, rhoA of rho_eos, as step2d's rubar does); without
-                                               ! VAR_RHO_2D it is set to .false. (with a log line)
+                                               ! gradient (rhoS, rhoA of rho_eos, as step2d's rubar does)
   logical :: fs_flather_zghost = .true.        ! open (Flather) faces: .true. (default): the sea level of the condition
                                                ! is the mean of the first interior and of the boundary rho point, as
                                                ! the split's u2dbc uses it (zx), so that the implicit step tends to the
@@ -130,7 +129,6 @@ module implicit_fs_mod
                                                        ! (main.F90 set_tides): n+1/2 (split, fs_pot_time = 'mid');
                                                        ! fs_pot_time = 'af' n+sft
 
-#ifdef SOLVE3D
   ! tile interior and physical edges (set at the first step)
   logical :: ready = .false.
   integer(kind=4) :: ib0, ib1, jb0, jb1
@@ -225,7 +223,6 @@ module implicit_fs_mod
   &  'pcg_start', 'pcg_op', 'pcg_pc', 'pcg_exch', 'pcg_allred', 'pcg_vec', 'finish',&
   &  'exch_fin', 'bc_uv', 'set_depth', 'mg_smooth', 'mg_exch', 'mg_transfer', 'mg_gather', 'mg_coarse',&
   &  'mg_setup', 'mgs_gather', 'mgs_global', 'mg_scatter']
-#endif
 
 contains
 
@@ -263,23 +260,12 @@ contains
     end if
     call set_fs_global_atts(fs_mode, fs_rho_inf, fs_nsub)   ! global attributes of the output files
     if (.not. fs_on) return
-#ifndef SOLVE3D
-    call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
-    &info="fs_mode = 'implicit' requires SOLVE3D")
-#endif
     if (fs_theta < 0.5_8 .or. fs_theta > 1._8 .or. fs_theta_div < 0.5_8 .or. fs_theta_div > 1._8)&
     &  call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
     &  info="fs_theta and fs_theta_div must lie in [0.5, 1]")
     if (fs_rho_inf < 0._8 .or. fs_rho_inf >= 1._8) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_rho_inf must lie in [0, 1): 1 (Crank-Nicolson) is"&
     &  //" resonant with the 3-D step's 2 dt mode")
-#ifndef VAR_RHO_2D
-    if (fs_pg_rho) then                     ! no rhoS, rhoA without VAR_RHO_2D: the operator keeps plain g
-      fs_pg_rho = .false.
-      if (mynode == 0) write(*,'(1x,A)') 'IMPLICIT_FS: fs_pg_rho needs VAR_RHO_2D, which is not defined:'&
-      &//' fs_pg_rho = .false.'
-    end if
-#endif
     if (fs_nsub < 1 .or. fs_nsub > 4) call error_log%raise_global(&
     &  context=trim(module_name)//"/"//sr_name, info="fs_nsub must lie in [1, 4]")
     call fs_scheme_coef
@@ -339,15 +325,9 @@ contains
       write(*,'(1x,A,A,A,F7.4,A)') 'IMPLICIT_FS: fs_pot_time = ', trim(fs_pot_time), ' (tidal potential at time +',&
       &  fs_pot_phase, ' dt)'
       ! boundary options of the split loop (u2dbc, v2dbc, zetabc) that the implicit step does not follow
-      ! (section 4). M2NUDGING needs no note: the implicit step requires M2_FRC_BRY, under which it changes
-      ! nothing, and the inflow nudging of the tangential faces is kept.
-#if defined OBC_M2ORLANSKI
-      write(*,'(1x,A)') 'IMPLICIT_FS: note: OBC_M2ORLANSKI has no implicit form; the normal barotropic'&
-      &//' faces use the implicit Flather condition and the boundary sea level the implicit upwind radiation'&
-      &//' instead'
-#endif
+      ! (section 4).
 #if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
- && !defined OBC_M2FLATHER && !defined OBC_M2ORLANSKI && !defined OBC_M2SPECIFIED
+ && !defined OBC_M2FLATHER && !defined OBC_M2SPECIFIED
       write(*,'(1x,A)') 'IMPLICIT_FS: note: no OBC_M2 type defined (zero-gradient ubar, vbar); the normal'&
       &//' barotropic faces use the implicit Flather condition, the tangential ones the upwind condition of'&
       &//' OBC_M2FLATHER and the boundary sea level the implicit upwind radiation instead'
@@ -358,20 +338,19 @@ contains
       &//' the implicit upwind radiation instead (zero gradient with OBC_M2SPECIFIED)'
 #endif
 #if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
- && defined LEGACY_ORLANSKI && (defined OBC_M2FLATHER || defined OBC_M2ORLANSKI)
+ && defined LEGACY_ORLANSKI && defined OBC_M2FLATHER
       write(*,'(1x,A)') 'IMPLICIT_FS: note: LEGACY_ORLANSKI has no implicit form; the tangential barotropic'&
       &//' faces use the implicit upwind condition instead'
 #endif
 #if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
  && (defined OBC_RAD_NORMAL || defined OBC_RAD_NPO) \
- && (defined OBC_M2ORLANSKI || (defined LEGACY_ORLANSKI && defined OBC_M2FLATHER))
+ && defined LEGACY_ORLANSKI && defined OBC_M2FLATHER
       write(*,'(1x,A)') 'IMPLICIT_FS: note: OBC_RAD_NORMAL and OBC_RAD_NPO act on the 3-D boundary velocities'&
       &//' only; the barotropic radiation they modify is replaced (note above)'
 #endif
     end if
   end subroutine read_nml_implicit_fs
 
-#ifdef SOLVE3D
 
 
   !----------------------------------------------------------------------
@@ -683,9 +662,7 @@ contains
     use dimensions, only: inode, jnode
     use scalars, only: dt, g, iic, knew, kstp, ntstart, ntimes
     use ocean_vars, only: zeta, ubar, vbar
-#ifdef VAR_RHO_2D
     use coupling, only: rhoS, rhoA
-#endif
     use coupling, only: rufrc, rvfrc, du_avg1, du_avg2, dv_avg1, dv_avg2, du_avg_bak, dv_avg_bak,&
     &                   zt_avg1, r_d
     use grid, only: h, pm, pn, dn_u, dm_v, fomn
@@ -735,14 +712,12 @@ contains
     th = thp
     call tq0
 
-    ! ---- (A) the predictor's DU_avg_bak (EXTRAP_BAR_FLUXES; step2d at iif = 1)
-#ifdef EXTRAP_BAR_FLUXES
+    ! ---- (A) the predictor's DU_avg_bak (extrapolated barotropic fluxes; step2d at iif = 1)
     do j=jstrR,jendR                        ! U^n for the end of the step
       do i=istrR,iendR
         du1o(i,j) = DU_avg1(i,j) ; dv1o(i,j) = DV_avg1(i,j)
       enddo
     enddo
-#endif
 
     ! ---- sub-steps k = 1..fs_nsub of length dts = dt/fs_nsub (section 2), each from the source level ks to
     ! the level kn: ks = kstp (zeta^n) for k = 1, else the level of sub-step k-1; kn = knew for the last
@@ -845,10 +820,8 @@ contains
         m = umask(i,j)
 #endif
         au(i,j) = th*dts*g*dn_u(i,j)*dn_u(i,j)*df*ainv*m/(1._8+gam)
-#ifdef VAR_RHO_2D
         if (fs_pg_rho) au(i,j) = au(i,j)*fs_rho_fac(h(i-1,j), h(i,j), zeta(i-1,j,ks), zeta(i,j,ks),&
         &                                           rhoS(i-1,j), rhoS(i,j), rhoA(i-1,j), rhoA(i,j))
-#endif
         ! memory on all but the Coriolis estimate c (ROMS rhs3d form, U^n)
         d = dts*dn_u(i,j)*ainv*rufrc(i,j)
         hf = dts*dn_u(i,j)*ainv*0.25_8*( fcr(i,j)*(cov(i,j)+cov(i,j+1)) + fcr(i-1,j)*(cov(i-1,j)+cov(i-1,j+1)) )
@@ -874,10 +847,8 @@ contains
         m = vmask(i,j)
 #endif
         av(i,j) = th*dts*g*dm_v(i,j)*dm_v(i,j)*df*ainv*m/(1._8+gam)
-#ifdef VAR_RHO_2D
         if (fs_pg_rho) av(i,j) = av(i,j)*fs_rho_fac(h(i,j-1), h(i,j), zeta(i,j-1,ks), zeta(i,j,ks),&
         &                                           rhoS(i,j-1), rhoS(i,j), rhoA(i,j-1), rhoA(i,j))
-#endif
         d = dts*dm_v(i,j)*ainv*rvfrc(i,j)
         hf = -dts*dm_v(i,j)*ainv*0.25_8*( fcr(i,j)*(cou(i,j)+cou(i+1,j)) + fcr(i,j-1)*(cou(i,j-1)+cou(i+1,j-1)) )
         usv(i,j) = m*(unv(i,j) + (hf + b1*(d - hf) + (1._8-b1)*dts*udv(i,j))/(1._8+gam))
@@ -1427,7 +1398,6 @@ contains
         Zt_avg1(i,j) = zeta(i,j,knew)
       enddo
     enddo
-#ifdef EXTRAP_BAR_FLUXES
     ! the predictor's transport: DU_avg_bak such that set_HUV1's NOW DU_avg1 - MID DU_avg2 + BAK DU_avg_bak
     ! (NOW, MID, BAK = 3.63, 4.47, 2.05 of set_depth_mod) is 1.5 U^n+1 - 0.5 U^n (AB2)
     do j=jstrR,jendR
@@ -1436,7 +1406,6 @@ contains
         DV_avg_bak(i,j) = ((1.5_8-3.63_8)*DV_avg1(i,j) - 0.5_8*dv1o(i,j) + 4.47_8*DV_avg2(i,j))/2.05_8
       enddo
     enddo
-#endif
     call tq(9)
     call exchange_xxx(ubar(:,:,knew),vbar(:,:,knew))         ! E4b
     call tq(10)
@@ -1688,7 +1657,7 @@ contains
     ! Tangential barotropic velocities on the boundary rows/columns (v at the
     ! western/eastern ghost columns, u at the southern/northern ghost rows) and the
     ! corners (section 4). Open edges: the backward-Euler form of u2dbc/v2dbc under
-    ! OBC_M2FLATHER (which redefines the tangential faces as OBC_M2ORLANSKI, non-legacy branch):
+    ! OBC_M2FLATHER (whose tangential faces use the Orlanski radiation scheme, non-legacy branch):
     ! explicit upwind advection along the edge by the tangential velocity (Courant number clamped
     ! to [-1, 1]), implicit upwind advection by the outward normal velocity un,
     ! v_b = (v' + ca v_1^n+1)/(1 + ca), ca = dts un/dx, and on inflow nudging
@@ -3814,6 +3783,5 @@ contains
     if (id <= 3) tml(mg_cl,id) = tml(mg_cl,id) + (t - tm_t0)
     tm_t0 = t
   end subroutine tqm
-#endif /* SOLVE3D */
 
 end module implicit_fs_mod

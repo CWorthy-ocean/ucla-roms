@@ -7,7 +7,6 @@ module omega_mod
 
 contains
 
-#ifdef SOLVE3D
 
   subroutine omega
 
@@ -247,17 +246,11 @@ contains
 !      call wrt_instant(We, 'We')
 !      call wrt_instant(Wi, 'Wi')
 
-# ifdef EXCHANGE
     call exchange_xxx(We,Wi)
-# endif
 
 !      call wrt_instant(We, 'We')
 !      call wrt_instant(Wi, 'Wi')
 
   end subroutine omega_tile
-#else
-  subroutine omega_empty
-  end subroutine omega_empty
-#endif /* SOLVE3D */
 end module omega_mod
 

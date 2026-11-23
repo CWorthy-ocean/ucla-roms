@@ -31,7 +31,7 @@ module surf_flux
 
   private
   character(len=9) :: module_name = "surf_flx"
-#if defined(QCORRECTION) && !defined(ANA_SST)
+#ifdef QCORRECTION
   ! edit variable name and time name to match input netcdf file if necessary:
   type (ncforce) :: nc_sst  = ncforce(vname='sst',tname='sst_time' )       ! sea-surface temperature (SST) data
   ! Restoring time-scale. coefficient expressed kinematically as piston velocity (m/s):
@@ -58,7 +58,7 @@ module surf_flux
   logical, public, protected :: do_sflx = .false.
   namelist /SURF_FLX_OUTPUT_SETTINGS/ output_period_sflx, nrpf_sflx,&
   &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
-#if defined(QCORRECTION) && !defined(ANA_SST)
+#ifdef QCORRECTION
   namelist /SST_CORRECTION/ dSSTdt
 #endif
 #if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
@@ -75,7 +75,7 @@ module surf_flux
 #endif
 
   ! Which restoring terms are compiled in (only bulk_frc computes them)
-#if defined(QCORRECTION) && !defined(ANA_SST) && defined(BULK_FRC)
+#if defined QCORRECTION && defined BULK_FRC
   logical,public,parameter :: rst_heat=.true.
 #else
   logical,public,parameter :: rst_heat=.false.
@@ -222,7 +222,7 @@ contains
     dSSSdt = dSSSdt / (100.*86400.)
 #endif
 
-#if defined(QCORRECTION) && !defined(ANA_SST)
+#ifdef QCORRECTION
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=SST_CORRECTION, iostat=ios, iomsg=msg)
     if (ios /= 0) then
@@ -288,7 +288,7 @@ subroutine init_arrays_surf_flx ![
   allocate( stflx  (GLOBAL_2D_ARRAY,nt) ); stflx=init
   allocate( srflx  (GLOBAL_2D_ARRAY)    ); srflx=init
   allocate( swflx  (GLOBAL_2D_ARRAY)    ); swflx = 0
-#if defined(QCORRECTION) && !defined(ANA_SST)
+#ifdef QCORRECTION
   allocate( sst(GLOBAL_2D_ARRAY)        ); sst=init
   allocate(nc_sst%vdata(GLOBAL_2D_ARRAY,2) )
 #endif
@@ -365,7 +365,7 @@ subroutine set_surf_field_corr ![
   pio_file_is_open = 0
 #endif
 
-#if defined(QCORRECTION) && !defined(ANA_SST)
+#ifdef QCORRECTION
   ! Sea-surface temperature (SST) data
   call set_frc_data(nc_sst,sst,'r')
   call error_log%abort_check()

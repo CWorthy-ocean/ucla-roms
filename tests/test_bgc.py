@@ -1,4 +1,4 @@
-"""Realistic BGC tests (BEC and MARBL).
+"""Realistic BGC tests (MARBL).
 
 The MARBL tests share one binary, built once per module, and each runs in its
 own tmp_path. ``test_bgc_real_marbl`` is checked against the reference hashes;
@@ -74,7 +74,7 @@ def marbl_conf(tmp_path_factory) -> ROMSConfiguration:
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
-        + MARBL_CPP_KEYS + ["TIDES"] + ["SFLX_CORR", "CFLX_CORR"]
+        + MARBL_CPP_KEYS + ["SFLX_CORR", "CFLX_CORR"]
     )
     build_dir = tmp_path_factory.mktemp("marbl_build")
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)

@@ -9,7 +9,6 @@ contains
 
 #include "cppdefs.opt"
 
-#ifdef SOLVE3D
 
   subroutine grid_stiffness (tile)
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
@@ -144,10 +143,3 @@ contains
 !$  OMP END CRITICAL(grd_stff_cr_rgn)
   end subroutine grid_stiffness_tile
 end module grid_stiffness_mod
-#else
-  module grid_stiffness_mod
-  contains
-    subroutine grid_stiffness_empty
-    end subroutine grid_stiffness_empty
-  end module grid_stiffness_mod
-#endif  /* SOLVE3D */

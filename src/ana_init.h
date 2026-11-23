@@ -7,9 +7,7 @@
 
       ! necessary for FIRST_TIME_STEP flag to work, as per set_global_definitions.h
       ! this had no value for analytical examples previously.
-#ifdef EXACT_RESTART
       forw_start=ntstart
-#endif
 
 
       do k=1,nz

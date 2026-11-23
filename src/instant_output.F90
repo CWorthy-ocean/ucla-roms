@@ -271,7 +271,7 @@ contains
       fname = trim(fname) //datestr
     endif
 
-#if defined MPI && defined PARALLEL_FILES
+#ifdef MPI
     if (nnodes<10) then
       write(indxstr,'(A,I0.1)') '.',mynode
     elseif (nnodes<100) then
