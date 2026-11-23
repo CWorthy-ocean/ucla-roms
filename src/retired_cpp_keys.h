@@ -1,6 +1,7 @@
 /* Retired CPP keys.  The code of these keys was removed (most of it no
- longer compiled, AKIMA_V and BBL had no effect, and the BEC2
- biogeochemical model was retired in favour of MARBL), see "Retired keys"
+ longer compiled, AKIMA_V and BBL had no effect, BULK_DIFFERENCE and
+ INT_AT_W_POINTS were broken, TR and ISWAKE_XXX were experiments, and the
+ BEC2 biogeochemical model was retired in favour of MARBL), see "Retired keys"
  in docs/model_settings/compile_time_settings.md.  Stop the build rather
  than silently ignore a key that a cppdefs.opt still defines.  An #undef
  line for one of them is harmless.  Included by set_global_definitions.h. */
@@ -58,6 +59,18 @@
 #endif
 #ifdef TAU_CORRECTION
 # error "CPP key TAU_CORRECTION was retired (wind-stress correction): remove it from cppdefs.opt"
+#endif
+#ifdef TR
+# error "CPP key TR was retired (experimental barotropic-coupling flux weights): remove it from cppdefs.opt"
+#endif
+#ifdef ISWAKE_XXX
+# error "CPP key ISWAKE_XXX was retired (constant-flux inflow at the western boundary): remove it from cppdefs.opt"
+#endif
+#ifdef BULK_DIFFERENCE
+# error "CPP key BULK_DIFFERENCE was retired (was broken: skipped the KPP bulk Richardson number integral): remove it from cppdefs.opt"
+#endif
+#ifdef INT_AT_W_POINTS
+# error "CPP key INT_AT_W_POINTS was retired (was broken: skipped the KPP bulk Richardson number integral): remove it from cppdefs.opt"
 #endif
 #ifdef BIOLOGY_BEC2
 # error "CPP key BIOLOGY_BEC2 was retired (BEC2 biogeochemical model; use MARBL): remove it from cppdefs.opt"
