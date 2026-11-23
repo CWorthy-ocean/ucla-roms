@@ -135,7 +135,7 @@ These switches control the biogeochemical (BGC) model, MARBL. (The BEC2 model wa
 
 ### Retired keys
 
-These keys were removed together with their code: most of them no longer compiled, `AKIMA_V` and `BBL` had no effect, and the BEC2 biogeochemical model was retired in favour of `MARBL`. The build stops with an error that names the key if your `cppdefs.opt` still defines one of them (`#undef` lines are harmless); delete it from the file.
+These keys were removed together with their code: most of them no longer compiled, `AKIMA_V` and `BBL` had no effect, `BULK_DIFFERENCE` and `INT_AT_W_POINTS` were broken, `TR` and `ISWAKE_XXX` were experiments that changed the results, and the BEC2 biogeochemical model was retired in favour of `MARBL`. The build stops with an error that names the key if your `cppdefs.opt` still defines one of them (`#undef` lines are harmless); delete it from the file.
 
 | Switch | What it was |
 |--------|-------------|
@@ -154,6 +154,9 @@ These keys were removed together with their code: most of them no longer compile
 | `OBC_TSPECIFIED` | Specified (clamped) tracers at open boundaries; use `OBC_TORLANSKI` |
 | `ANA_BRY` | Analytical lateral boundary data |
 | `TAU_CORRECTION` | Wind-stress correction toward observations from extra input fields |
+| `TR` | Experimental weights of the fluxes that couple the baroclinic and barotropic velocities |
+| `ISWAKE_XXX` | Constant-flux inflow condition for the barotropic velocity at the western boundary |
+| `BULK_DIFFERENCE`, `INT_AT_W_POINTS` | Alternative forms of the KPP bulk Richardson number; no code was left for them, so defining one skipped the integral |
 | `BIOLOGY_BEC2` | The BEC2 biogeochemical model; use `MARBL` |
 | `BEC2_DIAG` | Diagnostics of BEC2; use `MARBL_DIAGS` |
 | `DAILYPAR_BEC` | Daily-averaged photosynthetically available radiation in BEC2 |
