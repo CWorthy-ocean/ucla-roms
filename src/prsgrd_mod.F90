@@ -21,9 +21,7 @@ contains
 # ifdef SPLIT_EOS
     &A3d(1,4),&
 # endif
-# ifdef NHMG
     &A3d(1,5),&
-# endif
     &A2d(1,1), A2d(1,2),&
     &A2d(1,1), A2d(1,2), A2d(1,3), A2d(1,4)&
     &)
@@ -33,18 +31,14 @@ contains
 # ifdef SPLIT_EOS
   &rho,&
 # endif
-# ifdef NHMG
   &rw,&
-# endif
   &dR,dZ, FC,dZx,rx,dRx)
     use grid, only: f, pm, pn, umask, dn_u, vmask, dm_v
     use tides, only:  ptide, pot_tides
     use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
-    use ocean_vars, only: &
-#ifdef NHMG
-    & dzdeta, dzdxi,&
-#endif
-    &z_r, z_w, hz
+    use ocean_vars, only: z_r, z_w, hz
+    use ocean_vars, only: dzdeta, dzdxi   ! NHMG only
+    use nhmg_settings_mod, only: nhmg_on
 #ifdef SPLIT_EOS
     use eos_vars, only: qp1, rho1, qp2
 #else
@@ -61,6 +55,9 @@ contains
 #endif
     use roms_mpi, only: exchange_xxx
     use calc_pflx_mod, only: calc_pressure_flux, calc_pflx
+#ifdef DIAGNOSTICS_NHMG
+    use diagnostics, only: calc_diag, diag_uv, dxdyi, Wdiag, iwprsgr
+#endif
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k, imin,imax,jmin,jmax
@@ -73,9 +70,7 @@ contains
 #ifdef SPLIT_EOS
     real(kind=8) dpth
 #endif
-# ifdef NHMG
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: rw
-# endif
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: rw   ! NHMG only
     real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: dR,dZ
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: FC,dZx,rx,dRx
 
@@ -474,7 +469,7 @@ contains
     ! baroclinic pressure fluxes for nesting and sponge tuning (no cpp key needed)
     if (CORR_STAGE .and. calc_pflx) call calc_pressure_flux
 
-# ifdef NHMG
+    if (nhmg_on) then
 !
 !--------------------------------------------------------------------
 ! hydrostatic pressure gradient for the vertical flux
@@ -507,10 +502,12 @@ contains
     enddo
 #  ifdef DIAGNOSTICS_NHMG
     if (diag_uv.and.calc_diag) then
-      Wdiag(:,:,:,iwprsgr) =rw(1:nx,1:ny,:)*dxdyi
+      do k=1,nz
+        Wdiag(:,:,k,iwprsgr) =rw(1:nx,1:ny,k)*dxdyi
+      enddo
     endif
 #  endif
-# endif /* NHMG */
+    endif  ! nhmg_on
 
   end subroutine prsgrd_tile
 

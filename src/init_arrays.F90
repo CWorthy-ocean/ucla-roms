@@ -42,11 +42,8 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
   use eos_vars, only: init_arrays_eos_vars
   use grid, only: init_arrays_grid
   use mixing, only: init_arrays_mixing
-  use ocean_vars, only: &
-#ifdef NHMG
-  &w,&
-#endif
-  &we, wi, init_arrays_ocean
+  use ocean_vars, only: w, we, wi, init_arrays_ocean   ! w: NHMG only
+  use nhmg_settings_mod, only: nhmg_on
   use basic_output, only: init_avg_arrays
   use work_mod, only: init_arrays_work_mod
   use boundary, only: init_arrays_boundary
@@ -92,13 +89,19 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
       do i=istrR,iendR
         We(i,j,k)=init0
         Wi(i,j,k)=init0
-# ifdef NHMG
-        w(i,j,k,1)=init0
-        w(i,j,k,2)=init0
-# endif
       enddo
     enddo
   enddo
+  if (nhmg_on) then
+    do k=0,nz
+      do j=jstrR,jendR
+        do i=istrR,iendR
+          w(i,j,k,1)=init0
+          w(i,j,k,2)=init0
+        enddo
+      enddo
+    enddo
+  endif
 
 
 ! Initialize forcing arrays.

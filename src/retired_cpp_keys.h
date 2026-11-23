@@ -93,3 +93,9 @@
 #ifdef TDEP_REMIN
 # error "CPP key TDEP_REMIN was retired (temperature-dependent remineralization in BEC2): remove it from cppdefs.opt"
 #endif
+
+/* Not retired but no longer a cpp key: the non-hydrostatic solver is always
+ built, and the namelist key nhmg (group NHMG_SETTINGS) switches it on. */
+#ifdef NHMG
+# error "CPP key NHMG was removed: NHMG is now always built; switch it on with nhmg = .true. in the namelist group NHMG_SETTINGS, and remove NHMG from cppdefs.opt"
+#endif

@@ -25,6 +25,7 @@ module boundary
   &inode, jnode
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
+  use nhmg_settings_mod, only: nhmg_on
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_file_is_open, pio_FileDesc
   use pio, only : PIO_closefile
@@ -83,12 +84,11 @@ module boundary
   type (ncforce) :: nc_v_n = ncforce( vname='v_north', tname='bry_time')
   type (ncforce), dimension(:), allocatable :: nc_t_n
 
-#ifdef NHMG
+  ! NHMG only (nhmg = .true.)
   type (ncforce) :: nc_w_w = ncforce( vname='w_west', tname='bry_time')
   type (ncforce) :: nc_w_e = ncforce( vname='w_east', tname='bry_time')
   type (ncforce) :: nc_w_s = ncforce( vname='w_south', tname='bry_time')
   type (ncforce) :: nc_w_n = ncforce( vname='w_north', tname='bry_time')
-#endif
 
 contains
 
@@ -139,9 +139,7 @@ contains
     allocate( u_west(0:Mm+1,nz), v_west(0:Mm+1,nz) )
     allocate( nc_u_w%vdata(j0:j1,nz,2) )
     allocate( nc_v_w%vdata( 1:j1,nz,2) )
-#    ifdef NHMG
-    allocate( w_west(0:Mm+1,nz), nc_w_w%vdata(j0:j1,nz,2) )
-#    endif
+    if (nhmg_on) allocate( w_west(0:Mm+1,nz), nc_w_w%vdata(j0:j1,nz,2) )
 #   endif
 #   ifdef T_FRC_BRY
     allocate( t_west(0:Mm+1,nz,NT) ); t_west=0._8
@@ -168,9 +166,7 @@ contains
     allocate( u_east(0:Mm+1,nz), v_east(0:Mm+1,nz) )
     allocate( nc_u_e%vdata(j0:j1,nz,2) )
     allocate( nc_v_e%vdata( 1:j1,nz,2) )
-#    ifdef NHMG
-    allocate( w_east(0:Mm+1,nz), nc_w_e%vdata(j0:j1,nz,2) )
-#    endif
+    if (nhmg_on) allocate( w_east(0:Mm+1,nz), nc_w_e%vdata(j0:j1,nz,2) )
 #   endif
 #   ifdef T_FRC_BRY
     allocate( t_east(0:Mm+1,nz,NT) ); t_east=0._8
@@ -197,9 +193,7 @@ contains
     allocate( u_south(0:Lm+1,nz), v_south(0:Lm+1,nz) )
     allocate( nc_u_s%vdata( 1:i1,nz,2) )
     allocate( nc_v_s%vdata(i0:i1,nz,2) )
-#    ifdef NHMG
-    allocate( w_south(0:Lm+1,nz), nc_w_s%vdata(i0:i1,nz,2) )
-#    endif
+    if (nhmg_on) allocate( w_south(0:Lm+1,nz), nc_w_s%vdata(i0:i1,nz,2) )
 #   endif
 #   ifdef T_FRC_BRY
     allocate( t_south(0:Lm+1,nz,NT) ); t_south=0._8
@@ -226,9 +220,7 @@ contains
     allocate( u_north(0:Lm+1,nz), v_north(0:Lm+1,nz) )
     allocate( nc_u_n%vdata( 1:i1,nz,2) )
     allocate( nc_v_n%vdata(i0:i1,nz,2) )
-#    ifdef NHMG
-    allocate( w_north(0:Lm+1,nz), nc_w_n%vdata(i0:i1,nz,2) )
-#    endif
+    if (nhmg_on) allocate( w_north(0:Lm+1,nz), nc_w_n%vdata(i0:i1,nz,2) )
 #   endif
 #   ifdef T_FRC_BRY
     allocate( t_north(0:Lm+1,nz,NT) ); t_north=0._8
@@ -299,10 +291,8 @@ contains
         call set_frc_data( nc_u_w, var2d=u_west(j0:j1,:), obry=1, interp=on_bry )
         pio_gtype='w2vr'
         call set_frc_data( nc_v_w, var2d=v_west( 1:j1,:), obry=1, interp=on_bry )
-#     ifdef NHMG
 !       call set_frc_data( nc_w_w, var2d=w_west(j0:j1,:), obry=1 )
-        w_west = 0
-#     endif
+        if (nhmg_on) w_west = 0
 #   endif
 #   ifdef T_FRC_BRY
         pio_gtype='w2rr'
@@ -335,10 +325,8 @@ contains
         call set_frc_data( nc_u_e, var2d=u_east(j0:j1,:), obry=1, interp=on_bry )
         pio_gtype='e2vr'
         call set_frc_data( nc_v_e, var2d=v_east( 1:j1,:), obry=1, interp=on_bry )
-#     ifdef NHMG
 !       call set_frc_data( nc_w_e, var2d=w_east(j0:j1,:), obry=1 )
-        w_east = 0
-#     endif
+        if (nhmg_on) w_east = 0
 #   endif
 #   ifdef T_FRC_BRY
         pio_gtype='e2rr'
@@ -371,10 +359,8 @@ contains
         call set_frc_data( nc_u_s, var2d=u_south( 1:i1,:), obry=1, interp=on_bry )
         pio_gtype='s2vr'
         call set_frc_data( nc_v_s, var2d=v_south(i0:i1,:), obry=1, interp=on_bry )
-#     ifdef NHMG
 !       call set_frc_data( nc_w_s, var2d=w_south(i0:i1,:), obry=1 )
-        w_south = 0
-#     endif
+        if (nhmg_on) w_south = 0
 #   endif
 #   ifdef T_FRC_BRY
         pio_gtype='s2rr'
@@ -407,10 +393,8 @@ contains
         call set_frc_data( nc_u_n, var2d=u_north( 1:i1,:), obry=1, interp=on_bry )
         pio_gtype='n2vr'
         call set_frc_data( nc_v_n, var2d=v_north(i0:i1,:), obry=1, interp=on_bry )
-#     ifdef NHMG
 !       call set_frc_data( nc_w_n, var2d=w_north(i0:i1,:), obry=1 )
-        w_north = 0
-#     endif
+        if (nhmg_on) w_north = 0
 #   endif
 #   ifdef T_FRC_BRY
         pio_gtype='n2rr'

@@ -344,11 +344,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_parallel_io = .false.
 #endif
-#ifdef NHMG
-  logical, parameter, public :: key_nhmg = .true.
-#else
-  logical, parameter, public :: key_nhmg = .false.
-#endif
 #ifdef MPI
   logical, parameter, public :: key_mpi = .true.
 #else

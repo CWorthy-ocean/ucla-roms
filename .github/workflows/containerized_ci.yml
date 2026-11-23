@@ -515,6 +515,21 @@ jobs:
             DIAGNOSTICS
           '
 
+      - name: Compile NHMG diagnostics configuration
+        shell: bash
+        run: |
+          micromamba run -n roms-ci bash -c '
+          ci/compile_only.sh /tmp/nhmg_diag_build \
+            UV_ADV UV_COR UV_VIS2 TS_DIF2 MASKING \
+            SALINITY NONLIN_EOS SPLIT_EOS \
+            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
+            CURVGRID SPHERICAL \
+            OBC_WEST OBC_EAST OBC_NORTH OBC_SOUTH \
+            OBC_M2FLATHER OBC_M3ORLANSKI OBC_TORLANSKI \
+            Z_FRC_BRY M2_FRC_BRY M3_FRC_BRY T_FRC_BRY \
+            DIAGNOSTICS DIAGNOSTICS_NHMG NHMGDIAG
+          '
+
       - name: Compile CDR_FORCING + CDR_LITE configuration without MARBL
         shell: bash
         run: |

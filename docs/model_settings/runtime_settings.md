@@ -630,6 +630,17 @@ Multigrid settings (`fs_precond = 'mg'`; solver settings as above):
 | `fs_mg_faces` | `'width'` | Coarse face coefficients scaled by the aggregates' widths (`'width'`) or by 0.5 (`'half'`) |
 | `fs_exch_thin` | `.true.` | One-cell halo exchanges without corners in the solver (same results) |
 
+### `NHMG_SETTINGS`
+(read by module `nhmg_settings_mod.F90`)
+
+Optional: if the group is absent, `nhmg = .false.`. Switches on the non-hydrostatic solver (the NHMG library in `NHMG/src`, which every build compiles and links), which solves prognostically for the vertical velocity. WARNING: untested and unmaintained by [C]Worthy; it may break important features such as exact restarts, may need extra inputs, and roughly doubles the cost of the model. With `nhmg = .false.` none of its code runs and none of its arrays is allocated.
+
+| Setting | Default | Description |
+|--------|---------|-------------|
+| `nhmg` | `.false.` | Non-hydrostatic solver on (`.true.`) or off (`.false.`) |
+
+With `nhmg = .true.`, the solver's own settings (tolerance, iterations, relaxation method, surface condition, periodicity, ...) are read from the optional file `nhmg_namelist` in the run directory (group `&nhparam`, see `NHMG/src/mg_namelist.f90`); without the file they keep their defaults. ROMS stops at startup if `nhmg = .true.` is combined with `fs_mode = 'implicit'` (`IMPLICIT_FS`) or with the cpp key `MPI_MASKING` (NHMG needs an MPI rank for every tile), and, whatever `nhmg` is, if the cpp key `DIAGNOSTICS_NHMG` or `NHMGDIAG` (not finished) is defined.
+
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)
 
