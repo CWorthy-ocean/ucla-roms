@@ -50,6 +50,7 @@ def _marbl_nml(input_dir) -> dict:
     nml["TIME_STEPPING"].update({"dt": 20, "ntimes": 10})
     nml["TIDAL_FRC_SETTINGS"].update({"pot_tides": True, "ntides": 2})
     nml["PARAM_SETTINGS"]["nt_bgc"] = 32
+    nml["SURF_FRC_SETTINGS"].update({"sflx_corr": True, "cflx_corr": True})
     nml["SSS_CORRECTION"] = {"dSSSdt": 7.777}
     nml["DIC_ALK_CORRECTION"] = {"dCdt": 7.777}
     nml["FORCING_FILES"] = {
@@ -74,7 +75,7 @@ def marbl_conf(tmp_path_factory) -> ROMSConfiguration:
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
-        + MARBL_CPP_KEYS + ["SFLX_CORR", "CFLX_CORR"]
+        + MARBL_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("marbl_build")
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
@@ -90,6 +91,18 @@ def test_bgc_real_marbl(tmp_path, marbl_conf, input_dir, reference_results):
     assert_output_matches_reference(
         reference_results, "bgc_real_marbl", {"physics": pv, "bgc": bv}
     )
+
+
+@pytest.mark.parametrize(("group", "switch"), [
+    ("SSS_CORRECTION", "sflx_corr"), ("DIC_ALK_CORRECTION", "cflx_corr"),
+])
+def test_missing_restoring_coefficient_rejected(tmp_path, marbl_conf, input_dir, group, switch):
+    """A restoring term that is on needs its coefficient group."""
+    nml = _marbl_nml(input_dir)
+    del nml[group]
+    assert_run_rejected(marbl_conf, nml, tmp_path, [
+        f"could not read {group} section of namelist file (needed by {switch} = .true.)",
+    ], label=switch)
 
 
 class TestConstantFe:
@@ -310,7 +323,7 @@ def rstflx_runs(tmp_path_factory, marbl_conf, input_dir) -> dict:
 
 
 class TestRestoringFluxOutput:
-    """``wrt_rstflx`` on the realistic MARBL case (SFLX_CORR and CFLX_CORR).
+    """``wrt_rstflx`` on the realistic MARBL case (``sflx_corr`` and ``cflx_corr``).
 
     Output record ``k`` of the surface-flux and forcing files is step ``k + 1``
     (time ``k + 1`` steps), BGC record ``k`` is the state after ``k`` steps.

@@ -9,13 +9,9 @@ module mixing
 
 ! This is include file "mixing"
 !------ --- ----------------------
-#ifdef UV_VIS2
   real(kind=8),allocatable,dimension(:,:) :: visc2_r
   real(kind=8),allocatable,dimension(:,:) :: visc2_p
-#endif
-# ifdef TS_DIF2
   real(kind=8),allocatable,dimension(:,:,:) :: diff2
-# endif
 # ifdef ADV_ISONEUTRAL
   real(kind=8),allocatable,dimension(:,:,:) :: diff3u
   real(kind=8),allocatable,dimension(:,:,:) :: diff3v
@@ -64,13 +60,9 @@ contains
 
     integer(kind=4) :: itrc
 
-#ifdef UV_VIS2
     allocate( visc2_r(GLOBAL_2D_ARRAY) ); visc2_r=init
     allocate( visc2_p(GLOBAL_2D_ARRAY) ); visc2_p=init
-#endif
-# ifdef TS_DIF2
     allocate( diff2(GLOBAL_2D_ARRAY,NT) ); diff2=init
-# endif
 # ifdef ADV_ISONEUTRAL
     allocate( diff3u(GLOBAL_2D_ARRAY,nz) ); diff3u=init
     allocate( diff3v(GLOBAL_2D_ARRAY,nz) ); diff3v=init
@@ -107,15 +99,11 @@ contains
     allocate( hbbl(GLOBAL_2D_ARRAY) ); hbbl=0._8
 # endif /* LMD_BKPP */
 
-#ifdef UV_VIS2
     visc2_r=visc2
     visc2_p=visc2
-#endif
-# ifdef TS_DIF2
     do itrc=1,NT
       diff2(:,:,itrc)=tnu2(itrc)
     enddo
-# endif
 
 ! Initialize vertical mixing coefficients (see "mixing") to their
 ! background values. If no vertical closure scheme is selected, the

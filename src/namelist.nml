@@ -103,9 +103,11 @@ frcfiles =
 interp_bulk_frc = .true.       ! Interpolate forcing from coarser input grid if T
 check_bulk_frc_units = .false. ! Check units of input vars if T
 interp_flux_frc = .true.       ! Interpolate forcing from coarser input grid if T
-! Optional: sflx_corr, qcorrection and cflx_corr (logical) switch the surface
-! restoring terms. The cpp keys SFLX_CORR, QCORRECTION and CFLX_CORR still
-! decide them: left out, each takes its key; set, it must match its key.
+! Surface restoring (needs the BULK_FRC cppkey; each rate is in its own group
+! under SURFACE RESTORING below, which must then be present):
+sflx_corr = .false.    ! Restore salinity toward sss if T (needs SALINITY)
+qcorrection = .false.  ! Restore temperature toward sst if T
+cflx_corr = .false.    ! Restore DIC and ALK toward sDIC and sALK if T (needs MARBL)
 /
 
 !================================================================================
@@ -467,9 +469,9 @@ gamma2 = 1.0 ! Slipperiness parameter (free-slip = +1, no-slip = -1)
 
 &TRACER_DIFF2                                                        !scalars.F90
 !------------
-! Requires TS_DIF2 cppkey
+! Optional group; values beyond the number of tracers are ignored
 !------------
-tnu2=0.0 0.0 ! Horizontal Laplacian diffusion (m2/s) for each tracer
+tnu2=0.0 0.0 ! Horizontal Laplacian diffusion (m2/s) for each tracer; 0 for none
 /
 
 &BOTTOM_DRAG_SETTINGS                                                !scalars.F90
@@ -482,14 +484,14 @@ zob = 1.e-2    ! Bottom roughness height (m)
 &VERTICAL_MIXING_SETTINGS                                            !scalars.F90
 !------------------------
 akv_bak = 0.0        ! Vertical viscosity (m2/s)
-akt_bak = 0.0 0.0    ! Vertical mixing (m2/s) for each tracer
+akt_bak = 0.0 0.0    ! Vertical mixing (m2/s) for each tracer; values beyond the number of tracers are ignored
 /
 
 &LATERAL_VISC_SETTINGS                                               !scalars.F90
 !---------------------
-! Requires UV_VIS2 cppkey
+! Optional group
 !---------------------
-visc2 = 0. ! Horizontal Laplacian kinematic viscosity (m2/s)
+visc2 = 0. ! Horizontal Laplacian kinematic viscosity (m2/s); 0 for none
 /
 
 &UBIND_SETTINGS                                                      !scalars.F90
@@ -501,8 +503,9 @@ ubind = 0.1 ! Open boundary binding velocity (m/s)
 
 &V_SPONGE_SETTINGS                                                   !scalars.F90
 !-----------------
-!Requires SPONGE cppkey
+! Optional group; without it there is no sponge (v_sponge = 0)
 !-----------------
+use_boundary_sponge = .true. ! Extra viscosity and diffusivity along the open boundaries if T (the default)
 v_sponge = 1.0 ! Maximum viscosity in sponge layer (m2/s)
 v_sponge_trc = -1.0 ! Maximum tracer diffusivity in sponge layer (m2/s); 0 for a sponge on currents only, negative for the same as v_sponge
 /
@@ -514,21 +517,21 @@ v_sponge_trc = -1.0 ! Maximum tracer diffusivity in sponge layer (m2/s); 0 for a
 !================================================================================
 &SSS_CORRECTION                                                    !surf_flux.F90
 !--------------
-! Requires SFLX_CORR and SALINITY cppkeys
+! Required if sflx_corr = .true. (SURF_FRC_SETTINGS)
 !--------------
 dSSSdt = 7.777 ! SSS correction co-efficient as piston velocity (cm/day)
 /
 
 &SST_CORRECTION                                                    !surf_flux.F90
 !--------------
-! Requires QCORRECTION cppkey
+! Required if qcorrection = .true. (SURF_FRC_SETTINGS)
 !--------------
 dSSTdt = 7.777 ! SST correction co-efficient as piston velocity (cm/day)
 /
 
 &DIC_ALK_CORRECTION                                                !surf_flux.F90
 !--------------
-! Requires CFLX_CORR and MARBL cppkey
+! Required if cflx_corr = .true. (SURF_FRC_SETTINGS)
 !--------------
 dCdt = 7.777 ! DIC/ALK correction co-efficient as piston velocity (cm/day)
 /

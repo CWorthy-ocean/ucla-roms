@@ -3,7 +3,6 @@ module visc3d_mod
   implicit none
   private
 
-# ifdef UV_VIS2
   public :: visc3d_s
 contains
 
@@ -544,9 +543,4 @@ contains
 
   end subroutine visc3d_GP_tile
 
-#else
-contains
-  subroutine visc3d_empty
-  end subroutine visc3d_empty
-#endif
 end module visc3d_mod

@@ -23,7 +23,7 @@ BOUNDS_CHECK_FFLAGS = "-check bounds" if "COMPILER=intel" in MAKE_CMD else "-fch
 # CPP key groups
 # --------------------------------------------------------------------------
 UNIVERSAL_CPP_KEYS = [
-    "UV_ADV", "UV_COR", "UV_VIS2", "TS_DIF2", "MASKING",
+    "UV_ADV", "UV_COR", "MASKING",
 ]
 OCEAN_PHYSICS_CPP_KEYS = [
     "SALINITY", "NONLIN_EOS", "SPLIT_EOS",
@@ -39,7 +39,7 @@ ANALYTICAL_CPP_KEYS = [
     "ANA_GRID", "ANA_INITIAL", "ANA_SMFLUX",
     "ANA_SRFLUX", "ANA_STFLUX", "ANA_SSFLUX",
 ]
-BGC_REALISTIC_CPP_KEYS = ["BULK_FRC", "SPONGE", "SPONGE_TUNE", "PCO2AIR_FORCING"]
+BGC_REALISTIC_CPP_KEYS = ["BULK_FRC", "SPONGE_TUNE", "PCO2AIR_FORCING"]
 MARBL_CPP_KEYS = ["MARBL", "MARBL_DIAGS", "NOX_FORCING", "NHY_FORCING"]
 
 

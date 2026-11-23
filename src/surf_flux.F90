@@ -31,64 +31,39 @@ module surf_flux
 
   private
   character(len=9) :: module_name = "surf_flx"
-#ifdef QCORRECTION
+  ! Surface restoring switches, read with SURF_FRC_SETTINGS (bulk_frc.F90), which
+  ! comes before SURF_FLX_OUTPUT_SETTINGS
+  logical, public :: sflx_corr = .false., qcorrection = .false., cflx_corr = .false.
+
   ! edit variable name and time name to match input netcdf file if necessary:
   type (ncforce) :: nc_sst  = ncforce(vname='sst',tname='sst_time' )       ! sea-surface temperature (SST) data
   ! Restoring time-scale. coefficient expressed kinematically as piston velocity (m/s):
-  real,public :: dSSTdt = 7.777  ! SST correction     (required QCORRECTION)
-#endif
+  real,public :: dSSTdt = 7.777  ! SST correction     (needs qcorrection)
 
-#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
-  real,public :: dSSSdt = 7.777  ! SSS correction     (required SFLX_CORR)
+  real,public :: dSSSdt = 7.777  ! SSS correction     (needs sflx_corr)
   type (ncforce) :: nc_sss  = ncforce(vname='sss' ,tname='sss_time'  ) ! sea-surface salinity (SSS) data
-#endif
-#if defined CFLX_CORR && defined MARBL
   type (ncforce) :: nc_sdic = ncforce(vname='sDIC',tname='sDIC_time' )     ! sea-surface DIC data
   type (ncforce) :: nc_salk = ncforce(vname='sALK',tname='sALK_time' ) ! sea-surface ALK data
-  real,public :: dCdt   = 7.777  ! DIC/Alk correction (required CFLX_CORR)
-#endif
+  real,public :: dCdt   = 7.777  ! DIC/Alk correction (needs cflx_corr)
 
   real(kind=8), public    :: output_period_sflx = 120       ! output averaging period in seconds
   integer(kind=4), public :: nrpf_sflx          = 10 ! total recs per file
   logical, public ::&
   &wrt_smflx = .false., wrt_stflx = .false., wrt_swflx = .false., sflx_avg = .false.
-  ! Output the surface restoring fluxes of the compiled-in restoring terms (rst_heat, rst_salt, rst_carbon)
+  ! Output the surface restoring fluxes of the restoring terms that are on
   logical, public :: wrt_rstflx = .false.
   ! Any surface-flux output requested (set by read_nml_surf_flx)
   logical, public, protected :: do_sflx = .false.
   namelist /SURF_FLX_OUTPUT_SETTINGS/ output_period_sflx, nrpf_sflx,&
   &wrt_smflx, wrt_stflx, wrt_swflx, sflx_avg, wrt_rstflx
-#ifdef QCORRECTION
   namelist /SST_CORRECTION/ dSSTdt
-#endif
-#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
   namelist /SSS_CORRECTION/ dSSSdt
-#endif
-#if defined CFLX_CORR && defined MARBL
   namelist /DIC_ALK_CORRECTION/ dCdt
-#endif
 
 #if defined SALINITY
   logical,parameter :: salinity=.true.
 #else
   logical,parameter :: salinity=.false.
-#endif
-
-  ! Which restoring terms are compiled in (only bulk_frc computes them)
-#if defined QCORRECTION && defined BULK_FRC
-  logical,public,parameter :: rst_heat=.true.
-#else
-  logical,public,parameter :: rst_heat=.false.
-#endif
-#if defined(SFLX_CORR) && defined(SALINITY) && !defined(ANA_SSFLUX) && defined(BULK_FRC)
-  logical,public,parameter :: rst_salt=.true.
-#else
-  logical,public,parameter :: rst_salt=.false.
-#endif
-#if defined(CFLX_CORR) && defined(MARBL) && defined(BULK_FRC)
-  logical,public,parameter :: rst_carbon=.true.   ! DIC and ALK
-#else
-  logical,public,parameter :: rst_carbon=.false.
 #endif
 
   logical :: init_done=.false.        ! flag to init surf_flux
@@ -104,7 +79,7 @@ module surf_flux
   real(kind=8),public,allocatable,dimension(:,:)   :: srflx    ! Short-wave radiation surface flux
   real(kind=8),public,allocatable,dimension(:,:)   :: swflx ! Precip minus evaporation flux (surface water flux)
 
-  ! Restoring fluxes, included in stflx (allocated if wrt_rstflx and the term is compiled in)
+  ! Restoring fluxes, included in stflx (allocated if wrt_rstflx and the term is on)
   real(kind=8),public,allocatable,dimension(:,:)   :: shflx_rst   ! heat (SST restoring)
   real(kind=8),public,allocatable,dimension(:,:)   :: ssflx_rst   ! salinity (SSS restoring)
   real(kind=8),public,allocatable,dimension(:,:)   :: dicflx_rst  ! DIC (sDIC restoring)
@@ -199,56 +174,58 @@ contains
       &)
     end if
     do_sflx = wrt_smflx .or. wrt_stflx .or. wrt_swflx .or. wrt_rstflx
-    if (wrt_rstflx .and. .not.(rst_heat .or. rst_salt .or. rst_carbon)) then
+    call check_restoring_switches
+    if (wrt_rstflx .and. .not.(qcorrection .or. sflx_corr .or. cflx_corr)) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
       &info='SURF_FLX_OUTPUT_SETTINGS wrt_rstflx = .true. needs at least one'&
-      &//' restoring term compiled in (QCORRECTION, SFLX_CORR, or CFLX_CORR'&
-      &//' with MARBL, together with BULK_FRC). Set it to .false. otherwise.'&
+      &//' restoring term switched on (qcorrection, sflx_corr or cflx_corr in'&
+      &//' SURF_FRC_SETTINGS). Set it to .false. otherwise.'&
       &)
     end if
 
-#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=SSS_CORRECTION, iostat=ios, iomsg=msg)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read SSS_CORRECTION'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
+    ! The coefficient group of a restoring term is required, and read, only when the term is on
+    if (sflx_corr) then
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=SSS_CORRECTION, iostat=ios, iomsg=msg)
+      if (ios /= 0) then
+        call error_log%raise_global(&
+        &context = module_name//'/'//sr_name,&
+        &info='could not read SSS_CORRECTION'&
+        &//' section of namelist file (needed by sflx_corr = .true.): '&
+        &//trim(msg)&
+        &)
+      end if
+      dSSSdt = dSSSdt / (100.*86400.)
     end if
-    dSSSdt = dSSSdt / (100.*86400.)
-#endif
 
-#ifdef QCORRECTION
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=SST_CORRECTION, iostat=ios, iomsg=msg)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read SST_CORRECTION'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
+    if (qcorrection) then
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=SST_CORRECTION, iostat=ios, iomsg=msg)
+      if (ios /= 0) then
+        call error_log%raise_global(&
+        &context = module_name//'/'//sr_name,&
+        &info='could not read SST_CORRECTION'&
+        &//' section of namelist file (needed by qcorrection = .true.): '&
+        &//trim(msg)&
+        &)
+      end if
+      dSSTdt = dSSTdt / (100.*86400.)
     end if
-    dSSTdt = dSSTdt / (100.*86400.)
-#endif
 
-#if defined CFLX_CORR && defined MARBL
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=DIC_ALK_CORRECTION, iostat=ios, iomsg=msg)
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read DIC_ALK_CORRECTION'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
+    if (cflx_corr) then
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=DIC_ALK_CORRECTION, iostat=ios, iomsg=msg)
+      if (ios /= 0) then
+        call error_log%raise_global(&
+        &context = module_name//'/'//sr_name,&
+        &info='could not read DIC_ALK_CORRECTION'&
+        &//' section of namelist file (needed by cflx_corr = .true.): '&
+        &//trim(msg)&
+        &)
+      end if
+      dCdt = dCdt / (100.*86400.)
     end if
-    dCdt = dCdt / (100.*86400.)
-#endif
 
 #if defined CDR_LITE
     ! Optional group: if it is absent (ios < 0, end of file) keep the default.
@@ -270,6 +247,39 @@ contains
   record = nrpf_sflx
 end subroutine read_nml_surf_flx
 
+subroutine check_restoring_switches ![
+  ! Stop on a restoring switch this build would ignore: only bulk_frc computes
+  ! the restoring terms, the salinity one needs a salinity tracer whose flux is
+  ! not analytical, and the DIC/ALK one needs MARBL's tracers.
+  implicit none
+  character(len=*), parameter :: sr_name = "check_restoring_switches"
+
+#ifndef BULK_FRC
+  if (sflx_corr)   call raise_switch('sflx_corr',   'the cpp key BULK_FRC')
+  if (qcorrection) call raise_switch('qcorrection', 'the cpp key BULK_FRC')
+  if (cflx_corr)   call raise_switch('cflx_corr',   'the cpp key BULK_FRC')
+#endif
+#ifndef SALINITY
+  if (sflx_corr)   call raise_switch('sflx_corr',   'the cpp key SALINITY')
+#endif
+#ifdef ANA_SSFLUX
+  if (sflx_corr)   call raise_switch('sflx_corr',   'a build without the cpp key ANA_SSFLUX')
+#endif
+#ifndef MARBL
+  if (cflx_corr)   call raise_switch('cflx_corr',   'the cpp key MARBL')
+#endif
+
+contains
+
+  subroutine raise_switch(switch, needs)
+    character(len=*), intent(in) :: switch, needs
+    call error_log%raise_global(context=module_name//'/'//sr_name,&
+    &info='SURF_FRC_SETTINGS '//switch//' = .true. needs '//needs//&
+    &'. Set '//switch//' = .false. or rebuild.')
+  end subroutine raise_switch
+
+end subroutine check_restoring_switches  !]
+
 subroutine init_arrays_surf_flx ![
   use scalars, only: init
   implicit none
@@ -288,22 +298,22 @@ subroutine init_arrays_surf_flx ![
   allocate( stflx  (GLOBAL_2D_ARRAY,nt) ); stflx=init
   allocate( srflx  (GLOBAL_2D_ARRAY)    ); srflx=init
   allocate( swflx  (GLOBAL_2D_ARRAY)    ); swflx = 0
-#ifdef QCORRECTION
-  allocate( sst(GLOBAL_2D_ARRAY)        ); sst=init
-  allocate(nc_sst%vdata(GLOBAL_2D_ARRAY,2) )
-#endif
+  if (qcorrection) then
+    allocate( sst(GLOBAL_2D_ARRAY)        ); sst=init
+    allocate(nc_sst%vdata(GLOBAL_2D_ARRAY,2) )
+  endif
 
-#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
-  allocate( sss(GLOBAL_2D_ARRAY)        ); sss=init
-  allocate(nc_sss%vdata(GLOBAL_2D_ARRAY,2) )
+  if (sflx_corr) then
+    allocate( sss(GLOBAL_2D_ARRAY)        ); sss=init
+    allocate(nc_sss%vdata(GLOBAL_2D_ARRAY,2) )
 
-  call store_string_att(surf_forcing_strings,'<surf_flux.F>')
-  call store_string_att(surf_forcing_strings,'dSSSdt=')
-  write (string, "(F9.6)") dSSSdt*(100.*day2sec)                 ! convert number to string...
-  call store_string_att(surf_forcing_strings,string)
-  call store_string_att(surf_forcing_strings,'dSSSdt_units')
-  call store_string_att(surf_forcing_strings,'cm/day')
-#endif
+    call store_string_att(surf_forcing_strings,'<surf_flux.F>')
+    call store_string_att(surf_forcing_strings,'dSSSdt=')
+    write (string, "(F9.6)") dSSSdt*(100.*day2sec)                 ! convert number to string...
+    call store_string_att(surf_forcing_strings,string)
+    call store_string_att(surf_forcing_strings,'dSSSdt_units')
+    call store_string_att(surf_forcing_strings,'cm/day')
+  endif
 
 #if defined CDR_LITE
       allocate( nc_ddic_dco2%vdata( GLOBAL_2D_ARRAY,2) )
@@ -313,24 +323,24 @@ subroutine init_arrays_surf_flx ![
       allocate( k_gas(GLOBAL_2D_ARRAY)      ); k_gas=0.
 #endif
 
-#if defined CFLX_CORR && defined MARBL
-  allocate( sDIC(GLOBAL_2D_ARRAY)        ); sDIC=init
-  allocate(nc_sDIC%vdata(GLOBAL_2D_ARRAY,2) )
-  allocate( sALK(GLOBAL_2D_ARRAY)        ); sALK=init
-  allocate(nc_sALK%vdata(GLOBAL_2D_ARRAY,2) )
+  if (cflx_corr) then
+    allocate( sDIC(GLOBAL_2D_ARRAY)        ); sDIC=init
+    allocate(nc_sDIC%vdata(GLOBAL_2D_ARRAY,2) )
+    allocate( sALK(GLOBAL_2D_ARRAY)        ); sALK=init
+    allocate(nc_sALK%vdata(GLOBAL_2D_ARRAY,2) )
 
-  call store_string_att(surf_forcing_strings,'<surf_flux.F>')
-  call store_string_att(surf_forcing_strings,'dCdt=')
-  write (string, "(F9.6)") dCdt*(100.*day2sec)                 ! convert number to string...
-  call store_string_att(surf_forcing_strings,string)
-  call store_string_att(surf_forcing_strings,'dCdt_units')
-  call store_string_att(surf_forcing_strings,'cm/day')
-#endif
+    call store_string_att(surf_forcing_strings,'<surf_flux.F>')
+    call store_string_att(surf_forcing_strings,'dCdt=')
+    write (string, "(F9.6)") dCdt*(100.*day2sec)                 ! convert number to string...
+    call store_string_att(surf_forcing_strings,string)
+    call store_string_att(surf_forcing_strings,'dCdt_units')
+    call store_string_att(surf_forcing_strings,'cm/day')
+  endif
 
   if (wrt_rstflx) then
-    if (rst_heat)   then; allocate( shflx_rst  (GLOBAL_2D_ARRAY) ); shflx_rst  =0._8; endif
-    if (rst_salt)   then; allocate( ssflx_rst  (GLOBAL_2D_ARRAY) ); ssflx_rst  =0._8; endif
-    if (rst_carbon) then
+    if (qcorrection)   then; allocate( shflx_rst  (GLOBAL_2D_ARRAY) ); shflx_rst  =0._8; endif
+    if (sflx_corr)   then; allocate( ssflx_rst  (GLOBAL_2D_ARRAY) ); ssflx_rst  =0._8; endif
+    if (cflx_corr) then
       allocate( dicflx_rst(GLOBAL_2D_ARRAY) ); dicflx_rst=0._8
       allocate( alkflx_rst(GLOBAL_2D_ARRAY) ); alkflx_rst=0._8
     endif
@@ -344,9 +354,9 @@ subroutine init_arrays_surf_flx ![
     allocate(stflx_avg(i0:i1,j0:j1,nt)); stflx_avg=0._8
     allocate(swflx_avg(i0:i1,j0:j1)); swflx_avg=0._8
     if (wrt_rstflx) then
-      if (rst_heat)   then; allocate(shflx_rst_avg(i0:i1,j0:j1)); shflx_rst_avg=0._8; endif
-      if (rst_salt)   then; allocate(ssflx_rst_avg(i0:i1,j0:j1)); ssflx_rst_avg=0._8; endif
-      if (rst_carbon) then
+      if (qcorrection)   then; allocate(shflx_rst_avg(i0:i1,j0:j1)); shflx_rst_avg=0._8; endif
+      if (sflx_corr)   then; allocate(ssflx_rst_avg(i0:i1,j0:j1)); ssflx_rst_avg=0._8; endif
+      if (cflx_corr) then
         allocate(dicflx_rst_avg(i0:i1,j0:j1)); dicflx_rst_avg=0._8
         allocate(alkflx_rst_avg(i0:i1,j0:j1)); alkflx_rst_avg=0._8
       endif
@@ -365,24 +375,24 @@ subroutine set_surf_field_corr ![
   pio_file_is_open = 0
 #endif
 
-#ifdef QCORRECTION
-  ! Sea-surface temperature (SST) data
-  call set_frc_data(nc_sst,sst,'r')
-  call error_log%abort_check()
-#endif
+  if (qcorrection) then
+    ! Sea-surface temperature (SST) data
+    call set_frc_data(nc_sst,sst,'r')
+    call error_log%abort_check()
+  endif
 
-#if defined SFLX_CORR && defined SALINITY && !defined ANA_SSFLUX
-  ! Sea-surface salinity (SSS) data
-  call set_frc_data(nc_sss,sss,'r')
-  call error_log%abort_check()
-#endif
+  if (sflx_corr) then
+    ! Sea-surface salinity (SSS) data
+    call set_frc_data(nc_sss,sss,'r')
+    call error_log%abort_check()
+  endif
 
-#if defined CFLX_CORR && defined MARBL
-  ! Sea-surface DIC
-  call set_frc_data(nc_sDIC,sDIC,'r')
-  ! Sea-surface ALK
-  call set_frc_data(nc_sALK,sALK,'r')
-#endif
+  if (cflx_corr) then
+    ! Sea-surface DIC
+    call set_frc_data(nc_sDIC,sDIC,'r')
+    ! Sea-surface ALK
+    call set_frc_data(nc_sALK,sALK,'r')
+  endif
 
 #ifdef PARALLEL_IO
   if (pio_file_is_open == 1) then
@@ -532,9 +542,9 @@ subroutine calc_sflx_avg  ![
     swflx_avg = swflx_avg*(1-coef)+swflx(i0:i1,j0:j1)*coef
   end if
   if (wrt_rstflx) then  ! surface restoring fluxes
-    if (rst_heat) shflx_rst_avg = shflx_rst_avg*(1-coef)+shflx_rst(i0:i1,j0:j1)*coef
-    if (rst_salt) ssflx_rst_avg = ssflx_rst_avg*(1-coef)+ssflx_rst(i0:i1,j0:j1)*coef
-    if (rst_carbon) then
+    if (qcorrection) shflx_rst_avg = shflx_rst_avg*(1-coef)+shflx_rst(i0:i1,j0:j1)*coef
+    if (sflx_corr) ssflx_rst_avg = ssflx_rst_avg*(1-coef)+ssflx_rst(i0:i1,j0:j1)*coef
+    if (cflx_corr) then
       dicflx_rst_avg = dicflx_rst_avg*(1-coef)+dicflx_rst(i0:i1,j0:j1)*coef
       alkflx_rst_avg = alkflx_rst_avg*(1-coef)+alkflx_rst(i0:i1,j0:j1)*coef
     endif
@@ -587,21 +597,21 @@ subroutine create_sflx_vars(ncid)  ![
     ierr = nf90_put_att(ncid,varid,'units','m/s')
   endif
   if (wrt_rstflx) then
-    if (rst_heat) then
+    if (qcorrection) then
       varid = nccreate(ncid,'shflx_rst',(/dn_xr,dn_yr,dn_tm/),&
       &(/ds_xr,ds_yr,0/))
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Surface heat flux from SST restoring (included in shflx)')
       ierr = nf90_put_att(ncid,varid,'units','degC m/s')
     endif
-    if (rst_salt) then
+    if (sflx_corr) then
       varid = nccreate(ncid,'ssflx_rst',(/dn_xr,dn_yr,dn_tm/),&
       &(/ds_xr,ds_yr,0/))
       ierr = nf90_put_att(ncid,varid,'long_name',&
       &'Surface salinity flux from SSS restoring (equal to ssflx: SSS restoring replaces the salt flux)')
       ierr = nf90_put_att(ncid,varid,'units','PSU m/s')
     endif
-    if (rst_carbon) then
+    if (cflx_corr) then
       varid = nccreate(ncid,'dicflx_rst',(/dn_xr,dn_yr,dn_tm/),&
       &(/ds_xr,ds_yr,0/))
       ierr = nf90_put_att(ncid,varid,'long_name',&
@@ -679,9 +689,9 @@ subroutine wrt_sflux  ![
       endif
       if (wrt_rstflx) then
         pio_gtype = '2Drw'
-        if (rst_heat) call ncwrite(ncid,'shflx_rst',shflx_rst_avg(i0:i1,j0:j1),start,.true.)
-        if (rst_salt) call ncwrite(ncid,'ssflx_rst',ssflx_rst_avg(i0:i1,j0:j1),start,.true.)
-        if (rst_carbon) then
+        if (qcorrection) call ncwrite(ncid,'shflx_rst',shflx_rst_avg(i0:i1,j0:j1),start,.true.)
+        if (sflx_corr) call ncwrite(ncid,'ssflx_rst',ssflx_rst_avg(i0:i1,j0:j1),start,.true.)
+        if (cflx_corr) then
           call ncwrite(ncid,'dicflx_rst',dicflx_rst_avg(i0:i1,j0:j1),start,.true.)
           call ncwrite(ncid,'alkflx_rst',alkflx_rst_avg(i0:i1,j0:j1),start,.true.)
         endif
@@ -706,9 +716,9 @@ subroutine wrt_sflux  ![
       endif
       if (wrt_rstflx) then
         pio_gtype = '2Drw'
-        if (rst_heat) call ncwrite(ncid,'shflx_rst',shflx_rst(i0:i1,j0:j1),start,.true.)
-        if (rst_salt) call ncwrite(ncid,'ssflx_rst',ssflx_rst(i0:i1,j0:j1),start,.true.)
-        if (rst_carbon) then
+        if (qcorrection) call ncwrite(ncid,'shflx_rst',shflx_rst(i0:i1,j0:j1),start,.true.)
+        if (sflx_corr) call ncwrite(ncid,'ssflx_rst',ssflx_rst(i0:i1,j0:j1),start,.true.)
+        if (cflx_corr) then
           call ncwrite(ncid,'dicflx_rst',dicflx_rst(i0:i1,j0:j1),start,.true.)
           call ncwrite(ncid,'alkflx_rst',alkflx_rst(i0:i1,j0:j1),start,.true.)
         endif
@@ -753,9 +763,9 @@ subroutine wrt_sflux  ![
         call ncwrite(ncid,'swflx',swflx_avg(i0:i1,j0:j1),start)
       endif
       if (wrt_rstflx) then
-        if (rst_heat) call ncwrite(ncid,'shflx_rst',shflx_rst_avg,start)
-        if (rst_salt) call ncwrite(ncid,'ssflx_rst',ssflx_rst_avg,start)
-        if (rst_carbon) then
+        if (qcorrection) call ncwrite(ncid,'shflx_rst',shflx_rst_avg,start)
+        if (sflx_corr) call ncwrite(ncid,'ssflx_rst',ssflx_rst_avg,start)
+        if (cflx_corr) then
           call ncwrite(ncid,'dicflx_rst',dicflx_rst_avg,start)
           call ncwrite(ncid,'alkflx_rst',alkflx_rst_avg,start)
         endif
@@ -775,9 +785,9 @@ subroutine wrt_sflux  ![
         call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),start)
       endif
       if (wrt_rstflx) then
-        if (rst_heat) call ncwrite(ncid,'shflx_rst',shflx_rst(i0:i1,j0:j1),start)
-        if (rst_salt) call ncwrite(ncid,'ssflx_rst',ssflx_rst(i0:i1,j0:j1),start)
-        if (rst_carbon) then
+        if (qcorrection) call ncwrite(ncid,'shflx_rst',shflx_rst(i0:i1,j0:j1),start)
+        if (sflx_corr) call ncwrite(ncid,'ssflx_rst',ssflx_rst(i0:i1,j0:j1),start)
+        if (cflx_corr) then
           call ncwrite(ncid,'dicflx_rst',dicflx_rst(i0:i1,j0:j1),start)
           call ncwrite(ncid,'alkflx_rst',alkflx_rst(i0:i1,j0:j1),start)
         endif

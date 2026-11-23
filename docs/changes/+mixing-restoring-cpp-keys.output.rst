@@ -1,0 +1,2 @@
+Results change in a setup whose ``cppdefs.opt`` did not define ``UV_VIS2``, ``TS_DIF2`` or ``SPONGE`` but whose namelist sets a nonzero ``visc2``, ``tnu2``, or ``v_sponge`` with open boundaries: these values were ignored and now apply.
+- Output files always carry the attributes ``visc2``, ``gamma2`` and ``tnu2``, and ``v_sponge`` and ``v_sponge_trc`` when ``use_boundary_sponge`` is ``.true.``; the ``CPPS`` attribute no longer lists the six keys.

@@ -99,3 +99,23 @@
 #ifdef NHMG
 # error "CPP key NHMG was removed: NHMG is now always built; switch it on with nhmg = .true. in the namelist group NHMG_SETTINGS, and remove NHMG from cppdefs.opt"
 #endif
+
+/* Not retired but no longer cpp keys: these are namelist settings now. */
+#ifdef SFLX_CORR
+# error "CPP key SFLX_CORR was removed: surface salinity restoring is now switched on with sflx_corr = .true. in the namelist group SURF_FRC_SETTINGS; remove SFLX_CORR from cppdefs.opt"
+#endif
+#ifdef QCORRECTION
+# error "CPP key QCORRECTION was removed: surface temperature restoring is now switched on with qcorrection = .true. in the namelist group SURF_FRC_SETTINGS; remove QCORRECTION from cppdefs.opt"
+#endif
+#ifdef CFLX_CORR
+# error "CPP key CFLX_CORR was removed: surface DIC and ALK restoring is now switched on with cflx_corr = .true. in the namelist group SURF_FRC_SETTINGS; remove CFLX_CORR from cppdefs.opt"
+#endif
+#ifdef UV_VIS2
+# error "CPP key UV_VIS2 was removed: lateral viscosity is now set by visc2 in the namelist group LATERAL_VISC_SETTINGS (0 for none) and by the boundary sponge; remove UV_VIS2 from cppdefs.opt"
+#endif
+#ifdef TS_DIF2
+# error "CPP key TS_DIF2 was removed: lateral tracer diffusion is now set by tnu2 in the namelist group TRACER_DIFF2 (0 for none) and by the boundary sponge; remove TS_DIF2 from cppdefs.opt"
+#endif
+#ifdef SPONGE
+# error "CPP key SPONGE was removed: the boundary sponge is now switched with use_boundary_sponge in the namelist group V_SPONGE_SETTINGS (default .true.); remove SPONGE from cppdefs.opt"
+#endif

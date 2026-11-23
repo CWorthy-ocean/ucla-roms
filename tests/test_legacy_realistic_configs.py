@@ -14,7 +14,7 @@ from ._helpers import (
 def test_rivers_real(tmp_path, input_dir, reference_results):
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-        + ["SPONGE", "SPONGE_TUNE"]
+        + ["SPONGE_TUNE"]
     )
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path / "build")
     conf.compile()
@@ -42,6 +42,7 @@ def test_pipes_real(tmp_path, input_dir, reference_results):
     conf.compile()
 
     nml = create_test_namelist_dict(input_dir)
+    nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["TIME_STEPPING"]["dt"] = 20
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["FORCING_FILES"]["frcfiles"].append(
@@ -66,6 +67,7 @@ def test_flux_frc(tmp_path, input_dir, reference_results):
     conf.compile()
 
     nml = create_test_namelist_dict(input_dir)
+    nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     conf.run(nml)
 
