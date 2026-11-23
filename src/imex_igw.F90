@@ -4500,9 +4500,7 @@ contains
 #  ifdef SPONGE_TUNE
     use sponge_tune, only: ub_tune
 #  endif
-#  ifdef UV_VIS2
     use mixing, only: visc2_r
-#  endif
     implicit none
     real(kind=8) :: hf(nz), gk(0:nz), y(nz), hh, dz, n2, q, ym, yrem,&
     &               cmin(20), cmax(20), gmin(20), gmax(20), fmin, gfmin, wt, hres, sdn, gsdn, gmn
@@ -4608,13 +4606,11 @@ contains
       ! the explicit (sponge) viscosity's diffusion number visc2 dt / min(dx, dy)^2: with a reference a
       ! value of 0.17 let an edge mode grow at a rate ~1/tref (Hawaii nest), 0.085 ran
       sdn = 0._8
-#  ifdef UV_VIS2
       do j=jb0,jb1
         do i=ib0,ib1
           sdn = max(sdn, visc2_r(i,j)*dt*max(pm(i,j), pn(i,j))**2)
         enddo
       enddo
-#  endif
       call mpi_allreduce(sdn, gsdn, 1, mpi_double_precision, mpi_max, ocean_grid_comm, ierr)
       if (mynode == 0 .and. imex_mix_split < 2 .and. imex_obc_tref > 0._8 .and. gsdn > 0.1_8)&
       &  write(*,'(1x,A,F6.3,A)')&

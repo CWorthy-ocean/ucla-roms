@@ -211,9 +211,8 @@ contains
     use rho_eos_mod, only: rho_eos
     use set_depth_mod, only: set_depth, set_HUV, set_HUV1
     use set_scoord_mod, only: set_scoord
-#ifdef SPONGE
     use set_nudgcof_mod, only: set_nudgcof
-#endif
+    use scalars, only: use_boundary_sponge
     use setup_grid_mod, only: setup_grid1, setup_grid2
 
     implicit none
@@ -378,9 +377,7 @@ contains
 
     ! we should have a grid and z_r by now
 
-#if defined SPONGE
-    call set_nudgcof(0)
-#endif
+    if (use_boundary_sponge) call set_nudgcof(0)
     ! The optional argument refers to
     ! blowup if true, and initial if false.
 ! Come up with a better name!
@@ -454,9 +451,7 @@ contains
     use prsgrd_mod, only: prsgrd
     use rho_eos_mod, only: rho_eos
     use set_depth_mod, only: set_huv, set_huv1
-# ifdef TS_DIF2
     use t3dmix_mod, only: t3dmix => t3dmix_s
-#endif
 # ifdef MARBL
     use bgc_io, only: wrt_bgc
 #endif
@@ -476,9 +471,8 @@ contains
     use bgc_subcycle_mod, only: bgc_physics_subcycle, bgcsub_accumulate, bgcsub_step
     use sl_adv_mod, only: sl_adv, sl_adv_weights, sl_ts_prep, sl_uv_carry_in, sl_cfallback
     use step3d_uv_mod, only: step3d_uv1, step3d_uv2
-#  ifdef UV_VIS2
     use visc3d_mod, only: visc3d => visc3d_s
-#endif
+    use scalars, only: visc_on, diff_on
     use timers, only: reg_tic, reg_toc,&
     &  rg_set_forces, rg_set_bry, rg_rho_eos, rg_huv_omega, rg_lmd_vmix,&
     &  rg_prsgrd, rg_pre_step3d, rg_huv1_omega, rg_uv1_visc, rg_step2d,&
@@ -642,9 +636,7 @@ contains
     if (sl_adv) call sl_ts_prep   ! swept-volume advection: T, S increments, X's swept change
     call step3d_uv1(0)  ! update u/v(nnew) with dt*ru/rv
 
-#  ifdef UV_VIS2
-    call visc3d
-#  endif
+    if (visc_on) call visc3d
 #ifdef IMEX_IGW
     ! imex_mix_split = 2: the corrector's elliptic correction after visc3d, so
     ! that the implicit pressure and the corrector transport answer to the
@@ -694,27 +686,27 @@ contains
     if (bgc_physics_subcycle) call bgcsub_step(iic)    ! BGC tracers: window update + MARBL
     call reg_toc(rg_step3d_t)
 !GOOD
-# ifdef TS_DIF2
-    call reg_tic(rg_t3dmix)
+    if (diff_on) then
+      call reg_tic(rg_t3dmix)
 #  ifdef IMEX_IGW
-    nrhs_sv = nrhs
-    if (imex_solver_enabled) then
-      if (imex_mix_split == 2) then
-        ! mix t^n+1 (the state step3d_t left, open-boundary and wall ghost
-        ! cells by t3dbc); under TS_DIF2 step3d_t leaves its MPI halo stale
-        call exchange_tracers(nnew, nt_step)
-        nrhs = nnew
-      else
-        nrhs = nstp                           ! mix t^n, not t^n+1/2
+      nrhs_sv = nrhs
+      if (imex_solver_enabled) then
+        if (imex_mix_split == 2) then
+          ! mix t^n+1 (the state step3d_t left, open-boundary and wall ghost
+          ! cells by t3dbc); with diff_on step3d_t leaves its MPI halo stale
+          call exchange_tracers(nnew, nt_step)
+          nrhs = nnew
+        else
+          nrhs = nstp                           ! mix t^n, not t^n+1/2
+        end if
       end if
-    end if
 #  endif
-    call t3dmix
+      call t3dmix
 #  ifdef IMEX_IGW
-    nrhs = nrhs_sv
+      nrhs = nrhs_sv
 #  endif
-    call reg_toc(rg_t3dmix)
-# endif
+      call reg_toc(rg_t3dmix)
+    endif
 
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     ! After t3dmix, so the boundary rates hold this step's advective flux

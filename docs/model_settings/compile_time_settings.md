@@ -33,7 +33,6 @@ These switches control the configuration of the model grid, including geometry, 
 | `CURVGRID` | Use an orthogonal curvilinear grid | enabled | Makes slight adjustments to the velocity tendencies due to spatial changes in dx and dy |
 | `MASKING` | Use land masks for tracer and velocity points to set values to zero | enabled | Required; the model does not compile without it |
 | `SPHERICAL` | Use a spherical geometry in the grid setup | enabled | The model will look for coordinates based on latitude and longitude instead of distance |
-| `SPONGE` | Increase viscosity and diffusivity for momentum and tracers near the lateral boundaries | enabled | The magnitude is `v_sponge` in the `V_SPONGE_SETTINGS` namelist group; `v_sponge_trc` there sets the tracer part separately |
 | `MPI_MASKING` | Choose the MPI tiling at runtime from the land mask, skipping tiles that are entirely land | disabled | Requires `PARALLEL_IO` (a joined grid file). `NP_XI` and `NP_ETA` from the namelist are overwritten. Launch with at least as many ranks as the selected tiling needs; extra ranks exit at startup. No `partit` step is needed. |
 | `ANA_GRID` | Analytically prescribe the grid | disabled | Hardcoded in `ana_grid.h` |
 | `EW_PERIODIC` | Make the domain periodic in the east-west direction | disabled | This has not been tested or used, so it is unclear whether it would induce conflicts with more recent code |
@@ -50,9 +49,6 @@ These switches control the application of atmospheric forcing to the model surfa
 | `ANA_SRFLUX` | Analytically prescribe surface shortwave radiative flux (with flux forcing) | disabled | Hardcoded in `analytical.F90` |
 | `ANA_SSFLUX` | Analytically prescribe surface salinity flux (with flux forcing) | disabled | Hardcoded in `analytical.F90` |
 | `ANA_STFLUX` | Analytically prescribe surface heat flux (with flux forcing) | disabled | Hardcoded in `analytical.F90` |
-| `QCORRECTION` | Apply restoring to sea surface temperature | disabled | The rate is `dSSTdt` in the `SST_CORRECTION` namelist group |
-| `SFLX_CORR` | Apply restoring to sea surface salinity | disabled | The rate is `dSSSdt` in the `SSS_CORRECTION` namelist group |
-| `CFLX_CORR` | Apply restoring to sea surface DIC and ALK | disabled | Requires `MARBL`. The rate is `dCdt` in the `DIC_ALK_CORRECTION` namelist group; the targets are `sDIC` and `sALK` in the forcing files |
 
 ### `NUMERICAL ALGORITHMS`
 
@@ -101,8 +97,6 @@ These switches control the model's mixing parameterizations, including vertical 
 | `LMD_MIXING` | Enable and compute various parameterizations from Large et al., 1994 (KPP, etc.) | enabled | This is the overarching CPP key for all other `LMD` keys. This needs to be defined in order for KPP and others to be used. |
 | `LMD_NONLOCAL` | Compute the non-local term in the KPP parameterization | enabled | Can be used with either/both `LMD_KPP` and `LMD_BKPP` |
 | `LMD_RIMIX` | Compute mixing due to breaking internal waves | enabled | Designed only to have an effect where local gradient Richardson number is small |
-| `TS_DIF2` | Apply Laplacian diffusion along sigma-surfaces | enabled | Diffusivities are `tnu2` in the `TRACER_DIFF2` namelist group |
-| `UV_VIS2` | Apply Laplacian viscosity along sigma-surfaces | enabled | Viscosity is `visc2` in the `LATERAL_VISC_SETTINGS` namelist group |
 | `LMD_DDMIX` | Compute double-diffusive mixing (Large et al., 1994) | disabled | |
 | `ANA_VMIX` | Analytically prescribe vertical mixing coefficient | disabled | Hardcoded in `ana_vmix.h` |
 | `MERGE_OVERLAP` | If surface and bottom boundary layers overlap, set them both to be the entire depth of the water column | disabled | Unclear whether this is needed for physical or numerical reasons; disabled by default |
@@ -166,5 +160,14 @@ These keys were removed together with their code: most of them no longer compile
 | `NO3_RESTORE` | Nitrate restoring in BEC2 |
 | `Ncycle_SY` | Nitrogen cycle with NO2, N2O and N2 tracers in BEC2 |
 | `TDEP_REMIN` | Temperature-dependent particulate remineralization in BEC2 |
+
+These keys are no longer keys because the namelist now decides what they decided. Defining one stops the build with an error that names the setting (`#undef` lines are harmless).
+
+| Switch | Namelist setting |
+|--------|------------------|
+| `SFLX_CORR`, `QCORRECTION`, `CFLX_CORR` | `sflx_corr`, `qcorrection`, `cflx_corr` in [`SURF_FRC_SETTINGS`](runtime_settings.md#surf_frc_settings) (default `.false.`) |
+| `UV_VIS2` | `visc2` in [`LATERAL_VISC_SETTINGS`](runtime_settings.md#lateral_visc_settings) (`0` for none), and the boundary sponge |
+| `TS_DIF2` | `tnu2` in [`TRACER_DIFF2`](runtime_settings.md#tracer_diff2) (`0` for none), and the boundary sponge |
+| `SPONGE` | `use_boundary_sponge` in [`V_SPONGE_SETTINGS`](runtime_settings.md#v_sponge_settings) (default `.true.`) |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

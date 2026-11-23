@@ -21,7 +21,7 @@ module bgc_subcycle_mod
   !     the window Courant number needs it (the halo is 2 points);
   !  2. a 1-D swept flux vertically (any Courant number) in the
   !     pseudo-volumes left by the horizontal pass;
-  !  3. sources, explicit horizontal diffusion (TS_DIF2) over the window,
+  !  3. sources, explicit horizontal diffusion (tnu2, sponge) over the window,
   !     implicit vertical mixing with the window-integrated Akt;
   !  4. open boundaries with the window Courant numbers, MARBL, exchange.
   ! Optional flux-corrected positivity limiter (bgc_subcycle_pos) and
@@ -422,9 +422,8 @@ contains
     use error_handling_mod, only: error_log
     use timers, only: reg_tic, reg_toc, rg_marbl, rg_bgcsub_h, rg_bgcsub_v, rg_bgcsub_bc
     use river_frc, only: river_source, nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
-#ifdef TS_DIF2
     use mixing, only: diff2
-#endif
+    use scalars, only: diff_on
     use pipe_frc, only: pipe_source, pipe_idx, pipe_prf
 #ifdef CDR_FORCING
     use cdr_frc, only: cdr_source, cdr_nprf, cdr_iloc, cdr_jloc, cdr_icdr
@@ -551,26 +550,26 @@ contains
       end do
       lck(:,k) = [cface, c1d, cout, -v1min, crit]
     end do
-#ifdef TS_DIF2
-    ! explicit diffusion number with the largest diff2 of the BGC tracers
-    do j = jstr-1, jend+1
-      do i = istr-1, iend+1
-        dmx(i,j) = maxval(diff2(i,j,it0+1:it0+nb))
-      end do
-    end do
-    do k = 1, nz
-      do j = jstr, jend
-        do i = istr, iend
-          cff = dtw*pm(i,j)*pn(i,j)/HZS(i,j,k)*0.25_8*(&
-          &  (dmx(i+1,j)+dmx(i,j))*pmon_u(i+1,j)*(HZS(i+1,j,k)+HZS(i,j,k))&
-          & +(dmx(i,j)+dmx(i-1,j))*pmon_u(i,j)*(HZS(i,j,k)+HZS(i-1,j,k))&
-          & +(dmx(i,j+1)+dmx(i,j))*pnom_v(i,j+1)*(HZS(i,j+1,k)+HZS(i,j,k))&
-          & +(dmx(i,j)+dmx(i,j-1))*pnom_v(i,j)*(HZS(i,j,k)+HZS(i,j-1,k)) )
-          smax = max(smax, cff*rmask(i,j))
+    if (diff_on) then
+      ! explicit diffusion number with the largest diff2 of the BGC tracers
+      do j = jstr-1, jend+1
+        do i = istr-1, iend+1
+          dmx(i,j) = maxval(diff2(i,j,it0+1:it0+nb))
         end do
       end do
-    end do
-#endif
+      do k = 1, nz
+        do j = jstr, jend
+          do i = istr, iend
+            cff = dtw*pm(i,j)*pn(i,j)/HZS(i,j,k)*0.25_8*(&
+            &  (dmx(i+1,j)+dmx(i,j))*pmon_u(i+1,j)*(HZS(i+1,j,k)+HZS(i,j,k))&
+            & +(dmx(i,j)+dmx(i-1,j))*pmon_u(i,j)*(HZS(i,j,k)+HZS(i-1,j,k))&
+            & +(dmx(i,j+1)+dmx(i,j))*pnom_v(i,j+1)*(HZS(i,j+1,k)+HZS(i,j,k))&
+            & +(dmx(i,j)+dmx(i,j-1))*pnom_v(i,j)*(HZS(i,j,k)+HZS(i,j-1,k)) )
+            smax = max(smax, cff*rmask(i,j))
+          end do
+        end do
+      end do
+    end if
     do k = 1, nz-1
       do j = jstr, jend
         do i = istr, iend
@@ -945,7 +944,7 @@ contains
     ! Copy to the other time levels. bgcsub_step runs after the corrector
     ! (main.F90), so nnew = 3 - nstp is 1 or 2, and until the next window
     ! end only the other of the two is read in full. Level 3, the predictor
-    ! level, is read between windows only at the surface (CFLX_CORR
+    ! level, is read between windows only at the surface (cflx_corr
     ! restoring in bulk_frc, the CDR_LITE gas flux and the surface-flux
     ! exchange in tracers.F90); the window itself uses it as scratch, and
     ! the stock tracer code touches it only for T and S, so it gets the
@@ -1354,14 +1353,13 @@ contains
     end subroutine river_faces
 
     subroutine hupdate(Fu, Fv, c3)
-      ! content per area after the horizontal fluxes (+ TS_DIF2 diffusion
+      ! content per area after the horizontal fluxes (+ tracer diffusion
       ! of the window-start state over the window); boundary fluxes and
       ! river inputs into the budget
       real(kind=8), intent(inout) :: Fu(istr-2:iend+2,jstr-2:jend+2), Fv(istr-2:iend+2,jstr-2:jend+2)
       real(kind=8), intent(inout) :: c3(GLOBAL_2D_ARRAY,nz)
       integer(kind=4) :: ii, jj, jf
-#ifdef TS_DIF2
-      if (ib > 0 .and. isub == 1) then
+      if (diff_on .and. ib > 0 .and. isub == 1) then
         do jj = jstr, jend
           do ii = istr, iend+1
             Fu(ii,jj) = Fu(ii,jj) - dtw*0.25_8*(diff2(ii,jj,itrc)+diff2(ii-1,jj,itrc))&
@@ -1375,7 +1373,6 @@ contains
           end do
         end do
       end if
-#endif
       if (isub == 1) then
         do jj = jstr, jend
           do ii = istr, iend

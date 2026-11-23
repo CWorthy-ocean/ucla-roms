@@ -103,30 +103,15 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_cdr_lite = .false.
 #endif
-#ifdef TS_DIF2
-  logical, parameter, public :: key_ts_dif2 = .true.
-#else
-  logical, parameter, public :: key_ts_dif2 = .false.
-#endif
 #ifdef PCO2AIR_FORCING
   logical, parameter, public :: key_pco2air_forcing = .true.
 #else
   logical, parameter, public :: key_pco2air_forcing = .false.
 #endif
-#ifdef QCORRECTION
-  logical, parameter, public :: key_qcorrection = .true.
-#else
-  logical, parameter, public :: key_qcorrection = .false.
-#endif
 #ifdef SPHERICAL
   logical, parameter, public :: key_spherical = .true.
 #else
   logical, parameter, public :: key_spherical = .false.
-#endif
-#ifdef CFLX_CORR
-  logical, parameter, public :: key_cflx_corr = .true.
-#else
-  logical, parameter, public :: key_cflx_corr = .false.
 #endif
 #ifdef NHY_FORCING
   logical, parameter, public :: key_nhy_forcing = .true.
@@ -137,21 +122,6 @@ module cpp_keys_mod
   logical, parameter, public :: key_nox_forcing = .true.
 #else
   logical, parameter, public :: key_nox_forcing = .false.
-#endif
-#ifdef SFLX_CORR
-  logical, parameter, public :: key_sflx_corr = .true.
-#else
-  logical, parameter, public :: key_sflx_corr = .false.
-#endif
-#ifdef SPONGE
-  logical, parameter, public :: key_sponge = .true.
-#else
-  logical, parameter, public :: key_sponge = .false.
-#endif
-#ifdef UV_VIS2
-  logical, parameter, public :: key_uv_vis2 = .true.
-#else
-  logical, parameter, public :: key_uv_vis2 = .false.
 #endif
 #ifdef ANA_SSFLUX
   logical, parameter, public :: key_ana_ssflux = .true.

@@ -123,6 +123,7 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
         for run, tiles in (("tiled", "2x2"), ("one_rank", "1x1"), ("restart", "2x2"),
                            ("averaged", "2x2"), ("every_step", "2x2"), ("default_avg", "2x2")):
             nml = create_test_namelist_dict(sponge_inputs["joined" if pio else tiles])
+            nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False
             nml["TIME_STEPPING"].update(dt=DT, ntimes=NTIMES)
             nml["PARAM_SETTINGS"].update(NP_XI=int(tiles[0]), NP_ETA=int(tiles[2]))
             nml["BASIC_OUTPUT_SETTINGS"].update(

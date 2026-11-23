@@ -303,15 +303,14 @@ class TestCdr:
         ], label=key)
 
     def test_rstflx_needs_a_restoring_term(self, tmp_path, cdr_conf, input_dir):
-        """``wrt_rstflx`` on a binary with no restoring term compiled in (this
-        one has BULK_FRC and MARBL but none of QCORRECTION, SFLX_CORR, CFLX_CORR)
-        stops ROMS at startup instead of writing nothing."""
+        """``wrt_rstflx`` with no restoring term switched on (none of qcorrection,
+        sflx_corr, cflx_corr) stops ROMS at startup instead of writing nothing."""
         nml = _cdr_parm_nml(input_dir)
         nml["SURF_FLX_OUTPUT_SETTINGS"].update({"wrt_stflx": True, "wrt_rstflx": True})
         assert_run_rejected(cdr_conf, nml, tmp_path, [
             "SURF_FLX_OUTPUT_SETTINGS wrt_rstflx = .true. needs at least one restoring "
-            "term compiled in (QCORRECTION, SFLX_CORR, or CFLX_CORR with MARBL, together "
-            "with BULK_FRC). Set it to .false. otherwise.",
+            "term switched on (qcorrection, sflx_corr or cflx_corr in SURF_FRC_SETTINGS). "
+            "Set it to .false. otherwise.",
         ], label="wrt_rstflx")
 
     def test_bgc_averages_survive_restart(self, tmp_path, cdr_conf, input_dir):
@@ -632,7 +631,7 @@ class TestCdrLite:
         """
         cpp_keys = (
             UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-            + ["BULK_FRC", "SPONGE", "SPONGE_TUNE"]
+            + ["BULK_FRC", "SPONGE_TUNE"]
             + ["CDR_FORCING", "CDR_LITE"]
         )
         build_dir = tmp_path_factory.mktemp("cdr_lite_build")

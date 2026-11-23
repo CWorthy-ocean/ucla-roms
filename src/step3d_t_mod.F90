@@ -87,7 +87,7 @@ contains
        & ieast, isalt, itemp, iwest, jnorth, jsouth
   use t3dbc_mod, only : t3dbc_tile
   use ocean_vars, only: flxu, flxv, z_w, hz, we, wi, z_r
-  use scalars, only: nz, dt, nnew, nrhs, nt, nstp
+  use scalars, only: nz, dt, nnew, nrhs, nt, nstp, diff_on
 #if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
   use upscale_output, only:&
   &calc_forcing_rates, add_mixing_rates, do_upscale
@@ -1129,12 +1129,10 @@ if (is_marbl_step(tstep) .and. .not. bgc_physics_subcycle) then
 end if
 # endif
 
-# ifndef TS_DIF2
-  ! With TS_DIF2, t3dmix runs next: it reads only the t(nrhs) halo,
-  ! updates the t(nnew) interior and exchanges t(nnew) itself, so an
-  ! exchange here would be overwritten unused.
-  call exchange_tracers(nnew, nt_step)
-# endif
+  ! With horizontal diffusion (diff_on), t3dmix runs next: it reads only the
+  ! t(nrhs) halo, updates the t(nnew) interior and exchanges t(nnew) itself,
+  ! so an exchange here would be overwritten unused.
+  if (.not. diff_on) call exchange_tracers(nnew, nt_step)
 end subroutine step3d_t_iso_tile
 
 subroutine check_step_t_switches

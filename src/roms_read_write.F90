@@ -2606,9 +2606,7 @@ contains
 #if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
     &ubind,&
 #endif
-#ifdef SPONGE
-    &v_sponge, v_sponge_trc,&
-#endif
+    &use_boundary_sponge, v_sponge, v_sponge_trc,&
     &dtfast, gamma2, ndtfast, ntimes, rdrg, rdrg2,&
     &rho0, tnu2, visc2, zob
     use scoord, only:&
@@ -2724,16 +2722,12 @@ contains
 #  endif
 # endif
 
-#ifdef UV_VIS2
     ierr=nf90_put_att(ncid,nf90_global, 'visc2', visc2)            ! Horizontal viscosity and mixing coefficients.
     ierr=nf90_put_att (ncid,nf90_global, 'visc2_units', 'm^2/s')
 
     ierr=nf90_put_att(ncid, nf90_global, 'gamma2', gamma2)         ! Lateral slipperiness parameter
-#endif
-# ifdef TS_DIF2
     ierr=nf90_put_att(ncid,nf90_global, 'tnu2', tnu2)
     ierr=nf90_put_att (ncid,nf90_global, 'tnu2_units', 'm^2/s')
-# endif
 # ifndef LMD_MIXING
 
     ierr=nf90_put_att(ncid, nf90_global, 'Akv_bak', Akv_bak)       ! Background vertical viscosity tracer mixing
@@ -2748,12 +2742,12 @@ contains
     ierr=nf90_put_att (ncid, nf90_global, 'ubind_units', 'm/s')
 #endif
 
-#ifdef SPONGE
-    ierr=nf90_put_att(ncid, nf90_global, 'v_sponge', v_sponge)     ! Maximum viscosity in sponge layer
-    ierr=nf90_put_att (ncid, nf90_global, 'v_sponge_units','m^2/s')
-    ierr=nf90_put_att(ncid, nf90_global, 'v_sponge_trc', v_sponge_trc) ! Maximum tracer diffusivity in sponge layer
-    ierr=nf90_put_att (ncid, nf90_global, 'v_sponge_trc_units','m^2/s')
-#endif
+    if (use_boundary_sponge) then
+      ierr=nf90_put_att(ncid, nf90_global, 'v_sponge', v_sponge)   ! Maximum viscosity in sponge layer
+      ierr=nf90_put_att (ncid, nf90_global, 'v_sponge_units','m^2/s')
+      ierr=nf90_put_att(ncid, nf90_global, 'v_sponge_trc', v_sponge_trc) ! Maximum tracer diffusivity in sponge layer
+      ierr=nf90_put_att (ncid, nf90_global, 'v_sponge_trc_units','m^2/s')
+    endif
 
     ierr=nf90_put_att(ncid,nf90_global, 'rdrg', rdrg)              ! Bottom drag parameters.
     ierr=nf90_put_att (ncid,nf90_global, 'rdrg_units', 'm/s')

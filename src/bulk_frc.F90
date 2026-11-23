@@ -13,6 +13,7 @@ module bulk_frc
 #endif
   use instant_output, only: wrt_instant
   use flux_frc, only: interp_flux_frc   ! merged into SURF_FRC_SETTINGS (owned by flux_frc)
+  use surf_flux, only: sflx_corr, qcorrection, cflx_corr  ! in SURF_FRC_SETTINGS (owned by surf_flux)
   implicit none
 
   private  ! make all variable private to this module unless public specified
@@ -47,27 +48,10 @@ module bulk_frc
 
   real(kind=8),public,allocatable,dimension(:,:) :: wspd_used  ! wind speed at rho point (also used in BGC routines)
   logical, public :: interp_bulk_frc, check_bulk_frc_units
-  ! The surface restoring terms, named as in the GPU code's namelist. Here
-  ! the cpp keys SFLX_CORR, QCORRECTION and CFLX_CORR still decide them, so
-  ! the keys are optional and may only repeat the build (read_nml_surf_frc).
-  logical :: sflx_corr, qcorrection, cflx_corr
+  ! The tracers of the DIC and ALK restoring (cflx_corr), set by find_cflx_tracers
+  integer(kind=4) :: itrc_dic=0, itrc_dic_alt=0, itrc_alk=0, itrc_alk_alt=0
   namelist /SURF_FRC_SETTINGS/ interp_bulk_frc, check_bulk_frc_units, interp_flux_frc,&
   &sflx_corr, qcorrection, cflx_corr
-#ifdef SFLX_CORR
-  logical, parameter :: sflx_corr_cpp = .true.
-#else
-  logical, parameter :: sflx_corr_cpp = .false.
-#endif
-#ifdef QCORRECTION
-  logical, parameter :: qcorrection_cpp = .true.
-#else
-  logical, parameter :: qcorrection_cpp = .false.
-#endif
-#ifdef CFLX_CORR
-  logical, parameter :: cflx_corr_cpp = .true.
-#else
-  logical, parameter :: cflx_corr_cpp = .false.
-#endif
 
   public init_arrays_bulk_frc
   public set_bulk_frc
@@ -77,15 +61,11 @@ contains
 !     ----------------------------------------------------------------------
   subroutine read_nml_surf_frc
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file, check_nml_cpp_switch
+    use namelist_open_mod, only: open_namelist_file
 !     Read the "SURF_FRC_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_surf_frc"
     character(len=512) :: msg = ""
-    ! Left out, the restoring switches take the build's cpp keys
-    sflx_corr = sflx_corr_cpp
-    qcorrection = qcorrection_cpp
-    cflx_corr = cflx_corr_cpp
     ! Read namelist
     call open_namelist_file(namelist_unit)
     read (unit=namelist_unit, nml=SURF_FRC_SETTINGS, iostat=ios, iomsg=msg)
@@ -97,21 +77,42 @@ contains
       &//' section of namelist file: '&
       &//trim(msg)&
       &)
-    else
-      call check_nml_cpp_switch('SURF_FRC_SETTINGS', 'sflx_corr', sflx_corr,&
-      &sflx_corr_cpp, 'SFLX_CORR', module_name//'/'//sr_name)
-      call check_nml_cpp_switch('SURF_FRC_SETTINGS', 'qcorrection', qcorrection,&
-      &qcorrection_cpp, 'QCORRECTION', module_name//'/'//sr_name)
-      call check_nml_cpp_switch('SURF_FRC_SETTINGS', 'cflx_corr', cflx_corr,&
-      &cflx_corr_cpp, 'CFLX_CORR', module_name//'/'//sr_name)
     end if
     close(namelist_unit)
 
   end subroutine read_nml_surf_frc
 
+  subroutine find_cflx_tracers
+!     The tracer numbers of DIC, DIC_ALT_CO2, ALK and ALK_ALT_CO2, for cflx_corr
+    use tracers, only: itands, t_vname
+    use param, only: nt
+    implicit none
+    integer(kind=4) :: itrc
+
+    do itrc = iTandS+1, nt
+      select case (trim(t_vname(itrc)))
+      case ("DIC")
+        itrc_dic = itrc
+      case ("DIC_ALT_CO2")
+        itrc_dic_alt = itrc
+      case ("ALK")
+        itrc_alk = itrc
+      case ("ALK_ALT_CO2")
+        itrc_alk_alt = itrc
+      end select
+    enddo
+    if (min(itrc_dic, itrc_dic_alt, itrc_alk, itrc_alk_alt) == 0) then
+      call error_log%raise_global(context=module_name//'/find_cflx_tracers',&
+      &info='SURF_FRC_SETTINGS cflx_corr = .true. needs the MARBL tracers DIC, DIC_ALT_CO2,'&
+      &//' ALK and ALK_ALT_CO2, which this run does not have.')
+      call error_log%abort_check()
+    end if
+  end subroutine find_cflx_tracers
+
 
   subroutine init_arrays_bulk_frc  ![
     implicit none
+    if (cflx_corr) call find_cflx_tracers
     allocate(  tair(GLOBAL_2D_ARRAY) ); tair = 0
     allocate(     Q(GLOBAL_2D_ARRAY) ); Q = 0
     allocate( prate(GLOBAL_2D_ARRAY) ); prate = 0
@@ -257,19 +258,10 @@ contains
     use surf_flux, only:&
     &srflx, vwnd, uwnd, stflx, sustr_r, svstr_r,&
     &sustr, svstr, swflx
-#if defined(SFLX_CORR) && defined SALINITY && !defined ANA_SSFLUX
     use surf_flux, only:&
-    &sss, dSSSdt, ssflx_rst, wrt_rstflx
-#endif
-#ifdef QCORRECTION
-    use surf_flux, only:&
-    &sst, dSSTdt, shflx_rst, wrt_rstflx
-#endif
-#if defined(MARBL) && defined(CFLX_CORR)
-    use surf_flux, only:&
+    &sss, dSSSdt, ssflx_rst, sst, dSSTdt, shflx_rst,&
     &sDIC, sALK, dCdt, dicflx_rst, alkflx_rst, wrt_rstflx
-#endif
-    use tracers, only: t, itands, t_vname
+    use tracers, only: t
     use grid, only: rmask, umask, vmask
     use mixing, only: ieast, isalt, itemp, iwest, jnorth, jsouth
     use ocean_vars, only: u, v
@@ -282,7 +274,6 @@ contains
     integer(kind=4),intent(in)  :: istr,iend,jstr,jend
 
     integer(kind=4) i, j, IterMax, iter
-    integer(kind=4) itrc, itrc2read, itrc2writ
     real(kind=8) a
     real(kind=8) rho0i
     real(kind=8) TseaC,TseaK,Qsea
@@ -385,14 +376,6 @@ contains
     integer(kind=4) it1,it2, it3,it4, it5,it6, it7,it8, it9,it10
     real(kind=8) tmid, cff1,cff2, cff3,cff4, cff5,cff6, cff7,cff8,&
     &cff9,cff10, cff
-# ifdef QCORRECTION
-    integer(kind=4) it13,it14, it11,it12
-    real(kind=8) cff13,cff14, cff11,cff12
-# endif
-# ifdef SFLX_CORR
-    integer(kind=4) it15,it16
-    real(kind=8) cff15,cff16
-# endif
 
 ! Extended bounds needed since u2rho and rho2u averaging occurs, and
 ! lmd_kpp has SMOOTH_HBL which requires extended loop ranges for smoothing.
@@ -807,90 +790,63 @@ contains
 ! Flux correction to surface net heat flux.
 !---------------------------------------------------------------
 !
-# ifdef QCORRECTION
-!          cff=cff11*dqdtg(i,j,it11)+cff12*dqdtg(i,j,it12)
-!          stflx(i,j,itemp)=stflx(i,j,itemp) +cff*(
-!     &           t(i,j,N,nrhs,itemp) -cff13*sstg(i,j,it13)
-!     &                               -cff14*sstg(i,j,it14)
-!     &                                                  )
-        stflx(i,j,itemp)=stflx(i,j,itemp) -dSSTdt*(&
-        &t(i,j,nz,nrhs,itemp) - sst(i,j)  )&
-
-#  ifdef MASKING
-        &*rmask(i,j)
-#  endif
-        if (wrt_rstflx) then
-          shflx_rst(i,j)= -dSSTdt*(t(i,j,nz,nrhs,itemp) - sst(i,j))
-#   ifdef MASKING
-          shflx_rst(i,j)=shflx_rst(i,j)*rmask(i,j)
-#   endif
+        if (qcorrection) then
+          stflx(i,j,itemp)=stflx(i,j,itemp) -dSSTdt*(&
+          &t(i,j,nz,nrhs,itemp) - sst(i,j)  )&
+# ifdef MASKING
+          &*rmask(i,j)
+# endif
+          if (wrt_rstflx) then
+            shflx_rst(i,j)= -dSSTdt*(t(i,j,nz,nrhs,itemp) - sst(i,j))
+# ifdef MASKING
+            shflx_rst(i,j)=shflx_rst(i,j)*rmask(i,j)
+# endif
+          endif
         endif
-# endif /* QCORRECTION */
 
 !
 !--------------------------------------------------------------
 ! Flux corrections to surface net heat flux and salt flux.
 !--------------------------------------------------------------
-# ifdef SFLX_CORR
-# ifdef SALINITY
-     stflx(i,j,isalt)= -dSSSdt*(&
-     &t(i,j,nz,nrhs,isalt)-sss(i,j))&
-#  ifdef MASKING
-     &*rmask(i,j)
-#  endif
-#  ifndef ANA_SSFLUX
-     if (wrt_rstflx) ssflx_rst(i,j)=stflx(i,j,isalt)
-#  endif
+        if (sflx_corr) then
+          stflx(i,j,isalt)= -dSSSdt*(&
+          &t(i,j,nz,nrhs,isalt)-sss(i,j))&
+# ifdef MASKING
+          &*rmask(i,j)
 # endif
-# endif
+          if (wrt_rstflx) ssflx_rst(i,j)=stflx(i,j,isalt)
+        endif
 
 !
 !--------------------------------------------------------------
 ! Flux correction to surface Alk/DIC
 !--------------------------------------------------------------
-#if defined(CFLX_CORR) && defined(MARBL)
-
-!!!!!!!      DIC
-    do itrc = iTandS+1,NT
-      if ( trim(t_vname(itrc))=="DIC" ) then
-         itrc2writ=itrc
-      elseif ( trim(t_vname(itrc))=="DIC_ALT_CO2" ) then
-         itrc2read=itrc
-      endif
-    enddo
-       stflx(i,j,itrc2read)= -dCdt*(&
-       &t(i,j,nz,nrhs,itrc2read) - sDIC(i,j)  )&
-#  ifdef MASKING
-       &*rmask(i,j)
-#  endif
-       stflx(i,j,itrc2writ)= -dCdt*(&
-       &t(i,j,nz,nrhs,itrc2read) - sDIC(i,j)  )&
-#  ifdef MASKING
-       &*rmask(i,j)
-#  endif
-       if (wrt_rstflx) dicflx_rst(i,j)=stflx(i,j,itrc2writ)
-
-!!!!!!!      ALK
-       do itrc = iTandS+1,NT
-         if ( trim(t_vname(itrc))=="ALK" ) then
-            itrc2writ=itrc
-         elseif ( trim(t_vname(itrc))=="ALK_ALT_CO2" ) then
-            itrc2read=itrc
-         endif
-       enddo
-          stflx(i,j,itrc2read)= -dCdt*(&
-          &t(i,j,nz,nrhs,itrc2read) - sALK(i,j)  )&
-#  ifdef MASKING
+        if (cflx_corr) then
+          ! both tracers of a pair restore with the _ALT_CO2 tracer's value
+          stflx(i,j,itrc_dic_alt)= -dCdt*(&
+          &t(i,j,nz,nrhs,itrc_dic_alt) - sDIC(i,j)  )&
+# ifdef MASKING
           &*rmask(i,j)
-#  endif
-          stflx(i,j,itrc2writ)= -dCdt*(&
-          &t(i,j,nz,nrhs,itrc2read) - sALK(i,j)  )&
-#  ifdef MASKING
-          &*rmask(i,j)
-#  endif
-          if (wrt_rstflx) alkflx_rst(i,j)=stflx(i,j,itrc2writ)
-
 # endif
+          stflx(i,j,itrc_dic)= -dCdt*(&
+          &t(i,j,nz,nrhs,itrc_dic_alt) - sDIC(i,j)  )&
+# ifdef MASKING
+          &*rmask(i,j)
+# endif
+          if (wrt_rstflx) dicflx_rst(i,j)=stflx(i,j,itrc_dic)
+
+          stflx(i,j,itrc_alk_alt)= -dCdt*(&
+          &t(i,j,nz,nrhs,itrc_alk_alt) - sALK(i,j)  )&
+# ifdef MASKING
+          &*rmask(i,j)
+# endif
+          stflx(i,j,itrc_alk)= -dCdt*(&
+          &t(i,j,nz,nrhs,itrc_alk_alt) - sALK(i,j)  )&
+# ifdef MASKING
+          &*rmask(i,j)
+# endif
+          if (wrt_rstflx) alkflx_rst(i,j)=stflx(i,j,itrc_alk)
+        endif
 
 !---------------------------------------------------------------
 ! Restrict stflx to prevent surface temperature to go below -1.8_8
@@ -898,9 +854,7 @@ contains
 !---------------------------------------------------------------
         if( t(i,j,nz,nrhs,itemp) .le. -1.8_8 ) then
           stflx(i,j,itemp)=0._8
-#   ifdef QCORRECTION
-          if (wrt_rstflx) shflx_rst(i,j)=0._8  ! the correction actually applied
-#   endif
+          if (qcorrection .and. wrt_rstflx) shflx_rst(i,j)=0._8  ! the correction actually applied
 #   if defined LMD_KPP
           srflx(i,j)=0._8
 #    endif
