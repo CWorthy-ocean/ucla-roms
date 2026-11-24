@@ -1,0 +1,4 @@
+The CPP keys ``PCO2AIR_FORCING``, ``NOX_FORCING``, ``NHY_FORCING`` and ``MARBL_DIAGS`` are now namelist settings. A ``cppdefs.opt`` that defines one stops the build with an error that names the setting; delete the line (an ``#undef`` line is harmless).
+- ``use_xco2air_forcing``, ``use_nox_forcing`` and ``use_nhy_forcing`` (``BGC_SETTINGS``) are ``.true.`` by default: a run whose build left a key undefined needs ``.false.``, or the variables in its forcing files. A missing variable stops the run with a message that names the switch.
+- MARBL's diagnostics are kept when ``wrt_bgc_dia_his``, ``wrt_bgc_dia_avg`` or ``do_cdr_output`` is ``.true.``; there is no other switch. ``do_cdr_output`` needs only ``MARBL``.
+- A BGC output stream that is on stops the run if its period or its ``nrpf_*`` is 0 (the default).

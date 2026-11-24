@@ -298,9 +298,14 @@ Required with `MARBL`. Without it it is read only when there are tracers beyond 
 | `wrt_bgc_dia_avg` | Write averaged BGC diagnostics to output |
 | `output_period_bgc_avg_dia` | Frequency/period of averaged diagnostic output (s). Each record averages the model steps of the period ending at its `ocean_time`, which is also its `avg_end_time`; `avg_begin_time` is the period's start. With MARBL it must be a whole multiple of the MARBL timestep ROMS uses (`marbl_timestep` rounded down to a multiple of `dt`), or ROMS stops at startup: each window then ends on a MARBL step, averages the diagnostics of the MARBL steps within it, and a restarted run's records match an uninterrupted run's bit for bit |
 | `nrpf_bgc_avg_dia` | Number of time records per BGC diagnostics file |
-| `xco2air_default` | Atmospheric xCO2 (ppm) that MARBL uses when `PCO2AIR_FORCING` is not defined. Default `284.7` (pre-industrial) |
+| `use_xco2air_forcing` | Read the atmospheric xCO2 (`xco2_air` and `xco2_air_alt`) from the forcing files. Default `.true.`: ROMS stops if one is in no file. If `.false.`, MARBL uses `xco2air_default` for both and does not read them |
+| `xco2air_default` | Atmospheric xCO2 (ppm) that MARBL uses with `use_xco2air_forcing = .false.`. Default `284.7` (pre-industrial) |
+| `use_nox_forcing` | Read the NOx deposition (`nox`) from the forcing files. Default `.true.`: ROMS stops if it is in no file. If `.false.`, there is none |
+| `use_nhy_forcing` | Read the NHy deposition (`nhy`) from the forcing files. Default `.true.`: ROMS stops if it is in no file. If `.false.`, there is none |
 | `bgc_physics_subcycle` | Transport, mix and force the tracers beyond temperature and salinity (passive, CDR_LITE and MARBL tracers) only every `bgc_physics_timestep`, with the transports accumulated over that window; temperature, salinity and the dynamics still step every `dt`. Restarts must then fall on window boundaries. Default `.false.`. See [BGC tracer subcycling](bgc_subcycling.md) |
 | `bgc_physics_timestep` | How often the tracers beyond temperature and salinity are transported and mixed with `bgc_physics_subcycle` (seconds): a whole multiple of `dt`; with MARBL also a divisor of `marbl_timestep` (as MARBL rounds it), so `dt <= bgc_physics_timestep <= marbl_timestep`, and MARBL runs at the end of every `marbl_timestep / bgc_physics_timestep`-th window. 0 (the default) means `marbl_timestep`; without MARBL a value > 0 is required. Any other value stops ROMS at startup with a message giving the nearest valid values |
+
+`dust` and `iron` are always read. The switches `wrt_*` and `interp_bgc_frc` are `.false.` if left out; an output stream that is on needs its period and its `nrpf_*` above 0, or ROMS stops. ROMS keeps MARBL's diagnostics (those in `marbl_diagnostics_to_write`) only if an output uses them: `wrt_bgc_dia_his`, `wrt_bgc_dia_avg` or `do_cdr_output` (`CDR_OUTPUT_SETTINGS`).
 
 ### `MARBL_BIOGEOCHEMISTRY_SETTINGS`
 (read by module `marbl_driver.F90`)
@@ -340,7 +345,7 @@ Settings controlling Carbon Dioxide Removal (CDR) forcing: tracer releases read 
 ### `CDR_OUTPUT_SETTINGS`
 (read by module `cdr_output.F90`)
 
-Optional: without the group there is no such output. Needs `MARBL` and `MARBL_DIAGS`: without them, ROMS stops if it sets `do_cdr_output = .true.` Switches left out are `.false.`.
+Optional: without the group there is no such output. Needs `MARBL`: without it, ROMS stops if it sets `do_cdr_output = .true.` Switches left out are `.false.`.
 
 Write an output file containing CDR-relevant fields.
 
@@ -361,7 +366,7 @@ These settings control the carbonate sensitivities (beta = dDIC/dCO2, eta = dDIC
 
 | Setting | Description |
 |--------|-------------|
-| `cdr_online_carbonate_sensitivity` | If `.true.`, compute the sensitivities every step from the model's ALT_CO2 (no-CDR) surface state; this needs MARBL, and with `PCO2AIR_FORCING` the forcing files' `xco2_air_alt` must equal `xco2_air`. If `.false.` (default), read `ddic_dco2` and `ddic_dalk` from `frcfiles` (for example a `CDR_GAS_EXCH_OUTPUT_SETTINGS` file from another run). |
+| `cdr_online_carbonate_sensitivity` | If `.true.`, compute the sensitivities every step from the model's ALT_CO2 (no-CDR) surface state; this needs MARBL, and with `use_xco2air_forcing` the forcing files' `xco2_air_alt` must equal `xco2_air`. If `.false.` (default), read `ddic_dco2` and `ddic_dalk` from `frcfiles` (for example a `CDR_GAS_EXCH_OUTPUT_SETTINGS` file from another run). |
 | `cdr_carbonate_sensitivity_time_interpolation` | For sensitivities read from `frcfiles`: interpolate linearly in time between records if `.true.` (default), or hold each record until the next one starts if `.false.`. A record with `ddic_dco2` <= 0 at a cell (the 0 that `CDR_GAS_EXCH_OUTPUT_SETTINGS` files hold where the carbonate solve failed) means no gas exchange there; next to such a record the flux coefficients 1/beta and eta/beta are interpolated with 0 for it (beta = beta/w and eta of the other record, w its weight), so the gas flux ramps linearly to zero |
 
 The surface-flux variables `CDR_OAE_DIC<n>_flx` and `CDR_DOR_DIC<n>_flx` in the forcing files are optional: without them, a tracer's only surface flux is the air-sea gas exchange.

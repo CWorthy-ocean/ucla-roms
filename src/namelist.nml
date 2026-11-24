@@ -313,7 +313,10 @@ wrt_bgc_dia_avg = .false.   ! Write averaged BGC diagnostics to output
 output_period_bgc_avg_dia = 100 ! Frequency/period of averaged diagnostic output
 nrpf_bgc_avg_dia = 10           ! Number of time records per BGC diagnostics file
 !
-xco2air_default = 284.7         ! Atmospheric xCO2 (ppm) when PCO2AIR_FORCING is off
+use_xco2air_forcing = .true.    ! Read xco2_air and xco2_air_alt from the forcing files; if F, use xco2air_default
+xco2air_default = 284.7         ! Atmospheric xCO2 (ppm) when use_xco2air_forcing = F
+use_nox_forcing = .true.        ! Read nox (NOx deposition) from the forcing files; if F, none
+use_nhy_forcing = .true.        ! Read nhy (NHy deposition) from the forcing files; if F, none
 !
 ! BGC tracer subcycling (docs/model_settings/bgc_subcycling.md). Restarts must then
 ! fall on its windows (output_period_rst a multiple of bgc_physics_timestep, no monthly_restarts).
@@ -383,7 +386,7 @@ nrpf_cdr = 4                       ! Time records per output file
 ! computed each step from the model's ALT_CO2 (no-CDR) surface state (needs
 ! MARBL); if .false. (default), ddic_dco2/ddic_dalk are read from frcfiles.
 ! The online option assumes ALT_CO2 sees the same atmosphere as DIC/ALK: with
-! PCO2AIR_FORCING, xco2_air_alt must equal xco2_air in the forcing files.
+! use_xco2air_forcing, xco2_air_alt must equal xco2_air in the forcing files.
 ! The surface-flux variables CDR_OAE_DIC<n>_flx and CDR_DOR_DIC<n>_flx in the
 ! forcing files are optional: if absent, the tracer's surface flux is zero and
 ! only the gas exchange (from ddic_dco2/ddic_dalk) acts.

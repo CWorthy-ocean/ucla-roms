@@ -163,7 +163,7 @@ contains
     use particles, only: init_particles, floats
     use upscale_output, only:  init_upscale, do_upscale
     use random_output, only:  init_random, do_random, wrt_random
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
     use cdr_output, only:  init_cdr_output, do_cdr_output
 #endif
     use cdr_lite_output, only: init_cdr_lite_output, do_cdr_lite_output
@@ -372,7 +372,7 @@ contains
     call wrt_bgc(.true.)
 #endif
     if (do_random) call init_random
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
     if (do_cdr_output)  call init_cdr_output
 #endif
     if (do_cdr_lite_output) call init_cdr_lite_output
@@ -415,7 +415,7 @@ contains
     use marbl_driver, only: marbl_timestep_ratio, marbldrv_impose_constant_fe_all
     use tracers, only: t
 #endif
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
     use cdr_output, only:  wrt_cdr, do_cdr_output
 #endif
     use cdr_lite_output, only: wrt_cdr_lite, do_cdr_lite_output
@@ -742,7 +742,7 @@ contains
     if (diag_uv.or.diag_trc) call do_diagnostics
 
     if (do_random) call wrt_random
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
     if (do_cdr_output)  call wrt_cdr
 #endif
     if (do_cdr_lite_output) call wrt_cdr_lite

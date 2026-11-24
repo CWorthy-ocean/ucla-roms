@@ -31,12 +31,12 @@ module precheck
   &apply_sponge_tune, wrt_sponge, output_period_sponge, nrpf_sponge
   use diagnostics, only:&
   &diag_uv, diag_trc, output_period_diag, nrpf_diag
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
   use cdr_output, only:&
   &do_cdr_output, output_period_cdr, nrpf_cdr,&
   &wrt_cdr_avg, cdr_monthly_averages
 #endif
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
   use scalars, only: dt
   use marbl_driver, only: marbl_timestep_ratio
 #endif
@@ -103,7 +103,7 @@ contains
     &output_period_sponge, nrpf_sponge, 'sponge')
     call check_output_divides_rst(diag_uv.or.diag_trc,&
     &real(output_period_diag, kind=8), nrpf_diag, 'diagnostics')
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
     call check_output_divides_rst(do_cdr_output,&
     &output_period_cdr, nrpf_cdr, 'cdr')
 #endif
@@ -125,12 +125,12 @@ contains
     call check_output_divides_rst(wrt_bgc_dia_avg,&
     &output_period_bgc_avg_dia, nrpf_bgc_avg_dia, 'bgc_avg_dia')
 #endif
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
     call check_avg_ends_on_marbl_step(do_cdr_output .and. wrt_cdr_avg&
     &.and. .not. cdr_monthly_averages,&
     &output_period_cdr, 'output_period_cdr')
 #endif
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
     call check_avg_ends_on_marbl_step(wrt_bgc_dia_avg,&
     &output_period_bgc_avg_dia, 'output_period_bgc_avg_dia')
 #endif
@@ -180,7 +180,7 @@ contains
     endif
   end subroutine check_output_divides_rst
 !---------------------------------------------------
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
   subroutine check_avg_ends_on_marbl_step(avg_enabled, avg_period, label)
     ! An averaging period must be a whole multiple of the MARBL timestep
     ! ROMS uses (dt*marbl_timestep_ratio, set in marbldrv_configure_tracers
