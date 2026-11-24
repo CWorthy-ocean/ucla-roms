@@ -76,9 +76,9 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `LLm` | Number of grid points in XI direction |
 | `MMm` | Number of grid points in ETA direction |
 | `nz` | Number of vertical levels |
-| `nt_passive` | Number of passive tracers |
+| `nt_passive` | Number of passive tracers (`passive_tracer<n>`). They are in the history file unless `wrt_passive` is `.false.` |
 | `nt_cdr_oae` | Number of OAE `CDR_LITE` tracer pairs. Each pair is an ALK-mimicking and a DIC-mimicking passive tracer (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`), so it adds two tracers. The `CDR_LITE` CPP key adds their air-sea CO2 exchange. |
-| `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`) |
+| `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`). The `CDR_LITE` tracers are in the history file unless `wrt_passive` is `.false.` |
 | `nt_bgc` | Number of biogeochemical tracers: 32 for default `MARBL`, 0 without `MARBL` |
 
 ### `PIO_SETTINGS`
@@ -198,6 +198,7 @@ Each record of the `_avg` files averages the model state at the end of every ste
 | `wrt_avg_salt` | Include `salt` in averages files if `.true.` (needs `wrt_file_avg`) |
 | `wrt_temp_dia` | Include the temperature terms in the diagnostics file if `.true.` (needs `diag_trc`) |
 | `wrt_salt_dia` | Include the salinity terms in the diagnostics file if `.true.` (needs `diag_trc`) |
+| `wrt_passive` | Include the passive and `CDR_LITE` tracers in history files if `.true.` (default), whatever `marbl_tracers_to_write` names. The averages (`_avg`) have them only with MARBL, when that list is empty or names them |
 
 With `MARBL`, naming `temp` or `salt` in `marbl_tracers_to_write` also adds it to both the history and averages files, and an empty `marbl_tracers_to_write` adds every tracer to both, whatever these settings say.
 

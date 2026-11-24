@@ -98,8 +98,9 @@ module tracers
 
   logical, public :: wrt_temp, wrt_salt, wrt_temp_dia, wrt_salt_dia
   logical, public :: wrt_avg_temp = .false., wrt_avg_salt = .false.  ! .false. if absent from namelist
+  logical, public :: wrt_passive = .true.  ! passive and CDR_LITE tracers in history files
   namelist /TS_OUTPUT_SETTINGS/ wrt_temp, wrt_salt, wrt_avg_temp, wrt_avg_salt,&
-  &wrt_temp_dia, wrt_salt_dia
+  &wrt_temp_dia, wrt_salt_dia, wrt_passive
 
   public set_surf_tracer_flx
   public init_tracers
@@ -617,6 +618,10 @@ contains
     call marbldrv_configure_tracers(&
     &itot,t_vname,t_lname,t_units,t_tname,wrt_t,wrt_t_avg,t_ana_frc)
 #endif
+
+    ! wrt_passive alone decides whether the passive, CDR OAE and CDR DOR
+    ! tracers are in the history file, whatever marbl_tracers_to_write names
+    wrt_t(iTandS+1:ibgc0) = wrt_passive
 
     ! Every slot 1..nt must now be named; a mismatch means nt_bgc disagrees
     ! with the BGC model's tracer count.
