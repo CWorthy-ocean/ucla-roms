@@ -197,6 +197,7 @@ wrt_avg_temp = .false.      ! Include `temp` in averages files
 wrt_avg_salt = .false.      ! Include `salt` in averages files
 wrt_temp_dia = .false.      ! Include temperature terms in the diagnostics file (needs diag_trc)
 wrt_salt_dia = .false.      ! Include salinity terms in the diagnostics file (needs diag_trc)
+wrt_passive = .true.        ! Include the passive and CDR_LITE tracers in history files
 /
 
 &FRC_OUTPUT_SETTINGS                                              !frc_output.F90

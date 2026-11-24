@@ -105,6 +105,21 @@ def test_missing_restoring_coefficient_rejected(tmp_path, marbl_conf, input_dir,
     ], label=switch)
 
 
+@pytest.mark.parametrize("wrt_passive", [True, False])
+def test_wrt_passive_decides_alone(tmp_path, marbl_conf, input_dir, wrt_passive):
+    """``wrt_passive`` decides whether ``_his`` has the passive tracers, not
+    ``marbl_tracers_to_write``: the list names DIC only, then is empty (all)."""
+    nml = _marbl_nml(input_dir)
+    nml["TIME_STEPPING"]["ntimes"] = 2
+    nml["PARAM_SETTINGS"]["nt_passive"] = 1
+    nml["TS_OUTPUT_SETTINGS"]["wrt_passive"] = wrt_passive
+    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_tracers_to_write"] = "DIC" if wrt_passive else ""
+    marbl_conf.run(nml, cwd=tmp_path)
+    his_vars = get_summary_value(tmp_path, "roms_his.20100101000000").variables
+    assert ("passive_tracer1" in his_vars) == wrt_passive
+    assert "DIC" in get_summary_value(tmp_path, "roms_bgc.20100101000000").variables
+
+
 class TestConstantFe:
     """``use_constant_Fe`` on the realistic MARBL case."""
 

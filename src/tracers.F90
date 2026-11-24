@@ -98,8 +98,9 @@ module tracers
 
   logical, public :: wrt_temp, wrt_salt, wrt_temp_dia, wrt_salt_dia
   logical, public :: wrt_avg_temp = .false., wrt_avg_salt = .false.  ! .false. if absent from namelist
+  logical, public :: wrt_passive = .true.  ! passive and CDR_LITE tracers in history files
   namelist /TS_OUTPUT_SETTINGS/ wrt_temp, wrt_salt, wrt_avg_temp, wrt_avg_salt,&
-  &wrt_temp_dia, wrt_salt_dia
+  &wrt_temp_dia, wrt_salt_dia, wrt_passive
 
   public set_surf_tracer_flx
   public init_tracers
@@ -562,14 +563,12 @@ contains
     ! T/S, then passive, CDR OAE (2 each) and CDR DOR tracers; BGC tracers follow
     ibgc0 = iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
 
-    ! The passive, CDR OAE and CDR DOR tracers are always in the history file
-    ! (the BGC tracers are in the _bgc files)
     do itrc=iTandS+1,iTandS+nt_passive
       write(passive_tracer_num, '(I0)') (itrc-iTandS)
       t_vname(itrc)='passive_tracer' // TRIM(passive_tracer_num)
       t_units(itrc)='mMol m-3'
       t_lname(itrc)='passive tracer' // TRIM(passive_tracer_num)
-      wrt_t(itrc) = .true.
+      wrt_t(itrc) = .false.
       wrt_t_dia(itrc) = .false.
       t_ana_frc(itrc)=1
       itot = itot+1
@@ -583,7 +582,7 @@ contains
       t_tname(itrc)='CDR_time'
       t_units(itrc)='mMol m-3'
       t_lname(itrc)='CDR OAE ALK tracer' // TRIM(passive_tracer_num)
-      wrt_t(itrc) = .true.
+      wrt_t(itrc) = .false.
       wrt_t_dia(itrc) = .false.
       ! ALK is not exchanged with the atmosphere; analytical (zero) flux.
       t_ana_frc(itrc)=1
@@ -593,7 +592,7 @@ contains
       t_tname(itrc+1)='CDR_time'
       t_units(itrc+1)='mMol m-3'
       t_lname(itrc+1)='CDR OAE DIC tracer' // TRIM(passive_tracer_num)
-      wrt_t(itrc+1) = .true.
+      wrt_t(itrc+1) = .false.
       wrt_t_dia(itrc+1) = .false.
       t_ana_frc(itrc+1)=2
       ! Identify the corresponding ALK tracer
@@ -607,7 +606,7 @@ contains
       t_tname(itrc)='CDR_time'
       t_units(itrc)='mMol m-3'
       t_lname(itrc)='CDR DOR DIC tracer' // TRIM(passive_tracer_num)
-      wrt_t(itrc) = .true.
+      wrt_t(itrc) = .false.
       wrt_t_dia(itrc) = .false.
       t_ana_frc(itrc)=2
       itot = itot+1
@@ -619,6 +618,10 @@ contains
     call marbldrv_configure_tracers(&
     &itot,t_vname,t_lname,t_units,t_tname,wrt_t,wrt_t_avg,t_ana_frc)
 #endif
+
+    ! wrt_passive alone decides whether the passive, CDR OAE and CDR DOR
+    ! tracers are in the history file, whatever marbl_tracers_to_write names
+    wrt_t(iTandS+1:ibgc0) = wrt_passive
 
     ! Every slot 1..nt must now be named; a mismatch means nt_bgc disagrees
     ! with the BGC model's tracer count.
