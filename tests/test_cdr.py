@@ -678,7 +678,7 @@ class TestCdrLite:
             assert (ds["FG_CDR_OAE_DIC1"] != 0).any()  # gas exchange acted on it
 
         pv = get_summary_value(tmp_path, prefix="roms_his.20100101000000")
-        # the CDR_LITE tracers are always in _his, with the values of _cdrtrc
+        # the CDR_LITE tracers are in _his (wrt_passive by default), as in _cdrtrc
         with xr.open_dataset(pv.path, decode_times=False) as his, \
                 xr.open_dataset(tv.path, decode_times=False) as trc:
             n = list(his["ocean_time"].values).index(trc["ocean_time"].values[0])

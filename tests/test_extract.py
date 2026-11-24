@@ -439,14 +439,20 @@ def test_all_variables_written(tmp_path, extract_conf, input_dir, pio_input_dir,
         nml = _nml(conf, input_dir, pio_input_dir, [child])
         nml["PARAM_SETTINGS"]["nt_passive"] = 1
         nml["INITIAL_CONDITIONS"]["inifile"] = str(ini)
+        if run == "A_passive":
+            nml["TS_OUTPUT_SETTINGS"]["wrt_passive"] = False
+        else:
+            del nml["TS_OUTPUT_SETTINGS"]["wrt_passive"]  # on if left out
         conf.run(nml, cwd=run_dir)
         values[run] = _boundary_values(conf, run_dir)
         _assert_all_written(values[run])
-        # the passive tracer is always in the history file
+        # wrt_passive: the passive tracer is in the history file, or not
         his = sorted(run_dir.glob("*_his.*.nc"))
         with xr.open_dataset(his[0], decode_times=False) as ds:
-            assert np.isfinite(ds["passive_tracer1"].values).all()
-            assert (ds["passive_tracer1"].values != 0).any()
+            assert ("passive_tracer1" in ds) == (run == "A")
+            if run == "A":
+                assert np.isfinite(ds["passive_tracer1"].values).all()
+                assert (ds["passive_tracer1"].values != 0).any()
 
     passive = {f"passive_tracer1_{bnd}" for bnd in ("south", "north", "east", "west")}
     assert sorted(values["A"]) == sorted(expected)
