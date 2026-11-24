@@ -76,9 +76,9 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `LLm` | Number of grid points in XI direction |
 | `MMm` | Number of grid points in ETA direction |
 | `nz` | Number of vertical levels |
-| `nt_passive` | Number of passive tracers |
+| `nt_passive` | Number of passive tracers (`passive_tracer<n>`). They are always in the history file |
 | `nt_cdr_oae` | Number of OAE `CDR_LITE` tracer pairs. Each pair is an ALK-mimicking and a DIC-mimicking passive tracer (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`), so it adds two tracers. The `CDR_LITE` CPP key adds their air-sea CO2 exchange. |
-| `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`) |
+| `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`). The `CDR_LITE` tracers are always in the history file |
 | `nt_bgc` | Number of biogeochemical tracers: 32 for default `MARBL`, 0 without `MARBL` |
 
 ### `PIO_SETTINGS`
