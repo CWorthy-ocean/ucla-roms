@@ -1,5 +1,6 @@
 module get_init_mod
 
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
 
@@ -642,36 +643,44 @@ contains
     ! Here we catch an initial file that does not have the boundary values of u/v
     ! set to zero, even though we prescribed a closed boundary. This is necessary
     ! for conservation tests.
-#if !defined OBC_WEST && !defined EW_PERIODIC
-    if(WESTERN_EDGE) then
-      if(mynode==0) write (*,'(6x,A)')&        ! S&W bry always contained in start node (==0)
-      &'get_init :: set closed west  boundary row to zero (u/ub/v/vb)'
-      u(   istr  ,:     ,:,tindx)=0.0_8         ! ensure closed boundary u on boundary is zero
-      ubar(istr  ,:     ,1)      =0.0_8         ! ubar read into index 1 above
+#if !defined EW_PERIODIC
+    if (.not.obc_west) then
+      if(WESTERN_EDGE) then
+        if(mynode==0) write (*,'(6x,A)')&        ! S&W bry always contained in start node (==0)
+        &'get_init :: set closed west  boundary row to zero (u/ub/v/vb)'
+        u(   istr  ,:     ,:,tindx)=0.0_8         ! ensure closed boundary u on boundary is zero
+        ubar(istr  ,:     ,1)      =0.0_8         ! ubar read into index 1 above
+      endif
     endif
 #endif
-#if !defined OBC_EAST && !defined EW_PERIODIC
-    if(EASTERN_EDGE) then
-      if(mynode==NNODES-1) write (*,'(6x,A)')& ! N&E bry always contained in final node (==NNODES-1)
-      &'get_init :: set closed east  boundary row to zero (u/ub/v/vb)'
-      u(   iend+1,:     ,:,tindx)=0.0_8
-      ubar(iend+1,:     ,1)      =0.0_8
+#if !defined EW_PERIODIC
+    if (.not.obc_east) then
+      if(EASTERN_EDGE) then
+        if(mynode==NNODES-1) write (*,'(6x,A)')& ! N&E bry always contained in final node (==NNODES-1)
+        &'get_init :: set closed east  boundary row to zero (u/ub/v/vb)'
+        u(   iend+1,:     ,:,tindx)=0.0_8
+        ubar(iend+1,:     ,1)      =0.0_8
+      endif
     endif
 #endif
-#if !defined OBC_SOUTH && !defined NS_PERIODIC
-    if(SOUTHERN_EDGE) then
-      if(mynode==0) write (*,'(6x,A)')&
-      &'get_init :: set closed south boundary row to zero (u/ub/v/vb)'
-      v(   :     ,jstr  ,:,tindx)=0.0_8
-      vbar(:     ,jstr  ,1)      =0.0_8
+#if !defined NS_PERIODIC
+    if (.not.obc_south) then
+      if(SOUTHERN_EDGE) then
+        if(mynode==0) write (*,'(6x,A)')&
+        &'get_init :: set closed south boundary row to zero (u/ub/v/vb)'
+        v(   :     ,jstr  ,:,tindx)=0.0_8
+        vbar(:     ,jstr  ,1)      =0.0_8
+      endif
     endif
 #endif
-#if !defined OBC_NORTH && !defined NS_PERIODIC
-    if(NORTHERN_EDGE) then
-      if(mynode==NNODES-1) write (*,'(6x,A)')&
-      &'get_init :: set closed north boundary row to zero (u/ub/v/vb)'
-      v(   :     ,jend+1,:,tindx)=0.0_8
-      vbar(:     ,jend+1,1)      =0.0_8
+#if !defined NS_PERIODIC
+    if (.not.obc_north) then
+      if(NORTHERN_EDGE) then
+        if(mynode==NNODES-1) write (*,'(6x,A)')&
+        &'get_init :: set closed north boundary row to zero (u/ub/v/vb)'
+        v(   :     ,jend+1,:,tindx)=0.0_8
+        vbar(:     ,jend+1,1)      =0.0_8
+      endif
     endif
 #endif
 

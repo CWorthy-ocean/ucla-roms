@@ -37,6 +37,7 @@ module upscale_output
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
 
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
 
@@ -69,7 +70,6 @@ module upscale_output
   integer(kind=4) :: icdr0 = 0        ! last tracer index before the CDR_LITE range
   integer(kind=4) :: ncdr_lite = 0    ! number of CDR_LITE tracers
 
-#ifdef OBC_NORTH
   real(kind=8),allocatable,dimension(:,:) :: ALK_add_north_avg
   real(kind=8),allocatable,dimension(:,:) :: DIC_add_north_avg
 
@@ -86,9 +86,6 @@ module upscale_output
   real(kind=8),allocatable,dimension(:)   :: lat_north
   real(kind=8),allocatable,dimension(:)   :: lon_north
 
-#endif
-
-#ifdef OBC_SOUTH
   real(kind=8),allocatable,dimension(:,:) :: ALK_add_south_avg
   real(kind=8),allocatable,dimension(:,:) :: DIC_add_south_avg
 
@@ -105,9 +102,6 @@ module upscale_output
   real(kind=8),allocatable,dimension(:)   :: lat_south
   real(kind=8),allocatable,dimension(:)   :: lon_south
 
-#endif
-
-#ifdef OBC_EAST
   real(kind=8),allocatable,dimension(:,:) :: ALK_add_east_avg
   real(kind=8),allocatable,dimension(:,:) :: DIC_add_east_avg
 
@@ -124,9 +118,6 @@ module upscale_output
   real(kind=8),allocatable,dimension(:)   :: lat_east
   real(kind=8),allocatable,dimension(:)   :: lon_east
 
-#endif
-
-#ifdef OBC_WEST
   real(kind=8),allocatable,dimension(:,:) :: ALK_add_west_avg
   real(kind=8),allocatable,dimension(:,:) :: DIC_add_west_avg
 
@@ -142,8 +133,6 @@ module upscale_output
 
   real(kind=8),allocatable,dimension(:)   :: lat_west
   real(kind=8),allocatable,dimension(:)   :: lon_west
-
-#endif
 
   public init_upscale, wrt_upscale, wrt_upscale_final, calc_forcing_rates, add_mixing_rates, read_nml_upscale
 
@@ -218,30 +207,8 @@ contains
     ncdr_lite = 2*nt_cdr_oae + nt_cdr_dor
     marbl_add = min(iALK, iDIC, iALK_alt, iDIC_alt) > 0
 
-#ifdef OBC_NORTH
+    if (obc_north) then
 #ifdef PARALLEL_IO
-    allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(DIC_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(ALK_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(DIC_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(ALK_alt_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(DIC_alt_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(h_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(lat_north(GLOBAL_1DX_ARRAY))
-    allocate(lon_north(GLOBAL_1DX_ARRAY))
-    ALK_add_north_avg(:,:) = 0
-    DIC_add_north_avg(:,:) = 0
-    ALK_rate_north(:,:) = 0
-    DIC_rate_north(:,:) = 0
-    ALK_alt_rate_north(:,:) = 0
-    DIC_alt_rate_north(:,:) = 0
-    h_north_avg(:,:) = 0
-    lat_north(:) = 0
-    lon_north(:) = 0
-    allocate(cdr_add_north_avg(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite)); cdr_add_north_avg(:,:,:) = 0
-    allocate(cdr_rate_north(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite));    cdr_rate_north(:,:,:) = 0
-#else
-    if (jnode==npy-1) then ! .not. north_exchng
       allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
       allocate(DIC_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
       allocate(ALK_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
@@ -262,34 +229,34 @@ contains
       lon_north(:) = 0
       allocate(cdr_add_north_avg(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite)); cdr_add_north_avg(:,:,:) = 0
       allocate(cdr_rate_north(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite));    cdr_rate_north(:,:,:) = 0
-    endif
-#endif
-#endif
-
-#ifdef OBC_SOUTH
-#ifdef PARALLEL_IO
-    allocate(ALK_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(DIC_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(ALK_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(DIC_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(ALK_alt_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(DIC_alt_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(h_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
-    allocate(lat_south(GLOBAL_1DX_ARRAY))
-    allocate(lon_south(GLOBAL_1DX_ARRAY))
-    ALK_add_south_avg(:,:) = 0
-    DIC_add_south_avg(:,:) = 0
-    ALK_rate_south(:,:) = 0
-    DIC_rate_south(:,:) = 0
-    ALK_alt_rate_south(:,:) = 0
-    DIC_alt_rate_south(:,:) = 0
-    h_south_avg(:,:) = 0
-    lat_south(:) = 0
-    lon_south(:) = 0
-    allocate(cdr_add_south_avg(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite)); cdr_add_south_avg(:,:,:) = 0
-    allocate(cdr_rate_south(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite));    cdr_rate_south(:,:,:) = 0
 #else
-    if (jnode==0) then ! .not. south_exchange
+      if (jnode==npy-1) then ! .not. north_exchng
+        allocate(ALK_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(DIC_add_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(ALK_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(DIC_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(ALK_alt_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(DIC_alt_rate_north(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(h_north_avg(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(lat_north(GLOBAL_1DX_ARRAY))
+        allocate(lon_north(GLOBAL_1DX_ARRAY))
+        ALK_add_north_avg(:,:) = 0
+        DIC_add_north_avg(:,:) = 0
+        ALK_rate_north(:,:) = 0
+        DIC_rate_north(:,:) = 0
+        ALK_alt_rate_north(:,:) = 0
+        DIC_alt_rate_north(:,:) = 0
+        h_north_avg(:,:) = 0
+        lat_north(:) = 0
+        lon_north(:) = 0
+        allocate(cdr_add_north_avg(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite)); cdr_add_north_avg(:,:,:) = 0
+        allocate(cdr_rate_north(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite));    cdr_rate_north(:,:,:) = 0
+      endif
+#endif
+    endif
+
+    if (obc_south) then
+#ifdef PARALLEL_IO
       allocate(ALK_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
       allocate(DIC_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
       allocate(ALK_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
@@ -310,34 +277,34 @@ contains
       lon_south(:) = 0
       allocate(cdr_add_south_avg(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite)); cdr_add_south_avg(:,:,:) = 0
       allocate(cdr_rate_south(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite));    cdr_rate_south(:,:,:) = 0
-    endif
-#endif
-#endif
-
-#ifdef OBC_EAST
-#ifdef PARALLEL_IO
-    allocate(ALK_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(DIC_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(ALK_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(DIC_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(ALK_alt_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(DIC_alt_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(h_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(lat_east(GLOBAL_1DY_ARRAY))
-    allocate(lon_east(GLOBAL_1DY_ARRAY))
-    ALK_add_east_avg(:,:) = 0
-    DIC_add_east_avg(:,:) = 0
-    ALK_rate_east(:,:) = 0
-    DIC_rate_east(:,:) = 0
-    ALK_alt_rate_east(:,:) = 0
-    DIC_alt_rate_east(:,:) = 0
-    h_east_avg(:,:) = 0
-    lat_east(:) = 0
-    lon_east(:) = 0
-    allocate(cdr_add_east_avg(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite)); cdr_add_east_avg(:,:,:) = 0
-    allocate(cdr_rate_east(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite));    cdr_rate_east(:,:,:) = 0
 #else
-    if (inode==npx-1) then ! .not. east_exchng
+      if (jnode==0) then ! .not. south_exchange
+        allocate(ALK_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(DIC_add_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(ALK_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(DIC_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(ALK_alt_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(DIC_alt_rate_south(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(h_south_avg(GLOBAL_1DX_ARRAY,1:nz) )
+        allocate(lat_south(GLOBAL_1DX_ARRAY))
+        allocate(lon_south(GLOBAL_1DX_ARRAY))
+        ALK_add_south_avg(:,:) = 0
+        DIC_add_south_avg(:,:) = 0
+        ALK_rate_south(:,:) = 0
+        DIC_rate_south(:,:) = 0
+        ALK_alt_rate_south(:,:) = 0
+        DIC_alt_rate_south(:,:) = 0
+        h_south_avg(:,:) = 0
+        lat_south(:) = 0
+        lon_south(:) = 0
+        allocate(cdr_add_south_avg(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite)); cdr_add_south_avg(:,:,:) = 0
+        allocate(cdr_rate_south(GLOBAL_1DX_ARRAY,1:nz,ncdr_lite));    cdr_rate_south(:,:,:) = 0
+      endif
+#endif
+    endif
+
+    if (obc_east) then
+#ifdef PARALLEL_IO
       allocate(ALK_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
       allocate(DIC_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
       allocate(ALK_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
@@ -358,34 +325,34 @@ contains
       lon_east(:) = 0
       allocate(cdr_add_east_avg(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite)); cdr_add_east_avg(:,:,:) = 0
       allocate(cdr_rate_east(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite));    cdr_rate_east(:,:,:) = 0
-    endif
-#endif
-#endif
-
-#ifdef OBC_WEST
-#ifdef PARALLEL_IO
-    allocate(ALK_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(DIC_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(ALK_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(DIC_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(ALK_alt_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(DIC_alt_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(h_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
-    allocate(lat_west(GLOBAL_1DY_ARRAY))
-    allocate(lon_west(GLOBAL_1DY_ARRAY))
-    ALK_add_west_avg(:,:) = 0
-    DIC_add_west_avg(:,:) = 0
-    ALK_rate_west(:,:) = 0
-    DIC_rate_west(:,:) = 0
-    ALK_alt_rate_west(:,:) = 0
-    DIC_alt_rate_west(:,:) = 0
-    h_west_avg(:,:) = 0
-    lat_west(:) = 0
-    lon_west(:) = 0
-    allocate(cdr_add_west_avg(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite)); cdr_add_west_avg(:,:,:) = 0
-    allocate(cdr_rate_west(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite));    cdr_rate_west(:,:,:) = 0
 #else
-    if (inode==0) then ! .not. west_exchng
+      if (inode==npx-1) then ! .not. east_exchng
+        allocate(ALK_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(DIC_add_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(ALK_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(DIC_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(ALK_alt_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(DIC_alt_rate_east(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(h_east_avg(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(lat_east(GLOBAL_1DY_ARRAY))
+        allocate(lon_east(GLOBAL_1DY_ARRAY))
+        ALK_add_east_avg(:,:) = 0
+        DIC_add_east_avg(:,:) = 0
+        ALK_rate_east(:,:) = 0
+        DIC_rate_east(:,:) = 0
+        ALK_alt_rate_east(:,:) = 0
+        DIC_alt_rate_east(:,:) = 0
+        h_east_avg(:,:) = 0
+        lat_east(:) = 0
+        lon_east(:) = 0
+        allocate(cdr_add_east_avg(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite)); cdr_add_east_avg(:,:,:) = 0
+        allocate(cdr_rate_east(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite));    cdr_rate_east(:,:,:) = 0
+      endif
+#endif
+    endif
+
+    if (obc_west) then
+#ifdef PARALLEL_IO
       allocate(ALK_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
       allocate(DIC_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
       allocate(ALK_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
@@ -406,9 +373,31 @@ contains
       lon_west(:) = 0
       allocate(cdr_add_west_avg(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite)); cdr_add_west_avg(:,:,:) = 0
       allocate(cdr_rate_west(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite));    cdr_rate_west(:,:,:) = 0
+#else
+      if (inode==0) then ! .not. west_exchng
+        allocate(ALK_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(DIC_add_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(ALK_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(DIC_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(ALK_alt_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(DIC_alt_rate_west(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(h_west_avg(GLOBAL_1DY_ARRAY,1:nz) )
+        allocate(lat_west(GLOBAL_1DY_ARRAY))
+        allocate(lon_west(GLOBAL_1DY_ARRAY))
+        ALK_add_west_avg(:,:) = 0
+        DIC_add_west_avg(:,:) = 0
+        ALK_rate_west(:,:) = 0
+        DIC_rate_west(:,:) = 0
+        ALK_alt_rate_west(:,:) = 0
+        DIC_alt_rate_west(:,:) = 0
+        h_west_avg(:,:) = 0
+        lat_west(:) = 0
+        lon_west(:) = 0
+        allocate(cdr_add_west_avg(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite)); cdr_add_west_avg(:,:,:) = 0
+        allocate(cdr_rate_west(GLOBAL_1DY_ARRAY,1:nz,ncdr_lite));    cdr_rate_west(:,:,:) = 0
+      endif
+#endif
     endif
-#endif
-#endif
 
   end subroutine init_upscale  !]
 !----------------------------------------------------------------------
@@ -453,45 +442,45 @@ contains
 
     islot = cdr_uscl_slot(itrc)
 
-#ifdef OBC_NORTH
-    if (NORTHERN_EDGE) then
-      if (itrc == iALK)     call store(ALK_rate_north(istr:iend,k),     sgn*FE(istr:iend,jend+1))
-      if (itrc == iALK_alt) call store(ALK_alt_rate_north(istr:iend,k), sgn*FE(istr:iend,jend+1))
-      if (itrc == iDIC)     call store(DIC_rate_north(istr:iend,k),     sgn*FE(istr:iend,jend+1))
-      if (itrc == iDIC_alt) call store(DIC_alt_rate_north(istr:iend,k), sgn*FE(istr:iend,jend+1))
-      if (islot > 0)        call store(cdr_rate_north(istr:iend,k,islot), sgn*FE(istr:iend,jend+1))
+    if (obc_north) then
+      if (NORTHERN_EDGE) then
+        if (itrc == iALK)     call store(ALK_rate_north(istr:iend,k),     sgn*FE(istr:iend,jend+1))
+        if (itrc == iALK_alt) call store(ALK_alt_rate_north(istr:iend,k), sgn*FE(istr:iend,jend+1))
+        if (itrc == iDIC)     call store(DIC_rate_north(istr:iend,k),     sgn*FE(istr:iend,jend+1))
+        if (itrc == iDIC_alt) call store(DIC_alt_rate_north(istr:iend,k), sgn*FE(istr:iend,jend+1))
+        if (islot > 0)        call store(cdr_rate_north(istr:iend,k,islot), sgn*FE(istr:iend,jend+1))
+      endif
     endif
-#endif
 
-#ifdef OBC_SOUTH
-    if (SOUTHERN_EDGE) then
-      if (itrc == iALK)     call store(ALK_rate_south(istr:iend,k),     -sgn*FE(istr:iend,jstr))
-      if (itrc == iALK_alt) call store(ALK_alt_rate_south(istr:iend,k), -sgn*FE(istr:iend,jstr))
-      if (itrc == iDIC)     call store(DIC_rate_south(istr:iend,k),     -sgn*FE(istr:iend,jstr))
-      if (itrc == iDIC_alt) call store(DIC_alt_rate_south(istr:iend,k), -sgn*FE(istr:iend,jstr))
-      if (islot > 0)        call store(cdr_rate_south(istr:iend,k,islot), -sgn*FE(istr:iend,jstr))
+    if (obc_south) then
+      if (SOUTHERN_EDGE) then
+        if (itrc == iALK)     call store(ALK_rate_south(istr:iend,k),     -sgn*FE(istr:iend,jstr))
+        if (itrc == iALK_alt) call store(ALK_alt_rate_south(istr:iend,k), -sgn*FE(istr:iend,jstr))
+        if (itrc == iDIC)     call store(DIC_rate_south(istr:iend,k),     -sgn*FE(istr:iend,jstr))
+        if (itrc == iDIC_alt) call store(DIC_alt_rate_south(istr:iend,k), -sgn*FE(istr:iend,jstr))
+        if (islot > 0)        call store(cdr_rate_south(istr:iend,k,islot), -sgn*FE(istr:iend,jstr))
+      endif
     endif
-#endif
 
-#ifdef OBC_EAST
-    if (EASTERN_EDGE) then
-      if (itrc == iALK)     call store(ALK_rate_east(jstr:jend,k),     sgn*FX(iend+1,jstr:jend))
-      if (itrc == iALK_alt) call store(ALK_alt_rate_east(jstr:jend,k), sgn*FX(iend+1,jstr:jend))
-      if (itrc == iDIC)     call store(DIC_rate_east(jstr:jend,k),     sgn*FX(iend+1,jstr:jend))
-      if (itrc == iDIC_alt) call store(DIC_alt_rate_east(jstr:jend,k), sgn*FX(iend+1,jstr:jend))
-      if (islot > 0)        call store(cdr_rate_east(jstr:jend,k,islot), sgn*FX(iend+1,jstr:jend))
+    if (obc_east) then
+      if (EASTERN_EDGE) then
+        if (itrc == iALK)     call store(ALK_rate_east(jstr:jend,k),     sgn*FX(iend+1,jstr:jend))
+        if (itrc == iALK_alt) call store(ALK_alt_rate_east(jstr:jend,k), sgn*FX(iend+1,jstr:jend))
+        if (itrc == iDIC)     call store(DIC_rate_east(jstr:jend,k),     sgn*FX(iend+1,jstr:jend))
+        if (itrc == iDIC_alt) call store(DIC_alt_rate_east(jstr:jend,k), sgn*FX(iend+1,jstr:jend))
+        if (islot > 0)        call store(cdr_rate_east(jstr:jend,k,islot), sgn*FX(iend+1,jstr:jend))
+      endif
     endif
-#endif
 
-#ifdef OBC_WEST
-    if (WESTERN_EDGE) then
-      if (itrc == iALK)     call store(ALK_rate_west(jstr:jend,k),     -sgn*FX(istr,jstr:jend))
-      if (itrc == iALK_alt) call store(ALK_alt_rate_west(jstr:jend,k), -sgn*FX(istr,jstr:jend))
-      if (itrc == iDIC)     call store(DIC_rate_west(jstr:jend,k),     -sgn*FX(istr,jstr:jend))
-      if (itrc == iDIC_alt) call store(DIC_alt_rate_west(jstr:jend,k), -sgn*FX(istr,jstr:jend))
-      if (islot > 0)        call store(cdr_rate_west(jstr:jend,k,islot), -sgn*FX(istr,jstr:jend))
+    if (obc_west) then
+      if (WESTERN_EDGE) then
+        if (itrc == iALK)     call store(ALK_rate_west(jstr:jend,k),     -sgn*FX(istr,jstr:jend))
+        if (itrc == iALK_alt) call store(ALK_alt_rate_west(jstr:jend,k), -sgn*FX(istr,jstr:jend))
+        if (itrc == iDIC)     call store(DIC_rate_west(jstr:jend,k),     -sgn*FX(istr,jstr:jend))
+        if (itrc == iDIC_alt) call store(DIC_alt_rate_west(jstr:jend,k), -sgn*FX(istr,jstr:jend))
+        if (islot > 0)        call store(cdr_rate_west(jstr:jend,k,islot), -sgn*FX(istr,jstr:jend))
+      endif
     endif
-#endif
 
   contains
 
@@ -527,53 +516,53 @@ contains
       &'upscale :: started averaging.'
     endif
 
-#ifdef OBC_NORTH
-    if (jnode==npy-1) then
-      ALK_add_north_avg(:,:) = ALK_add_north_avg(:,:)*(1-coef) +&
-      &(ALK_rate_north(:,:) - ALK_alt_rate_north(:,:))*coef
-      DIC_add_north_avg(:,:) = DIC_add_north_avg(:,:)*(1-coef) +&
-      &(DIC_rate_north(:,:) - DIC_alt_rate_north(:,:))*coef
-      cdr_add_north_avg(:,:,:) = cdr_add_north_avg(:,:,:)*(1-coef) +&
-      &cdr_rate_north(:,:,:)*coef
-      h_north_avg(:,:) = h_north_avg(:,:)*(1-coef) + Hz(:,j1,:)*coef
+    if (obc_north) then
+      if (jnode==npy-1) then
+        ALK_add_north_avg(:,:) = ALK_add_north_avg(:,:)*(1-coef) +&
+        &(ALK_rate_north(:,:) - ALK_alt_rate_north(:,:))*coef
+        DIC_add_north_avg(:,:) = DIC_add_north_avg(:,:)*(1-coef) +&
+        &(DIC_rate_north(:,:) - DIC_alt_rate_north(:,:))*coef
+        cdr_add_north_avg(:,:,:) = cdr_add_north_avg(:,:,:)*(1-coef) +&
+        &cdr_rate_north(:,:,:)*coef
+        h_north_avg(:,:) = h_north_avg(:,:)*(1-coef) + Hz(:,j1,:)*coef
+      endif
     endif
-#endif
 
-#ifdef OBC_SOUTH
-    if (jnode==0) then
-      ALK_add_south_avg(:,:) = ALK_add_south_avg(:,:)*(1-coef) +&
-      &(ALK_rate_south(:,:) - ALK_alt_rate_south(:,:))*coef
-      DIC_add_south_avg(:,:) = DIC_add_south_avg(:,:)*(1-coef) +&
-      &(DIC_rate_south(:,:) - DIC_alt_rate_south(:,:))*coef
-      cdr_add_south_avg(:,:,:) = cdr_add_south_avg(:,:,:)*(1-coef) +&
-      &cdr_rate_south(:,:,:)*coef
-      h_south_avg(:,:) = h_south_avg(:,:)*(1-coef) + Hz(:,j0,:)*coef
+    if (obc_south) then
+      if (jnode==0) then
+        ALK_add_south_avg(:,:) = ALK_add_south_avg(:,:)*(1-coef) +&
+        &(ALK_rate_south(:,:) - ALK_alt_rate_south(:,:))*coef
+        DIC_add_south_avg(:,:) = DIC_add_south_avg(:,:)*(1-coef) +&
+        &(DIC_rate_south(:,:) - DIC_alt_rate_south(:,:))*coef
+        cdr_add_south_avg(:,:,:) = cdr_add_south_avg(:,:,:)*(1-coef) +&
+        &cdr_rate_south(:,:,:)*coef
+        h_south_avg(:,:) = h_south_avg(:,:)*(1-coef) + Hz(:,j0,:)*coef
+      endif
     endif
-#endif
 
-#ifdef OBC_EAST
-    if (inode==npx-1) then
-      ALK_add_east_avg(:,:) = ALK_add_east_avg(:,:)*(1-coef) +&
-      &(ALK_rate_east(:,:) - ALK_alt_rate_east(:,:))*coef
-      DIC_add_east_avg(:,:) = DIC_add_east_avg(:,:)*(1-coef) +&
-      &(DIC_rate_east(:,:) - DIC_alt_rate_east(:,:))*coef
-      cdr_add_east_avg(:,:,:) = cdr_add_east_avg(:,:,:)*(1-coef) +&
-      &cdr_rate_east(:,:,:)*coef
-      h_east_avg(:,:) = h_east_avg(:,:)*(1-coef) + Hz(i1,:,:)*coef
+    if (obc_east) then
+      if (inode==npx-1) then
+        ALK_add_east_avg(:,:) = ALK_add_east_avg(:,:)*(1-coef) +&
+        &(ALK_rate_east(:,:) - ALK_alt_rate_east(:,:))*coef
+        DIC_add_east_avg(:,:) = DIC_add_east_avg(:,:)*(1-coef) +&
+        &(DIC_rate_east(:,:) - DIC_alt_rate_east(:,:))*coef
+        cdr_add_east_avg(:,:,:) = cdr_add_east_avg(:,:,:)*(1-coef) +&
+        &cdr_rate_east(:,:,:)*coef
+        h_east_avg(:,:) = h_east_avg(:,:)*(1-coef) + Hz(i1,:,:)*coef
+      endif
     endif
-#endif
 
-#ifdef OBC_WEST
-    if (inode==0) then
-      ALK_add_west_avg(:,:) = ALK_add_west_avg(:,:)*(1-coef) +&
-      &(ALK_rate_west(:,:) - ALK_alt_rate_west(:,:))*coef
-      DIC_add_west_avg(:,:) = DIC_add_west_avg(:,:)*(1-coef) +&
-      &(DIC_rate_west(:,:) - DIC_alt_rate_west(:,:))*coef
-      cdr_add_west_avg(:,:,:) = cdr_add_west_avg(:,:,:)*(1-coef) +&
-      &cdr_rate_west(:,:,:)*coef
-      h_west_avg(:,:) = h_west_avg(:,:)*(1-coef) + Hz(i0,:,:)*coef
+    if (obc_west) then
+      if (inode==0) then
+        ALK_add_west_avg(:,:) = ALK_add_west_avg(:,:)*(1-coef) +&
+        &(ALK_rate_west(:,:) - ALK_alt_rate_west(:,:))*coef
+        DIC_add_west_avg(:,:) = DIC_add_west_avg(:,:)*(1-coef) +&
+        &(DIC_rate_west(:,:) - DIC_alt_rate_west(:,:))*coef
+        cdr_add_west_avg(:,:,:) = cdr_add_west_avg(:,:,:)*(1-coef) +&
+        &cdr_rate_west(:,:,:)*coef
+        h_west_avg(:,:) = h_west_avg(:,:)*(1-coef) + Hz(i0,:,:)*coef
+      endif
     endif
-#endif
 
   end subroutine calc_average  !]
 !----------------------------------------------------------------------
@@ -648,61 +637,61 @@ contains
         coords_written = .true.
       endif
 
-#ifdef OBC_NORTH
-      pio_gtype = 'n2rw'
-      if (marbl_add) call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-      if (marbl_add) call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-      call wrt_cdr_uscl(ncid,'north',cdr_add_north_avg(i0:i1,:,:),.true.)
-      call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-      if (jnode==npy-1) then
-        ALK_add_north_avg(:,:) = 0
-        DIC_add_north_avg(:,:) = 0
-        cdr_add_north_avg(:,:,:) = 0
-        h_north_avg(:,:) = 0
+      if (obc_north) then
+        pio_gtype = 'n2rw'
+        if (marbl_add) call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        if (marbl_add) call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        call wrt_cdr_uscl(ncid,'north',cdr_add_north_avg(i0:i1,:,:),.true.)
+        call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        if (jnode==npy-1) then
+          ALK_add_north_avg(:,:) = 0
+          DIC_add_north_avg(:,:) = 0
+          cdr_add_north_avg(:,:,:) = 0
+          h_north_avg(:,:) = 0
+        endif
       endif
-#endif
 
-#ifdef OBC_SOUTH
-      pio_gtype = 's2rw'
-      if (marbl_add) call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-      if (marbl_add) call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-      call wrt_cdr_uscl(ncid,'south',cdr_add_south_avg(i0:i1,:,:),.true.)
-      call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
-      if (jnode==0) then
-        ALK_add_south_avg(:,:) = 0
-        DIC_add_south_avg(:,:) = 0
-        cdr_add_south_avg(:,:,:) = 0
-        h_south_avg(:,:) = 0
+      if (obc_south) then
+        pio_gtype = 's2rw'
+        if (marbl_add) call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        if (marbl_add) call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        call wrt_cdr_uscl(ncid,'south',cdr_add_south_avg(i0:i1,:,:),.true.)
+        call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/),.true.)
+        if (jnode==0) then
+          ALK_add_south_avg(:,:) = 0
+          DIC_add_south_avg(:,:) = 0
+          cdr_add_south_avg(:,:,:) = 0
+          h_south_avg(:,:) = 0
+        endif
       endif
-#endif
 
-#ifdef OBC_EAST
-      pio_gtype = 'e2rw'
-      if (marbl_add) call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-      if (marbl_add) call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-      call wrt_cdr_uscl(ncid,'east',cdr_add_east_avg(j0:j1,:,:),.true.)
-      call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-      if (inode==npx-1) then
-        ALK_add_east_avg(:,:) = 0
-        DIC_add_east_avg(:,:) = 0
-        cdr_add_east_avg(:,:,:) = 0
-        h_east_avg(:,:) = 0
+      if (obc_east) then
+        pio_gtype = 'e2rw'
+        if (marbl_add) call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        if (marbl_add) call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        call wrt_cdr_uscl(ncid,'east',cdr_add_east_avg(j0:j1,:,:),.true.)
+        call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        if (inode==npx-1) then
+          ALK_add_east_avg(:,:) = 0
+          DIC_add_east_avg(:,:) = 0
+          cdr_add_east_avg(:,:,:) = 0
+          h_east_avg(:,:) = 0
+        endif
       endif
-#endif
 
-#ifdef OBC_WEST
-      pio_gtype = 'w2rw'
-      if (marbl_add) call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-      if (marbl_add) call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-      call wrt_cdr_uscl(ncid,'west',cdr_add_west_avg(j0:j1,:,:),.true.)
-      call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
-      if (inode==0) then
-        ALK_add_west_avg(:,:) = 0
-        DIC_add_west_avg(:,:) = 0
-        cdr_add_west_avg(:,:,:) = 0
-        h_west_avg(:,:) = 0
+      if (obc_west) then
+        pio_gtype = 'w2rw'
+        if (marbl_add) call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        if (marbl_add) call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        call wrt_cdr_uscl(ncid,'west',cdr_add_west_avg(j0:j1,:,:),.true.)
+        call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/),.true.)
+        if (inode==0) then
+          ALK_add_west_avg(:,:) = 0
+          DIC_add_west_avg(:,:) = 0
+          cdr_add_west_avg(:,:,:) = 0
+          h_west_avg(:,:) = 0
+        endif
       endif
-#endif
 
       call error_log%abort_check()
       call MPI_Barrier(ocean_grid_comm, ierr)
@@ -718,57 +707,57 @@ contains
       call ncwrite(ncid,'avg_begin_time',(/avg_begin_time/),(/record_uscl/))
       call ncwrite(ncid,'avg_end_time',(/end_time/),(/record_uscl/))
 
-#ifdef OBC_NORTH
-      if (jnode==npy-1) then
-        if (marbl_add) call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/))
-        if (marbl_add) call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/))
-        call wrt_cdr_uscl(ncid,'north',cdr_add_north_avg(i0:i1,:,:),.false.)
-        call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/))
-        ALK_add_north_avg(:,:) = 0
-        DIC_add_north_avg(:,:) = 0
-        cdr_add_north_avg(:,:,:) = 0
-        h_north_avg(:,:) = 0
+      if (obc_north) then
+        if (jnode==npy-1) then
+          if (marbl_add) call ncwrite(ncid,'ALK_add_north',ALK_add_north_avg(i0:i1,:),(/1,1,record_uscl/))
+          if (marbl_add) call ncwrite(ncid,'DIC_add_north',DIC_add_north_avg(i0:i1,:),(/1,1,record_uscl/))
+          call wrt_cdr_uscl(ncid,'north',cdr_add_north_avg(i0:i1,:,:),.false.)
+          call ncwrite(ncid,'h_north',h_north_avg(i0:i1,:),(/1,1,record_uscl/))
+          ALK_add_north_avg(:,:) = 0
+          DIC_add_north_avg(:,:) = 0
+          cdr_add_north_avg(:,:,:) = 0
+          h_north_avg(:,:) = 0
+        endif
       endif
-#endif
 
-#ifdef OBC_SOUTH
-      if (jnode==0) then
-        if (marbl_add) call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/))
-        if (marbl_add) call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/))
-        call wrt_cdr_uscl(ncid,'south',cdr_add_south_avg(i0:i1,:,:),.false.)
-        call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/))
-        ALK_add_south_avg(:,:) = 0
-        DIC_add_south_avg(:,:) = 0
-        cdr_add_south_avg(:,:,:) = 0
-        h_south_avg(:,:) = 0
+      if (obc_south) then
+        if (jnode==0) then
+          if (marbl_add) call ncwrite(ncid,'ALK_add_south',ALK_add_south_avg(i0:i1,:),(/1,1,record_uscl/))
+          if (marbl_add) call ncwrite(ncid,'DIC_add_south',DIC_add_south_avg(i0:i1,:),(/1,1,record_uscl/))
+          call wrt_cdr_uscl(ncid,'south',cdr_add_south_avg(i0:i1,:,:),.false.)
+          call ncwrite(ncid,'h_south',h_south_avg(i0:i1,:),(/1,1,record_uscl/))
+          ALK_add_south_avg(:,:) = 0
+          DIC_add_south_avg(:,:) = 0
+          cdr_add_south_avg(:,:,:) = 0
+          h_south_avg(:,:) = 0
+        endif
       endif
-#endif
 
-#ifdef OBC_EAST
-      if (inode==npx-1) then
-        if (marbl_add) call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/))
-        if (marbl_add) call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/))
-        call wrt_cdr_uscl(ncid,'east',cdr_add_east_avg(j0:j1,:,:),.false.)
-        call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/))
-        ALK_add_east_avg(:,:) = 0
-        DIC_add_east_avg(:,:) = 0
-        cdr_add_east_avg(:,:,:) = 0
-        h_east_avg(:,:) = 0
+      if (obc_east) then
+        if (inode==npx-1) then
+          if (marbl_add) call ncwrite(ncid,'ALK_add_east',ALK_add_east_avg(j0:j1,:),(/1,1,record_uscl/))
+          if (marbl_add) call ncwrite(ncid,'DIC_add_east',DIC_add_east_avg(j0:j1,:),(/1,1,record_uscl/))
+          call wrt_cdr_uscl(ncid,'east',cdr_add_east_avg(j0:j1,:,:),.false.)
+          call ncwrite(ncid,'h_east',h_east_avg(j0:j1,:),(/1,1,record_uscl/))
+          ALK_add_east_avg(:,:) = 0
+          DIC_add_east_avg(:,:) = 0
+          cdr_add_east_avg(:,:,:) = 0
+          h_east_avg(:,:) = 0
+        endif
       endif
-#endif
 
-#ifdef OBC_WEST
-      if (inode==0) then
-        if (marbl_add) call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/))
-        if (marbl_add) call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/))
-        call wrt_cdr_uscl(ncid,'west',cdr_add_west_avg(j0:j1,:,:),.false.)
-        call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/))
-        ALK_add_west_avg(:,:) = 0
-        DIC_add_west_avg(:,:) = 0
-        cdr_add_west_avg(:,:,:) = 0
-        h_west_avg(:,:) = 0
+      if (obc_west) then
+        if (inode==0) then
+          if (marbl_add) call ncwrite(ncid,'ALK_add_west',ALK_add_west_avg(j0:j1,:),(/1,1,record_uscl/))
+          if (marbl_add) call ncwrite(ncid,'DIC_add_west',DIC_add_west_avg(j0:j1,:),(/1,1,record_uscl/))
+          call wrt_cdr_uscl(ncid,'west',cdr_add_west_avg(j0:j1,:,:),.false.)
+          call ncwrite(ncid,'h_west',h_west_avg(j0:j1,:),(/1,1,record_uscl/))
+          ALK_add_west_avg(:,:) = 0
+          DIC_add_west_avg(:,:) = 0
+          cdr_add_west_avg(:,:,:) = 0
+          h_west_avg(:,:) = 0
+        endif
       endif
-#endif
 
       ierr=nf90_close(ncid)
 #endif
@@ -849,137 +838,137 @@ contains
     ierr = nf90_put_att(ncid,varid,'long_name','Time at end of averaging period')
     ierr = nf90_put_att(ncid,varid,'units','second')
 
-#ifdef OBC_NORTH
-    if (all_boundaries .or. jnode==npy-1) then
-    if (marbl_add) then
-      varid = nccreate(ncid,'ALK_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-      ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'ALK additionality on northern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
+    if (obc_north) then
+      if (all_boundaries .or. jnode==npy-1) then
+      if (marbl_add) then
+        varid = nccreate(ncid,'ALK_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+        ierr = nf90_put_att(ncid,varid,'long_name',&
+        &'ALK additionality on northern boundary')
+        ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
-      varid = nccreate(ncid,'DIC_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+        varid = nccreate(ncid,'DIC_add_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+        ierr = nf90_put_att(ncid,varid,'long_name',&
+        &'DIC additionality on northern boundary')
+        ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+      endif
+
+      call def_cdr_uscl_vars(ncid,'north','northern',dn_xr,ds_xr)
+
+      varid = nccreate(ncid,'h_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'DIC additionality on northern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+      &'Layer thickness on northern boundary')
+      ierr = nf90_put_att(ncid,varid,'units','meters')
+
+      varid = nccreate(ncid,'lat_north',(/dn_xr/),(/ds_xr/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'Latitudes of tracer points on northern boundary')
+      ierr = nf90_put_att(ncid,varid,'units','degrees')
+
+      varid = nccreate(ncid,'lon_north',(/dn_xr/),(/ds_xr/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'Longitudes of tracer points on northern boundary')
+      ierr = nf90_put_att(ncid,varid,'units','degrees')
+      endif
     endif
 
-    call def_cdr_uscl_vars(ncid,'north','northern',dn_xr,ds_xr)
+    if (obc_south) then
+      if (all_boundaries .or. jnode==0) then
+      if (marbl_add) then
+        varid = nccreate(ncid,'ALK_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+        ierr = nf90_put_att(ncid,varid,'long_name',&
+        &'ALK additionality on southern boundary')
+        ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
-    varid = nccreate(ncid,'h_north',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Layer thickness on northern boundary')
-    ierr = nf90_put_att(ncid,varid,'units','meters')
+        varid = nccreate(ncid,'DIC_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+        ierr = nf90_put_att(ncid,varid,'long_name',&
+        &'DIC additionality on southern boundary')
+        ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+      endif
 
-    varid = nccreate(ncid,'lat_north',(/dn_xr/),(/ds_xr/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Latitudes of tracer points on northern boundary')
-    ierr = nf90_put_att(ncid,varid,'units','degrees')
+      call def_cdr_uscl_vars(ncid,'south','southern',dn_xr,ds_xr)
 
-    varid = nccreate(ncid,'lon_north',(/dn_xr/),(/ds_xr/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Longitudes of tracer points on northern boundary')
-    ierr = nf90_put_att(ncid,varid,'units','degrees')
-    endif
-#endif
-
-#ifdef OBC_SOUTH
-    if (all_boundaries .or. jnode==0) then
-    if (marbl_add) then
-      varid = nccreate(ncid,'ALK_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+      varid = nccreate(ncid,'h_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'ALK additionality on southern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
+      &'Layer thickness on southern boundary')
+      ierr = nf90_put_att(ncid,varid,'units','meters')
 
-      varid = nccreate(ncid,'DIC_add_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
+      varid = nccreate(ncid,'lat_south',(/dn_xr/),(/ds_xr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'DIC additionality on southern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
-    endif
+      &'Latitudes of tracer points on southern boundary')
+      ierr = nf90_put_att(ncid,varid,'units','degrees')
 
-    call def_cdr_uscl_vars(ncid,'south','southern',dn_xr,ds_xr)
-
-    varid = nccreate(ncid,'h_south',(/dn_xr,dn_zr,dn_tm/),(/ds_xr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Layer thickness on southern boundary')
-    ierr = nf90_put_att(ncid,varid,'units','meters')
-
-    varid = nccreate(ncid,'lat_south',(/dn_xr/),(/ds_xr/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Latitudes of tracer points on southern boundary')
-    ierr = nf90_put_att(ncid,varid,'units','degrees')
-
-    varid = nccreate(ncid,'lon_south',(/dn_xr/),(/ds_xr/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Longitudes of tracer points on southern boundary')
-    ierr = nf90_put_att(ncid,varid,'units','degrees')
-    endif
-#endif
-
-#ifdef OBC_EAST
-    if (all_boundaries .or. inode==npx-1) then
-    if (marbl_add) then
-      varid = nccreate(ncid,'ALK_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+      varid = nccreate(ncid,'lon_south',(/dn_xr/),(/ds_xr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'ALK additionality on eastern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
+      &'Longitudes of tracer points on southern boundary')
+      ierr = nf90_put_att(ncid,varid,'units','degrees')
+      endif
+    endif
 
-      varid = nccreate(ncid,'DIC_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+    if (obc_east) then
+      if (all_boundaries .or. inode==npx-1) then
+      if (marbl_add) then
+        varid = nccreate(ncid,'ALK_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+        ierr = nf90_put_att(ncid,varid,'long_name',&
+        &'ALK additionality on eastern boundary')
+        ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
+
+        varid = nccreate(ncid,'DIC_add_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+        ierr = nf90_put_att(ncid,varid,'long_name',&
+        &'DIC additionality on eastern boundary')
+        ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+      endif
+
+      call def_cdr_uscl_vars(ncid,'east','eastern',dn_yr,ds_yr)
+
+      varid = nccreate(ncid,'h_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'DIC additionality on eastern boundary')
-      ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
-    endif
+      &'Layer thickness on eastern boundary')
+      ierr = nf90_put_att(ncid,varid,'units','meters')
 
-    call def_cdr_uscl_vars(ncid,'east','eastern',dn_yr,ds_yr)
-
-    varid = nccreate(ncid,'h_east',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Layer thickness on eastern boundary')
-    ierr = nf90_put_att(ncid,varid,'units','meters')
-
-    varid = nccreate(ncid,'lat_east',(/dn_yr/),(/ds_yr/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Latitudes of tracer points on eastern boundary')
-    ierr = nf90_put_att(ncid,varid,'units','degrees')
-
-    varid = nccreate(ncid,'lon_east',(/dn_yr/),(/ds_yr/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Longitudes of tracer points on eastern boundary')
-    ierr = nf90_put_att(ncid,varid,'units','degrees')
-    endif
-#endif
-
-#ifdef OBC_WEST
-    if (all_boundaries .or. inode==0) then
-    if (marbl_add) then
-      varid = nccreate(ncid,'ALK_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+      varid = nccreate(ncid,'lat_east',(/dn_yr/),(/ds_yr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'ALK additionality on western boundary')
-      ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
+      &'Latitudes of tracer points on eastern boundary')
+      ierr = nf90_put_att(ncid,varid,'units','degrees')
 
-      varid = nccreate(ncid,'DIC_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+      varid = nccreate(ncid,'lon_east',(/dn_yr/),(/ds_yr/),uscl_prec)
       ierr = nf90_put_att(ncid,varid,'long_name',&
-      &'DIC additionality on western boundary')
-      ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+      &'Longitudes of tracer points on eastern boundary')
+      ierr = nf90_put_att(ncid,varid,'units','degrees')
+      endif
     endif
 
-    call def_cdr_uscl_vars(ncid,'west','western',dn_yr,ds_yr)
+    if (obc_west) then
+      if (all_boundaries .or. inode==0) then
+      if (marbl_add) then
+        varid = nccreate(ncid,'ALK_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+        ierr = nf90_put_att(ncid,varid,'long_name',&
+        &'ALK additionality on western boundary')
+        ierr = nf90_put_att(ncid,varid,'units',flux_units(iALK))
 
-    varid = nccreate(ncid,'h_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Layer thickness on western boundary')
-    ierr = nf90_put_att(ncid,varid,'units','meters')
+        varid = nccreate(ncid,'DIC_add_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+        ierr = nf90_put_att(ncid,varid,'long_name',&
+        &'DIC additionality on western boundary')
+        ierr = nf90_put_att(ncid,varid,'units',flux_units(iDIC))
+      endif
 
-    varid = nccreate(ncid,'lat_west',(/dn_yr/),(/ds_yr/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Latitudes of tracer points on western boundary')
-    ierr = nf90_put_att(ncid,varid,'units','degrees')
+      call def_cdr_uscl_vars(ncid,'west','western',dn_yr,ds_yr)
 
-    varid = nccreate(ncid,'lon_west',(/dn_yr/),(/ds_yr/),uscl_prec)
-    ierr = nf90_put_att(ncid,varid,'long_name',&
-    &'Longitudes of tracer points on western boundary')
-    ierr = nf90_put_att(ncid,varid,'units','degrees')
+      varid = nccreate(ncid,'h_west',(/dn_yr,dn_zr,dn_tm/),(/ds_yr,ds_zr,0/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'Layer thickness on western boundary')
+      ierr = nf90_put_att(ncid,varid,'units','meters')
+
+      varid = nccreate(ncid,'lat_west',(/dn_yr/),(/ds_yr/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'Latitudes of tracer points on western boundary')
+      ierr = nf90_put_att(ncid,varid,'units','degrees')
+
+      varid = nccreate(ncid,'lon_west',(/dn_yr/),(/ds_yr/),uscl_prec)
+      ierr = nf90_put_att(ncid,varid,'long_name',&
+      &'Longitudes of tracer points on western boundary')
+      ierr = nf90_put_att(ncid,varid,'units','degrees')
+      endif
     endif
-#endif
 
   end subroutine def_upscale_vars  !]
 ! ----------------------------------------------------------------------
@@ -991,49 +980,49 @@ contains
     logical, intent(in) :: use_pio
     integer(kind=4), intent(in) :: ncid
 
-#ifdef OBC_NORTH
-    if (use_pio) then
-      pio_gtype = 'n1rw'
-      call ncwrite(ncid,'lat_north',latr(i0:i1,j1), PP=.true.)
-      call ncwrite(ncid,'lon_north',lonr(i0:i1,j1), PP=.true.)
-    elseif (jnode==npy-1) then
-      call ncwrite(ncid,'lat_north',latr(i0:i1,j1),(/1/))
-      call ncwrite(ncid,'lon_north',lonr(i0:i1,j1),(/1/))
+    if (obc_north) then
+      if (use_pio) then
+        pio_gtype = 'n1rw'
+        call ncwrite(ncid,'lat_north',latr(i0:i1,j1), PP=.true.)
+        call ncwrite(ncid,'lon_north',lonr(i0:i1,j1), PP=.true.)
+      elseif (jnode==npy-1) then
+        call ncwrite(ncid,'lat_north',latr(i0:i1,j1),(/1/))
+        call ncwrite(ncid,'lon_north',lonr(i0:i1,j1),(/1/))
+      endif
     endif
-#endif
 
-#ifdef OBC_SOUTH
-    if (use_pio) then
-      pio_gtype = 's1rw'
-      call ncwrite(ncid,'lat_south',latr(i0:i1,j0), PP=.true.)
-      call ncwrite(ncid,'lon_south',lonr(i0:i1,j0), PP=.true.)
-    elseif (jnode==0) then
-      call ncwrite(ncid,'lat_south',latr(i0:i1,j0),(/1/))
-      call ncwrite(ncid,'lon_south',lonr(i0:i1,j0),(/1/))
+    if (obc_south) then
+      if (use_pio) then
+        pio_gtype = 's1rw'
+        call ncwrite(ncid,'lat_south',latr(i0:i1,j0), PP=.true.)
+        call ncwrite(ncid,'lon_south',lonr(i0:i1,j0), PP=.true.)
+      elseif (jnode==0) then
+        call ncwrite(ncid,'lat_south',latr(i0:i1,j0),(/1/))
+        call ncwrite(ncid,'lon_south',lonr(i0:i1,j0),(/1/))
+      endif
     endif
-#endif
 
-#ifdef OBC_EAST
-    if (use_pio) then
-      pio_gtype = 'e1rw'
-      call ncwrite(ncid,'lat_east',latr(i1,j0:j1), PP=.true.)
-      call ncwrite(ncid,'lon_east',lonr(i1,j0:j1), PP=.true.)
-    elseif (inode==npx-1) then
-      call ncwrite(ncid,'lat_east',latr(i1,j0:j1),(/1/))
-      call ncwrite(ncid,'lon_east',lonr(i1,j0:j1),(/1/))
+    if (obc_east) then
+      if (use_pio) then
+        pio_gtype = 'e1rw'
+        call ncwrite(ncid,'lat_east',latr(i1,j0:j1), PP=.true.)
+        call ncwrite(ncid,'lon_east',lonr(i1,j0:j1), PP=.true.)
+      elseif (inode==npx-1) then
+        call ncwrite(ncid,'lat_east',latr(i1,j0:j1),(/1/))
+        call ncwrite(ncid,'lon_east',lonr(i1,j0:j1),(/1/))
+      endif
     endif
-#endif
 
-#ifdef OBC_WEST
-    if (use_pio) then
-      pio_gtype = 'w1rw'
-      call ncwrite(ncid,'lat_west',latr(i0,j0:j1), PP=.true.)
-      call ncwrite(ncid,'lon_west',lonr(i0,j0:j1), PP=.true.)
-    elseif (inode==0) then
-      call ncwrite(ncid,'lat_west',latr(i0,j0:j1),(/1/))
-      call ncwrite(ncid,'lon_west',lonr(i0,j0:j1),(/1/))
+    if (obc_west) then
+      if (use_pio) then
+        pio_gtype = 'w1rw'
+        call ncwrite(ncid,'lat_west',latr(i0,j0:j1), PP=.true.)
+        call ncwrite(ncid,'lon_west',lonr(i0,j0:j1), PP=.true.)
+      elseif (inode==0) then
+        call ncwrite(ncid,'lat_west',latr(i0,j0:j1),(/1/))
+        call ncwrite(ncid,'lon_west',lonr(i0,j0:j1),(/1/))
+      endif
     endif
-#endif
 
   end subroutine wrt_upscale_coords  !]
 ! ----------------------------------------------------------------------

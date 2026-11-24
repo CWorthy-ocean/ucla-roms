@@ -46,13 +46,13 @@
 # error "CPP key BBL was retired (had no effect): remove it from cppdefs.opt"
 #endif
 #ifdef OBC_M2ORLANSKI
-# error "CPP key OBC_M2ORLANSKI was retired (use OBC_M2FLATHER or OBC_M2SPECIFIED): remove it from cppdefs.opt"
+# error "CPP key OBC_M2ORLANSKI was retired (use obc_m2 = 'flather' or 'specified' in the namelist group OPEN_BOUNDARY_SETTINGS): remove it from cppdefs.opt"
 #endif
 #ifdef OBC_M3SPECIFIED
-# error "CPP key OBC_M3SPECIFIED was retired (use OBC_M3ORLANSKI): remove it from cppdefs.opt"
+# error "CPP key OBC_M3SPECIFIED was retired (use obc_m3 = 'orlanski' in the namelist group OPEN_BOUNDARY_SETTINGS): remove it from cppdefs.opt"
 #endif
 #ifdef OBC_TSPECIFIED
-# error "CPP key OBC_TSPECIFIED was retired (use OBC_TORLANSKI): remove it from cppdefs.opt"
+# error "CPP key OBC_TSPECIFIED was retired (use obc_t = 'orlanski' in the namelist group OPEN_BOUNDARY_SETTINGS): remove it from cppdefs.opt"
 #endif
 #ifdef ANA_BRY
 # error "CPP key ANA_BRY was retired (analytical boundary data): remove it from cppdefs.opt"
@@ -92,6 +92,19 @@
 #endif
 #ifdef TDEP_REMIN
 # error "CPP key TDEP_REMIN was retired (temperature-dependent remineralization in BEC2): remove it from cppdefs.opt"
+#endif
+
+#ifdef LEGACY_ORLANSKI
+# error "CPP key LEGACY_ORLANSKI was retired (Orlanski scheme of the tangential barotropic velocity, which no longer compiled): remove it from cppdefs.opt"
+#endif
+#ifdef OBC_Z2ORLANSKI
+# error "CPP key OBC_Z2ORLANSKI was retired (Orlanski scheme of the sea level, which no longer compiled): remove it from cppdefs.opt"
+#endif
+#ifdef OBC_WSPECIFIED
+# error "CPP key OBC_WSPECIFIED was retired (specified vertical velocity at the southern boundary; it needed W_FRC_BRY): remove it from cppdefs.opt"
+#endif
+#ifdef W_FRC_BRY
+# error "CPP key W_FRC_BRY was retired (vertical velocity boundary data at the southern and northern boundaries): remove it from cppdefs.opt"
 #endif
 
 /* Not retired but no longer a cpp key: the non-hydrostatic solver is always
@@ -145,4 +158,46 @@
 #endif
 #ifdef NHY_FORCING
 # error "CPP key NHY_FORCING was removed: NHy deposition is now switched with use_nhy_forcing in the namelist group BGC_SETTINGS (default .true.); remove NHY_FORCING from cppdefs.opt"
+#endif
+#ifdef OBC_WEST
+# error "CPP key OBC_WEST was removed: open sides are now set with obc_west in the namelist group OPEN_BOUNDARY_SETTINGS (default .true.); remove OBC_WEST from cppdefs.opt"
+#endif
+#ifdef OBC_EAST
+# error "CPP key OBC_EAST was removed: open sides are now set with obc_east in the namelist group OPEN_BOUNDARY_SETTINGS (default .true.); remove OBC_EAST from cppdefs.opt"
+#endif
+#ifdef OBC_SOUTH
+# error "CPP key OBC_SOUTH was removed: open sides are now set with obc_south in the namelist group OPEN_BOUNDARY_SETTINGS (default .true.); remove OBC_SOUTH from cppdefs.opt"
+#endif
+#ifdef OBC_NORTH
+# error "CPP key OBC_NORTH was removed: open sides are now set with obc_north in the namelist group OPEN_BOUNDARY_SETTINGS (default .true.); remove OBC_NORTH from cppdefs.opt"
+#endif
+#ifdef OBC_M2FLATHER
+# error "CPP key OBC_M2FLATHER was removed: the barotropic scheme is now obc_m2 = 'flather' (the default) in the namelist group OPEN_BOUNDARY_SETTINGS; remove OBC_M2FLATHER from cppdefs.opt"
+#endif
+#ifdef OBC_M2SPECIFIED
+# error "CPP key OBC_M2SPECIFIED was removed: the barotropic scheme is now obc_m2 = 'specified' in the namelist group OPEN_BOUNDARY_SETTINGS; remove OBC_M2SPECIFIED from cppdefs.opt"
+#endif
+#ifdef OBC_M3ORLANSKI
+# error "CPP key OBC_M3ORLANSKI was removed: the scheme of u and v is now obc_m3 = 'orlanski' (the default) in the namelist group OPEN_BOUNDARY_SETTINGS; remove OBC_M3ORLANSKI from cppdefs.opt"
+#endif
+#ifdef OBC_TORLANSKI
+# error "CPP key OBC_TORLANSKI was removed: the scheme of the tracers is now obc_t = 'orlanski' (the default) in the namelist group OPEN_BOUNDARY_SETTINGS; remove OBC_TORLANSKI from cppdefs.opt"
+#endif
+#ifdef OBC_RAD_NORMAL
+# error "CPP key OBC_RAD_NORMAL was removed: now set with obc_rad = 'normal' in the namelist group OPEN_BOUNDARY_SETTINGS; remove OBC_RAD_NORMAL from cppdefs.opt"
+#endif
+#ifdef OBC_RAD_NPO
+# error "CPP key OBC_RAD_NPO was removed: now set with obc_rad = 'npo' in the namelist group OPEN_BOUNDARY_SETTINGS; remove OBC_RAD_NPO from cppdefs.opt"
+#endif
+#ifdef M3_FRC_BRY
+# error "CPP key M3_FRC_BRY was removed: boundary data for u and v are now switched with use_m3_boundary_data in the namelist group OPEN_BOUNDARY_SETTINGS (default .true.); remove M3_FRC_BRY from cppdefs.opt"
+#endif
+#ifdef T_FRC_BRY
+# error "CPP key T_FRC_BRY was removed: boundary data for the tracers are now switched with use_t_boundary_data in the namelist group OPEN_BOUNDARY_SETTINGS (default .true.); remove T_FRC_BRY from cppdefs.opt"
+#endif
+#ifdef M2_FRC_BRY
+# error "CPP key M2_FRC_BRY was removed: ubar and vbar boundary data are now read with obc_m2 = 'flather' or 'specified' in the namelist group OPEN_BOUNDARY_SETTINGS; remove M2_FRC_BRY from cppdefs.opt"
+#endif
+#ifdef Z_FRC_BRY
+# error "CPP key Z_FRC_BRY was removed: sea level boundary data are now read with obc_m2 = 'flather' in the namelist group OPEN_BOUNDARY_SETTINGS; remove Z_FRC_BRY from cppdefs.opt"
 #endif

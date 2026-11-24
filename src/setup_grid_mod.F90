@@ -1,6 +1,7 @@
 module setup_grid_mod
 
 #include "cppdefs.opt"
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
   public :: setup_grid1, setup_grid2
@@ -248,12 +249,7 @@ contains
     real(kind=8) my_hmax, my_grdmax, my_Cu_max, cff,&
     &my_hmin, my_grdmin, my_Cu_min, my_Cu_Cor
     integer(kind=4) is,isize,itg, js,jsize,jtg
-# if defined OBC_WEST || defined OBC_EAST
-    integer(kind=4) :: jnc
-# endif
-# if defined OBC_SOUTH || defined OBC_NORTH
-    integer(kind=4) :: inc
-# endif
+    integer(kind=4) :: inc, jnc
 #ifdef MPI
 # define MPI_BUFF_TYPE MPI_REAL8
     integer(kind=4) size, step, itag, status(MPI_STATUS_SIZE), ierr
@@ -358,82 +354,82 @@ contains
 
     ! Compute integral crossection
     my_crss=QuadZero                  ! of all open boundaries...
-#ifdef OBC_WEST
-    if (WESTERN_EDGE) then
-      do j=jstr,jend
-        dA(istr,j)=0.5_8*(h(istr-1,j)+h(istr,j))*dn_u(istr,j)&
+    if (obc_west) then
+      if (WESTERN_EDGE) then
+        do j=jstr,jend
+          dA(istr,j)=0.5_8*(h(istr-1,j)+h(istr,j))*dn_u(istr,j)&
 # ifdef MASKING
-        &*umask(istr,j)
+          &*umask(istr,j)
 # endif
-      enddo
-      jnc=1
-      do while(jstr<=jend-jnc)
-        js=2*jnc
-        do j=jstr,jend-jnc,js
-          dA(istr,j) = dA(istr,j) + dA(istr,j+jnc)
         enddo
-        jnc=js
-      enddo
-      my_crss=my_crss + dA(istr,jstr)
+        jnc=1
+        do while(jstr<=jend-jnc)
+          js=2*jnc
+          do j=jstr,jend-jnc,js
+            dA(istr,j) = dA(istr,j) + dA(istr,j+jnc)
+          enddo
+          jnc=js
+        enddo
+        my_crss=my_crss + dA(istr,jstr)
+      endif
     endif
-#endif
-#ifdef OBC_EAST
-    if (EASTERN_EDGE) then
-      do j=jstr,jend
-        dA(iend,j)=0.5_8*(h(iend,j)+h(iend+1,j))*dn_u(iend+1,j)&
+    if (obc_east) then
+      if (EASTERN_EDGE) then
+        do j=jstr,jend
+          dA(iend,j)=0.5_8*(h(iend,j)+h(iend+1,j))*dn_u(iend+1,j)&
 # ifdef MASKING
-        &*umask(iend+1,j)
+          &*umask(iend+1,j)
 # endif
-      enddo
-      jnc=1
-      do while(jstr<=jend-jnc)
-        js=2*jnc
-        do j=jstr,jend-jnc,js
-          dA(iend,j) = dA(iend,j) + dA(iend,j+jnc)
         enddo
-        jnc=js
-      enddo
-      my_crss=my_crss + dA(iend,jstr)
+        jnc=1
+        do while(jstr<=jend-jnc)
+          js=2*jnc
+          do j=jstr,jend-jnc,js
+            dA(iend,j) = dA(iend,j) + dA(iend,j+jnc)
+          enddo
+          jnc=js
+        enddo
+        my_crss=my_crss + dA(iend,jstr)
+      endif
     endif
-#endif
-#ifdef OBC_SOUTH
-    if (SOUTHERN_EDGE) then
-      do i=istr,iend
-        dA(i,jstr)=0.5_8*(h(i,jstr)+h(i,jstr-1))*dm_v(i,jstr)&
+    if (obc_south) then
+      if (SOUTHERN_EDGE) then
+        do i=istr,iend
+          dA(i,jstr)=0.5_8*(h(i,jstr)+h(i,jstr-1))*dm_v(i,jstr)&
 # ifdef MASKING
-        &*vmask(i,jstr)
+          &*vmask(i,jstr)
 # endif
-      enddo
-      inc=1
-      do while(istr<=iend-inc)
-        is=2*inc
-        do i=istr,iend-inc,is
-          dA(i,jstr) = dA(i,jstr) + dA(i+inc,jstr)
         enddo
-        inc=is
-      enddo
-      my_crss=my_crss + dA(istr,jstr)
+        inc=1
+        do while(istr<=iend-inc)
+          is=2*inc
+          do i=istr,iend-inc,is
+            dA(i,jstr) = dA(i,jstr) + dA(i+inc,jstr)
+          enddo
+          inc=is
+        enddo
+        my_crss=my_crss + dA(istr,jstr)
+      endif
     endif
-#endif
-#ifdef OBC_NORTH
-    if (NORTHERN_EDGE) then
-      do i=istr,iend
-        dA(i,jend)=0.5_8*(h(i,jend)+h(i,jend+1))*dm_v(i,jend+1)&
+    if (obc_north) then
+      if (NORTHERN_EDGE) then
+        do i=istr,iend
+          dA(i,jend)=0.5_8*(h(i,jend)+h(i,jend+1))*dm_v(i,jend+1)&
 # ifdef MASKING
-        &*vmask(i,jend+1)
+          &*vmask(i,jend+1)
 # endif
-      enddo
-      inc=1
-      do while(istr<=iend-inc)
-        is=2*inc
-        do i=istr,iend-inc,is
-          dA(i,jend) = dA(i,jend) + dA(i+inc,jend)
         enddo
-        inc=is
-      enddo
-      my_crss=my_crss + dA(istr,jend)
+        inc=1
+        do while(istr<=iend-inc)
+          is=2*inc
+          do i=istr,iend-inc,is
+            dA(i,jend) = dA(i,jend) + dA(i+inc,jend)
+          enddo
+          inc=is
+        enddo
+        my_crss=my_crss + dA(istr,jend)
+      endif
     endif
-#endif
 
 ! Thus far everything has ben computed within the tile. Next: combine
 ! the results to get global min/max and summations.  This needs to be

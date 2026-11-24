@@ -1,5 +1,6 @@
 module pre_step3d_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
 

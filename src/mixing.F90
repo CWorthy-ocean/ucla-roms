@@ -4,7 +4,8 @@ module mixing
 
   use param, only:&
   &isalt, lm, mm, ieast, itemp, iwest,&
-  &jnorth, jsouth, obc_east, obc_north, obc_south, obc_west
+  &jnorth, jsouth
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
 
 ! This is include file "mixing"

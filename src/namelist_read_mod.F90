@@ -71,6 +71,7 @@ contains
 #endif
     use diag_mod, only: read_nml_stdout_diag
     use imex_igw, only: read_nml_imex_igw          !IMEX_IGW_SETTINGS (required in every build)
+    use open_boundary_mod, only: read_nml_open_boundary  !OPEN_BOUNDARY_SETTINGS (optional)
     use implicit_fs_mod, only: read_nml_implicit_fs, fs_on !IMPLICIT_FS (optional)
     use sl_adv_mod, only: read_nml_sl_adv          !SL_ADV_SETTINGS (optional)
     use nhmg_settings_mod, only: read_nml_nhmg, nhmg_on  !NHMG_SETTINGS (optional)
@@ -81,6 +82,7 @@ contains
 #endif
     implicit none
     call read_nml_param
+    call read_nml_open_boundary
 #ifndef ANA_GRID
     call read_nml_grid
 #endif

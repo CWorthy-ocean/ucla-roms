@@ -37,6 +37,8 @@ module bgc_subcycle_mod
   ! (tracers module; nt_step = iTandS here, nt when bgc_physics_subcycle is off).
 
 #include "cppdefs.opt"
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_t_orlanski,&
+  &  use_t_boundary_data
   implicit none
   private
 
@@ -1407,16 +1409,14 @@ contains
     ! Window version of t3dbc_tile for one BGC tracer: Orlanski radiation
     ! with the window Courant numbers of the accumulated boundary-face
     ! transports (clipped to 1), the window-start state (nstp) on the right
-    ! side, T_FRC_BRY nudging with the window-end boundary data; TSPECIFIED
-    ! and gradient conditions and the corners as in t3dbc_tile.
+    ! side, nudging to the window-end boundary data (use_t_boundary_data);
+    ! gradient conditions and the corners as in t3dbc_tile.
     use param, only: np_xi, np_eta
     use dimensions, only: nz, inode, jnode
     use scalars, only: nnew, nstp
     use tracers, only: t
     use grid, only: rmask, umask, vmask, pm, pn, dn_u, dm_v
-#ifdef T_FRC_BRY
     use boundary, only: t_west, t_east, t_south, t_north
-#endif
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend, itrc
     real(kind=8) :: grd(istr-2:iend+2,jstr-2:jend+2), cx, cy, cext, cff
@@ -1426,69 +1426,69 @@ contains
 #ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do k = 1, nz
-# if defined OBC_WEST && defined OBC_TORLANSKI
-        do j = jstr, jend+1
-          grd(istr-1,j) = (t(istr-1,j,k,nstp,itrc)-t(istr-1,j-1,k,nstp,itrc))*vmask(istr-1,j)
-          grd(istr  ,j) = (t(istr  ,j,k,nstp,itrc)-t(istr  ,j-1,k,nstp,itrc))*vmask(istr  ,j)
-        end do
-        do j = jstr, jend
-          cx = -VX(istr,j,k)*pm(istr-1,j)/(0.5_8*(HZS(istr-1,j,k)+HZS(istr,j,k))*dn_u(istr,j))
-          cy = 0.5_8*(VY(istr-1,j,k)/(0.5_8*(HZS(istr-1,j,k)+HZS(istr-1,j-1,k))*dm_v(istr-1,j))&
-          &          +VY(istr-1,j+1,k)/(0.5_8*(HZS(istr-1,j+1,k)+HZS(istr-1,j,k))*dm_v(istr-1,j+1)))&
-          &   *pn(istr-1,j)
-          cy = max(-1._8, min(1._8, cy))
-          if (cx > 0._8) then
-            cext = 0._8 ; cx = min(cx, 1._8)
-          else
-            cext = min(-cx, 1._8) ; cx = 0._8
-          end if
-          t(istr-1,j,k,nnew,itrc) = (1._8-cx)*( t(istr-1,j,k,nstp,itrc)&
-          &   -max(cy,0._8)*grd(istr-1,j) - min(cy,0._8)*grd(istr-1,j+1) )&
-          &   +cx*( t(istr,j,k,nstp,itrc) - max(cy,0._8)*grd(istr,j) - min(cy,0._8)*grd(istr,j+1) )
-#  ifdef T_FRC_BRY
-          t(istr-1,j,k,nnew,itrc) = (1._8-cext)*t(istr-1,j,k,nnew,itrc) + cext*t_west(j,k,itrc)
-#  endif
-          t(istr-1,j,k,nnew,itrc) = t(istr-1,j,k,nnew,itrc)*rmask(istr-1,j)
-        end do
-# else
-        do j = jstr, jend
-          t(istr-1,j,k,nnew,itrc) = t(istr,j,k,nnew,itrc)*rmask(istr-1,j)
-        end do
-# endif
+        if (obc_west .and. obc_t_orlanski) then
+          do j = jstr, jend+1
+            grd(istr-1,j) = (t(istr-1,j,k,nstp,itrc)-t(istr-1,j-1,k,nstp,itrc))*vmask(istr-1,j)
+            grd(istr  ,j) = (t(istr  ,j,k,nstp,itrc)-t(istr  ,j-1,k,nstp,itrc))*vmask(istr  ,j)
+          end do
+          do j = jstr, jend
+            cx = -VX(istr,j,k)*pm(istr-1,j)/(0.5_8*(HZS(istr-1,j,k)+HZS(istr,j,k))*dn_u(istr,j))
+            cy = 0.5_8*(VY(istr-1,j,k)/(0.5_8*(HZS(istr-1,j,k)+HZS(istr-1,j-1,k))*dm_v(istr-1,j))&
+            &          +VY(istr-1,j+1,k)/(0.5_8*(HZS(istr-1,j+1,k)+HZS(istr-1,j,k))*dm_v(istr-1,j+1)))&
+            &   *pn(istr-1,j)
+            cy = max(-1._8, min(1._8, cy))
+            if (cx > 0._8) then
+              cext = 0._8 ; cx = min(cx, 1._8)
+            else
+              cext = min(-cx, 1._8) ; cx = 0._8
+            end if
+            t(istr-1,j,k,nnew,itrc) = (1._8-cx)*( t(istr-1,j,k,nstp,itrc)&
+            &   -max(cy,0._8)*grd(istr-1,j) - min(cy,0._8)*grd(istr-1,j+1) )&
+            &   +cx*( t(istr,j,k,nstp,itrc) - max(cy,0._8)*grd(istr,j) - min(cy,0._8)*grd(istr,j+1) )
+            if (use_t_boundary_data) then
+              t(istr-1,j,k,nnew,itrc) = (1._8-cext)*t(istr-1,j,k,nnew,itrc) + cext*t_west(j,k,itrc)
+            endif
+            t(istr-1,j,k,nnew,itrc) = t(istr-1,j,k,nnew,itrc)*rmask(istr-1,j)
+          end do
+        else
+          do j = jstr, jend
+            t(istr-1,j,k,nnew,itrc) = t(istr,j,k,nnew,itrc)*rmask(istr-1,j)
+          end do
+        endif
       end do
     end if
 
     if (EASTERN_EDGE) then
       do k = 1, nz
-# if defined OBC_EAST && defined OBC_TORLANSKI
-        do j = jstr, jend+1
-          grd(iend  ,j) = (t(iend  ,j,k,nstp,itrc)-t(iend  ,j-1,k,nstp,itrc))*vmask(iend  ,j)
-          grd(iend+1,j) = (t(iend+1,j,k,nstp,itrc)-t(iend+1,j-1,k,nstp,itrc))*vmask(iend+1,j)
-        end do
-        do j = jstr, jend
-          cx = VX(iend+1,j,k)*pm(iend+1,j)/(0.5_8*(HZS(iend+1,j,k)+HZS(iend,j,k))*dn_u(iend+1,j))
-          cy = 0.5_8*(VY(iend+1,j,k)/(0.5_8*(HZS(iend+1,j,k)+HZS(iend+1,j-1,k))*dm_v(iend+1,j))&
-          &          +VY(iend+1,j+1,k)/(0.5_8*(HZS(iend+1,j+1,k)+HZS(iend+1,j,k))*dm_v(iend+1,j+1)))&
-          &   *pn(iend+1,j)
-          cy = max(-1._8, min(1._8, cy))
-          if (cx > 0._8) then
-            cext = 0._8 ; cx = min(cx, 1._8)
-          else
-            cext = min(-cx, 1._8) ; cx = 0._8
-          end if
-          t(iend+1,j,k,nnew,itrc) = (1._8-cx)*( t(iend+1,j,k,nstp,itrc)&
-          &   -max(cy,0._8)*grd(iend+1,j) - min(cy,0._8)*grd(iend+1,j+1) )&
-          &   +cx*( t(iend,j,k,nstp,itrc) - max(cy,0._8)*grd(iend,j) - min(cy,0._8)*grd(iend,j+1) )
-#  ifdef T_FRC_BRY
-          t(iend+1,j,k,nnew,itrc) = (1._8-cext)*t(iend+1,j,k,nnew,itrc) + cext*t_east(j,k,itrc)
-#  endif
-          t(iend+1,j,k,nnew,itrc) = t(iend+1,j,k,nnew,itrc)*rmask(iend+1,j)
-        end do
-# else
-        do j = jstr, jend
-          t(iend+1,j,k,nnew,itrc) = t(iend,j,k,nnew,itrc)*rmask(iend+1,j)
-        end do
-# endif
+        if (obc_east .and. obc_t_orlanski) then
+          do j = jstr, jend+1
+            grd(iend  ,j) = (t(iend  ,j,k,nstp,itrc)-t(iend  ,j-1,k,nstp,itrc))*vmask(iend  ,j)
+            grd(iend+1,j) = (t(iend+1,j,k,nstp,itrc)-t(iend+1,j-1,k,nstp,itrc))*vmask(iend+1,j)
+          end do
+          do j = jstr, jend
+            cx = VX(iend+1,j,k)*pm(iend+1,j)/(0.5_8*(HZS(iend+1,j,k)+HZS(iend,j,k))*dn_u(iend+1,j))
+            cy = 0.5_8*(VY(iend+1,j,k)/(0.5_8*(HZS(iend+1,j,k)+HZS(iend+1,j-1,k))*dm_v(iend+1,j))&
+            &          +VY(iend+1,j+1,k)/(0.5_8*(HZS(iend+1,j+1,k)+HZS(iend+1,j,k))*dm_v(iend+1,j+1)))&
+            &   *pn(iend+1,j)
+            cy = max(-1._8, min(1._8, cy))
+            if (cx > 0._8) then
+              cext = 0._8 ; cx = min(cx, 1._8)
+            else
+              cext = min(-cx, 1._8) ; cx = 0._8
+            end if
+            t(iend+1,j,k,nnew,itrc) = (1._8-cx)*( t(iend+1,j,k,nstp,itrc)&
+            &   -max(cy,0._8)*grd(iend+1,j) - min(cy,0._8)*grd(iend+1,j+1) )&
+            &   +cx*( t(iend,j,k,nstp,itrc) - max(cy,0._8)*grd(iend,j) - min(cy,0._8)*grd(iend,j+1) )
+            if (use_t_boundary_data) then
+              t(iend+1,j,k,nnew,itrc) = (1._8-cext)*t(iend+1,j,k,nnew,itrc) + cext*t_east(j,k,itrc)
+            endif
+            t(iend+1,j,k,nnew,itrc) = t(iend+1,j,k,nnew,itrc)*rmask(iend+1,j)
+          end do
+        else
+          do j = jstr, jend
+            t(iend+1,j,k,nnew,itrc) = t(iend,j,k,nnew,itrc)*rmask(iend+1,j)
+          end do
+        endif
       end do
     end if
 #endif
@@ -1496,69 +1496,69 @@ contains
 #ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do k = 1, nz
-# if defined OBC_SOUTH && defined OBC_TORLANSKI
-        do i = istr, iend+1
-          grd(i,jstr  ) = (t(i,jstr  ,k,nstp,itrc)-t(i-1,jstr  ,k,nstp,itrc))*umask(i,jstr  )
-          grd(i,jstr-1) = (t(i,jstr-1,k,nstp,itrc)-t(i-1,jstr-1,k,nstp,itrc))*umask(i,jstr-1)
-        end do
-        do i = istr, iend
-          cy = -VY(i,jstr,k)*pn(i,jstr-1)/(0.5_8*(HZS(i,jstr-1,k)+HZS(i,jstr,k))*dm_v(i,jstr))
-          cx = 0.5_8*(VX(i,jstr-1,k)/(0.5_8*(HZS(i,jstr-1,k)+HZS(i-1,jstr-1,k))*dn_u(i,jstr-1))&
-          &          +VX(i+1,jstr-1,k)/(0.5_8*(HZS(i+1,jstr-1,k)+HZS(i,jstr-1,k))*dn_u(i+1,jstr-1)))&
-          &   *pm(i,jstr-1)
-          cx = max(-1._8, min(1._8, cx))
-          if (cy > 0._8) then
-            cext = 0._8 ; cy = min(cy, 1._8)
-          else
-            cext = min(-cy, 1._8) ; cy = 0._8
-          end if
-          t(i,jstr-1,k,nnew,itrc) = (1._8-cy)*( t(i,jstr-1,k,nstp,itrc)&
-          &   -max(cx,0._8)*grd(i,jstr-1) - min(cx,0._8)*grd(i+1,jstr-1) )&
-          &   +cy*( t(i,jstr,k,nstp,itrc) - max(cx,0._8)*grd(i,jstr) - min(cx,0._8)*grd(i+1,jstr) )
-#  ifdef T_FRC_BRY
-          t(i,jstr-1,k,nnew,itrc) = (1._8-cext)*t(i,jstr-1,k,nnew,itrc) + cext*t_south(i,k,itrc)
-#  endif
-          t(i,jstr-1,k,nnew,itrc) = t(i,jstr-1,k,nnew,itrc)*rmask(i,jstr-1)
-        end do
-# else
-        do i = istr, iend
-          t(i,jstr-1,k,nnew,itrc) = t(i,jstr,k,nnew,itrc)*rmask(i,jstr-1)
-        end do
-# endif
+        if (obc_south .and. obc_t_orlanski) then
+          do i = istr, iend+1
+            grd(i,jstr  ) = (t(i,jstr  ,k,nstp,itrc)-t(i-1,jstr  ,k,nstp,itrc))*umask(i,jstr  )
+            grd(i,jstr-1) = (t(i,jstr-1,k,nstp,itrc)-t(i-1,jstr-1,k,nstp,itrc))*umask(i,jstr-1)
+          end do
+          do i = istr, iend
+            cy = -VY(i,jstr,k)*pn(i,jstr-1)/(0.5_8*(HZS(i,jstr-1,k)+HZS(i,jstr,k))*dm_v(i,jstr))
+            cx = 0.5_8*(VX(i,jstr-1,k)/(0.5_8*(HZS(i,jstr-1,k)+HZS(i-1,jstr-1,k))*dn_u(i,jstr-1))&
+            &          +VX(i+1,jstr-1,k)/(0.5_8*(HZS(i+1,jstr-1,k)+HZS(i,jstr-1,k))*dn_u(i+1,jstr-1)))&
+            &   *pm(i,jstr-1)
+            cx = max(-1._8, min(1._8, cx))
+            if (cy > 0._8) then
+              cext = 0._8 ; cy = min(cy, 1._8)
+            else
+              cext = min(-cy, 1._8) ; cy = 0._8
+            end if
+            t(i,jstr-1,k,nnew,itrc) = (1._8-cy)*( t(i,jstr-1,k,nstp,itrc)&
+            &   -max(cx,0._8)*grd(i,jstr-1) - min(cx,0._8)*grd(i+1,jstr-1) )&
+            &   +cy*( t(i,jstr,k,nstp,itrc) - max(cx,0._8)*grd(i,jstr) - min(cx,0._8)*grd(i+1,jstr) )
+            if (use_t_boundary_data) then
+              t(i,jstr-1,k,nnew,itrc) = (1._8-cext)*t(i,jstr-1,k,nnew,itrc) + cext*t_south(i,k,itrc)
+            endif
+            t(i,jstr-1,k,nnew,itrc) = t(i,jstr-1,k,nnew,itrc)*rmask(i,jstr-1)
+          end do
+        else
+          do i = istr, iend
+            t(i,jstr-1,k,nnew,itrc) = t(i,jstr,k,nnew,itrc)*rmask(i,jstr-1)
+          end do
+        endif
       end do
     end if
 
     if (NORTHERN_EDGE) then
       do k = 1, nz
-# if defined OBC_NORTH && defined OBC_TORLANSKI
-        do i = istr, iend+1
-          grd(i,jend  ) = (t(i,jend  ,k,nstp,itrc)-t(i-1,jend  ,k,nstp,itrc))*umask(i,jend  )
-          grd(i,jend+1) = (t(i,jend+1,k,nstp,itrc)-t(i-1,jend+1,k,nstp,itrc))*umask(i,jend+1)
-        end do
-        do i = istr, iend
-          cy = VY(i,jend+1,k)*pn(i,jend+1)/(0.5_8*(HZS(i,jend+1,k)+HZS(i,jend,k))*dm_v(i,jend+1))
-          cx = 0.5_8*(VX(i,jend+1,k)/(0.5_8*(HZS(i,jend+1,k)+HZS(i-1,jend+1,k))*dn_u(i,jend+1))&
-          &          +VX(i+1,jend+1,k)/(0.5_8*(HZS(i+1,jend+1,k)+HZS(i,jend+1,k))*dn_u(i+1,jend+1)))&
-          &   *pm(i,jend+1)
-          cx = max(-1._8, min(1._8, cx))
-          if (cy > 0._8) then
-            cext = 0._8 ; cy = min(cy, 1._8)
-          else
-            cext = min(-cy, 1._8) ; cy = 0._8
-          end if
-          t(i,jend+1,k,nnew,itrc) = (1._8-cy)*( t(i,jend+1,k,nstp,itrc)&
-          &   -max(cx,0._8)*grd(i,jend+1) - min(cx,0._8)*grd(i+1,jend+1) )&
-          &   +cy*( t(i,jend,k,nstp,itrc) - max(cx,0._8)*grd(i,jend) - min(cx,0._8)*grd(i+1,jend) )
-#  ifdef T_FRC_BRY
-          t(i,jend+1,k,nnew,itrc) = (1._8-cext)*t(i,jend+1,k,nnew,itrc) + cext*t_north(i,k,itrc)
-#  endif
-          t(i,jend+1,k,nnew,itrc) = t(i,jend+1,k,nnew,itrc)*rmask(i,jend+1)
-        end do
-# else
-        do i = istr, iend
-          t(i,jend+1,k,nnew,itrc) = t(i,jend,k,nnew,itrc)*rmask(i,jend+1)
-        end do
-# endif
+        if (obc_north .and. obc_t_orlanski) then
+          do i = istr, iend+1
+            grd(i,jend  ) = (t(i,jend  ,k,nstp,itrc)-t(i-1,jend  ,k,nstp,itrc))*umask(i,jend  )
+            grd(i,jend+1) = (t(i,jend+1,k,nstp,itrc)-t(i-1,jend+1,k,nstp,itrc))*umask(i,jend+1)
+          end do
+          do i = istr, iend
+            cy = VY(i,jend+1,k)*pn(i,jend+1)/(0.5_8*(HZS(i,jend+1,k)+HZS(i,jend,k))*dm_v(i,jend+1))
+            cx = 0.5_8*(VX(i,jend+1,k)/(0.5_8*(HZS(i,jend+1,k)+HZS(i-1,jend+1,k))*dn_u(i,jend+1))&
+            &          +VX(i+1,jend+1,k)/(0.5_8*(HZS(i+1,jend+1,k)+HZS(i,jend+1,k))*dn_u(i+1,jend+1)))&
+            &   *pm(i,jend+1)
+            cx = max(-1._8, min(1._8, cx))
+            if (cy > 0._8) then
+              cext = 0._8 ; cy = min(cy, 1._8)
+            else
+              cext = min(-cy, 1._8) ; cy = 0._8
+            end if
+            t(i,jend+1,k,nnew,itrc) = (1._8-cy)*( t(i,jend+1,k,nstp,itrc)&
+            &   -max(cx,0._8)*grd(i,jend+1) - min(cx,0._8)*grd(i+1,jend+1) )&
+            &   +cy*( t(i,jend,k,nstp,itrc) - max(cx,0._8)*grd(i,jend) - min(cx,0._8)*grd(i+1,jend) )
+            if (use_t_boundary_data) then
+              t(i,jend+1,k,nnew,itrc) = (1._8-cext)*t(i,jend+1,k,nnew,itrc) + cext*t_north(i,k,itrc)
+            endif
+            t(i,jend+1,k,nnew,itrc) = t(i,jend+1,k,nnew,itrc)*rmask(i,jend+1)
+          end do
+        else
+          do i = istr, iend
+            t(i,jend+1,k,nnew,itrc) = t(i,jend,k,nnew,itrc)*rmask(i,jend+1)
+          end do
+        endif
       end do
     end if
 #endif

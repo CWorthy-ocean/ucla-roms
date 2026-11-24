@@ -90,6 +90,8 @@ module imex_igw
   !-----------------------------------------------------------------------
 #include "cppdefs.opt"
 
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, any_open_side,&
+  &  use_m3_boundary_data, use_t_boundary_data
   implicit none
   private
 
@@ -303,7 +305,7 @@ module imex_igw
                                                  ! u_b = u_ext + s Y (p_int - p_ext - m) on the baroclinic part,
                                                  ! implicit in the stage solves (see the OPEN BOUNDARY section of the
                                                  ! header); 'auto' (default) 'modal' where it is supported (an open
-                                                 ! edge with M3_FRC_BRY and T_FRC_BRY and the settings it needs),
+                                                 ! edge with boundary data for u, v, T, S and the settings it needs),
                                                  ! else 'fixed' (printed)
   integer(kind=4) :: imex_obc_nmodes = 3         ! 'modal': vertical modes kept; the rest get the admittance of
                                                  ! the last one (remainder term)
@@ -1035,22 +1037,17 @@ contains
     &//" 'fixed', 'modal' or 'auto'")
     ! what 'modal' needs: the solves (the faces live in the operator's fused kernels and the Jacobi
     ! diagonal), a stage-solve start other than 1, an open edge and the external velocity and density
-    ! (M3_FRC_BRY, T_FRC_BRY)
+    ! (use_m3_boundary_data, use_t_boundary_data)
     obm_supported = imex_solver_enabled .and. imex_pcg_start /= 1
-#  if !defined M3_FRC_BRY || !defined T_FRC_BRY
-    obm_supported = .false.
-#  endif
-#  if !defined OBC_WEST && !defined OBC_EAST && !defined OBC_SOUTH && !defined OBC_NORTH
-    obm_supported = .false.
-#  endif
+    if (.not.use_m3_boundary_data .or. .not.use_t_boundary_data .or. .not.any_open_side) obm_supported = .false.
     if (trim(imex_obc_mode) == 'auto') then
       imex_obc_modal = obm_supported
     else
       imex_obc_modal = (trim(imex_obc_mode) == 'modal')
     end if
     if (trim(imex_obc_mode) == 'modal' .and. .not. obm_supported) call error_log%raise_global(context=context,&
-    &info="imex_obc_mode = 'modal' needs the solver enabled, imex_pcg_start /= 1, an open edge, M3_FRC_BRY"&
-    &//" and T_FRC_BRY")
+    &info="imex_obc_mode = 'modal' needs the solver enabled, imex_pcg_start /= 1, an open edge,"&
+    &//" use_m3_boundary_data and use_t_boundary_data")
     if (imex_obc_modal .and. (imex_obc_nmodes < 1 .or. imex_obc_nmodes > 20 .or. (imex_obc_q0 /= 0._8 .and.&
     &   (imex_obc_q0 < obm_q0min .or. imex_obc_q0 > 1._8)) .or. imex_obc_tref < 0._8 .or. imex_obc_mprint < 0))&
     &   call error_log%raise_global(context=context, info="imex_obc_nmodes must be in 1..20, imex_obc_q0 0 (off)"&
@@ -2084,12 +2081,12 @@ contains
       do ii=ib0,ib1+1
         fx(ii) = 0.5_8*(q(ii,jj,kk)+q(ii-1,jj,kk))*f(ii) - c6*( cv(ii-1)*max(f(ii),0._8) + cv(ii)*min(f(ii),0._8) )
       enddo
-#  ifdef OBC_WEST
-      if (w_edge) fx(ib0) = fx(ib0) + 0.5_8*(q(ib0-1,jj,kk)-q(ib0,jj,kk))*max(f(ib0),0._8)
-#  endif
-#  ifdef OBC_EAST
-      if (e_edge) fx(ib1+1) = fx(ib1+1) + 0.5_8*(q(ib1+1,jj,kk)-q(ib1,jj,kk))*min(f(ib1+1),0._8)
-#  endif
+      if (obc_west) then
+        if (w_edge) fx(ib0) = fx(ib0) + 0.5_8*(q(ib0-1,jj,kk)-q(ib0,jj,kk))*max(f(ib0),0._8)
+      endif
+      if (obc_east) then
+        if (e_edge) fx(ib1+1) = fx(ib1+1) + 0.5_8*(q(ib1+1,jj,kk)-q(ib1,jj,kk))*min(f(ib1+1),0._8)
+      endif
     end subroutine uflux
     subroutine vrow(jf, sl)
       ! v-faces of face row jf (cells jf-1, jf), into slot sl: b* flux fes with F = FlxV (fvs), b_ref flux fer
@@ -2142,12 +2139,12 @@ contains
       cl = cl*vmask(ii,jf-1)*m0 ; cr = cr*m0*vmask(ii,jf+1)
 #  endif
       fe = 0.5_8*(q(ii,jf,kk)+q(ii,jf-1,kk))*ff - c6*( cl*max(ff,0._8) + cr*min(ff,0._8) )
-#  ifdef OBC_SOUTH
-      if (s_edge .and. jf == jb0) fe = fe + 0.5_8*(q(ii,jb0-1,kk)-q(ii,jb0,kk))*max(ff,0._8)
-#  endif
-#  ifdef OBC_NORTH
-      if (n_edge .and. jf == jb1+1) fe = fe + 0.5_8*(q(ii,jb1+1,kk)-q(ii,jb1,kk))*min(ff,0._8)
-#  endif
+      if (obc_south) then
+        if (s_edge .and. jf == jb0) fe = fe + 0.5_8*(q(ii,jb0-1,kk)-q(ii,jb0,kk))*max(ff,0._8)
+      endif
+      if (obc_north) then
+        if (n_edge .and. jf == jb1+1) fe = fe + 0.5_8*(q(ii,jb1+1,kk)-q(ii,jb1,kk))*min(ff,0._8)
+      endif
     end function vfx
     subroutine u3col(q, w, fz)
       ! thickness-aware U3 vertical fluxes of one column (advection.F90, t_vadv_up3), rh, cp, cm set
@@ -3092,18 +3089,18 @@ contains
     enddo
     ! Closed edges: no flux through the boundary face. Open edges keep the
     ! face; the ghost rho row beyond it holds x = 0 (Dirichlet).
-# ifndef OBC_WEST
-    if (w_edge) cx(istr,jstr:jend) = 0._8
-# endif
-# ifndef OBC_EAST
-    if (e_edge) cx(iend+1,jstr:jend) = 0._8
-# endif
-# ifndef OBC_SOUTH
-    if (s_edge) cy(istr:iend,jstr) = 0._8
-# endif
-# ifndef OBC_NORTH
-    if (n_edge) cy(istr:iend,jend+1) = 0._8
-# endif
+    if (.not.obc_west) then
+      if (w_edge) cx(istr,jstr:jend) = 0._8
+    endif
+    if (.not.obc_east) then
+      if (e_edge) cx(iend+1,jstr:jend) = 0._8
+    endif
+    if (.not.obc_south) then
+      if (s_edge) cy(istr:iend,jstr) = 0._8
+    endif
+    if (.not.obc_north) then
+      if (n_edge) cy(istr:iend,jend+1) = 0._8
+    endif
     ! Active points: wet with at least one open face. A wet cell with all
     ! faces closed is decoupled and its pressure correction irrelevant
     ! (all its face velocities are masked); it is left out (x = 0).
@@ -4514,18 +4511,18 @@ contains
       ob_act = 0._8 ; ob_yr = 0._8 ; ob_w = 0._8 ; ob_hn = 0._8 ; ob_ub = 0._8
       ob_a = 0._8 ; ob_c = 0._8 ; ob_phi = 0._8 ; ob_kd = 0._8
       ob_edge = .false.
-#  ifdef OBC_WEST
-      ob_edge(1) = w_edge
-#  endif
-#  ifdef OBC_EAST
-      ob_edge(2) = e_edge
-#  endif
-#  ifdef OBC_SOUTH
-      ob_edge(3) = s_edge
-#  endif
-#  ifdef OBC_NORTH
-      ob_edge(4) = n_edge
-#  endif
+      if (obc_west) then
+        ob_edge(1) = w_edge
+      endif
+      if (obc_east) then
+        ob_edge(2) = e_edge
+      endif
+      if (obc_south) then
+        ob_edge(3) = s_edge
+      endif
+      if (obc_north) then
+        ob_edge(4) = n_edge
+      endif
     end if
     ob_kd = 0._8
     q = 1._8                                     ! admittance factor 1/q0 (rotating tuning; 1 when off):
@@ -4989,20 +4986,7 @@ contains
     use param, only: isalt
 #  endif
     use ocean_vars, only: hz, z_r
-#  if defined M3_FRC_BRY && defined T_FRC_BRY
-#   ifdef OBC_WEST
-    use boundary, only: u_west, t_west
-#   endif
-#   ifdef OBC_EAST
-    use boundary, only: u_east, t_east
-#   endif
-#   ifdef OBC_SOUTH
-    use boundary, only: v_south, t_south
-#   endif
-#   ifdef OBC_NORTH
-    use boundary, only: v_north, t_north
-#   endif
-#  endif
+    use boundary, only: u_west, t_west, u_east, t_east, v_south, t_south, v_north, t_north
     implicit none
     integer(kind=4), intent(in) :: stage
     real(kind=8) :: db(nz), p(nz), tc(nz), ue(nz), te, se, ti, si, acc, um, wr
@@ -5046,38 +5030,30 @@ contains
 #  ifdef SALINITY
           si = t(i,j,k,nrhs,isalt) ; se = si
 #  endif
-#  if defined M3_FRC_BRY && defined T_FRC_BRY
-          select case (e)
-#   ifdef OBC_WEST
-          case (1)
-            te = t_west(l,k,itemp) ; ue(k) = u_west(l,k)
+          if (use_m3_boundary_data .and. use_t_boundary_data) then   ! (ob_edge: an open side)
+            select case (e)
+            case (1)
+              te = t_west(l,k,itemp) ; ue(k) = u_west(l,k)
 #    ifdef SALINITY
-            se = t_west(l,k,isalt)
+              se = t_west(l,k,isalt)
 #    endif
-#   endif
-#   ifdef OBC_EAST
-          case (2)
-            te = t_east(l,k,itemp) ; ue(k) = u_east(l,k)
+            case (2)
+              te = t_east(l,k,itemp) ; ue(k) = u_east(l,k)
 #    ifdef SALINITY
-            se = t_east(l,k,isalt)
+              se = t_east(l,k,isalt)
 #    endif
-#   endif
-#   ifdef OBC_SOUTH
-          case (3)
-            te = t_south(l,k,itemp) ; ue(k) = v_south(l,k)
+            case (3)
+              te = t_south(l,k,itemp) ; ue(k) = v_south(l,k)
 #    ifdef SALINITY
-            se = t_south(l,k,isalt)
+              se = t_south(l,k,isalt)
 #    endif
-#   endif
-#   ifdef OBC_NORTH
-          case (4)
-            te = t_north(l,k,itemp) ; ue(k) = v_north(l,k)
+            case (4)
+              te = t_north(l,k,itemp) ; ue(k) = v_north(l,k)
 #    ifdef SALINITY
-            se = t_north(l,k,isalt)
+              se = t_north(l,k,isalt)
 #    endif
-#   endif
-          end select
-#  endif
+            end select
+          end if
           db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
         enddo
         acc = 0._8                               ! p = -int_z^0 db, on the cell column
@@ -5254,20 +5230,7 @@ contains
     use param, only: isalt
 #  endif
     use ocean_vars, only: hz, z_r
-#  if defined M3_FRC_BRY && defined T_FRC_BRY
-#   ifdef OBC_WEST
-    use boundary, only: t_west
-#   endif
-#   ifdef OBC_EAST
-    use boundary, only: t_east
-#   endif
-#   ifdef OBC_SOUTH
-    use boundary, only: t_south
-#   endif
-#   ifdef OBC_NORTH
-    use boundary, only: t_north
-#   endif
-#  endif
+    use boundary, only: t_west, t_east, t_south, t_north
     implicit none
     integer(kind=4), intent(in) :: e, l
     real(kind=8), intent(out) :: p(nz)
@@ -5279,38 +5242,30 @@ contains
 #  ifdef SALINITY
       si = t(i,j,k,nrhs,isalt) ; se = si
 #  endif
-#  if defined M3_FRC_BRY && defined T_FRC_BRY
-      select case (e)
-#   ifdef OBC_WEST
-      case (1)
-        te = t_west(l,k,itemp)
+      if (use_m3_boundary_data .and. use_t_boundary_data) then   ! (ob_edge: an open side)
+        select case (e)
+        case (1)
+          te = t_west(l,k,itemp)
 #    ifdef SALINITY
-        se = t_west(l,k,isalt)
+          se = t_west(l,k,isalt)
 #    endif
-#   endif
-#   ifdef OBC_EAST
-      case (2)
-        te = t_east(l,k,itemp)
+        case (2)
+          te = t_east(l,k,itemp)
 #    ifdef SALINITY
-        se = t_east(l,k,isalt)
+          se = t_east(l,k,isalt)
 #    endif
-#   endif
-#   ifdef OBC_SOUTH
-      case (3)
-        te = t_south(l,k,itemp)
+        case (3)
+          te = t_south(l,k,itemp)
 #    ifdef SALINITY
-        se = t_south(l,k,isalt)
+          se = t_south(l,k,isalt)
 #    endif
-#   endif
-#   ifdef OBC_NORTH
-      case (4)
-        te = t_north(l,k,itemp)
+        case (4)
+          te = t_north(l,k,itemp)
 #    ifdef SALINITY
-        se = t_north(l,k,isalt)
+          se = t_north(l,k,isalt)
 #    endif
-#   endif
-      end select
-#  endif
+        end select
+      end if
       db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
     enddo
     acc = 0._8
@@ -5931,18 +5886,18 @@ contains
       integer(kind=4), intent(in) :: i, j
       integer(kind=4), parameter :: bre_nedge = 2
       bre_edge = .false.
-#  ifdef OBC_WEST
-      if (isw_corn + i <= bre_nedge) bre_edge = .true.
-#  endif
-#  ifdef OBC_EAST
-      if (isw_corn + i > llm - bre_nedge) bre_edge = .true.
-#  endif
-#  ifdef OBC_SOUTH
-      if (jsw_corn + j <= bre_nedge) bre_edge = .true.
-#  endif
-#  ifdef OBC_NORTH
-      if (jsw_corn + j > mmm - bre_nedge) bre_edge = .true.
-#  endif
+      if (obc_west) then
+        if (isw_corn + i <= bre_nedge) bre_edge = .true.
+      endif
+      if (obc_east) then
+        if (isw_corn + i > llm - bre_nedge) bre_edge = .true.
+      endif
+      if (obc_south) then
+        if (jsw_corn + j <= bre_nedge) bre_edge = .true.
+      endif
+      if (obc_north) then
+        if (jsw_corn + j > mmm - bre_nedge) bre_edge = .true.
+      endif
     end function bre_edge
   end subroutine bre_weights
 

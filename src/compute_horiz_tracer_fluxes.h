@@ -101,28 +101,28 @@
 ! (FlxU > 0 west, < 0 east) makes the UP3 flux g*Q, first-order upwind.
 ! The C4 flux (the predictor, and the corrector under ADV_ISONEUTRAL)
 ! becomes (11/12 g + 1/6 c1 - 1/12 c2)*Q; AKIMA gives other weights.
-! g is what t3dbc left in the ghost cell: on inflow, OBC_TORLANSKI with
-! T_FRC_BRY relaxes it toward the boundary data by the Courant number
+! g is what t3dbc left in the ghost cell: on inflow, obc_t_orlanski with
+! use_t_boundary_data relaxes it toward the boundary data by the Courant number
 ! each step.  Outflow faces
 ! keep the scheme's flux.  Open-boundary sides only (as in t3dbc):
 ! never at a periodic seam or a wall.
 #ifndef EW_PERIODIC
-# ifdef OBC_WEST
-  if (WESTERN_EDGE) then
-    do j=jstr,jend
-      FX(istr,j) = FX(istr,j) + 0.5_8*(t(istr-1,j,k,nrhs,itrc)-t(istr,j,k,nrhs,itrc))&
-      &* max(FlxU(istr,j,k),0.0_8)
-    enddo
+  if (obc_west) then
+    if (WESTERN_EDGE) then
+      do j=jstr,jend
+        FX(istr,j) = FX(istr,j) + 0.5_8*(t(istr-1,j,k,nrhs,itrc)-t(istr,j,k,nrhs,itrc))&
+        &* max(FlxU(istr,j,k),0.0_8)
+      enddo
+    endif
   endif
-# endif
-# ifdef OBC_EAST
-  if (EASTERN_EDGE) then
-    do j=jstr,jend
-      FX(iend+1,j) = FX(iend+1,j) + 0.5_8*(t(iend+1,j,k,nrhs,itrc)-t(iend,j,k,nrhs,itrc))&
-      &* min(FlxU(iend+1,j,k),0.0_8)
-    enddo
+  if (obc_east) then
+    if (EASTERN_EDGE) then
+      do j=jstr,jend
+        FX(iend+1,j) = FX(iend+1,j) + 0.5_8*(t(iend+1,j,k,nrhs,itrc)-t(iend,j,k,nrhs,itrc))&
+        &* min(FlxU(iend+1,j,k),0.0_8)
+      enddo
+    endif
   endif
-# endif
 #endif
 
 #ifndef NS_PERIODIC
@@ -197,22 +197,22 @@
 
 ! Inflow faces of southern/northern open boundaries: see FX above.
 #ifndef NS_PERIODIC
-# ifdef OBC_SOUTH
-  if (SOUTHERN_EDGE) then
-    do i=istr,iend
-      FE(i,jstr) = FE(i,jstr) + 0.5_8*(t(i,jstr-1,k,nrhs,itrc)-t(i,jstr,k,nrhs,itrc))&
-      &* max(FlxV(i,jstr,k),0.0_8)
-    enddo
+  if (obc_south) then
+    if (SOUTHERN_EDGE) then
+      do i=istr,iend
+        FE(i,jstr) = FE(i,jstr) + 0.5_8*(t(i,jstr-1,k,nrhs,itrc)-t(i,jstr,k,nrhs,itrc))&
+        &* max(FlxV(i,jstr,k),0.0_8)
+      enddo
+    endif
   endif
-# endif
-# ifdef OBC_NORTH
-  if (NORTHERN_EDGE) then
-    do i=istr,iend
-      FE(i,jend+1) = FE(i,jend+1) + 0.5_8*(t(i,jend+1,k,nrhs,itrc)-t(i,jend,k,nrhs,itrc))&
-      &* min(FlxV(i,jend+1,k),0.0_8)
-    enddo
+  if (obc_north) then
+    if (NORTHERN_EDGE) then
+      do i=istr,iend
+        FE(i,jend+1) = FE(i,jend+1) + 0.5_8*(t(i,jend+1,k,nrhs,itrc)-t(i,jend,k,nrhs,itrc))&
+        &* min(FlxV(i,jend+1,k),0.0_8)
+      enddo
+    endif
   endif
-# endif
 #endif
 
 

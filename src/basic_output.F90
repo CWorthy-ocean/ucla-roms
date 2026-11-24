@@ -32,7 +32,7 @@ module basic_output
   &zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,&
   &w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
   use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
-  &max_name_size, obc_west, obc_east, obc_north, obc_south
+  &max_name_size
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
@@ -41,6 +41,7 @@ module basic_output
 #endif
   use mpi_f08, only: MPI_CHARACTER, mpi_bcast
 
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
 

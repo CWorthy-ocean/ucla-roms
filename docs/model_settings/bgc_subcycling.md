@@ -50,7 +50,7 @@ After the horizontal pass, the vertical flux through a w-face is the content of 
 
 ### 3.5 Boundaries and MARBL
 
-Open boundaries use the stock conditions over the window: Orlanski radiation (`OBC_TORLANSKI`) with the window Courant numbers of the accumulated boundary transports, nudging to the window-end boundary data (`T_FRC_BRY`), `OBC_TSPECIFIED`, gradient conditions and corners. As in the stock scheme, inflow faces of open boundaries carry the boundary-cell value (first-order upwind); outflow faces keep the swept flux. At window ends that are MARBL steps, MARBL then runs with its usual `marbl_timestep` (its tendencies and surface fluxes applied over `marbl_timestep`, as in the stock model), and the new state is exchanged and copied to the other time levels (level 3: surface layer only).
+Open boundaries use the stock conditions over the window: Orlanski radiation (`obc_t = 'orlanski'`) with the window Courant numbers of the accumulated boundary transports, nudging to the window-end boundary data (`use_t_boundary_data`), gradient conditions and corners. As in the stock scheme, inflow faces of open boundaries carry the boundary-cell value (first-order upwind); outflow faces keep the swept flux. At window ends that are MARBL steps, MARBL then runs with its usual `marbl_timestep` (its tendencies and surface fluxes applied over `marbl_timestep`, as in the stock model), and the new state is exchanged and copied to the other time levels (level 3: surface layer only).
 
 ### 3.6 Positivity
 

@@ -28,46 +28,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_lmd_bkpp = .false.
 #endif
-#ifdef M2_FRC_BRY
-  logical, parameter, public :: key_m2_frc_bry = .true.
-#else
-  logical, parameter, public :: key_m2_frc_bry = .false.
-#endif
-#ifdef M3_FRC_BRY
-  logical, parameter, public :: key_m3_frc_bry = .true.
-#else
-  logical, parameter, public :: key_m3_frc_bry = .false.
-#endif
-#ifdef T_FRC_BRY
-  logical, parameter, public :: key_t_frc_bry = .true.
-#else
-  logical, parameter, public :: key_t_frc_bry = .false.
-#endif
-#ifdef Z_FRC_BRY
-  logical, parameter, public :: key_z_frc_bry = .true.
-#else
-  logical, parameter, public :: key_z_frc_bry = .false.
-#endif
-#ifdef OBC_EAST
-  logical, parameter, public :: key_obc_east = .true.
-#else
-  logical, parameter, public :: key_obc_east = .false.
-#endif
-#ifdef OBC_WEST
-  logical, parameter, public :: key_obc_west = .true.
-#else
-  logical, parameter, public :: key_obc_west = .false.
-#endif
-#ifdef OBC_SOUTH
-  logical, parameter, public :: key_obc_south = .true.
-#else
-  logical, parameter, public :: key_obc_south = .false.
-#endif
-#ifdef OBC_NORTH
-  logical, parameter, public :: key_obc_north = .true.
-#else
-  logical, parameter, public :: key_obc_north = .false.
-#endif
 #ifdef UV_ADV
   logical, parameter, public :: key_uv_adv = .true.
 #else
@@ -168,11 +128,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_nhmgdiag = .false.
 #endif
-#ifdef W_FRC_BRY
-  logical, parameter, public :: key_w_frc_bry = .true.
-#else
-  logical, parameter, public :: key_w_frc_bry = .false.
-#endif
 #ifdef IMEX_IGW
   logical, parameter, public :: key_imex_igw = .true.
 #else
@@ -199,51 +154,6 @@ module cpp_keys_mod
   logical, parameter, public :: key_lmd_mixing = .true.
 #else
   logical, parameter, public :: key_lmd_mixing = .false.
-#endif
-#ifdef OBC_M2FLATHER
-  logical, parameter, public :: key_obc_m2flather = .true.
-#else
-  logical, parameter, public :: key_obc_m2flather = .false.
-#endif
-#ifdef OBC_M2SPECIFIED
-  logical, parameter, public :: key_obc_m2specified = .true.
-#else
-  logical, parameter, public :: key_obc_m2specified = .false.
-#endif
-#ifdef LEGACY_ORLANSKI
-  logical, parameter, public :: key_legacy_orlanski = .true.
-#else
-  logical, parameter, public :: key_legacy_orlanski = .false.
-#endif
-#ifdef OBC_Z2ORLANSKI
-  logical, parameter, public :: key_obc_z2orlanski = .true.
-#else
-  logical, parameter, public :: key_obc_z2orlanski = .false.
-#endif
-#ifdef OBC_M3ORLANSKI
-  logical, parameter, public :: key_obc_m3orlanski = .true.
-#else
-  logical, parameter, public :: key_obc_m3orlanski = .false.
-#endif
-#ifdef OBC_TORLANSKI
-  logical, parameter, public :: key_obc_torlanski = .true.
-#else
-  logical, parameter, public :: key_obc_torlanski = .false.
-#endif
-#ifdef OBC_RAD_NORMAL
-  logical, parameter, public :: key_obc_rad_normal = .true.
-#else
-  logical, parameter, public :: key_obc_rad_normal = .false.
-#endif
-#ifdef OBC_RAD_NPO
-  logical, parameter, public :: key_obc_rad_npo = .true.
-#else
-  logical, parameter, public :: key_obc_rad_npo = .false.
-#endif
-#ifdef OBC_WSPECIFIED
-  logical, parameter, public :: key_obc_wspecified = .true.
-#else
-  logical, parameter, public :: key_obc_wspecified = .false.
 #endif
 #ifdef PARABOLIC_SPLINES
   logical, parameter, public :: key_parabolic_splines = .true.

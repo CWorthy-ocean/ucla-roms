@@ -3,6 +3,7 @@ from ._assertions import assert_output_matches_reference
 from ._helpers import (
     ADDITIONAL_FILES,
     ANALYTICAL_CPP_KEYS,
+    CLOSED_BOX,
     OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
@@ -28,6 +29,7 @@ def test_pipes_ana(tmp_path, input_dir, reference_results):
     nml = create_test_namelist_dict(input_dir)
     nml["TIME_STEPPING"]["dt"] = 60
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 1200
+    nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
     nml["GRID_SETTINGS"] = {"grdname": ""}
     nml["INITIAL_CONDITIONS"] = {"inifile": ""}
     nml["FORCING_FILES"] = {"frcfiles": ""}
@@ -60,6 +62,7 @@ def test_rivers_ana(tmp_path, input_dir, reference_results):
     nml = create_test_namelist_dict(input_dir)
     nml["TIME_STEPPING"]["dt"] = 20
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
+    nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
     nml["GRID_SETTINGS"] = {"grdname": ""}
     nml["INITIAL_CONDITIONS"] = {"inifile": ""}
     nml["FORCING_FILES"] = {"frcfiles": ""}
@@ -101,7 +104,9 @@ def test_filament(tmp_path, input_dir, reference_results):
     nml["RHO0_SETTINGS"]["rho0"] = 1000
     nml["S_COORD"]["theta_b"] = 2.0
 
-    conf.run(nml)
+    # both directions are periodic, so the template's open sides are ignored
+    log = conf.run(nml, capture_output=True)
+    assert "obc_west and obc_east ignored" in log and "obc_south and obc_north ignored" in log
 
     pv = get_summary_value(conf.location, prefix="roms_his.20000101000000")
     assert_output_matches_reference(reference_results, "filament", {"physics": pv})

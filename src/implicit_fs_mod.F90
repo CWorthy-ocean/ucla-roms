@@ -33,6 +33,8 @@ module implicit_fs_mod
 #include "cppdefs.opt"
 
   use mpi_f08, only: mpi_comm
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m2_flather,&
+  &  obc_m2_specified
   implicit none
   private
 
@@ -82,7 +84,7 @@ module implicit_fs_mod
   integer(kind=4) :: fs_warm = 1               ! PCG start: 1 previous delta, 0 zero
   ! Fixed parts of the scheme: the predictor's barotropic transport is the AB2 extrapolation 1.5 U^n - 0.5 U^n-1
   ! (through DU_avg_bak); open normal faces (Flather) use the flux with U_b^n and the generalized-alpha memory;
-  ! tangential open-boundary ubar/vbar are the backward-Euler form of u2dbc/v2dbc (OBC_M2FLATHER: upwind advection
+  ! tangential open-boundary ubar/vbar are the backward-Euler form of u2dbc/v2dbc (obc_m2_flather: upwind advection
   ! by the normal flow, nudging at |u_n|/dx on inflow); the generalized-alpha memory holds all of the momentum
   ! increment except an estimate of the depth-integrated Coriolis force on U^n (which enters with weight 1);
   ! prescribed volume sources enter with the step's own value (as the split's fast loop and the 3-D step use
@@ -302,12 +304,12 @@ contains
     &  trim(fs_mg_global_on) /= 'one') .or. (trim(fs_mg_faces) /= 'half' .and. trim(fs_mg_faces) /= 'width'))&
     &  call error_log%raise_global(context=trim(module_name)//"/"//sr_name, info="fs_mg_gather >= 0, fs_mg_global_on"&
     &  //" 'all', 'node' or 'one', fs_mg_faces 'half' or 'width' required")
-#if defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH
-# if !defined M2_FRC_BRY || !defined Z_FRC_BRY
-    call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
-    &info="fs_mode = 'implicit' with open boundaries needs M2_FRC_BRY and Z_FRC_BRY")
-# endif
-#endif
+    if ((obc_west .or. obc_east .or. obc_south .or. obc_north) .and. .not. obc_m2_flather&
+    &  .and. .not. obc_m2_specified) then
+      call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
+      &info="fs_mode = 'implicit' with open boundaries needs obc_m2 = 'flather' or 'specified' "&
+      &//"(OPEN_BOUNDARY_SETTINGS)")
+    endif
     if (mynode == 0) then
       write(*,'(/1x,A)') 'IMPLICIT_FS: fs_mode = implicit (the step2d fast loop is replaced)'
       write(*,'(1x,A,F6.3,A,F7.4,A,F7.4,A,F7.4,A,F7.4,A,F7.4)') 'IMPLICIT_FS: fs_rho_inf =', fs_rho_inf,&
@@ -327,30 +329,6 @@ contains
       &  ' fs_mg_lag =', fs_mg_lag, ' fs_exch_thin = ', fs_exch_thin
       write(*,'(1x,A,A,A,F7.4,A)') 'IMPLICIT_FS: fs_pot_time = ', trim(fs_pot_time), ' (tidal potential at time +',&
       &  fs_pot_phase, ' dt)'
-      ! boundary options of the split loop (u2dbc, v2dbc, zetabc) that the implicit step does not follow
-      ! (section 4).
-#if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
- && !defined OBC_M2FLATHER && !defined OBC_M2SPECIFIED
-      write(*,'(1x,A)') 'IMPLICIT_FS: note: no OBC_M2 type defined (zero-gradient ubar, vbar); the normal'&
-      &//' barotropic faces use the implicit Flather condition, the tangential ones the upwind condition of'&
-      &//' OBC_M2FLATHER and the boundary sea level the implicit upwind radiation instead'
-#endif
-#if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
- && defined OBC_Z2ORLANSKI && !defined OBC_M2FLATHER
-      write(*,'(1x,A)') 'IMPLICIT_FS: note: OBC_Z2ORLANSKI has no implicit form; the boundary sea level uses'&
-      &//' the implicit upwind radiation instead (zero gradient with OBC_M2SPECIFIED)'
-#endif
-#if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
- && defined LEGACY_ORLANSKI && defined OBC_M2FLATHER
-      write(*,'(1x,A)') 'IMPLICIT_FS: note: LEGACY_ORLANSKI has no implicit form; the tangential barotropic'&
-      &//' faces use the implicit upwind condition instead'
-#endif
-#if (defined OBC_WEST || defined OBC_EAST || defined OBC_SOUTH || defined OBC_NORTH) \
- && (defined OBC_RAD_NORMAL || defined OBC_RAD_NPO) \
- && defined LEGACY_ORLANSKI && defined OBC_M2FLATHER
-      write(*,'(1x,A)') 'IMPLICIT_FS: note: OBC_RAD_NORMAL and OBC_RAD_NPO act on the 3-D boundary velocities'&
-      &//' only; the barotropic radiation they modify is replaced (note above)'
-#endif
     end if
   end subroutine read_nml_implicit_fs
 
@@ -704,22 +682,8 @@ contains
     use river_frc, only: river_source, nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j,&
     &                    riv_uflx, riv_vflx, riv_vol
     use cdr_frc, only: cdr_source, cdr_volume, cdr_zsrc
-#if defined M2_FRC_BRY && defined Z_FRC_BRY
-    use boundary, only:&
-# ifdef OBC_WEST
-    &  zeta_west, ubar_west,&
-# endif
-# ifdef OBC_EAST
-    &  zeta_east, ubar_east,&
-# endif
-# ifdef OBC_SOUTH
-    &  zeta_south, vbar_south,&
-# endif
-# ifdef OBC_NORTH
-    &  zeta_north, vbar_north,&
-# endif
-    &  set_bry_all
-#endif
+    use boundary, only: zeta_west, ubar_west, zeta_east, ubar_east,&
+    &  zeta_south, vbar_south, zeta_north, vbar_north
     use roms_mpi, only: exchange_xxx
     use set_depth_mod, only: set_depth_tile
     use mpi_f08, only: mpi_wtime, mpi_allreduce, mpi_double_precision, mpi_sum, mpi_max
@@ -933,118 +897,118 @@ contains
     ! (cxu, w1u, w0u, cxv, w1v, w0v; fs_flather_wts).
 #ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
-# if defined OBC_WEST && defined M2_FRC_BRY && defined Z_FRC_BRY
-      do j=jstr,jend
-        m = 1._8
+      if (obc_west) then
+        do j=jstr,jend
+          m = 1._8
 #  ifdef MASKING
-        m = umask(istr,j)
+          m = umask(istr,j)
 #  endif
-        df = 0.5_8*(wd(istr-1,j)+wd(istr,j))
-#  ifdef OBC_M2SPECIFIED
-        ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j)&
-        &           + thd*(df*dn_u(istr,j)*ubar_west(j) - unu(istr,j)))
-#  else
-        hf = 0.5_8*(h(istr-1,j)+h(istr,j))
-        cb = m*dn_u(istr,j)*df*sqrt(g/hf)
-        rb(istr,j) = rb(istr,j) + dts*thd*cb
-        if (fs_flather_zghost) then
-          ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
-          &           - cb*(w1u(istr,j)*zeta(istr,j,ks) + w0u(istr,j)*zeta(istr-1,j,ks) - zeta_west(j)) - unu(istr,j)))
-          rb(istr,j) = rb(istr,j) + dts*thd*cb*(w1u(istr,j)-1._8) ; cbu(istr,j) = cb*w1u(istr,j)
-        else
-          ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
-          &           - cb*(zeta(istr,j,ks) - zeta_west(j)) - unu(istr,j)))
-          cbu(istr,j) = cb
-        end if
-#  endif
-      enddo
-# endif
+          df = 0.5_8*(wd(istr-1,j)+wd(istr,j))
+          if (obc_m2_specified) then
+            ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j)&
+            &           + thd*(df*dn_u(istr,j)*ubar_west(j) - unu(istr,j)))
+          else
+            hf = 0.5_8*(h(istr-1,j)+h(istr,j))
+            cb = m*dn_u(istr,j)*df*sqrt(g/hf)
+            rb(istr,j) = rb(istr,j) + dts*thd*cb
+            if (fs_flather_zghost) then
+              ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
+              &           - cb*(w1u(istr,j)*zeta(istr,j,ks) + w0u(istr,j)*zeta(istr-1,j,ks) - zeta_west(j)) - unu(istr,j)))
+              rb(istr,j) = rb(istr,j) + dts*thd*cb*(w1u(istr,j)-1._8) ; cbu(istr,j) = cb*w1u(istr,j)
+            else
+              ftu(istr,j) = m*(b1*unu(istr,j) + (1._8-b1)*gru(istr,j) + thd*(df*dn_u(istr,j)*ubar_west(j)&
+              &           - cb*(zeta(istr,j,ks) - zeta_west(j)) - unu(istr,j)))
+              cbu(istr,j) = cb
+            end if
+          endif
+        enddo
+      endif
     endif
     if (EASTERN_EDGE) then
-# if defined OBC_EAST && defined M2_FRC_BRY && defined Z_FRC_BRY
-      do j=jstr,jend
-        m = 1._8
+      if (obc_east) then
+        do j=jstr,jend
+          m = 1._8
 #  ifdef MASKING
-        m = umask(iend+1,j)
+          m = umask(iend+1,j)
 #  endif
-        df = 0.5_8*(wd(iend,j)+wd(iend+1,j))
-#  ifdef OBC_M2SPECIFIED
-        ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j)&
-        &             + thd*(df*dn_u(iend+1,j)*ubar_east(j) - unu(iend+1,j)))
-#  else
-        hf = 0.5_8*(h(iend,j)+h(iend+1,j))
-        cb = m*dn_u(iend+1,j)*df*sqrt(g/hf)
-        rb(iend,j) = rb(iend,j) + dts*thd*cb
-        if (fs_flather_zghost) then
-          ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
-          &             + cb*(w1u(iend+1,j)*zeta(iend,j,ks) + w0u(iend+1,j)*zeta(iend+1,j,ks) - zeta_east(j)) - unu(iend+1,j)))
-          rb(iend,j) = rb(iend,j) + dts*thd*cb*(w1u(iend+1,j)-1._8) ; cbu(iend+1,j) = cb*w1u(iend+1,j)
-        else
-          ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
-          &             + cb*(zeta(iend,j,ks) - zeta_east(j)) - unu(iend+1,j)))
-          cbu(iend+1,j) = cb
-        end if
-#  endif
-      enddo
-# endif
+          df = 0.5_8*(wd(iend,j)+wd(iend+1,j))
+          if (obc_m2_specified) then
+            ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j)&
+            &             + thd*(df*dn_u(iend+1,j)*ubar_east(j) - unu(iend+1,j)))
+          else
+            hf = 0.5_8*(h(iend,j)+h(iend+1,j))
+            cb = m*dn_u(iend+1,j)*df*sqrt(g/hf)
+            rb(iend,j) = rb(iend,j) + dts*thd*cb
+            if (fs_flather_zghost) then
+              ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
+              &             + cb*(w1u(iend+1,j)*zeta(iend,j,ks) + w0u(iend+1,j)*zeta(iend+1,j,ks) - zeta_east(j)) - unu(iend+1,j)))
+              rb(iend,j) = rb(iend,j) + dts*thd*cb*(w1u(iend+1,j)-1._8) ; cbu(iend+1,j) = cb*w1u(iend+1,j)
+            else
+              ftu(iend+1,j) = m*(b1*unu(iend+1,j) + (1._8-b1)*gru(iend+1,j) + thd*(df*dn_u(iend+1,j)*ubar_east(j)&
+              &             + cb*(zeta(iend,j,ks) - zeta_east(j)) - unu(iend+1,j)))
+              cbu(iend+1,j) = cb
+            end if
+          endif
+        enddo
+      endif
     endif
 #endif
 #ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
-# if defined OBC_SOUTH && defined M2_FRC_BRY && defined Z_FRC_BRY
-      do i=istr,iend
-        m = 1._8
+      if (obc_south) then
+        do i=istr,iend
+          m = 1._8
 #  ifdef MASKING
-        m = vmask(i,jstr)
+          m = vmask(i,jstr)
 #  endif
-        df = 0.5_8*(wd(i,jstr-1)+wd(i,jstr))
-#  ifdef OBC_M2SPECIFIED
-        ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr)&
-        &           + thd*(df*dm_v(i,jstr)*vbar_south(i) - unv(i,jstr)))
-#  else
-        hf = 0.5_8*(h(i,jstr-1)+h(i,jstr))
-        cb = m*dm_v(i,jstr)*df*sqrt(g/hf)
-        rb(i,jstr) = rb(i,jstr) + dts*thd*cb
-        if (fs_flather_zghost) then
-          ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
-          &           - cb*(w1v(i,jstr)*zeta(i,jstr,ks) + w0v(i,jstr)*zeta(i,jstr-1,ks) - zeta_south(i)) - unv(i,jstr)))
-          rb(i,jstr) = rb(i,jstr) + dts*thd*cb*(w1v(i,jstr)-1._8) ; cbv(i,jstr) = cb*w1v(i,jstr)
-        else
-          ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
-          &           - cb*(zeta(i,jstr,ks) - zeta_south(i)) - unv(i,jstr)))
-          cbv(i,jstr) = cb
-        end if
-#  endif
-      enddo
-# endif
+          df = 0.5_8*(wd(i,jstr-1)+wd(i,jstr))
+          if (obc_m2_specified) then
+            ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr)&
+            &           + thd*(df*dm_v(i,jstr)*vbar_south(i) - unv(i,jstr)))
+          else
+            hf = 0.5_8*(h(i,jstr-1)+h(i,jstr))
+            cb = m*dm_v(i,jstr)*df*sqrt(g/hf)
+            rb(i,jstr) = rb(i,jstr) + dts*thd*cb
+            if (fs_flather_zghost) then
+              ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
+              &           - cb*(w1v(i,jstr)*zeta(i,jstr,ks) + w0v(i,jstr)*zeta(i,jstr-1,ks) - zeta_south(i)) - unv(i,jstr)))
+              rb(i,jstr) = rb(i,jstr) + dts*thd*cb*(w1v(i,jstr)-1._8) ; cbv(i,jstr) = cb*w1v(i,jstr)
+            else
+              ftv(i,jstr) = m*(b1*unv(i,jstr) + (1._8-b1)*grv(i,jstr) + thd*(df*dm_v(i,jstr)*vbar_south(i)&
+              &           - cb*(zeta(i,jstr,ks) - zeta_south(i)) - unv(i,jstr)))
+              cbv(i,jstr) = cb
+            end if
+          endif
+        enddo
+      endif
     endif
     if (NORTHERN_EDGE) then
-# if defined OBC_NORTH && defined M2_FRC_BRY && defined Z_FRC_BRY
-      do i=istr,iend
-        m = 1._8
+      if (obc_north) then
+        do i=istr,iend
+          m = 1._8
 #  ifdef MASKING
-        m = vmask(i,jend+1)
+          m = vmask(i,jend+1)
 #  endif
-        df = 0.5_8*(wd(i,jend)+wd(i,jend+1))
-#  ifdef OBC_M2SPECIFIED
-        ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1)&
-        &             + thd*(df*dm_v(i,jend+1)*vbar_north(i) - unv(i,jend+1)))
-#  else
-        hf = 0.5_8*(h(i,jend)+h(i,jend+1))
-        cb = m*dm_v(i,jend+1)*df*sqrt(g/hf)
-        rb(i,jend) = rb(i,jend) + dts*thd*cb
-        if (fs_flather_zghost) then
-          ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
-          &             + cb*(w1v(i,jend+1)*zeta(i,jend,ks) + w0v(i,jend+1)*zeta(i,jend+1,ks) - zeta_north(i)) - unv(i,jend+1)))
-          rb(i,jend) = rb(i,jend) + dts*thd*cb*(w1v(i,jend+1)-1._8) ; cbv(i,jend+1) = cb*w1v(i,jend+1)
-        else
-          ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
-          &             + cb*(zeta(i,jend,ks) - zeta_north(i)) - unv(i,jend+1)))
-          cbv(i,jend+1) = cb
-        end if
-#  endif
-      enddo
-# endif
+          df = 0.5_8*(wd(i,jend)+wd(i,jend+1))
+          if (obc_m2_specified) then
+            ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1)&
+            &             + thd*(df*dm_v(i,jend+1)*vbar_north(i) - unv(i,jend+1)))
+          else
+            hf = 0.5_8*(h(i,jend)+h(i,jend+1))
+            cb = m*dm_v(i,jend+1)*df*sqrt(g/hf)
+            rb(i,jend) = rb(i,jend) + dts*thd*cb
+            if (fs_flather_zghost) then
+              ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
+              &             + cb*(w1v(i,jend+1)*zeta(i,jend,ks) + w0v(i,jend+1)*zeta(i,jend+1,ks) - zeta_north(i)) - unv(i,jend+1)))
+              rb(i,jend) = rb(i,jend) + dts*thd*cb*(w1v(i,jend+1)-1._8) ; cbv(i,jend+1) = cb*w1v(i,jend+1)
+            else
+              ftv(i,jend+1) = m*(b1*unv(i,jend+1) + (1._8-b1)*grv(i,jend+1) + thd*(df*dm_v(i,jend+1)*vbar_north(i)&
+              &             + cb*(zeta(i,jend,ks) - zeta_north(i)) - unv(i,jend+1)))
+              cbv(i,jend+1) = cb
+            end if
+          endif
+        enddo
+      endif
     endif
 #endif
 
@@ -1153,17 +1117,17 @@ contains
     if (WESTERN_EDGE) then
       do j=jstr,jend
         fbu(istr,j) = ftu(istr,j)
-# if defined OBC_WEST && defined M2_FRC_BRY && defined Z_FRC_BRY && !defined OBC_M2SPECIFIED
-        fbu(istr,j) = fbu(istr,j) - thd*cbu(istr,j)*xx(istr,j)
-# endif
+        if (obc_west .and. .not.obc_m2_specified) then
+          fbu(istr,j) = fbu(istr,j) - thd*cbu(istr,j)*xx(istr,j)
+        endif
       enddo
     endif
     if (EASTERN_EDGE) then
       do j=jstr,jend
         fbu(iend+1,j) = ftu(iend+1,j)
-# if defined OBC_EAST && defined M2_FRC_BRY && defined Z_FRC_BRY && !defined OBC_M2SPECIFIED
-        fbu(iend+1,j) = fbu(iend+1,j) + thd*cbu(iend+1,j)*xx(iend,j)
-# endif
+        if (obc_east .and. .not.obc_m2_specified) then
+          fbu(iend+1,j) = fbu(iend+1,j) + thd*cbu(iend+1,j)*xx(iend,j)
+        endif
       enddo
     endif
 #endif
@@ -1171,17 +1135,17 @@ contains
     if (SOUTHERN_EDGE) then
       do i=istr,iend
         fbv(i,jstr) = ftv(i,jstr)
-# if defined OBC_SOUTH && defined M2_FRC_BRY && defined Z_FRC_BRY && !defined OBC_M2SPECIFIED
-        fbv(i,jstr) = fbv(i,jstr) - thd*cbv(i,jstr)*xx(i,jstr)
-# endif
+        if (obc_south .and. .not.obc_m2_specified) then
+          fbv(i,jstr) = fbv(i,jstr) - thd*cbv(i,jstr)*xx(i,jstr)
+        endif
       enddo
     endif
     if (NORTHERN_EDGE) then
       do i=istr,iend
         fbv(i,jend+1) = ftv(i,jend+1)
-# if defined OBC_NORTH && defined M2_FRC_BRY && defined Z_FRC_BRY && !defined OBC_M2SPECIFIED
-        fbv(i,jend+1) = fbv(i,jend+1) + thd*cbv(i,jend+1)*xx(i,jend)
-# endif
+        if (obc_north .and. .not.obc_m2_specified) then
+          fbv(i,jend+1) = fbv(i,jend+1) + thd*cbv(i,jend+1)*xx(i,jend)
+        endif
       enddo
     endif
 #endif
@@ -1467,7 +1431,7 @@ contains
     ! zeta_b^n+1 = (zeta_b^n + cx zeta_int^n+1)/(1 + cx)), and the weights w1 = (1 + 2 cx)/(2 (1 + cx)),
     ! w0 = 1/(2 (1 + cx)) of zeta_int^n+1 and zeta_b^n in the Flather condition's sea level with fs_flather_zghost
     ! (the Flather faces of fs_step_tile, fs_normal_bc). Rows jstr-1..jend+1 (columns istr-1..iend+1), for the
-    ! boundary points of fs_zeta_bc in the halo rows; open edges other than OBC_M2SPECIFIED.
+    ! boundary points of fs_zeta_bc in the halo rows; open edges other than obc_m2_specified.
     use param, only: np_xi, np_eta
     use dimensions, only: inode, jnode
     use scalars, only: g
@@ -1477,40 +1441,40 @@ contains
     real(kind=8), intent(in) :: dts
     integer(kind=4) :: i, j
 #ifndef EW_PERIODIC
-# if defined OBC_WEST && !defined OBC_M2SPECIFIED
-    if (WESTERN_EDGE) then
-      do j=jstr-1,jend+1
-        cxu(istr,j) = dts*pm(istr,j)*sqrt(g*h(istr,j))
-        w1u(istr,j) = 0.5_8*(1._8+2._8*cxu(istr,j))/(1._8+cxu(istr,j)) ; w0u(istr,j) = 0.5_8/(1._8+cxu(istr,j))
-      enddo
+    if (obc_west .and. .not.obc_m2_specified) then
+      if (WESTERN_EDGE) then
+        do j=jstr-1,jend+1
+          cxu(istr,j) = dts*pm(istr,j)*sqrt(g*h(istr,j))
+          w1u(istr,j) = 0.5_8*(1._8+2._8*cxu(istr,j))/(1._8+cxu(istr,j)) ; w0u(istr,j) = 0.5_8/(1._8+cxu(istr,j))
+        enddo
+      endif
     endif
-# endif
-# if defined OBC_EAST && !defined OBC_M2SPECIFIED
-    if (EASTERN_EDGE) then
-      do j=jstr-1,jend+1
-        cxu(iend+1,j) = dts*pm(iend,j)*sqrt(g*h(iend,j))
-        w1u(iend+1,j) = 0.5_8*(1._8+2._8*cxu(iend+1,j))/(1._8+cxu(iend+1,j)) ; w0u(iend+1,j) = 0.5_8/(1._8+cxu(iend+1,j))
-      enddo
+    if (obc_east .and. .not.obc_m2_specified) then
+      if (EASTERN_EDGE) then
+        do j=jstr-1,jend+1
+          cxu(iend+1,j) = dts*pm(iend,j)*sqrt(g*h(iend,j))
+          w1u(iend+1,j) = 0.5_8*(1._8+2._8*cxu(iend+1,j))/(1._8+cxu(iend+1,j)) ; w0u(iend+1,j) = 0.5_8/(1._8+cxu(iend+1,j))
+        enddo
+      endif
     endif
-# endif
 #endif
 #ifndef NS_PERIODIC
-# if defined OBC_SOUTH && !defined OBC_M2SPECIFIED
-    if (SOUTHERN_EDGE) then
-      do i=istr-1,iend+1
-        cxv(i,jstr) = dts*pn(i,jstr)*sqrt(g*h(i,jstr))
-        w1v(i,jstr) = 0.5_8*(1._8+2._8*cxv(i,jstr))/(1._8+cxv(i,jstr)) ; w0v(i,jstr) = 0.5_8/(1._8+cxv(i,jstr))
-      enddo
+    if (obc_south .and. .not.obc_m2_specified) then
+      if (SOUTHERN_EDGE) then
+        do i=istr-1,iend+1
+          cxv(i,jstr) = dts*pn(i,jstr)*sqrt(g*h(i,jstr))
+          w1v(i,jstr) = 0.5_8*(1._8+2._8*cxv(i,jstr))/(1._8+cxv(i,jstr)) ; w0v(i,jstr) = 0.5_8/(1._8+cxv(i,jstr))
+        enddo
+      endif
     endif
-# endif
-# if defined OBC_NORTH && !defined OBC_M2SPECIFIED
-    if (NORTHERN_EDGE) then
-      do i=istr-1,iend+1
-        cxv(i,jend+1) = dts*pn(i,jend)*sqrt(g*h(i,jend))
-        w1v(i,jend+1) = 0.5_8*(1._8+2._8*cxv(i,jend+1))/(1._8+cxv(i,jend+1)) ; w0v(i,jend+1) = 0.5_8/(1._8+cxv(i,jend+1))
-      enddo
+    if (obc_north .and. .not.obc_m2_specified) then
+      if (NORTHERN_EDGE) then
+        do i=istr-1,iend+1
+          cxv(i,jend+1) = dts*pn(i,jend)*sqrt(g*h(i,jend))
+          w1v(i,jend+1) = 0.5_8*(1._8+2._8*cxv(i,jend+1))/(1._8+cxv(i,jend+1)) ; w0v(i,jend+1) = 0.5_8/(1._8+cxv(i,jend+1))
+        enddo
+      endif
     endif
-# endif
 #endif
   end subroutine fs_flather_wts
 
@@ -1518,7 +1482,7 @@ contains
   subroutine fs_zeta_bc(istr,iend,jstr,jend, halo, ks, kn)
     ! Boundary rho points of zeta(kn) (section 4; kn the level the (sub-)step writes, ks its
     ! source level): on open edges other than
-    ! OBC_M2SPECIFIED the backward-Euler form of zetabc's upwind radiation,
+    ! obc_m2_specified the backward-Euler form of zetabc's upwind radiation,
     ! zeta_b = (zeta_b^n + cx zeta_int^n+1)/(1+cx), cx = dts pm(int) sqrt(g h(int)) (cxu, cxv of fs_flather_wts);
     ! else zero gradient. halo = .false.: the tile's own rows/columns and the
     ! physical corners; .true. (after the exchange of zeta(kn)): the boundary
@@ -1631,11 +1595,11 @@ contains
 #ifdef MASKING
       m = rmask(istr-1,jj)
 #endif
-#if defined OBC_WEST && !defined OBC_M2SPECIFIED
-      zeta(istr-1,jj,kn) = m*(zeta(istr-1,jj,ks) + cxu(istr,jj)*zeta(istr,jj,kn))/(1._8+cxu(istr,jj))
-#else
-      zeta(istr-1,jj,kn) = m*zeta(istr,jj,kn)
-#endif
+      if (obc_west .and. .not.obc_m2_specified) then
+        zeta(istr-1,jj,kn) = m*(zeta(istr-1,jj,ks) + cxu(istr,jj)*zeta(istr,jj,kn))/(1._8+cxu(istr,jj))
+      else
+        zeta(istr-1,jj,kn) = m*zeta(istr,jj,kn)
+      endif
     end subroutine wbc
     subroutine ebc(jj)
       integer(kind=4), intent(in) :: jj
@@ -1643,11 +1607,11 @@ contains
 #ifdef MASKING
       m = rmask(iend+1,jj)
 #endif
-#if defined OBC_EAST && !defined OBC_M2SPECIFIED
-      zeta(iend+1,jj,kn) = m*(zeta(iend+1,jj,ks) + cxu(iend+1,jj)*zeta(iend,jj,kn))/(1._8+cxu(iend+1,jj))
-#else
-      zeta(iend+1,jj,kn) = m*zeta(iend,jj,kn)
-#endif
+      if (obc_east .and. .not.obc_m2_specified) then
+        zeta(iend+1,jj,kn) = m*(zeta(iend+1,jj,ks) + cxu(iend+1,jj)*zeta(iend,jj,kn))/(1._8+cxu(iend+1,jj))
+      else
+        zeta(iend+1,jj,kn) = m*zeta(iend,jj,kn)
+      endif
     end subroutine ebc
     subroutine sbc(ii)
       integer(kind=4), intent(in) :: ii
@@ -1655,11 +1619,11 @@ contains
 #ifdef MASKING
       m = rmask(ii,jstr-1)
 #endif
-#if defined OBC_SOUTH && !defined OBC_M2SPECIFIED
-      zeta(ii,jstr-1,kn) = m*(zeta(ii,jstr-1,ks) + cxv(ii,jstr)*zeta(ii,jstr,kn))/(1._8+cxv(ii,jstr))
-#else
-      zeta(ii,jstr-1,kn) = m*zeta(ii,jstr,kn)
-#endif
+      if (obc_south .and. .not.obc_m2_specified) then
+        zeta(ii,jstr-1,kn) = m*(zeta(ii,jstr-1,ks) + cxv(ii,jstr)*zeta(ii,jstr,kn))/(1._8+cxv(ii,jstr))
+      else
+        zeta(ii,jstr-1,kn) = m*zeta(ii,jstr,kn)
+      endif
     end subroutine sbc
     subroutine nbc(ii)
       integer(kind=4), intent(in) :: ii
@@ -1667,11 +1631,11 @@ contains
 #ifdef MASKING
       m = rmask(ii,jend+1)
 #endif
-#if defined OBC_NORTH && !defined OBC_M2SPECIFIED
-      zeta(ii,jend+1,kn) = m*(zeta(ii,jend+1,ks) + cxv(ii,jend+1)*zeta(ii,jend,kn))/(1._8+cxv(ii,jend+1))
-#else
-      zeta(ii,jend+1,kn) = m*zeta(ii,jend,kn)
-#endif
+      if (obc_north .and. .not.obc_m2_specified) then
+        zeta(ii,jend+1,kn) = m*(zeta(ii,jend+1,ks) + cxv(ii,jend+1)*zeta(ii,jend,kn))/(1._8+cxv(ii,jend+1))
+      else
+        zeta(ii,jend+1,kn) = m*zeta(ii,jend,kn)
+      endif
     end subroutine nbc
   end subroutine fs_zeta_bc
 
@@ -1680,11 +1644,11 @@ contains
     ! Tangential barotropic velocities on the boundary rows/columns (v at the
     ! western/eastern ghost columns, u at the southern/northern ghost rows) and the
     ! corners (section 4). Open edges: the backward-Euler form of u2dbc/v2dbc under
-    ! OBC_M2FLATHER (whose tangential faces use the Orlanski radiation scheme, non-legacy branch):
+    ! obc_m2_flather:
     ! explicit upwind advection along the edge by the tangential velocity (Courant number clamped
     ! to [-1, 1]), implicit upwind advection by the outward normal velocity un,
     ! v_b = (v' + ca v_1^n+1)/(1 + ca), ca = dts un/dx, and on inflow nudging
-    ! v_b = (v' + ce v_ext)/(1 + ce), ce = -ca fs_tang_nudge; OBC_M2SPECIFIED the external value;
+    ! v_b = (v' + ce v_ext)/(1 + ce), ce = -ca fs_tang_nudge; obc_m2_specified the external value;
     ! closed edges gamma2 v_int; corners as u2dbc/v2dbc. ks, kn, dts: the (sub-)step's source and new
     ! levels and its length.
     use param, only: np_xi, np_eta
@@ -1695,22 +1659,7 @@ contains
 #ifdef MASKING
     use grid, only: umask, vmask
 #endif
-#if defined M2_FRC_BRY
-    use boundary, only:&
-# ifdef OBC_WEST
-    &  vbar_west,&
-# endif
-# ifdef OBC_EAST
-    &  vbar_east,&
-# endif
-# ifdef OBC_SOUTH
-    &  ubar_south,&
-# endif
-# ifdef OBC_NORTH
-    &  ubar_north,&
-# endif
-    &  set_bry_all
-#endif
+    use boundary, only: vbar_west, vbar_east, ubar_south, ubar_north
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend, ks, kn
     real(kind=8), intent(in) :: dts
@@ -1719,170 +1668,146 @@ contains
 #include "compute_auxiliary_bounds.h"
 #ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
-# ifdef OBC_WEST
-      do j=jstrV,jend
-#  ifdef OBC_M2SPECIFIED
-        vbar(istr-1,j,kn) = vbar_west(j)
-#  else
-        ca = -0.125_8*dts*(ubar(istr,j,ks)+ubar(istr,j-1,ks))&
-        &   *(pm(istr-1,j)+pm(istr-1,j-1)+pm(istr,j)+pm(istr,j-1))
-        cy = 0.125_8*dts*(vbar(istr-1,j,ks)+vbar(istr,j,ks))&
-        &   *(pn(istr-1,j)+pn(istr-1,j-1)+pn(istr,j)+pn(istr,j-1))
-#   ifdef M2_FRC_BRY
-        vbar(istr-1,j,kn) = tnew(vbar(istr-1,j,ks), vbar(istr,j,kn), ca, cy,&
-        &  vbar(istr-1,j,ks)-vbar(istr-1,j-1,ks), vbar(istr-1,j+1,ks)-vbar(istr-1,j,ks),&
-        &  vbar_west(j), .true.)
-#   else
-        vbar(istr-1,j,kn) = tnew(vbar(istr-1,j,ks), vbar(istr,j,kn), ca, cy,&
-        &  vbar(istr-1,j,ks)-vbar(istr-1,j-1,ks), vbar(istr-1,j+1,ks)-vbar(istr-1,j,ks),&
-        &  0._8, .false.)
-#   endif
-#  endif
+      if (obc_west) then
+        do j=jstrV,jend
+          if (obc_m2_specified) then
+            vbar(istr-1,j,kn) = vbar_west(j)
+          else
+            ca = -0.125_8*dts*(ubar(istr,j,ks)+ubar(istr,j-1,ks))&
+            &   *(pm(istr-1,j)+pm(istr-1,j-1)+pm(istr,j)+pm(istr,j-1))
+            cy = 0.125_8*dts*(vbar(istr-1,j,ks)+vbar(istr,j,ks))&
+            &   *(pn(istr-1,j)+pn(istr-1,j-1)+pn(istr,j)+pn(istr,j-1))
+            vbar(istr-1,j,kn) = tnew(vbar(istr-1,j,ks), vbar(istr,j,kn), ca, cy,&
+            &  vbar(istr-1,j,ks)-vbar(istr-1,j-1,ks), vbar(istr-1,j+1,ks)-vbar(istr-1,j,ks),&
+            &  vbar_west(j), .true.)
+          endif
 #  ifdef MASKING
-        vbar(istr-1,j,kn) = vbar(istr-1,j,kn)*vmask(istr-1,j)
+          vbar(istr-1,j,kn) = vbar(istr-1,j,kn)*vmask(istr-1,j)
 #  endif
-      enddo
-# else
-      do j=jstr,jendR
-        vbar(istr-1,j,kn) = gamma2*vbar(istr,j,kn)
+        enddo
+      else
+        do j=jstr,jendR
+          vbar(istr-1,j,kn) = gamma2*vbar(istr,j,kn)
 #  ifdef MASKING
-        vbar(istr-1,j,kn) = vbar(istr-1,j,kn)*vmask(istr-1,j)
+          vbar(istr-1,j,kn) = vbar(istr-1,j,kn)*vmask(istr-1,j)
 #  endif
-      enddo
-# endif
+        enddo
+      endif
     endif
     if (EASTERN_EDGE) then
-# ifdef OBC_EAST
-      do j=jstrV,jend
-#  ifdef OBC_M2SPECIFIED
-        vbar(iend+1,j,kn) = vbar_east(j)
-#  else
-        ca = 0.125_8*dts*(ubar(iend+1,j,ks)+ubar(iend+1,j-1,ks))&
-        &   *(pm(iend,j)+pm(iend,j-1)+pm(iend+1,j)+pm(iend+1,j-1))
-        cy = 0.125_8*dts*(vbar(iend,j,ks)+vbar(iend+1,j,ks))&
-        &   *(pn(iend,j)+pn(iend,j-1)+pn(iend+1,j)+pn(iend+1,j-1))
-#   ifdef M2_FRC_BRY
-        vbar(iend+1,j,kn) = tnew(vbar(iend+1,j,ks), vbar(iend,j,kn), ca, cy,&
-        &  vbar(iend+1,j,ks)-vbar(iend+1,j-1,ks), vbar(iend+1,j+1,ks)-vbar(iend+1,j,ks),&
-        &  vbar_east(j), .true.)
-#   else
-        vbar(iend+1,j,kn) = tnew(vbar(iend+1,j,ks), vbar(iend,j,kn), ca, cy,&
-        &  vbar(iend+1,j,ks)-vbar(iend+1,j-1,ks), vbar(iend+1,j+1,ks)-vbar(iend+1,j,ks),&
-        &  0._8, .false.)
-#   endif
-#  endif
+      if (obc_east) then
+        do j=jstrV,jend
+          if (obc_m2_specified) then
+            vbar(iend+1,j,kn) = vbar_east(j)
+          else
+            ca = 0.125_8*dts*(ubar(iend+1,j,ks)+ubar(iend+1,j-1,ks))&
+            &   *(pm(iend,j)+pm(iend,j-1)+pm(iend+1,j)+pm(iend+1,j-1))
+            cy = 0.125_8*dts*(vbar(iend,j,ks)+vbar(iend+1,j,ks))&
+            &   *(pn(iend,j)+pn(iend,j-1)+pn(iend+1,j)+pn(iend+1,j-1))
+            vbar(iend+1,j,kn) = tnew(vbar(iend+1,j,ks), vbar(iend,j,kn), ca, cy,&
+            &  vbar(iend+1,j,ks)-vbar(iend+1,j-1,ks), vbar(iend+1,j+1,ks)-vbar(iend+1,j,ks),&
+            &  vbar_east(j), .true.)
+          endif
 #  ifdef MASKING
-        vbar(iend+1,j,kn) = vbar(iend+1,j,kn)*vmask(iend+1,j)
+          vbar(iend+1,j,kn) = vbar(iend+1,j,kn)*vmask(iend+1,j)
 #  endif
-      enddo
-# else
-      do j=jstr,jendR
-        vbar(iend+1,j,kn) = gamma2*vbar(iend,j,kn)
+        enddo
+      else
+        do j=jstr,jendR
+          vbar(iend+1,j,kn) = gamma2*vbar(iend,j,kn)
 #  ifdef MASKING
-        vbar(iend+1,j,kn) = vbar(iend+1,j,kn)*vmask(iend+1,j)
+          vbar(iend+1,j,kn) = vbar(iend+1,j,kn)*vmask(iend+1,j)
 #  endif
-      enddo
-# endif
+        enddo
+      endif
     endif
 #endif
 #ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
-# ifdef OBC_SOUTH
-      do i=istrU,iend
-#  ifdef OBC_M2SPECIFIED
-        ubar(i,jstr-1,kn) = ubar_south(i)
-#  else
-        ca = -0.125_8*dts*(vbar(i,jstr,ks)+vbar(i-1,jstr,ks))&
-        &   *(pn(i,jstr-1)+pn(i-1,jstr-1)+pn(i,jstr)+pn(i-1,jstr))
-        cy = 0.125_8*dts*(ubar(i,jstr-1,ks)+ubar(i,jstr,ks))&
-        &   *(pm(i,jstr-1)+pm(i-1,jstr-1)+pm(i,jstr)+pm(i-1,jstr))
-#   ifdef M2_FRC_BRY
-        ubar(i,jstr-1,kn) = tnew(ubar(i,jstr-1,ks), ubar(i,jstr,kn), ca, cy,&
-        &  ubar(i,jstr-1,ks)-ubar(i-1,jstr-1,ks), ubar(i+1,jstr-1,ks)-ubar(i,jstr-1,ks),&
-        &  ubar_south(i), .true.)
-#   else
-        ubar(i,jstr-1,kn) = tnew(ubar(i,jstr-1,ks), ubar(i,jstr,kn), ca, cy,&
-        &  ubar(i,jstr-1,ks)-ubar(i-1,jstr-1,ks), ubar(i+1,jstr-1,ks)-ubar(i,jstr-1,ks),&
-        &  0._8, .false.)
-#   endif
-#  endif
+      if (obc_south) then
+        do i=istrU,iend
+          if (obc_m2_specified) then
+            ubar(i,jstr-1,kn) = ubar_south(i)
+          else
+            ca = -0.125_8*dts*(vbar(i,jstr,ks)+vbar(i-1,jstr,ks))&
+            &   *(pn(i,jstr-1)+pn(i-1,jstr-1)+pn(i,jstr)+pn(i-1,jstr))
+            cy = 0.125_8*dts*(ubar(i,jstr-1,ks)+ubar(i,jstr,ks))&
+            &   *(pm(i,jstr-1)+pm(i-1,jstr-1)+pm(i,jstr)+pm(i-1,jstr))
+            ubar(i,jstr-1,kn) = tnew(ubar(i,jstr-1,ks), ubar(i,jstr,kn), ca, cy,&
+            &  ubar(i,jstr-1,ks)-ubar(i-1,jstr-1,ks), ubar(i+1,jstr-1,ks)-ubar(i,jstr-1,ks),&
+            &  ubar_south(i), .true.)
+          endif
 #  ifdef MASKING
-        ubar(i,jstr-1,kn) = ubar(i,jstr-1,kn)*umask(i,jstr-1)
+          ubar(i,jstr-1,kn) = ubar(i,jstr-1,kn)*umask(i,jstr-1)
 #  endif
-      enddo
-# else
-      do i=istr,iendR
-        ubar(i,jstr-1,kn) = gamma2*ubar(i,jstr,kn)
+        enddo
+      else
+        do i=istr,iendR
+          ubar(i,jstr-1,kn) = gamma2*ubar(i,jstr,kn)
 #  ifdef MASKING
-        ubar(i,jstr-1,kn) = ubar(i,jstr-1,kn)*umask(i,jstr-1)
+          ubar(i,jstr-1,kn) = ubar(i,jstr-1,kn)*umask(i,jstr-1)
 #  endif
-      enddo
-# endif
+        enddo
+      endif
     endif
     if (NORTHERN_EDGE) then
-# ifdef OBC_NORTH
-      do i=istrU,iend
-#  ifdef OBC_M2SPECIFIED
-        ubar(i,jend+1,kn) = ubar_north(i)
-#  else
-        ca = 0.125_8*dts*(vbar(i,jend+1,ks)+vbar(i-1,jend+1,ks))&
-        &   *(pn(i,jend)+pn(i-1,jend)+pn(i,jend+1)+pn(i-1,jend+1))
-        cy = 0.125_8*dts*(ubar(i,jend,ks)+ubar(i,jend+1,ks))&
-        &   *(pm(i,jend)+pm(i-1,jend)+pm(i,jend+1)+pm(i-1,jend+1))
-#   ifdef M2_FRC_BRY
-        ubar(i,jend+1,kn) = tnew(ubar(i,jend+1,ks), ubar(i,jend,kn), ca, cy,&
-        &  ubar(i,jend+1,ks)-ubar(i-1,jend+1,ks), ubar(i+1,jend+1,ks)-ubar(i,jend+1,ks),&
-        &  ubar_north(i), .true.)
-#   else
-        ubar(i,jend+1,kn) = tnew(ubar(i,jend+1,ks), ubar(i,jend,kn), ca, cy,&
-        &  ubar(i,jend+1,ks)-ubar(i-1,jend+1,ks), ubar(i+1,jend+1,ks)-ubar(i,jend+1,ks),&
-        &  0._8, .false.)
-#   endif
-#  endif
+      if (obc_north) then
+        do i=istrU,iend
+          if (obc_m2_specified) then
+            ubar(i,jend+1,kn) = ubar_north(i)
+          else
+            ca = 0.125_8*dts*(vbar(i,jend+1,ks)+vbar(i-1,jend+1,ks))&
+            &   *(pn(i,jend)+pn(i-1,jend)+pn(i,jend+1)+pn(i-1,jend+1))
+            cy = 0.125_8*dts*(ubar(i,jend,ks)+ubar(i,jend+1,ks))&
+            &   *(pm(i,jend)+pm(i-1,jend)+pm(i,jend+1)+pm(i-1,jend+1))
+            ubar(i,jend+1,kn) = tnew(ubar(i,jend+1,ks), ubar(i,jend,kn), ca, cy,&
+            &  ubar(i,jend+1,ks)-ubar(i-1,jend+1,ks), ubar(i+1,jend+1,ks)-ubar(i,jend+1,ks),&
+            &  ubar_north(i), .true.)
+          endif
 #  ifdef MASKING
-        ubar(i,jend+1,kn) = ubar(i,jend+1,kn)*umask(i,jend+1)
+          ubar(i,jend+1,kn) = ubar(i,jend+1,kn)*umask(i,jend+1)
 #  endif
-      enddo
-# else
-      do i=istr,iendR
-        ubar(i,jend+1,kn) = gamma2*ubar(i,jend,kn)
+        enddo
+      else
+        do i=istr,iendR
+          ubar(i,jend+1,kn) = gamma2*ubar(i,jend,kn)
 #  ifdef MASKING
-        ubar(i,jend+1,kn) = ubar(i,jend+1,kn)*umask(i,jend+1)
+          ubar(i,jend+1,kn) = ubar(i,jend+1,kn)*umask(i,jend+1)
 #  endif
-      enddo
-# endif
+        enddo
+      endif
     endif
 #endif
     ! corners between adjacent open boundaries (u2dbc, v2dbc)
-#if defined OBC_SOUTH && defined OBC_WEST
-    if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
-      ubar(istr,jstr-1,kn) = 0.5_8*(ubar(istr+1,jstr-1,kn) + ubar(istr,jstr,kn))
-      vbar(istr-1,jstr,kn) = 0.5_8*(vbar(istr-1,jstr+1,kn) + vbar(istr,jstr,kn))
+    if (obc_south .and. obc_west) then
+      if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
+        ubar(istr,jstr-1,kn) = 0.5_8*(ubar(istr+1,jstr-1,kn) + ubar(istr,jstr,kn))
+        vbar(istr-1,jstr,kn) = 0.5_8*(vbar(istr-1,jstr+1,kn) + vbar(istr,jstr,kn))
+      endif
     endif
-#endif
-#if defined OBC_SOUTH && defined OBC_EAST
-    if (EASTERN_EDGE .and. SOUTHERN_EDGE) then
-      ubar(iend+1,jstr-1,kn) = 0.5_8*(ubar(iend,jstr-1,kn) + ubar(iend+1,jstr,kn))
-      vbar(iend+1,jstr,kn) = 0.5_8*(vbar(iend+1,jstr+1,kn) + vbar(iend,jstr,kn))
+    if (obc_south .and. obc_east) then
+      if (EASTERN_EDGE .and. SOUTHERN_EDGE) then
+        ubar(iend+1,jstr-1,kn) = 0.5_8*(ubar(iend,jstr-1,kn) + ubar(iend+1,jstr,kn))
+        vbar(iend+1,jstr,kn) = 0.5_8*(vbar(iend+1,jstr+1,kn) + vbar(iend,jstr,kn))
+      endif
     endif
-#endif
-#if defined OBC_NORTH && defined OBC_WEST
-    if (WESTERN_EDGE .and. NORTHERN_EDGE) then
-      ubar(istr,jend+1,kn) = 0.5_8*(ubar(istr+1,jend+1,kn) + ubar(istr,jend,kn))
-      vbar(istr-1,jend+1,kn) = 0.5_8*(vbar(istr-1,jend,kn) + vbar(istr,jend+1,kn))
+    if (obc_north .and. obc_west) then
+      if (WESTERN_EDGE .and. NORTHERN_EDGE) then
+        ubar(istr,jend+1,kn) = 0.5_8*(ubar(istr+1,jend+1,kn) + ubar(istr,jend,kn))
+        vbar(istr-1,jend+1,kn) = 0.5_8*(vbar(istr-1,jend,kn) + vbar(istr,jend+1,kn))
+      endif
     endif
-#endif
-#if defined OBC_NORTH && defined OBC_EAST
-    if (EASTERN_EDGE .and. NORTHERN_EDGE) then
-      ubar(iend+1,jend+1,kn) = 0.5_8*(ubar(iend,jend+1,kn) + ubar(iend+1,jend,kn))
-      vbar(iend+1,jend+1,kn) = 0.5_8*(vbar(iend+1,jend,kn) + vbar(iend,jend+1,kn))
+    if (obc_north .and. obc_east) then
+      if (EASTERN_EDGE .and. NORTHERN_EDGE) then
+        ubar(iend+1,jend+1,kn) = 0.5_8*(ubar(iend,jend+1,kn) + ubar(iend+1,jend,kn))
+        vbar(iend+1,jend+1,kn) = 0.5_8*(vbar(iend+1,jend,kn) + vbar(iend,jend+1,kn))
+      endif
     endif
-#endif
   contains
     real(kind=8) function tnew(vbn, v1, ca, cy, gm, gp, vext, has_ext)
       ! one tangential boundary face: vbn the ghost value at n, v1 the first interior value at n+1, ca the
       ! outward-normal advective Courant number, cy the along-edge one, gm/gp the along-edge differences at n
-      ! (v(k)-v(k-1), v(k+1)-v(k)), vext the external value (has_ext: M2_FRC_BRY)
+      ! (v(k)-v(k-1), v(k+1)-v(k)), vext the external value (has_ext)
       real(kind=8), intent(in) :: vbn, v1, ca, cy, gm, gp, vext
       logical, intent(in) :: has_ext
       real(kind=8) :: c, r
@@ -1918,153 +1843,137 @@ contains
 #ifdef MASKING
     use grid, only: umask, vmask
 #endif
-#if defined M2_FRC_BRY && defined Z_FRC_BRY
-    use boundary, only:&
-# ifdef OBC_WEST
-    &  zeta_west, ubar_west,&
-# endif
-# ifdef OBC_EAST
-    &  zeta_east, ubar_east,&
-# endif
-# ifdef OBC_SOUTH
-    &  zeta_south, vbar_south,&
-# endif
-# ifdef OBC_NORTH
-    &  zeta_north, vbar_north,&
-# endif
-    &  set_bry_all
-#endif
+    use boundary, only: zeta_west, ubar_west, zeta_east, ubar_east,&
+    &  zeta_south, vbar_south, zeta_north, vbar_north
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend, ks, kn
     integer(kind=4) :: i, j
     real(kind=8) :: m, dfn, ub
 #include "compute_auxiliary_bounds.h"
 #ifndef EW_PERIODIC
-# ifndef OBC_WEST
-    if (WESTERN_EDGE) then
-      do j=jstr,jend
-        ubar(istr,j,kn) = 0._8
-      enddo
+    if (.not.obc_west) then
+      if (WESTERN_EDGE) then
+        do j=jstr,jend
+          ubar(istr,j,kn) = 0._8
+        enddo
+      endif
     endif
-# endif
-# ifndef OBC_EAST
-    if (EASTERN_EDGE) then
-      do j=jstr,jend
-        ubar(iend+1,j,kn) = 0._8
-      enddo
+    if (.not.obc_east) then
+      if (EASTERN_EDGE) then
+        do j=jstr,jend
+          ubar(iend+1,j,kn) = 0._8
+        enddo
+      endif
     endif
-# endif
 #endif
 #ifndef NS_PERIODIC
-# ifndef OBC_SOUTH
-    if (SOUTHERN_EDGE) then
-      do i=istr,iend
-        vbar(i,jstr,kn) = 0._8
-      enddo
+    if (.not.obc_south) then
+      if (SOUTHERN_EDGE) then
+        do i=istr,iend
+          vbar(i,jstr,kn) = 0._8
+        enddo
+      endif
     endif
-# endif
-# ifndef OBC_NORTH
-    if (NORTHERN_EDGE) then
-      do i=istr,iend
-        vbar(i,jend+1,kn) = 0._8
-      enddo
+    if (.not.obc_north) then
+      if (NORTHERN_EDGE) then
+        do i=istr,iend
+          vbar(i,jend+1,kn) = 0._8
+        enddo
+      endif
     endif
-# endif
 #endif
-#if defined M2_FRC_BRY && defined Z_FRC_BRY
 # ifndef EW_PERIODIC
-#  ifdef OBC_WEST
-    if (WESTERN_EDGE) then
-      do j=jstr,jend
-        m = 1._8
+    if (obc_west) then
+      if (WESTERN_EDGE) then
+        do j=jstr,jend
+          m = 1._8
 #   ifdef MASKING
-        m = umask(istr,j)
+          m = umask(istr,j)
 #   endif
-#   ifdef OBC_M2SPECIFIED
-        ubar(istr,j,kn) = m*ubar_west(j)
-#   else
-        dfn = 0.5_8*(h(istr-1,j)+zeta(istr-1,j,ks)+h(istr,j)+zeta(istr,j,ks))
-        if (fs_flather_zghost) then          ! cbu = cb w1u
-          ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,kn)&
-          &        + (w0u(istr,j)*zeta(istr-1,j,ks) - zeta_west(j))/w1u(istr,j)) )
-        else
-          ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,kn) - zeta_west(j)) )
-        end if
-        ubar(istr,j,kn) = 2._8*ub/((wd(istr-1,j)+wd(istr,j))*dn_u(istr,j))
-#   endif
-      enddo
+          if (obc_m2_specified) then
+            ubar(istr,j,kn) = m*ubar_west(j)
+          else
+            dfn = 0.5_8*(h(istr-1,j)+zeta(istr-1,j,ks)+h(istr,j)+zeta(istr,j,ks))
+            if (fs_flather_zghost) then          ! cbu = cb w1u
+              ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,kn)&
+              &        + (w0u(istr,j)*zeta(istr-1,j,ks) - zeta_west(j))/w1u(istr,j)) )
+            else
+              ub = m*( dfn*dn_u(istr,j)*ubar_west(j) - cbu(istr,j)*(zeta(istr,j,kn) - zeta_west(j)) )
+            end if
+            ubar(istr,j,kn) = 2._8*ub/((wd(istr-1,j)+wd(istr,j))*dn_u(istr,j))
+          endif
+        enddo
+      endif
     endif
-#  endif
-#  ifdef OBC_EAST
-    if (EASTERN_EDGE) then
-      do j=jstr,jend
-        m = 1._8
+    if (obc_east) then
+      if (EASTERN_EDGE) then
+        do j=jstr,jend
+          m = 1._8
 #   ifdef MASKING
-        m = umask(iend+1,j)
+          m = umask(iend+1,j)
 #   endif
-#   ifdef OBC_M2SPECIFIED
-        ubar(iend+1,j,kn) = m*ubar_east(j)
-#   else
-        dfn = 0.5_8*(h(iend,j)+zeta(iend,j,ks)+h(iend+1,j)+zeta(iend+1,j,ks))
-        if (fs_flather_zghost) then
-          ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,kn)&
-          &        + (w0u(iend+1,j)*zeta(iend+1,j,ks) - zeta_east(j))/w1u(iend+1,j)) )
-        else
-          ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,kn) - zeta_east(j)) )
-        end if
-        ubar(iend+1,j,kn) = 2._8*ub/((wd(iend,j)+wd(iend+1,j))*dn_u(iend+1,j))
-#   endif
-      enddo
+          if (obc_m2_specified) then
+            ubar(iend+1,j,kn) = m*ubar_east(j)
+          else
+            dfn = 0.5_8*(h(iend,j)+zeta(iend,j,ks)+h(iend+1,j)+zeta(iend+1,j,ks))
+            if (fs_flather_zghost) then
+              ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,kn)&
+              &        + (w0u(iend+1,j)*zeta(iend+1,j,ks) - zeta_east(j))/w1u(iend+1,j)) )
+            else
+              ub = m*( dfn*dn_u(iend+1,j)*ubar_east(j) + cbu(iend+1,j)*(zeta(iend,j,kn) - zeta_east(j)) )
+            end if
+            ubar(iend+1,j,kn) = 2._8*ub/((wd(iend,j)+wd(iend+1,j))*dn_u(iend+1,j))
+          endif
+        enddo
+      endif
     endif
-#  endif
 # endif
 # ifndef NS_PERIODIC
-#  ifdef OBC_SOUTH
-    if (SOUTHERN_EDGE) then
-      do i=istr,iend
-        m = 1._8
+    if (obc_south) then
+      if (SOUTHERN_EDGE) then
+        do i=istr,iend
+          m = 1._8
 #   ifdef MASKING
-        m = vmask(i,jstr)
+          m = vmask(i,jstr)
 #   endif
-#   ifdef OBC_M2SPECIFIED
-        vbar(i,jstr,kn) = m*vbar_south(i)
-#   else
-        dfn = 0.5_8*(h(i,jstr-1)+zeta(i,jstr-1,ks)+h(i,jstr)+zeta(i,jstr,ks))
-        if (fs_flather_zghost) then
-          ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,kn)&
-          &        + (w0v(i,jstr)*zeta(i,jstr-1,ks) - zeta_south(i))/w1v(i,jstr)) )
-        else
-          ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,kn) - zeta_south(i)) )
-        end if
-        vbar(i,jstr,kn) = 2._8*ub/((wd(i,jstr-1)+wd(i,jstr))*dm_v(i,jstr))
-#   endif
-      enddo
+          if (obc_m2_specified) then
+            vbar(i,jstr,kn) = m*vbar_south(i)
+          else
+            dfn = 0.5_8*(h(i,jstr-1)+zeta(i,jstr-1,ks)+h(i,jstr)+zeta(i,jstr,ks))
+            if (fs_flather_zghost) then
+              ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,kn)&
+              &        + (w0v(i,jstr)*zeta(i,jstr-1,ks) - zeta_south(i))/w1v(i,jstr)) )
+            else
+              ub = m*( dfn*dm_v(i,jstr)*vbar_south(i) - cbv(i,jstr)*(zeta(i,jstr,kn) - zeta_south(i)) )
+            end if
+            vbar(i,jstr,kn) = 2._8*ub/((wd(i,jstr-1)+wd(i,jstr))*dm_v(i,jstr))
+          endif
+        enddo
+      endif
     endif
-#  endif
-#  ifdef OBC_NORTH
-    if (NORTHERN_EDGE) then
-      do i=istr,iend
-        m = 1._8
+    if (obc_north) then
+      if (NORTHERN_EDGE) then
+        do i=istr,iend
+          m = 1._8
 #   ifdef MASKING
-        m = vmask(i,jend+1)
+          m = vmask(i,jend+1)
 #   endif
-#   ifdef OBC_M2SPECIFIED
-        vbar(i,jend+1,kn) = m*vbar_north(i)
-#   else
-        dfn = 0.5_8*(h(i,jend)+zeta(i,jend,ks)+h(i,jend+1)+zeta(i,jend+1,ks))
-        if (fs_flather_zghost) then
-          ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,kn)&
-          &        + (w0v(i,jend+1)*zeta(i,jend+1,ks) - zeta_north(i))/w1v(i,jend+1)) )
-        else
-          ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,kn) - zeta_north(i)) )
-        end if
-        vbar(i,jend+1,kn) = 2._8*ub/((wd(i,jend)+wd(i,jend+1))*dm_v(i,jend+1))
-#   endif
-      enddo
+          if (obc_m2_specified) then
+            vbar(i,jend+1,kn) = m*vbar_north(i)
+          else
+            dfn = 0.5_8*(h(i,jend)+zeta(i,jend,ks)+h(i,jend+1)+zeta(i,jend+1,ks))
+            if (fs_flather_zghost) then
+              ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,kn)&
+              &        + (w0v(i,jend+1)*zeta(i,jend+1,ks) - zeta_north(i))/w1v(i,jend+1)) )
+            else
+              ub = m*( dfn*dm_v(i,jend+1)*vbar_north(i) + cbv(i,jend+1)*(zeta(i,jend,kn) - zeta_north(i)) )
+            end if
+            vbar(i,jend+1,kn) = 2._8*ub/((wd(i,jend)+wd(i,jend+1))*dm_v(i,jend+1))
+          endif
+        enddo
+      endif
     endif
-#  endif
 # endif
-#endif
   end subroutine fs_normal_bc
 
   !----------------------------------------------------------------------
@@ -2556,36 +2465,36 @@ contains
     ! faces (umask = 0 and not a river face) of the tile's owned faces.
     wl = 0._8
 #ifndef EW_PERIODIC
-# ifndef OBC_WEST
-    if (WESTERN_EDGE) then
-      do j=jstr,jend
-        call wmax(wl(1:3), ubar(istr,j,knew), DU_avg1(istr,j), DU_avg2(istr,j))
-      enddo
+    if (.not.obc_west) then
+      if (WESTERN_EDGE) then
+        do j=jstr,jend
+          call wmax(wl(1:3), ubar(istr,j,knew), DU_avg1(istr,j), DU_avg2(istr,j))
+        enddo
+      endif
     endif
-# endif
-# ifndef OBC_EAST
-    if (EASTERN_EDGE) then
-      do j=jstr,jend
-        call wmax(wl(1:3), ubar(iend+1,j,knew), DU_avg1(iend+1,j), DU_avg2(iend+1,j))
-      enddo
+    if (.not.obc_east) then
+      if (EASTERN_EDGE) then
+        do j=jstr,jend
+          call wmax(wl(1:3), ubar(iend+1,j,knew), DU_avg1(iend+1,j), DU_avg2(iend+1,j))
+        enddo
+      endif
     endif
-# endif
 #endif
 #ifndef NS_PERIODIC
-# ifndef OBC_SOUTH
-    if (SOUTHERN_EDGE) then
-      do i=istr,iend
-        call wmax(wl(1:3), vbar(i,jstr,knew), DV_avg1(i,jstr), DV_avg2(i,jstr))
-      enddo
+    if (.not.obc_south) then
+      if (SOUTHERN_EDGE) then
+        do i=istr,iend
+          call wmax(wl(1:3), vbar(i,jstr,knew), DV_avg1(i,jstr), DV_avg2(i,jstr))
+        enddo
+      endif
     endif
-# endif
-# ifndef OBC_NORTH
-    if (NORTHERN_EDGE) then
-      do i=istr,iend
-        call wmax(wl(1:3), vbar(i,jend+1,knew), DV_avg1(i,jend+1), DV_avg2(i,jend+1))
-      enddo
+    if (.not.obc_north) then
+      if (NORTHERN_EDGE) then
+        do i=istr,iend
+          call wmax(wl(1:3), vbar(i,jend+1,knew), DV_avg1(i,jend+1), DV_avg2(i,jend+1))
+        enddo
+      endif
     endif
-# endif
 #endif
 #ifdef MASKING
     do j=jstr,jend

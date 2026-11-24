@@ -34,9 +34,6 @@ OCEAN_PHYSICS_CPP_KEYS = [
 ]
 REALISTIC_CPP_KEYS = [
     "CURVGRID", "SPHERICAL",
-    "OBC_WEST", "OBC_EAST", "OBC_NORTH", "OBC_SOUTH",
-    "OBC_M2FLATHER", "OBC_M3ORLANSKI", "OBC_TORLANSKI",
-    "Z_FRC_BRY", "M2_FRC_BRY", "M3_FRC_BRY", "T_FRC_BRY",
 ]
 ANALYTICAL_CPP_KEYS = [
     "ANA_GRID", "ANA_INITIAL", "ANA_SMFLUX",
@@ -50,6 +47,9 @@ MARBL_CPP_KEYS = ["MARBL"]
 # Base namelist
 # --------------------------------------------------------------------------
 _BASE_NAMELIST = nl.read(ROMS_ROOT / "src/namelist.nml")
+
+# OPEN_BOUNDARY_SETTINGS of a domain with walls on all sides
+CLOSED_BOX = {"obc_west": False, "obc_east": False, "obc_south": False, "obc_north": False}
 
 
 def create_test_namelist_dict(input_dir: Path) -> dict:
