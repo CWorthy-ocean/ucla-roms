@@ -52,11 +52,9 @@ contains
   use pipe_frc, only: pidx, pipe_idx, pipe_trc,&
   &pipe_prf, pipe_flx, pipe_source
   use dimensions, only: inode, jnode, npx, npy
-#ifdef CDR_FORCING
   use cdr_frc, only: cdr_nprf, cdr_icdr, cdr_iloc,&
   &cdr_jloc, cdr_flx, cdr_prf, cdr_flx_3d_ALK, cdr_flx_3d_DIC,&
   &ncdr, cdr_source, cdr_forcing_3d
-#endif
   use river_frc, only: iriver, riv_depth, riv_uvel, riv_vvel, river_source,&
   &riv_uflx, riv_vol, riv_trc, riv_vflx,&
   &nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
@@ -88,17 +86,13 @@ contains
   use t3dbc_mod, only : t3dbc_tile
   use ocean_vars, only: flxu, flxv, z_w, hz, we, wi, z_r
   use scalars, only: nz, dt, nnew, nrhs, nt, nstp, diff_on
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
   use upscale_output, only:&
   &calc_forcing_rates, add_mixing_rates, do_upscale
-#endif
 #ifdef ADV_ISONEUTRAL
   use eos_vars, only: drdx, drde, idrz
 #endif
-#ifdef DIAGNOSTICS
   use diagnostics, only: calc_diag, tdiag, tmixx, tadvx, tadvy, diag_trc,&
   &tmixy, tadvy, tadvz, td, vflxd, zflx, tmixz, diag_t_adv_vc4, diag_t_adv_hc4
-#endif
   use bulk_frc, only: tair
   use surf_flux, only: swflx
   implicit none
@@ -203,13 +197,11 @@ contains
       ! swept-volume advection: the blend on the hot faces of level k
       if (sl_adv) call sl_hflux(k, itrc, FX, FE, istr, iend, jstr, jend)
 
-# ifdef DIAGNOSTICS
 #  ifndef ADV_ISONEUTRAL
       if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
         call diag_t_adv_hc4(k,itrc)
       endif
 #  endif
-# endif
 
       do j=jstr,jend
         do i=istr,iend
@@ -219,14 +211,10 @@ contains
           &)
         enddo
       enddo                 !-->  discard FX,FE
-
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
       if (do_upscale) then
         call calc_forcing_rates(itrc,k,FX,FE,istr,iend,jstr,jend)
       endif
-#endif
 
-# ifdef DIAGNOSTICS
 #  ifdef ADV_ISONEUTRAL
       if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
         do j= 1,ny
@@ -256,7 +244,6 @@ contains
         enddo
       endif
 #  endif
-# endif
 
 # ifdef ADV_ISONEUTRAL
     endif !<-- k > 0
@@ -726,12 +713,9 @@ contains
           &+FSC(i,j,k2)-FSC(i,j,k1) )
         enddo
       enddo
-#  if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
       ! FX,FE here are minus the flux in the +xi/+eta direction
       if (do_upscale) call add_mixing_rates(itrc,k,FX,FE,istr,iend,jstr,jend,-1._8)
-#  endif
 
-# ifdef DIAGNOSTICS
       if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
         do j=1,ny
           do i=1,nx+1
@@ -749,7 +733,6 @@ contains
           enddo
         enddo
       endif
-# endif /* DIAGNOSTICS */
 
     endif   !<-- k > 0
 # endif /* ADV_ISONEUTRAL */
@@ -759,13 +742,10 @@ contains
 
 ! Compute and apply vertical advective fluxes.
 
-# ifdef DIAGNOSTICS
   if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
     call diag_t_adv_vc4(itrc )
   endif
-# endif
 
-#ifdef CDR_FORCING
   if (cdr_source) then
 
 # ifdef MARBL
@@ -813,7 +793,6 @@ contains
 # endif
 
   endif ! cdr_source
-#endif
 
 enddo     !<-- itrc (horizontal advection and sources)
 
@@ -828,7 +807,6 @@ enddo     !<-- itrc (horizontal advection and sources)
     ! swept-volume advection: hot columns' explicit vertical flux, carry, arrival term
     if (sl_adv) call sl_vflux(j, itrc, FC, istr, iend)
 
-# ifdef DIAGNOSTICS
     if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
       do k=1,nz
         do i=1,nx
@@ -838,7 +816,6 @@ enddo     !<-- itrc (horizontal advection and sources)
       enddo
     endif
 
-# endif
 
 
     do k=1,nz
@@ -1063,7 +1040,6 @@ enddo     !<-- itrc (horizontal advection and sources)
     enddo
     endif  ! itrc <= iTandS
 
-# ifdef DIAGNOSTICS
     if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
       do k=1,nz
         do i=istr,iend
@@ -1099,7 +1075,6 @@ enddo     !<-- itrc (horizontal advection and sources)
       enddo
 
     endif
-# endif
 
 #ifdef CONST_TRACERS
     do k=1,nz

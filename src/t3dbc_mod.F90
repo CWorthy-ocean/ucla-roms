@@ -26,7 +26,7 @@ contains
     use scalars, only: dt, nz, nnew, nrhs, nstp
     use sponge_tune, only:&
     &ub_west, ub_east, ub_south,&
-    &ub_north, ub_tune
+    &ub_north, apply_sponge_tune
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, itrc, i,j,k
@@ -81,9 +81,7 @@ contains
           &)
 
 #   if defined T_FRC_BRY
-#     if defined SPONGE_TUNE
-          if (ub_tune) cext = max(cext,min(ub_west(j),1.0_8))
-#     endif
+          if (apply_sponge_tune) cext = max(cext,min(ub_west(j),1.0_8))
           t(istr-1,j,k,nnew,itrc)=(1._8-cext)*t(istr-1,j,k,nnew,itrc)&
           &+cext*t_west(j,k,itrc)
 #   endif
@@ -144,9 +142,7 @@ contains
           &)
 
 #   if defined T_FRC_BRY
-#     if defined SPONGE_TUNE
-          if (ub_tune) cext = max(cext,min(ub_east(j),1.0_8))
-#     endif
+          if (apply_sponge_tune) cext = max(cext,min(ub_east(j),1.0_8))
           t(iend+1,j,k,nnew,itrc)=(1._8-cext)*t(iend+1,j,k,nnew,itrc)&
           &+cext*t_east(j,k,itrc)
 #   endif
@@ -212,9 +208,7 @@ contains
           &)
 
 #   if defined T_FRC_BRY
-#     if defined SPONGE_TUNE
-          if (ub_tune) cext = max(cext,min(ub_south(i),1.0_8))
-#     endif
+          if (apply_sponge_tune) cext = max(cext,min(ub_south(i),1.0_8))
           t(i,jstr-1,k,nnew,itrc)=(1._8-cext)*t(i,jstr-1,k,nnew,itrc)&
           &+cext*t_south(i,k,itrc)
 #   endif
@@ -273,9 +267,7 @@ contains
           &)
 
 #   if defined T_FRC_BRY
-#     if defined SPONGE_TUNE
-          if (ub_tune) cext = max(cext,min(ub_north(i),1.0_8))
-#     endif
+          if (apply_sponge_tune) cext = max(cext,min(ub_north(i),1.0_8))
           t(i,jend+1,k,nnew,itrc)=(1._8-cext)*t(i,jend+1,k,nnew,itrc)&
           &+cext*t_north(i,k,itrc)
 #   endif

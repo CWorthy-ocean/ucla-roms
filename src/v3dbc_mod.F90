@@ -22,7 +22,7 @@ contains
 #endif
     use sponge_tune, only:&
     &ub_south, ub_north, ub_west,&
-    &ub_east, ub_tune
+    &ub_east, apply_sponge_tune
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k
@@ -96,9 +96,7 @@ contains
           &-min(cy,0._8)*grad(i+1,jstr)&
           &)/(cff+cx)
 #    if defined M3_FRC_BRY
-#      if defined SPONGE_TUNE
-          if (ub_tune) cext = max(cext,min(ub_south(i),1.0_8))
-#      endif
+          if (apply_sponge_tune) cext = max(cext,min(ub_south(i),1.0_8))
           v(i,jstr,k,nnew)=(1._8-cext)*v(i,jstr,k,nnew)&
           &+cext*v_south(i,k)
 #    endif
@@ -184,9 +182,7 @@ contains
           &-min(cy,0._8)*grad(i+1,jend+1)&
           &)/(cff+cx)
 #    if defined M3_FRC_BRY
-#      if defined SPONGE_TUNE
-          if (ub_tune) cext = max(cext,min(ub_north(i),1.0_8))
-#      endif
+          if (apply_sponge_tune) cext = max(cext,min(ub_north(i),1.0_8))
           v(i,jend+1,k,nnew)=(1._8-cext)*v(i,jend+1,k,nnew)&
           &+cext*v_north(i,k)
 #    endif
@@ -252,9 +248,7 @@ contains
           &)
 
 #    if defined M3_FRC_BRY
-#      if defined SPONGE_TUNE
-          if (ub_tune) cext = max(cext,min(ub_west(j),1.0_8))
-#      endif
+          if (apply_sponge_tune) cext = max(cext,min(ub_west(j),1.0_8))
           v(istr-1,j,k,nnew)=(1._8-cext)*v(istr-1,j,k,nnew)&
           &+cext*v_west(j,k)
 #    endif
@@ -325,9 +319,7 @@ contains
         &)
 
 #    if defined M3_FRC_BRY
-#      if defined SPONGE_TUNE
-        if (ub_tune) cext = max(cext,min(ub_east(j),1.0_8))
-#      endif
+        if (apply_sponge_tune) cext = max(cext,min(ub_east(j),1.0_8))
         v(iend+1,j,k,nnew)=(1._8-cext)*v(iend+1,j,k,nnew)&
         &+cext*v_east(j,k)
 #    endif

@@ -64,7 +64,7 @@ The swept fluxes are not positivity-preserving. The stock model makes negative v
 - **Start and end of a run.** A run that starts inside a window has a shorter first window (consistent and conservative). If the run ends inside a window, the BGC transport of its last steps is not applied; both are noted in the startup log. Choose `ntimes` as a multiple of `k`.
 - **Free surface.** The window uses the transports of the step whatever the barotropic mode (`fs_mode = 'split'` or `'implicit'`).
 
-Not supported with `bgc_physics_subcycle` (ROMS stops at startup): `ADV_ISONEUTRAL`, `CONST_TRACERS`, per-step tracer diagnostics (`DIAGNOSTICS` with `diag_trc`) of BGC tracers, `UPSCALING` output, and `SPONGE_TUNE` with `ub_tune`.
+Not supported with `bgc_physics_subcycle` (ROMS stops at startup): `ADV_ISONEUTRAL`, `CONST_TRACERS`, per-step tracer diagnostics (`diag_trc`) of BGC tracers, upscaling output (`do_upscale`), and `apply_sponge_tune`.
 
 ## 5. Cost
 

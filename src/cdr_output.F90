@@ -4,7 +4,7 @@ module cdr_output
 
 #include "cppdefs.opt"
 
-#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+#if defined MARBL && defined MARBL_DIAGS
       use namelist_open_mod, only: open_namelist_file
       use tracers, only: t_units, t_vname
       use param, only: max_name_size
@@ -44,7 +44,7 @@ module cdr_output
   real(kind=8), public    :: output_period_cdr = 3600 ! in seconds
   integer(kind=4), public :: nrpf_cdr   = 4     ! number of frames per file
 
-  logical, public :: wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
+  logical, public :: wrt_cdr_avg = .false., cdr_monthly_averages = .false., do_cdr_output = .false.
   namelist /CDR_OUTPUT_SETTINGS/ output_period_cdr, nrpf_cdr,&
   &wrt_cdr_avg, cdr_monthly_averages, do_cdr_output
 
@@ -149,16 +149,18 @@ contains
   subroutine read_cdr_output_nml
 !     Read the "CDR_OUTPUT_SETTINGS" section of the namelist file
 
+    use, intrinsic :: iso_fortran_env, only: iostat_end
     integer(kind=4) ::  namelist_unit, ios
+    character(len=512) :: msg = ""
     character(len=20) :: sr_name = "read_cdr_output_nml"
     ! Read namelist
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
-    read (unit=namelist_unit, nml=CDR_OUTPUT_SETTINGS, iostat=ios)
-    if (ios /= 0) then
+    read (unit=namelist_unit, nml=CDR_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+    if (ios /= 0 .and. ios /= iostat_end) then
       call error_log%raise_global(&
       &context=module_name//'/'//sr_name, info=&
-      &'could not read CDR_OUTPUT_SETTINGS section of namelist file'&
+      &'could not read CDR_OUTPUT_SETTINGS section of namelist file: '//trim(msg)&
       &)
     end if
     close(namelist_unit)
@@ -1496,7 +1498,7 @@ contains
         end subroutine display_cdr_output_settings_to_terminal_cdr
 
 !----------------------------------------------------------------------
-#else /* MARBL && MARBL_DIAGS && CDR_FORCING */
+#else
 !----------------------------------------------------------------------
       use error_handling_mod, only : error_log
 
@@ -1512,7 +1514,7 @@ contains
       contains
 
       subroutine read_cdr_output_nml
-!     Without MARBL, MARBL_DIAGS and CDR_FORCING, CDR_OUTPUT_SETTINGS is
+!     Without MARBL and MARBL_DIAGS, CDR_OUTPUT_SETTINGS is
 !     read only to stop when do_cdr_output = .true.; a missing group is
 !     fine. Its keys and types are those of the group with the keys.
       use namelist_open_mod, only: open_namelist_file, gated_nml_found,&
@@ -1535,9 +1537,6 @@ contains
 #ifndef MARBL_DIAGS
       missing = trim(missing)//' MARBL_DIAGS'
 #endif
-#ifndef CDR_FORCING
-      missing = trim(missing)//' CDR_FORCING'
-#endif
       do_cdr_output = .false.
       msg = ''
       call open_namelist_file(namelist_unit)
@@ -1547,7 +1546,7 @@ contains
       if (gated_nml_found(ios, msg, 'CDR_OUTPUT_SETTINGS',&
      &    trim(module_name)//'/'//sr_name)) then
         call check_nml_cpp_switch('CDR_OUTPUT_SETTINGS', 'do_cdr_output',&
-     &    do_cdr_output, .false., 'MARBL, MARBL_DIAGS and CDR_FORCING',&
+     &    do_cdr_output, .false., 'MARBL and MARBL_DIAGS',&
      &    trim(module_name)//'/'//sr_name, missing)
       end if
       end subroutine read_cdr_output_nml
@@ -1569,11 +1568,6 @@ contains
      &        info="cdr_output must have MARBL_DIAGS enabled.")
 #endif
 
-#ifndef CDR_FORCING
-        call error_log%raise_global(&
-     &        context=module_name//"/"//sr_name,&
-     &        info='cdr_output must have CDR_FORCING enabled.')
-#endif
         call error_log%abort_check()
       end subroutine init_cdr_output !]
 
@@ -1584,6 +1578,6 @@ contains
       end subroutine wrt_cdr !]
 !----------------------------------------------------------------------
 
-#endif /* MARBL && MARBL_DIAGS && CDR_FORCING */
+#endif
 
       end module cdr_output

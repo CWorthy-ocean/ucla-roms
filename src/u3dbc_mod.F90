@@ -19,7 +19,7 @@ contains
 #endif
     use sponge_tune, only:&
     &ub_west, ub_east, ub_south,&
-    &ub_north, ub_tune
+    &ub_north, apply_sponge_tune
     use dimensions, only: ny, nz
     use grid, only: pmask, pm, umask, pn
 
@@ -95,9 +95,7 @@ contains
           &-min(cy,0._8)*grad(istr,j+1)&
           &)/(cff+cx)
 #    if defined M3_FRC_BRY
-#      if defined SPONGE_TUNE
-          if (ub_tune) cext = max(cext,min(ub_west(j),1.0_8))
-#      endif
+          if (apply_sponge_tune) cext = max(cext,min(ub_west(j),1.0_8))
           u(istr,j,k,nnew)=(1._8-cext)*u(istr,j,k,nnew)&
           &+cext*u_west(j,k)
 #    endif
@@ -180,9 +178,7 @@ contains
           &-min(cy,0._8)*grad(iend+1,j+1)&
           &)/(cff+cx)
 #    if defined M3_FRC_BRY
-#      if defined SPONGE_TUNE
-          if (ub_tune) cext = max(cext,min(ub_east(j),1.0_8))
-#      endif
+          if (apply_sponge_tune) cext = max(cext,min(ub_east(j),1.0_8))
           u(iend+1,j,k,nnew)=(1._8-cext)*u(iend+1,j,k,nnew)&
           &+cext*u_east(j,k)
 #    endif
@@ -249,9 +245,7 @@ contains
           &)
 
 #    if defined M3_FRC_BRY
-#      if defined SPONGE_TUNE
-          if (ub_tune) cext = max(cext,min(ub_south(i),1.0_8))
-#      endif
+          if (apply_sponge_tune) cext = max(cext,min(ub_south(i),1.0_8))
           u(i,jstr-1,k,nnew)=(1._8-cext)*u(i,jstr-1,k,nnew)&
           &+cext*u_south(i,k)
 #    endif
@@ -325,9 +319,7 @@ contains
         &)
 
 #    if defined M3_FRC_BRY
-#      if defined SPONGE_TUNE
-        if (ub_tune) cext = max(cext,min(ub_north(i),1.0_8))
-#      endif
+        if (apply_sponge_tune) cext = max(cext,min(ub_north(i),1.0_8))
         u(i,jend+1,k,nnew)=(1._8-cext)*u(i,jend+1,k,nnew)&
         &+cext*u_north(i,k)
 #    endif

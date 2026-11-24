@@ -156,7 +156,7 @@ module marbl_driver
   logical                             :: print_values = .false. ! Print example values to stdout during loop
 
 !     Indices of carbonate system tracers
-  integer(kind=4), public :: iALK, iDIC, iALK_alt, iDIC_alt
+  integer(kind=4), public :: iALK = 0, iDIC = 0, iALK_alt = 0, iDIC_alt = 0   ! 0: not in the run
 !     Index of MARBL's dissolved iron (Fe) in the ROMS tracer array
   integer(kind=4) :: iFe = 0
   character(len=1024) :: error_info

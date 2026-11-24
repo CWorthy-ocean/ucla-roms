@@ -703,9 +703,7 @@ contains
     use pipe_frc, only: pipe_idx, pipe_flx, pipe_source
     use river_frc, only: river_source, nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j,&
     &                    riv_uflx, riv_vflx, riv_vol
-#ifdef CDR_FORCING
     use cdr_frc, only: cdr_source, cdr_volume, cdr_zsrc
-#endif
 #if defined M2_FRC_BRY && defined Z_FRC_BRY
     use boundary, only:&
 # ifdef OBC_WEST
@@ -1059,7 +1057,6 @@ contains
         endif
       enddo
     enddo
-#ifdef CDR_FORCING
     if (cdr_source .and. cdr_volume) then   ! CDR volume releases (cdr_frc's cdr_zsrc, as step2d adds them)
       do j=jstr,jend
         do i=istr,iend
@@ -1067,7 +1064,6 @@ contains
         enddo
       enddo
     endif
-#endif
     call tq(1)                              ! Qbar = Q (the volume the 3-D step adds: omega, step3d_t)
 
     ! ---- (C) halos of the face coefficients and explicit fluxes (E1): read only on the tile's eastern and
@@ -2499,9 +2495,7 @@ contains
     use pipe_frc, only: pipe_idx, pipe_flx, pipe_source
     use river_frc, only: river_source, nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j,&
     &                    riv_uflx, riv_vflx, riv_vol
-#ifdef CDR_FORCING
     use cdr_frc, only: cdr_source, cdr_volume, cdr_zsrc
-#endif
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_sum, mpi_max
     use scalars, only: knew
     use ocean_vars, only: ubar, vbar
@@ -2546,7 +2540,6 @@ contains
         if (fs_on) loc(5) = loc(5) + ar(i,j)*qs(i,j)
       enddo
     enddo
-#ifdef CDR_FORCING
     if (cdr_source .and. cdr_volume) then
       do j=jstr,jend
         do i=istr,iend
@@ -2554,7 +2547,6 @@ contains
         enddo
       enddo
     endif
-#endif
     call mpi_allreduce(loc, glob, 5, mpi_double_precision, mpi_sum, ocean_grid_comm, ierr)
     if (mynode == 0) write(*,'(1x,A,I8,A,ES20.12,A,ES20.12,A,ES20.12,A,ES20.12,A,ES20.12)') 'FS_SRC', iic,&
     &  ' riv_map', glob(1), ' riv_del', glob(2), ' src_pc', glob(3), ' src_sw', glob(4), ' qbar', glob(5)

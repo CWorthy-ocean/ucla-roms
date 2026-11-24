@@ -236,11 +236,11 @@ Boundary data can be extracted for up to 8 child domains in one run. `extract_fi
 ### `SPONGE_TUNE_SETTINGS`
 (read by module `sponge_tune.F90`)
 
-Sponge tuning tunes the sponge values near the boundaries to attempt to match the incoming baroclinic wave flux from the parent.
+Optional: without the group there is no tuning. Sponge tuning tunes the sponge values near the boundaries to attempt to match the incoming baroclinic wave flux from the parent.
 
 | Setting | Description |
 |--------|-------------|
-| `ub_tune` | Tune boundary sponge layer if `.true.` (default `.false.`). Needs the `SPONGE_TUNE` CPP key: ROMS stops if it is `.true.` without it |
+| `apply_sponge_tune` | Tune boundary sponge layer if `.true.` (default `.false.`). Needs `calc_pflx = .true.` (`CALC_PFLX_SETTINGS`) and `sponge_timescale` > 0: ROMS stops otherwise. Named `ub_tune` up to version 0.16.0 |
 | `sponge_timescale` | Filtering timescale (s) |
 | `wrt_sponge` | Output sponge tuning fields if `.true.` (default `.false.`) |
 | `sponge_avg` | Sponge tuning output averaged if `.true.` or instantaneous if `.false.` (default `.true.`) |
@@ -255,7 +255,7 @@ These settings control the calculation of baroclinic pressure fluxes, e.g. at ne
 
 | Setting | Description |
 |--------|-------------|
-| `calc_pflx` | Enable baroclinic pressure flux calculation (no CPP key needed). Needed only by a parent whose children extract `up`/`vp`, and by `ub_tune`; both stop if it is off. It costs time every step, so leave it off otherwise (the template does) |
+| `calc_pflx` | Enable baroclinic pressure flux calculation. Needed only by a parent whose children extract `up`/`vp`, and by `apply_sponge_tune`; both stop if it is off. It costs time every step, so leave it off otherwise (the template does) |
 | `pflx_timescale` |  Timescale for filtering pressure fluxes (s); must be > 0 when `calc_pflx` is `.true.` |
 
 
@@ -320,7 +320,7 @@ Read only with `MARBL`.
 ### `CDR_FRC_SETTINGS`
 (read by module `cdr_frc.F90`)
 
-Used only with `CDR_FORCING`. Without it the group is optional, and ROMS stops if it sets `cdr_source = .true.`
+Optional: without the group there is no CDR forcing. Switches left out are `.false.`.
 
 Settings controlling Carbon Dioxide Removal (CDR) forcing: tracer releases read from `cdr_file`. Parameterized releases can target any tracer (passive, `CDR_LITE` or BGC) and work with or without MARBL; 3D forcing supplies ALK and DIC and needs MARBL.
 
@@ -340,7 +340,7 @@ Settings controlling Carbon Dioxide Removal (CDR) forcing: tracer releases read 
 ### `CDR_OUTPUT_SETTINGS`
 (read by module `cdr_output.F90`)
 
-Used only with `MARBL`, `MARBL_DIAGS` and `CDR_FORCING`. Without them the group is optional, and ROMS stops if it sets `do_cdr_output = .true.`
+Optional: without the group there is no such output. Needs `MARBL` and `MARBL_DIAGS`: without them, ROMS stops if it sets `do_cdr_output = .true.` Switches left out are `.false.`.
 
 Write an output file containing CDR-relevant fields.
 
@@ -355,7 +355,7 @@ Write an output file containing CDR-relevant fields.
 ### `CDR_LITE_SETTINGS`
 (read by module `surf_flux.F90`)
 
-Read only with `CDR_LITE`. Optional: if the group is missing, the defaults apply.
+Optional: if the group is missing, the defaults apply. Used only with `CDR_LITE` tracers (`nt_cdr_oae` or `nt_cdr_dor` > 0 in `PARAM_SETTINGS`).
 
 These settings control the carbonate sensitivities (beta = dDIC/dCO2, eta = dDIC/dALK) used in the linearized air-sea CO2 flux of the `CDR_LITE` DIC tracers.
 
@@ -369,7 +369,7 @@ The surface-flux variables `CDR_OAE_DIC<n>_flx` and `CDR_DOR_DIC<n>_flx` in the 
 ### `CDR_LITE_OUTPUT_SETTINGS`
 (read by module `cdr_lite_output.F90`)
 
-Output of the `CDR_LITE` tracers (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`, `CDR_DOR_DIC<n>`), which need `nt_cdr_oae` or `nt_cdr_dor` > 0 in `PARAM_SETTINGS`. ROMS reads this group in every configuration, so keep it in the namelist.
+Output of the `CDR_LITE` tracers (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`, `CDR_DOR_DIC<n>`), which need `nt_cdr_oae` or `nt_cdr_dor` > 0 in `PARAM_SETTINGS`. Optional: without the group there is no such output. Switches left out are `.false.`, except `wrt_alk` and `wrt_dic` (`.true.`).
 
 | Setting | Description |
 |--------|-------------|
@@ -381,7 +381,7 @@ Output of the `CDR_LITE` tracers (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`, `CDR_DOR_D
 | `wrt_tracers` | Write the tracer concentrations |
 | `wrt_vertical_integrals` | Write vertical integrals (`int_z_*` fields) |
 | `wrt_thickness_weighted` | Write layer-thickness-weighted fields (`h*`, `h*_avg`) |
-| `wrt_sources` | Write the CDR source fields (`*_source`); needs `CDR_FORCING` and `cdr_source` |
+| `wrt_sources` | Write the CDR source fields (`*_source`); needs `cdr_source` |
 | `wrt_alk` | Write `CDR_OAE_ALK` and its variants |
 | `wrt_dic` | Write `CDR_OAE_DIC`, `CDR_DOR_DIC` and their variants |
 | `wrt_gas_exchange` | Write `FG_CDR_*_DIC`, the air-sea CO2 flux into each `CDR_LITE` DIC tracer (mmol/m^2/s, positive into the ocean) |
@@ -389,7 +389,7 @@ Output of the `CDR_LITE` tracers (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`, `CDR_DOR_D
 ### `CDR_GAS_EXCH_OUTPUT_SETTINGS`
 (read by module `cdr_gas_exch_output.F90`)
 
-Used only with `MARBL` and `CDR_FORCING`. Without them the group is optional, and ROMS stops if it sets `do_cdr_gas_exch_output = .true.`
+Optional: without the group there is no such output. Needs `MARBL`: without it, ROMS stops if it sets `do_cdr_gas_exch_output = .true.` Switches left out are `.false.`.
 
 Output of the carbonate sensitivities `ddic_dco2` (beta) and `ddic_dalk` (eta), in a form a `CDR_LITE` run can read from its `frcfiles` (with `cdr_online_carbonate_sensitivity = .false.`). Each run writes an instantaneous record at its start and end time, in addition to the `nrpf_cdr_gas` regular records, so each chunk of a chain of restarted runs is self-contained. Averaged records average 1/beta and eta/beta, as the gas exchange uses them, and are stamped at the window midpoint. The run that reads them must use the same `reference_date` and start at or after the first record.
 
@@ -404,7 +404,7 @@ Output of the carbonate sensitivities `ddic_dco2` (beta) and `ddic_dalk` (eta), 
 ### `UPSCALE_SETTINGS`
 (read by module `upscale_output.F90`)
 
-Used only with `UPSCALING`, `MARBL` and `MARBL_DIAGS`. Without them the group is optional, and ROMS stops if it sets `do_upscale = .true.`
+Optional: without the group there is no such output. ROMS stops on `do_upscale = .true.` unless the run has MARBL tracers (`MARBL`, `nt_bgc` > 0) or `CDR_LITE` tracers (`nt_cdr_oae` or `nt_cdr_dor` > 0), and on a grid without `SPHERICAL`. The ALK and DIC fluxes are written only with the MARBL tracers, the `CDR_LITE` fluxes with or without them.
 
 Settings controlling CDR upscaling: recording the fluxes of CDR-relevant tracers through the open boundaries of a child domain, so that its parent domain can be re-run with them as CDR forcing to follow their further propagation. The fluxes cover advection and horizontal mixing, for the ALK and DIC perturbations (relative to their ALT_CO2 analogues) and for any `CDR_LITE` tracers.
 
@@ -531,7 +531,7 @@ Required, and read, only if `cflx_corr = .true.` (`SURF_FRC_SETTINGS`).
 ### `DIAGNOSTICS_SETTINGS`
 (read by module `diagnostics.F90`)
 
-Used only with `DIAGNOSTICS`. Without it the group is optional, and ROMS stops if it sets `diag_uv` or `diag_trc` to `.true.`
+Optional: without the group there are no diagnostics. Switches left out are `.false.`.
 
 Controls output of diagnostics concerning the physical ocean state.
 

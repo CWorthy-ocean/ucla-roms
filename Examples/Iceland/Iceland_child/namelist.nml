@@ -205,9 +205,9 @@ hc_chd = 250.0                    ! `hc` of nested domain
 &SPONGE_TUNE_SETTINGS                                              !sponge_tune.F
 !--------------------
 ! Previously set in `sponge_tune.opt`
-! Require SPONGE_TUNE cppkey
+! Optional group
 !--------------------
-ub_tune = .false.      ! Tune boundary "sponge" to match parent bry conditions
+apply_sponge_tune = .false. ! Tune boundary "sponge" to match parent bry conditions
 sponge_timescale = 86400    ! Filtering time scale (s)
 wrt_sponge = .true.    ! Write out sponge tuning values
 sponge_avg = .true.       ! Sponge tuning output averaged (T) or instantaneous (F)
@@ -286,7 +286,7 @@ marbl_diagnostics_to_write = "" ! MARBL diagnostics to include in BGC output
 &CDR_FRC_SETTINGS                                                      !cdr_frc.F
 !----------------
 ! Previously set in `cdr_frc.opt`
-! Requires CDR_FORCING cppkey
+! Optional group
 !----------------
 cdr_source = .true.              ! Apply CDR perturbation (T) or not (F)
 cdr_file = "input_data/iceland_child_cdr_forcing.nc"      ! File path to CDR perturbation
@@ -315,7 +315,7 @@ nrpf_cdr = 28                       ! Time records per output file
 !--------------------------
 ! Output for CDR_OAE_ALK/DIC and CDR_DOR_DIC
 ! Requires nt_cdr_oae or nt_cdr_dor > 0 (PARAM_SETTINGS); works with or
-! without MARBL. The *_source fields need MARBL and CDR_FORCING (cdr_frc).
+! without MARBL. The *_source fields need cdr_source (CDR_FRC_SETTINGS).
 !--------------------------
 do_cdr_lite_output = .false.         ! Output CDR_LITE tracers
 wrt_cdr_lite_avg = .true.            ! Write averaged (T) or instantaneous (F)
@@ -334,7 +334,7 @@ wrt_gas_exchange = .false.           ! Write FG_CDR_*_DIC: air-sea CO2 flux into
 &CDR_GAS_EXCH_OUTPUT_SETTINGS                       !cdr_gas_exch_output.F90
 !----------------------------
 ! Output for ddic_dco2 (beta) and ddic_dalk (eta)
-! Requires MARBL and CDR_FORCING cppkeys
+! Requires MARBL cppkey
 ! The files carry ddic_dco2_time / ddic_dalk_time (days since the reference
 ! date; averaged records are stamped at the window midpoint), so they can be
 ! listed in `frcfiles` of a CDR_LITE run with cdr_online_carbonate_sensitivity
@@ -354,7 +354,7 @@ nrpf_cdr_gas = 4                     ! Time records per output file
 &UPSCALE_SETTINGS                                              !upscale_output.F
 !----------------
 ! Previously set in `upscale_output.opt`
-! Requires UPSCALING cppkey
+! Optional group
 !----------------
 do_upscale = .true.           ! Record CDR tracer fluxes thru domain boundaries
 nrpf_uscl = 24                 ! Number of records per file
@@ -454,7 +454,7 @@ dSSTdt = 0. ! SST correction co-efficient as piston velocity (cm/day)
 &DIAGNOSTICS_SETTINGS                                              !diagnostics.F
 !--------------------
 ! Previously set in `diagnostics.opt`
-! Requires DIAGNOSTICS cppkey
+! Optional group
 !--------------------
 diag_avg = .false          ! Output physics diags as avgs (T) or snapshots (F)
 diag_uv = .false.          ! Output momentum diagnostics

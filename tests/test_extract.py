@@ -14,7 +14,7 @@ its run alone bit for bit: with PARALLEL_IO each child's joined
 ``_ext`` files (which extract_data_join would split by prefix). The
 PARALLEL_IO two-child output is also checked against the reference hashes;
 the interpolation and remapping are the same code in both builds. Neither
-build defines DIAGNOSTICS: calc_pflx computes the pressure fluxes without it;
+run switches on the budget diagnostics: calc_pflx computes the pressure fluxes without them;
 the runs that do not ask for them leave calc_pflx off. Child A is also run
 with the pressure fluxes up and vp, which must be written, non-zero, equal
 to the reference hashes in both builds, and with PARALLEL_IO independent of
@@ -123,7 +123,7 @@ def pio_input_dir(input_dir, tmp_path_factory) -> Path:
 @pytest.fixture(scope="module", params=[False, True], ids=["per_rank", "parallel_io"])
 def extract_conf(request, tmp_path_factory) -> ROMSConfiguration:
     """Physics-only realistic build, without and with PARALLEL_IO, and without
-    DIAGNOSTICS: calc_pflx computes up and vp without it (test_pressure_fluxes),
+    budget diagnostics: calc_pflx computes up and vp without them (test_pressure_fluxes),
     as in the C-Star Forge builds."""
     pio = request.param
     cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS

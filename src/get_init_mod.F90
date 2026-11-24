@@ -60,7 +60,7 @@ contains
     use imex_igw, only: imex_rst_get
     use sl_adv_mod, only: sl_rst_get
 #endif
-    use sponge_tune, only: get_init_ub, ub_tune
+    use sponge_tune, only: get_init_ub, apply_sponge_tune
     use pio_roms, only: use_pio, pio_gtype
 #ifdef PARALLEL_IO
     use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_open_or_abort, pio_direct_close
@@ -602,7 +602,7 @@ contains
 
 
     if (calc_pflx) call get_init_slow(ncid,record,tindx)
-    if (ub_tune)   call get_init_ub(ncid,record)
+    if (apply_sponge_tune)   call get_init_ub(ncid,record)
 #ifdef IMEX_IGW
     call imex_rst_get(ncid, record, tindx)   ! IMEX_IGW: the state carried across steps (exact restart)
     call sl_rst_get(ncid, record, tindx)     ! SL_ADV: the swept-volume advection's state (sl_adv on)

@@ -8,7 +8,7 @@ module surf_flux
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
   use param, only: max_name_size
-  use param, only: mynode, lm, mm, ocean_grid_comm, nt
+  use param, only: mynode, lm, mm, ocean_grid_comm, nt, cdr_lite_on
   use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u&
   &, ds_xr, ds_yr, ds_xu, ds_yv
   use roms_read_write, only:&
@@ -109,7 +109,6 @@ module surf_flux
   real(kind=8),public,allocatable,dimension(:,:) :: sss
   ! real(kind=8),public :: dSSSdt = 0._8                           ! input units (cm/day)
 
-#if defined CDR_LITE
       real(kind=8),public,allocatable,dimension(:,:) :: ddic_dco2  ! carbonate sensitivity at the forcing time
       real(kind=8),public,allocatable,dimension(:,:) :: ddic_dalk  ! carbonate sensitivity at the forcing time
       real(kind=8),public,allocatable,dimension(:,:) :: k_gas      ! time interpolated gas transfer velocity
@@ -130,7 +129,6 @@ module surf_flux
       logical, public :: cdr_carbonate_sensitivity_time_interpolation = .true.
       namelist /CDR_LITE_SETTINGS/ cdr_online_carbonate_sensitivity,&
       &                            cdr_carbonate_sensitivity_time_interpolation
-#endif
 
   ! Sea-surface DIC (sDIC) and ALK (sALK) data for restoring
   real(kind=8),public,allocatable,dimension(:,:) :: sDIC
@@ -227,7 +225,6 @@ contains
       dCdt = dCdt / (100.*86400.)
     end if
 
-#if defined CDR_LITE
     ! Optional group: if it is absent (ios < 0, end of file) keep the default.
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=CDR_LITE_SETTINGS, iostat=ios, iomsg=msg)
@@ -241,7 +238,6 @@ contains
     end if
     nc_ddic_dco2%time_interpolation = cdr_carbonate_sensitivity_time_interpolation
     nc_ddic_dalk%time_interpolation = cdr_carbonate_sensitivity_time_interpolation
-#endif
 
   close(namelist_unit)
   record = nrpf_sflx
@@ -315,13 +311,17 @@ subroutine init_arrays_surf_flx ![
     call store_string_att(surf_forcing_strings,'cm/day')
   endif
 
-#if defined CDR_LITE
-      allocate( nc_ddic_dco2%vdata( GLOBAL_2D_ARRAY,2) )
-      allocate( ddic_dco2(GLOBAL_2D_ARRAY)  )
-      allocate( nc_ddic_dalk%vdata( GLOBAL_2D_ARRAY,2) )
-      allocate( ddic_dalk(GLOBAL_2D_ARRAY)  )
-      allocate( k_gas(GLOBAL_2D_ARRAY)      ); k_gas=0.
+  if (cdr_lite_on) then
+    allocate( nc_ddic_dco2%vdata( GLOBAL_2D_ARRAY,2) )
+    allocate( ddic_dco2(GLOBAL_2D_ARRAY)  )
+    allocate( nc_ddic_dalk%vdata( GLOBAL_2D_ARRAY,2) )
+    allocate( ddic_dalk(GLOBAL_2D_ARRAY)  )
+    allocate( k_gas(GLOBAL_2D_ARRAY)      ); k_gas=0.
+#ifndef BULK_FRC
+    ! the winds come with the bulk forcing only
+    if (mynode == 0) write(*,'(/1x,A)') 'cdr_lite: no bulk winds, k_gas = 0 (no air-sea CO2 exchange)'
 #endif
+  endif
 
   if (cflx_corr) then
     allocate( sDIC(GLOBAL_2D_ARRAY)        ); sDIC=init
@@ -408,7 +408,6 @@ subroutine set_carbonate_sensitivity ![
   use roms_read_write, only: set_frc_data
       implicit none
 
-#ifdef CDR_LITE
       ! Online values are set in tracers%set_surf_tracer_flx instead
       if (.not. cdr_online_carbonate_sensitivity) then
 #ifdef PARALLEL_IO
@@ -425,11 +424,9 @@ subroutine set_carbonate_sensitivity ![
         if (nc_ddic_dco2%time_interpolation .and. .not. nc_ddic_dco2%missing)&
         & call interp_missing_sensitivity
       endif
-#endif
 
 end subroutine set_carbonate_sensitivity  !]
 ! ----------------------------------------------------------------------
-#ifdef CDR_LITE
 subroutine interp_missing_sensitivity ![
   ! Time interpolation of beta (ddic_dco2) and eta (ddic_dalk) at cells where
   ! exactly one of the two bracketing records is missing (beta <= 0 or NaN:
@@ -516,7 +513,6 @@ subroutine interp_missing_sensitivity ![
     call error_log%abort_check()
   endif
 end subroutine interp_missing_sensitivity  !]
-#endif
 ! ----------------------------------------------------------------------
 subroutine calc_sflx_avg  ![
   implicit none

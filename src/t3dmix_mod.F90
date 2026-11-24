@@ -38,9 +38,7 @@ contains
     &calc_diag, tmixx, tmixy, td,&
     &tdiag, diag_trc
     use roms_mpi, only: exchange_xxx
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     use upscale_output, only: add_mixing_rates, do_upscale
-#endif
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, itrc, i,j,k
@@ -101,10 +99,8 @@ contains
           &/Hz(i,j,k)
         enddo
       enddo
-#  if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
       ! FX,FE here are minus the flux in the +xi/+eta direction
       if (do_upscale) call add_mixing_rates(itrc,k,FX,FE,istr,iend,jstr,jend,-1._8)
-#  endif
 
     enddo
   end subroutine t3dmix_s_tile
