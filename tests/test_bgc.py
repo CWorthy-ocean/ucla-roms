@@ -148,13 +148,16 @@ class TestConstantFe:
         )
 
 
-def _pieces_without(input_dir, out, name: str, drop: set[str]) -> Path:
+def _pieces_without(input_dir, out, name: str, drop: set[str], zero: bool = False) -> Path:
     """Copy the four per-rank pieces of input ``name`` into ``out`` without
-    the variables in ``drop``; returns the name to put in the namelist."""
+    the variables in ``drop`` (``zero``: with them 0); returns the name to put
+    in the namelist."""
     for r in range(4):
         with xr.open_dataset(input_dir / f"{name}.{r}.nc", decode_cf=False) as ds:
             ds = ds.load()
-        ds.drop_vars([v for v in ds.data_vars if v in drop]).to_netcdf(out / f"{name}.{r}.nc")
+        here = [v for v in ds.data_vars if v in drop]
+        ds = ds.assign({v: ds[v] * 0 for v in here}) if zero else ds.drop_vars(here)
+        ds.to_netcdf(out / f"{name}.{r}.nc")
     return out / f"{name}.nc"
 
 
@@ -219,6 +222,114 @@ class TestRequiredBGCInputs:
             ["Cannot find variable 'DIC'", "A BGC run needs every BGC tracer in the initial file"],
             label="missing DIC initial",
         )
+
+
+def _forcing_without(nml, input_dir, out, name: str, drop: set[str], zero: bool = False):
+    """Point ``nml`` at a copy of forcing input ``name`` without the variables in
+    ``drop``, or with them 0."""
+    copy = _pieces_without(input_dir, out, name, drop, zero)
+    files = nml["FORCING_FILES"]["frcfiles"]
+    files[files.index(str(input_dir / f"{name}.nc"))] = str(copy)
+
+
+def _bgc_state(conf, nml, run_dir) -> dict:
+    """The BGC history of a run in ``run_dir``, as variable hashes."""
+    run_dir.mkdir()
+    conf.run(nml, cwd=run_dir)
+    return get_summary_value(run_dir, "roms_bgc.20100101000000").variables
+
+
+SURFACE_FORCING = {  # variable: (input file, switch)
+    "xco2_air": ("example_input_co2_surface_forcing", "use_xco2air_forcing"),
+    "xco2_air_alt": ("example_input_co2_surface_forcing", "use_xco2air_forcing"),
+    "nox": ("example_input_bgc_surface_forcing", "use_nox_forcing"),
+    "nhy": ("example_input_bgc_surface_forcing", "use_nhy_forcing"),
+}
+
+
+class TestSurfaceForcingSwitches:
+    """``use_xco2air_forcing``, ``use_nox_forcing`` and ``use_nhy_forcing``."""
+
+    @pytest.mark.parametrize("var", SURFACE_FORCING)
+    def test_missing_variable_rejected(self, tmp_path, marbl_conf, input_dir, var):
+        """The switches are on if left out: a variable that is in no file stops ROMS."""
+        name, switch = SURFACE_FORCING[var]
+        nml = _marbl_nml(input_dir)
+        for key in ("use_xco2air_forcing", "use_nox_forcing", "use_nhy_forcing"):
+            del nml["BGC_SETTINGS"][key]
+        _forcing_without(nml, input_dir, tmp_path, name, {var})
+        assert_run_rejected(
+            marbl_conf, nml, tmp_path,
+            [f"Could not find var: {var} in forcing files.", f"or set {switch} = .false."],
+            label=f"missing {var}",
+        )
+
+    def test_xco2_off_uses_default(self, tmp_path, marbl_conf, input_dir):
+        """Off, ``xco2air_default`` decides and the files are not read: it does not
+        matter whether they hold xco2, and the value does."""
+        nml = _marbl_nml(input_dir)
+        on = _bgc_state(marbl_conf, nml, tmp_path / "on")
+        nml["BGC_SETTINGS"]["use_xco2air_forcing"] = False
+        off = _bgc_state(marbl_conf, nml, tmp_path / "off")
+        files = nml["FORCING_FILES"]["frcfiles"]
+        files.remove(str(input_dir / "example_input_co2_surface_forcing.nc"))
+        assert _bgc_state(marbl_conf, nml, tmp_path / "nofile") == off
+        nml["BGC_SETTINGS"]["xco2air_default"] = 400.0
+        other = _bgc_state(marbl_conf, nml, tmp_path / "other")
+        for a, b in ((on, off), (on, other), (off, other)):
+            assert a["DIC"] != b["DIC"] and a["DIC_ALT_CO2"] != b["DIC_ALT_CO2"]
+
+    @pytest.mark.parametrize("var", ["nox", "nhy"])
+    def test_deposition_off_is_zero_deposition(self, tmp_path, marbl_conf, input_dir, var):
+        """Off, the result is that of a file with zero deposition, not that of the file."""
+        name, switch = SURFACE_FORCING[var]
+        nml = _marbl_nml(input_dir)
+        on = _bgc_state(marbl_conf, nml, tmp_path / "on")
+        nml["BGC_SETTINGS"][switch] = False
+        off = _bgc_state(marbl_conf, nml, tmp_path / "off")
+        nml["BGC_SETTINGS"][switch] = True
+        _forcing_without(nml, input_dir, tmp_path, name, {var}, zero=True)
+        assert _bgc_state(marbl_conf, nml, tmp_path / "zero") == off
+        tracer = {"nox": "NO3", "nhy": "NH4"}[var]
+        assert on[tracer] != off[tracer]
+
+
+@pytest.mark.parametrize("balance", [False, True])
+def test_diagnostics_do_not_change_the_run(tmp_path, marbl_conf, input_dir, balance):
+    """MARBL's diagnostics are kept only for an output that uses them, and keeping
+    them changes no tracer, with or without ``marbl_balance``."""
+    nml = _marbl_nml(input_dir)
+    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_balance"] = balance
+    off_dir, on_dir = tmp_path / "off", tmp_path / "on"
+    off = _bgc_state(marbl_conf, nml, off_dir)
+    nml["BGC_SETTINGS"].update(
+        wrt_bgc_dia_his=True, output_period_bgc_his_dia=100, nrpf_bgc_his_dia=10
+    )
+    on = _bgc_state(marbl_conf, nml, on_dir)
+    assert on == off
+    assert list(on_dir.glob("roms_bgc_dia.*")) and not list(off_dir.glob("roms_bgc_dia.*"))
+    assert (get_summary_value(on_dir, "roms_his.20100101000000").variables
+            == get_summary_value(off_dir, "roms_his.20100101000000").variables)
+
+
+@pytest.mark.parametrize("stream, period, nrpf", [
+    ("wrt_bgc_his", "output_period_bgc_his", "nrpf_bgc_his"),
+    ("wrt_bgc_avg", "output_period_bgc_avg", "nrpf_bgc_avg"),
+    ("wrt_bgc_dia_his", "output_period_bgc_his_dia", "nrpf_bgc_his_dia"),
+    ("wrt_bgc_dia_avg", "output_period_bgc_avg_dia", "nrpf_bgc_avg_dia"),
+])
+def test_stream_without_length_rejected(tmp_path, marbl_conf, input_dir, stream, period, nrpf):
+    """An output stream that is on needs its period and its records per file. With
+    restarts on, the check of the file length against the restart period must not
+    stop the run before this one."""
+    nml = _marbl_nml(input_dir)
+    nml["BASIC_OUTPUT_SETTINGS"]["wrt_file_rst"] = True
+    nml["BGC_SETTINGS"][stream] = True
+    del nml["BGC_SETTINGS"][nrpf]  # 0 by default
+    assert_run_rejected(
+        marbl_conf, nml, tmp_path, [f"{stream} = .true. needs {period} and {nrpf} above 0"],
+        label=stream,
+    )
 
 
 class TestFileNames:

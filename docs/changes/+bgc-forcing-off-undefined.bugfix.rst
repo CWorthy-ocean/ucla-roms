@@ -1,0 +1,1 @@
+MARBL no longer receives uninitialized NOx or NHy deposition when they are not read from the forcing files: it is 0. ``wrt_bgc_his``, ``wrt_bgc_avg``, ``wrt_bgc_dia_his``, ``wrt_bgc_dia_avg`` and ``interp_bgc_frc`` are ``.false.`` when ``BGC_SETTINGS`` leaves them out; before, they were undefined.

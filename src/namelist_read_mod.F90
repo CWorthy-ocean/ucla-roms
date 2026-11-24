@@ -74,6 +74,11 @@ contains
     use implicit_fs_mod, only: read_nml_implicit_fs, fs_on !IMPLICIT_FS (optional)
     use sl_adv_mod, only: read_nml_sl_adv          !SL_ADV_SETTINGS (optional)
     use nhmg_settings_mod, only: read_nml_nhmg, nhmg_on  !NHMG_SETTINGS (optional)
+#ifdef MARBL
+    use bgc_shared_vars, only: wrt_bgc_dia_his, wrt_bgc_dia_avg
+    use cdr_output, only: do_cdr_output
+    use marbl_driver, only: marbl_diag_on
+#endif
     implicit none
     call read_nml_param
 #ifndef ANA_GRID
@@ -128,6 +133,11 @@ contains
 #ifdef IMEX_IGW
    if (nhmg_on) call error_log%raise_global(context=trim(module_name)//"/read_namelists",&
    &info="nhmg = .true. (NHMG_SETTINGS) does not work with IMEX_IGW (IMEX_IGW_SETTINGS imex_igw = .true.)")
+#endif
+
+#ifdef MARBL
+   ! MARBL's diagnostics are kept only for an output that uses them
+   marbl_diag_on = wrt_bgc_dia_his .or. wrt_bgc_dia_avg .or. do_cdr_output
 #endif
 
    ! Stop on any namelist error before the values are used (a path cut off

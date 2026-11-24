@@ -48,11 +48,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_z_frc_bry = .false.
 #endif
-#ifdef MARBL_DIAGS
-  logical, parameter, public :: key_marbl_diags = .true.
-#else
-  logical, parameter, public :: key_marbl_diags = .false.
-#endif
 #ifdef OBC_EAST
   logical, parameter, public :: key_obc_east = .true.
 #else
@@ -78,25 +73,10 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_uv_adv = .false.
 #endif
-#ifdef PCO2AIR_FORCING
-  logical, parameter, public :: key_pco2air_forcing = .true.
-#else
-  logical, parameter, public :: key_pco2air_forcing = .false.
-#endif
 #ifdef SPHERICAL
   logical, parameter, public :: key_spherical = .true.
 #else
   logical, parameter, public :: key_spherical = .false.
-#endif
-#ifdef NHY_FORCING
-  logical, parameter, public :: key_nhy_forcing = .true.
-#else
-  logical, parameter, public :: key_nhy_forcing = .false.
-#endif
-#ifdef NOX_FORCING
-  logical, parameter, public :: key_nox_forcing = .true.
-#else
-  logical, parameter, public :: key_nox_forcing = .false.
 #endif
 #ifdef ANA_SSFLUX
   logical, parameter, public :: key_ana_ssflux = .true.
