@@ -1,0 +1,1 @@
+History files (``_his``) always hold the passive tracers (``passive_tracer<n>``) and the ``CDR_LITE`` tracers (``CDR_OAE_ALK<n>``, ``CDR_OAE_DIC<n>``, ``CDR_DOR_DIC<n>``). Before, they were there only with MARBL, when ``marbl_tracers_to_write`` was empty or named them. The averages are unchanged.
