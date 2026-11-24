@@ -309,3 +309,19 @@ def test_tracer_diagnostics_on_unequal_tiles(box_diag_conf, box_cdr_file, input_
         run_dir.mkdir()
         box_diag_conf.run(nml, cwd=run_dir)
         assert list(run_dir.glob("roms_dia.*.0.nc")), f"{np_xi}x{np_eta}: no diagnostics file"
+
+
+def test_nhmg_closed_box_runs(box_diag_conf, box_cdr_file, input_dir, tmp_path):
+    """A non-hydrostatic run in a domain with closed walls runs to its end, on a
+    bounds-checked build. At the closed southern and northern walls the boundary
+    condition on ``w`` used an index along the wall that was never set, which could
+    crash the run (the gfortran build always catches it, see BOUNDS_CHECK_FFLAGS)."""
+    nml = box_namelist(input_dir, box_cdr_file)
+    nml["NHMG_SETTINGS"]["nhmg"] = True
+    log = box_diag_conf.run(nml, cwd=tmp_path, capture_output=True)
+    assert "nhmg = .true. (non-hydrostatic solver on" in log
+    path = join_output(tmp_path, his_prefix(tmp_path))
+    with xr.open_dataset(path, decode_times=False) as ds:
+        for var in ("zeta", "u", "v", "w"):
+            assert np.isfinite(ds[var].values).all(), var
+            assert ds[var].any(), var
