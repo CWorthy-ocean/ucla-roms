@@ -180,7 +180,7 @@ contains
 #   endif /* orlanski, spec, or no-grad */
 #  else /* not open, but closed */
       do k=1,nz                          ! Wall: slip: gamma= 1
-        do j=jstr,jend                  !    no-slip: gamma=-1
+        do i=istr,iend                  !    no-slip: gamma=-1
           w(i,jstr-1,k,nnew)=gamma2*w(i,jstr,k,nnew)
         enddo
       enddo
@@ -228,7 +228,7 @@ contains
 #   endif  /* orlanski, spec, or non-grad */
 #  else /* not open, but closed */
       do k=1,nz                          ! Wall: slip: gamma= 1
-        do j=jstr,jend                  !    no-slip: gamma=-1
+        do i=istr,iend                  !    no-slip: gamma=-1
           w(i,jend+1,k,nnew)=gamma2*w(i,jend,k,nnew)
         enddo
       enddo
