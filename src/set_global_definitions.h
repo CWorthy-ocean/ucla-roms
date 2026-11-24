@@ -109,13 +109,8 @@
  adjacent to WESTERN[EASTERN, SOUTHERN, NORTHERN] edge (i.e. physical
  boundary) of the model domain?''  Note that ghost points associated
  with periodicity are NOT considered as physical boundary points by
- these macros. In the case of periodicity and/or MPI-partitioning in
- either direction these macros deliberately left undefined
- (non-existing): if they were, they would always be .false. in this
- case because the corresponding WEST[EAST, ...]_EXCH are .true. and
- periodicity is handled the same way as MPI messages. They are left
- undefined to prevent their mistaken use as flags for proximity to
- the edge of the grid.  */
+ these macros: in a periodic direction they are .false., so that code
+ for an open side (obc_west, ... in open_boundary_mod.F90) compiles. */
 
 #ifndef EW_PERIODIC
 # ifdef MPI
@@ -125,6 +120,9 @@
 #  define WESTERN_EDGE .true.
 #  define EASTERN_EDGE .true.
 # endif
+#else
+# define WESTERN_EDGE .false.
+# define EASTERN_EDGE .false.
 #endif
 
 #ifndef NS_PERIODIC
@@ -135,6 +133,9 @@
 #  define SOUTHERN_EDGE .true.
 #  define NORTHERN_EDGE .true.
 # endif
+#else
+# define SOUTHERN_EDGE .false.
+# define NORTHERN_EDGE .false.
 #endif
 
 /* The following macros are to signal the proximity of computational

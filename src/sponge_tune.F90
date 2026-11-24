@@ -23,7 +23,6 @@ module sponge_tune
   use dimensions, only: i0, i1, j0, j1
   use param, only: max_name_size
   use param, only:&
-  &obc_east, obc_north, obc_south, obc_west,&
   &mynode, np_eta, np_xi, ocean_grid_comm
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
@@ -33,6 +32,7 @@ module sponge_tune
 #endif
   use mpi_f08, only: MPI_CHARACTER, MPI_Barrier, mpi_bcast
 
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
   character(len=11) :: module_name = "sponge_tune"

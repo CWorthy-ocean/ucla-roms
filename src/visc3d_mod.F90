@@ -1,5 +1,6 @@
 module visc3d_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
 
@@ -160,14 +161,14 @@ contains
             Uk(istr,j)=u(istr,j,k,nstp)
           enddo
           do j=jstrV-1,jend+1
-#  ifdef OBC_WEST
-            Vk(istr-1,j)=v(istr-1,j,k,nstp)
-#  else
-            Vk(istr-1,j)=gamma2*Vk(istr,j)
+            if (obc_west) then
+              Vk(istr-1,j)=v(istr-1,j,k,nstp)
+            else
+              Vk(istr-1,j)=gamma2*Vk(istr,j)
 #   ifdef MASKING
-            Vk(istr-1,j)=Vk(istr-1,j)*vmask(istr-1,j)
+              Vk(istr-1,j)=Vk(istr-1,j)*vmask(istr-1,j)
 #   endif
-#  endif
+            endif
           enddo
         endif
         if (EASTERN_EDGE) then
@@ -175,14 +176,14 @@ contains
             Uk(iend+1,j)=u(iend+1,j,k,nstp)
           enddo
           do j=jstrV-1,jend+1
-#  ifdef OBC_EAST
-            Vk(iend+1,j)=v(iend+1,j,k,nstp)
-#  else
-            Vk(iend+1,j)=gamma2*Vk(iend,j)
+            if (obc_east) then
+              Vk(iend+1,j)=v(iend+1,j,k,nstp)
+            else
+              Vk(iend+1,j)=gamma2*Vk(iend,j)
 #   ifdef MASKING
-            Vk(iend+1,j)=Vk(iend+1,j)*vmask(iend+1,j)
+              Vk(iend+1,j)=Vk(iend+1,j)*vmask(iend+1,j)
 #   endif
-#  endif
+            endif
           enddo
         endif
 #  endif
@@ -192,14 +193,14 @@ contains
             Vk(i,jstr)=v(i,jstr,k,nstp)
           enddo
           do i=istrU-1,iend+1
-#  ifdef OBC_SOUTH
-            Uk(i,jstr-1)=u(i,jstr-1,k,nstp)
-#  else
-            Uk(i,jstr-1)=gamma2*Uk(i,jstr)
+            if (obc_south) then
+              Uk(i,jstr-1)=u(i,jstr-1,k,nstp)
+            else
+              Uk(i,jstr-1)=gamma2*Uk(i,jstr)
 #   ifdef MASKING
-            Uk(i,jstr-1)=Uk(i,jstr-1)*umask(i,jstr-1)
+              Uk(i,jstr-1)=Uk(i,jstr-1)*umask(i,jstr-1)
 #   endif
-#  endif
+            endif
           enddo
         endif
         if (NORTHERN_EDGE) then
@@ -207,14 +208,14 @@ contains
             Vk(i,jend+1)=v(i,jend+1,k,nstp)
           enddo
           do i=istrU-1,iend+1
-#  ifdef OBC_NORTH
-            Uk(i,jend+1)=u(i,jend+1,k,nstp)
-#  else
-            Uk(i,jend+1)=gamma2*Uk(i,jend)
+            if (obc_north) then
+              Uk(i,jend+1)=u(i,jend+1,k,nstp)
+            else
+              Uk(i,jend+1)=gamma2*Uk(i,jend)
 #   ifdef MASKING
-            Uk(i,jend+1)=Uk(i,jend+1)*umask(i,jend+1)
+              Uk(i,jend+1)=Uk(i,jend+1)*umask(i,jend+1)
 #   endif
-#  endif
+            endif
           enddo
         endif
 #  endif

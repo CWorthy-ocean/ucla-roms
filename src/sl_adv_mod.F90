@@ -50,6 +50,7 @@ module sl_adv_mod
   ! face, land faces 0; weight w = smoothstep((c2d - sl_c_lo)/(sl_c_hi - sl_c_lo)).
 
 #include "cppdefs.opt"
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
 
@@ -623,20 +624,20 @@ contains
       integer(kind=4), intent(in) :: ii, jj
       near_edge = .false.
 #ifndef EW_PERIODIC
-# ifdef OBC_WEST
-      if (WESTERN_EDGE .and. ii <= istr+2) near_edge = .true.
-# endif
-# ifdef OBC_EAST
-      if (EASTERN_EDGE .and. ii >= iend-1) near_edge = .true.
-# endif
+      if (obc_west) then
+        if (WESTERN_EDGE .and. ii <= istr+2) near_edge = .true.
+      endif
+      if (obc_east) then
+        if (EASTERN_EDGE .and. ii >= iend-1) near_edge = .true.
+      endif
 #endif
 #ifndef NS_PERIODIC
-# ifdef OBC_SOUTH
-      if (SOUTHERN_EDGE .and. jj <= jstr+2) near_edge = .true.
-# endif
-# ifdef OBC_NORTH
-      if (NORTHERN_EDGE .and. jj >= jend-1) near_edge = .true.
-# endif
+      if (obc_south) then
+        if (SOUTHERN_EDGE .and. jj <= jstr+2) near_edge = .true.
+      endif
+      if (obc_north) then
+        if (NORTHERN_EDGE .and. jj >= jend-1) near_edge = .true.
+      endif
 #endif
     end function near_edge
   end subroutine sl_weights_tile
@@ -895,12 +896,12 @@ contains
         fx(i,j) = 0.5_8*(q(i,j)+q(i-1,j))*f(i,j) - c6*(cv(i-1)*max(f(i,j),0._8) + cv(i)*min(f(i,j),0._8))
       end do
 #ifndef EW_PERIODIC
-# ifdef OBC_WEST
-      if (WESTERN_EDGE) fx(istr,j) = fx(istr,j) + 0.5_8*(q(istr-1,j)-q(istr,j))*max(f(istr,j),0._8)
-# endif
-# ifdef OBC_EAST
-      if (EASTERN_EDGE) fx(iend+1,j) = fx(iend+1,j) + 0.5_8*(q(iend+1,j)-q(iend,j))*min(f(iend+1,j),0._8)
-# endif
+      if (obc_west) then
+        if (WESTERN_EDGE) fx(istr,j) = fx(istr,j) + 0.5_8*(q(istr-1,j)-q(istr,j))*max(f(istr,j),0._8)
+      endif
+      if (obc_east) then
+        if (EASTERN_EDGE) fx(iend+1,j) = fx(iend+1,j) + 0.5_8*(q(iend+1,j)-q(iend,j))*min(f(iend+1,j),0._8)
+      endif
 #endif
     end do
   end subroutine up3_x
@@ -945,20 +946,20 @@ contains
       end do
     end do
 #ifndef NS_PERIODIC
-# ifdef OBC_SOUTH
-    if (SOUTHERN_EDGE) then
-      do i = istr, iend
-        fy(i,jstr) = fy(i,jstr) + 0.5_8*(q(i,jstr-1)-q(i,jstr))*max(f(i,jstr),0._8)
-      end do
-    end if
-# endif
-# ifdef OBC_NORTH
-    if (NORTHERN_EDGE) then
-      do i = istr, iend
-        fy(i,jend+1) = fy(i,jend+1) + 0.5_8*(q(i,jend+1)-q(i,jend))*min(f(i,jend+1),0._8)
-      end do
-    end if
-# endif
+    if (obc_south) then
+      if (SOUTHERN_EDGE) then
+        do i = istr, iend
+          fy(i,jstr) = fy(i,jstr) + 0.5_8*(q(i,jstr-1)-q(i,jstr))*max(f(i,jstr),0._8)
+        end do
+      end if
+    endif
+    if (obc_north) then
+      if (NORTHERN_EDGE) then
+        do i = istr, iend
+          fy(i,jend+1) = fy(i,jend+1) + 0.5_8*(q(i,jend+1)-q(i,jend))*min(f(i,jend+1),0._8)
+        end do
+      end if
+    endif
 #endif
   end subroutine up3_y
 
@@ -2008,12 +2009,12 @@ contains
     if (EASTERN_EDGE) then
       gu%ihi = iend+1 ; gv%ihi = iend+1
     end if
-# ifdef OBC_WEST
-    gu%ow = WESTERN_EDGE ; gv%ow = WESTERN_EDGE
-# endif
-# ifdef OBC_EAST
-    gu%oe = EASTERN_EDGE ; gv%oe = EASTERN_EDGE
-# endif
+    if (obc_west) then
+      gu%ow = WESTERN_EDGE ; gv%ow = WESTERN_EDGE
+    endif
+    if (obc_east) then
+      gu%oe = EASTERN_EDGE ; gv%oe = EASTERN_EDGE
+    endif
 #endif
 #ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
@@ -2022,12 +2023,12 @@ contains
     if (NORTHERN_EDGE) then
       gu%jhi = jend+1 ; gv%jhi = jend+1
     end if
-# ifdef OBC_SOUTH
-    gu%os = SOUTHERN_EDGE ; gv%os = SOUTHERN_EDGE
-# endif
-# ifdef OBC_NORTH
-    gu%on = NORTHERN_EDGE ; gv%on = NORTHERN_EDGE
-# endif
+    if (obc_south) then
+      gu%os = SOUTHERN_EDGE ; gv%os = SOUTHERN_EDGE
+    endif
+    if (obc_north) then
+      gu%on = NORTHERN_EDGE ; gv%on = NORTHERN_EDGE
+    endif
 #endif
   end subroutine sl_malloc
 

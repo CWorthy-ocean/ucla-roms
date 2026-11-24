@@ -28,6 +28,7 @@ import xarray as xr
 
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
+    CLOSED_BOX,
     OCEAN_PHYSICS_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -36,7 +37,7 @@ from ._helpers import (
     summarize_output,
 )
 
-# REALISTIC_CPP_KEYS without the open boundaries
+# a realistic grid; all sides are closed (CLOSED_BOX)
 CPP_KEYS = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + ["CURVGRID", "SPHERICAL", "LMD_CONVEC"]
 # Joined inputs, copied to classic netCDF for the PARALLEL_IO build: PIO reads them through PnetCDF.
 PIO_INPUTS = [
@@ -84,6 +85,7 @@ def _namelist(input_dir: Path, surface_dir: Path) -> dict:
     """The test namelist with the river, the pipe and the extra-record surface file."""
     nml = create_test_namelist_dict(input_dir)
     nml["TIME_STEPPING"].update(dt=DT, ntimes=NTIMES)
+    nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
     nml["FORCING_FILES"]["frcfiles"] = [
         str(surface_dir / SURFACE),
         str(input_dir / "example_input_river_forcing.nc"),

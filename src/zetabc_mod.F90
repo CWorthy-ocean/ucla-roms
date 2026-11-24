@@ -1,5 +1,6 @@
 module zetabc_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m2_flather
   implicit none
   private
   public :: zetabc_tile
@@ -25,176 +26,91 @@ contains
 
 #ifndef EW_PERIODIC
     if (inode==0) then
-# if defined OBC_WEST && defined OBC_M2FLATHER
-      do j=jstrV-1,jend
-        cx=dtfast*pm(istr,j)*sqrt(g*h(istr,j))
-        zeta_new(istr-1,j)=( (1._8-cx)*zeta(istr-1,j,kstp)&
-        &                               +cx*zeta(istr,j,kstp) )&
+      if (obc_west .and. obc_m2_flather) then
+        do j=jstrV-1,jend
+          cx=dtfast*pm(istr,j)*sqrt(g*h(istr,j))
+          zeta_new(istr-1,j)=( (1._8-cx)*zeta(istr-1,j,kstp)&
+          &                               +cx*zeta(istr,j,kstp) )&
 #  ifdef MASKING
-        &                                      *rmask(istr-1,j)
+          &                                      *rmask(istr-1,j)
 #  endif
-      enddo
-# elif defined OBC_WEST && defined OBC_Z2ORLANSKI
-      do j=jstrV-1,jend                             ! Western edge
-        dft=zeta(istr,j,kstp)-zeta_new(istr,j)      ! Radiation BC
-        dfx=zeta_new(istr,j)-zeta_new(istr+1,j)
-
-        cx=dft*dfx
-        if (cx < 0._8) cx=0._8
-
-        cff=max(dfx*dfx, eps)
-        zeta_new(istr-1,j)=( cff*zeta(istr-1,j,kstp)&
-        &                  +cx*zeta_new(istr,j) )/(cff+cx)&
-
+        enddo
+      else
+        do j=jstrV-1,jend                              ! Western edge
+          zeta_new(istr-1,j)=zeta_new(istr,j)&          ! zero gradient BC
 #  ifdef MASKING
-        &                                 *rmask(istr-1,j)
+          &                        *rmask(istr-1,j)
 #  endif
-      enddo
-# else
-      do j=jstrV-1,jend                              ! Western edge
-        zeta_new(istr-1,j)=zeta_new(istr,j)&          ! zero gradient BC
-#  ifdef MASKING
-        &                        *rmask(istr-1,j)
-#  endif
-      enddo
-# endif
+        enddo
+      endif
     endif
 
     if (EASTERN_EDGE) then
-# if defined OBC_EAST && defined OBC_M2FLATHER
-      do j=jstrV-1,jend
-        cx=dtfast*pm(iend,j)*sqrt(g*h(iend,j))
-        zeta_new(iend+1,j)=( (1._8-cx)*zeta(iend+1,j,kstp)&
-        &                               +cx*zeta(iend,j,kstp) )&
+      if (obc_east .and. obc_m2_flather) then
+        do j=jstrV-1,jend
+          cx=dtfast*pm(iend,j)*sqrt(g*h(iend,j))
+          zeta_new(iend+1,j)=( (1._8-cx)*zeta(iend+1,j,kstp)&
+          &                               +cx*zeta(iend,j,kstp) )&
 
 #  ifdef MASKING
-        &                                      *rmask(iend+1,j)
+          &                                      *rmask(iend+1,j)
 #  endif
-      enddo
+        enddo
 
-# elif defined OBC_EAST && defined OBC_Z2ORLANSKI
-      do j=jstrV-1,jend                             ! Eastern edge
-        dft=zeta(iend,j,kstp)-zeta_new(iend,j)      ! Radiation BC
-        dfx=zeta(iend,j,kstp)-zeta(iend-1,j,kstp)
-        dfxi=zeta_new(iend,j)-zeta_new(iend-1,j)
-
-        cx=dft*dfx ; cxi=dft*dfxi ;  cff=dfx*dfx
-        if (cx < 0._8) then
-          cx=0._8 ; cxi=0._8
-        elseif (cx > c0*cff) then
-          cxi=
-
-          write(*,*) 'supercourant'
-
-          c
-
-          XXXX TO BE DEVELOPED
-
-
-        endif
-
-        zeta_new(iend+1,j)=( cffi*zeta(iend+1,j,kstp)-cx(zeta(iend+1,j,kstp)&
-        &                  +cxi*zeta_new(iend,j) )/(cffi+cxi)
-
-
-
-        c          cx=dft*dfx
-        c          if (cx < 0._8) cx=0._8
-
-        cff=max(dfx*dfx, eps)
-        zeta_new(iend+1,j)=( cff*zeta(iend+1,j,kstp)&
-        &                  +cx*zeta_new(iend,j) )/(cff+cx)&
+      else
+        do j=jstrV-1,jend                             ! Eastern edge
+          zeta_new(iend+1,j)=zeta_new(iend,j)&         ! gradient BC
 #  ifdef MASKING
-        &                                 *rmask(iend+1,j)
+          &                        *rmask(iend+1,j)
 #  endif
-      enddo
-# else
-      do j=jstrV-1,jend                             ! Eastern edge
-        zeta_new(iend+1,j)=zeta_new(iend,j)&         ! gradient BC
-#  ifdef MASKING
-        &                        *rmask(iend+1,j)
-#  endif
-      enddo
-# endif
+        enddo
+      endif
     endif
 #endif        /* !EW_PERIODIC */
 
 
 #ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
-# if defined OBC_SOUTH && defined OBC_M2FLATHER
-      do i=istrU-1,iend
-        cx=dtfast*pn(i,jstr)*sqrt(g*h(i,jstr))     ! Southern edge
-        zeta_new(i,jstr-1)=( (1._8-cx)*zeta(i,jstr-1,kstp)&
-        &                               +cx*zeta(i,jstr,kstp) )&
+      if (obc_south .and. obc_m2_flather) then
+        do i=istrU-1,iend
+          cx=dtfast*pn(i,jstr)*sqrt(g*h(i,jstr))     ! Southern edge
+          zeta_new(i,jstr-1)=( (1._8-cx)*zeta(i,jstr-1,kstp)&
+          &                               +cx*zeta(i,jstr,kstp) )&
 #  ifdef MASKING
-        &                                      *rmask(i,jstr-1)
+          &                                      *rmask(i,jstr-1)
 #  endif
-      enddo
+        enddo
 
-# elif defined OBC_SOUTH && defined OBC_Z2ORLANSKI
-      do i=istrU-1,iend                             ! Southern edge
-        dft=zeta(i,jstr,kstp)-zeta_new(i,jstr)      ! Radiation BC
-        dfx=zeta_new(i,jstr)-zeta_new(i,jstr+1)
-
-        cx=dft*dfx
-        if (cx < 0._8) cx=0._8
-
-        cff=max(dfx*dfx, eps)
-
-        zeta_new(i,jstr-1)=( cff*zeta(i,jstr-1,kstp)&
-        &                  +cx*zeta_new(i,jstr) )/(cff+cx)&
-
+      else
+        do i=istrU-1,iend                            ! Southern edge
+          zeta_new(i,jstr-1)=zeta_new(i,jstr)&        ! gradient BC
 #  ifdef MASKING
-        &                                 *rmask(i,jstr-1)
+          &                       *rmask(i,jstr-1)
 #  endif
-      enddo
-# else
-      do i=istrU-1,iend                            ! Southern edge
-        zeta_new(i,jstr-1)=zeta_new(i,jstr)&        ! gradient BC
-#  ifdef MASKING
-        &                       *rmask(i,jstr-1)
-#  endif
-      enddo
-# endif  /* OBC_SOUTH */
+        enddo
+      endif
     endif
 
 
     if (NORTHERN_EDGE) then
-# if defined OBC_NORTH && defined OBC_M2FLATHER
-      do i=istrU-1,iend
-        cx=dtfast*pn(i,jend)*sqrt(g*h(i,jend))    ! Northern edge
-        zeta_new(i,jend+1)=( (1._8-cx)*zeta(i,jend+1,kstp)&
-        &                               +cx*zeta(i,jend,kstp) )&
+      if (obc_north .and. obc_m2_flather) then
+        do i=istrU-1,iend
+          cx=dtfast*pn(i,jend)*sqrt(g*h(i,jend))    ! Northern edge
+          zeta_new(i,jend+1)=( (1._8-cx)*zeta(i,jend+1,kstp)&
+          &                               +cx*zeta(i,jend,kstp) )&
 #  ifdef MASKING
-        &                                      *rmask(i,jend+1)
+          &                                      *rmask(i,jend+1)
 #  endif
-      enddo
+        enddo
 
-# elif defined OBC_EAST && defined OBC_Z2ORLANSKI
-      do i=istrU-1,iend                             ! Northern edge
-        dft=zeta(i,jend,kstp)-zeta_new(i,jend)      ! Radiation BC
-        dfx=zeta_new(i,jend)-zeta_new(i,jend-1)
-
-        cx=dft*dfx
-        if (cx < 0._8) cx=0._8
-
-        cff=max(dfx*dfx, eps)
-        zeta_new(i,jend+1)=( cff*zeta(i,jend+1,kstp)&
-        &                  +cx*zeta_new(i,jend) )/(cff+cx)&
+      else
+        do i=istrU-1,iend                           ! Northern edge
+          zeta_new(i,jend+1)=zeta_new(i,jend)&       ! gradient BC
 #  ifdef MASKING
-        &                                 *rmask(i,jend+1)
+          &                       *rmask(i,jend+1)
 #  endif
-      enddo
-
-# else
-      do i=istrU-1,iend                           ! Northern edge
-        zeta_new(i,jend+1)=zeta_new(i,jend)&       ! gradient BC
-#  ifdef MASKING
-        &                       *rmask(i,jend+1)
-#  endif
-      enddo
-# endif   /* OBC_NORTH */
+        enddo
+      endif
     endif
 #endif       /* !NS_PERIODIC */
 

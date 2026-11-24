@@ -487,10 +487,31 @@ Optional: without the group `visc2` is 0.
 |--------|-------------|
 | `visc2` | Horizontal Laplacian kinematic viscosity (m2/s; `0` for none) |
 
+### `OPEN_BOUNDARY_SETTINGS`
+(read by module `open_boundary_mod.F90`)
+
+Optional: without the group all four sides are open, with the defaults below. A side that is not open is closed (a wall), and its boundary data are not read. Sides in a periodic direction (`EW_PERIODIC`, `NS_PERIODIC`) are never open: `obc_west` and `obc_east`, or `obc_south` and `obc_north`, are then ignored, with a line at start-up.
+
+| Setting | Description |
+|--------|-------------|
+| `obc_west`, `obc_east`, `obc_south`, `obc_north` | That side is open (default `.true.`). West is the side of the MPI ranks in column 0, east column `NP_XI-1`, south row 0, north row `NP_ETA-1` |
+| `obc_m2` | Scheme of the sea level and the barotropic velocities: `'flather'` (the default; reads `zeta`, `ubar` and `vbar`), `'specified'` (clamped to the data; reads `ubar` and `vbar`) or `'gradient'` (zero gradient; reads no data) |
+| `obc_m3` | Scheme of `u` and `v` (and `w`, if non-hydrostatic): `'orlanski'` (radiation, the default) or `'gradient'` (zero gradient) |
+| `obc_t` | Scheme of the tracers: `'orlanski'` (the default) or `'gradient'` |
+| `obc_rad` | Phase speed of the Orlanski scheme of `u` and `v`: `'oblique'` (the default), `'normal'` (from the normal gradient only) or `'npo'` (the phase speed of `'oblique'`, with no propagation along the boundary) |
+| `use_m3_boundary_data` | Relax `u` and `v` toward boundary data while water flows in (default `.true.`; reads `u` and `v`, and `w` if non-hydrostatic). No effect with `obc_m3 = 'gradient'` |
+| `use_t_boundary_data` | Relax the tracers toward boundary data while water flows in (default `.true.`; reads every tracer). No effect with `obc_t = 'gradient'` |
+
+Boundary data that are read must be in the forcing files for every open side (the tracers of the biogeochemical model have their own rules for missing variables); the run stops if a variable is missing.
+
+Tracer advection through an open-boundary face is upwind on inflow: the corrector step uses the ghost-cell value, which the tracer boundary condition relaxes toward the boundary data while water flows in. Outflow faces use the interior advection scheme. This needs no setting and applies to every tracer on every open side.
+
+The Orlanski radiation updates (of `u`, `v`, the tracers and the tangential barotropic velocity) form the new boundary value as a weighted average of the old boundary value, its neighbour along the edge, the first interior value and the boundary data, with weights from Courant numbers of the flow across the edge, along it, and of the inflow nudging. Each of these Courant numbers is capped at 1, so the weights stay between 0 and 1 and the update cannot overshoot when a long time step or a fast flow along the edge would otherwise take it above 1.
+
 ### `UBIND_SETTINGS`
 (read by module `scalars.F90`)
 
-Read only with boundary forcing (`T_FRC_BRY`, `M2_FRC_BRY`, `M3_FRC_BRY` or `Z_FRC_BRY`).
+Read only with an open side, `obc_m3 = 'orlanski'` and `use_m3_boundary_data = .true.` ([`OPEN_BOUNDARY_SETTINGS`](#open_boundary_settings)).
 
 | Setting | Description |
 |--------|-------------|
@@ -660,7 +681,7 @@ Settings (the keys of the namelist template):
 | `imex_igw` | none (required) | `.true.`: the IMEX internal-wave step (build with `IMEX_IGW`); `.false.`: the stock baroclinic step (build without `IMEX_IGW`) |
 | `imex_verbose` | `0` | 1: an `IMEX` line every `ninfo` steps (iterations of each stage's solve, largest velocity correction, unconverged solves), an `IMEX_SOLVE` line per solve, `IMEX_BREF` and `IMEX_TAPER` lines at the rebuilds; 2: also the true FP64 residual of every solve (`IMEX_PCHK`), the residual history of every solve (`IMEX_RH`) and the largest pressure correction. 0, 1 and 2 give the same results |
 | `imex_bref_hours` | `24.0` | Rebuild interval (model hours) of the reference stratification `b_ref`, the operator and its preconditioner, which are held in between. 12 is the cautious value where the stratification changes strongly within a day. It is the longest age of `b_ref`: `imex_bref_trigger` rebuilds it earlier where it goes stale |
-| `imex_obc_mode` | `'auto'` | Normal velocity at the open-boundary faces: `'modal'` the characteristic (per-mode Flather) condition on the internal modes, implicit in the stage solves; `'fixed'` the explicit value of the boundary conditions, as without IMEX; `'auto'` `'modal'` where supported (an open edge, `M3_FRC_BRY` and `T_FRC_BRY`), else `'fixed'`. A run that does not start from the state its boundary data come from should take its first ~10 days with `'fixed'` (see [open boundaries](implicit_internal_waves.md#5-open-boundaries)) |
+| `imex_obc_mode` | `'auto'` | Normal velocity at the open-boundary faces: `'modal'` the characteristic (per-mode Flather) condition on the internal modes, implicit in the stage solves; `'fixed'` the explicit value of the boundary conditions, as without IMEX; `'auto'` `'modal'` where supported (an open edge, `use_m3_boundary_data` and `use_t_boundary_data`), else `'fixed'`. A run that does not start from the state its boundary data come from should take its first ~10 days with `'fixed'` (see [open boundaries](implicit_internal_waves.md#5-open-boundaries)) |
 | `imex_obc_tref` | `259200.0` | `'modal'`: time scale (s) of the reference of the baroclinic mismatch that is held instead of radiated; at least about three inertial periods at the lowest `\|f\|` of the open edges and at least 1 day; 0: no reference |
 | `imex_rst_state` | `1` | With `EXACT_RESTART`: 1 the restart files carry the IMEX state (about eleven 3-D variables, one copy per file) and restarts are exact; 0 no IMEX state: much smaller files, but the first step after a restart starts the IMEX stores as on the first step of a run (inexact restart) |
 

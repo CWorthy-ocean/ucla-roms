@@ -118,9 +118,9 @@ Development keys removed on 2026-11-13 (their former defaults are now fixed) sto
 
 `imex_obc_mode` selects how the normal velocity at the open-boundary faces enters the IMEX step:
 
-- **`'fixed'`**: the open faces are outside the implicit operator; their normal velocity is the explicit value of the boundary conditions (`OBC_M3ORLANSKI`, ...), as without IMEX, and enters each stage's right-hand side.
+- **`'fixed'`**: the open faces are outside the implicit operator; their normal velocity is the explicit value of the boundary conditions (`obc_m3`, ...), as without IMEX, and enters each stage's right-hand side.
 - **`'modal'`**: a characteristic (per-mode Flather) condition on the internal modes, implicit in the stage solves. At each open face column the baroclinic normal velocity is `u_b = u_ext + s Y (p_int - p_ext - m)`: the boundary data's velocity plus the radiation of the baroclinic pressure mismatch between the interior and the boundary data, with the admittance `Y` built from the vertical modes of the operator's stratification in that column (the first `imex_obc_nmodes` modes with `1/c_m`, the rest with the last mode's admittance). Outgoing internal waves leave and the internal tide that the boundary data carry comes in. `m` is a slow reference of the mismatch (time scale `imex_obc_tref`), so a slow child-parent mismatch is held instead of being radiated as a flow through the boundary. The barotropic mode and the tracers keep their usual boundary conditions.
-- **`'auto'`** (default): `'modal'` where it is supported (an open edge, `M3_FRC_BRY` and `T_FRC_BRY`), else `'fixed'`; the startup log prints the choice.
+- **`'auto'`** (default): `'modal'` where it is supported (an open edge, `use_m3_boundary_data` and `use_t_boundary_data`), else `'fixed'`; the startup log prints the choice.
 
 On the nests whose boundary data carry the parent's internal tide, `'modal'` admitted 75-100 % of the parent's incoming mode-1 tide near the edges, against 20-70 % with the stock boundary, and a Pacific basin (boundary data without internal tide) ran 21 days at 1440 s with quiet edges. It costs at most 0.4 % of the step (the modes are recomputed at each rebuild of `b_ref`).
 

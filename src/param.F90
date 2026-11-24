@@ -59,27 +59,6 @@ module param
   logical,parameter :: ns_periodic =.false.
 # endif
 
-# ifdef OBC_WEST
-  logical,parameter :: obc_west =.true.
-# else
-  logical,parameter :: obc_west =.false.
-# endif
-# ifdef OBC_EAST
-  logical,parameter :: obc_east =.true.
-# else
-  logical,parameter :: obc_east =.false.
-# endif
-# ifdef OBC_NORTH
-  logical,parameter :: obc_north=.true.
-# else
-  logical,parameter :: obc_north=.false.
-# endif
-# ifdef OBC_SOUTH
-  logical,parameter :: obc_south=.true.
-# else
-  logical,parameter :: obc_south=.false.
-# endif
-
 contains
 
   subroutine read_nml_param

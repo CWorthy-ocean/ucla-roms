@@ -15,6 +15,7 @@ module swept_flux_mod
   ! Documentation: docs/model_settings/bgc_subcycling.md (sections 2-3).
 
 #include "cppdefs.opt"
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
 
@@ -89,20 +90,20 @@ contains
     ! would carry part of the first interior cell back in (half of it
     ! as c -> 0). Outflow faces keep the swept flux.
 #ifndef EW_PERIODIC
-# ifdef OBC_WEST
-    if (WESTERN_EDGE) then
-      do jj = j0, j1
-        if (vxf(istr,jj) > 0._8) F(istr,jj) = vxf(istr,jj)*s(istr-1,jj)
-      end do
-    end if
-# endif
-# ifdef OBC_EAST
-    if (EASTERN_EDGE) then
-      do jj = j0, j1
-        if (vxf(iend+1,jj) < 0._8) F(iend+1,jj) = vxf(iend+1,jj)*s(iend+1,jj)
-      end do
-    end if
-# endif
+    if (obc_west) then
+      if (WESTERN_EDGE) then
+        do jj = j0, j1
+          if (vxf(istr,jj) > 0._8) F(istr,jj) = vxf(istr,jj)*s(istr-1,jj)
+        end do
+      end if
+    endif
+    if (obc_east) then
+      if (EASTERN_EDGE) then
+        do jj = j0, j1
+          if (vxf(iend+1,jj) < 0._8) F(iend+1,jj) = vxf(iend+1,jj)*s(iend+1,jj)
+        end do
+      end if
+    endif
 #endif
   end subroutine sweep_x
 
@@ -162,20 +163,20 @@ contains
     end do
     ! Inflow faces of southern/northern open boundaries: see sweep_x.
 #ifndef NS_PERIODIC
-# ifdef OBC_SOUTH
-    if (SOUTHERN_EDGE) then
-      do ii = i0, i1
-        if (vyf(ii,jstr) > 0._8) F(ii,jstr) = vyf(ii,jstr)*s(ii,jstr-1)
-      end do
-    end if
-# endif
-# ifdef OBC_NORTH
-    if (NORTHERN_EDGE) then
-      do ii = i0, i1
-        if (vyf(ii,jend+1) < 0._8) F(ii,jend+1) = vyf(ii,jend+1)*s(ii,jend+1)
-      end do
-    end if
-# endif
+    if (obc_south) then
+      if (SOUTHERN_EDGE) then
+        do ii = i0, i1
+          if (vyf(ii,jstr) > 0._8) F(ii,jstr) = vyf(ii,jstr)*s(ii,jstr-1)
+        end do
+      end if
+    endif
+    if (obc_north) then
+      if (NORTHERN_EDGE) then
+        do ii = i0, i1
+          if (vyf(ii,jend+1) < 0._8) F(ii,jend+1) = vyf(ii,jend+1)*s(ii,jend+1)
+        end do
+      end if
+    endif
 #endif
   end subroutine sweep_y
 

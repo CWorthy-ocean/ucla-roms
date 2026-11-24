@@ -6,8 +6,7 @@ module boundary
 
 !      use param, only: nt
 !      use param, only:
-!     &     lm, mm, n, obc_east, obc_north, obc_south,
-!     &     obc_west
+!     &     lm, mm, n
 !      use roms_read_write, only:
 !     &     ncforce, bc_options, set_frc_data,
 !     &     frctype, store_string_att
@@ -16,8 +15,7 @@ module boundary
 !      use error_handling_mod, only: error_log
   use param, only: nt
   use param, only:&
-  &lm, mm, nz, obc_east, obc_north, obc_south,&
-  &obc_west
+  &lm, mm, nz
   use roms_read_write, only:&
   &ncforce, bc_options, set_frc_data,&
   &frctype, store_string_att
@@ -30,6 +28,9 @@ module boundary
   use pio_roms, only: pio_file_is_open, pio_FileDesc
   use pio, only : PIO_closefile
 #endif
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m2_flather,&
+  &  obc_m3_orlanski, obc_t_orlanski, use_m3_boundary_data, use_t_boundary_data,&
+  &  use_m2_boundary_data
   implicit none
 
   ! Set module to private and make vars explicitly public
@@ -117,121 +118,119 @@ contains
     if (obc_north) call store_string_att(bc_options,'OBC_NORTH, ')
     if (obc_south) call store_string_att(bc_options,'OBC_SOUTH, ')
     bc_options = trim(adjustl(bc_options))
-# ifdef OBC_M3ORLANSKI
-    call store_string_att(bc_options,'OBC_M3ORLANSKI, ')
-#  endif
-# ifdef OBC_TORLANSKI
-    call store_string_att(bc_options,'OBC_TORLANSKI, ')
-#  endif
+    if (obc_west.or.obc_east.or.obc_north.or.obc_south) then
+      if (obc_m3_orlanski) call store_string_att(bc_options,'OBC_M3ORLANSKI, ')
+      if (obc_t_orlanski)  call store_string_att(bc_options,'OBC_TORLANSKI, ')
+    endif
 
 
-# ifdef OBC_WEST
-#  ifdef Z_FRC_BRY
-    allocate( zeta_west(0:Mm+1) )
-    allocate( nc_z_w%vdata(j0:j1,1,2) )
-#  endif
-#  ifdef M2_FRC_BRY
-    allocate( ubar_west(0:Mm+1), vbar_west(0:Mm+1) )
-    allocate( nc_ub_w%vdata(j0:j1,1,2) )
-    allocate( nc_vb_w%vdata( 1:j1,1,2) )
-#  endif
-#   ifdef M3_FRC_BRY
-    allocate( u_west(0:Mm+1,nz), v_west(0:Mm+1,nz) )
-    allocate( nc_u_w%vdata(j0:j1,nz,2) )
-    allocate( nc_v_w%vdata( 1:j1,nz,2) )
-    if (nhmg_on) allocate( w_west(0:Mm+1,nz), nc_w_w%vdata(j0:j1,nz,2) )
-#   endif
-#   ifdef T_FRC_BRY
-    allocate( t_west(0:Mm+1,nz,NT) ); t_west=0._8
-    do itrc=1,nt
-      nc_t_w(itrc)%vname = trim(t_vname(itrc)) // '_west'
-      call set_tracer_bry_rule(nc_t_w(itrc), itrc)
-      allocate( nc_t_w(itrc)%vdata(j0:j1,nz,2) )
-      nc_t_w(itrc)%vdata=0._8
-    enddo
-#   endif
-# endif
+    if (obc_west) then
+      if (obc_m2_flather) then
+        allocate( zeta_west(0:Mm+1) )
+        allocate( nc_z_w%vdata(j0:j1,1,2) )
+      endif
+      if (use_m2_boundary_data) then
+        allocate( ubar_west(0:Mm+1), vbar_west(0:Mm+1) )
+        allocate( nc_ub_w%vdata(j0:j1,1,2) )
+        allocate( nc_vb_w%vdata( 1:j1,1,2) )
+      endif
+      if (use_m3_boundary_data) then
+        allocate( u_west(0:Mm+1,nz), v_west(0:Mm+1,nz) )
+        allocate( nc_u_w%vdata(j0:j1,nz,2) )
+        allocate( nc_v_w%vdata( 1:j1,nz,2) )
+        if (nhmg_on) allocate( w_west(0:Mm+1,nz), nc_w_w%vdata(j0:j1,nz,2) )
+      endif
+      if (use_t_boundary_data) then
+        allocate( t_west(0:Mm+1,nz,NT) ); t_west=0._8
+        do itrc=1,nt
+          nc_t_w(itrc)%vname = trim(t_vname(itrc)) // '_west'
+          call set_tracer_bry_rule(nc_t_w(itrc), itrc)
+          allocate( nc_t_w(itrc)%vdata(j0:j1,nz,2) )
+          nc_t_w(itrc)%vdata=0._8
+        enddo
+      endif
+    endif
 
-# ifdef OBC_EAST
-#  ifdef Z_FRC_BRY
-    allocate( zeta_east(0:Mm+1) )
-    allocate( nc_z_e%vdata(j0:j1,1,2) )
-#  endif
-#  ifdef M2_FRC_BRY
-    allocate( ubar_east(0:Mm+1), vbar_east(0:Mm+1) )
-    allocate( nc_ub_e%vdata(j0:j1,1,2) )
-    allocate( nc_vb_e%vdata( 1:j1,1,2) )
-#  endif
-#   ifdef M3_FRC_BRY
-    allocate( u_east(0:Mm+1,nz), v_east(0:Mm+1,nz) )
-    allocate( nc_u_e%vdata(j0:j1,nz,2) )
-    allocate( nc_v_e%vdata( 1:j1,nz,2) )
-    if (nhmg_on) allocate( w_east(0:Mm+1,nz), nc_w_e%vdata(j0:j1,nz,2) )
-#   endif
-#   ifdef T_FRC_BRY
-    allocate( t_east(0:Mm+1,nz,NT) ); t_east=0._8
-    do itrc=1,nt
-      nc_t_e(itrc)%vname = trim(t_vname(itrc)) // '_east'
-      call set_tracer_bry_rule(nc_t_e(itrc), itrc)
-      allocate( nc_t_e(itrc)%vdata(j0:j1,nz,2) )
-      nc_t_e(itrc)%vdata=0._8
-    enddo
-#   endif
-# endif
+    if (obc_east) then
+      if (obc_m2_flather) then
+        allocate( zeta_east(0:Mm+1) )
+        allocate( nc_z_e%vdata(j0:j1,1,2) )
+      endif
+      if (use_m2_boundary_data) then
+        allocate( ubar_east(0:Mm+1), vbar_east(0:Mm+1) )
+        allocate( nc_ub_e%vdata(j0:j1,1,2) )
+        allocate( nc_vb_e%vdata( 1:j1,1,2) )
+      endif
+      if (use_m3_boundary_data) then
+        allocate( u_east(0:Mm+1,nz), v_east(0:Mm+1,nz) )
+        allocate( nc_u_e%vdata(j0:j1,nz,2) )
+        allocate( nc_v_e%vdata( 1:j1,nz,2) )
+        if (nhmg_on) allocate( w_east(0:Mm+1,nz), nc_w_e%vdata(j0:j1,nz,2) )
+      endif
+      if (use_t_boundary_data) then
+        allocate( t_east(0:Mm+1,nz,NT) ); t_east=0._8
+        do itrc=1,nt
+          nc_t_e(itrc)%vname = trim(t_vname(itrc)) // '_east'
+          call set_tracer_bry_rule(nc_t_e(itrc), itrc)
+          allocate( nc_t_e(itrc)%vdata(j0:j1,nz,2) )
+          nc_t_e(itrc)%vdata=0._8
+        enddo
+      endif
+    endif
 
-# ifdef OBC_SOUTH
-#  ifdef Z_FRC_BRY
-    allocate( zeta_south(0:Lm+1) )
-    allocate( nc_z_s%vdata(i0:i1,1,2) )
-#  endif
-#  ifdef M2_FRC_BRY
-    allocate( ubar_south(0:Lm+1), vbar_south(0:Lm+1) )
-    allocate( nc_ub_s%vdata( 1:i1,1,2) )
-    allocate( nc_vb_s%vdata(i0:i1,1,2) )
-#  endif
-#   ifdef M3_FRC_BRY
-    allocate( u_south(0:Lm+1,nz), v_south(0:Lm+1,nz) )
-    allocate( nc_u_s%vdata( 1:i1,nz,2) )
-    allocate( nc_v_s%vdata(i0:i1,nz,2) )
-    if (nhmg_on) allocate( w_south(0:Lm+1,nz), nc_w_s%vdata(i0:i1,nz,2) )
-#   endif
-#   ifdef T_FRC_BRY
-    allocate( t_south(0:Lm+1,nz,NT) ); t_south=0._8
-    do itrc=1,nt
-      nc_t_s(itrc)%vname = trim(t_vname(itrc)) // '_south'
-      call set_tracer_bry_rule(nc_t_s(itrc), itrc)
-      allocate( nc_t_s(itrc)%vdata(i0:i1,nz,2) )
-      nc_t_s(itrc)%vdata=0._8
-    enddo
-#   endif
-# endif
+    if (obc_south) then
+      if (obc_m2_flather) then
+        allocate( zeta_south(0:Lm+1) )
+        allocate( nc_z_s%vdata(i0:i1,1,2) )
+      endif
+      if (use_m2_boundary_data) then
+        allocate( ubar_south(0:Lm+1), vbar_south(0:Lm+1) )
+        allocate( nc_ub_s%vdata( 1:i1,1,2) )
+        allocate( nc_vb_s%vdata(i0:i1,1,2) )
+      endif
+      if (use_m3_boundary_data) then
+        allocate( u_south(0:Lm+1,nz), v_south(0:Lm+1,nz) )
+        allocate( nc_u_s%vdata( 1:i1,nz,2) )
+        allocate( nc_v_s%vdata(i0:i1,nz,2) )
+        if (nhmg_on) allocate( w_south(0:Lm+1,nz), nc_w_s%vdata(i0:i1,nz,2) )
+      endif
+      if (use_t_boundary_data) then
+        allocate( t_south(0:Lm+1,nz,NT) ); t_south=0._8
+        do itrc=1,nt
+          nc_t_s(itrc)%vname = trim(t_vname(itrc)) // '_south'
+          call set_tracer_bry_rule(nc_t_s(itrc), itrc)
+          allocate( nc_t_s(itrc)%vdata(i0:i1,nz,2) )
+          nc_t_s(itrc)%vdata=0._8
+        enddo
+      endif
+    endif
 
-# ifdef OBC_NORTH
-#  ifdef Z_FRC_BRY
-    allocate( zeta_north(0:Lm+1) )
-    allocate( nc_z_n%vdata(i0:i1,1,2) )
-#  endif
-#  ifdef M2_FRC_BRY
-    allocate( ubar_north(0:Lm+1), vbar_north(0:Lm+1) )
-    allocate( nc_ub_n%vdata( 1:i1,1,2) )
-    allocate( nc_vb_n%vdata(i0:i1,1,2) )
-#  endif
-#   ifdef M3_FRC_BRY
-    allocate( u_north(0:Lm+1,nz), v_north(0:Lm+1,nz) )
-    allocate( nc_u_n%vdata( 1:i1,nz,2) )
-    allocate( nc_v_n%vdata(i0:i1,nz,2) )
-    if (nhmg_on) allocate( w_north(0:Lm+1,nz), nc_w_n%vdata(i0:i1,nz,2) )
-#   endif
-#   ifdef T_FRC_BRY
-    allocate( t_north(0:Lm+1,nz,NT) ); t_north=0._8
-    do itrc=1,nt
-      nc_t_n(itrc)%vname = trim(t_vname(itrc)) // '_north'
-      call set_tracer_bry_rule(nc_t_n(itrc), itrc)
-      allocate( nc_t_n(itrc)%vdata(i0:i1,nz,2) )
-      nc_t_n(itrc)%vdata=0._8
-    enddo
-#   endif
-# endif
+    if (obc_north) then
+      if (obc_m2_flather) then
+        allocate( zeta_north(0:Lm+1) )
+        allocate( nc_z_n%vdata(i0:i1,1,2) )
+      endif
+      if (use_m2_boundary_data) then
+        allocate( ubar_north(0:Lm+1), vbar_north(0:Lm+1) )
+        allocate( nc_ub_n%vdata( 1:i1,1,2) )
+        allocate( nc_vb_n%vdata(i0:i1,1,2) )
+      endif
+      if (use_m3_boundary_data) then
+        allocate( u_north(0:Lm+1,nz), v_north(0:Lm+1,nz) )
+        allocate( nc_u_n%vdata( 1:i1,nz,2) )
+        allocate( nc_v_n%vdata(i0:i1,nz,2) )
+        if (nhmg_on) allocate( w_north(0:Lm+1,nz), nc_w_n%vdata(i0:i1,nz,2) )
+      endif
+      if (use_t_boundary_data) then
+        allocate( t_north(0:Lm+1,nz,NT) ); t_north=0._8
+        do itrc=1,nt
+          nc_t_n(itrc)%vname = trim(t_vname(itrc)) // '_north'
+          call set_tracer_bry_rule(nc_t_n(itrc), itrc)
+          allocate( nc_t_n(itrc)%vdata(i0:i1,nz,2) )
+          nc_t_n(itrc)%vdata=0._8
+        enddo
+      endif
+    endif
 
   end subroutine init_arrays_boundary !]
 !----------------------------------------------------------------------
@@ -275,31 +274,31 @@ contains
       if (inode==0) then
 #endif
         on_bry = (inode==0)
-#  ifdef Z_FRC_BRY
-        pio_gtype='w1rr'
-        call set_frc_data( nc_z_w, zeta_west(j0:j1), obry=2, interp=on_bry )
-!       call exch_bry_EW_tile(1, ny, zeta_west, 1)      ! DevinD - exchange did not make a difference
-#  endif
-#  ifdef M2_FRC_BRY
-        pio_gtype='w1ur'
-        call set_frc_data( nc_ub_w, ubar_west(j0:j1), obry=1, interp=on_bry )
-        pio_gtype='w1vr'
-        call set_frc_data( nc_vb_w, vbar_west( 1:j1), obry=1, interp=on_bry )
-#  endif
-#   ifdef M3_FRC_BRY
-        pio_gtype='w2ur'
-        call set_frc_data( nc_u_w, var2d=u_west(j0:j1,:), obry=1, interp=on_bry )
-        pio_gtype='w2vr'
-        call set_frc_data( nc_v_w, var2d=v_west( 1:j1,:), obry=1, interp=on_bry )
-!       call set_frc_data( nc_w_w, var2d=w_west(j0:j1,:), obry=1 )
-        if (nhmg_on) w_west = 0
-#   endif
-#   ifdef T_FRC_BRY
-        pio_gtype='w2rr'
-        do itrc=1,nt
-          call set_frc_data( nc_t_w(itrc), var2d=t_west(j0:j1,:,itrc), obry=1, interp=on_bry )
-        enddo
-#   endif
+        if (obc_m2_flather) then
+          pio_gtype='w1rr'
+          call set_frc_data( nc_z_w, zeta_west(j0:j1), obry=2, interp=on_bry )
+  !       call exch_bry_EW_tile(1, ny, zeta_west, 1)      ! DevinD - exchange did not make a difference
+        endif
+        if (use_m2_boundary_data) then
+          pio_gtype='w1ur'
+          call set_frc_data( nc_ub_w, ubar_west(j0:j1), obry=1, interp=on_bry )
+          pio_gtype='w1vr'
+          call set_frc_data( nc_vb_w, vbar_west( 1:j1), obry=1, interp=on_bry )
+        endif
+        if (use_m3_boundary_data) then
+          pio_gtype='w2ur'
+          call set_frc_data( nc_u_w, var2d=u_west(j0:j1,:), obry=1, interp=on_bry )
+          pio_gtype='w2vr'
+          call set_frc_data( nc_v_w, var2d=v_west( 1:j1,:), obry=1, interp=on_bry )
+  !       call set_frc_data( nc_w_w, var2d=w_west(j0:j1,:), obry=1 )
+          if (nhmg_on) w_west = 0
+        endif
+        if (use_t_boundary_data) then
+          pio_gtype='w2rr'
+          do itrc=1,nt
+            call set_frc_data( nc_t_w(itrc), var2d=t_west(j0:j1,:,itrc), obry=1, interp=on_bry )
+          enddo
+        endif
       endif
 #ifndef PARALLEL_IO
     endif
@@ -310,30 +309,30 @@ contains
       if (inode==npx-1) then
 #endif
         on_bry = (inode==npx-1)
-#  ifdef Z_FRC_BRY
-        pio_gtype='e1rr'
-        call set_frc_data( nc_z_e, zeta_east(j0:j1), obry=2, interp=on_bry )
-#  endif
-#  ifdef M2_FRC_BRY
-        pio_gtype='e1ur'
-        call set_frc_data( nc_ub_e, ubar_east(j0:j1), obry=1, interp=on_bry )
-        pio_gtype='e1vr'
-        call set_frc_data( nc_vb_e, vbar_east( 1:j1), obry=1, interp=on_bry )
-#  endif
-#   ifdef M3_FRC_BRY
-        pio_gtype='e2ur'
-        call set_frc_data( nc_u_e, var2d=u_east(j0:j1,:), obry=1, interp=on_bry )
-        pio_gtype='e2vr'
-        call set_frc_data( nc_v_e, var2d=v_east( 1:j1,:), obry=1, interp=on_bry )
-!       call set_frc_data( nc_w_e, var2d=w_east(j0:j1,:), obry=1 )
-        if (nhmg_on) w_east = 0
-#   endif
-#   ifdef T_FRC_BRY
-        pio_gtype='e2rr'
-        do itrc=1,NT
-          call set_frc_data( nc_t_e(itrc), var2d=t_east(j0:j1,:,itrc), obry=1, interp=on_bry )
-        enddo
-#   endif
+        if (obc_m2_flather) then
+          pio_gtype='e1rr'
+          call set_frc_data( nc_z_e, zeta_east(j0:j1), obry=2, interp=on_bry )
+        endif
+        if (use_m2_boundary_data) then
+          pio_gtype='e1ur'
+          call set_frc_data( nc_ub_e, ubar_east(j0:j1), obry=1, interp=on_bry )
+          pio_gtype='e1vr'
+          call set_frc_data( nc_vb_e, vbar_east( 1:j1), obry=1, interp=on_bry )
+        endif
+        if (use_m3_boundary_data) then
+          pio_gtype='e2ur'
+          call set_frc_data( nc_u_e, var2d=u_east(j0:j1,:), obry=1, interp=on_bry )
+          pio_gtype='e2vr'
+          call set_frc_data( nc_v_e, var2d=v_east( 1:j1,:), obry=1, interp=on_bry )
+  !       call set_frc_data( nc_w_e, var2d=w_east(j0:j1,:), obry=1 )
+          if (nhmg_on) w_east = 0
+        endif
+        if (use_t_boundary_data) then
+          pio_gtype='e2rr'
+          do itrc=1,NT
+            call set_frc_data( nc_t_e(itrc), var2d=t_east(j0:j1,:,itrc), obry=1, interp=on_bry )
+          enddo
+        endif
       endif
 #ifndef PARALLEL_IO
     endif
@@ -344,30 +343,30 @@ contains
       if (jnode==0) then
 #endif
         on_bry = (jnode==0)
-#  ifdef Z_FRC_BRY
-        pio_gtype='s1rr'
-        call set_frc_data( nc_z_s, zeta_south(i0:i1), obry=2, interp=on_bry )
-#  endif
-#  ifdef M2_FRC_BRY
-        pio_gtype='s1ur'
-        call set_frc_data( nc_ub_s, ubar_south( 1:i1), obry=1, interp=on_bry )
-        pio_gtype='s1vr'
-        call set_frc_data( nc_vb_s, vbar_south(i0:i1), obry=1, interp=on_bry )
-#  endif
-#   ifdef M3_FRC_BRY
-        pio_gtype='s2ur'
-        call set_frc_data( nc_u_s, var2d=u_south( 1:i1,:), obry=1, interp=on_bry )
-        pio_gtype='s2vr'
-        call set_frc_data( nc_v_s, var2d=v_south(i0:i1,:), obry=1, interp=on_bry )
-!       call set_frc_data( nc_w_s, var2d=w_south(i0:i1,:), obry=1 )
-        if (nhmg_on) w_south = 0
-#   endif
-#   ifdef T_FRC_BRY
-        pio_gtype='s2rr'
-        do itrc=1,nt
-          call set_frc_data( nc_t_s(itrc), var2d=t_south(i0:i1,:,itrc), obry=1, interp=on_bry )
-        enddo
-#   endif
+        if (obc_m2_flather) then
+          pio_gtype='s1rr'
+          call set_frc_data( nc_z_s, zeta_south(i0:i1), obry=2, interp=on_bry )
+        endif
+        if (use_m2_boundary_data) then
+          pio_gtype='s1ur'
+          call set_frc_data( nc_ub_s, ubar_south( 1:i1), obry=1, interp=on_bry )
+          pio_gtype='s1vr'
+          call set_frc_data( nc_vb_s, vbar_south(i0:i1), obry=1, interp=on_bry )
+        endif
+        if (use_m3_boundary_data) then
+          pio_gtype='s2ur'
+          call set_frc_data( nc_u_s, var2d=u_south( 1:i1,:), obry=1, interp=on_bry )
+          pio_gtype='s2vr'
+          call set_frc_data( nc_v_s, var2d=v_south(i0:i1,:), obry=1, interp=on_bry )
+  !       call set_frc_data( nc_w_s, var2d=w_south(i0:i1,:), obry=1 )
+          if (nhmg_on) w_south = 0
+        endif
+        if (use_t_boundary_data) then
+          pio_gtype='s2rr'
+          do itrc=1,nt
+            call set_frc_data( nc_t_s(itrc), var2d=t_south(i0:i1,:,itrc), obry=1, interp=on_bry )
+          enddo
+        endif
       endif
 #ifndef PARALLEL_IO
     endif
@@ -378,30 +377,30 @@ contains
       if (jnode==npy-1) then
 #endif
         on_bry = (jnode==npy-1)
-#  ifdef Z_FRC_BRY
-        pio_gtype='n1rr'
-        call set_frc_data( nc_z_n, zeta_north(i0:i1), obry=2, interp=on_bry )
-#  endif
-#  ifdef M2_FRC_BRY
-        pio_gtype='n1ur'
-        call set_frc_data( nc_ub_n, ubar_north( 1:i1), obry=1, interp=on_bry )
-        pio_gtype='n1vr'
-        call set_frc_data( nc_vb_n, vbar_north(i0:i1), obry=1, interp=on_bry )
-#  endif
-#   ifdef M3_FRC_BRY
-        pio_gtype='n2ur'
-        call set_frc_data( nc_u_n, var2d=u_north( 1:i1,:), obry=1, interp=on_bry )
-        pio_gtype='n2vr'
-        call set_frc_data( nc_v_n, var2d=v_north(i0:i1,:), obry=1, interp=on_bry )
-!       call set_frc_data( nc_w_n, var2d=w_north(i0:i1,:), obry=1 )
-        if (nhmg_on) w_north = 0
-#   endif
-#   ifdef T_FRC_BRY
-        pio_gtype='n2rr'
-        do itrc=1,NT
-          call set_frc_data( nc_t_n(itrc), var2d=t_north(i0:i1,:,itrc), obry=1, interp=on_bry )
-        enddo
-#   endif
+        if (obc_m2_flather) then
+          pio_gtype='n1rr'
+          call set_frc_data( nc_z_n, zeta_north(i0:i1), obry=2, interp=on_bry )
+        endif
+        if (use_m2_boundary_data) then
+          pio_gtype='n1ur'
+          call set_frc_data( nc_ub_n, ubar_north( 1:i1), obry=1, interp=on_bry )
+          pio_gtype='n1vr'
+          call set_frc_data( nc_vb_n, vbar_north(i0:i1), obry=1, interp=on_bry )
+        endif
+        if (use_m3_boundary_data) then
+          pio_gtype='n2ur'
+          call set_frc_data( nc_u_n, var2d=u_north( 1:i1,:), obry=1, interp=on_bry )
+          pio_gtype='n2vr'
+          call set_frc_data( nc_v_n, var2d=v_north(i0:i1,:), obry=1, interp=on_bry )
+  !       call set_frc_data( nc_w_n, var2d=w_north(i0:i1,:), obry=1 )
+          if (nhmg_on) w_north = 0
+        endif
+        if (use_t_boundary_data) then
+          pio_gtype='n2rr'
+          do itrc=1,NT
+            call set_frc_data( nc_t_n(itrc), var2d=t_north(i0:i1,:,itrc), obry=1, interp=on_bry )
+          enddo
+        endif
       endif
 #ifndef PARALLEL_IO
     endif

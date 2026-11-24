@@ -415,7 +415,8 @@ visc2 = 0. ! Horizontal Laplacian kinematic viscosity (m2/s)
 
 &UBIND_SETTINGS                                                        !scalars.F
 !--------------
-!Requires T_FRC_BRY, M2_FRC_BRY, Z_FRC_BRY or M3_FRC_BRY cppkeys
+! Read only with an open side, obc_m3 = 'orlanski' and use_m3_boundary_data = T
+! (OPEN_BOUNDARY_SETTINGS)
 !--------------
 ubind = 0.1 ! Open boundary binding velocity (m/s)
 /

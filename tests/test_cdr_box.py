@@ -18,6 +18,7 @@ from ._helpers import (
     ADDITIONAL_FILES,
     ANALYTICAL_CPP_KEYS,
     BOUNDS_CHECK_FFLAGS,
+    CLOSED_BOX,
     OCEAN_PHYSICS_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -96,6 +97,7 @@ def box_namelist(input_dir, cdr_file, np_xi=2, np_eta=2) -> dict:
     test_cdr_file_without_frcfiles depends on finding it without that."""
     nml = create_test_namelist_dict(input_dir)
     nml["TIME_STEPPING"].update({"dt": DT, "ndtfast": 12, "ntimes": NSTEPS})
+    nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
     nml["GRID_SETTINGS"] = {"grdname": ""}
     nml["INITIAL_CONDITIONS"] = {"inifile": ""}
     nml["FORCING_FILES"] = {"frcfiles": [str(cdr_file)]}
