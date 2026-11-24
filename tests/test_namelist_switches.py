@@ -58,8 +58,7 @@ def _namelist(input_dir) -> dict:
 # case: (group, keys set in it, stable substrings of the message)
 STOPS = {
     "do_cdr_output": ("CDR_OUTPUT_SETTINGS", {"do_cdr_output": True},
-                      ["CDR_OUTPUT_SETTINGS do_cdr_output = .true. needs the cpp keys",
-                       "does not define MARBL, MARBL_DIAGS"]),
+                      ["CDR_OUTPUT_SETTINGS do_cdr_output = .true. needs the cpp key MARBL"]),
     "do_cdr_gas_exch_output": ("CDR_GAS_EXCH_OUTPUT_SETTINGS", {"do_cdr_gas_exch_output": True},
                                ["do_cdr_gas_exch_output = .true. needs the cpp keys",
                                 "does not define MARBL"]),

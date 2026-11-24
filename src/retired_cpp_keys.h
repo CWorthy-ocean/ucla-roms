@@ -76,7 +76,7 @@
 # error "CPP key BIOLOGY_BEC2 was retired (BEC2 biogeochemical model; use MARBL): remove it from cppdefs.opt"
 #endif
 #ifdef BEC2_DIAG
-# error "CPP key BEC2_DIAG was retired (BEC2 diagnostics; use MARBL_DIAGS): remove it from cppdefs.opt"
+# error "CPP key BEC2_DIAG was retired (BEC2 diagnostics; use MARBL): remove it from cppdefs.opt"
 #endif
 #ifdef DAILYPAR_BEC
 # error "CPP key DAILYPAR_BEC was retired (daily-averaged PAR in BEC2): remove it from cppdefs.opt"
@@ -133,4 +133,16 @@
 #endif
 #ifdef UPSCALING
 # error "CPP key UPSCALING was removed: upscaling output is now switched on with do_upscale = .true. in the namelist group UPSCALE_SETTINGS; remove UPSCALING from cppdefs.opt"
+#endif
+#ifdef MARBL_DIAGS
+# error "CPP key MARBL_DIAGS was removed: MARBL's diagnostics are now kept when wrt_bgc_dia_his, wrt_bgc_dia_avg (namelist group BGC_SETTINGS) or do_cdr_output (CDR_OUTPUT_SETTINGS) is .true.; remove MARBL_DIAGS from cppdefs.opt"
+#endif
+#ifdef PCO2AIR_FORCING
+# error "CPP key PCO2AIR_FORCING was removed: atmospheric CO2 is now read from the forcing files with use_xco2air_forcing in the namelist group BGC_SETTINGS (default .true.); remove PCO2AIR_FORCING from cppdefs.opt"
+#endif
+#ifdef NOX_FORCING
+# error "CPP key NOX_FORCING was removed: NOx deposition is now switched with use_nox_forcing in the namelist group BGC_SETTINGS (default .true.); remove NOX_FORCING from cppdefs.opt"
+#endif
+#ifdef NHY_FORCING
+# error "CPP key NHY_FORCING was removed: NHy deposition is now switched with use_nhy_forcing in the namelist group BGC_SETTINGS (default .true.); remove NHY_FORCING from cppdefs.opt"
 #endif

@@ -9,19 +9,18 @@ module bgc_shared_vars
   use error_handling_mod, only: error_log
   use param, only: mynode, nt_passive, nt_bgc, lm, mm, nz, nt_cdr_oae, nt_cdr_dor
   use roms_read_write, only: ncforce
-  use bgc_forces, only: xco2air_default   ! declared in bgc_forces; read here via BGC_SETTINGS
+  ! declared in bgc_forces; read here via BGC_SETTINGS
+  use bgc_forces, only: xco2air_default, use_xco2air_forcing, use_nox_forcing, use_nhy_forcing
   use tracers, only: itands, t_vname, wrt_t, t_lname, t
 
 
   use marbl_driver, only: &
-# ifdef MARBL_DIAGS
        & marbldrv_configure_diagnostics&
        &,nr_marbl_diag_2d,nr_marbl_diag_3d&
        &,marbl_diag_2d,marbl_diag_3d&
        &,idx_marbl_diag_2d,idx_marbl_diag_3d&
        &,wrt_marbl_diag_2d,wrt_marbl_diag_3d, &
-# endif
-       marbldrv_configure_saved_state
+       marbldrv_configure_saved_state, marbl_diag_on
 
   implicit none
   character(len=18) :: module_name = "bgc_shared_vars.F"
@@ -30,20 +29,14 @@ module bgc_shared_vars
   &vname='dust', tname='dust_time' ) ! dust forcing
   type (ncforce) :: nc_iron = ncforce(&
   &vname='iron', tname='iron_time' ) ! iron forcing
-#ifdef PCO2AIR_FORCING
   type (ncforce) :: nc_xco2air = ncforce(&
   &vname='xco2_air',   tname='xco2_time' )
   type (ncforce) :: nc_xco2air_alt = ncforce(&
   &vname='xco2_air_alt',   tname='xco2_time' )
-#endif
-#ifdef NOX_FORCING
   type (ncforce) :: nc_nox = ncforce(&
   &vname='nox', tname='nox_time' )
-#endif
-#ifdef NHY_FORCING
   type (ncforce) :: nc_nhy = ncforce(&
   &vname='nhy', tname='nhy_time' )
-#endif
 
   ! note: choice of bgc tracers to output is still selected in tracers.opt.
 
@@ -59,9 +52,9 @@ module bgc_shared_vars
   real(kind=8)    :: output_period_bgc_avg_dia = 0._8    ! output period in seconds
   integer(kind=4) :: nrpf_bgc_avg_dia          = 0              ! total recs per file
 
-  logical, public :: wrt_bgc_his, wrt_bgc_avg,&
-  &wrt_bgc_dia_his, wrt_bgc_dia_avg,&
-  &interp_bgc_frc
+  logical, public :: wrt_bgc_his = .false., wrt_bgc_avg = .false.,&
+  &wrt_bgc_dia_his = .false., wrt_bgc_dia_avg = .false.,&
+  &interp_bgc_frc = .false.
 
   namelist /BGC_SETTINGS/&
   &wrt_bgc_his, wrt_bgc_avg, wrt_bgc_dia_his, wrt_bgc_dia_avg,&
@@ -70,8 +63,8 @@ module bgc_shared_vars
   &output_period_bgc_avg, nrpf_bgc_avg,&
   &output_period_bgc_his_dia, nrpf_bgc_his_dia,&
   &output_period_bgc_avg_dia, nrpf_bgc_avg_dia,&
+  &use_xco2air_forcing, use_nox_forcing, use_nhy_forcing,&
   &xco2air_default
-#ifdef MARBL_DIAGS
 !
 ! Diagnostic variables appearing in average and history files:
 !
@@ -84,7 +77,7 @@ module bgc_shared_vars
   real(kind=8),allocatable,dimension(:,:,:,:),target   :: bgc_diag_3d
   real(kind=8),allocatable,dimension(:,:,:)  ,target   :: bgc_diag_2d
 
-! Control MARBL_DIAGS Output vars
+! Control MARBL diagnostics output vars
   logical, target :: wrt_bgc_diag_2d(nr_bgc_diag_2d)
   logical, target :: wrt_bgc_diag_3d(nr_bgc_diag_3d)
   integer(kind=4), target :: idx_bgc_diag_2d(nr_bgc_diag_2d)
@@ -96,7 +89,6 @@ module bgc_shared_vars
   real(kind=8),allocatable,dimension(:,:,:,:),target :: bgc_diag_3d_avg
   real(kind=8),allocatable,dimension(:,:,:)  ,target :: bgc_diag_2d_avg
 
-#endif /* MARBL_DIAGS */
 
   public bgc_precheck, read_nml_bgc
 
@@ -106,9 +98,32 @@ contains
 
     implicit none
 
-    character(len=12) :: sr_name = "bgc_precheck"
-    character(len=1024) :: error_info
+    call check_stream(wrt_bgc_his, 'wrt_bgc_his',&
+    &output_period_bgc_his, 'output_period_bgc_his', nrpf_bgc_his, 'nrpf_bgc_his')
+    call check_stream(wrt_bgc_avg, 'wrt_bgc_avg',&
+    &output_period_bgc_avg, 'output_period_bgc_avg', nrpf_bgc_avg, 'nrpf_bgc_avg')
+    call check_stream(wrt_bgc_dia_his, 'wrt_bgc_dia_his',&
+    &output_period_bgc_his_dia, 'output_period_bgc_his_dia', nrpf_bgc_his_dia, 'nrpf_bgc_his_dia')
+    call check_stream(wrt_bgc_dia_avg, 'wrt_bgc_dia_avg',&
+    &output_period_bgc_avg_dia, 'output_period_bgc_avg_dia', nrpf_bgc_avg_dia, 'nrpf_bgc_avg_dia')
 
+  contains
+
+    subroutine check_stream(enabled, switch, period, period_name, nrpf, nrpf_name)
+      ! An output stream that is on needs a period and a file length (both default to 0).
+      logical, intent(in) :: enabled
+      character(len=*), intent(in) :: switch, period_name, nrpf_name
+      real(kind=8), intent(in) :: period
+      integer(kind=4), intent(in) :: nrpf
+      character(len=12) :: sr_name = "bgc_precheck"
+
+      if (.not. enabled) return
+      if (period > 0._8 .and. nrpf > 0) return
+      call error_log%raise_global(&
+      &context=trim(module_name)//"/"//sr_name,&
+      &info=switch//' = .true. needs '//period_name//' and '//nrpf_name//&
+      &' above 0 in the namelist group BGC_SETTINGS')
+    end subroutine check_stream
 
   end subroutine bgc_precheck
 
@@ -131,7 +146,6 @@ contains
   end function t_idx
 
 
-#ifdef MARBL_DIAGS
   subroutine find_write_bgc_diag
     implicit none
 
@@ -171,7 +185,6 @@ contains
 
 
   end subroutine find_write_bgc_diag  !]
-#endif /* MARBL_DIAGS */
 
   subroutine read_nml_bgc
 
@@ -193,6 +206,8 @@ contains
       &)
     end if
     close(namelist_unit)
+    ! MARBL's diagnostics are kept only for an output that uses them
+    marbl_diag_on = marbl_diag_on .or. wrt_bgc_dia_his .or. wrt_bgc_dia_avg
 
   end subroutine read_nml_bgc
 
@@ -200,31 +215,31 @@ contains
   subroutine init_arrays_bgc_shared_vars
     implicit none
 
-#ifdef MARBL_DIAGS
-    call find_write_bgc_diag
+    ! MARBL's diagnostics are kept only for an output that uses them
+    if (marbl_diag_on) call find_write_bgc_diag
     call display_bgc_output_settings_to_terminal
 
-    allocate( bgc_diag_3d(GLOBAL_2D_ARRAY,nz,nr_bgc_wrdiag_3d) )
-    allocate( bgc_diag_2d(GLOBAL_2D_ARRAY,nr_bgc_wrdiag_2d) )
+    if (marbl_diag_on) then
+      allocate( bgc_diag_3d(GLOBAL_2D_ARRAY,nz,nr_bgc_wrdiag_3d) )
+      allocate( bgc_diag_2d(GLOBAL_2D_ARRAY,nr_bgc_wrdiag_2d) )
 
-    bgc_diag_2d=0.0_8
-    bgc_diag_3d=0.0_8
-    marbl_diag_2d => bgc_diag_2d
-    marbl_diag_3d => bgc_diag_3d
+      bgc_diag_2d=0.0_8
+      bgc_diag_3d=0.0_8
+      marbl_diag_2d => bgc_diag_2d
+      marbl_diag_3d => bgc_diag_3d
 
-    if (wrt_bgc_dia_avg) then
-      allocate( bgc_diag_3d_avg(GLOBAL_2D_ARRAY,nz,nr_bgc_wrdiag_3d) )
-      allocate( bgc_diag_2d_avg(GLOBAL_2D_ARRAY,nr_bgc_wrdiag_2d) )
-      bgc_diag_2d_avg=0.0_8
-      bgc_diag_3d_avg=0.0_8
+      if (wrt_bgc_dia_avg) then
+        allocate( bgc_diag_3d_avg(GLOBAL_2D_ARRAY,nz,nr_bgc_wrdiag_3d) )
+        allocate( bgc_diag_2d_avg(GLOBAL_2D_ARRAY,nr_bgc_wrdiag_2d) )
+        bgc_diag_2d_avg=0.0_8
+        bgc_diag_3d_avg=0.0_8
+      endif
+
+      if (mynode == 0) then
+        write(*,'(7x,A,I3,I3)') 'BGC diags allocation :: ',&
+        &nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d
+      endif
     endif
-
-    if (mynode == 0) then
-      write(*,'(7x,A,I3,I3)') 'BGC diags allocation :: ',&
-      &nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d
-    endif
-
-#endif /* MARBL_DIAGS */
 
 !     Allocate arrays for MARBL saved state variables
     call marbldrv_configure_saved_state
@@ -239,9 +254,7 @@ contains
 
     n_bgc_fields = nt_bgc
     n_bgc_wrt_fields = 0
-#ifdef MARBL_DIAGS
-    n_bgc_fields=n_bgc_fields+nr_bgc_diag_2d+nr_bgc_diag_3d
-#endif /* MARBL_DIAGS */
+    if (marbl_diag_on) n_bgc_fields=n_bgc_fields+nr_bgc_diag_2d+nr_bgc_diag_3d
     allocate(stdoutlines(n_bgc_fields))
     stdoutlines=''
     lineidx=1
@@ -258,29 +271,29 @@ contains
       lineidx=lineidx+1
     end do
 
-#ifdef MARBL_DIAGS
-    ! BGC 2D diagnostics
-    do idx = 1, nr_bgc_diag_2d
-      write(stdoutline, '(11X, A, T50, L1, 4X, A)')&
-      &trim(vname_bgc_diag_2d(1,idx)),& ! Short name
-      &wrt_bgc_diag_2d(idx),& !Write (T/F)
-      &trim(vname_bgc_diag_2d(2,idx)) ! Long name
-      if (wrt_bgc_diag_2d(idx)) n_bgc_wrt_fields=n_bgc_wrt_fields + 1
-      stdoutlines(lineidx) = stdoutline
-      lineidx=lineidx+1
-    end do
+    if (marbl_diag_on) then
+      ! BGC 2D diagnostics
+      do idx = 1, nr_bgc_diag_2d
+        write(stdoutline, '(11X, A, T50, L1, 4X, A)')&
+        &trim(vname_bgc_diag_2d(1,idx)),& ! Short name
+        &wrt_bgc_diag_2d(idx),& !Write (T/F)
+        &trim(vname_bgc_diag_2d(2,idx)) ! Long name
+        if (wrt_bgc_diag_2d(idx)) n_bgc_wrt_fields=n_bgc_wrt_fields + 1
+        stdoutlines(lineidx) = stdoutline
+        lineidx=lineidx+1
+      end do
 
-    ! BGC 3D diagnostics
-    do idx = 1, nr_bgc_diag_3d
-      write(stdoutline, '(11X, A, T50, L1, 4X, A)')&
-      &trim(vname_bgc_diag_3d(1,idx)),& ! Short name
-      &wrt_bgc_diag_3d(idx),& ! Write (T/F)
-      &trim(vname_bgc_diag_3d(2,idx)) ! Long name
-      if (wrt_bgc_diag_3d(idx)) n_bgc_wrt_fields=n_bgc_wrt_fields + 1
-      stdoutlines(lineidx) = stdoutline
-      lineidx=lineidx+1
-    end do
-#endif /* MARBL_DIAGS */
+      ! BGC 3D diagnostics
+      do idx = 1, nr_bgc_diag_3d
+        write(stdoutline, '(11X, A, T50, L1, 4X, A)')&
+        &trim(vname_bgc_diag_3d(1,idx)),& ! Short name
+        &wrt_bgc_diag_3d(idx),& ! Write (T/F)
+        &trim(vname_bgc_diag_3d(2,idx)) ! Long name
+        if (wrt_bgc_diag_3d(idx)) n_bgc_wrt_fields=n_bgc_wrt_fields + 1
+        stdoutlines(lineidx) = stdoutline
+        lineidx=lineidx+1
+      end do
+    endif
 
     if (mynode==0) then
       if (wrt_bgc_his) then

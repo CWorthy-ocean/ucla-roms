@@ -101,10 +101,6 @@ These switches control the biogeochemical (BGC) model, MARBL. (The BEC2 model wa
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
 | `MARBL` | Use the MARBL biogeochemical library | enabled | Building needs `MARBL_ROOT` |
-| `MARBL_DIAGS` | Enable the writing of diagnostics and other variables from the MARBL biogeochemical library | enabled | Specific variables are listed in `marbl_diagnostics_to_write` in the `MARBL_BIOGEOCHEMISTRY_SETTINGS` namelist group |
-| `NHY_FORCING` | Use ammonia atmospheric forcing | enabled | |
-| `NOX_FORCING` | Use nitrogen oxide atmospheric forcing | enabled | |
-| `PCO2AIR_FORCING` | Use atmospheric forcing for CO2 | enabled | Without it, MARBL uses `xco2air_default` from the `BGC_SETTINGS` namelist group |
 
 ### `MISCELLANEOUS`
 
@@ -146,7 +142,7 @@ These keys were removed together with their code: most of them no longer compile
 | `ISWAKE_XXX` | Constant-flux inflow condition for the barotropic velocity at the western boundary |
 | `BULK_DIFFERENCE`, `INT_AT_W_POINTS` | Alternative forms of the KPP bulk Richardson number; no code was left for them, so defining one skipped the integral |
 | `BIOLOGY_BEC2` | The BEC2 biogeochemical model; use `MARBL` |
-| `BEC2_DIAG` | Diagnostics of BEC2; use `MARBL_DIAGS` |
+| `BEC2_DIAG` | Diagnostics of BEC2; use `MARBL` and `wrt_bgc_dia_his` or `wrt_bgc_dia_avg` |
 | `DAILYPAR_BEC` | Daily-averaged photosynthetically available radiation in BEC2 |
 | `DAILYPAR_PHOTOINHIBITION` | Daily-averaged photosynthetically available radiation for the photoinhibition of nitrification in BEC2 |
 | `NO3_RESTORE` | Nitrate restoring in BEC2 |
