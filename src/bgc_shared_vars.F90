@@ -228,10 +228,6 @@ contains
       &)
     end if
     close(namelist_unit)
-#ifdef MARBL
-    ! MARBL's diagnostics are kept only for an output that uses them
-    marbl_diag_on = marbl_diag_on .or. wrt_bgc_dia_his .or. wrt_bgc_dia_avg
-#endif
 
   end subroutine read_nml_bgc
 #ifdef MARBL

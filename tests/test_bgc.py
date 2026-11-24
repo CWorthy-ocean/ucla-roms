@@ -319,8 +319,11 @@ def test_diagnostics_do_not_change_the_run(tmp_path, marbl_conf, input_dir, bala
     ("wrt_bgc_dia_avg", "output_period_bgc_avg_dia", "nrpf_bgc_avg_dia"),
 ])
 def test_stream_without_length_rejected(tmp_path, marbl_conf, input_dir, stream, period, nrpf):
-    """An output stream that is on needs its period and its records per file."""
+    """An output stream that is on needs its period and its records per file. With
+    restarts on, the check of the file length against the restart period must not
+    stop the run before this one."""
     nml = _marbl_nml(input_dir)
+    nml["BASIC_OUTPUT_SETTINGS"]["wrt_file_rst"] = True
     nml["BGC_SETTINGS"][stream] = True
     del nml["BGC_SETTINGS"][nrpf]  # 0 by default
     assert_run_rejected(
