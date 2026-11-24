@@ -13,8 +13,7 @@ module particles
   use scalars, only: dt, nnew, iic, tdays, time
   use param, only: max_name_size
   use param, only:&
-  &ocean_grid_comm, mynode, isw_corn, jsw_corn,&
-  &obc_east, obc_west, obc_south, obc_north
+  &ocean_grid_comm, mynode, isw_corn, jsw_corn
   use grid, only: dn_u, dn_v, h, pm, pn, dm_v
   use dimensions, only: nx, ny, nz, inode, jnode, npx, npy
   use roms_read_write, only:&
@@ -22,6 +21,7 @@ module particles
   &particle_opt
   use nc_read_write, only: nccreate
   use error_handling_mod, only: error_log
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
 

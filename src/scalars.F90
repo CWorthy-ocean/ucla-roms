@@ -3,6 +3,7 @@ module scalars
 #include "cppdefs.opt"
 
   use param, only: nt, nz, mynode
+  use open_boundary_mod, only: ubind_used
   implicit none
   character(len=7) :: module_name = "scalars"
 ! This is include file "scalars"
@@ -95,15 +96,7 @@ module scalars
 
 
 
-#if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
-  real(kind=8) ubind
-
-
-  /* --> OBSOLETE
-  real(kind=8) tauM2_in, tauM2_out
-  real(kind=8) tauM3_in, tauM3_out,  tauT_in, tauT_out
-  */
-#endif
+  real(kind=8) :: ubind = 0._8   ! UBIND_SETTINGS, read if ubind_used (open_boundary_mod)
 
   integer(kind=4) ntstart, ntimes, ndtfast, nfast, ninfo, &
   &                                                barr_count(16)
@@ -134,9 +127,7 @@ module scalars
   & rdrg, rdrg2
   namelist /LATERAL_VISC_SETTINGS/ visc2
   namelist /TIME_STEPPING/ dt, ndtfast, ntimes, ninfo
-#if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
   namelist /UBIND_SETTINGS/ ubind
-#endif
   namelist /V_SPONGE_SETTINGS/ use_boundary_sponge, v_sponge, v_sponge_trc
   namelist /RHO0_SETTINGS/ rho0
   ! tnu2 and akt_bak lists may hold values for this many tracers, as in the GPU code
@@ -298,22 +289,22 @@ contains
     dtfast = dt/dble(ndtfast)
 !===============================================================================
 ! ubind
-#if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=UBIND_SETTINGS, iostat=ios, iomsg=msg)
+    if (ubind_used) then
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=UBIND_SETTINGS, iostat=ios, iomsg=msg)
 
-    if (ios /= 0) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name,&
-      &   info='could not read UBIND_SETTINGS'&
-      &        //' section of namelist file: '&
-      &        //trim(msg)&
-      &      )
+      if (ios /= 0) then
+        call error_log%raise_global( &
+        &   context = module_name//'/'//sr_name,&
+        &   info='could not read UBIND_SETTINGS'&
+        &        //' section of namelist file: '&
+        &        //trim(msg)&
+        &      )
+      end if
+      mpi_master_only write(*,'(6x,A,ES10.3,2x,A)')&
+      &    'ubind =', ubind,&
+      &    'open boundary binding velcity [m/s]'
     end if
-    mpi_master_only write(*,'(6x,A,ES10.3,2x,A)')&
-    &    'ubind =', ubind,&
-    &    'open boundary binding velcity [m/s]'
-#endif
 !===============================================================================
 !v_sponge (optional group: v_sponge = 0, no sponge)
     v_sponge_trc = -1._8   ! negative (or absent): tracers get the same sponge as momentum

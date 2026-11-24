@@ -57,28 +57,6 @@ These switches control the numerical schemes used by the model for tracer advect
 | `UPSTREAM_TS_LAND_CURV` | Drop the curvature (third-order) correction of upstream horizontal tracer advection at faces whose stencil touches land, falling back to second-order centered there | disabled | Masked differences are zero, which otherwise inflates the curvature at the first wet point and produces large overshoots. Affects the corrector step, and only with `MASKING` |
 | `PARABOLIC_SPLINES` | Use parabolic splines for vertical tracer advection | disabled | Restores the spline reconstruction that was the default before the thickness-aware U3 scheme |
 
-### `BOUNDARY CONDITIONS`
-
-These switches control the configuration of the open boundaries, including which sides are open and which schemes are used to apply forcing and allow waves to exit.
-
-Tracer advection through an open-boundary face is upwind on inflow: the corrector step uses the ghost-cell value, which the tracer boundary condition relaxes toward the boundary data while water flows in (`OBC_TORLANSKI` with `T_FRC_BRY`). Outflow faces use the interior advection scheme. This needs no key and applies to every tracer on every open side.
-
-| Switch | Description | Default | Usage notes |
-|--------|-------------|---------|-------------|
-| `M2_FRC_BRY` | Apply barotropic (2D) momentum forcing at the open boundaries | enabled | Can be combined with `OBC_M2SPECIFIED` to have a different effect. Requires inputs for `ubar` and `vbar`. |
-| `M3_FRC_BRY` | Apply baroclinic (3D) momentum forcing at the open boundaries | enabled | Can be combined with `apply_sponge_tune` (namelist). Requires inputs for `u` and `v` (and `w`, if non-hydrostatic). |
-| `OBC_EAST` | Use an open boundary on the "east" side of the domain | enabled | "East" in this context refers to MPI nodes with i-rank = `NP_XI-1` |
-| `OBC_M2FLATHER` | Use the Flather scheme for the 2D dynamical fields at open boundaries | enabled | |
-| `OBC_M3ORLANSKI` | Use the Orlanski scheme for the 3D dynamical fields at open boundaries | enabled | Designed to allow waves to exit the domain with minimal reflection |
-| `OBC_NORTH` | Use an open boundary on the "north" side of the domain | enabled | "North" in this context refers to MPI nodes with j-rank = `NP_ETA-1` |
-| `OBC_SOUTH` | Use an open boundary on the "south" side of the domain | enabled | "South" in this context refers to MPI nodes with j-rank = 0 |
-| `OBC_TORLANSKI` | Use the Orlanski scheme for the thermodynamical fields at open boundaries | enabled | Designed to allow waves to exit the domain with minimal reflection |
-| `OBC_WEST` | Use an open boundary on the "west" side of the domain | enabled | "West" in this context refers to MPI nodes with i-rank = 0 |
-| `T_FRC_BRY` | Apply tracer forcing at the open boundaries | enabled | Requires inputs for each thermodynamic and biogeochemical tracer. |
-| `Z_FRC_BRY` | Apply SSH forcing at the open boundaries | enabled | Requires inputs for SSH. |
-| `OBC_RAD_NORMAL` | Calculate radiation for the Orlanski scheme using only the normal component of the velocity | disabled | Only has an effect with `OBC_M3ORLANSKI`, or with `OBC_M2FLATHER` and `LEGACY_ORLANSKI` (the tangential barotropic velocities) |
-| `OBC_RAD_NPO` | Explicitly set radiation for the Orlanski scheme to be zero for the velocity parallel to the boundary | disabled | Only has an effect if `OBC_RAD_NORMAL` is enabled |
-
 ### `MIXING OPTIONS`
 
 These switches control the model's mixing parameterizations, including vertical mixing schemes (KPP and others) and lateral diffusion/viscosity.
@@ -133,9 +111,12 @@ These keys were removed together with their code: most of them no longer compile
 | `BIO_1ST_USTREAM_TEST` | First-order upstream advection of the biogeochemical tracers |
 | `AKIMA_V` | Unused (vertical tracer fluxes come from the `advection` module) |
 | `BBL` | Unused (bottom boundary layer of the BEC sediment module) |
-| `OBC_M2ORLANSKI` | Orlanski scheme for the normal barotropic velocity; use `OBC_M2FLATHER` or `OBC_M2SPECIFIED` |
-| `OBC_M3SPECIFIED` | Specified (clamped) baroclinic velocities at open boundaries; use `OBC_M3ORLANSKI` |
-| `OBC_TSPECIFIED` | Specified (clamped) tracers at open boundaries; use `OBC_TORLANSKI` |
+| `OBC_M2ORLANSKI` | Orlanski scheme for the normal barotropic velocity; use `obc_m2` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) |
+| `OBC_M3SPECIFIED` | Specified (clamped) baroclinic velocities at open boundaries; use `obc_m3` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) |
+| `OBC_TSPECIFIED` | Specified (clamped) tracers at open boundaries; use `obc_t` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) |
+| `LEGACY_ORLANSKI` | Orlanski scheme of the tangential barotropic velocity, instead of the upwind condition |
+| `OBC_Z2ORLANSKI` | Orlanski scheme of the sea level |
+| `W_FRC_BRY`, `OBC_WSPECIFIED` | Boundary data for the vertical velocity (NHMG) at the southern and northern boundaries |
 | `ANA_BRY` | Analytical lateral boundary data |
 | `TAU_CORRECTION` | Wind-stress correction toward observations from extra input fields |
 | `TR` | Experimental weights of the fluxes that couple the baroclinic and barotropic velocities |
@@ -162,5 +143,12 @@ These keys are no longer keys because the namelist now decides what they decided
 | `CDR_FORCING` | `cdr_source` in [`CDR_FRC_SETTINGS`](runtime_settings.md#cdr_frc_settings) (default `.false.`) |
 | `CDR_LITE` | `nt_cdr_oae` or `nt_cdr_dor` above 0 in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default 0) |
 | `UPSCALING` | `do_upscale` in [`UPSCALE_SETTINGS`](runtime_settings.md#upscale_settings) (default `.false.`) |
+| `OBC_WEST`, `OBC_EAST`, `OBC_SOUTH`, `OBC_NORTH` | `obc_west`, `obc_east`, `obc_south`, `obc_north` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) (default `.true.`) |
+| `OBC_M2FLATHER`, `OBC_M2SPECIFIED` | `obc_m2 = 'flather'` (the default) or `'specified'` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings); neither key: `'gradient'` |
+| `OBC_M3ORLANSKI` | `obc_m3 = 'orlanski'` (the default) in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings); without the key: `'gradient'` |
+| `OBC_TORLANSKI` | `obc_t = 'orlanski'` (the default) in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings); without the key: `'gradient'` |
+| `OBC_RAD_NORMAL`, `OBC_RAD_NPO` | `obc_rad = 'normal'` or `'npo'` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) (default `'oblique'`) |
+| `M3_FRC_BRY`, `T_FRC_BRY` | `use_m3_boundary_data`, `use_t_boundary_data` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) (default `.true.`) |
+| `M2_FRC_BRY`, `Z_FRC_BRY` | `obc_m2` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) decides which data are read |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

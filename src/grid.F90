@@ -11,7 +11,7 @@ module grid
   use param, only: max_name_size
   use param, only:&
   &mynode, isw_corn, jsw_corn, lm, mm,&
-  &ocean_grid_comm, obc_east, obc_north, obc_south, obc_west,&
+  &ocean_grid_comm,&
   &ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, isalt, itemp
   use netcdf, only:&
   &nf90_noerr, nf90_nowrite, nf90_write,&
@@ -33,6 +33,7 @@ module grid
 #endif
   use netcdf, only: nf90_redef, nf90_enddef
   use instant_output, only: wrt_instant
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
 !
 ! h         Model bottom topography (depth [m] at RHO-points.)

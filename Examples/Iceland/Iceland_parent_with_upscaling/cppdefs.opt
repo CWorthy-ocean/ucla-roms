@@ -105,63 +105,6 @@
 #undef AKIMA
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!! BOUNDARY CONDITIONS !!!!!!!!!!!!!!!!!!!!!!!!!
-
-! Apply barotropic (2D) momentum forcing at the open boundaries
-! Usage notes: Can be combined with OBC_M2SPECIFIED to have a different effect. Requires inputs for ubar and vbar.
-#define M2_FRC_BRY
-
-! Apply baroclinic (3D) momentum forcing at the open boundaries
-! Usage notes: Can be combined with apply_sponge_tune (namelist). Requires inputs for u and v (and w, if non-hydrostatic).
-#define M3_FRC_BRY
-
-! Use an open boundary on the "east" side of the domain
-! Usage notes: "East" in this context refers to MPI nodes with i-rank = NP_XI-1
-#define OBC_EAST
-
-! Use the Flather scheme for the 2D dynamical fields at open boundaries
-! Usage notes:
-#define OBC_M2FLATHER
-
-! Use the Orlanski scheme for the 3D dynamical fields at open boundaries
-! Usage notes: Designed to allow waves to exit the domain with minimal reflection
-#define OBC_M3ORLANSKI
-
-! Use an open boundary on the "north" side of the domain
-! Usage notes: "North" in this context refers to MPI nodes with j-rank = NP_ETA-1
-#define OBC_NORTH
-
-! Use an open boundary on the "south" side of the domain
-! Usage notes: "South" in this context refers to MPI nodes with j-rank = 0
-#define OBC_SOUTH
-
-! Use the Orlanski scheme for the thermodynamical fields at open boundaries
-! Usage notes: Designed to allow waves to exit the domain with minimal reflection
-#define OBC_TORLANSKI
-
-! Use an open boundary on the "west" side of the domain
-! Usage notes: "West" in this context refers to MPI nodes with i-rank = 0
-#define OBC_WEST
-
-! Apply tracer forcing at the open boundaries
-! Usage notes: Requires inputs for each thermodynamic and biogeochemical tracer.
-#define T_FRC_BRY
-
-! Apply SSH forcing at the open boundaries
-! Usage notes: Requires inputs for SSH.
-#define Z_FRC_BRY
-
-!----------------------------------------------------------
-
-! Calculate radiation for the Orlanski scheme using only the normal component of the velocity
-! Usage notes: Only has an effect with OBC_M3ORLANSKI, or with OBC_M2FLATHER and LEGACY_ORLANSKI
-#undef OBC_RAD_NORMAL
-
-! Explicitly set radiation for the Orlanski scheme to be zero for the velocity parallel to the boundary
-! Usage notes: Only has an effect if OBC_RAD_NORMAL is enabled
-#undef OBC_RAD_NPO
-
-
 !!!!!!!!!!!!!!!!!!!!!!!!! MIXING OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! Use the KPP parameterization (Large et al., 1994) in the bottom boundary layer

@@ -1,5 +1,6 @@
 module set_nudgcof_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
 
@@ -51,31 +52,31 @@ contains
       do i=max(-1,istrR-1),iendR          ! the physical grid (a.k.a.
         ibnd=isp                          ! absolute indices).
 #  ifdef MPI
-#   ifdef OBC_WEST
-        ibnd=min(ibnd,         i+iSW_corn )
-#   endif
-#   ifdef OBC_EAST
-        ibnd=min(ibnd, LLm+1 -(i+iSW_corn))
-#   endif
-#   ifdef OBC_SOUTH
-        ibnd=min(ibnd,         j+jSW_corn )
-#   endif
-#   ifdef OBC_NORTH
-        ibnd=min(ibnd, MMm+1 -(j+jSW_corn))
-#   endif
+        if (obc_west) then
+          ibnd=min(ibnd,         i+iSW_corn )
+        endif
+        if (obc_east) then
+          ibnd=min(ibnd, LLm+1 -(i+iSW_corn))
+        endif
+        if (obc_south) then
+          ibnd=min(ibnd,         j+jSW_corn )
+        endif
+        if (obc_north) then
+          ibnd=min(ibnd, MMm+1 -(j+jSW_corn))
+        endif
 #  else
-#   ifdef OBC_WEST
-        ibnd=min(ibnd,      i)
-#   endif
-#   ifdef OBC_EAST
-        ibnd=min(ibnd, Lm+1-i)
-#   endif
-#   ifdef OBC_SOUTH
-        ibnd=min(ibnd,      j)
-#   endif
-#   ifdef OBC_NORTH
-        ibnd=min(ibnd, Mm+1-j)
-#   endif
+        if (obc_west) then
+          ibnd=min(ibnd,      i)
+        endif
+        if (obc_east) then
+          ibnd=min(ibnd, Lm+1-i)
+        endif
+        if (obc_south) then
+          ibnd=min(ibnd,      j)
+        endif
+        if (obc_north) then
+          ibnd=min(ibnd, Mm+1-j)
+        endif
 #  endif
 #  ifdef PACIFIC
         wrk(i,j)=0.5_8 + 0.5_8*cos(pi*float(ibnd)/float(isp))

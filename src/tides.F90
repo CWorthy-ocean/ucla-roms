@@ -17,6 +17,8 @@ module tides
 #endif
   use error_handling_mod, only: error_log
 
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north,&
+  &  obc_m2_flather, use_m2_boundary_data
   implicit none
 
   private                                              ! default variables private to module
@@ -185,82 +187,90 @@ contains
       omT  = ftide(itide)*(time+bphase*dt)   ! boundary harmonics
       omTp = ftide(itide)*(time+pphase*dt)   ! tidal potential
 
-      if (bry_tides) then
+      if (bry_tides .and. use_m2_boundary_data) then
 
-#  ifdef OBC_WEST
-        if (WESTERN_EDGE) THEN
-          i=istr-1
-          do j=jstrR,jendR
-            zeta_west(j) =zeta_west(j)&
-            &+ ztide_r(i,j,itide)*cos(omT)- ztide_i(i,j,itide)*sin(omT)
-          enddo
-          i=istrU-1
-          do j=jstrR,jendR
-            ubar_west(j)=ubar_west(j)&
-            &+ utide_r(i,j,itide)*cos(omT)- utide_i(i,j,itide)*sin(omT)
-          enddo
-          i=istr-1
-          do j=jstr,jendR
-            vbar_west(j)=vbar_west(j)&
-            &+ vtide_r(i,j,itide)*cos(omT)- vtide_i(i,j,itide)*sin(omT)
-          enddo
+        if (obc_west) then
+          if (WESTERN_EDGE) THEN
+            i=istr-1
+            if (obc_m2_flather) then
+              do j=jstrR,jendR
+                zeta_west(j) =zeta_west(j)&
+                &+ ztide_r(i,j,itide)*cos(omT)- ztide_i(i,j,itide)*sin(omT)
+              enddo
+            endif
+            i=istrU-1
+            do j=jstrR,jendR
+              ubar_west(j)=ubar_west(j)&
+              &+ utide_r(i,j,itide)*cos(omT)- utide_i(i,j,itide)*sin(omT)
+            enddo
+            i=istr-1
+            do j=jstr,jendR
+              vbar_west(j)=vbar_west(j)&
+              &+ vtide_r(i,j,itide)*cos(omT)- vtide_i(i,j,itide)*sin(omT)
+            enddo
+          endif
         endif
-#  endif
 
-#  ifdef OBC_EAST
-        if (EASTERN_EDGE) THEN
-          i = iend+1
-          do j=jstrR,jendR
-            zeta_east(j) =zeta_east(j)&
-            &+ ztide_r(i,j,itide)*cos(omT)- ztide_i(i,j,itide)*sin(omT)
-          enddo
-          do j=jstrR,jendR
-            ubar_east(j)=ubar_east(j)&
-            &+ utide_r(i,j,itide)*cos(omT)- utide_i(i,j,itide)*sin(omT)
-          enddo
-          do j=jstr,jendR
-            vbar_east(j)=vbar_east(j)&
-            &+ vtide_r(i,j,itide)*cos(omT)- vtide_i(i,j,itide)*sin(omT)
-          enddo
+        if (obc_east) then
+          if (EASTERN_EDGE) THEN
+            i = iend+1
+            if (obc_m2_flather) then
+              do j=jstrR,jendR
+                zeta_east(j) =zeta_east(j)&
+                &+ ztide_r(i,j,itide)*cos(omT)- ztide_i(i,j,itide)*sin(omT)
+              enddo
+            endif
+            do j=jstrR,jendR
+              ubar_east(j)=ubar_east(j)&
+              &+ utide_r(i,j,itide)*cos(omT)- utide_i(i,j,itide)*sin(omT)
+            enddo
+            do j=jstr,jendR
+              vbar_east(j)=vbar_east(j)&
+              &+ vtide_r(i,j,itide)*cos(omT)- vtide_i(i,j,itide)*sin(omT)
+            enddo
+          endif
         endif
-#  endif
 
-#  ifdef OBC_SOUTH
-        if (SOUTHERN_EDGE) THEN
-          j=jstr-1
-          do i=istrR,iendR
-            zeta_south(i)=zeta_south(i)&
-            &+ ztide_r(i,j,itide)*cos(omT)- ztide_i(i,j,itide)*sin(omT)
-          enddo
-          j=jstr-1
-          do i=istr,iendR
-            ubar_south(i)=ubar_south(i)&
-            &+ utide_r(i,j,itide)*cos(omT)- utide_i(i,j,itide)*sin(omT)
-          enddo
-          j=jstrV-1
-          do i=istrR,iendR
-            vbar_south(i)=vbar_south(i)&
-            &+ vtide_r(i,j,itide)*cos(omT)- vtide_i(i,j,itide)*sin(omT)
-          enddo
+        if (obc_south) then
+          if (SOUTHERN_EDGE) THEN
+            j=jstr-1
+            if (obc_m2_flather) then
+              do i=istrR,iendR
+                zeta_south(i)=zeta_south(i)&
+                &+ ztide_r(i,j,itide)*cos(omT)- ztide_i(i,j,itide)*sin(omT)
+              enddo
+            endif
+            j=jstr-1
+            do i=istr,iendR
+              ubar_south(i)=ubar_south(i)&
+              &+ utide_r(i,j,itide)*cos(omT)- utide_i(i,j,itide)*sin(omT)
+            enddo
+            j=jstrV-1
+            do i=istrR,iendR
+              vbar_south(i)=vbar_south(i)&
+              &+ vtide_r(i,j,itide)*cos(omT)- vtide_i(i,j,itide)*sin(omT)
+            enddo
+          endif
         endif
-#  endif
-#  ifdef OBC_NORTH
-        if (NORTHERN_EDGE) THEN
-          j=jend+1
-          do i=istrR,iendR
-            zeta_north(i)=zeta_north(i)&
-            &+ ztide_r(i,j,itide)*cos(omT)- ztide_i(i,j,itide)*sin(omT)
-          enddo
-          do i=istr,iendR
-            ubar_north(i)=ubar_north(i)&
-            &+ utide_r(i,j,itide)*cos(omT)- utide_i(i,j,itide)*sin(omT)
-          enddo
-          do i=istrR,iendR
-            vbar_north(i)=vbar_north(i)&
-            &+ vtide_r(i,j,itide)*cos(omT)- vtide_i(i,j,itide)*sin(omT)
-          enddo
+        if (obc_north) then
+          if (NORTHERN_EDGE) THEN
+            j=jend+1
+            if (obc_m2_flather) then
+              do i=istrR,iendR
+                zeta_north(i)=zeta_north(i)&
+                &+ ztide_r(i,j,itide)*cos(omT)- ztide_i(i,j,itide)*sin(omT)
+              enddo
+            endif
+            do i=istr,iendR
+              ubar_north(i)=ubar_north(i)&
+              &+ utide_r(i,j,itide)*cos(omT)- utide_i(i,j,itide)*sin(omT)
+            enddo
+            do i=istrR,iendR
+              vbar_north(i)=vbar_north(i)&
+              &+ vtide_r(i,j,itide)*cos(omT)- vtide_i(i,j,itide)*sin(omT)
+            enddo
+          endif
         endif
-#  endif
       endif  ! bry_tides
 
       if (do_pot) then

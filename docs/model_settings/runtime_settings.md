@@ -484,10 +484,29 @@ Optional: without the group `visc2` is 0.
 |--------|-------------|
 | `visc2` | Horizontal Laplacian kinematic viscosity (m2/s; `0` for none) |
 
+### `OPEN_BOUNDARY_SETTINGS`
+(read by module `open_boundary_mod.F90`)
+
+Optional: without the group all four sides are open, with the defaults below. A side that is not open is closed (a wall), and its boundary data are not read. Sides in a periodic direction (`EW_PERIODIC`, `NS_PERIODIC`) are never open: `obc_west` and `obc_east`, or `obc_south` and `obc_north`, are then ignored, with a line at start-up.
+
+| Setting | Description |
+|--------|-------------|
+| `obc_west`, `obc_east`, `obc_south`, `obc_north` | That side is open (default `.true.`). West is the side of the MPI ranks in column 0, east column `NP_XI-1`, south row 0, north row `NP_ETA-1` |
+| `obc_m2` | Scheme of the sea level and the barotropic velocities: `'flather'` (the default; reads `zeta`, `ubar` and `vbar`), `'specified'` (clamped to the data; reads `ubar` and `vbar`) or `'gradient'` (zero gradient; reads no data) |
+| `obc_m3` | Scheme of `u` and `v` (and `w`, if non-hydrostatic): `'orlanski'` (radiation, the default) or `'gradient'` (zero gradient) |
+| `obc_t` | Scheme of the tracers: `'orlanski'` (the default) or `'gradient'` |
+| `obc_rad` | Phase speed of the Orlanski scheme of `u` and `v`: `'oblique'` (the default), `'normal'` (from the normal gradient only) or `'npo'` (the phase speed of `'oblique'`, with no propagation along the boundary) |
+| `use_m3_boundary_data` | Relax `u` and `v` toward boundary data while water flows in (default `.true.`; reads `u` and `v`, and `w` if non-hydrostatic). No effect with `obc_m3 = 'gradient'` |
+| `use_t_boundary_data` | Relax the tracers toward boundary data while water flows in (default `.true.`; reads every tracer). No effect with `obc_t = 'gradient'` |
+
+Boundary data that are read must be in the forcing files for every open side (the tracers of the biogeochemical model have their own rules for missing variables); the run stops if a variable is missing.
+
+Tracer advection through an open-boundary face is upwind on inflow: the corrector step uses the ghost-cell value, which the tracer boundary condition relaxes toward the boundary data while water flows in. Outflow faces use the interior advection scheme. This needs no setting and applies to every tracer on every open side.
+
 ### `UBIND_SETTINGS`
 (read by module `scalars.F90`)
 
-Read only with boundary forcing (`T_FRC_BRY`, `M2_FRC_BRY`, `M3_FRC_BRY` or `Z_FRC_BRY`).
+Read only with an open side, `obc_m3 = 'orlanski'` and `use_m3_boundary_data = .true.` ([`OPEN_BOUNDARY_SETTINGS`](#open_boundary_settings)).
 
 | Setting | Description |
 |--------|-------------|
