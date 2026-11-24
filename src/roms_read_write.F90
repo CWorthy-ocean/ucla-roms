@@ -15,6 +15,7 @@ module roms_read_write
   &nf90_get_var, nf90_clobber, nf90_64bit_data, nf90_max_name, nf90_inquire
   use scalars, only: time, dt, sec2day, tdays, akt_bak, akv_bak
   use nc_read_write, only: nccreate, ncread
+  use open_boundary_mod, only: ubind_used
   use dimensions, only:&
   &bf, nx, ny, gnx, gny, i0, i1, j0, j1,&
   &eta_rho, xi_rho, xi_u, eta_v,&
@@ -2577,9 +2578,7 @@ contains
   subroutine put_global_atts (ncid, ierr)  ![
 
     use scalars, only:&
-#if defined T_FRC_BRY || defined M2_FRC_BRY || defined Z_FRC_BRY || defined M3_FRC_BRY
     &ubind,&
-#endif
     &use_boundary_sponge, v_sponge, v_sponge_trc,&
     &dtfast, gamma2, ndtfast, ntimes, rdrg, rdrg2,&
     &rho0, tnu2, visc2, zob
@@ -2711,10 +2710,10 @@ contains
     ierr=nf90_put_att (ncid, nf90_global, 'Akt_bak_units', 'm^2/s')
 # endif
 
-#if  defined T_FRC_BRY || defined M2_FRC_BRY || defined M3_FRC_BRY
-    ierr=nf90_put_att(ncid, nf90_global, 'ubind', ubind) ! Binding velocity for external data forcing at open boundari
-    ierr=nf90_put_att (ncid, nf90_global, 'ubind_units', 'm/s')
-#endif
+    if (ubind_used) then
+      ierr=nf90_put_att(ncid, nf90_global, 'ubind', ubind) ! Binding velocity for external data forcing at open boundari
+      ierr=nf90_put_att (ncid, nf90_global, 'ubind_units', 'm/s')
+    endif
 
     if (use_boundary_sponge) then
       ierr=nf90_put_att(ncid, nf90_global, 'v_sponge', v_sponge)   ! Maximum viscosity in sponge layer

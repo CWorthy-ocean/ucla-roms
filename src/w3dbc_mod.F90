@@ -1,5 +1,7 @@
 module w3dbc_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m3_orlanski,&
+  &  use_m3_boundary_data
   implicit none
   private
   ! Boundary conditions for w; called only with nhmg = .true. (NHMG)
@@ -33,103 +35,103 @@ contains
 # ifndef EW_PERIODIC
 
     if (WESTERN_EDGE) then
-#  if defined OBC_WEST
-#   if defined OBC_M3ORLANSKI
-      do k=1,nz
-        do j=jstr,jend+1
-          grad(istr-1,j)= w(istr-1,j,k,nstp)- w(istr-1,j-1,k,nstp)
-          grad(istr  ,j)= w(istr  ,j,k,nstp)- w(istr  ,j-1,k,nstp)
+      if (obc_west) then
+        if (obc_m3_orlanski) then
+          do k=1,nz
+            do j=jstr,jend+1
+              grad(istr-1,j)= w(istr-1,j,k,nstp)- w(istr-1,j-1,k,nstp)
+              grad(istr  ,j)= w(istr  ,j,k,nstp)- w(istr  ,j-1,k,nstp)
+            enddo
+
+            do j=jstr,jend
+
+              cx=-dtfwd*u(istr,j,k,nrhs)*pm(istr-1,j)
+              cy=0.5_8*dtfwd*(v(istr-1,j,k,nrhs)+v(istr-1,j+1,k,nrhs))&
+              &*pn(istr-1,j)
+              if (cx > 0._8) then
+                cext=0._8
+              else
+                cext=-cx ; cx=0._8
+              endif
+
+              w(istr-1,j,k,nnew)=(1._8-cx)*( w(istr-1,j,k,nstp)&
+              &-max(cy,0._8)*grad(istr-1,j  )&
+              &-min(cy,0._8)*grad(istr-1,j+1) )&
+              &+cx*( w(istr  ,j,k,nstp)&
+              &-max(cy,0._8)*grad(istr  ,j  )&
+              &-min(cy,0._8)*grad(istr  ,j+1) )
+
+              if (use_m3_boundary_data) then
+                w(istr-1,j,k,nnew)= (1._8-cext)*w(istr-1,j,k,nnew)&
+                &+cext*w_west(j,k)
+              endif
+            enddo
+          enddo
+        else
+          ! not orlanski, can be either no gradient, or specified
+          do k=1,nz
+            do j=jstr,jend
+              w(istr-1,j,k,nnew)=w(istr,j,k,nnew)  ! no gradient
+            enddo
+          enddo
+        endif
+
+      else
+        do k=1,nz                          ! Wall: slip: gamma= 1
+          do j=jstr,jend                  !    no-slip: gamma=-1
+            w(istr-1,j,k,nnew)=gamma2*w(istr,j,k,nnew)
+          enddo
         enddo
-
-        do j=jstr,jend
-
-          cx=-dtfwd*u(istr,j,k,nrhs)*pm(istr-1,j)
-          cy=0.5_8*dtfwd*(v(istr-1,j,k,nrhs)+v(istr-1,j+1,k,nrhs))&
-          &*pn(istr-1,j)
-          if (cx > 0._8) then
-            cext=0._8
-          else
-            cext=-cx ; cx=0._8
-          endif
-
-          w(istr-1,j,k,nnew)=(1._8-cx)*( w(istr-1,j,k,nstp)&
-          &-max(cy,0._8)*grad(istr-1,j  )&
-          &-min(cy,0._8)*grad(istr-1,j+1) )&
-          &+cx*( w(istr  ,j,k,nstp)&
-          &-max(cy,0._8)*grad(istr  ,j  )&
-          &-min(cy,0._8)*grad(istr  ,j+1) )
-
-#    if defined M3_FRC_BRY
-          w(istr-1,j,k,nnew)= (1._8-cext)*w(istr-1,j,k,nnew)&
-          &+cext*w_west(j,k)
-#    endif
-        enddo
-      enddo
-#   else  /* not OBC_M3ORLANSKI */
-      ! not orlanski, can be either no gradient, or specified
-      do k=1,nz
-        do j=jstr,jend
-          w(istr-1,j,k,nnew)=w(istr,j,k,nnew)  ! no gradient
-        enddo
-      enddo
-#   endif /* OBC_M3ORLANSKI or SPECIFIED/NO-GRAD*/
-
-#  else /* !OBC_WEST (closed)*/
-      do k=1,nz                          ! Wall: slip: gamma= 1
-        do j=jstr,jend                  !    no-slip: gamma=-1
-          w(istr-1,j,k,nnew)=gamma2*w(istr,j,k,nnew)
-        enddo
-      enddo
-#  endif
+      endif
     endif     ! <-- WESTERN_EDGE
 
 
     if (EASTERN_EDGE) then
-#  if defined OBC_EAST
-#   if defined OBC_M3ORLANSKI
-      do k=1,nz
-        do j=jstr,jend+1
-          grad(iend  ,j)= w(iend  ,j,k,nstp)-w(iend  ,j-1,k,nstp)
-          grad(iend+1,j)= w(iend+1,j,k,nstp)-w(iend+1,j-1,k,nstp)
-        enddo
-        do j=jstr,jend
-          cx=    dtfwd* u(iend+1,j,k,nrhs)*pm(iend+1,j)
-          cy=0.5_8*dtfwd*(v(iend+1,j,k,nrhs)+v(iend+1,j+1,k,nrhs))&
-          &*pn(iend+1,j)
-          if (cx > 0._8) then
-            cext=0._8
-          else
-            cext=-cx ; cx=0._8
-          endif
+      if (obc_east) then
+        if (obc_m3_orlanski) then
+          do k=1,nz
+            do j=jstr,jend+1
+              grad(iend  ,j)= w(iend  ,j,k,nstp)-w(iend  ,j-1,k,nstp)
+              grad(iend+1,j)= w(iend+1,j,k,nstp)-w(iend+1,j-1,k,nstp)
+            enddo
+            do j=jstr,jend
+              cx=    dtfwd* u(iend+1,j,k,nrhs)*pm(iend+1,j)
+              cy=0.5_8*dtfwd*(v(iend+1,j,k,nrhs)+v(iend+1,j+1,k,nrhs))&
+              &*pn(iend+1,j)
+              if (cx > 0._8) then
+                cext=0._8
+              else
+                cext=-cx ; cx=0._8
+              endif
 
-          w(iend+1,j,k,nnew)=(1._8-cx)*( w(iend+1,j,k,nstp)&
-          &-max(cy,0._8)*grad(iend+1,j  )&
-          &-min(cy,0._8)*grad(iend+1,j+1)  )&
-          &+cx *( w(iend  ,j,k,nnew)&
-          &-max(cy,0._8)*grad(iend  ,j  )&
-          &-min(cy,0._8)*grad(iend  ,j+1)  )
+              w(iend+1,j,k,nnew)=(1._8-cx)*( w(iend+1,j,k,nstp)&
+              &-max(cy,0._8)*grad(iend+1,j  )&
+              &-min(cy,0._8)*grad(iend+1,j+1)  )&
+              &+cx *( w(iend  ,j,k,nnew)&
+              &-max(cy,0._8)*grad(iend  ,j  )&
+              &-min(cy,0._8)*grad(iend  ,j+1)  )
 
-#    if defined M3_FRC_BRY
-          w(iend+1,j,k,nnew)=((1._8-cext)*w(iend+1,j,k,nnew)&
-          &+cext*w_east(j,k)  )
-#    endif
-        enddo
-      enddo
-#   else  /* not ORLANSKI  (Spec or no grad)*/
-      do k=1,nz
-        do j=jstr,jend
-          w(iend+1,j,k,nnew)=w(iend,j,k,nnew)
-        enddo
-      enddo
-#   endif /* orlanski,spec, or no-grad */
+              if (use_m3_boundary_data) then
+                w(iend+1,j,k,nnew)=((1._8-cext)*w(iend+1,j,k,nnew)&
+                &+cext*w_east(j,k)  )
+              endif
+            enddo
+          enddo
+        else
+          do k=1,nz
+            do j=jstr,jend
+              w(iend+1,j,k,nnew)=w(iend,j,k,nnew)
+            enddo
+          enddo
+        endif
 
-#  else /* not OBC_EAST (closed) */
-      do k=1,nz                          ! Wall: slip: gamma= 1
-        do j=jstr,jend                  !    no-slip: gamma=-1
-          w(iend+1,j,k,nnew)=gamma2*w(iend,j,k,nnew)
+      else
+        do k=1,nz                          ! Wall: slip: gamma= 1
+          do j=jstr,jend                  !    no-slip: gamma=-1
+            w(iend+1,j,k,nnew)=gamma2*w(iend,j,k,nnew)
+          enddo
         enddo
-      enddo
-#  endif        /* OBC_EAST or not */
+      endif
     endif    ! <-- EASTERN_EDGE
 
 # endif        /* not EW_PERIODIC */
@@ -139,100 +141,88 @@ contains
 # ifndef NS_PERIODIC
 
     if (SOUTHERN_EDGE) then
-#  if defined OBC_SOUTH
-#   if defined OBC_M3ORLANSKI
-      do k=1,nz
-        do i=istr,iend+1
-          grad(i,jstr  )= w(i  ,jstr  ,k,nstp)-w(i-1,jstr  ,k,nstp)
-          grad(i,jstr-1)= w(i  ,jstr-1,k,nstp)-w(i-1,jstr-1,k,nstp)
+      if (obc_south) then
+        if (obc_m3_orlanski) then
+          do k=1,nz
+            do i=istr,iend+1
+              grad(i,jstr  )= w(i  ,jstr  ,k,nstp)-w(i-1,jstr  ,k,nstp)
+              grad(i,jstr-1)= w(i  ,jstr-1,k,nstp)-w(i-1,jstr-1,k,nstp)
+            enddo
+            do i=istr,iend
+              cx=-dtfwd*v(i,jstr,k,nrhs)*pn(i,jstr-1)
+              cy=0.5_8*dtfwd*(u(i,jstr-1,k,nrhs)+u(i+1,jstr-1,k,nrhs))&
+              &*pm(i,jstr-1)
+              if (cx > 0._8) then
+                cext=0._8
+              else
+                cext=-cx ; cx=0._8
+              endif
+              w(i,jstr-1,k,nnew)=(1._8-cx)*( w(i,jstr-1,k,nstp)&
+              &-max(cy,0._8)*grad(i  ,jstr-1)&
+              &-min(cy,0._8)*grad(i+1,jstr-1) )&
+              &+cx*( w(i,jstr  ,k,nstp)&
+              &-max(cy,0._8)*grad(i  ,jstr  )&
+              &-min(cy,0._8)*grad(i+1,jstr  ) )
+            enddo
+          enddo
+        else
+          do k=1,nz
+            do i=istr,iend
+              w(i,jstr-1,k,nnew)=w(i,jstr,k,nnew)
+            enddo
+          enddo
+        endif
+      else
+        do k=1,nz                          ! Wall: slip: gamma= 1
+          do i=istr,iend                  !    no-slip: gamma=-1
+            w(i,jstr-1,k,nnew)=gamma2*w(i,jstr,k,nnew)
+          enddo
         enddo
-        do i=istr,iend
-          cx=-dtfwd*v(i,jstr,k,nrhs)*pn(i,jstr-1)
-          cy=0.5_8*dtfwd*(u(i,jstr-1,k,nrhs)+u(i+1,jstr-1,k,nrhs))&
-          &*pm(i,jstr-1)
-          if (cx > 0._8) then
-            cext=0._8
-          else
-            cext=-cx ; cx=0._8
-          endif
-          w(i,jstr-1,k,nnew)=(1._8-cx)*( w(i,jstr-1,k,nstp)&
-          &-max(cy,0._8)*grad(i  ,jstr-1)&
-          &-min(cy,0._8)*grad(i+1,jstr-1) )&
-          &+cx*( w(i,jstr  ,k,nstp)&
-          &-max(cy,0._8)*grad(i  ,jstr  )&
-          &-min(cy,0._8)*grad(i+1,jstr  ) )
-#    if defined W_FRC_BRY
-          w(i,jstr-1,k,nnew)=( (1._8-cext)*w(i,jstr-1,k,nnew)&
-          &+cext*w_south(i,k) )
-#    endif
-        enddo
-      enddo
-#   else /* not orlanski, but spec or no-grad */
-      do k=1,nz
-        do i=istr,iend
-#    if defined OBC_WSPECIFIED
-          w(i,jstr-1,k,nnew)=w_south(i,k)
-#    else
-          w(i,jstr-1,k,nnew)=w(i,jstr,k,nnew)
-#    endif
-        enddo
-      enddo
-#   endif /* orlanski, spec, or no-grad */
-#  else /* not open, but closed */
-      do k=1,nz                          ! Wall: slip: gamma= 1
-        do i=istr,iend                  !    no-slip: gamma=-1
-          w(i,jstr-1,k,nnew)=gamma2*w(i,jstr,k,nnew)
-        enddo
-      enddo
-#  endif /* OBC_SOUTH or not */
+      endif
     endif    ! <-- SOUTHERN_EDGE
 
 
     if (NORTHERN_EDGE) then
-#  if defined OBC_NORTH
-#   if defined OBC_M3ORLANSKI
-      do k=1,nz
-        do i=istr,iend+1
-          grad(i,jend  )= w(i  ,jend  ,k,nstp)-w(i-1,jend  ,k,nstp)
-          grad(i,jend+1)= w(i  ,jend+1,k,nstp)-w(i-1,jend+1,k,nstp)
-        enddo
-        do i=istr,iend
+      if (obc_north) then
+        if (obc_m3_orlanski) then
+          do k=1,nz
+            do i=istr,iend+1
+              grad(i,jend  )= w(i  ,jend  ,k,nstp)-w(i-1,jend  ,k,nstp)
+              grad(i,jend+1)= w(i  ,jend+1,k,nstp)-w(i-1,jend+1,k,nstp)
+            enddo
+            do i=istr,iend
 
-          cx=dtfwd*v(i,jend+1,k,nrhs)*pn(i,jend+1)
-          cy=0.5_8*dtfwd*(u(i,jend+1,k,nrhs)+u(i+1,jend+1,k,nrhs))&
-          &*pm(i,jend+1)
-          if (cx > 0._8) then
-            cext=0._8
-          else
-            cext=-cx ; cx=0._8
-          endif
+              cx=dtfwd*v(i,jend+1,k,nrhs)*pn(i,jend+1)
+              cy=0.5_8*dtfwd*(u(i,jend+1,k,nrhs)+u(i+1,jend+1,k,nrhs))&
+              &*pm(i,jend+1)
+              if (cx > 0._8) then
+                cext=0._8
+              else
+                cext=-cx ; cx=0._8
+              endif
 
-          w(i,jend+1,k,nnew)=(1._8-cx)*( w(i,jend+1,k,nstp)&
-          &-max(cy,0._8)*grad(i  ,jend+1)&
-          &-min(cy,0._8)*grad(i+1,jend+1) )&
-          &+cx*( w(i,jend  ,k,nnew)&
-          &-max(cy,0._8)*grad(i  ,jend  )&
-          &-min(cy,0._8)*grad(i+1,jend  ) )
-#    if defined W_FRC_BRY
-          w(i,jend+1,k,nnew)= ((1._8-cext)*w(i,jend+1,k,nnew)&
-          &+cext*w_north(i,k) )
-#    endif
+              w(i,jend+1,k,nnew)=(1._8-cx)*( w(i,jend+1,k,nstp)&
+              &-max(cy,0._8)*grad(i  ,jend+1)&
+              &-min(cy,0._8)*grad(i+1,jend+1) )&
+              &+cx*( w(i,jend  ,k,nnew)&
+              &-max(cy,0._8)*grad(i  ,jend  )&
+              &-min(cy,0._8)*grad(i+1,jend  ) )
+            enddo
+          enddo
+        else
+          do k=1,nz
+            do i=istr,iend
+              w(i,jend+1,k,nnew)=w(i,jend,k,nnew)
+            enddo
+          enddo
+        endif
+      else
+        do k=1,nz                          ! Wall: slip: gamma= 1
+          do i=istr,iend                  !    no-slip: gamma=-1
+            w(i,jend+1,k,nnew)=gamma2*w(i,jend,k,nnew)
+          enddo
         enddo
-      enddo
-#   else  /* not orlanski, spec or non-grad instead */
-      do k=1,nz
-        do i=istr,iend
-          w(i,jend+1,k,nnew)=w(i,jend,k,nnew)
-        enddo
-      enddo
-#   endif  /* orlanski, spec, or non-grad */
-#  else /* not open, but closed */
-      do k=1,nz                          ! Wall: slip: gamma= 1
-        do i=istr,iend                  !    no-slip: gamma=-1
-          w(i,jend+1,k,nnew)=gamma2*w(i,jend,k,nnew)
-        enddo
-      enddo
-#  endif /* OBC_NORTH or not */
+      endif
     endif    ! <-- NORTHERN_EDGE
 
 # endif /* not NS_PERIODIC */

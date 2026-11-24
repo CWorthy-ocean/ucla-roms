@@ -120,8 +120,7 @@ contains
     implicit none
     character(len=16) :: sr_name = "check_switches2"
     character(len=1024) :: error_info
-    integer(kind=4) nobc_west, nobc_east, nobc_south, nobc_north, &
-    &                                ncoupl, nAk, is,ie
+    integer(kind=4) ncoupl, nAk, is,ie
 
     ie=lenstr(cpps)
 
@@ -213,65 +212,6 @@ contains
       &          'switches PRED_COUPLED_MODE and CORR_COUPLED_MODE '// &
       &          'in "set_global_definitions.h": only one of them '// &
       &        'should be defined.'
-      call error_log%raise_global( &
-      &        context=sr_name, &
-      &        info=error_info)
-
-    endif
-
-! Checking the number of selections of boundary conditions.
-
-#ifdef EW_PERIODIC
-    nobc_west=1     ! here "nobc_west=1" means that it is already
-    nobc_east=1     ! chosen and no further selection is possible
-#else
-    nobc_west=0
-    nobc_east=0
-#endif
-#ifdef OBC_WEST
-    nobc_west=nobc_west+1
-#endif
-#ifdef OBC_EAST
-    nobc_east=nobc_east+1
-#endif
-    if (nobc_west>1) then
-      write(error_info, *) 'more than one '// &
-      &        'boundary condition is chosen on the WESTERN EDGE.'
-      call error_log%raise_global( &
-      &        context=sr_name, &
-      &        info=error_info)
-    endif
-    if (nobc_east>1) then
-      write(*,'(A)') 'more than one '// &
-      &        'boundary condition is chosen on the EASTERN EDGE.'
-      call error_log%raise_global( &
-      &        context=sr_name, &
-      &        info=error_info)
-    endif
-
-#ifdef NS_PERIODIC
-    nobc_south=1
-    nobc_north=1
-#else
-    nobc_south=0
-    nobc_north=0
-#endif
-#ifdef OBC_SOUTH
-    nobc_south=nobc_south+1
-#endif
-#ifdef OBC_NORTH
-    nobc_north=nobc_north+1
-#endif
-    if (nobc_south>1) then
-      write(error_info, *) 'more than one '// &
-      &        'boundary condition is chosen on the SOUTHERN EDGE.'
-      call error_log%raise_global( &
-      &        context=sr_name, &
-      &        info=error_info)
-    endif
-    if (nobc_north>1) then
-      write(error_info, *) 'more than one '// &
-      &        'boundary condition is chosen on the NORTHERN EDGE.'
       call error_log%raise_global( &
       &        context=sr_name, &
       &        info=error_info)

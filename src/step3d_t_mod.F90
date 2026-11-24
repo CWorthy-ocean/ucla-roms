@@ -1,6 +1,7 @@
 
 module step3d_t_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
   private
 
@@ -468,22 +469,22 @@ contains
   if (WESTERN_EDGE) then
     do k=1,nz
       do j=jmin,jmax
-#   ifndef OBC_WEST
-        LapT(istr-1,j,k)=0._8
-#   else
-        LapT(istr-1,j,k)=LapT(istr,j,k)
-#   endif
+        if (.not.obc_west) then
+          LapT(istr-1,j,k)=0._8
+        else
+          LapT(istr-1,j,k)=LapT(istr,j,k)
+        endif
       enddo
     enddo
   endif
   if (EASTERN_EDGE) then
     do k=1,nz
       do j=jmin,jmax
-#   ifndef OBC_EAST
-        LapT(iend+1,j,k)=0._8
-#   else
-        LapT(iend+1,j,k)=LapT(iend,j,k)
-#   endif
+        if (.not.obc_east) then
+          LapT(iend+1,j,k)=0._8
+        else
+          LapT(iend+1,j,k)=LapT(iend,j,k)
+        endif
       enddo
     enddo
   endif
@@ -492,22 +493,22 @@ contains
   if (SOUTHERN_EDGE) then
     do k=1,nz
       do i=imin,imax
-#   ifndef OBC_SOUTH
-        LapT(i,jstr-1,k)=0._8
-#   else
-        LapT(i,jstr-1,k)=LapT(i,jstr,k)
-#   endif
+        if (.not.obc_south) then
+          LapT(i,jstr-1,k)=0._8
+        else
+          LapT(i,jstr-1,k)=LapT(i,jstr,k)
+        endif
       enddo
     enddo
   endif
   if (NORTHERN_EDGE) then
     do k=1,nz
       do i=imin,imax
-#   ifndef OBC_NORTH
-        LapT(i,jend+1,k)=0._8
-#   else
-        LapT(i,jend+1,k)=LapT(i,jend,k)
-#   endif
+        if (.not.obc_north) then
+          LapT(i,jend+1,k)=0._8
+        else
+          LapT(i,jend+1,k)=LapT(i,jend,k)
+        endif
       enddo
     enddo
   endif

@@ -38,9 +38,7 @@ def test_default_cppkeys(read_cppdefs):
     """
     expected_cpp_keys=[
         'NONLIN_EOS', 'SALINITY', 'SPLIT_EOS', 'UV_ADV', 'UV_COR',
-        'CURVGRID', 'MASKING', 'SPHERICAL', 'BULK_FRC', 'M2_FRC_BRY', 'M3_FRC_BRY', 'OBC_EAST',
-        'OBC_M2FLATHER', 'OBC_M3ORLANSKI', 'OBC_NORTH', 'OBC_SOUTH', 'OBC_TORLANSKI', 'OBC_WEST', 'T_FRC_BRY',
-        'Z_FRC_BRY', 'LMD_BKPP', 'LMD_KPP', 'LMD_MIXING', 'LMD_NONLOCAL', 'LMD_RIMIX',
+        'CURVGRID', 'MASKING', 'SPHERICAL', 'BULK_FRC', 'LMD_BKPP', 'LMD_KPP', 'LMD_MIXING', 'LMD_NONLOCAL', 'LMD_RIMIX',
         'MARBL']
     default_cpp_keys = read_cppdefs(ROMS_ROOT/"src/cppdefs.opt")
     assert (expected_cpp_keys == default_cpp_keys)
