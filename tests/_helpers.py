@@ -17,7 +17,10 @@ ADDITIONAL_FILES = ROMS_ROOT / "tests" / "additional_files"
 # COMPILER=intel by rewriting the text "make BUILD_MODE=test" in this file, so keep that literal form.
 MAKE_CMD = "make BUILD_MODE=test"
 # USER_FFLAGS that turn on array bounds checking for the compiler MAKE_CMD selects (after that rewrite).
-BOUNDS_CHECK_FFLAGS = "-check bounds" if "COMPILER=intel" in MAKE_CMD else "-fcheck=bounds"
+# gfortran also starts local integers far out of range, so that an index that is never set is caught.
+BOUNDS_CHECK_FFLAGS = (
+    "-check bounds" if "COMPILER=intel" in MAKE_CMD else "-fcheck=bounds -finit-integer=-99999"
+)
 
 # --------------------------------------------------------------------------
 # CPP key groups
