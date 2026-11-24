@@ -134,11 +134,11 @@ contains
     call check_avg_ends_on_marbl_step(wrt_bgc_dia_avg,&
     &output_period_bgc_avg_dia, 'output_period_bgc_avg_dia')
 #endif
-    call error_log%abort_check()
-
 #ifdef MARBL
     call bgc_precheck
 #endif
+    call error_log%abort_check()
+
   end subroutine do_precheck
 !---------------------------------------------------
   subroutine check_output_divides_rst(write_enabled, rec_period,&

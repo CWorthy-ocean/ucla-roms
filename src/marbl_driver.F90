@@ -157,8 +157,8 @@ module marbl_driver
   public :: read_nml_marbl
   public :: is_marbl_step
 
-  ! .true. if an output uses MARBL's diagnostics (set by the readers of
-  ! BGC_SETTINGS and CDR_OUTPUT_SETTINGS); otherwise ROMS does not keep them
+  ! .true. if an output uses MARBL's diagnostics (set by read_namelists);
+  ! otherwise ROMS does not keep them
   logical, public :: marbl_diag_on = .false.
 contains
 

@@ -10,7 +10,7 @@ module cdr_output
       use param, only: max_name_size
       use param, only: itemp, isalt, nt
       use marbl_driver, only:&
-     &     marbl_saved_state_3d, ialk, is_marbl_step, marbl_diag_on,&
+     &     marbl_saved_state_3d, ialk, is_marbl_step,&
      &     ialk_alt, idic, idic_alt, nr_marbl_ss_2d, nr_marbl_ss_3d,&
      &     vname_marbl_ss_3d, vname_marbl_ss_2d
       use bgc_shared_vars, only:&
@@ -165,8 +165,6 @@ contains
     end if
     close(namelist_unit)
     record = nrpf_cdr
-    ! the output uses MARBL's diagnostics
-    marbl_diag_on = marbl_diag_on .or. do_cdr_output
   end subroutine read_cdr_output_nml
 
   subroutine add_cdr_output_variable(list, name, dimnames, dims,&
