@@ -28,12 +28,10 @@ module precheck
   &do_sflx, output_period_sflx, nrpf_sflx
   use particles, only: floats, output_period_particles, nrpf_particles
   use sponge_tune, only:&
-  &wrt_sponge, output_period_sponge, nrpf_sponge
-#ifdef DIAGNOSTICS
+  &apply_sponge_tune, wrt_sponge, output_period_sponge, nrpf_sponge
   use diagnostics, only:&
   &diag_uv, diag_trc, output_period_diag, nrpf_diag
-#endif
-#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+#if defined MARBL && defined MARBL_DIAGS
   use cdr_output, only:&
   &do_cdr_output, output_period_cdr, nrpf_cdr,&
   &wrt_cdr_avg, cdr_monthly_averages
@@ -44,14 +42,12 @@ module precheck
 #endif
   use cdr_lite_output, only:&
   &do_cdr_lite_output, output_period_cdr_lite, nrpf_cdr_lite
-#if defined MARBL && defined CDR_FORCING
+#ifdef MARBL
   use cdr_gas_exch_output, only:&
   &do_cdr_gas_exch_output, output_period_cdr_gas, nrpf_cdr_gas
 #endif
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
   use upscale_output, only:&
   &do_upscale, output_period_uscl, nrpf_uscl
-#endif
   use check_switches_mod, only: check_switches2, print_switches
 #if defined LMD_KPP || defined LMD_BKPP
   use lmd_kpp_mod, only: check_kpp_switches
@@ -103,26 +99,22 @@ contains
     &output_period_sflx, nrpf_sflx, 'sflx')
     call check_output_divides_rst(floats,&
     &output_period_particles, nrpf_particles, 'particles')
-    call check_output_divides_rst(wrt_sponge,&
+    call check_output_divides_rst(apply_sponge_tune .and. wrt_sponge,&
     &output_period_sponge, nrpf_sponge, 'sponge')
-#ifdef DIAGNOSTICS
     call check_output_divides_rst(diag_uv.or.diag_trc,&
     &real(output_period_diag, kind=8), nrpf_diag, 'diagnostics')
-#endif
-#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+#if defined MARBL && defined MARBL_DIAGS
     call check_output_divides_rst(do_cdr_output,&
     &output_period_cdr, nrpf_cdr, 'cdr')
 #endif
     call check_output_divides_rst(do_cdr_lite_output,&
     &output_period_cdr_lite, nrpf_cdr_lite, 'cdrtrc')
-#if defined MARBL && defined CDR_FORCING
+#ifdef MARBL
     call check_output_divides_rst(do_cdr_gas_exch_output,&
     &output_period_cdr_gas, nrpf_cdr_gas, 'cdrgas')
 #endif
-#if defined MARBL && defined MARBL_DIAGS && defined UPSCALING
     call check_output_divides_rst(do_upscale,&
     &output_period_uscl, nrpf_uscl, 'upscale')
-#endif
 #ifdef MARBL
     call check_output_divides_rst(wrt_bgc_his,&
     &output_period_bgc_his, nrpf_bgc_his, 'bgc_his')
@@ -133,7 +125,7 @@ contains
     call check_output_divides_rst(wrt_bgc_dia_avg,&
     &output_period_bgc_avg_dia, nrpf_bgc_avg_dia, 'bgc_avg_dia')
 #endif
-#if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
+#if defined MARBL && defined MARBL_DIAGS
     call check_avg_ends_on_marbl_step(do_cdr_output .and. wrt_cdr_avg&
     &.and. .not. cdr_monthly_averages,&
     &output_period_cdr, 'output_period_cdr')

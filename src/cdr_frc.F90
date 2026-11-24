@@ -8,7 +8,6 @@ module cdr_frc
 
 #include "cppdefs.opt"
 
-#ifdef CDR_FORCING
   ! Parameterized releases (cdr_trcflx, or cdr_volume + cdr_tracer) can
   ! target any tracer -- passive, CDR_LITE or BGC -- and work with or without
   ! MARBL. Depth-profile forcing (upscaling) targets the tracers named in
@@ -86,9 +85,9 @@ module cdr_frc
 
   integer(kind=4) :: cdr_nz_chd = 0  ! Number of vertical layers in the forcing file, or, if upscaling,
 ! the number of vertical layers in the child grid.
-  logical, public :: cdr_source,&
-  &cdr_forcing_depth_profiles, cdr_forcing_3d, cdr_forcing_parameterized,&
-  &cdr_time_interpolation, cdr_relocate_to_wet_pts, cdr_volume
+  logical, public :: cdr_source = .false.,&
+  &cdr_forcing_depth_profiles = .false., cdr_forcing_3d = .false., cdr_forcing_parameterized = .false.,&
+  &cdr_time_interpolation = .false., cdr_relocate_to_wet_pts = .false., cdr_volume = .false.
 
   namelist /CDR_FRC_SETTINGS/ cdr_file, cdr_ncdr_parm, cdr_nz_chd, cdr_source,&
   &cdr_forcing_depth_profiles, cdr_forcing_3d, cdr_forcing_parameterized,&
@@ -250,17 +249,19 @@ contains
   subroutine read_nml_cdr_frc
 
 !     Read the "CDR_FRC_SETTINGS" section of the namelist file
+    use, intrinsic :: iso_fortran_env, only: iostat_end
     integer(kind=4) ::  namelist_unit, ios
     character(len=17) :: sr_name = "read_nml_cdr_frc"
-    ! Read namelist
+    character(len=512) :: msg = ""
+    ! Read namelist (optional group: without it, no CDR forcing)
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
-    read (unit=namelist_unit, nml=CDR_FRC_SETTINGS, iostat=ios)
-    if (ios /= 0) then
+    read (unit=namelist_unit, nml=CDR_FRC_SETTINGS, iostat=ios, iomsg=msg)
+    if (ios /= 0 .and. ios /= iostat_end) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
       &info=&
-      &'could not read CDR_FRC_SETTINGS section of namelist file'&
+      &'could not read CDR_FRC_SETTINGS section of namelist file: '//trim(msg)&
       &)
     end if
     call check_nml_string(cdr_file, 'CDR_FRC_SETTINGS cdr_file', module_name//'/'//sr_name)
@@ -1083,67 +1084,6 @@ contains
   end subroutine ll2dist  !]
 ! ----------------------------------------------------------------------
 ! ----------------------------------------------------------------------
-#else /* CDR_FORCING */
-
-!----------------------------------------------------------------------
-  use roms_read_write, only: ncforce, ncforce3d
-  use error_handling_mod, only: error_log
-
-  implicit none
-
-  private
-  character(len=9) :: module_name="cdr_frc"
-
-  ! Public functions
-  public set_cdr_frc, read_nml_cdr_frc
-
-contains
-
-  subroutine read_nml_cdr_frc
-    ! Without CDR_FORCING, CDR_FRC_SETTINGS is read only to stop when
-    ! cdr_source = .true.; a missing group is fine. Its keys and types are
-    ! those of the group with CDR_FORCING, so the same group reads here.
-    use namelist_open_mod, only: open_namelist_file, gated_nml_found,&
-    &check_nml_cpp_switch
-    use param, only: max_name_size
-    implicit none
-    character(len=max_name_size) :: cdr_file
-    integer(kind=4) :: cdr_ncdr_parm, cdr_nz_chd
-    logical :: cdr_source,&
-    &cdr_forcing_depth_profiles, cdr_forcing_3d, cdr_forcing_parameterized,&
-    &cdr_time_interpolation, cdr_relocate_to_wet_pts, cdr_volume
-    namelist /CDR_FRC_SETTINGS/ cdr_file, cdr_ncdr_parm, cdr_nz_chd, cdr_source,&
-    &cdr_forcing_depth_profiles, cdr_forcing_3d, cdr_forcing_parameterized,&
-    &cdr_time_interpolation, cdr_relocate_to_wet_pts, cdr_volume
-    integer(kind=4) :: namelist_unit, ios
-    character(len=17) :: sr_name = "read_nml_cdr_frc"
-    character(len=512) :: msg
-
-    cdr_source = .false.
-    msg = ''
-    call open_namelist_file(namelist_unit)
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=CDR_FRC_SETTINGS, iostat=ios, iomsg=msg)
-    close(namelist_unit)
-    if (gated_nml_found(ios, msg, 'CDR_FRC_SETTINGS', trim(module_name)//'/'//sr_name)) then
-      call check_nml_cpp_switch('CDR_FRC_SETTINGS', 'cdr_source', cdr_source,&
-      &.false., 'CDR_FORCING', trim(module_name)//'/'//sr_name)
-    end if
-  end subroutine read_nml_cdr_frc
-
-  subroutine set_cdr_frc    ![
-! Allocate and initialize arrays.
-
-    implicit none
-    character(len=11) :: sr_name = "set_cdr_frc"
-
-    call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="CDR module must have CDR_FORCING enabled.")
-
-  end subroutine set_cdr_frc !]
-!----------------------------------------------------------------------
-
-#endif /* CDR_FORCING */
 
 
 end module cdr_frc

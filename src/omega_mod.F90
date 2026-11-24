@@ -47,12 +47,10 @@ contains
     use pipe_frc, only:&
     &pidx, pipe_idx, pipe_prf,&
     &pipe_flx, pipe_source
-#ifdef CDR_FORCING
     use cdr_frc, only:&
     &cdr_nprf, cdr_icdr,&
     &cdr_iloc, cdr_jloc, cdr_prf, cdr_vol,&
     &cdr_source, cdr_volume
-#endif
     use roms_mpi, only: exchange_xxx
     use ocean_vars, only: wi, flxv, flxu, z_w, we, hz
     use scalars, only: nz, dt, forw_start, iic, nrhs, AM3_crv
@@ -101,7 +99,6 @@ contains
           &+max(FlxV(i,j+1,k),0._8)-min(FlxV(i,j,k),0._8)
         enddo
       enddo
-#ifdef CDR_FORCING
       ! CDR volume source: add the volume flux of each release in this row,
       ! accumulated bottom-up like the horizontal divergence above, so Wi
       ! sees the water that step2d adds to zeta. The vertical distribution
@@ -121,7 +118,6 @@ contains
           endif
         enddo
       endif
-#endif
       ! rain water
       do i=1,nx
         Wi(i,j,nz) = Wi(i,j,nz) + swflx(i,j)*dm_r(i,j)*dn_r(i,j)

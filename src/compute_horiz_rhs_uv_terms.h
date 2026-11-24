@@ -25,7 +25,6 @@ do j=jstrV,jend
   enddo
 enddo
 
-# ifdef DIAGNOSTICS
  ! JM It would be better to not do the u,v boundary points
 if (CORR_STAGE) then
   if (diag_uv.and.calc_diag) then
@@ -33,7 +32,6 @@ if (CORR_STAGE) then
     Vdiag(:,:,k,icori) =-0.5_8*(VFe(1:nx,1:ny)+VFe(1:nx,0:ny-1))*dxdyi_v
   endif
 endif
-# endif /* DIAGNOSTICS */
 
 #endif  /* UV_COR */
 

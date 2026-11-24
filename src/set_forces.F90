@@ -31,7 +31,7 @@ subroutine set_forces
 #ifdef SALINITY
   &isalt,&
 #endif
-  &ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, itemp
+  &ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, itemp, cdr_lite_on
   use flux_frc, only: set_flux_frc
   use surf_flux, only: set_surf_field_corr, set_carbonate_sensitivity, sflx_corr, qcorrection, cflx_corr
   use tracers, only: set_surf_tracer_flx, iTandS
@@ -43,9 +43,7 @@ subroutine set_forces
   use dimensions, only: jnode, inode
   use boundary, only: frctype
   use scalars, only: nt
-#ifdef CDR_FORCING
   use cdr_frc, only: set_cdr_frc, cdr_source
-#endif
 # ifdef BULK_FRC
   use bulk_frc, only: set_bulk_frc
 #endif
@@ -87,9 +85,7 @@ subroutine set_forces
 
 
   if (qcorrection .or. sflx_corr .or. cflx_corr) call set_surf_field_corr
-# if defined CDR_LITE
-      call set_carbonate_sensitivity
-# endif
+  if (cdr_lite_on) call set_carbonate_sensitivity
 # ifdef BULK_FRC
 #  ifdef LMD_KPP
 #   ifdef ANA_SRFLUX
@@ -130,9 +126,7 @@ subroutine set_forces
     call set_river_frc
   endif
   if (pipe_source) call set_pipe_frc
-#ifdef CDR_FORCING
   if (cdr_source) call set_cdr_frc
-#endif
 
 !--> Bottom boundary fluxes [Styles and Glenn (1996) bottom
 !    boundary layer formulation.  Not implemented in this code]

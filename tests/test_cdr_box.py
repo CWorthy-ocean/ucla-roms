@@ -1,7 +1,7 @@
 """CDR releases, analytical restarts and output in a small closed box.
 
 One analytical build (``ANA_GRID``, ``ANA_INITIAL``, ``SPHERICAL``,
-``CDR_FORCING``, without ``PARALLEL_IO``) and a forcing
+without ``PARALLEL_IO``) and a forcing
 file with two parameterized volume releases: A in one cell, B spread over
 several cells around the corner of the 2x2 tiles. Each test says what it
 checks. The tests compare runs with each other or with values computed
@@ -40,7 +40,7 @@ A_VOLUME, A_DEPTH, A_VSC = 200.0, 60.0, 5.0
 B_CENTRE = (16.5, 16.5)   # release B's centre in global (i, j) index units
 CPP_KEYS = (
     UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + ANALYTICAL_CPP_KEYS
-    + ["LMD_CONVEC", "SPHERICAL", "CDR_FORCING"]
+    + ["LMD_CONVEC", "SPHERICAL"]
 )
 
 
@@ -255,8 +255,8 @@ def test_output_is_cdf5(box_conf, box_cdr_file, input_dir, tmp_path):
 
 @pytest.fixture(scope="module")
 def box_diag_conf(tmp_path_factory) -> ROMSConfiguration:
-    """The box with DIAGNOSTICS, compiled with array bounds checking."""
-    return _box_configuration(tmp_path_factory, "cdr_box_diag_build", ["DIAGNOSTICS"],
+    """The box, compiled with array bounds checking."""
+    return _box_configuration(tmp_path_factory, "cdr_box_diag_build", [],
                               make_args=f'USER_FFLAGS="{BOUNDS_CHECK_FFLAGS}"')
 
 

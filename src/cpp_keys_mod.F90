@@ -73,35 +73,10 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_obc_north = .false.
 #endif
-#ifdef CDR_FORCING
-  logical, parameter, public :: key_cdr_forcing = .true.
-#else
-  logical, parameter, public :: key_cdr_forcing = .false.
-#endif
-#ifdef DIAGNOSTICS
-  logical, parameter, public :: key_diagnostics = .true.
-#else
-  logical, parameter, public :: key_diagnostics = .false.
-#endif
-#ifdef SPONGE_TUNE
-  logical, parameter, public :: key_sponge_tune = .true.
-#else
-  logical, parameter, public :: key_sponge_tune = .false.
-#endif
-#ifdef UPSCALING
-  logical, parameter, public :: key_upscaling = .true.
-#else
-  logical, parameter, public :: key_upscaling = .false.
-#endif
 #ifdef UV_ADV
   logical, parameter, public :: key_uv_adv = .true.
 #else
   logical, parameter, public :: key_uv_adv = .false.
-#endif
-#ifdef CDR_LITE
-  logical, parameter, public :: key_cdr_lite = .true.
-#else
-  logical, parameter, public :: key_cdr_lite = .false.
 #endif
 #ifdef PCO2AIR_FORCING
   logical, parameter, public :: key_pco2air_forcing = .true.

@@ -33,15 +33,11 @@ ALK_PERTURBATION = 100.0  # meq/m^3, added to the initial ALK at every point
 
 @pytest.fixture(scope="module")
 def uscl_conf(tmp_path_factory) -> ROMSConfiguration:
-    """Compile the MARBL + UPSCALING binary once for the module.
-
-    CDR_FORCING is there for the ``_cdr`` output's depth-integrated ALK and
-    ALK_ALT_CO2, which give the inventory without rebuilding Hz.
-    """
+    """Compile the MARBL binary once for the module."""
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
-        + MARBL_CPP_KEYS + ["CDR_FORCING", "UPSCALING"]
+        + MARBL_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("uscl_build")
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)

@@ -35,9 +35,7 @@ contains
     &riv_vol, riv_vflx, river_source,&
     &nriv_u, riv_u_i, riv_u_j, nriv_v, riv_v_i, riv_v_j
     use pipe_frc, only: pipe_idx, pipe_flx, pipe_source
-#ifdef CDR_FORCING
     use cdr_frc, only: cdr_source, cdr_volume, cdr_zsrc
-#endif
     use coupling, only:&
     &rhos, rhoa, weight, du_avg_bak, du_avg2,&
     &du_avg1, dv_avg_bak, dv_avg2, dv_avg1, zt_avg1, rufrc, rvfrc
@@ -172,13 +170,11 @@ contains
             zeta_new(i,j)=zeta_new(i,j) + dtfast*pm(i,j)*pn(i,j)*pipe_flx(i,j)
           endif
         endif
-#ifdef CDR_FORCING
         ! CDR volume releases (cdr_zsrc is exchanged, so the halo cells
         ! get it too, as for pipe_flx)
         if (cdr_source.and.cdr_volume) then
           zeta_new(i,j)=zeta_new(i,j) + dtfast*cdr_zsrc(i,j)
         endif
-#endif
 
 
 #ifdef MASKING

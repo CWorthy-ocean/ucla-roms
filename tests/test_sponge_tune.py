@@ -1,9 +1,9 @@
-"""Boundary sponge tuning (``SPONGE_TUNE`` with ``ub_tune``, ``sponge_tune.F90``).
+"""Boundary sponge tuning (``apply_sponge_tune``, ``sponge_tune.F90``).
 
-With ``ub_tune`` ROMS nudges the Orlanski boundary coefficients ``ub_*`` toward
+With ``apply_sponge_tune`` ROMS nudges the Orlanski boundary coefficients ``ub_*`` toward
 matching the parent's baroclinic pressure flux, read from the boundary file
 (``up_west``/``up_east``/``vp_south``/``vp_north``), with the child's own flux
-from ``calc_pflx`` (built without ``DIAGNOSTICS``, as C-Star Forge builds are). The test parent has no parent, so its
+from ``calc_pflx``. The test parent has no parent, so its
 boundary file gets synthetic fluxes: smooth along each edge, varying in time.
 
 Each build, with and without PARALLEL_IO, runs the case on 2x2 ranks with
@@ -112,8 +112,7 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
 
     def _build_and_run(build: str) -> dict[str, Path]:
         pio = build == "parallel_io"
-        cpp_keys = (UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-                    + ["SPONGE_TUNE"])
+        cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
         if pio:
             cpp_keys = cpp_keys + ["PARALLEL_IO"]
         conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path_factory.mktemp(f"sponge_build_{build}"))
@@ -130,7 +129,7 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
                 wrt_file_rst=True, output_period_rst=RST_PERIOD, wrt_file_his=False)
             nml["CALC_PFLX_SETTINGS"].update(calc_pflx=True, pflx_timescale=3600)
             nml["SPONGE_TUNE_SETTINGS"].update(
-                ub_tune=True, sponge_timescale=SPONGE_TIMESCALE, wrt_sponge=True,
+                apply_sponge_tune=True, sponge_timescale=SPONGE_TIMESCALE, wrt_sponge=True,
                 sponge_avg=False, nrpf_sponge=2, output_period_sponge=SPN_PERIOD)
             if run in ("averaged", "every_step", "default_avg"):
                 # no restarts (their output-period check would need nrpf_sponge = 10 here)

@@ -119,3 +119,18 @@
 #ifdef SPONGE
 # error "CPP key SPONGE was removed: the boundary sponge is now switched with use_boundary_sponge in the namelist group V_SPONGE_SETTINGS (default .true.); remove SPONGE from cppdefs.opt"
 #endif
+#ifdef SPONGE_TUNE
+# error "CPP key SPONGE_TUNE was removed: sponge tuning is now switched on with apply_sponge_tune = .true. in the namelist group SPONGE_TUNE_SETTINGS; remove SPONGE_TUNE from cppdefs.opt"
+#endif
+#ifdef DIAGNOSTICS
+# error "CPP key DIAGNOSTICS was removed: the budget diagnostics are now switched on with diag_uv and diag_trc in the namelist group DIAGNOSTICS_SETTINGS; remove DIAGNOSTICS from cppdefs.opt"
+#endif
+#ifdef CDR_FORCING
+# error "CPP key CDR_FORCING was removed: CDR forcing is now switched on with cdr_source = .true. in the namelist group CDR_FRC_SETTINGS; remove CDR_FORCING from cppdefs.opt"
+#endif
+#ifdef CDR_LITE
+# error "CPP key CDR_LITE was removed: the CDR_LITE tracers are now on when nt_cdr_oae or nt_cdr_dor is above 0 in the namelist group PARAM_SETTINGS; remove CDR_LITE from cppdefs.opt"
+#endif
+#ifdef UPSCALING
+# error "CPP key UPSCALING was removed: upscaling output is now switched on with do_upscale = .true. in the namelist group UPSCALE_SETTINGS; remove UPSCALING from cppdefs.opt"
+#endif

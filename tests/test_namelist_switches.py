@@ -2,8 +2,8 @@
 
 A group whose cpp key is off is still read, only to stop when it switches its
 feature on (gated_nml_found and check_nml_cpp_switch in namelist_open_mod).
-Every case runs one physics-only build, without MARBL, CDR_FORCING, UPSCALING,
-DIAGNOSTICS, SPONGE_TUNE or BULK_FRC, against a mutated test namelist.
+Every case runs one physics-only build, without MARBL or BULK_FRC, against a
+mutated test namelist.
 
 A stop is an MPI_Abort after read_namelists collects the errors: mpirun exits
 non-zero and the message goes to stderr, so it never reaches "Git hash:",
@@ -31,9 +31,10 @@ AFTER_NAMELISTS = "Git hash:"
 # printed by main.F90 after the last step
 RUN_END = "MPI_run_time ="
 
-GATED_GROUPS = [
+OPTIONAL_GROUPS = [
     "CDR_FRC_SETTINGS", "CDR_OUTPUT_SETTINGS", "CDR_GAS_EXCH_OUTPUT_SETTINGS",
-    "UPSCALE_SETTINGS", "DIAGNOSTICS_SETTINGS",
+    "CDR_LITE_SETTINGS", "CDR_LITE_OUTPUT_SETTINGS", "UPSCALE_SETTINGS",
+    "DIAGNOSTICS_SETTINGS", "SPONGE_TUNE_SETTINGS",
 ]
 
 
@@ -56,23 +57,20 @@ def _namelist(input_dir) -> dict:
 
 # case: (group, keys set in it, stable substrings of the message)
 STOPS = {
-    "cdr_source": ("CDR_FRC_SETTINGS", {"cdr_source": True},
-                   ["CDR_FRC_SETTINGS cdr_source = .true. needs the cpp key CDR_FORCING"]),
     "do_cdr_output": ("CDR_OUTPUT_SETTINGS", {"do_cdr_output": True},
                       ["CDR_OUTPUT_SETTINGS do_cdr_output = .true. needs the cpp keys",
-                       "does not define MARBL, MARBL_DIAGS, CDR_FORCING"]),
+                       "does not define MARBL, MARBL_DIAGS"]),
     "do_cdr_gas_exch_output": ("CDR_GAS_EXCH_OUTPUT_SETTINGS", {"do_cdr_gas_exch_output": True},
                                ["do_cdr_gas_exch_output = .true. needs the cpp keys",
-                                "does not define MARBL, CDR_FORCING"]),
+                                "does not define MARBL"]),
     "do_upscale": ("UPSCALE_SETTINGS", {"do_upscale": True},
-                   ["UPSCALE_SETTINGS do_upscale = .true. needs the cpp keys",
-                    "does not define MARBL, MARBL_DIAGS, UPSCALING"]),
-    "diag_uv": ("DIAGNOSTICS_SETTINGS", {"diag_uv": True},
-                ["DIAGNOSTICS_SETTINGS diag_uv = .true. needs the cpp key DIAGNOSTICS"]),
-    "diag_trc": ("DIAGNOSTICS_SETTINGS", {"diag_trc": True},
-                 ["DIAGNOSTICS_SETTINGS diag_trc = .true. needs the cpp key DIAGNOSTICS"]),
-    "ub_tune": ("SPONGE_TUNE_SETTINGS", {"ub_tune": True},
-                ["SPONGE_TUNE_SETTINGS ub_tune = .true. needs the cpp key SPONGE_TUNE"]),
+                   ["UPSCALE_SETTINGS do_upscale = .true. needs MARBL tracers",
+                    "or CDR_LITE tracers"]),
+    "apply_sponge_tune_without_pflx": ("SPONGE_TUNE_SETTINGS", {"apply_sponge_tune": True},
+                                       ["apply_sponge_tune = .true. needs calc_pflx = .true."]),
+    "ub_tune_old_name": ("SPONGE_TUNE_SETTINGS", {"ub_tune": True},
+                         ["could not read SPONGE_TUNE_SETTINGS",
+                          "ub_tune is now named apply_sponge_tune"]),
     "sflx_corr": ("SURF_FRC_SETTINGS", {"sflx_corr": True},
                   ["SURF_FRC_SETTINGS sflx_corr = .true. needs the cpp key BULK_FRC"]),
     "qcorrection": ("SURF_FRC_SETTINGS", {"qcorrection": True},
@@ -107,9 +105,17 @@ def test_switch_stops(physics_conf, input_dir, tmp_path, case):
     )
 
 
-def _drop_gated_groups(nml):
-    for group in GATED_GROUPS:
+def _drop_optional_groups(nml):
+    for group in OPTIONAL_GROUPS:
         del nml[group]
+
+
+def _unused_spn_period(nml):
+    # no _spn file without apply_sponge_tune, so its period need not divide the restarts'
+    nml["BASIC_OUTPUT_SETTINGS"].update(
+        wrt_file_rst=True, output_period_rst=80, output_period_his=80, nrpf_his=1
+    )
+    nml["SPONGE_TUNE_SETTINGS"].update(wrt_sponge=True, output_period_sponge=86400, nrpf_sponge=7)
 
 
 def _drop_reference_date(nml):
@@ -135,7 +141,8 @@ def _extra_tracer_values(nml):
 NO_STOPS = {
     "mixing_groups_missing": _drop_mixing_groups,
     "extra_tracer_values": _extra_tracer_values,
-    "gated_groups_missing": _drop_gated_groups,
+    "optional_groups_missing": _drop_optional_groups,
+    "unused_spn_period": _unused_spn_period,
     "reference_date_missing": _drop_reference_date,
     "error_handling_leftover": _add_error_handling,
 }

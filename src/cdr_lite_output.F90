@@ -5,7 +5,7 @@ module cdr_lite_output
   ! The CDR_LITE tracers exist whenever nt_cdr_oae/nt_cdr_dor (PARAM_SETTINGS) are
   ! non-zero, with or without MARBL (see CDR_LITE in cppdefs.opt), so this
   ! module always compiles. Only the *_source fields depend on the cdr_frc
-  ! release profiles, which are available under CDR_FORCING (cdr_frc's own
+  ! release profiles, which are available with cdr_source (cdr_frc's own
   ! guard); without them wrt_sources has no effect.
 
 #include "cppdefs.opt"
@@ -24,10 +24,8 @@ module cdr_lite_output
   use scalars, only: iic, knew, nnew, tdays, time, dt
   use ocean_vars, only: hz
   use error_handling_mod, only: error_log
-#ifdef CDR_FORCING
   use cdr_frc, only: cdr_prf, cdr_flx, cdr_nprf, cdr_icdr, cdr_iloc,&
  &                   cdr_jloc, cdr_source, cdr_forcing_3d
-#endif
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_FileDesc, pio_IoSystem, pio_type, pio_gtype
   use pio, only: PIO_openfile, PIO_closefile, PIO_write
@@ -38,17 +36,12 @@ module cdr_lite_output
 
   private
 
-#ifndef CDR_FORCING
-  ! No cdr_frc release profiles in this build: the *_source fields are never
-  ! defined, allocated or written.
-  logical, parameter :: cdr_source = .false.
-#endif
 
   real(kind=8), public    :: output_period_cdr_lite = 3600
   integer(kind=4), public :: nrpf_cdr_lite = 4
-  logical, public :: wrt_cdr_lite_avg, cdr_lite_monthly_averages, do_cdr_lite_output
-  logical, public :: wrt_tracers, wrt_vertical_integrals, wrt_thickness_weighted
-  logical, public :: wrt_sources
+  logical, public :: wrt_cdr_lite_avg = .false., cdr_lite_monthly_averages = .false., do_cdr_lite_output = .false.
+  logical, public :: wrt_tracers = .false., wrt_vertical_integrals = .false., wrt_thickness_weighted = .false.
+  logical, public :: wrt_sources = .false.
   logical, public :: wrt_alk = .true., wrt_dic = .true.
   logical, public :: wrt_gas_exchange = .false.   ! FG_CDR_*_DIC air-sea fluxes
   namelist /CDR_LITE_OUTPUT_SETTINGS/ output_period_cdr_lite, nrpf_cdr_lite,&
@@ -108,15 +101,17 @@ module cdr_lite_output
 contains
 
   subroutine read_cdr_lite_output_nml
+    use, intrinsic :: iso_fortran_env, only: iostat_end
     integer(kind=4) :: namelist_unit, ios
+    character(len=512) :: msg = ""
     character(len=24) :: sr_name = "read_cdr_lite_output_nml"
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
-    read (unit=namelist_unit, nml=CDR_LITE_OUTPUT_SETTINGS, iostat=ios)
-    if (ios /= 0) then
+    read (unit=namelist_unit, nml=CDR_LITE_OUTPUT_SETTINGS, iostat=ios, iomsg=msg)
+    if (ios /= 0 .and. ios /= iostat_end) then
       call error_log%raise_global(&
       &context=module_name//'/'//sr_name, info=&
-      &'could not read CDR_LITE_OUTPUT_SETTINGS section of namelist file')
+      &'could not read CDR_LITE_OUTPUT_SETTINGS section of namelist file: '//trim(msg))
     end if
     close(namelist_unit)
     record = nrpf_cdr_lite
@@ -370,12 +365,6 @@ contains
       endif
     endif
 
-    if (wrt_gas_exchange .and. .not. allocated(cdr_gas_flx)) then
-      call error_log%raise_global(&
-     &  context=module_name//'/'//sr_name,&
-     &  info='wrt_gas_exchange is .true. but the CDR_LITE tracer air-sea flux'//&
-     &       ' is not computed in this build (requires the CDR_LITE cppkey).')
-    endif
     call error_log%abort_check()
 
     if (wrt_gas_exchange .and. wrt_dic .and. wrt_cdr_lite_avg) then
@@ -654,7 +643,6 @@ contains
 
   subroutine calc_cdr_lite_source
     implicit none
-#ifdef CDR_FORCING
     integer :: i,j,k,icdr,cidx,ioae,idor,itrc
     if (wrt_alk .and. nt_cdr_oae > 0) then
       CDR_OAE_ALK_source(:,:,:,:) = 0
@@ -685,7 +673,6 @@ contains
         endif
       enddo
     enddo
-#endif /* CDR_FORCING */
   end subroutine calc_cdr_lite_source
 
   subroutine create_cdr_lite_output_variables(ncid)
