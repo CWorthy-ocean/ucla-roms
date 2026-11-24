@@ -225,22 +225,6 @@
 ! Usage notes: Set MARBL_ROOT to the MARBL installation when building
 #define MARBL
 
-! Enable the writing of diagnostics and other variables from the MARBL biogeochemical library
-! Usage notes: Specific variables can be requested in the runtime "marbl_diagnostic_output_list" file
-#define MARBL_DIAGS
-
-! Use ammonia atmospheric forcing
-! Usage notes:
-#define NHY_FORCING
-
-! Use nitrogen oxide atmospheric forcing
-! Usage notes:
-#define NOX_FORCING
-
-! Use atmospheric forcing for CO2
-! Usage notes:
-#define PCO2AIR_FORCING
-
 !!!!!!!!!!!!!!!!!!!!!!!!! MISCELLANEOUS !!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! Analytically prescribe the initial conditions

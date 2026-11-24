@@ -285,8 +285,8 @@ contains
       ! (the no-CDR counterfactual) at the time level the gas flux uses.
       ! Replaces the ddic_dco2/ddic_dalk read from file.
       ! ALT_CO2 is the no-CDR state only if it is forced with the same
-      ! atmospheric CO2 as DIC/ALK (CDR forcing never touches it): under
-      ! PCO2AIR_FORCING, xco2_air_alt must equal xco2_air.
+      ! atmospheric CO2 as DIC/ALK (CDR forcing never touches it): with
+      ! use_xco2air_forcing, xco2_air_alt must equal xco2_air.
 
       use error_handling_mod, only: error_log
       implicit none

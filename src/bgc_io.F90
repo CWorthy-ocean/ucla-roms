@@ -14,37 +14,24 @@ module bgc_io
   use param, only: ieast, itemp, iwest, jnorth, jsouth, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
   &max_name_size
   use tracers, only: t_avg, wrt_t_avg, nt_2_t_avg, t_units
-#ifdef MARBL_DIAGS
-  use marbl_driver, only: marbldrv_compute_init_diagnostics, is_marbl_step
-#endif
+  use marbl_driver, only: marbldrv_compute_init_diagnostics, is_marbl_step, marbl_diag_on
 
 ! imports from bgc_shared_vars
   use bgc_shared_vars, only: wrt_bgc_his, wrt_bgc_avg,&
        & wrt_bgc_dia_his, wrt_bgc_dia_avg, interp_bgc_frc,&
        & nrpf_bgc_avg, nrpf_bgc_his, nrpf_bgc_avg_dia,&
        & nrpf_bgc_his_dia, t, nc_dust, nc_iron,&
-#ifdef PCO2AIR_FORCING
-       & nc_xco2air,&
-       & nc_xco2air_alt,&
-#endif
+       & nc_xco2air, nc_xco2air_alt, nc_nox, nc_nhy,&
        & bgc_idx, t_idx, lm, mm, itands,&
        & mynode, nt_passive, output_period_bgc_avg, output_period_bgc_his,&
        & t_vname, wrt_t, t_lname
-#ifdef NOX_FORCING
-  use bgc_shared_vars, only: nc_nox
-#endif
-#ifdef NHY_FORCING
-  use bgc_shared_vars, only: nc_nhy
-#endif
-
-#ifdef MARBL_DIAGS
+  use bgc_forces, only: use_xco2air_forcing, use_nox_forcing, use_nhy_forcing
   use bgc_shared_vars, only: bgc_diag_2d_avg, bgc_diag_3d_avg,&
        &bgc_diag_2d, bgc_diag_3d, nr_bgc_diag_2d, nr_bgc_diag_3d,&
        &nr_bgc_wrdiag_2d, nr_bgc_wrdiag_3d, output_period_bgc_avg_dia,&
        &output_period_bgc_his_dia,&
        &wrt_bgc_diag_2d, idx_bgc_diag_2d, vname_bgc_diag_2d,&
        &wrt_bgc_diag_3d, idx_bgc_diag_3d, vname_bgc_diag_3d
-#endif
 ! /bgc_shared_vars
   use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill
   use roms_read_write, only:&
@@ -121,18 +108,7 @@ contains
 
     use scalars, only: cp, nrhs, rho0
     use dimensions, only: inode, jnode
-    use bgc_forces, only: &
-#ifdef PCO2AIR_FORCING
-    & xco2air, &
-    & xco2air_alt, &
-#endif
-#ifdef NOX_FORCING
-    & nox, &
-#endif
-#ifdef NHY_FORCING
-    & nhy,&
-#endif
-    & dust, iron
+    use bgc_forces, only: xco2air, xco2air_alt, nox, nhy, dust, iron
     use dimensions, only: npx, npy
     implicit none
 
@@ -153,17 +129,13 @@ contains
     call set_frc_data(nc_iron,iron,'r')
 
 
-#ifdef PCO2AIR_FORCING
-    call set_frc_data(nc_xco2air,xco2air,'r')
-    call set_frc_data(nc_xco2air_alt,xco2air_alt,'r')
-#endif /* PCO2AIR_FORCING */
+    if (use_xco2air_forcing) then
+      call set_frc_data(nc_xco2air,xco2air,'r')
+      call set_frc_data(nc_xco2air_alt,xco2air_alt,'r')
+    endif
 
-#ifdef NOX_FORCING
-    call set_frc_data(nc_nox,nox,'r')
-#endif /* NOX_FORCING */
-#ifdef NHY_FORCING
-    call set_frc_data(nc_nhy,nhy,'r')
-#endif /* NHY_FORCING */
+    if (use_nox_forcing) call set_frc_data(nc_nox,nox,'r')
+    if (use_nhy_forcing) call set_frc_data(nc_nhy,nhy,'r')
 
     call error_log%abort_check()
 
@@ -430,7 +402,6 @@ contains
     implicit none
     ! import/export
     logical, intent(in) :: init   ! .true. for the start-up call (wrt_bgc(init))
-#ifdef MARBL_DIAGS
 ! local
     character(len=13) :: sr_name = "wrt_bgc_diags"
     character(len=max_name_size),save :: fname_his,fname_avg
@@ -667,7 +638,6 @@ contains
 
     endif
 
-#endif /* MARBL_DIAGS */
 
   end subroutine wrt_bgc_diags  !]
 !----------------------------------------------------------------------
@@ -703,7 +673,6 @@ contains
     ierr = nf90_close(ncid)
   end subroutine create_bgc_file !]
 !----------------------------------------------------------------------
-#ifdef MARBL_DIAGS
   subroutine create_bgc_dia_file(fname,avg)  ![
     implicit none
 
@@ -735,7 +704,6 @@ contains
     ierr = nf90_enddef(ncid)
     ierr = nf90_close(ncid)
   end subroutine create_bgc_dia_file !]
-#endif /* MARBL_DIAGS */
 ! ----------------------------------------------------------------------
   subroutine def_vars_bgc( ncid, avg )  ![
     ! define output variable & attributes in netcdf results file
@@ -807,7 +775,6 @@ contains
 
   end subroutine calc_avg_bgc  !]
 ! ----------------------------------------------------------------------
-#ifdef MARBL_DIAGS
   subroutine calc_avg_dia_bgc  ![
     implicit none
 
@@ -906,12 +873,10 @@ contains
       enddo
     enddo
   end subroutine finalize_dia_bgc  !]
-#endif /* MARBL_DIAGS */
 ! ----------------------------------------------------------------------
-#ifdef MARBL_DIAGS
   subroutine def_bgc_diag(ncid,avg)  ![
 
-    ! Define history/avg file variables for MARBL_DIAGS
+    ! Define history/avg file variables for MARBL's diagnostics
     ! Taken from def_his.F of ETH code.
     ! Called from def_his.F
 
@@ -946,7 +911,6 @@ contains
     enddo
 
   end subroutine def_bgc_diag  !]
-#endif /* MARBL_DIAGS */
 ! ----------------------------------------------------------------------
   subroutine init_arrays_bgc_frc  ![
     implicit none
@@ -956,49 +920,46 @@ contains
     allocate( nc_iron%vdata( GLOBAL_2D_ARRAY,2) )
     if (interp_bgc_frc) nc_iron%coarse = 1
 
-#ifdef PCO2AIR_FORCING
-    allocate( nc_xco2air%vdata( GLOBAL_2D_ARRAY,2) )
-    if (interp_bgc_frc) nc_xco2air%coarse = 1
-    allocate( nc_xco2air_alt%vdata( GLOBAL_2D_ARRAY,2) )
-    if (interp_bgc_frc) nc_xco2air_alt%coarse = 1
-#endif
-
-#ifdef NOX_FORCING
-    allocate( nc_nox%vdata( GLOBAL_2D_ARRAY,2) )
-    if (interp_bgc_frc) nc_nox%coarse = 1
-#endif
-#ifdef NHY_FORCING
-    allocate( nc_nhy%vdata( GLOBAL_2D_ARRAY,2) )
-    if (interp_bgc_frc) nc_nhy%coarse = 1
-#endif
-
+    if (use_xco2air_forcing) then
+      allocate( nc_xco2air%vdata( GLOBAL_2D_ARRAY,2) )
+      if (interp_bgc_frc) nc_xco2air%coarse = 1
+      nc_xco2air%missing_hint = "Add it, or set use_xco2air_forcing = .false. in BGC_SETTINGS to use xco2air_default."
+      allocate( nc_xco2air_alt%vdata( GLOBAL_2D_ARRAY,2) )
+      if (interp_bgc_frc) nc_xco2air_alt%coarse = 1
+      nc_xco2air_alt%missing_hint = nc_xco2air%missing_hint
+    endif
+    if (use_nox_forcing) then
+      allocate( nc_nox%vdata( GLOBAL_2D_ARRAY,2) )
+      if (interp_bgc_frc) nc_nox%coarse = 1
+      nc_nox%missing_hint = "Add it, or set use_nox_forcing = .false. in BGC_SETTINGS for no NOx deposition."
+    endif
+    if (use_nhy_forcing) then
+      allocate( nc_nhy%vdata( GLOBAL_2D_ARRAY,2) )
+      if (interp_bgc_frc) nc_nhy%coarse = 1
+      nc_nhy%missing_hint = "Add it, or set use_nhy_forcing = .false. in BGC_SETTINGS for no NHy deposition."
+    endif
 
   end subroutine init_arrays_bgc_frc !]
 ! ----------------------------------------------------------------------
   subroutine wrt_bgc(init)  ![
-#ifdef MARBL_DIAGS
     use dimensions, only: inode, jnode
     use param, only: nsub_e, nsub_x
-#endif
     implicit none
 
 !     import/export
     logical,optional,intent(in)       :: init
     integer(kind=4) :: tile = 0
-#ifdef MARBL_DIAGS
 #include "compute_tile_bounds.h"
-#endif
     if (wrt_bgc_his) call wrt_bgc_tracers(.false.) ! write his data
     ! the start-up state is not a step of any averaging window
     if (wrt_bgc_avg .and. .not. present(init)) call wrt_bgc_tracers(.true.)
 
-#ifdef MARBL_DIAGS
-    if (present(init)) then
-      call marbldrv_compute_init_diagnostics(istr,iend,jstr,jend,t)
-    end if
-    call wrt_bgc_diags(present(init))
-#endif
-
+    if (marbl_diag_on) then
+      if (present(init)) then
+        call marbldrv_compute_init_diagnostics(istr,iend,jstr,jend,t)
+      end if
+      call wrt_bgc_diags(present(init))
+    endif
 
   end subroutine wrt_bgc  !]
 ! ----------------------------------------------------------------------

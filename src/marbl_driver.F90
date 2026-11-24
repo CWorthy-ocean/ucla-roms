@@ -27,10 +27,8 @@ module marbl_driver
 !     ----------------------------------------------------------------------
 
   use marbl_interface             , only: marbl_interface_class
-#ifdef MARBL_DIAGS
   use MARBL_interface_public_types, only: marbl_diagnostics_type,&
   &marbl_saved_state_type
-#endif
   use param, only: max_name_size
   use param                       , only: mynode,nt,nt_bgc,&
   &isalt,itemp,Lm,Mm,&
@@ -38,11 +36,7 @@ module marbl_driver
   use dimensions                  , only: nz
   use surf_flux                   , only: uwnd, vwnd
   use bgc_forces                  , only: dust,iron,&
-#ifdef PCO2AIR_FORCING
   &xco2air,xco2air_alt
-#else
-  &xco2air_default
-#endif
   use surf_flux                   , only: srflx
   use scalars                     , only: nstp,nnew,dt,iic,ntstart,&
   &Cp, rho0
@@ -51,12 +45,8 @@ module marbl_driver
   use mpi_f08                     , only: MPI_CHARACTER, MPI_INTEGER, mpi_bcast
 !      use dimensions
 #endif
-#ifdef NOX_FORCING
   use bgc_forces                  , only: nox
-#endif
-#ifdef NHY_FORCING
   use bgc_forces                  , only: nhy
-#endif
   use ocean_vars                  , only: Hz, z_r, z_w
   use error_handling_mod          , only: error_log
 
@@ -76,10 +66,8 @@ module marbl_driver
   character(len=max_name_size), public :: marbl_config_file='marbl_in'
   character(len=32), public ::&
   &marbl_tracers_to_write(40) = ""
-#ifdef MARBL_DIAGS
   character(len=400), public ::&
   &marbl_diagnostics_to_write(64) = ""
-#endif
 !     Constant iron: with use_constant_Fe, MARBL's Fe tracer is held at
 !     constant_Fe_value (in Fe's units, mmol/m3) at every wet point, instead
 !     of evolving with transport, boundary and river inputs and MARBL's
@@ -90,9 +78,7 @@ module marbl_driver
   namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
   &marbl_timestep, marbl_tracers_to_write,&
   &use_constant_Fe, constant_Fe_value&
-#ifdef MARBL_DIAGS
   &, marbl_diagnostics_to_write
-#endif
 
 !     Surface flux forcing variable indices (-1 means unused,default)
   integer(kind=4),public ::    u10_sqr_ind=-1,       sss_ind=-1,      sst_ind=-1,&
@@ -108,7 +94,6 @@ module marbl_driver
   &remin_scalef_ind=-1
 
 
-#ifdef MARBL_DIAGS
 !     Keeping count of diagnostics:
 !     These are the amount to allocate in ROMS...
   integer(kind=4), parameter, public :: nr_marbl_diag_2d = 179
@@ -135,7 +120,6 @@ module marbl_driver
   logical, allocatable :: surface_flux_diag_is_2d(:)
   logical, allocatable :: interior_tendency_diag_is_2d(:)
 
-#endif
 !     Saved state variables: (mimicking structure of bgc_shared_vars for bgc_diag arrays)
   integer(kind=4), public                         :: nr_marbl_ss_2d,nr_marbl_ss_3d       ! No. of saved_state vars
   parameter( nr_marbl_ss_2d=3, nr_marbl_ss_3d=2)                             ! Hardcode no. of vars (error if wrong)
@@ -161,10 +145,8 @@ module marbl_driver
 
   public :: marbldrv_configure_tracers
   public :: marbldrv_configure_saved_state
-#ifdef MARBL_DIAGS
   public :: marbldrv_compute_init_diagnostics
   public :: marbldrv_configure_diagnostics
-#endif
   public :: marbldrv_write_ss_vars_to_rst
   public :: marbldrv_create_ss_vars_in_rst
   public :: marbldrv_read_ss_vars_from_rst
@@ -174,6 +156,10 @@ module marbl_driver
 
   public :: read_nml_marbl
   public :: is_marbl_step
+
+  ! .true. if an output uses MARBL's diagnostics (set by read_namelists);
+  ! otherwise ROMS does not keep them
+  logical, public :: marbl_diag_on = .false.
 contains
 
   logical function is_marbl_step(istep)
@@ -960,7 +946,6 @@ contains
   end subroutine marbldrv_write_ss_vars_to_rst
 
 
-#ifdef MARBL_DIAGS
   subroutine marbldrv_configure_diagnostics(&
   &vname_marbl_diag_2d,vname_marbl_diag_3d&
   &)
@@ -1277,7 +1262,6 @@ contains
     end do
   end subroutine marbldrv_compute_init_diagnostics
 
-#endif /* MARBL_DIAGS */
 
 
   subroutine marbldrv_column_physics(istr,iend,jstr,jend,tracer_array)
@@ -1337,9 +1321,7 @@ contains
 
     real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,&
     &intent(inout)     :: tracer_array
-#ifdef MARBL_DIAGS
     integer(kind=4)                                       :: diagidx2d,diagidx3d ! indices for stepping through diagno
-#endif
     integer(kind=4)                                       :: i,j,k,m
 
 
@@ -1390,11 +1372,9 @@ contains
 !     8b. Update saved state array in ROMS using newly computed values:
 !     ----------------------------------------------------------------------
         call marbldrv_update_roms_saved_state_values_interior(i,j)
-#ifdef MARBL_DIAGS
 !     8c. Update diagnostics array in ROMS using newly computed values:
 !     ----------------------------------------------------------------------
-        call marbldrv_update_roms_diagnostics(i,j)
-#endif
+        if (marbl_diag_on) call marbldrv_update_roms_diagnostics(i,j)
 
       end do                 !j=jstr,jend
     end do                    ! i=istr,iend
@@ -1499,7 +1479,6 @@ contains
       if (print_values) call sf_test_print(atmpress_ind,i,j)
     end if
 !     xco2
-#ifdef PCO2AIR_FORCING
     if (xco2_ind > 0) then
       marbl_instance%surface_flux_forcings(xco2_ind)%field_0d(1)=&
       &xco2air(i,j)   !(ppm)
@@ -1511,19 +1490,6 @@ contains
       &xco2air_alt(i,j) !(ppm)
       if (print_values) call sf_test_print(xco2_alt_ind,i,j)
     end if
-#else
-    if (xco2_ind > 0) then
-      marbl_instance%surface_flux_forcings(xco2_ind)%field_0d(1)=&
-      &xco2air_default  !(ppm)
-      if (print_values) call sf_test_print(xco2_ind,i,j)
-    end if
-!     xco2 (alternative co2 forcing)
-    if (xco2_alt_ind > 0) then
-      marbl_instance%surface_flux_forcings(xco2_alt_ind)%field_0d(1)=&
-      &xco2air_default !(ppm)
-      if (print_values) call sf_test_print(xco2_alt_ind,i,j)
-    end if
-#endif
 !     dust
     if (dust_dep_ind > 0) then
       marbl_instance%surface_flux_forcings(dust_dep_ind)%field_0d(1)&
@@ -1537,21 +1503,17 @@ contains
       if (print_values) call sf_test_print(fe_dep_ind,i,j)
     end if
 !     nox
-#ifdef NOX_FORCING
     if (nox_flux_ind > 0) then
       marbl_instance%surface_flux_forcings(nox_flux_ind)%field_0d(1)=&
       &nox(i,j)*71394.200220751_8 ! kg(N)/m2/s (ROMS) -> mmol/m2/s (MARBL MKS)
       if (print_values) call sf_test_print(nox_flux_ind,i,j)
     end if
-#endif
 !     nhy
-#ifdef NHY_FORCING
     if (nhy_flux_ind > 0) then
       marbl_instance%surface_flux_forcings(nhy_flux_ind)%field_0d(1)=&
       &nhy(i,j)*71394.200220751_8 ! kg(N)/m2/s (ROMS) -> mmol/m2/s (MARBL MKS)
       if (print_values) call sf_test_print(nhy_flux_ind,i,j)
     end if
-#endif
 
   end subroutine marbldrv_set_marbl_surface_flux_forcing_values
 
@@ -1862,7 +1824,6 @@ contains
 !-----------------------------------------------------------------------
 
 
-#ifdef MARBL_DIAGS
 !-----------------------------------------------------------------------
   subroutine marbldrv_update_roms_diagnostics(i,j)
 !------------------------------------------------------------------------
@@ -1918,7 +1879,6 @@ contains
     end do
   end subroutine marbldrv_update_roms_diagnostics
 !-----------------------------------------------------------------------
-#endif
 !-----------------------------------------------------------------------
   subroutine marbldrv_compute_interior_tendency(i,j)
 !------------------------------------------------------------------------

@@ -117,7 +117,7 @@ make <compiler> USEMPI=TRUE
 4. Where `<compiler>` is either `intel` (if your compiler is `ifx` or `ifort`) or `gnu` (if your compiler is `gfortran`).
 If you are unsure, your compiler information should be returned by `mpifort --version`
 
-To compile ROMS without MARBL, change both `#define MARBL` and `#define MARBL_DIAGS` to `#undef` in your case's `cppdefs.opt`. The build decides whether to link MARBL by looking for a `#define` line starting with `MARBL`, so either key left defined makes it look for MARBL.
+To compile ROMS without MARBL, change `#define MARBL` to `#undef` in your case's `cppdefs.opt`. The build decides whether to link MARBL by looking for a `#define` line starting with `MARBL`.
 
 ## Installing ParallelIO
 

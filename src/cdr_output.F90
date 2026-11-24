@@ -4,7 +4,7 @@ module cdr_output
 
 #include "cppdefs.opt"
 
-#if defined MARBL && defined MARBL_DIAGS
+#ifdef MARBL
       use namelist_open_mod, only: open_namelist_file
       use tracers, only: t_units, t_vname
       use param, only: max_name_size
@@ -1514,9 +1514,9 @@ contains
       contains
 
       subroutine read_cdr_output_nml
-!     Without MARBL and MARBL_DIAGS, CDR_OUTPUT_SETTINGS is
-!     read only to stop when do_cdr_output = .true.; a missing group is
-!     fine. Its keys and types are those of the group with the keys.
+!     Without MARBL, CDR_OUTPUT_SETTINGS is read only to stop when
+!     do_cdr_output = .true.; a missing group is fine. Its keys and
+!     types are those of the group with MARBL.
       use namelist_open_mod, only: open_namelist_file, gated_nml_found,&
      &  check_nml_cpp_switch
       implicit none
@@ -1528,15 +1528,7 @@ contains
       integer(kind=4) :: namelist_unit, ios
       character(len=20) :: sr_name = "read_cdr_output_nml"
       character(len=512) :: msg
-      character(len=40) :: missing
 
-      missing = ''
-#ifndef MARBL
-      missing = trim(missing)//' MARBL'
-#endif
-#ifndef MARBL_DIAGS
-      missing = trim(missing)//' MARBL_DIAGS'
-#endif
       do_cdr_output = .false.
       msg = ''
       call open_namelist_file(namelist_unit)
@@ -1546,8 +1538,7 @@ contains
       if (gated_nml_found(ios, msg, 'CDR_OUTPUT_SETTINGS',&
      &    trim(module_name)//'/'//sr_name)) then
         call check_nml_cpp_switch('CDR_OUTPUT_SETTINGS', 'do_cdr_output',&
-     &    do_cdr_output, .false., 'MARBL and MARBL_DIAGS',&
-     &    trim(module_name)//'/'//sr_name, missing)
+     &    do_cdr_output, .false., 'MARBL', trim(module_name)//'/'//sr_name)
       end if
       end subroutine read_cdr_output_nml
 
@@ -1556,17 +1547,9 @@ contains
       implicit none
       character(len=15) :: sr_name = "init_cdr_output"
 
-#ifndef MARBL
          call error_log%raise_global(&
      &        context=module_name//"/"//sr_name,&
      &        info="cdr_output must have MARBL enabled.")
-#endif
-
-#ifndef MARBL_DIAGS
-         call error_log%raise_global(&
-     &        context=module_name//"/"//sr_name,&
-     &        info="cdr_output must have MARBL_DIAGS enabled.")
-#endif
 
         call error_log%abort_check()
       end subroutine init_cdr_output !]
