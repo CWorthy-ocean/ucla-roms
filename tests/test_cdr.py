@@ -678,6 +678,14 @@ class TestCdrLite:
             assert (ds["FG_CDR_OAE_DIC1"] != 0).any()  # gas exchange acted on it
 
         pv = get_summary_value(tmp_path, prefix="roms_his.20100101000000")
+        # the CDR_LITE tracers are always in _his, with the values of _cdrtrc
+        with xr.open_dataset(pv.path, decode_times=False) as his, \
+                xr.open_dataset(tv.path, decode_times=False) as trc:
+            n = list(his["ocean_time"].values).index(trc["ocean_time"].values[0])
+            for var in ("CDR_OAE_ALK1", "CDR_OAE_DIC1"):
+                np.testing.assert_array_equal(
+                    his[var].values[n], trc[var].values[0].astype(his[var].dtype), err_msg=var
+                )
         assert_output_matches_reference(
             reference_results, "cdr_lite_parm", {"physics": pv, "cdrtrc": tv}
         )

@@ -442,6 +442,11 @@ def test_all_variables_written(tmp_path, extract_conf, input_dir, pio_input_dir,
         conf.run(nml, cwd=run_dir)
         values[run] = _boundary_values(conf, run_dir)
         _assert_all_written(values[run])
+        # the passive tracer is always in the history file
+        his = sorted(run_dir.glob("*_his.*.nc"))
+        with xr.open_dataset(his[0], decode_times=False) as ds:
+            assert np.isfinite(ds["passive_tracer1"].values).all()
+            assert (ds["passive_tracer1"].values != 0).any()
 
     passive = {f"passive_tracer1_{bnd}" for bnd in ("south", "north", "east", "west")}
     assert sorted(values["A"]) == sorted(expected)
