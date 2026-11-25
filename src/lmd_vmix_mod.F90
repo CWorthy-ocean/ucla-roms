@@ -1,5 +1,6 @@
 module lmd_vmix_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
   private
 
@@ -134,19 +135,10 @@ contains
 
 # ifdef LMD_RIMIX
 !----#  define tind nstp
-#   ifdef EW_PERIODIC
-#    define I_EXT_RANGE istr-1,iend+1
-#   else
 #    define I_EXT_RANGE imin,imax
     integer(kind=4) imin,imax
-#   endif
-#   ifdef NS_PERIODIC
-#    define J_EXT_RANGE jstr-1,jend+1
-#   else
 #    define J_EXT_RANGE jmin,jmax
     integer(kind=4) jmin,jmax
-#   endif
-#   ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       imin=istr
     else
@@ -157,8 +149,6 @@ contains
     else
       imax=iend+1
     endif
-#   endif
-#   ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       jmin=jstr
     else
@@ -169,7 +159,6 @@ contains
     else
       jmax=jend+1
     endif
-#   endif
 # endif  /* LMD_RIMIX */
 
 !                                    ! Compute horizontal velocity
@@ -191,7 +180,6 @@ contains
     enddo
   enddo
 
-#   ifndef EW_PERIODIC
   if (WESTERN_EDGE) then
     do j=J_EXT_RANGE
     Rig(istr-1,j,k)=Rig(istr,j,k)
@@ -202,8 +190,6 @@ if (EASTERN_EDGE) then
   Rig(iend+1,j,k)=Rig(iend,j,k)
 enddo
 endif
-#   endif
-#   ifndef NS_PERIODIC
 if (SOUTHERN_EDGE) then
   do i=I_EXT_RANGE
   Rig(i,jstr-1,k)=Rig(i,jstr,k)
@@ -214,7 +200,6 @@ if (NORTHERN_EDGE) then
   Rig(i,jend+1,k)=Rig(i,jend,k)
 enddo
 endif
-#    ifndef EW_PERIODIC
 if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
   Rig(istr-1,jstr-1,k)=Rig(istr,jstr,k)
 endif
@@ -227,8 +212,6 @@ endif
 if (EASTERN_EDGE .and. NORTHERN_EDGE) then
   Rig(iend+1,jend+1,k)=Rig(iend,jend,k)
 endif
-#    endif
-#   endif
 
 cff=1._8/12._8
 cff1=3._8/16._8

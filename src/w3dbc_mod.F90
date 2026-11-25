@@ -1,7 +1,7 @@
 module w3dbc_mod
 #include "cppdefs.opt"
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m3_orlanski,&
-  &  use_m3_boundary_data
+  &  use_m3_boundary_data, ew_periodic, ns_periodic
   implicit none
   private
   ! Boundary conditions for w; called only with nhmg = .true. (NHMG)
@@ -32,7 +32,6 @@ contains
 # define dt illegal
 
 
-# ifndef EW_PERIODIC
 
     if (WESTERN_EDGE) then
       if (obc_west) then
@@ -136,11 +135,9 @@ contains
       endif
     endif    ! <-- EASTERN_EDGE
 
-# endif        /* not EW_PERIODIC */
 
 
 
-# ifndef NS_PERIODIC
 
     if (SOUTHERN_EDGE) then
       if (obc_south) then
@@ -229,7 +226,6 @@ contains
       endif
     endif    ! <-- NORTHERN_EDGE
 
-# endif /* not NS_PERIODIC */
 
 ! Corner points between adjacent boundaries. Note that because boundary
 ! conditions for tracers are of gradient nature -- either Neumann, or
@@ -239,8 +235,6 @@ contains
 ! tangential components.   In the case when one/or both points near the
 ! corner is/are masked, the use of masked points is avoided.
 
-# ifndef EW_PERIODIC
-#  ifndef NS_PERIODIC
     if (SOUTHERN_EDGE .and. WESTERN_EDGE) then
 #   ifdef MASKING
       cff=rmask(istr,jstr-1)+rmask(istr-1,jstr)
@@ -332,8 +326,6 @@ contains
       enddo
 #   endif
     endif
-#  endif
-# endif
   end subroutine w3dbc_tile
 
 end module w3dbc_mod

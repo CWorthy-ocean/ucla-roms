@@ -15,7 +15,8 @@ module swept_flux_mod
   ! Documentation: docs/model_settings/bgc_subcycling.md (sections 2-3).
 
 #include "cppdefs.opt"
-  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north,&
+  &  ew_periodic, ns_periodic
   implicit none
   private
 
@@ -89,7 +90,6 @@ contains
     ! parabola of the boundary cell, whose far slope is extrapolated,
     ! would carry part of the first interior cell back in (half of it
     ! as c -> 0). Outflow faces keep the swept flux.
-#ifndef EW_PERIODIC
     if (obc_west) then
       if (WESTERN_EDGE) then
         do jj = j0, j1
@@ -104,7 +104,6 @@ contains
         end do
       end if
     endif
-#endif
   end subroutine sweep_x
 
 ! ----------------------------------------------------------------------
@@ -162,7 +161,6 @@ contains
       end do
     end do
     ! Inflow faces of southern/northern open boundaries: see sweep_x.
-#ifndef NS_PERIODIC
     if (obc_south) then
       if (SOUTHERN_EDGE) then
         do ii = i0, i1
@@ -177,7 +175,6 @@ contains
         end do
       end if
     endif
-#endif
   end subroutine sweep_y
 
 ! ----------------------------------------------------------------------

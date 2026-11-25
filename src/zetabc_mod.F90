@@ -1,6 +1,7 @@
 module zetabc_mod
 #include "cppdefs.opt"
-  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m2_flather
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m2_flather,&
+  &  ew_periodic, ns_periodic
   implicit none
   private
   public :: zetabc_tile
@@ -24,8 +25,7 @@ contains
 #include "compute_auxiliary_bounds.h"
 
 
-#ifndef EW_PERIODIC
-    if (inode==0) then
+    if (WESTERN_EDGE) then
       if (obc_west .and. obc_m2_flather) then
         do j=jstrV-1,jend
           cx=dtfast*pm(istr,j)*sqrt(g*h(istr,j))
@@ -66,10 +66,8 @@ contains
         enddo
       endif
     endif
-#endif        /* !EW_PERIODIC */
 
 
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       if (obc_south .and. obc_m2_flather) then
         do i=istrU-1,iend
@@ -112,12 +110,9 @@ contains
         enddo
       endif
     endif
-#endif       /* !NS_PERIODIC */
 
 ! Corners between adjacent open boundaries
 
-#ifndef EW_PERIODIC
-# ifndef NS_PERIODIC
     if (SOUTHERN_EDGE .and. WESTERN_EDGE) then
       zeta_new(istr-1,jstr-1)=0.5_8*( zeta_new(istr  ,jstr-1)&
       &                               +zeta_new(istr-1,jstr  ))
@@ -134,7 +129,5 @@ contains
       zeta_new(iend+1,jend+1)=0.5_8*( zeta_new(iend  ,jend+1)&
       &                               +zeta_new(iend+1,jend  ))
     endif
-# endif
-#endif
   end subroutine zetabc_tile
 end module zetabc_mod

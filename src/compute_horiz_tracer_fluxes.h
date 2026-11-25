@@ -19,7 +19,6 @@
 #else
 # define grad wrk1
 #endif
-#ifndef EW_PERIODIC
   if (WESTERN_EDGE) then       ! Determine extended index
     imin=istr                  ! range for computation of
   else                         ! elementary differences: it
@@ -30,10 +29,6 @@
   else                         ! and extrapolation of slope
     imax=iend+1                ! is used instead.
   endif
-#else
-  imin=istr-1
-  imax=iend+1
-#endif
   do j=jstr,jend
     do i=imin,imax+1
       FX(i,j)=(t(i,j,k,nrhs,itrc)-t(i-1,j,k,nrhs,itrc))&
@@ -42,7 +37,6 @@
 #endif
     enddo
   enddo
-#ifndef EW_PERIODIC
   if (WESTERN_EDGE) then
     do j=jstr,jend
       FX(istr-1,j)=FX(istr,j)
@@ -53,7 +47,6 @@
       FX(iend+2,j)=FX(iend+1,j)
     enddo
   endif
-#endif
   do j=jstr,jend
     do i=istr-1,iend+1
 #if defined UPSTREAM_TS
@@ -106,7 +99,6 @@
 ! each step.  Outflow faces
 ! keep the scheme's flux.  Open-boundary sides only (as in t3dbc):
 ! never at a periodic seam or a wall.
-#ifndef EW_PERIODIC
   if (obc_west) then
     if (WESTERN_EDGE) then
       do j=jstr,jend
@@ -123,9 +115,7 @@
       enddo
     endif
   endif
-#endif
 
-#ifndef NS_PERIODIC
   if (SOUTHERN_EDGE) then
     jmin=jstr
   else
@@ -136,10 +126,6 @@
   else
     jmax=jend+1
   endif
-#else
-  jmin=jstr-1
-  jmax=jend+1
-#endif
   do j=jmin,jmax+1
     do i=istr,iend
       FE(i,j)=(t(i,j,k,nrhs,itrc)-t(i,j-1,k,nrhs,itrc))&
@@ -148,7 +134,6 @@
 #endif
     enddo
   enddo
-#ifndef NS_PERIODIC
   if (SOUTHERN_EDGE) then
     do i=istr,iend
       FE(i,jstr-1)=FE(i,jstr)
@@ -159,7 +144,6 @@
       FE(i,jend+2)=FE(i,jend+1)
     enddo
   endif
-#endif
   do j=jstr-1,jend+1
     do i=istr,iend
 #if defined UPSTREAM_TS
@@ -196,7 +180,6 @@
   enddo             !--> discard curv,grad, keep FE
 
 ! Inflow faces of southern/northern open boundaries: see FX above.
-#ifndef NS_PERIODIC
   if (obc_south) then
     if (SOUTHERN_EDGE) then
       do i=istr,iend
@@ -213,7 +196,6 @@
       enddo
     endif
   endif
-#endif
 
 
 if (river_source) then

@@ -201,3 +201,9 @@
 #ifdef Z_FRC_BRY
 # error "CPP key Z_FRC_BRY was removed: sea level boundary data are now read with obc_m2 = 'flather' in the namelist group OPEN_BOUNDARY_SETTINGS; remove Z_FRC_BRY from cppdefs.opt"
 #endif
+#ifdef EW_PERIODIC
+# error "CPP key EW_PERIODIC was removed: a domain is now made periodic in the west-east direction with ew_periodic = .true. in the namelist group PERIODIC_SETTINGS (default .false.); remove EW_PERIODIC from cppdefs.opt"
+#endif
+#ifdef NS_PERIODIC
+# error "CPP key NS_PERIODIC was removed: a domain is now made periodic in the south-north direction with ns_periodic = .true. in the namelist group PERIODIC_SETTINGS (default .false.); remove NS_PERIODIC from cppdefs.opt"
+#endif

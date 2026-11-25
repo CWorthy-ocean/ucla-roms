@@ -1,6 +1,7 @@
 module pre_step3d_mod
 #include "cppdefs.opt"
-  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north,&
+  &  ew_periodic, ns_periodic
   implicit none
   private
 
@@ -661,7 +662,6 @@ contains
       enddo
 
     else  !! instead of using AB2 to extrapolate the nh pressure gradient from corrector steps, we project here
-#  ifndef EW_PERIODIC
       if (WESTERN_EDGE) then
         do k=1,nz
           do j=jstr,jend
@@ -676,8 +676,6 @@ contains
           enddo
         enddo
       endif
-#  endif
-#  ifndef NS_PERIODIC
       if (SOUTHERN_EDGE) then
         do k=1,nz
           do i=istr,iend
@@ -692,7 +690,6 @@ contains
           enddo
         enddo
       endif
-#  endif
 
 !    At the end of the tridiag solves, the velocities are in m/s
 !    Multiply u,v,w to get back fluxes for use inside mg_solve

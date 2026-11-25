@@ -1,7 +1,8 @@
 
 module step3d_t_mod
 #include "cppdefs.opt"
-  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north,&
+  &  ew_periodic, ns_periodic
   implicit none
   private
 
@@ -128,7 +129,6 @@ contains
 
 # include "compute_auxiliary_bounds.h"
 
-# ifndef EW_PERIODIC
   if (WESTERN_EDGE) then
     imin=istr
   else
@@ -139,11 +139,6 @@ contains
   else
     imax=iend+1
   endif
-# else
-  imin=istr-1
-  imax=iend+1
-# endif
-# ifndef NS_PERIODIC
   if (SOUTHERN_EDGE) then
     jmin=jstr
   else
@@ -154,10 +149,6 @@ contains
   else
     jmax=jend+1
   endif
-# else
-  jmin=jstr-1
-  jmax=jend+1
-# endif
 #  define ntdf nstp
 !--#  define ntdf nrhs
 
@@ -471,7 +462,6 @@ contains
 ! Apply lateral boundary conditions to the Laplacian (for the cases
 ! other than periodic: closed or gradient.
 
-#  ifndef EW_PERIODIC
   if (WESTERN_EDGE) then
     do k=1,nz
       do j=jmin,jmax
@@ -494,8 +484,6 @@ contains
       enddo
     enddo
   endif
-#  endif
-#  ifndef NS_PERIODIC
   if (SOUTHERN_EDGE) then
     do k=1,nz
       do i=imin,imax
@@ -518,7 +506,6 @@ contains
       enddo
     enddo
   endif
-#  endif /* !NS_PERIODIC */
 
 ! The second rotated Laplacian operator:
 !---- ------ ------- --------- ----------

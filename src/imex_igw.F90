@@ -91,7 +91,7 @@ module imex_igw
 #include "cppdefs.opt"
 
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, any_open_side,&
-  &  use_m3_boundary_data, use_t_boundary_data
+  &  use_m3_boundary_data, use_t_boundary_data, ew_periodic, ns_periodic
   implicit none
   private
 
@@ -3055,14 +3055,10 @@ contains
 #include "compute_auxiliary_bounds.h"
 
     ib0 = istr ; ib1 = iend ; jb0 = jstr ; jb1 = jend
-# ifndef EW_PERIODIC
     w_edge = WESTERN_EDGE
     e_edge = EASTERN_EDGE
-# endif
-# ifndef NS_PERIODIC
     s_edge = SOUTHERN_EDGE
     n_edge = NORTHERN_EDGE
-# endif
 
     cx = 0._8 ; cy = 0._8 ; act = 0._8
     ! With MASKING the metric ratio is formed only on open faces: with MPI_MASKING the faces
@@ -7683,16 +7679,8 @@ contains
       allocate( pcm_phi4(GLOBAL_2D_ARRAY,nz,pcm_kmax) ) ; pcm_phi4 = 0._4
     end if
     allocate( pcm_ffx1(pcm_nx(1)+1), pcm_ffx2(pcm_nx(2)+1), pcm_ffy1(pcm_ny(1)+1), pcm_ffy2(pcm_ny(2)+1) )
-#  ifdef EW_PERIODIC
-    call pcm_faces_dir(gnx, npx, inode, pcm_nx, .true., pcm_ffx1, pcm_ffx2)
-#  else
-    call pcm_faces_dir(gnx, npx, inode, pcm_nx, .false., pcm_ffx1, pcm_ffx2)
-#  endif
-#  ifdef NS_PERIODIC
-    call pcm_faces_dir(gny, npy, jnode, pcm_ny, .true., pcm_ffy1, pcm_ffy2)
-#  else
-    call pcm_faces_dir(gny, npy, jnode, pcm_ny, .false., pcm_ffy1, pcm_ffy2)
-#  endif
+    call pcm_faces_dir(gnx, npx, inode, pcm_nx, ew_periodic, pcm_ffx1, pcm_ffx2)
+    call pcm_faces_dir(gny, npy, jnode, pcm_ny, ns_periodic, pcm_ffy1, pcm_ffy2)
     call mg_exch_reserve(max(pcm_nx(0), pcm_ny(0)) + 2)
     call mg_tmp_reserve(pcm_nx(0), pcm_ny(0))
   end subroutine pcm_alloc

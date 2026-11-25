@@ -2,7 +2,7 @@ module v3dbc_mod
 
 #include "cppdefs.opt"
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m3_orlanski,&
-  &  obc_rad_normal, obc_rad_npo, use_m3_boundary_data
+  &  obc_rad_normal, obc_rad_npo, use_m3_boundary_data, ew_periodic, ns_periodic
   implicit none
   private
   public :: v3dbc_tile
@@ -40,7 +40,6 @@ contains
 
 # define dt illegal
 
-# ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       if (obc_south) then
         if (obc_m3_orlanski) then
@@ -209,11 +208,9 @@ contains
         enddo
       endif
     endif     !<--  NORTHERN_EDGE
-# endif          /* !NS_PERIODIC */
 
 
 
-# ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       if (obc_west) then
         if (obc_m3_orlanski) then
@@ -268,11 +265,7 @@ contains
           enddo
         endif
       else
-#   ifdef NS_PERIODIC
-#    define J_RANGE jstrV,jend
-#   else
 #    define J_RANGE jstr,jendR
-#   endif
         do k=1,nz                        ! Wall: free-slip (gamma2=+1)
           do j=J_RANGE                  ! =====   no-slip (gamma2=-1)
           v(istr-1,j,k,nnew)=gamma2*v(istr,j,k,nnew)&
@@ -339,11 +332,7 @@ contains
         enddo
       endif
     else
-#   ifdef NS_PERIODIC
-#    define J_RANGE jstrV,jend
-#   else
 #    define J_RANGE jstr,jendR
-#   endif
       do k=1,nz                        ! Wall: free-slip (gamma2=+1)
         do j=J_RANGE                  ! ====    no-slip (gamma2=-1)
         v(iend+1,j,k,nnew)=gamma2*v(iend,j,k,nnew)&
@@ -355,7 +344,6 @@ contains
 #   undef J_RANGE
     endif
 endif     !<-- EASTERN_EDGE
-# endif          /* !EW_PERIODIC */
 
  ! Corners between adjacent open boundaries
  ! ======= ======= ======== ==== ==========

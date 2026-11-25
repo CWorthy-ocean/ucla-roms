@@ -20,29 +20,9 @@
 ! bounds, it must be included just after the last type declaration
 ! inside a subroutine, but before the first executable statement.
 
-#ifdef EW_PERIODIC
-# undef istrU
-# define istrU istr
-# undef istrR
-# define istrR istr
-# undef iendR
-# define iendR iend
-#else
       integer istrU, istrR, iendR
-#endif
-
-#ifdef NS_PERIODIC
-# undef jstrV
-# define jstrV jstr
-# undef jstrR
-# define jstrR jstr
-# undef jendR
-# define jendR jend
-#else
       integer jstrV, jstrR, jendR
-#endif
 
-#ifndef EW_PERIODIC
       if (WESTERN_EDGE) then
         istrR=istr-1
         istrU=istr+1
@@ -55,9 +35,7 @@
       else
         iendR=iend
       endif
-#endif
 
-#ifndef NS_PERIODIC
       if (SOUTHERN_EDGE) then
         jstrR=jstr-1
         jstrV=jstr+1
@@ -70,5 +48,4 @@
       else
         jendR=jend
       endif
-#endif
 

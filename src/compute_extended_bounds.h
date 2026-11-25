@@ -30,10 +30,8 @@ integer(kind=4) jstrR,jendR
 #endif
 
 if (istr == iwest) then
-#ifdef EW_PERIODIC
-  istrR=istr-2
-#elif defined MPI
-  if (inode>0) then
+#ifdef MPI
+  if (inode>0 .or. ew_periodic) then
     istrR=istr-2
   else
     istrR=istr-1
@@ -46,10 +44,8 @@ else
 endif
 
 if (iend == ieast) then
-#ifdef EW_PERIODIC
-  iendR=iend+2
-#elif defined MPI
-  if (inode<npx-1) then
+#ifdef MPI
+  if (inode<npx-1 .or. ew_periodic) then
     iendR=iend+2
   else
     iendR=iend+1
@@ -63,10 +59,8 @@ endif
 
 #ifndef XI_ONLY
 if (jstr == jsouth) then
-# ifdef NS_PERIODIC
-  jstrR=jstr-2
-# elif defined MPI
-  if (jnode>0) then
+# ifdef MPI
+  if (jnode>0 .or. ns_periodic) then
     jstrR=jstr-2
   else
     jstrR=jstr-1
@@ -79,10 +73,8 @@ else
 endif
 
 if (jend == jnorth) then
-# ifdef NS_PERIODIC
-  jendR=jend+2
-# elif defined MPI
-  if (jnode<npy-1) then
+# ifdef MPI
+  if (jnode<npy-1 .or. ns_periodic) then
     jendR=jend+2
   else
     jendR=jend+1

@@ -22,6 +22,7 @@ subroutine init_arrays
 end subroutine init_arrays
 
 subroutine init_arrays_tile (istr,iend,jstr,jend)
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   use dimensions, only: inode, jnode
 
 ! This routine initialize "first-touches" model shared arrays. Most

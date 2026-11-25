@@ -18,6 +18,7 @@ module analytical
   use eos_vars, only: tcoef
 #endif
 
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
   private
 

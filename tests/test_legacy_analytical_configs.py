@@ -80,7 +80,7 @@ def test_rivers_ana(tmp_path, input_dir, reference_results):
 def test_filament(tmp_path, input_dir, reference_results):
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + ANALYTICAL_CPP_KEYS
-        + ["ANA_VMIX", "NS_PERIODIC", "EW_PERIODIC", "FILAMENT_IDEAL"]
+        + ["ANA_VMIX", "FILAMENT_IDEAL"]
     )
     build_dir = tmp_path / "build"
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
@@ -94,6 +94,7 @@ def test_filament(tmp_path, input_dir, reference_results):
     nml = create_test_namelist_dict(input_dir)
     nml["TIME_STEPPING"].update({"dt": 5, "ndtfast": 60})
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 50
+    nml["PERIODIC_SETTINGS"].update({"ew_periodic": True, "ns_periodic": True})
     nml["GRID_SETTINGS"] = {"grdname": ""}
     nml["INITIAL_CONDITIONS"] = {"inifile": ""}
     nml["FORCING_FILES"] = {"frcfiles": ""}
