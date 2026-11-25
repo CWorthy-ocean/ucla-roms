@@ -142,9 +142,9 @@ contains
         call error_log%raise_global(context=module_name//"/"//sr_name, info=info)
       end if
     end if
-#if defined ADV_ISONEUTRAL || defined CONST_TRACERS
+#ifdef ADV_ISONEUTRAL
     call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_physics_subcycle does not support ADV_ISONEUTRAL or CONST_TRACERS")
+    &info="bgc_physics_subcycle does not support ADV_ISONEUTRAL")
 #endif
     if (diag_trc) then
       if (any(wrt_t_dia(it0+1:nt))) call error_log%raise_global(&

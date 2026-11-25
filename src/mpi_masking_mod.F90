@@ -70,7 +70,7 @@ contains
     if (analytical_grid) then
       call error_log%raise_global(&
       &context=module_name//'/'//sr_name,&
-      &info='MPI_MASKING cannot be used with ANA_GRID.')
+      &info='MPI_MASKING cannot be used with an analytical grid (GRID_SETTINGS ana_grid = .true.).')
       call error_log%abort_check()
       return
     endif

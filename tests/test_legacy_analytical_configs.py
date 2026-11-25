@@ -2,7 +2,6 @@
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
     ADDITIONAL_FILES,
-    ANALYTICAL_CPP_KEYS,
     CLOSED_BOX,
     OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
@@ -14,8 +13,8 @@ from ._helpers import (
 
 def test_pipes_ana(tmp_path, input_dir, reference_results):
     cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + ANALYTICAL_CPP_KEYS
-        + ["LMD_CONVEC", "ANA_PIPES"]
+        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
+        + ["LMD_CONVEC"]
     )
     build_dir = tmp_path / "build"
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
@@ -30,9 +29,9 @@ def test_pipes_ana(tmp_path, input_dir, reference_results):
     nml["TIME_STEPPING"]["dt"] = 60
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 1200
     nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
-    nml["GRID_SETTINGS"] = {"grdname": ""}
+    nml["GRID_SETTINGS"] = {"grdname": "", "ana_grid": True}
     nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "none"
-    nml["INITIAL_CONDITIONS"] = {"inifile": ""}
+    nml["INITIAL_CONDITIONS"] = {"inifile": "", "ana_initial": True}
     nml["FORCING_FILES"] = {"frcfiles": ""}
     nml["PARAM_SETTINGS"].update({"NP_XI": 2, "NP_ETA": 2, "LLm": 100, "MMm": 100, "nz": 10})
     nml["PIPE_FRC_SETTINGS"] = {
@@ -47,8 +46,8 @@ def test_pipes_ana(tmp_path, input_dir, reference_results):
 
 def test_rivers_ana(tmp_path, input_dir, reference_results):
     cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + ANALYTICAL_CPP_KEYS
-        + ["LMD_CONVEC", "ANA_RIVER_USWC"]
+        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
+        + ["LMD_CONVEC"]
     )
     build_dir = tmp_path / "build"
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
@@ -64,9 +63,9 @@ def test_rivers_ana(tmp_path, input_dir, reference_results):
     nml["TIME_STEPPING"]["dt"] = 20
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
-    nml["GRID_SETTINGS"] = {"grdname": ""}
+    nml["GRID_SETTINGS"] = {"grdname": "", "ana_grid": True}
     nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "none"
-    nml["INITIAL_CONDITIONS"] = {"inifile": ""}
+    nml["INITIAL_CONDITIONS"] = {"inifile": "", "ana_initial": True}
     nml["FORCING_FILES"] = {"frcfiles": ""}
     nml["PARAM_SETTINGS"].update({"NP_XI": 2, "NP_ETA": 2, "LLm": 100, "MMm": 100, "nz": 10})
     nml["RIVER_FRC_SETTINGS"] = {
@@ -80,10 +79,7 @@ def test_rivers_ana(tmp_path, input_dir, reference_results):
     assert_output_matches_reference(reference_results, "rivers_ana", {"physics": pv})
 
 def test_filament(tmp_path, input_dir, reference_results):
-    cpp_keys = (
-        UNIVERSAL_CPP_KEYS + ANALYTICAL_CPP_KEYS
-        + ["ANA_VMIX", "FILAMENT_IDEAL"]
-    )
+    cpp_keys = UNIVERSAL_CPP_KEYS
     build_dir = tmp_path / "build"
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
 
@@ -97,12 +93,12 @@ def test_filament(tmp_path, input_dir, reference_results):
     nml["TIME_STEPPING"].update({"dt": 5, "ndtfast": 60})
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 50
     nml["PERIODIC_SETTINGS"].update({"ew_periodic": True, "ns_periodic": True})
-    nml["GRID_SETTINGS"] = {"grdname": ""}
+    nml["GRID_SETTINGS"] = {"grdname": "", "ana_grid": True}
     nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "none"
-    nml["INITIAL_CONDITIONS"] = {"inifile": ""}
+    nml["INITIAL_CONDITIONS"] = {"inifile": "", "ana_initial": True}
     nml["FORCING_FILES"] = {"frcfiles": ""}
     nml["PARAM_SETTINGS"].update({"NP_XI": 2, "NP_ETA": 2, "LLm": 64, "MMm": 64, "nz": 32})
-    nml["VERTICAL_MIXING_SETTINGS"] = {"akv_bak": 0., "akt_bak": 0.}
+    nml["VERTICAL_MIXING_SETTINGS"] = {"akv_bak": 0., "akt_bak": 0., "ana_vmix": True}
     nml["TRACER_DIFF2"] = {"tnu2": 0.}  # one tracer (no SALINITY), like akt_bak
     nml["LIN_RHO_EOS_SETTINGS"] = {"Tcoef": 0.2, "T0": 1.0}
     nml["RHO0_SETTINGS"]["rho0"] = 1000

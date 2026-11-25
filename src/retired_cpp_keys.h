@@ -222,3 +222,30 @@
 #ifdef ANA_SRFLUX
 # error "CPP key ANA_SRFLUX was removed: zero surface fluxes are now surf_frc_type = 'none' in the namelist group SURF_FRC_SETTINGS; remove ANA_SRFLUX from cppdefs.opt"
 #endif
+#ifdef ANA_GRID
+# error "CPP key ANA_GRID was removed: an analytical grid (the case's ana_grid.h) is now ana_grid = .true. in the namelist group GRID_SETTINGS; remove ANA_GRID from cppdefs.opt"
+#endif
+#ifdef ANA_INITIAL
+# error "CPP key ANA_INITIAL was removed: an analytical initial state (the case's ana_init.h) is now ana_initial = .true. in the namelist group INITIAL_CONDITIONS; remove ANA_INITIAL from cppdefs.opt"
+#endif
+#ifdef ANA_VMIX
+# error "CPP key ANA_VMIX was removed: analytical vertical mixing (the case's ana_vmix.h) is now ana_vmix = .true. in the namelist group VERTICAL_MIXING_SETTINGS; remove ANA_VMIX from cppdefs.opt"
+#endif
+#ifdef ANA_PIPES
+# error "CPP key ANA_PIPES was retired: the case's ana_grid.h can always place pipes (pipe_fraction, pipe_idx, pipe_source); remove it from cppdefs.opt"
+#endif
+#ifdef ANA_RIVER_USWC
+# error "CPP key ANA_RIVER_USWC was retired: the case's ana_grid.h can always use LLm and MMm; remove it from cppdefs.opt"
+#endif
+#ifdef FILAMENT_IDEAL
+# error "CPP key FILAMENT_IDEAL was retired (it declared the filament case's depth hd = 1000 in analytical.F90): declare hd in the case's ana_init.h; remove FILAMENT_IDEAL from cppdefs.opt"
+#endif
+#ifdef CONST_TRACERS
+# error "CPP key CONST_TRACERS was retired (tracers held constant in time): remove it from cppdefs.opt"
+#endif
+#ifdef PACIFIC
+# error "CPP key PACIFIC was removed: the cosine sponge profile is now sponge_profile = 'cosine' in the namelist group V_SPONGE_SETTINGS (default 'linear'); remove PACIFIC from cppdefs.opt"
+#endif
+#ifdef LINEAR_DRAG_ONLY
+# error "CPP key LINEAR_DRAG_ONLY was removed: linear bottom drag only is now linear_drag = .true. in the namelist group BOTTOM_DRAG_SETTINGS; remove LINEAR_DRAG_ONLY from cppdefs.opt"
+#endif

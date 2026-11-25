@@ -1,5 +1,4 @@
-#ifndef LINEAR_DRAG_ONLY
-if (Zob > 0._8) then
+if (Zob > 0._8 .and. .not. linear_drag) then   ! linear_drag: BOTTOM_DRAG_SETTINGS
   do j=jstrV-1,jend
     do i=istrU-1,iend
 # define nrdg nstp
@@ -40,8 +39,7 @@ if (Zob > 0._8) then
 
     enddo
   enddo
-else  !<-- Zob > 0._8
-#endif /* ! LINEAR_DRAG_ONLY */
+else  !<-- Zob > 0._8 .and. .not. linear_drag
 
   do j=jstrV-1,jend
     do i=istrU-1,iend
@@ -52,9 +50,7 @@ else  !<-- Zob > 0._8
     enddo
   enddo
 
-#ifndef LINEAR_DRAG_ONLY
-endif  !<-- Zob > 0
-#endif
+endif  !<-- Zob > 0 .and. .not. linear_drag
 
 ! Save "rd" into shared array "r_D" for subsequent use in barotropic
 ! mode. Note that "rd" is computed with an extra row of points on the

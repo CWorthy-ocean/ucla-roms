@@ -17,7 +17,6 @@ These switches control fundamental aspects of the model setup, including the equ
 | `UV_ADV` | Use advection in horizontal momentum equations | enabled | |
 | `UV_COR` | Use Coriolis term in horizontal momentum equations | enabled | |
 | `ADV_ISONEUTRAL` | Rotate the advection and diffusion operators so they are oriented in the isoneutral direction | disabled | |
-| `CONST_TRACERS` | Keep tracer values constant in time and space | disabled | At each timestep the tracer tendencies will be calculated, but in the end it will just keep the value it had at the previous timestep |
 | `DIAGNOSTICS_NHMG` | Enable the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation | disabled | Not finished: compiles, but ROMS stops at startup, whether `nhmg` (`NHMG_SETTINGS`) is on or off, because its arrays are never allocated |
 | `NHMGDIAG` | Write momentum equation diagnostics for non-hydrostatic mode | disabled | As `DIAGNOSTICS_NHMG` |
 
@@ -31,7 +30,6 @@ These switches control the configuration of the model grid, including geometry a
 | `MASKING` | Use land masks for tracer and velocity points to set values to zero | enabled | Required; the model does not compile without it |
 | `SPHERICAL` | Use a spherical geometry in the grid setup | enabled | The model will look for coordinates based on latitude and longitude instead of distance |
 | `MPI_MASKING` | Choose the MPI tiling at runtime from the land mask, skipping tiles that are entirely land | disabled | Requires `PARALLEL_IO` (a joined grid file). `NP_XI` and `NP_ETA` from the namelist are overwritten. Launch with at least as many ranks as the selected tiling needs; extra ranks exit at startup. No `partit` step is needed. |
-| `ANA_GRID` | Analytically prescribe the grid | disabled | Hardcoded in `ana_grid.h` |
 
 ### `NUMERICAL ALGORITHMS`
 
@@ -56,7 +54,6 @@ These switches control the model's mixing parameterizations, including vertical 
 | `LMD_NONLOCAL` | Compute the non-local term in the KPP parameterization | enabled | Can be used with either/both `LMD_KPP` and `LMD_BKPP` |
 | `LMD_RIMIX` | Compute mixing due to breaking internal waves | enabled | Designed only to have an effect where local gradient Richardson number is small |
 | `LMD_DDMIX` | Compute double-diffusive mixing (Large et al., 1994) | disabled | |
-| `ANA_VMIX` | Analytically prescribe vertical mixing coefficient | disabled | Hardcoded in `ana_vmix.h` |
 | `MERGE_OVERLAP` | If surface and bottom boundary layers overlap, set them both to be the entire depth of the water column | disabled | Unclear whether this is needed for physical or numerical reasons; disabled by default |
 
 ### `BIOGEOCHEMICAL OPTIONS`
@@ -66,13 +63,6 @@ These switches control the biogeochemical (BGC) model, MARBL. (The BEC2 model wa
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
 | `MARBL` | Use the MARBL biogeochemical library | enabled | Building needs `MARBL_ROOT` |
-
-### `MISCELLANEOUS`
-
-| Switch | Description | Default | Usage notes |
-|--------|-------------|---------|-------------|
-| `ANA_INITIAL` | Analytically prescribe the initial conditions | disabled | Hardcoded in `ana_init.h` |
-| `ANA_PIPES` | Let an analytical grid (`ana_grid.h`) place pipes | disabled | Analytical pipe fluxes are switched on with `p_analytical` in the `PIPE_FRC_SETTINGS` namelist group and are defined in `ana_pipe_frc.h` |
 
 ### Parallel I/O
 
@@ -116,6 +106,9 @@ These keys were removed together with their code: most of them no longer compile
 | `NO3_RESTORE` | Nitrate restoring in BEC2 |
 | `Ncycle_SY` | Nitrogen cycle with NO2, N2O and N2 tracers in BEC2 |
 | `TDEP_REMIN` | Temperature-dependent particulate remineralization in BEC2 |
+| `CONST_TRACERS` | Hold the tracers constant in time |
+| `FILAMENT_IDEAL` | Declared the filament case's depth `hd = 1000` in `analytical.F90`; such a case's `ana_init.h` now declares it |
+| `ANA_PIPES`, `ANA_RIVER_USWC` | Let an analytical grid (`ana_grid.h`) place pipes, or use `LLm` and `MMm`; a case's `ana_grid.h` can now always do both |
 
 These keys are no longer keys because the namelist now decides what they decided. Defining one stops the build with an error that names the setting (`#undef` lines are harmless).
 
@@ -140,5 +133,10 @@ These keys are no longer keys because the namelist now decides what they decided
 | `EW_PERIODIC`, `NS_PERIODIC` | `ew_periodic`, `ns_periodic` in [`PERIODIC_SETTINGS`](runtime_settings.md#periodic_settings) (default `.false.`) |
 | `BULK_FRC` | `surf_frc_type = 'bulk'` (the default) in [`SURF_FRC_SETTINGS`](runtime_settings.md#surf_frc_settings); without the key: `'flux'` |
 | `ANA_SMFLUX`, `ANA_STFLUX`, `ANA_SSFLUX`, `ANA_SRFLUX` | `surf_frc_type = 'none'` in [`SURF_FRC_SETTINGS`](runtime_settings.md#surf_frc_settings) (all surface fluxes zero) |
+| `ANA_GRID` | `ana_grid` in [`GRID_SETTINGS`](runtime_settings.md#grid_settings) (default `.false.`): the grid from the case's `ana_grid.h` |
+| `ANA_INITIAL` | `ana_initial` in [`INITIAL_CONDITIONS`](runtime_settings.md#initial_conditions) (default `.false.`): the initial state from the case's `ana_init.h` |
+| `ANA_VMIX` | `ana_vmix` in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings) (default `.false.`): `Akv` and `Akt` from the case's `ana_vmix.h`; not with `LMD_MIXING` |
+| `PACIFIC` | `sponge_profile = 'cosine'` in [`V_SPONGE_SETTINGS`](runtime_settings.md#v_sponge_settings) (default `'linear'`) |
+| `LINEAR_DRAG_ONLY` | `linear_drag` in [`BOTTOM_DRAG_SETTINGS`](runtime_settings.md#bottom_drag_settings) (default `.false.`) |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.
