@@ -36,10 +36,8 @@ REALISTIC_CPP_KEYS = [
     "CURVGRID", "SPHERICAL",
 ]
 ANALYTICAL_CPP_KEYS = [
-    "ANA_GRID", "ANA_INITIAL", "ANA_SMFLUX",
-    "ANA_SRFLUX", "ANA_STFLUX", "ANA_SSFLUX",
+    "ANA_GRID", "ANA_INITIAL",
 ]
-BGC_REALISTIC_CPP_KEYS = ["BULK_FRC"]
 MARBL_CPP_KEYS = ["MARBL"]
 
 
@@ -79,6 +77,8 @@ def create_test_namelist_dict(input_dir: Path) -> dict:
         str(input_dir / "example_input_boundary_forcing.nc"),
         str(input_dir / "example_input_surface_flux_forcing.nc"),
     ]
+    # the fluxes of example_input_surface_flux_forcing.nc; tests with bulk forcing set "bulk"
+    this_nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "flux"
 
     this_nml["CALC_PFLX_SETTINGS"]["calc_pflx"] = False
     this_nml["CALC_PFLX_SETTINGS"]["pflx_timescale"] = 0

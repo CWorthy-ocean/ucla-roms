@@ -82,6 +82,7 @@ frcfiles = "input_data/iceland_parent_tides.nc",
 !---------------------------------
 ! Previously set in `bulk_frc.opt and flux_frc.opt`
 !---------------------------------
+surf_frc_type = 'bulk'         ! Surface fluxes: 'bulk', 'flux' or 'none'
 interp_bulk_frc = .false.       ! Interpolate forcing from coarser input grid if T
 check_bulk_frc_units = .false. ! Check units of input vars if T
 interp_flux_frc = .false.       ! Interpolate forcing from coarser input grid if T

@@ -28,7 +28,6 @@ import xarray as xr
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
     ADDITIONAL_FILES,
-    BGC_REALISTIC_CPP_KEYS,
     MARBL_CPP_KEYS,
     OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
@@ -72,6 +71,7 @@ def _marbl_nml(input_dir) -> dict:
             str(input_dir / "example_input_tides.nc"),
         ]
     }
+    nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "bulk"
     return nml
 
 
@@ -80,7 +80,7 @@ def marbl_conf(tmp_path_factory) -> ROMSConfiguration:
     """Compile the realistic MARBL binary once for the whole module."""
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
-        + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
+        + REALISTIC_CPP_KEYS
         + MARBL_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("marbl_build")

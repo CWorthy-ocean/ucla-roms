@@ -24,7 +24,7 @@ contains
 #ifdef LMD_KPP
     use alphabeta_mod, only: alphabeta_tile
 #endif
-    use surf_flux, only: stflx, srflx, svstr, sustr, svstr_r, sustr_r
+    use surf_flux, only: stflx, srflx, svstr, sustr, svstr_r, sustr_r, bulk_frc_on
 !     bulk_frc-> only: sustr_r, svstr_r, stflx, srflx, only:
     use grid, only: f, rmask, umask, vmask
 !     flux_frc-> only: sustr, svstr, stflx, srflx
@@ -163,15 +163,15 @@ contains
 ! DevinD & JM: better to use rho variables for sustr & svstr since we
 ! currently calculated both u/v and rho versions. If we converted u/v back to rho
 ! it would be a double average and dilute the answer further.
-#   ifdef BULK_FRC
-    ustar(i,j)=sqrt( sqrt( sustr_r(i,j)**2 +svstr_r(i,j)**2 ))
-#   else
-! Orginal for non-bulk-flux
-    ustar(i,j)=sqrt( sqrt( 0.333333333333_8*(&
-    &sustr(i,j)**2 + sustr(i+1,j)**2 + sustr(i,j)*sustr(i+1,j)&
-    &+svstr(i,j)**2 + svstr(i,j+1)**2 + svstr(i,j)*svstr(i,j+1)&
-    &)))
-#   endif /* BULK_FRC */
+    if (bulk_frc_on) then
+      ustar(i,j)=sqrt( sqrt( sustr_r(i,j)**2 +svstr_r(i,j)**2 ))
+    else
+      ! flux forcing or none
+      ustar(i,j)=sqrt( sqrt( 0.333333333333_8*(&
+      &sustr(i,j)**2 + sustr(i+1,j)**2 + sustr(i,j)*sustr(i+1,j)&
+      &+svstr(i,j)**2 + svstr(i,j+1)**2 + svstr(i,j)*svstr(i,j+1)&
+      &)))
+    endif
 
 # ifdef LMD_KPP
     hbl(i,j)=hbls(i,j)     ! use old-time-step values
