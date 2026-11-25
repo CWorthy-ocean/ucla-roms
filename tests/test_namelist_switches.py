@@ -1,16 +1,16 @@
 """Namelist settings that the build cannot honour stop ROMS at start-up.
 
 A group whose cpp key is off is still read, only to stop when it switches its
-feature on (gated_nml_found and check_nml_cpp_switch in namelist_open_mod).
-Every case runs one physics-only build, without MARBL, with flux forcing, against a
-mutated test namelist.
+feature on (gated_nml_found, check_nml_cpp_switch and check_nml_needs_marbl in
+namelist_open_mod). Every case runs one physics-only build, without MARBL (no
+make MARBL=yes), with flux forcing, against a mutated test namelist.
 
 A stop is an MPI_Abort after read_namelists collects the errors: mpirun exits
 non-zero and the message goes to stderr, so it never reaches "Git hash:",
 which main.F90 prints once every group has been read. A no-stop case runs two
 steps and must exit 0, printing that line and the final "MPI_run_time =".
 
-BGC_SETTINGS is read only with MARBL or BIOLOGY_BEC2, so a leftover nbgc_flx
+BGC_SETTINGS is read only with use_marbl = .true., so a leftover nbgc_flx
 key is not checked here: this build never reads the group. These runs write
 no hashed output and need no reference results.
 """
@@ -58,10 +58,10 @@ def _namelist(input_dir) -> dict:
 # case: (group, keys set in it, stable substrings of the message)
 STOPS = {
     "do_cdr_output": ("CDR_OUTPUT_SETTINGS", {"do_cdr_output": True},
-                      ["CDR_OUTPUT_SETTINGS do_cdr_output = .true. needs the cpp key MARBL"]),
+                      ["CDR_OUTPUT_SETTINGS do_cdr_output = .true. needs MARBL: set use_marbl = .true.",
+                       "in a build made with make MARBL=yes"]),
     "do_cdr_gas_exch_output": ("CDR_GAS_EXCH_OUTPUT_SETTINGS", {"do_cdr_gas_exch_output": True},
-                               ["do_cdr_gas_exch_output = .true. needs the cpp keys",
-                                "does not define MARBL"]),
+                               ["CDR_GAS_EXCH_OUTPUT_SETTINGS do_cdr_gas_exch_output = .true. needs MARBL"]),
     "do_upscale": ("UPSCALE_SETTINGS", {"do_upscale": True},
                    ["UPSCALE_SETTINGS do_upscale = .true. needs MARBL tracers",
                     "or CDR_LITE tracers"]),
@@ -76,7 +76,10 @@ STOPS = {
                     ["SURF_FRC_SETTINGS qcorrection = .true. needs surf_frc_type = 'bulk'"]),
     "cflx_corr": ("SURF_FRC_SETTINGS", {"cflx_corr": True},
                   ["SURF_FRC_SETTINGS cflx_corr = .true. needs surf_frc_type = 'bulk'",
-                   "SURF_FRC_SETTINGS cflx_corr = .true. needs the cpp key MARBL"]),
+                   "SURF_FRC_SETTINGS cflx_corr = .true. needs MARBL (use_marbl = .true."]),
+    "use_marbl_without_marbl_build": ("MARBL_BIOGEOCHEMISTRY_SETTINGS", {"use_marbl": True},
+                                      ["MARBL_BIOGEOCHEMISTRY_SETTINGS use_marbl = .true. needs a MARBL build",
+                                       "rebuild with make MARBL=yes"]),
     "bad_surf_frc_type": ("SURF_FRC_SETTINGS", {"surf_frc_type": "bulkk"},
                           ["SURF_FRC_SETTINGS surf_frc_type = 'bulkk' is not a choice",
                            "use 'bulk', 'flux' or 'none'"]),
@@ -191,3 +194,19 @@ def test_no_stop(physics_conf, input_dir, tmp_path, case):
     log = squeezed(physics_conf.run(nml, cwd=tmp_path, capture_output=True))  # raises on a non-zero exit
     assert squeezed(AFTER_NAMELISTS) in log
     assert squeezed(RUN_END) in log
+
+
+def test_nt_bgc_without_use_marbl(physics_conf, input_dir, tmp_path):
+    """nt_bgc > 0 with use_marbl = .false. stops when the tracers are set up.
+
+    That is after the namelists are read, so this run prints the Git hash line
+    first.
+    """
+    nml = _namelist(input_dir)
+    nml["PARAM_SETTINGS"]["nt_bgc"] = 32
+    assert_run_rejected(
+        physics_conf, nml, tmp_path,
+        ["in PARAM_SETTINGS, but use_marbl = .false. (MARBL_BIOGEOCHEMISTRY_SETTINGS)",
+         "set nt_bgc = 0, or use_marbl = .true. in a build made with make MARBL=yes"],
+        label="nt_bgc_without_use_marbl", absent=[RUN_END],
+    )

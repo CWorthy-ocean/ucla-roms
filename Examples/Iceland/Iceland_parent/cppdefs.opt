@@ -92,9 +92,9 @@
 
 !!!!!!!!!!!!!!!!!!!!!!!!! BIOGEOCHEMICAL OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!
 
-! Use the MARBL biogeochemical library
-! Usage notes: Set MARBL_ROOT to the MARBL installation when building
-#define MARBL
+! MARBL is not a key here: build this example with make MARBL=yes
+! (MARBL_ROOT set to the MARBL installation); its namelist sets
+! use_marbl = .true. in the group MARBL_BIOGEOCHEMISTRY_SETTINGS.
 
 !!!!!!!!!!!!!!!!!!!!!!!!! MISCELLANEOUS !!!!!!!!!!!!!!!!!!!!!!!!!
 

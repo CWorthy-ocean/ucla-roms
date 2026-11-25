@@ -23,6 +23,7 @@ module namelist_open_mod
   public :: check_nml_string
   public :: gated_nml_found
   public :: check_nml_cpp_switch
+  public :: check_nml_needs_marbl
 
 contains
 
@@ -148,6 +149,22 @@ contains
            info="could not read "//group//" section of namelist file: "//trim(msg))
     end if
   end function gated_nml_found
+
+  subroutine check_nml_needs_marbl(group, key, value, marbl_on, context)
+    !-----------------------------------------------------------------------
+    !     SUBROUTINE: check_nml_needs_marbl
+    !     DESCRIPTION:
+    !     Raise an error when the namelist switch `key` is on but MARBL does
+    !     not run (marbl_on: param's use_marbl).
+    !-----------------------------------------------------------------------
+    implicit none
+    character(len=*), intent(in) :: group, key, context
+    logical, intent(in) :: value, marbl_on
+
+    if (value .and. .not. marbl_on) call error_log%raise_global(context=context,&
+         info=group//" "//key//" = .true. needs MARBL: set use_marbl = .true."//&
+         " (MARBL_BIOGEOCHEMISTRY_SETTINGS) in a build made with make MARBL=yes")
+  end subroutine check_nml_needs_marbl
 
   subroutine check_nml_cpp_switch(group, key, value, cpp_on, cpp_keys, context, missing)
     !-----------------------------------------------------------------------

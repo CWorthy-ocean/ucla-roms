@@ -35,7 +35,6 @@ OCEAN_PHYSICS_CPP_KEYS = [
 REALISTIC_CPP_KEYS = [
     "CURVGRID", "SPHERICAL",
 ]
-MARBL_CPP_KEYS = ["MARBL"]
 
 
 # --------------------------------------------------------------------------
@@ -65,6 +64,7 @@ def create_test_namelist_dict(input_dir: Path) -> dict:
     this_nml["PARAM_SETTINGS"]["MMm"] = 19
     this_nml["PARAM_SETTINGS"]["nz"] = 10
     this_nml["PARAM_SETTINGS"]["nt_bgc"] = 0  # BGC tests set 32 (MARBL) themselves
+    this_nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["use_marbl"] = False  # ... and use_marbl
 
     this_nml["INITIAL_CONDITIONS"]["inifile"] = str(
         input_dir / "example_input_bgc_initial_conditions.nc"
@@ -112,9 +112,12 @@ class ROMSConfiguration:
     share one compiled binary while keeping their outputs separate.
     """
 
-    def __init__(self, cpp_keys: list[str], location: Path):
+    def __init__(self, cpp_keys: list[str], location: Path, marbl: bool = False):
+        """``marbl`` builds with MARBL (``make MARBL=yes``); runs switch it on with
+        ``use_marbl`` in ``MARBL_BIOGEOCHEMISTRY_SETTINGS``."""
         self.location = location
         self.cpp_keys = cpp_keys
+        self.marbl = marbl
 
         self.location.mkdir(parents=True, exist_ok=True)
         (self.location / "Makefile").symlink_to(ROMS_ROOT / "Work/Makefile")
@@ -127,7 +130,7 @@ class ROMSConfiguration:
     def compile(self, make_args: str = ""):
         """Compile with the suite's make command; ``make_args`` are appended (e.g. USER_FFLAGS)."""
         subprocess.run(
-            f"cd {self.location} && {MAKE_CMD} {make_args}",
+            f"cd {self.location} && {MAKE_CMD}{' MARBL=yes' if self.marbl else ''} {make_args}",
             shell=True, text=True, check=True,
         )
 

@@ -15,6 +15,10 @@ USER_FFLAGS ?=
 # Note: MPI wrappers that inject their own -rpath flags (e.g. spack-built OpenMPI)
 # make the linker ignore LD_RUN_PATH, so rpaths must be passed explicitly here.
 USER_LDFLAGS ?=
+# Build options, each yes or no (e.g. make MARBL=yes):
+#   MARBL : compile and link the MARBL biogeochemistry library (MARBL_ROOT);
+#           the namelist key use_marbl then switches it on at run time
+MARBL ?= no
 ##############################
 #       FILE EXTENSIONS      #
 
@@ -103,9 +107,22 @@ else ifeq ($(BUILD_MODE),grof)
    KEEP_PPSRC=true
 endif
 
-#Check whether we're compiling with MARBL or PARALLEL_IO (NHMG is always built, see Makefile):
+# Build options: each must be yes or no. yes_no_option(NAME) stops with a
+# message otherwise and gives true or false.
+yes_no_option = $(if $(filter yes no,$($(1))),$(if $(filter yes,$($(1))),true,false),$(error $(1)=$($(1)): use $(1)=yes or $(1)=no))
+USEMARBL := $(call yes_no_option,MARBL)
+# The build options are kept in build_options.txt, rewritten only when they
+# change; every object depends on it (see Makefile), so changing an option
+# recompiles everything, as editing cppdefs.opt does.
+# (Only in a ROMS build directory, which has a cppdefs.opt: Tools-Roms includes
+# this file too.)
+BUILD_OPTIONS := MARBL=$(MARBL)
 ifeq ($(wildcard cppdefs.opt),cppdefs.opt)
-	USEMARBL := $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*MARBL' cppdefs.opt && echo true || echo false )
+$(shell [ "$$(cat build_options.txt 2>/dev/null)" = "$(BUILD_OPTIONS)" ] || echo "$(BUILD_OPTIONS)" > build_options.txt)
+endif
+
+#Check whether we're compiling with PARALLEL_IO (NHMG is always built, see Makefile):
+ifeq ($(wildcard cppdefs.opt),cppdefs.opt)
         USEPIO := $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*PARALLEL_IO' cppdefs.opt && echo true || echo false )
 endif
 
@@ -121,6 +138,11 @@ ifeq ($(COMPILER),intel)
 else
         CPP = /usr/bin/cpp
 	CPPFLAGS =  -traditional -D__IFC -Wno-invalid-pp-token -I${MPIHOME}/include -I${NETCDFHOME}/include -I${NETCDFFHOME}/include
+endif
+# MARBL=yes: set_global_definitions.h defines MARBL from ROMS_BUILD_MARBL (after
+# retired_cpp_keys.h, which stops a cppdefs.opt that still defines MARBL)
+ifeq ($(USEMARBL),true)
+	CPPFLAGS += -DROMS_BUILD_MARBL
 endif
 
 #   Since we no longer keep preprocessed files after compilation, if you want to still
@@ -296,6 +318,9 @@ FFLAGS+=$(USER_FFLAGS)
 # Compilation rules for file types:
 #   (used for every file until the final linking step)
 
+# Clear make's built-in suffixes first: with them, rebuilding an object whose
+# Fortran module file (.mod) exists matches the Modula-2 rule (.mod -> .o, m2c)
+.SUFFIXES:
 .SUFFIXES: $(OBJ_ext) $(PPF77_ext) $(UPF77_ext) $(UPF90_ext) $(PPF90_ext)
 
 #Unprocessed F90 -> object file (typically .F90->.o)

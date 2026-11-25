@@ -37,6 +37,7 @@ subroutine set_forces
   use pipe_frc, only: set_pipe_frc, pipe_source
 #ifdef MARBL
   use bgc_io, only: set_bgc_surf_frc
+  use param, only: use_marbl
 #endif
   use dimensions, only: jnode, inode
   use boundary, only: frctype
@@ -91,7 +92,7 @@ subroutine set_forces
   ! BGC surface flux:
 
 # ifdef MARBL
-  call set_bgc_surf_frc(istr,iend,jstr,jend)
+  if (use_marbl) call set_bgc_surf_frc(istr,iend,jstr,jend)
 # endif
 
   if (river_source) then

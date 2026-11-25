@@ -48,6 +48,7 @@ module precheck
 #endif
   use upscale_output, only:&
   &do_upscale, output_period_uscl, nrpf_uscl
+  use param, only: use_marbl
   use check_switches_mod, only: check_switches2, print_switches
 #if defined LMD_KPP || defined LMD_BKPP
   use lmd_kpp_mod, only: check_kpp_switches
@@ -116,26 +117,24 @@ contains
     call check_output_divides_rst(do_upscale,&
     &output_period_uscl, nrpf_uscl, 'upscale')
 #ifdef MARBL
-    call check_output_divides_rst(wrt_bgc_his,&
-    &output_period_bgc_his, nrpf_bgc_his, 'bgc_his')
-    call check_output_divides_rst(wrt_bgc_avg,&
-    &output_period_bgc_avg, nrpf_bgc_avg, 'bgc_avg')
-    call check_output_divides_rst(wrt_bgc_dia_his,&
-    &output_period_bgc_his_dia, nrpf_bgc_his_dia, 'bgc_his_dia')
-    call check_output_divides_rst(wrt_bgc_dia_avg,&
-    &output_period_bgc_avg_dia, nrpf_bgc_avg_dia, 'bgc_avg_dia')
-#endif
-#ifdef MARBL
-    call check_avg_ends_on_marbl_step(do_cdr_output .and. wrt_cdr_avg&
-    &.and. .not. cdr_monthly_averages,&
-    &output_period_cdr, 'output_period_cdr')
-#endif
-#ifdef MARBL
-    call check_avg_ends_on_marbl_step(wrt_bgc_dia_avg,&
-    &output_period_bgc_avg_dia, 'output_period_bgc_avg_dia')
-#endif
-#ifdef MARBL
-    call bgc_precheck
+    ! MARBL's outputs (BGC_SETTINGS is read only with use_marbl; the CDR
+    ! outputs are off without it)
+    if (use_marbl) then
+      call check_output_divides_rst(wrt_bgc_his,&
+      &output_period_bgc_his, nrpf_bgc_his, 'bgc_his')
+      call check_output_divides_rst(wrt_bgc_avg,&
+      &output_period_bgc_avg, nrpf_bgc_avg, 'bgc_avg')
+      call check_output_divides_rst(wrt_bgc_dia_his,&
+      &output_period_bgc_his_dia, nrpf_bgc_his_dia, 'bgc_his_dia')
+      call check_output_divides_rst(wrt_bgc_dia_avg,&
+      &output_period_bgc_avg_dia, nrpf_bgc_avg_dia, 'bgc_avg_dia')
+      call check_avg_ends_on_marbl_step(do_cdr_output .and. wrt_cdr_avg&
+      &.and. .not. cdr_monthly_averages,&
+      &output_period_cdr, 'output_period_cdr')
+      call check_avg_ends_on_marbl_step(wrt_bgc_dia_avg,&
+      &output_period_bgc_avg_dia, 'output_period_bgc_avg_dia')
+      call bgc_precheck
+    end if
 #endif
     call error_log%abort_check()
 

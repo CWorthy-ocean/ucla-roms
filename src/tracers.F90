@@ -28,7 +28,7 @@ module tracers
 #error "CDR_TRACER was renamed to CDR_LITE: replace it in cppdefs.opt"
 #endif
   use param, only: isalt, itemp, lm, mm, mynode, nt_passive, nt_cdr_oae, nt_cdr_dor&
-  &,ieast, iwest, jnorth, jsouth, nt_bgc, cdr_lite_on, salinity
+  &,ieast, iwest, jnorth, jsouth, nt_bgc, cdr_lite_on, salinity, use_marbl
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: cflx_corr
@@ -297,6 +297,13 @@ contains
       integer(kind=4), save :: iPO4 = 0, iSiO3 = 0
       integer(kind=4) :: itrc
 
+      if (.not. use_marbl) then
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info="cdr_online_carbonate_sensitivity requires MARBL (it uses the "//&
+        &"ALT_CO2 carbon system as the no-CDR reference state)")
+        call error_log%abort_check()
+      endif
       if (iPO4 == 0) then
         do itrc=1,nt
           if (t_vname(itrc) == 'PO4')  iPO4  = itrc
@@ -513,19 +520,19 @@ contains
     character(len=8) :: passive_tracer_num
     character(len=12) :: sr_name = "init_tracers"
 
-#ifndef MARBL
     ! Only MARBL names the nt_bgc tracer slots; without it they
     ! would stay uninitialized and forcing/output lookups would use garbage names.
-    if (nt_bgc /= 0) then
+    ! (With use_marbl, marbldrv_configure_tracers checks nt_bgc against
+    ! MARBL's tracer count.)
+    if (.not. use_marbl .and. nt_bgc /= 0) then
       write(error_info,*) "nt_bgc = ", nt_bgc, " in PARAM_SETTINGS, but",&
-      &" MARBL is not defined in cppdefs.opt;",&
-      &" set nt_bgc = 0."
+      &" use_marbl = .false. (MARBL_BIOGEOCHEMISTRY_SETTINGS);",&
+      &" set nt_bgc = 0, or use_marbl = .true. in a build made with make MARBL=yes."
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info=error_info)
       call error_log%abort_check()
     end if
-#endif
 
     allocate(t_vname(nt))
     allocate(t_lname(nt))
@@ -615,7 +622,7 @@ contains
     ! Additional passive tracers:
 
 #ifdef MARBL
-    call marbldrv_configure_tracers(&
+    if (use_marbl) call marbldrv_configure_tracers(&
     &itot,t_vname,t_lname,t_units,t_tname,wrt_t,wrt_t_avg,t_ana_frc)
 #endif
 

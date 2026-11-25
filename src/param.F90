@@ -23,6 +23,11 @@ module param
   integer(kind=4), public :: nt_cdr_oae = 0, nt_cdr_dor = 0
   logical, public :: cdr_lite_on = .false.   ! the run has CDR_LITE tracers (read_nml_param)
   integer(kind=4), public :: nt_passive = 0, nt_bgc = 0
+  ! use_marbl (MARBL_BIOGEOCHEMISTRY_SETTINGS, read by marbl_driver's
+  ! read_nml_marbl in every build): MARBL runs. It needs a build with
+  ! make MARBL=yes, and nt_bgc must then be MARBL's tracer count; without it
+  ! nt_bgc must be 0.
+  logical, public :: use_marbl = .false.
   ! salinity: the run carries salinity (tracer isalt). Without it the only
   ! active tracer is temperature, and the tracers that follow start at isalt.
   logical, public :: salinity = .true.

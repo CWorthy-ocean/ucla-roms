@@ -12,7 +12,7 @@ module upscale_output
 #include "cppdefs.opt"
 
   use dimensions, only: i0, i1, j0, j1, inode, jnode, npx, npy, ds_xr, ds_yr, ds_zr
-  use param, only: max_name_size
+  use param, only: max_name_size, use_marbl
   use param, only: jnorth, jsouth, ieast, iwest, nsub_e, nsub_x, np_xi, np_eta&
   &,mynode, ocean_grid_comm, nt_passive, nt_bgc, nt_cdr_oae, nt_cdr_dor, lm, mm
   use namelist_open_mod, only: open_namelist_file
@@ -165,15 +165,11 @@ contains
     record_uscl = nrpf_uscl  ! the first window opens a new file
     if (.not. do_upscale) return
 
-#ifdef MARBL
-    marbl_run = nt_bgc > 0
-#else
-    marbl_run = .false.
-#endif
+    marbl_run = use_marbl
     if (.not. marbl_run .and. nt_cdr_oae + nt_cdr_dor == 0) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
-      &info='UPSCALE_SETTINGS do_upscale = .true. needs MARBL tracers (cpp key MARBL and nt_bgc > 0)'&
+      &info='UPSCALE_SETTINGS do_upscale = .true. needs MARBL tracers (use_marbl = .true.)'&
       &//' or CDR_LITE tracers (nt_cdr_oae or nt_cdr_dor > 0)')
     end if
 #ifndef SPHERICAL

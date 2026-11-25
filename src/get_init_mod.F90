@@ -20,6 +20,7 @@ contains
     use tracers, only: t_vname, t, ibgc0, tracer_required
 #ifdef MARBL
     use marbl_driver, only: marbldrv_read_ss_vars_from_rst
+    use param, only: use_marbl
 #endif
     use coupling, only:&
     &du_avg1, dv_avg1, du_avg2, dv_avg2,&
@@ -595,7 +596,7 @@ contains
 
 #ifdef MARBL
 !     Read in MARBL saved_state variables here
-    call marbldrv_read_ss_vars_from_rst(ncid,record)
+    if (use_marbl) call marbldrv_read_ss_vars_from_rst(ncid,record)
 #endif /* MARBL */
 
 
