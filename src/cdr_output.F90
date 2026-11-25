@@ -5,10 +5,10 @@ module cdr_output
 #include "cppdefs.opt"
 
 #ifdef MARBL
-      use namelist_open_mod, only: open_namelist_file
+      use namelist_open_mod, only: open_namelist_file, check_nml_needs_marbl
       use tracers, only: t_units, t_vname
       use param, only: max_name_size
-      use param, only: itemp, isalt, nt
+      use param, only: itemp, isalt, nt, use_marbl
       use marbl_driver, only:&
      &     marbl_saved_state_3d, ialk, is_marbl_step,&
      &     ialk_alt, idic, idic_alt, nr_marbl_ss_2d, nr_marbl_ss_3d,&
@@ -164,6 +164,9 @@ contains
       &)
     end if
     close(namelist_unit)
+    call check_nml_needs_marbl('CDR_OUTPUT_SETTINGS', 'do_cdr_output', do_cdr_output,&
+    &use_marbl, module_name//'/'//sr_name)
+    if (.not. use_marbl) do_cdr_output = .false.
     record = nrpf_cdr
   end subroutine read_cdr_output_nml
 
@@ -1518,7 +1521,8 @@ contains
 !     do_cdr_output = .true.; a missing group is fine. Its keys and
 !     types are those of the group with MARBL.
       use namelist_open_mod, only: open_namelist_file, gated_nml_found,&
-     &  check_nml_cpp_switch
+     &  check_nml_needs_marbl
+      use param, only: use_marbl
       implicit none
       real(kind=8)    :: output_period_cdr
       integer(kind=4) :: nrpf_cdr
@@ -1537,8 +1541,8 @@ contains
       close(namelist_unit)
       if (gated_nml_found(ios, msg, 'CDR_OUTPUT_SETTINGS',&
      &    trim(module_name)//'/'//sr_name)) then
-        call check_nml_cpp_switch('CDR_OUTPUT_SETTINGS', 'do_cdr_output',&
-     &    do_cdr_output, .false., 'MARBL', trim(module_name)//'/'//sr_name)
+        call check_nml_needs_marbl('CDR_OUTPUT_SETTINGS', 'do_cdr_output',&
+     &    do_cdr_output, use_marbl, trim(module_name)//'/'//sr_name)
       end if
       end subroutine read_cdr_output_nml
 

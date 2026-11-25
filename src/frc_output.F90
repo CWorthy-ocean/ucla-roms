@@ -6,7 +6,7 @@ module frc_output
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
   use error_handling_mod, only: error_log
-  use param, only: max_name_size
+  use param, only: max_name_size, use_marbl
   use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x,&
   &lm, mm, isalt, itemp, mynode, ocean_grid_comm, salinity
   use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u,&
@@ -129,14 +129,16 @@ contains
           allocate(ssflx_avg(GLOBAL_2D_ARRAY) )
           ssflx_avg(:,:)=0
 #if defined MARBL
-          allocate(vflux_ALK_avg(GLOBAL_2D_ARRAY) )
-          vflux_ALK_avg(:,:)=0
-          allocate(vflux_DIC_avg(GLOBAL_2D_ARRAY) )
-          vflux_DIC_avg(:,:)=0
-          allocate(vflux_ALK_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
-          vflux_ALK_ALT_CO2_avg(:,:)=0
-          allocate(vflux_DIC_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
-          vflux_DIC_ALT_CO2_avg(:,:)=0
+          if (use_marbl) then
+            allocate(vflux_ALK_avg(GLOBAL_2D_ARRAY) )
+            vflux_ALK_avg(:,:)=0
+            allocate(vflux_DIC_avg(GLOBAL_2D_ARRAY) )
+            vflux_DIC_avg(:,:)=0
+            allocate(vflux_ALK_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
+            vflux_ALK_ALT_CO2_avg(:,:)=0
+            allocate(vflux_DIC_ALT_CO2_avg(GLOBAL_2D_ARRAY) )
+            vflux_DIC_ALT_CO2_avg(:,:)=0
+          endif
 #endif /* MARBL */
         endif
         allocate(sustr_avg(GLOBAL_2D_ARRAY) )
@@ -183,10 +185,12 @@ contains
       if (salinity) ssflx_avg(:,:) = ssflx_avg(:,:)*(1-coef) + stflx(:,:,isalt)*coef
       swflx_avg(:,:) = swflx_avg(:,:)*(1-coef) + swflx(:,:)*coef
 #if defined MARBL
-      vflux_ALK_avg(:,:)  = vflux_ALK_avg(:,:)*(1-coef)  + stflx(:,:,iALK)*coef
-      vflux_DIC_avg(:,:)  = vflux_DIC_avg(:,:)*(1-coef)  + stflx(:,:,iDIC)*coef
-      vflux_ALK_ALT_CO2_avg(:,:)  = vflux_ALK_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,iALK_alt)*coef
-      vflux_DIC_ALT_CO2_avg(:,:)  = vflux_DIC_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,iDIC_alt)*coef
+      if (use_marbl) then
+        vflux_ALK_avg(:,:)  = vflux_ALK_avg(:,:)*(1-coef)  + stflx(:,:,iALK)*coef
+        vflux_DIC_avg(:,:)  = vflux_DIC_avg(:,:)*(1-coef)  + stflx(:,:,iDIC)*coef
+        vflux_ALK_ALT_CO2_avg(:,:)  = vflux_ALK_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,iALK_alt)*coef
+        vflux_DIC_ALT_CO2_avg(:,:)  = vflux_DIC_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,iDIC_alt)*coef
+      endif
 #endif /* MARBL */
     else
       swflx_avg(:,:) = swflx_avg(:,:)*(1-coef) + swflx(:,:)*coef
@@ -228,11 +232,13 @@ contains
         call nc_set_record_nofill(ncid)
         call ncwrite(ncid,'ocean_time',(/time/),(/record/))
 #ifdef MARBL
-        if (bulk_frc_on .and. .not. wrt_frc_avg) then   ! defined, but written as averages only
-          call nc_fill_record(ncid,'vflux_ALK',record)
-          call nc_fill_record(ncid,'vflux_DIC',record)
-          call nc_fill_record(ncid,'vflux_ALK_ALT_CO2',record)
-          call nc_fill_record(ncid,'vflux_DIC_ALT_CO2',record)
+        if (use_marbl) then
+          if (bulk_frc_on .and. .not. wrt_frc_avg) then   ! defined, but written as averages only
+            call nc_fill_record(ncid,'vflux_ALK',record)
+            call nc_fill_record(ncid,'vflux_DIC',record)
+            call nc_fill_record(ncid,'vflux_ALK_ALT_CO2',record)
+            call nc_fill_record(ncid,'vflux_DIC_ALT_CO2',record)
+          endif
         endif
 #endif
         ierr=nf90_close(ncid)
@@ -261,14 +267,16 @@ contains
           if (salinity) call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
           ssflx_avg(:,:) = 0
 #ifdef MARBL
-          call ncwrite(ncid,'vflux_ALK',vflux_ALK_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
-          vflux_ALK_avg(:,:) = 0
-          call ncwrite(ncid,'vflux_DIC',vflux_DIC_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
-          vflux_DIC_avg(:,:) = 0
-          call ncwrite(ncid,'vflux_ALK_ALT_CO2',vflux_ALK_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
-          vflux_ALK_ALT_CO2_avg(:,:) = 0
-          call ncwrite(ncid,'vflux_DIC_ALT_CO2',vflux_DIC_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
-          vflux_DIC_ALT_CO2_avg(:,:) = 0
+          if (use_marbl) then
+            call ncwrite(ncid,'vflux_ALK',vflux_ALK_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+            vflux_ALK_avg(:,:) = 0
+            call ncwrite(ncid,'vflux_DIC',vflux_DIC_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+            vflux_DIC_avg(:,:) = 0
+            call ncwrite(ncid,'vflux_ALK_ALT_CO2',vflux_ALK_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+            vflux_ALK_ALT_CO2_avg(:,:) = 0
+            call ncwrite(ncid,'vflux_DIC_ALT_CO2',vflux_DIC_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+            vflux_DIC_ALT_CO2_avg(:,:) = 0
+          endif
 #endif /* MARBL */
         endif
         pio_gtype = '2Duw'
@@ -334,14 +342,16 @@ contains
           if (salinity) call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/))
           ssflx_avg(:,:) = 0
 #ifdef MARBL
-          call ncwrite(ncid,'vflux_ALK',vflux_ALK_avg(i0:i1,j0:j1),(/1,1,record/))
-          vflux_ALK_avg(:,:) = 0
-          call ncwrite(ncid,'vflux_DIC',vflux_DIC_avg(i0:i1,j0:j1),(/1,1,record/))
-          vflux_DIC_avg(:,:) = 0
-          call ncwrite(ncid,'vflux_ALK_ALT_CO2',vflux_ALK_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
-          vflux_ALK_ALT_CO2_avg(:,:) = 0
-          call ncwrite(ncid,'vflux_DIC_ALT_CO2',vflux_DIC_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
-          vflux_DIC_ALT_CO2_avg(:,:) = 0
+          if (use_marbl) then
+            call ncwrite(ncid,'vflux_ALK',vflux_ALK_avg(i0:i1,j0:j1),(/1,1,record/))
+            vflux_ALK_avg(:,:) = 0
+            call ncwrite(ncid,'vflux_DIC',vflux_DIC_avg(i0:i1,j0:j1),(/1,1,record/))
+            vflux_DIC_avg(:,:) = 0
+            call ncwrite(ncid,'vflux_ALK_ALT_CO2',vflux_ALK_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
+            vflux_ALK_ALT_CO2_avg(:,:) = 0
+            call ncwrite(ncid,'vflux_DIC_ALT_CO2',vflux_DIC_ALT_CO2_avg(i0:i1,j0:j1),(/1,1,record/))
+            vflux_DIC_ALT_CO2_avg(:,:) = 0
+          endif
 #endif /* MARBL */
         endif
         call ncwrite(ncid,'sustr',sustr_avg(1:i1,j0:j1),(/1,1,record/))
@@ -548,28 +558,30 @@ contains
       ierr = nf90_put_att(ncid,varid,'units','m2 s-2')
 
 #ifdef MARBL
-      ! Virtual fluxes
-      ! Input comes in units of:         N/A (calculated)
-      ! Output is written in units of:   mmol m-2 s-1
-      varid = nccreate(ncid,'vflux_ALK',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
-      ierr=nf90_put_att(ncid, varid, 'long_name',&
-      &'Virtual flux of ALK')
-      ierr = nf90_put_att(ncid,varid,'units','mmol m-2 s-1 ')
+      if (use_marbl) then
+        ! Virtual fluxes
+        ! Input comes in units of:         N/A (calculated)
+        ! Output is written in units of:   mmol m-2 s-1
+        varid = nccreate(ncid,'vflux_ALK',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
+        ierr=nf90_put_att(ncid, varid, 'long_name',&
+        &'Virtual flux of ALK')
+        ierr = nf90_put_att(ncid,varid,'units','mmol m-2 s-1 ')
 
-      varid = nccreate(ncid,'vflux_DIC',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
-      ierr=nf90_put_att(ncid, varid, 'long_name',&
-      &'Virtual flux of DIC')
-      ierr = nf90_put_att(ncid,varid,'units','mmol m-2 s-1 ')
+        varid = nccreate(ncid,'vflux_DIC',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
+        ierr=nf90_put_att(ncid, varid, 'long_name',&
+        &'Virtual flux of DIC')
+        ierr = nf90_put_att(ncid,varid,'units','mmol m-2 s-1 ')
 
-      varid = nccreate(ncid,'vflux_ALK_ALT_CO2',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
-      ierr=nf90_put_att(ncid, varid, 'long_name',&
-      &'Virtual flux of ALK')
-      ierr = nf90_put_att(ncid,varid,'units','mmol m-2 s-1 ')
+        varid = nccreate(ncid,'vflux_ALK_ALT_CO2',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
+        ierr=nf90_put_att(ncid, varid, 'long_name',&
+        &'Virtual flux of ALK')
+        ierr = nf90_put_att(ncid,varid,'units','mmol m-2 s-1 ')
 
-      varid = nccreate(ncid,'vflux_DIC_ALT_CO2',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
-      ierr=nf90_put_att(ncid, varid, 'long_name',&
-      &'Virtual flux of ALK')
-      ierr = nf90_put_att(ncid,varid,'units','mmol m-2 s-1 ')
+        varid = nccreate(ncid,'vflux_DIC_ALT_CO2',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
+        ierr=nf90_put_att(ncid, varid, 'long_name',&
+        &'Virtual flux of ALK')
+        ierr = nf90_put_att(ncid,varid,'units','mmol m-2 s-1 ')
+      endif
 #endif /* MARBL */
     else
       ! Input comes in units of:         N m-2

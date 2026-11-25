@@ -16,6 +16,7 @@ program main              ! Open MP version of ROMS driver
   use bulk_frc, only: interp_bulk_frc
   use flux_frc, only: interp_flux_frc
   use surf_flux, only: bulk_frc_on, flux_frc_on
+  use param, only: use_marbl
 #ifdef MARBL
   use bgc_shared_vars, only: interp_bgc_frc
 #endif
@@ -53,7 +54,7 @@ program main              ! Open MP version of ROMS driver
   if (mpi_masking) then
     coarse_frc = (bulk_frc_on .and. interp_bulk_frc) .or. (flux_frc_on .and. interp_flux_frc)
 #ifdef MARBL
-    coarse_frc = coarse_frc .or. interp_bgc_frc
+    coarse_frc = coarse_frc .or. (use_marbl .and. interp_bgc_frc)
 #endif
     call find_optimal_tiling(coarse_frc)
   endif
@@ -288,7 +289,7 @@ contains
 #ifdef MARBL
     ! use_constant_Fe (no-op otherwise): Fe at its constant value from the
     ! start, in every time level and halo point of this rank's arrays
-    call marbldrv_impose_constant_fe_all(t)
+    if (use_marbl) call marbldrv_impose_constant_fe_all(t)
 #endif
 
     if (ana_vmix_on) call ana_vmix
@@ -338,7 +339,7 @@ contains
 ! Come up with a better name!
     call wrt_his_ocean_vars(.false.)
 #ifdef MARBL
-    call wrt_bgc(.true.)
+    if (use_marbl) call wrt_bgc(.true.)
 #endif
     if (do_random) call init_random
 #ifdef MARBL
@@ -621,7 +622,7 @@ contains
     ! the step (t3dmix's fluxes come from the n+1/2 tracers, which transport
     ! moves slightly off the constant), in every time level and halo point,
     ! so the next step and this step's output see exactly constant_Fe_value
-    call marbldrv_impose_constant_fe_all(t)
+    if (use_marbl) call marbldrv_impose_constant_fe_all(t)
 #endif
 
 
@@ -678,7 +679,7 @@ contains
     if (wrt_frc)    call wrt_frc_output
 
 #ifdef MARBL
-    call wrt_bgc
+    if (use_marbl) call wrt_bgc
 #endif
     call reg_toc(rg_output)
 

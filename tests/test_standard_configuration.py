@@ -8,7 +8,7 @@ def standard_configuration(tmp_path_factory, read_cppdefs) -> ROMSConfiguration:
 
     cpp_keys=read_cppdefs(ROMS_ROOT/"src/cppdefs.opt")
     build_dir = tmp_path_factory.mktemp("standard_configuration_build")
-    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
+    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir, marbl=True)
     conf.compile()
     return conf
 
@@ -38,8 +38,7 @@ def test_default_cppkeys(read_cppdefs):
     """
     expected_cpp_keys=[
         'NONLIN_EOS', 'SPLIT_EOS', 'UV_ADV', 'UV_COR',
-        'CURVGRID', 'MASKING', 'SPHERICAL', 'LMD_BKPP', 'LMD_KPP', 'LMD_MIXING', 'LMD_NONLOCAL', 'LMD_RIMIX',
-        'MARBL']
+        'CURVGRID', 'MASKING', 'SPHERICAL', 'LMD_BKPP', 'LMD_KPP', 'LMD_MIXING', 'LMD_NONLOCAL', 'LMD_RIMIX']
     default_cpp_keys = read_cppdefs(ROMS_ROOT/"src/cppdefs.opt")
     assert (expected_cpp_keys == default_cpp_keys)
 
@@ -76,6 +75,7 @@ def test_exact_restart(standard_configuration,input_dir,tmp_path):
     }
     nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "bulk"
     nml["PARAM_SETTINGS"]["nt_bgc"] = 32
+    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["use_marbl"] = True
 
     # Run 1: Produce 2 restart files from init
     run1_path = (tmp_path/"run_1/")

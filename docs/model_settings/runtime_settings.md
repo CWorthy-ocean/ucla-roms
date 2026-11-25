@@ -78,8 +78,8 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `nt_passive` | Number of passive tracers (`passive_tracer<n>`). They are in the history file unless `wrt_passive` is `.false.` |
 | `nt_cdr_oae` | Number of OAE `CDR_LITE` tracer pairs. Each pair is an ALK-mimicking and a DIC-mimicking passive tracer (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`), so it adds two tracers. The `CDR_LITE` CPP key adds their air-sea CO2 exchange. |
 | `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`). The `CDR_LITE` tracers are in the history file unless `wrt_passive` is `.false.` |
-| `nt_bgc` | Number of biogeochemical tracers: 32 for default `MARBL`, 0 without `MARBL` |
-| `salinity` | `.true.` (default): the model carries salinity, the second tracer. `.false.`: temperature is the only active tracer (passive and CDR_LITE tracers then start at the second tracer), the linear equation of state has no salt term, the nonlinear one uses a salinity of 34.5, and no salt, `AKs` or forcing-output `ssflx` is written. Replaces the cpp key `SALINITY`. ROMS stops with `salinity = .false.` and `sflx_corr`, with the cpp key `LMD_DDMIX`, or in a `MARBL` build (MARBL and its CDR outputs read salinity) |
+| `nt_bgc` | Number of biogeochemical tracers: MARBL's tracer count (32 with its defaults) with `use_marbl = .true.`, else 0. ROMS stops on any other value |
+| `salinity` | `.true.` (default): the model carries salinity, the second tracer. `.false.`: temperature is the only active tracer (passive and CDR_LITE tracers then start at the second tracer), the linear equation of state has no salt term, the nonlinear one uses a salinity of 34.5, and no salt, `AKs` or forcing-output `ssflx` is written. Replaces the cpp key `SALINITY`. ROMS stops with `salinity = .false.` and `sflx_corr`, with the cpp key `LMD_DDMIX`, or with `use_marbl = .true.` (MARBL and its CDR outputs read salinity) |
 | `mpi_masking` | `.true.`: choose the MPI tiling at start-up from the land mask, without the tiles that are entirely land (default `.false.`). `NP_XI` and `NP_ETA` are then overwritten; launch with at least as many ranks as the selected tiling needs, and extra ranks exit at start-up. No `partit` step is needed. Needs a `PARALLEL_IO` build and a joined grid file (ROMS stops otherwise), and not with `ana_grid`. Replaces the cpp key `MPI_MASKING` |
 
 ### `PIO_SETTINGS`
@@ -283,7 +283,7 @@ These settings control "Z-slice" output, i.e. the output of certain fields verti
 ### `BGC_SETTINGS`
 (read by module `bgc_shared_vars.F90`)
 
-Read only with `MARBL`.
+Read only with `use_marbl = .true.`.
 
 | Setting | Description |
 |--------|-------------|
@@ -310,10 +310,11 @@ Read only with `MARBL`.
 ### `MARBL_BIOGEOCHEMISTRY_SETTINGS`
 (read by module `marbl_driver.F90`)
 
-Read only with `MARBL`.
+Read in every build; without the group, `use_marbl` is `.false.`. The other settings are used only with `use_marbl = .true.`.
 
 | Setting | Description |
 |--------|-------------|
+| `use_marbl` | Run MARBL (default `.false.`). Needs a build made with `make MARBL=yes`, and `nt_bgc` in `PARAM_SETTINGS` must then be MARBL's tracer count; with `.false.`, `nt_bgc` must be 0, and a MARBL build runs as one without MARBL. ROMS stops otherwise, and with `.true.` and `salinity = .false.`. `do_cdr_output`, `do_cdr_gas_exch_output`, `cflx_corr`, `cdr_forcing_3d` and BGC extraction need it |
 | `marbl_config_file` | MARBL configuration file |
 | `marbl_tracers_to_write` | Comma-separated (string) list of MARBL tracers to include in BGC output |
 | `marbl_diagnostics_to_write` | Comma-separated (string) list of MARBL diagnostics to include in BGC diagnostics output |
@@ -408,7 +409,7 @@ Output of the carbonate sensitivities `ddic_dco2` (beta) and `ddic_dalk` (eta), 
 ### `UPSCALE_SETTINGS`
 (read by module `upscale_output.F90`)
 
-Optional: without the group there is no such output. ROMS stops on `do_upscale = .true.` unless the run has MARBL tracers (`MARBL`, `nt_bgc` > 0) or `CDR_LITE` tracers (`nt_cdr_oae` or `nt_cdr_dor` > 0), and on a grid without `SPHERICAL`. The ALK and DIC fluxes are written only with the MARBL tracers, the `CDR_LITE` fluxes with or without them.
+Optional: without the group there is no such output. ROMS stops on `do_upscale = .true.` unless the run has MARBL tracers (`use_marbl = .true.`) or `CDR_LITE` tracers (`nt_cdr_oae` or `nt_cdr_dor` > 0), and on a grid without `SPHERICAL`. The ALK and DIC fluxes are written only with the MARBL tracers, the `CDR_LITE` fluxes with or without them.
 
 Settings controlling CDR upscaling: recording the fluxes of CDR-relevant tracers through the open boundaries of a child domain, so that its parent domain can be re-run with them as CDR forcing to follow their further propagation. The fluxes cover advection and horizontal mixing, for the ALK and DIC perturbations (relative to their ALT_CO2 analogues) and for any `CDR_LITE` tracers.
 

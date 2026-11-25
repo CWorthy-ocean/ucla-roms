@@ -22,7 +22,6 @@ import xarray as xr
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
     ADDITIONAL_FILES,
-    MARBL_CPP_KEYS,
     OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
@@ -49,6 +48,7 @@ def _marbl_nml(input_dir) -> dict:
     nml["TIME_STEPPING"].update({"dt": 20, "ntimes": 10})
     nml["TIDAL_FRC_SETTINGS"].update({"pot_tides": True, "ntides": 2})
     nml["PARAM_SETTINGS"]["nt_bgc"] = 32
+    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["use_marbl"] = True
     nml["SURF_FRC_SETTINGS"].update({"sflx_corr": True, "cflx_corr": True})
     nml["SSS_CORRECTION"] = {"dSSSdt": 7.777}
     nml["DIC_ALK_CORRECTION"] = {"dCdt": 7.777}
@@ -75,10 +75,9 @@ def marbl_conf(tmp_path_factory) -> ROMSConfiguration:
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS
-        + MARBL_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("marbl_build")
-    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
+    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir, marbl=True)
     conf.compile()
     return conf
 

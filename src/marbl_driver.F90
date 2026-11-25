@@ -30,6 +30,7 @@ module marbl_driver
   use MARBL_interface_public_types, only: marbl_diagnostics_type,&
   &marbl_saved_state_type
   use param, only: max_name_size
+  use param                       , only: use_marbl
   use param                       , only: mynode,nt,nt_bgc,&
   &isalt,itemp,Lm,Mm,&
   &ocean_grid_comm
@@ -75,7 +76,7 @@ module marbl_driver
   logical, public :: use_constant_Fe = .false.
   real(kind=8), public :: constant_Fe_value = 3.0e-3_8
 
-  namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
+  namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ use_marbl, marbl_config_file,&
   &marbl_timestep, marbl_tracers_to_write,&
   &use_constant_Fe, constant_Fe_value&
   &, marbl_diagnostics_to_write
@@ -172,8 +173,10 @@ contains
 
   subroutine read_nml_marbl
     use error_handling_mod, only: error_log
-    use namelist_open_mod, only: open_namelist_file, check_nml_string
-!     Read the "MARBL_BIOGEOCHEMISTRY_SETTINGS" section of the namelist file
+    use namelist_open_mod, only: open_namelist_file, check_nml_string, gated_nml_found
+!     Read the "MARBL_BIOGEOCHEMISTRY_SETTINGS" section of the namelist file.
+!     use_marbl (default .false.; a missing group leaves it off) decides
+!     whether MARBL runs; the group's other settings are used only then.
     integer(kind=4) ::  namelist_unit, ios, tidx
     character(len=21) :: sr_name = "read_nml_marbl"
     character(len=512) :: msg = ""
@@ -181,15 +184,14 @@ contains
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
 
+    use_marbl = .false.
     read (unit=namelist_unit, nml=MARBL_BIOGEOCHEMISTRY_SETTINGS, iostat=ios, iomsg=msg)
 
-    if (ios /= 0) then
-      call error_log%raise_global(&
-      &context = module_name//'/'//sr_name,&
-      &info='could not read MARBL_BIOGEOCHEMISTRY_SETTINGS'&
-      &//' section of namelist file: '&
-      &//trim(msg)&
-      &)
+    if (.not. gated_nml_found(ios, msg, 'MARBL_BIOGEOCHEMISTRY_SETTINGS',&
+    &   module_name//'/'//sr_name)) use_marbl = .false.
+    if (.not. use_marbl) then
+      close(namelist_unit)
+      return
     end if
     call check_nml_string(marbl_config_file,&
     &'MARBL_BIOGEOCHEMISTRY_SETTINGS marbl_config_file', module_name//'/'//sr_name)
@@ -2070,6 +2072,47 @@ contains
 
   end subroutine get_tracer_indices  !]
 !-----------------------------------------------------------------------
+#else /* MARBL */
+!     A build without MARBL (make MARBL=no) reads MARBL_BIOGEOCHEMISTRY_SETTINGS
+!     only to stop when use_marbl = .true.; a missing group is fine. Its keys
+!     and types are those of the group with MARBL.
+  implicit none
+  private
+  public :: read_nml_marbl
+  character(len=12) :: module_name = "marbl_driver"
+
+contains
+
+  subroutine read_nml_marbl
+    use param, only: max_name_size, use_marbl
+    use error_handling_mod, only: error_log
+    use namelist_open_mod, only: open_namelist_file, gated_nml_found
+    real(kind=8) :: marbl_timestep, constant_Fe_value
+    character(len=max_name_size) :: marbl_config_file
+    character(len=32) :: marbl_tracers_to_write(40)
+    character(len=400) :: marbl_diagnostics_to_write(64)
+    logical :: use_constant_Fe
+    namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ use_marbl, marbl_config_file,&
+    &marbl_timestep, marbl_tracers_to_write,&
+    &use_constant_Fe, constant_Fe_value&
+    &, marbl_diagnostics_to_write
+    integer(kind=4) :: namelist_unit, ios
+    character(len=21) :: sr_name = "read_nml_marbl"
+    character(len=512) :: msg
+
+    use_marbl = .false.
+    msg = ''
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=MARBL_BIOGEOCHEMISTRY_SETTINGS, iostat=ios, iomsg=msg)
+    close(namelist_unit)
+    if (.not. gated_nml_found(ios, msg, 'MARBL_BIOGEOCHEMISTRY_SETTINGS',&
+    &   module_name//'/'//sr_name)) use_marbl = .false.
+    if (use_marbl) call error_log%raise_global(&
+    &context=module_name//'/'//sr_name,&
+    &info='MARBL_BIOGEOCHEMISTRY_SETTINGS use_marbl = .true. needs a MARBL build:'&
+    &//' rebuild with make MARBL=yes, or set use_marbl = .false.')
+  end subroutine read_nml_marbl
 #endif /* MARBL */
 end module marbl_driver
 

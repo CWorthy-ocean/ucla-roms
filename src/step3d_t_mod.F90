@@ -67,7 +67,7 @@ contains
   &is_marbl_step, marbldrv_impose_constant_fe
 #endif
   use grid, only: umask, vmask, pn, pm, rmask, nx, ny, nz, dn_u, dm_v
-  use param, only: mynode, np_eta, np_xi, salinity
+  use param, only: mynode, np_eta, np_xi, salinity, use_marbl
   use roms_mpi, only: exchange_xxx
   use timers, only: reg_tic, reg_toc, rg_marbl
   use mixing, only: &
@@ -1064,14 +1064,16 @@ do itrc=1,nt
 enddo     !<-- itrc
 
 # if defined(MARBL)
-if (is_marbl_step(tstep)) then
-  ! use_constant_Fe (no-op otherwise): MARBL computes with the constant iron;
-  ! the step's changes to Fe (transport, boundaries, rivers, MARBL, lateral
-  ! mixing) are undone after t3dmix in roms_step
-  call marbldrv_impose_constant_fe(istrR,iendR,jstrR,jendR,t,nnew)
-  call reg_tic(rg_marbl)
-  call marbldrv_column_physics(istr,iend,jstr,jend,t)
-  call reg_toc(rg_marbl)
+if (use_marbl) then
+  if (is_marbl_step(tstep)) then
+    ! use_constant_Fe (no-op otherwise): MARBL computes with the constant iron;
+    ! the step's changes to Fe (transport, boundaries, rivers, MARBL, lateral
+    ! mixing) are undone after t3dmix in roms_step
+    call marbldrv_impose_constant_fe(istrR,iendR,jstrR,jendR,t,nnew)
+    call reg_tic(rg_marbl)
+    call marbldrv_column_physics(istr,iend,jstr,jend,t)
+    call reg_toc(rg_marbl)
+  end if
 end if
 # endif
 

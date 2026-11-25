@@ -327,6 +327,7 @@ use_nhy_forcing = .true.        ! Read nhy (NHy deposition) from the forcing fil
 /
 
 &MARBL_BIOGEOCHEMISTRY_SETTINGS                                 !marbl_driver.F90
+use_marbl = .true.                ! Run MARBL (needs a build made with make MARBL=yes); nt_bgc must be its tracer count
 !------------------------------
 ! Previously set in `roms.in`
 !------------------------------

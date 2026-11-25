@@ -7,10 +7,10 @@ ROMS includes one example, a nested simulation off the northwest coast of Icelan
 
 ```
 cd $ROMS_ROOT/Examples/Iceland/Iceland_parent
-make
+make MARBL=yes
 ```
 
-With Intel compilers, use `make COMPILER=intel` (see {doc}`compilation`). `make` copies `$ROMS_ROOT/src` into a `Compile/` subdirectory, adds the directory's own `cppdefs.opt` and any source files it contains, and compiles there. You should now have an executable, `roms`, in the directory.
+With Intel compilers, use `make COMPILER=intel MARBL=yes` (see {doc}`compilation`). `make` copies `$ROMS_ROOT/src` into a `Compile/` subdirectory, adds the directory's own `cppdefs.opt` and any source files it contains, and compiles there. You should now have an executable, `roms`, in the directory.
 
 To set up your own configuration, make a new directory with a copy of `$ROMS_ROOT/Work/Makefile` (the same `Makefile` the example uses), `$ROMS_ROOT/src/cppdefs.opt` and `$ROMS_ROOT/src/namelist.nml`, and edit the copies (see {doc}`../model_settings/index`).
 

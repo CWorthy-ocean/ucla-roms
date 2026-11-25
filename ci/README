@@ -1,6 +1,6 @@
 The ci directory houses helper files for the GitHub Actions workflows in $ROMS_ROOT/.github/workflows/
 
-- compile_only.sh: compiles ROMS with a given set of CPP keys and no run; containerized_ci.yml uses it to check that CPP-key combinations the pytest suite doesn't run still compile (PARALLEL_IO, DIAGNOSTICS, CDR forcing without MARBL)
+- compile_only.sh: compiles ROMS with a given set of CPP keys and no run; containerized_ci.yml uses it to check that CPP-key combinations the pytest suite doesn't run still compile (PARALLEL_IO, DIAGNOSTICS, CDR forcing without MARBL); MARBL among the keys builds with make MARBL=yes
 - set_environs.sh: sets the ROMS environment variables for a conda environment (e.g. in a GitHub Codespaces session)
 - pre-commit/: scripts for the repository's pre-commit hooks (.pre-commit-config.yaml)
 - number_fragments.py, add_release_to_index.py, towncrier_template.rst, release_body.py: build docs/releases/<tag>.rst and the GitHub release text from the release-note fragments in docs/changes/ (configured in towncrier.toml), run by the release-notes and publish workflows; test_*.py are their unit tests (run them with `pytest ci`; the towncrier ones need towncrier and docutils, and no workflow runs them)

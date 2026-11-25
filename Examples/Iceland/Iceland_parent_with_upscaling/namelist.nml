@@ -278,6 +278,7 @@ nrpf_bgc_avg_dia = 10           ! Number of time records per BGC diagnostics fil
 /
 
 &MARBL_BIOGEOCHEMISTRY_SETTINGS                                  !marbl_driver.F
+use_marbl = .true.               ! Run MARBL (the build needs make MARBL=yes); nt_bgc must be its tracer count
 !------------------------------
 ! Previously set in `roms.in`
 !------------------------------
