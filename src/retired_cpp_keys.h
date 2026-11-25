@@ -207,3 +207,18 @@
 #ifdef NS_PERIODIC
 # error "CPP key NS_PERIODIC was removed: a domain is now made periodic in the south-north direction with ns_periodic = .true. in the namelist group PERIODIC_SETTINGS (default .false.); remove NS_PERIODIC from cppdefs.opt"
 #endif
+#ifdef BULK_FRC
+# error "CPP key BULK_FRC was removed: bulk forcing is now surf_frc_type = 'bulk' (the default) in the namelist group SURF_FRC_SETTINGS; a build without it set surf_frc_type = 'flux'; remove BULK_FRC from cppdefs.opt"
+#endif
+#ifdef ANA_SMFLUX
+# error "CPP key ANA_SMFLUX was removed: zero surface fluxes are now surf_frc_type = 'none' in the namelist group SURF_FRC_SETTINGS; remove ANA_SMFLUX from cppdefs.opt"
+#endif
+#ifdef ANA_STFLUX
+# error "CPP key ANA_STFLUX was removed: zero surface fluxes are now surf_frc_type = 'none' in the namelist group SURF_FRC_SETTINGS; remove ANA_STFLUX from cppdefs.opt"
+#endif
+#ifdef ANA_SSFLUX
+# error "CPP key ANA_SSFLUX was removed: zero surface fluxes are now surf_frc_type = 'none' in the namelist group SURF_FRC_SETTINGS; remove ANA_SSFLUX from cppdefs.opt"
+#endif
+#ifdef ANA_SRFLUX
+# error "CPP key ANA_SRFLUX was removed: zero surface fluxes are now surf_frc_type = 'none' in the namelist group SURF_FRC_SETTINGS; remove ANA_SRFLUX from cppdefs.opt"
+#endif

@@ -13,7 +13,7 @@ module bulk_frc
 #endif
   use instant_output, only: wrt_instant
   use flux_frc, only: interp_flux_frc   ! merged into SURF_FRC_SETTINGS (owned by flux_frc)
-  use surf_flux, only: sflx_corr, qcorrection, cflx_corr  ! in SURF_FRC_SETTINGS (owned by surf_flux)
+  use surf_flux, only: sflx_corr, qcorrection, cflx_corr, surf_frc_type, bulk_frc_on, flux_frc_on  ! (owned by surf_flux)
   use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
 
@@ -51,7 +51,7 @@ module bulk_frc
   logical, public :: interp_bulk_frc, check_bulk_frc_units
   ! The tracers of the DIC and ALK restoring (cflx_corr), set by find_cflx_tracers
   integer(kind=4) :: itrc_dic=0, itrc_dic_alt=0, itrc_alk=0, itrc_alk_alt=0
-  namelist /SURF_FRC_SETTINGS/ interp_bulk_frc, check_bulk_frc_units, interp_flux_frc,&
+  namelist /SURF_FRC_SETTINGS/ surf_frc_type, interp_bulk_frc, check_bulk_frc_units, interp_flux_frc,&
   &sflx_corr, qcorrection, cflx_corr
 
   public init_arrays_bulk_frc
@@ -68,6 +68,7 @@ contains
     character(len=20) :: sr_name = "read_nml_surf_frc"
     character(len=512) :: msg = ""
     ! Read namelist
+    surf_frc_type = 'bulk'
     call open_namelist_file(namelist_unit)
     read (unit=namelist_unit, nml=SURF_FRC_SETTINGS, iostat=ios, iomsg=msg)
 
@@ -80,6 +81,16 @@ contains
       &)
     end if
     close(namelist_unit)
+    if (ios /= 0) return
+
+    bulk_frc_on = surf_frc_type == 'bulk'
+    flux_frc_on = surf_frc_type == 'flux'
+    if (.not. (bulk_frc_on .or. flux_frc_on .or. surf_frc_type == 'none')) then
+      call error_log%raise_global(context = module_name//'/'//sr_name,&
+      &info="SURF_FRC_SETTINGS surf_frc_type = '"//trim(surf_frc_type)//"' is not a choice:"&
+      &//" use 'bulk', 'flux' or 'none'")
+    end if
+    if (mynode == 0) write(*,'(/1x,3A)') "SURF_FRC_SETTINGS: surf_frc_type = '", trim(surf_frc_type), "'"
 
   end subroutine read_nml_surf_frc
 

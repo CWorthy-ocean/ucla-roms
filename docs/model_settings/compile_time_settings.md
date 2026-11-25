@@ -33,18 +33,6 @@ These switches control the configuration of the model grid, including geometry a
 | `MPI_MASKING` | Choose the MPI tiling at runtime from the land mask, skipping tiles that are entirely land | disabled | Requires `PARALLEL_IO` (a joined grid file). `NP_XI` and `NP_ETA` from the namelist are overwritten. Launch with at least as many ranks as the selected tiling needs; extra ranks exit at startup. No `partit` step is needed. |
 | `ANA_GRID` | Analytically prescribe the grid | disabled | Hardcoded in `ana_grid.h` |
 
-### `ATMOSPHERIC FORCING`
-
-These switches control the application of atmospheric forcing to the model surface.
-
-| Switch | Description | Default | Usage notes |
-|--------|-------------|---------|-------------|
-| `BULK_FRC` | Use the bulk forcing module for atmospheric forcing | enabled | ROMS will use flux forcing if this CPP key is not set and the `ANA_` keys are not present |
-| `ANA_SMFLUX` | Analytically prescribe surface momentum flux (with flux forcing) | disabled | Hardcoded in `analytical.F90` |
-| `ANA_SRFLUX` | Analytically prescribe surface shortwave radiative flux (with flux forcing) | disabled | Hardcoded in `analytical.F90` |
-| `ANA_SSFLUX` | Analytically prescribe surface salinity flux (with flux forcing) | disabled | Hardcoded in `analytical.F90` |
-| `ANA_STFLUX` | Analytically prescribe surface heat flux (with flux forcing) | disabled | Hardcoded in `analytical.F90` |
-
 ### `NUMERICAL ALGORITHMS`
 
 These switches control the numerical schemes used by the model for tracer advection. By default, horizontal tracer advection is fourth-order centered (C4) in the predictor step and third-order upstream (U3) in the corrector step. Vertical tracer advection is a thickness-aware U3 scheme, again with a C4 predictor and a U3 corrector.
@@ -149,5 +137,7 @@ These keys are no longer keys because the namelist now decides what they decided
 | `M3_FRC_BRY`, `T_FRC_BRY` | `use_m3_boundary_data`, `use_t_boundary_data` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) (default `.true.`) |
 | `M2_FRC_BRY`, `Z_FRC_BRY` | `obc_m2` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) decides which data are read |
 | `EW_PERIODIC`, `NS_PERIODIC` | `ew_periodic`, `ns_periodic` in [`PERIODIC_SETTINGS`](runtime_settings.md#periodic_settings) (default `.false.`) |
+| `BULK_FRC` | `surf_frc_type = 'bulk'` (the default) in [`SURF_FRC_SETTINGS`](runtime_settings.md#surf_frc_settings); without the key: `'flux'` |
+| `ANA_SMFLUX`, `ANA_STFLUX`, `ANA_SSFLUX`, `ANA_SRFLUX` | `surf_frc_type = 'none'` in [`SURF_FRC_SETTINGS`](runtime_settings.md#surf_frc_settings) (all surface fluxes zero) |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

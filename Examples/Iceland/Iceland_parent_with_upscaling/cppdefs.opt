@@ -65,31 +65,6 @@
 #undef ANA_GRID
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!! ATMOSPHERIC FORCING !!!!!!!!!!!!!!!!!!!!!!!!!
-
-! Use the bulk forcing module for atmospheric forcing
-! Usage notes: ROMS will use flux forcing if this CPP key is not set and the ANA_ keys are not present
-#define BULK_FRC
-
-!----------------------------------------------------------
-
-! Analytically prescribe surface momentum flux (with flux forcing)
-! Usage notes: Hardcoded in analytical.F
-#undef ANA_SMFLUX
-
-! Analytically prescribe surface shortwave radiative flux (with flux forcing)
-! Usage notes: Hardcoded in analytical.F
-#undef ANA_SRFLUX
-
-! Analytically prescribe surface salinity flux (with flux forcing)
-! Usage notes: Hardcoded in analytical.F
-#undef ANA_SSFLUX
-
-! Analytically prescribe surface heat flux (with flux forcing)
-! Usage notes: Hardcoded in analytical.F
-#undef ANA_STFLUX
-
-
 !!!!!!!!!!!!!!!!!!!!!!!!! NUMERICAL ALGORITHMS !!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! Use the fourth-order Akima scheme for horizontal advection

@@ -104,6 +104,7 @@ def box_namelist(input_dir, cdr_file, np_xi=2, np_eta=2) -> dict:
     nml["TIME_STEPPING"].update({"dt": DT, "ndtfast": 12, "ntimes": NSTEPS})
     nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
     nml["GRID_SETTINGS"] = {"grdname": ""}
+    nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "none"
     nml["INITIAL_CONDITIONS"] = {"inifile": ""}
     nml["FORCING_FILES"] = {"frcfiles": [str(cdr_file)]}
     nml["S_COORD"].update({"theta_s": 0.0, "theta_b": 0.0, "hc": 1.0e4})

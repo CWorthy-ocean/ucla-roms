@@ -17,7 +17,6 @@ import xarray as xr
 
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
-    BGC_REALISTIC_CPP_KEYS,
     MARBL_CPP_KEYS,
     OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
@@ -47,6 +46,7 @@ def _cdr_base_nml(input_dir) -> dict:
             str(input_dir / "example_input_bgc_boundary_forcing.nc"),
         ]
     }
+    nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "bulk"
     nml["PARAM_SETTINGS"]["nt_bgc"] = 32
     return nml
 
@@ -68,7 +68,7 @@ def cdr_conf(tmp_path_factory) -> ROMSConfiguration:
     """Compile the MARBL binary once for the whole module."""
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
-        + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
+        + REALISTIC_CPP_KEYS
         + MARBL_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("cdr_build")
@@ -568,6 +568,7 @@ def _cdr_lite_parm_nml(input_dir) -> dict:
             CDRGAS_NAME,
         ]
     }
+    nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "bulk"
     nml["CDR_FRC_SETTINGS"].update({
         "cdr_source": True,
         "cdr_forcing_parameterized": True,
@@ -624,12 +625,11 @@ class TestCdrLite:
     def cdr_lite_conf(self, tmp_path_factory) -> ROMSConfiguration:
         """Compile the no-MARBL binary once for the class.
 
-        The key set of the CI compile-only "BULK_FRC without MARBL" build. BULK_FRC is needed so the surface forcing supplies the
+        The key set of the CI compile-only "without MARBL" build, run with bulk forcing so the surface forcing supplies the
         winds ``k_gas`` uses.
         """
         cpp_keys = (
             UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-            + ["BULK_FRC"]
         )
         build_dir = tmp_path_factory.mktemp("cdr_lite_build")
         conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
@@ -933,6 +933,7 @@ class TestCdrLite:
                 CDRGAS_NAME,
             ]
         }
+        nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "bulk"
         nml["CDR_FRC_SETTINGS"].update({
             "cdr_source": True,
             "cdr_forcing_depth_profiles": True,

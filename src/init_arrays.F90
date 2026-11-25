@@ -58,9 +58,8 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
   use bgc_forces, only: init_arrays_bgc_forces
   use bgc_io, only: init_arrays_bgc_frc
 #endif
-#ifdef BULK_FRC
   use bulk_frc, only: init_arrays_bulk_frc
-#endif
+  use surf_flux, only: bulk_frc_on, flux_frc_on
   use dimensions, only: npx, npy
   use advection, only: init_advection
   implicit none
@@ -109,9 +108,7 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
 
   call init_arrays_surf_flx
 
-#ifdef BULK_FRC
-  call init_arrays_bulk_frc
-#endif
+  if (bulk_frc_on) call init_arrays_bulk_frc
 
 
 ! Set variable horizontal viscosities and tracer diffusion
@@ -122,9 +119,7 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
   call init_arrays_boundary
   call init_arrays_buffer     ! DevinD added this here to allocate
 
-#ifndef BULK_FRC
-  call init_arrays_flux_frc   ! DevinD added this here to allocate
-#endif
+  if (flux_frc_on) call init_arrays_flux_frc
 
   if (pipe_source) call init_arrays_pipes
 

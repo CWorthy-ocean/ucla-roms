@@ -38,7 +38,7 @@ def test_default_cppkeys(read_cppdefs):
     """
     expected_cpp_keys=[
         'NONLIN_EOS', 'SALINITY', 'SPLIT_EOS', 'UV_ADV', 'UV_COR',
-        'CURVGRID', 'MASKING', 'SPHERICAL', 'BULK_FRC', 'LMD_BKPP', 'LMD_KPP', 'LMD_MIXING', 'LMD_NONLOCAL', 'LMD_RIMIX',
+        'CURVGRID', 'MASKING', 'SPHERICAL', 'LMD_BKPP', 'LMD_KPP', 'LMD_MIXING', 'LMD_NONLOCAL', 'LMD_RIMIX',
         'MARBL']
     default_cpp_keys = read_cppdefs(ROMS_ROOT/"src/cppdefs.opt")
     assert (expected_cpp_keys == default_cpp_keys)
@@ -74,6 +74,7 @@ def test_exact_restart(standard_configuration,input_dir,tmp_path):
             str(input_dir / "example_input_bgc_boundary_forcing.nc"),
         ]
     }
+    nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "bulk"
     nml["PARAM_SETTINGS"]["nt_bgc"] = 32
 
     # Run 1: Produce 2 restart files from init
