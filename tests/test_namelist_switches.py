@@ -2,7 +2,7 @@
 
 A group whose cpp key is off is still read, only to stop when it switches its
 feature on (gated_nml_found and check_nml_cpp_switch in namelist_open_mod).
-Every case runs one physics-only build, without MARBL or BULK_FRC, against a
+Every case runs one physics-only build, without MARBL, with flux forcing, against a
 mutated test namelist.
 
 A stop is an MPI_Abort after read_namelists collects the errors: mpirun exits
@@ -71,12 +71,15 @@ STOPS = {
                          ["could not read SPONGE_TUNE_SETTINGS",
                           "ub_tune is now named apply_sponge_tune"]),
     "sflx_corr": ("SURF_FRC_SETTINGS", {"sflx_corr": True},
-                  ["SURF_FRC_SETTINGS sflx_corr = .true. needs the cpp key BULK_FRC"]),
+                  ["SURF_FRC_SETTINGS sflx_corr = .true. needs surf_frc_type = 'bulk'"]),
     "qcorrection": ("SURF_FRC_SETTINGS", {"qcorrection": True},
-                    ["SURF_FRC_SETTINGS qcorrection = .true. needs the cpp key BULK_FRC"]),
+                    ["SURF_FRC_SETTINGS qcorrection = .true. needs surf_frc_type = 'bulk'"]),
     "cflx_corr": ("SURF_FRC_SETTINGS", {"cflx_corr": True},
-                  ["SURF_FRC_SETTINGS cflx_corr = .true. needs the cpp key BULK_FRC",
+                  ["SURF_FRC_SETTINGS cflx_corr = .true. needs surf_frc_type = 'bulk'",
                    "SURF_FRC_SETTINGS cflx_corr = .true. needs the cpp key MARBL"]),
+    "bad_surf_frc_type": ("SURF_FRC_SETTINGS", {"surf_frc_type": "bulkk"},
+                          ["SURF_FRC_SETTINGS surf_frc_type = 'bulkk' is not a choice",
+                           "use 'bulk', 'flux' or 'none'"]),
     "negative_v_sponge": ("V_SPONGE_SETTINGS", {"v_sponge": -1.0},
                           ["V_SPONGE_SETTINGS v_sponge must not be negative"]),
     "v_sponge_misspelled": ("V_SPONGE_SETTINGS", {"use_boundary_spong": True},

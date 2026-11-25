@@ -28,26 +28,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_spherical = .false.
 #endif
-#ifdef ANA_SSFLUX
-  logical, parameter, public :: key_ana_ssflux = .true.
-#else
-  logical, parameter, public :: key_ana_ssflux = .false.
-#endif
-#ifdef ANA_SMFLUX
-  logical, parameter, public :: key_ana_smflux = .true.
-#else
-  logical, parameter, public :: key_ana_smflux = .false.
-#endif
-#ifdef ANA_SRFLUX
-  logical, parameter, public :: key_ana_srflux = .true.
-#else
-  logical, parameter, public :: key_ana_srflux = .false.
-#endif
-#ifdef ANA_STFLUX
-  logical, parameter, public :: key_ana_stflux = .true.
-#else
-  logical, parameter, public :: key_ana_stflux = .false.
-#endif
 #ifdef MPI_MASKING
   logical, parameter, public :: key_mpi_masking = .true.
 #else
@@ -125,11 +105,6 @@ module cpp_keys_mod
 #endif
 
   ! (b) Choices: each selects one of several alternative schemes.
-#ifdef BULK_FRC
-  logical, parameter, public :: key_bulk_frc = .true.
-#else
-  logical, parameter, public :: key_bulk_frc = .false.
-#endif
 #ifdef NONLIN_EOS
   logical, parameter, public :: key_nonlin_eos = .true.
 #else

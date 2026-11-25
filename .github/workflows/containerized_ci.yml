@@ -437,7 +437,7 @@ jobs:
     #   with PARALLEL_IO on top, so MARBL+CDR+PIO interactions are compiled
     #   too. Built once without MPI_MASKING and once with it.
     # - NHMG diagnostics (DIAGNOSTICS_NHMG, NHMGDIAG), which no test defines.
-    # - BULK_FRC without MARBL: the CDR and CDR_LITE code in a physics-only
+    # - Without MARBL: the CDR and CDR_LITE code in a physics-only
     #   build, without PARALLEL_IO (compile_ifx covers the PARALLEL_IO variant).
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_gnu.result == 'success' || needs.build_gnu.result == 'skipped') }}
     runs-on: ubuntu-latest
@@ -467,7 +467,6 @@ jobs:
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
-            BULK_FRC \
             MARBL \
             PARALLEL_IO
           '
@@ -481,7 +480,6 @@ jobs:
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
-            BULK_FRC \
             MARBL \
             PARALLEL_IO MPI_MASKING
           '
@@ -498,7 +496,7 @@ jobs:
             DIAGNOSTICS_NHMG NHMGDIAG
           '
 
-      - name: Compile BULK_FRC configuration without MARBL
+      - name: Compile the configuration without MARBL
         shell: bash
         run: |
           micromamba run -n roms-ci bash -c '
@@ -506,8 +504,7 @@ jobs:
             UV_ADV UV_COR MASKING \
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
-            CURVGRID SPHERICAL \
-            BULK_FRC
+            CURVGRID SPHERICAL
           '
 
   compile_ifx:
@@ -515,7 +512,7 @@ jobs:
     # ifx counterpart of compile_gnu's PARALLEL_IO checks: the same production
     # key set compiled with COMPILER=intel against the ifx image's from-source
     # PnetCDF + ParallelIO fork, once without MPI_MASKING and once with it.
-    # Also BULK_FRC without MARBL, with PARALLEL_IO. Same build_ifx gating as
+    # Also without MARBL, with PARALLEL_IO. Same build_ifx gating as
     # test_ifx.
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_ifx.result == 'success' || needs.build_ifx.result == 'skipped') }}
     runs-on: ubuntu-latest
@@ -545,7 +542,6 @@ jobs:
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
-            BULK_FRC \
             MARBL \
             PARALLEL_IO
 
@@ -558,11 +554,10 @@ jobs:
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
-            BULK_FRC \
             MARBL \
             PARALLEL_IO MPI_MASKING
 
-      - name: Compile BULK_FRC configuration without MARBL
+      - name: Compile the configuration without MARBL
         shell: bash
         run: |
           export COMPILER=intel
@@ -571,7 +566,6 @@ jobs:
             SALINITY NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
-            BULK_FRC \
             PARALLEL_IO
 
   test_ifx:

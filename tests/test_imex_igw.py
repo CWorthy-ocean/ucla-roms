@@ -26,7 +26,6 @@ import pytest
 
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
-    BGC_REALISTIC_CPP_KEYS,
     MARBL_CPP_KEYS,
     OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
@@ -446,7 +445,7 @@ def imex_marbl_configuration(tmp_path_factory) -> ROMSConfiguration:
     """The realistic MARBL case of test_bgc.py with IMEX_IGW, compiled once for this module."""
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
-        + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
+        + REALISTIC_CPP_KEYS
         + MARBL_CPP_KEYS + ["IMEX_IGW"]
     )
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path_factory.mktemp("imex_marbl_build"))

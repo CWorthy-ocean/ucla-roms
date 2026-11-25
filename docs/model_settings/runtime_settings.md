@@ -113,12 +113,13 @@ Not read with `ANA_INITIAL`.
 
 | Setting | Description |
 |--------|-------------|
-| `interp_bulk_frc` | Interpolate forcing from coarser input grid if .true. |
-| `check_bulk_frc_units` | Perform a check that input files have expected units if .true.  |
-| `interp_flux_frc` | Interpolate forcing from coarser input grid if .true. |
-| `sflx_corr` | Restore surface salinity toward `sss` if `.true.` (default `.false.`; coefficient `dSSSdt` in `SSS_CORRECTION`). ROMS stops if it is `.true.` without `BULK_FRC` and `SALINITY`, or with `ANA_SSFLUX` |
-| `qcorrection` | Restore surface temperature toward `sst` if `.true.` (default `.false.`; coefficient `dSSTdt` in `SST_CORRECTION`). ROMS stops if it is `.true.` without `BULK_FRC` |
-| `cflx_corr` | Restore surface DIC and ALK toward `sDIC` and `sALK` if `.true.` (default `.false.`; coefficient `dCdt` in `DIC_ALK_CORRECTION`). ROMS stops if it is `.true.` without `BULK_FRC` and `MARBL`, or if a tracer it needs (`DIC`, `DIC_ALT_CO2`, `ALK`, `ALK_ALT_CO2`) is missing |
+| `surf_frc_type` | The surface fluxes: `'bulk'` (bulk formulae from the atmospheric fields `uwnd`, `vwnd`, `Tair`, `qair`, `rain`, `lwrad` and `swrad` of the forcing files, the default), `'flux'` (the fluxes `sustr`, `svstr`, `shflux`, `swflux` and `swrad` read from the forcing files) or `'none'` (all surface fluxes zero, as in idealized cases) |
+| `interp_bulk_frc` | Interpolate bulk forcing from a 2x coarser input grid if .true. |
+| `check_bulk_frc_units` | Perform a check that bulk input files have expected units if .true.  |
+| `interp_flux_frc` | Interpolate flux forcing from a 2x coarser input grid if .true. |
+| `sflx_corr` | Restore surface salinity toward `sss` if `.true.` (default `.false.`; coefficient `dSSSdt` in `SSS_CORRECTION`). ROMS stops if it is `.true.` without `surf_frc_type = 'bulk'` and `SALINITY` |
+| `qcorrection` | Restore surface temperature toward `sst` if `.true.` (default `.false.`; coefficient `dSSTdt` in `SST_CORRECTION`). ROMS stops if it is `.true.` without `surf_frc_type = 'bulk'` |
+| `cflx_corr` | Restore surface DIC and ALK toward `sDIC` and `sALK` if `.true.` (default `.false.`; coefficient `dCdt` in `DIC_ALK_CORRECTION`). ROMS stops if it is `.true.` without `surf_frc_type = 'bulk'` and `MARBL`, or if a tracer it needs (`DIC`, `DIC_ALT_CO2`, `ALK`, `ALK_ALT_CO2`) is missing |
 
 ### `RIVER_FRC_SETTINGS`
 (read by module `river_frc.F90`)

@@ -17,13 +17,10 @@ program main              ! Open MP version of ROMS driver
 #endif
 #ifdef MPI_MASKING
   use mpi_masking_mod, only: find_optimal_tiling
-! Coarse-resolution forcing flags: only the flag belonging to the active
-! forcing module matters (interp_flux_frc is inert under BULK_FRC).
-# ifdef BULK_FRC
+! Coarse-resolution forcing flags: only the flag of surf_frc_type matters.
   use bulk_frc, only: interp_bulk_frc
-# else
   use flux_frc, only: interp_flux_frc
-# endif
+  use surf_flux, only: bulk_frc_on, flux_frc_on
 # ifdef MARBL
   use bgc_shared_vars, only: interp_bgc_frc
 # endif
@@ -62,11 +59,7 @@ program main              ! Open MP version of ROMS driver
 !     Git hash
   mpi_master_only write(*,'(/1x,2A)') "Git hash: ", git_hash
 #ifdef MPI_MASKING
-# ifdef BULK_FRC
-  coarse_frc = interp_bulk_frc
-# else
-  coarse_frc = interp_flux_frc
-# endif
+  coarse_frc = (bulk_frc_on .and. interp_bulk_frc) .or. (flux_frc_on .and. interp_flux_frc)
 # ifdef MARBL
   coarse_frc = coarse_frc .or. interp_bgc_frc
 # endif
