@@ -1,7 +1,7 @@
 module u3dbc_mod
 #include "cppdefs.opt"
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m3_orlanski,&
-  &  obc_rad_normal, obc_rad_npo, use_m3_boundary_data
+  &  obc_rad_normal, obc_rad_npo, use_m3_boundary_data, ew_periodic, ns_periodic
   implicit none
   private
 
@@ -39,8 +39,7 @@ contains
 
 # define dt illegal
 
-# ifndef EW_PERIODIC
-    if (inode==0) then
+    if (WESTERN_EDGE) then
       if (obc_west) then
         if (obc_m3_orlanski) then
           do k=1,nz                         ! Western edge radiation
@@ -205,11 +204,9 @@ contains
         enddo
       endif
     endif         !<-- EASTERN_EDGE
-# endif             /* !EW_PERIODIC */
 
 
 
-# ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       if (obc_south) then
         if (obc_m3_orlanski) then
@@ -264,11 +261,7 @@ contains
           enddo
         endif
       else
-#   ifdef EW_PERIODIC
-#    define I_RANGE istrU,iend
-#   else
 #    define I_RANGE istr,iendR
-#   endif
         do k=1,nz                       ! Wall: free-slip (gamma2=+1)
           do i=I_RANGE                  ! =====   no-slip (gamma2=-1)
           u(i,jstr-1,k,nnew)=gamma2*u(i,jstr,k,nnew)&
@@ -337,11 +330,7 @@ contains
         enddo
       endif
     else
-#   ifdef EW_PERIODIC
-#    define I_RANGE istrU,iend
-#   else
 #    define I_RANGE istr,iendR
-#   endif
       do k=1,nz                        ! Wall: free-slip (gamma2=+1)
         do i=I_RANGE                  ! =====   no-slip (gamma2=-1)
         u(i,jend+1,k,nnew)=gamma2*u(i,jend,k,nnew)&
@@ -353,7 +342,6 @@ contains
 #   undef I_RANGE
     endif
 endif   !<-- NORTHERN_EDGE
-# endif        /* !NS_PERIODIC */
 
 ! Corners between adjacent open boundaries
 

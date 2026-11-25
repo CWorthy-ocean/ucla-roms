@@ -23,7 +23,7 @@ These switches control fundamental aspects of the model setup, including the equ
 
 ### `GRID OPTIONS`
 
-These switches control the configuration of the model grid, including geometry, masking, and boundary treatment.
+These switches control the configuration of the model grid, including geometry and masking.
 
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
@@ -32,8 +32,6 @@ These switches control the configuration of the model grid, including geometry, 
 | `SPHERICAL` | Use a spherical geometry in the grid setup | enabled | The model will look for coordinates based on latitude and longitude instead of distance |
 | `MPI_MASKING` | Choose the MPI tiling at runtime from the land mask, skipping tiles that are entirely land | disabled | Requires `PARALLEL_IO` (a joined grid file). `NP_XI` and `NP_ETA` from the namelist are overwritten. Launch with at least as many ranks as the selected tiling needs; extra ranks exit at startup. No `partit` step is needed. |
 | `ANA_GRID` | Analytically prescribe the grid | disabled | Hardcoded in `ana_grid.h` |
-| `EW_PERIODIC` | Make the domain periodic in the east-west direction | disabled | This has not been tested or used, so it is unclear whether it would induce conflicts with more recent code |
-| `NS_PERIODIC` | Make the domain periodic in the north-south direction | disabled | This has not been tested or used, so it is unclear whether it would induce conflicts with more recent code |
 
 ### `ATMOSPHERIC FORCING`
 
@@ -150,5 +148,6 @@ These keys are no longer keys because the namelist now decides what they decided
 | `OBC_RAD_NORMAL`, `OBC_RAD_NPO` | `obc_rad = 'normal'` or `'npo'` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) (default `'oblique'`) |
 | `M3_FRC_BRY`, `T_FRC_BRY` | `use_m3_boundary_data`, `use_t_boundary_data` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) (default `.true.`) |
 | `M2_FRC_BRY`, `Z_FRC_BRY` | `obc_m2` in [`OPEN_BOUNDARY_SETTINGS`](runtime_settings.md#open_boundary_settings) decides which data are read |
+| `EW_PERIODIC`, `NS_PERIODIC` | `ew_periodic`, `ns_periodic` in [`PERIODIC_SETTINGS`](runtime_settings.md#periodic_settings) (default `.false.`) |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

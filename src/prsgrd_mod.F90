@@ -1,5 +1,6 @@
 module prsgrd_mod
 
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
   private
 
@@ -123,7 +124,6 @@ contains
 
 # include "compute_auxiliary_bounds.h"
 
-# ifndef EW_PERIODIC
     if (WESTERN_EDGE) then          ! Restrict extended ranges by
       imin=istrU                    ! one row of points inward near
     else                            ! the physical boundaries.
@@ -134,11 +134,6 @@ contains
     else                            ! jmin,jmax only for ETA.
       imax=iend+1
     endif
-# else
-    imin=istr-1
-    imax=iend+1
-# endif
-# ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       jmin=jstrV
     else
@@ -149,10 +144,6 @@ contains
     else
       jmax=jend+1
     endif
-# else
-    jmin=jstr-1
-    jmax=jend+1
-# endif
 
 ! Preliminary step (same for XI- and ETA-components):
 !------------ ---- ----- --- --- --- ----------------
@@ -258,7 +249,6 @@ contains
         enddo
       enddo
 
-# ifndef EW_PERIODIC
       if (WESTERN_EDGE) then         ! Extrapolate elementary
         do j=jstr,jend               ! differences near physical
           FC(imin-1,j)=FC(imin,j)    ! boundaries to compensate.
@@ -271,7 +261,6 @@ contains
           rx(imax+1,j)=rx(imax,j)
         enddo
       endif
-# endif
 
       do j=jstr,jend
         do i=istrU-1,iend
@@ -366,7 +355,6 @@ contains
         enddo
       enddo
 
-# ifndef NS_PERIODIC
       if (SOUTHERN_EDGE) then
         do i=istr,iend
           FC(i,jmin-1)=FC(i,jmin)
@@ -379,7 +367,6 @@ contains
           rx(i,jmax+1)=rx(i,jmax)
         enddo
       endif
-# endif
 
       do j=jstrV-1,jend
         do i=istr,iend

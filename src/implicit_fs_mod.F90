@@ -34,7 +34,7 @@ module implicit_fs_mod
 
   use mpi_f08, only: mpi_comm
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m2_flather,&
-  &  obc_m2_specified
+  &  obc_m2_specified, ew_periodic, ns_periodic
   implicit none
   private
 
@@ -586,14 +586,10 @@ contains
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     ib0 = istr ; ib1 = iend ; jb0 = jstr ; jb1 = jend
-#ifndef EW_PERIODIC
     w_edge = WESTERN_EDGE
     e_edge = EASTERN_EDGE
-#endif
-#ifndef NS_PERIODIC
     s_edge = SOUTHERN_EDGE
     n_edge = NORTHERN_EDGE
-#endif
     call fs_alloc
     ready = .true.
   end subroutine fs_init
@@ -715,7 +711,6 @@ contains
     ! au, av, cu, cv, ftu, ftv, usu, usv, cbu, cbv are set below on every face they are read on (elsewhere they
     ! keep the zeros of fs_alloc; the halo faces read come from the exchange E1); rb accumulates the Robin terms
     ! of the open edges on the edge cells (zero elsewhere), so only those are cleared
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do j=jstr,jend
         rb(istr,j) = 0._8
@@ -726,8 +721,6 @@ contains
         rb(iend,j) = 0._8
       enddo
     endif
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do i=istr,iend
         rb(i,jstr) = 0._8
@@ -738,7 +731,6 @@ contains
         rb(i,jend) = 0._8
       enddo
     endif
-#endif
     do j=jstrR,jendR
       do i=istr,iend+1
         unu(i,j) = 0.5_8*(wd(i-1,j)+wd(i,j))*dn_u(i,j)*ubar(i,j,ks)
@@ -868,7 +860,6 @@ contains
     ! joins the explicit part. For resolved signals zeta_b follows zeta_1 with the delay dx/c, so the condition
     ! sees the first interior sea level of dx/(2c) earlier, as the split's does. cx, w1, w0 are stored per face
     ! (cxu, w1u, w0u, cxv, w1v, w0v; fs_flather_wts).
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       if (obc_west) then
         do j=jstr,jend
@@ -925,8 +916,6 @@ contains
         enddo
       endif
     endif
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       if (obc_south) then
         do i=istr,iend
@@ -983,7 +972,6 @@ contains
         enddo
       endif
     endif
-#endif
 
     ! volume sources Q [m/s] (the same in every sub-step)
     do j=jstr,jend
@@ -1086,7 +1074,6 @@ contains
     ! open normal faces: Fbar_b = Ftil_b + s cb th_d delta_int (Flather) or Ftil_b
     ! (specified); closed edges: 0 (ftu = 0 there). cb from rb would mix corners,
     ! so it is recomputed (same expression as in (B)).
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do j=jstr,jend
         fbu(istr,j) = ftu(istr,j)
@@ -1103,8 +1090,6 @@ contains
         endif
       enddo
     endif
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do i=istr,iend
         fbv(i,jstr) = ftv(i,jstr)
@@ -1121,7 +1106,6 @@ contains
         endif
       enddo
     endif
-#endif
     ! generalized-alpha rates for the next (sub-)step
     if (ga0) then
       do j=jstr,jend
@@ -1221,7 +1205,6 @@ contains
         DV_avg1(i,j) = u1v(i,j) ; DV_avg2(i,j) = fbv(i,j)
       enddo
     enddo
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do j=jstrR,jendR
         DU_avg1(istrU-1,j) = 0.5_8*(wd(istrU-1,j)+wd(istrU-2,j))*ubar(istrU-1,j,kn)*dn_u(istrU-1,j)
@@ -1248,8 +1231,6 @@ contains
         DV_avg2(iend+1,j) = thd*DV_avg1(iend+1,j) + (1._8-thd)*unv(iend+1,j)
       enddo
     endif
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do i=istrU,iend
         DU_avg1(i,jstr-1) = 0.5_8*(wd(i,jstr-1)+wd(i-1,jstr-1))*ubar(i,jstr-1,kn)*dn_u(i,jstr-1)
@@ -1276,7 +1257,6 @@ contains
         DV_avg2(i,jend+1) = fbv(i,jend+1)
       enddo
     endif
-#endif
     if (river_source) then
       do iface=1,nriv_u
         i = riv_u_i(iface) ; j = riv_u_j(iface)
@@ -1413,7 +1393,6 @@ contains
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     real(kind=8), intent(in) :: dts
     integer(kind=4) :: i, j
-#ifndef EW_PERIODIC
     if (obc_west .and. .not.obc_m2_specified) then
       if (WESTERN_EDGE) then
         do j=jstr-1,jend+1
@@ -1430,8 +1409,6 @@ contains
         enddo
       endif
     endif
-#endif
-#ifndef NS_PERIODIC
     if (obc_south .and. .not.obc_m2_specified) then
       if (SOUTHERN_EDGE) then
         do i=istr-1,iend+1
@@ -1448,7 +1425,6 @@ contains
         enddo
       endif
     endif
-#endif
   end subroutine fs_flather_wts
 
   !----------------------------------------------------------------------
@@ -1474,20 +1450,15 @@ contains
     integer(kind=4) :: jl(2), il(2), nl
     real(kind=8) :: m
 #include "compute_auxiliary_bounds.h"
-#ifndef EW_PERIODIC
     ! rows handled on the western/eastern edges
     if (halo) then
       nl = 0
-# ifndef NS_PERIODIC
       if (.not. (SOUTHERN_EDGE)) then
         nl = nl + 1 ; jl(nl) = jstr-1
       endif
       if (.not. (NORTHERN_EDGE)) then
         nl = nl + 1 ; jl(nl) = jend+1
       endif
-# else
-      nl = 2 ; jl(1) = jstr-1 ; jl(2) = jend+1
-# endif
     end if
     if (WESTERN_EDGE) then
       if (halo) then
@@ -1511,20 +1482,14 @@ contains
         enddo
       end if
     endif
-#endif
-#ifndef NS_PERIODIC
     if (halo) then
       nl = 0
-# ifndef EW_PERIODIC
       if (.not. (WESTERN_EDGE)) then
         nl = nl + 1 ; il(nl) = istr-1
       endif
       if (.not. (EASTERN_EDGE)) then
         nl = nl + 1 ; il(nl) = iend+1
       endif
-# else
-      nl = 2 ; il(1) = istr-1 ; il(2) = iend+1
-# endif
     end if
     if (SOUTHERN_EDGE) then
       if (halo) then
@@ -1548,8 +1513,6 @@ contains
         enddo
       end if
     endif
-#endif
-#if !defined EW_PERIODIC && !defined NS_PERIODIC
     if (.not. halo) then                      ! physical corners: mean of the two edge neighbours
       if (WESTERN_EDGE .and. SOUTHERN_EDGE) zeta(istr-1,jstr-1,kn) =&
       &  0.5_8*(zeta(istr-1,jstr,kn) + zeta(istr,jstr-1,kn))
@@ -1560,7 +1523,6 @@ contains
       if (EASTERN_EDGE .and. NORTHERN_EDGE) zeta(iend+1,jend+1,kn) =&
       &  0.5_8*(zeta(iend+1,jend,kn) + zeta(iend,jend+1,kn))
     end if
-#endif
   contains
     subroutine wbc(jj)
       integer(kind=4), intent(in) :: jj
@@ -1639,7 +1601,6 @@ contains
     integer(kind=4) :: i, j
     real(kind=8) :: ca, cy
 #include "compute_auxiliary_bounds.h"
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       if (obc_west) then
         do j=jstrV,jend
@@ -1694,8 +1655,6 @@ contains
         enddo
       endif
     endif
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       if (obc_south) then
         do i=istrU,iend
@@ -1750,7 +1709,6 @@ contains
         enddo
       endif
     endif
-#endif
     ! corners between adjacent open boundaries (u2dbc, v2dbc)
     if (obc_south .and. obc_west) then
       if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
@@ -1823,7 +1781,6 @@ contains
     integer(kind=4) :: i, j
     real(kind=8) :: m, dfn, ub
 #include "compute_auxiliary_bounds.h"
-#ifndef EW_PERIODIC
     if (.not.obc_west) then
       if (WESTERN_EDGE) then
         do j=jstr,jend
@@ -1838,8 +1795,6 @@ contains
         enddo
       endif
     endif
-#endif
-#ifndef NS_PERIODIC
     if (.not.obc_south) then
       if (SOUTHERN_EDGE) then
         do i=istr,iend
@@ -1854,8 +1809,6 @@ contains
         enddo
       endif
     endif
-#endif
-# ifndef EW_PERIODIC
     if (obc_west) then
       if (WESTERN_EDGE) then
         do j=jstr,jend
@@ -1900,8 +1853,6 @@ contains
         enddo
       endif
     endif
-# endif
-# ifndef NS_PERIODIC
     if (obc_south) then
       if (SOUTHERN_EDGE) then
         do i=istr,iend
@@ -1946,7 +1897,6 @@ contains
         enddo
       endif
     endif
-# endif
   end subroutine fs_normal_bc
 
   !----------------------------------------------------------------------
@@ -2437,7 +2387,6 @@ contains
     ! OBC_<edge>, not periodic; the faces fs_normal_bc / u2dbc set to zero) and (4-6) over the masked
     ! faces (umask = 0 and not a river face) of the tile's owned faces.
     wl = 0._8
-#ifndef EW_PERIODIC
     if (.not.obc_west) then
       if (WESTERN_EDGE) then
         do j=jstr,jend
@@ -2452,8 +2401,6 @@ contains
         enddo
       endif
     endif
-#endif
-#ifndef NS_PERIODIC
     if (.not.obc_south) then
       if (SOUTHERN_EDGE) then
         do i=istr,iend
@@ -2468,7 +2415,6 @@ contains
         enddo
       endif
     endif
-#endif
 #ifdef MASKING
     do j=jstr,jend
       do i=istrU,iend
@@ -2703,11 +2649,8 @@ contains
     call mg_build_faces
     l = mg_lc
     mg_nc = mg_nx(l)*mg_ny(l)
-#ifdef NS_PERIODIC
-    mg_bw = mg_nc - 1
-#else
     mg_bw = mg_nx(l)
-#endif
+    if (ns_periodic) mg_bw = mg_nc - 1
     mg_bw = min(mg_bw, mg_nc - 1)
     allocate(mg_ab(0:mg_bw, mg_nc), mg_sol(mg_nc))
     allocate(mg_tmp(maxval(mg_nx(1:mg_lc)), maxval(mg_ny(1:mg_lc))))
@@ -2729,7 +2672,7 @@ contains
     ! (w_f(fi-1) + w_f(fi)) / (w_c(I-1) + w_c(I)), with the cell widths in fine-grid cells on the global index of
     ! the level (from the tile-size rule for all tiles: the neighbours' halo cells have their true widths, so
     ! both sides of a tile seam get the same factor; beyond a physical edge the edge cell's width, periodic wrap
-    ! with EW_PERIODIC / NS_PERIODIC). Level mg_ld+1 is gathered, not coarsened.
+    ! with ew_periodic / ns_periodic). Level mg_ld+1 is gathered, not coarsened.
     use dimensions, only: inode, jnode, npx, npy, gnx, gny
     implicit none
     integer(kind=4) :: l, tot
@@ -2741,13 +2684,7 @@ contains
     allocate(mg_ffx(tot), mg_ffy(tot))
     mg_ffx = 0.5_8 ; mg_ffy = 0.5_8
     if (trim(fs_mg_faces) == 'half') return
-    perx = .false. ; pery = .false.
-#ifdef EW_PERIODIC
-    perx = .true.
-#endif
-#ifdef NS_PERIODIC
-    pery = .true.
-#endif
+    perx = ew_periodic ; pery = ns_periodic
     call faces_dir(gnx, npx, inode, mg_nx, perx, mg_ffx)
     call faces_dir(gny, npy, jnode, mg_ny, pery, mg_ffy)
   contains
@@ -3150,12 +3087,8 @@ contains
         if (j > 1) then
           call addl(k, k-nx, -cs(i,j))
         end if
-#ifdef EW_PERIODIC
-        if (i == nx .and. nx > 2) call addl(k, k-nx+1, -cw(1,j))
-#endif
-#ifdef NS_PERIODIC
-        if (j == ny .and. ny > 2) call addl(k, i, -cs(i,1))
-#endif
+        if (ew_periodic .and. i == nx .and. nx > 2) call addl(k, k-nx+1, -cw(1,j))
+        if (ns_periodic .and. j == ny .and. ny > 2) call addl(k, i, -cs(i,1))
       enddo
     enddo
     ! zero couplings to inactive cells (their rows are identity)
@@ -3364,20 +3297,20 @@ contains
     integer(kind=4), intent(in) :: nx, ny
     real(kind=8), dimension(0:nx+1,0:ny+1), intent(inout) :: x
     integer(kind=4) :: i, j
-#ifdef EW_PERIODIC
-    do j=1,ny
-      x(0,j) = x(nx,j) ; x(nx+1,j) = x(1,j)
-    enddo
-#else
-    x(0,:) = 0._8 ; x(nx+1,:) = 0._8
-#endif
-#ifdef NS_PERIODIC
-    do i=1,nx
-      x(i,0) = x(i,ny) ; x(i,ny+1) = x(i,1)
-    enddo
-#else
-    x(:,0) = 0._8 ; x(:,ny+1) = 0._8
-#endif
+    if (ew_periodic) then
+      do j=1,ny
+        x(0,j) = x(nx,j) ; x(nx+1,j) = x(1,j)
+      enddo
+    else
+      x(0,:) = 0._8 ; x(nx+1,:) = 0._8
+    endif
+    if (ns_periodic) then
+      do i=1,nx
+        x(i,0) = x(i,ny) ; x(i,ny+1) = x(i,1)
+      enddo
+    else
+      x(:,0) = 0._8 ; x(:,ny+1) = 0._8
+    endif
   end subroutine mg_halo_glob
 
   subroutine mg_exch(nx, ny, x)

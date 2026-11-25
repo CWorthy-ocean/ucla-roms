@@ -2,7 +2,7 @@ module v2dbc_mod
 #include "cppdefs.opt"
 
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m2_flather,&
-  &  obc_m2_specified
+  &  obc_m2_specified, ew_periodic, ns_periodic
   implicit none
 
   private
@@ -34,7 +34,6 @@ contains
 #include "compute_auxiliary_bounds.h"
 
 
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       if (obc_south) then
         if (obc_m2_flather) then
@@ -129,12 +128,10 @@ contains
         enddo
       endif
     endif          !<--  NORTHERN_EDGE
-#endif                  /* !NS_PERIODIC */
 
 ! Tangential edges (west, east): with obc_m2_flather, vbar there uses
 ! the Orlanski radiation scheme.
 
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       if (obc_west) then
         if (obc_m2_flather) then
@@ -185,11 +182,7 @@ contains
           enddo
         endif
       else
-#  ifdef NS_PERIODIC
-#   define J_RANGE jstrV,jend
-#  else
 #   define J_RANGE jstr,jendR
-#  endif
         ! Closed BC: free-slip (gamma2=+1)
         do j=J_RANGE               ! ====== ===   no-slip (gamma2=-1)
         vbar(istr-1,j,knew)=gamma2*vbar(istr,j,knew)&
@@ -255,11 +248,7 @@ contains
         enddo
       endif
     else
-#  ifdef NS_PERIODIC
-#   define J_RANGE jstrV,jend
-#  else
 #   define J_RANGE jstr,jendR
-#  endif
       ! Wall: free-slip (gamma2=+1)
       do j=J_RANGE                    ! =====   no-slip (gamma2=-1)
       vbar(iend+1,j,knew)=gamma2*vbar(iend,j,knew)&
@@ -270,7 +259,6 @@ contains
 #  undef J_RANGE
     endif
 endif      !<-- EASTERN_EDGE
-#endif             /* !EW_PERIODIC */
 
  ! Corners between adjacent open boundaries
  ! ======= ======= ======== ==== ==========

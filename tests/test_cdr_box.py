@@ -69,10 +69,15 @@ def box_cdr_file(tmp_path_factory):
     Without PARALLEL_IO each rank opens its own piece <name>.<rank>.nc of a file
     listed in frcfiles (the CDR file itself is read whole, as cdr_file), so the
     pieces are links to the file."""
-    path = tmp_path_factory.mktemp("cdr_box_input") / "cdr_box.nc"
-    x = np.array([(A_CELL[0] - 0.5) * DX, 16 * DX])
-    y = np.array([(A_CELL[1] - 0.5) * DX, 16 * DX])
-    vol = np.array([A_VOLUME, 300.0])
+    return _write_box_cdr_file(tmp_path_factory.mktemp("cdr_box_input"))
+
+
+def _write_box_cdr_file(directory, a_cell=A_CELL, volumes=(A_VOLUME, 300.0)):
+    """The file of the two releases, with release A in the cell ``a_cell``."""
+    path = directory / "cdr_box.nc"
+    x = np.array([(a_cell[0] - 0.5) * DX, 16 * DX])
+    y = np.array([(a_cell[1] - 0.5) * DX, 16 * DX])
+    vol = np.array(volumes)
     ds = xr.Dataset(
         {
             "cdr_volume": (("cdr_time", "ncdr_parm"), np.tile(vol, (2, 1))),
@@ -327,3 +332,77 @@ def test_nhmg_closed_box_runs(box_diag_conf, box_cdr_file, input_dir, tmp_path):
         for var in ("zeta", "u", "v", "w"):
             assert np.isfinite(ds[var].values).all(), var
             assert ds[var].any(), var
+
+
+PERIODIC = {"ew": (True, False), "ns": (False, True), "both": (True, True)}
+
+
+def periodic_namelist(input_dir, cdr_file, ew, ns, np_xi=2, np_eta=2) -> dict:
+    nml = box_namelist(input_dir, cdr_file, np_xi, np_eta)
+    nml["PERIODIC_SETTINGS"].update({"ew_periodic": ew, "ns_periodic": ns})
+    return nml
+
+
+@pytest.mark.parametrize("case", PERIODIC)
+def test_periodic_box(box_conf, box_cdr_file, input_dir, tmp_path, case):
+    """In a periodic direction (PERIODIC_SETTINGS) water flows through the seam and the
+    boundary points are copies of the points at the other end; the other direction keeps
+    its walls. The results do not depend on the tiles."""
+    ew, ns = PERIODIC[case]
+    runs = {}
+    for np_xi, np_eta in ((2, 2), (1, 1), (3, 2)):
+        run_dir = tmp_path / f"t{np_xi}x{np_eta}"
+        run_dir.mkdir()
+        box_conf.run(periodic_namelist(input_dir, box_cdr_file, ew, ns, np_xi, np_eta), cwd=run_dir)
+        runs[(np_xi, np_eta)] = get_summary_value(run_dir, his_prefix(run_dir))
+    differ = {tiles: sorted(k for k in v.variables if v.variables[k] != runs[(2, 2)].variables[k])
+              for tiles, v in runs.items()}
+    assert all(not d for d in differ.values()), f"variables differing from 2x2: {differ}"
+
+    with xr.open_dataset(runs[(2, 2)].path, decode_times=False) as ds:
+        ds = ds.isel(time=-1).load()
+    for name in ("zeta", "rho", "u", "ubar", "v", "vbar"):
+        assert np.isfinite(ds[name].values).all() and ds[name].any(), name
+    for periodic, xi, u, ubar in ((ew, "xi", "u", "ubar"), (ns, "eta", "v", "vbar")):
+        face = "xi_u" if xi == "xi" else "eta_v"
+        for name in (u, ubar):
+            first, last = ds[name].isel({face: 0}), ds[name].isel({face: -1})
+            assert bool(first.any()) == periodic and bool(last.any()) == periodic, name
+            if periodic:
+                np.testing.assert_array_equal(first, last, err_msg=name)
+        if periodic:
+            for name in ("zeta", "rho"):
+                var = ds[name]
+                for ghost, inside in ((0, -2), (-1, 1)):
+                    np.testing.assert_array_equal(
+                        var.isel({f"{xi}_rho": ghost}), var.isel({f"{xi}_rho": inside}), err_msg=name
+                    )
+
+
+def test_periodic_box_is_translation_invariant(box_conf, input_dir, tmp_path):
+    """Periodic in the west-east direction, with one release: moving the release along
+    the channel, across the seam, moves the solution."""
+    shift = 22
+    runs = {}
+    for label, cell in (("a", A_CELL), ("b", (A_CELL[0] + shift, A_CELL[1]))):
+        run_dir = tmp_path / label
+        run_dir.mkdir()
+        cdr_file = _write_box_cdr_file(run_dir, cell, (A_VOLUME, 0.0))
+        box_conf.run(periodic_namelist(input_dir, cdr_file, True, False), cwd=run_dir)
+        path = join_output(run_dir, his_prefix(run_dir))
+        with xr.open_dataset(path, decode_times=False) as ds:
+            runs[label] = ds[["zeta", "u", "v", "rho"]].isel(time=-1).load()
+    for name in ("zeta", "u", "v", "rho"):
+        dim = "xi_u" if name == "u" else "xi_rho"
+        a, b = (runs[k][name].isel({dim: slice(0 if name == "u" else 1, -1)}).values for k in "ab")
+        assert a.shape[-1] == 32
+        np.testing.assert_allclose(
+            np.roll(a, shift, axis=-1), b, rtol=0, atol=1e-8 * np.abs(a).max(), err_msg=name
+        )
+
+
+def test_periodic_misspelled(box_conf, box_cdr_file, input_dir, tmp_path):
+    """A key that PERIODIC_SETTINGS does not have stops the run."""
+    nml = box_namelist(input_dir, box_cdr_file)
+    nml["PERIODIC_SETTINGS"]["ew_period"] = True
+    assert_run_rejected(box_conf, nml, tmp_path, ["could not read the PERIODIC_SETTINGS section"])

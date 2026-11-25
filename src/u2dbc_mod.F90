@@ -2,7 +2,7 @@ module u2dbc_mod
 
 #include "cppdefs.opt"
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_m2_flather,&
-  &  obc_m2_specified
+  &  obc_m2_specified, ew_periodic, ns_periodic
   implicit none
   private
   public :: u2dbc_tile
@@ -32,7 +32,6 @@ contains
 #include "compute_auxiliary_bounds.h"
 
 
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       if (obc_west) then
         if (obc_m2_flather) then
@@ -124,12 +123,10 @@ contains
         enddo
       endif
     endif         !<-- EASTERN_EDGE
-#endif              /* !EW_PERIODIC */
 
 ! Tangential edges (south, north): with obc_m2_flather, ubar there uses
 ! the Orlanski radiation scheme.
 
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       if (obc_south) then
         if (obc_m2_flather) then
@@ -180,11 +177,7 @@ contains
           enddo
         endif
       else
-#  ifdef EW_PERIODIC
-#   define I_RANGE istrU,iend
-#  else
 #   define I_RANGE istr,iendR
-#  endif
         ! Wall: free-slip (gamma2=+1)
         do i=I_RANGE                    ! ====    no-slip (gamma2=-1)
         ubar(i,jstr-1,knew)=gamma2*ubar(i,jstr,knew)&
@@ -247,11 +240,7 @@ contains
         enddo
       endif
     else
-#  ifdef EW_PERIODIC
-#   define I_RANGE istrU,iend
-#  else
 #   define I_RANGE istr,iendR
-#  endif
       !  Wall: free-slip (gamma2=+1)
       do i=I_RANGE                   !  =====   no-slip (gamma2=-1)
       ubar(i,jend+1,knew)=gamma2*ubar(i,jend,knew)&
@@ -262,7 +251,6 @@ contains
 #  undef I_RANGE
     endif
 endif          !<-- NORTHERN_EDGE
-#endif                /* !NS_PERIODIC */
 
  ! Corners between adjacent open boundaries
  ! ======= ======= ======== ==== ==========
