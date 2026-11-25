@@ -45,10 +45,11 @@ module marbl_driver
   use surf_flux                   , only: srflx
   use scalars                     , only: nstp,nnew,dt,iic,ntstart,&
   &Cp, rho0
-  use grid                        , only : rmask
+  use grid                        , only : rmask, pm, pn
   use tracer_groomer              , only : groom_column
 #ifdef MPI
-  use mpi_f08                     , only: MPI_CHARACTER, MPI_INTEGER, mpi_bcast
+  use mpi_f08                     , only: MPI_CHARACTER, MPI_INTEGER, mpi_bcast,&
+  &MPI_DOUBLE_PRECISION, MPI_SUM, MPI_Reduce
 !      use dimensions
 #endif
 #ifdef NOX_FORCING
@@ -115,6 +116,10 @@ module marbl_driver
   integer(kind=4) :: n_groom = 0
   integer(kind=4), allocatable :: groom_idx(:)        ! index in the ROMS tracer array
   real(kind=8), allocatable :: groom_t(:), groom_hz(:) ! column work arrays (nz)
+!     This rank's negative mass removed and mass added (tracer units * m3)
+!     per groomed tracer since the last report, and the reduction buffers
+  real(kind=8), allocatable :: groom_removed(:), groom_added(:)
+  real(kind=8), allocatable :: groom_sendbuf(:), groom_recvbuf(:)
 
 !     Surface flux forcing variable indices (-1 means unused,default)
   integer(kind=4),public ::    u10_sqr_ind=-1,       sss_ind=-1,      sst_ind=-1,&
@@ -193,6 +198,7 @@ module marbl_driver
   public :: marbldrv_column_physics
   public :: marbldrv_impose_constant_fe
   public :: marbldrv_impose_constant_fe_all
+  public :: marbldrv_report_groomed_tracers
 
   public :: read_nml_marbl
   public :: is_marbl_step
@@ -689,6 +695,10 @@ contains
     allocate(groom_idx(n_groom))
     groom_idx(:) = found(1:n_groom)
     allocate(groom_t(nz), groom_hz(nz))
+    allocate(groom_removed(n_groom), groom_added(n_groom))
+    allocate(groom_sendbuf(2*n_groom), groom_recvbuf(2*n_groom))
+    groom_removed(:) = 0._8
+    groom_added(:) = 0._8
 
     if (mynode==printnode) then
       write(*,'(A)') 'groom_negative_tracers: grooming negative values of'
@@ -1509,7 +1519,8 @@ contains
 !     With groom_negative_tracers, remove the negative values of each
 !     groomed tracer in column (i,j) of time level nnew, keeping the
 !     column inventory where the column holds enough positive mass (see
-!     groom_column in tracer_groomer).
+!     groom_column in tracer_groomer), and add the mass removed and added
+!     to this rank's totals (marbldrv_report_groomed_tracers).
 !
 !     NOTES:
 !     - Columns without negative values are skipped after one scan.
@@ -1517,7 +1528,7 @@ contains
     integer(kind=4), intent(in) :: i,j
     real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,&
     &intent(inout)     :: tracer_array
-    real(kind=8)    :: removed, added
+    real(kind=8)    :: removed, added, area
     integer(kind=4) :: n, m
     logical :: have_hz
 
@@ -1532,8 +1543,58 @@ contains
       groom_t(:) = tracer_array(i,j,:,nnew,m)
       call groom_column(nz, groom_t, groom_hz, removed, added)
       tracer_array(i,j,:,nnew,m) = groom_t(:)
+      area = 1._8/(pm(i,j)*pn(i,j))
+      groom_removed(n) = groom_removed(n) + removed*area
+      groom_added(n) = groom_added(n) + added*area
     end do
   end subroutine marbldrv_groom_column
+!-----------------------------------------------------------------------
+
+  subroutine marbldrv_report_groomed_tracers
+!-----------------------------------------------------------------------
+!     SUBROUTINE: marbldrv_report_groomed_tracers
+!     DESCRIPTION:
+!     With groom_negative_tracers, sum over all ranks the mass each
+!     groomed tracer has had removed (its negative values) and added (by
+!     columns with too little positive mass) since the last report, print
+!     one line for each tracer with nonzero totals, and reset the totals.
+!     Does nothing otherwise.
+!
+!     NOTES:
+!     - Called on every rank after each step's diagnostics line (diag in
+!       main.F90), so it reports at the same steps.
+!     - Masses are in the tracer's units times m3 (e.g. mmol for
+!       mmol/m3); "added" is the only departure from conservation.
+!-----------------------------------------------------------------------
+    integer(kind=4) :: n, m
+#ifdef MPI
+    integer(kind=4) :: ierr
+#endif
+
+    if (.not. groom_negative_tracers) return
+
+    groom_sendbuf(1:n_groom) = groom_removed(:)
+    groom_sendbuf(n_groom+1:2*n_groom) = groom_added(:)
+#ifdef MPI
+    call MPI_Reduce(groom_sendbuf, groom_recvbuf, 2*n_groom,&
+    &MPI_DOUBLE_PRECISION, MPI_SUM, 0, ocean_grid_comm, ierr)
+#else
+    groom_recvbuf(:) = groom_sendbuf(:)
+#endif
+    if (mynode==0) then
+      do n=1,n_groom
+        if (groom_recvbuf(n) == 0._8 .and. groom_recvbuf(n_groom+n) == 0._8) cycle
+        m = groom_idx(n)-(NT-nt_marbl)
+        write(*,'(1x,A,I10,1x,A10,A,ES12.5,A,ES12.5,3A)') 'GROOM', iic,&
+        &trim(MARBL_instance%tracer_metadata(m)%short_name),&
+        &' removed ', groom_recvbuf(n), ' added ', groom_recvbuf(n_groom+n),&
+        &' [', trim(MARBL_instance%tracer_metadata(m)%units), ' * m3]'
+      end do
+      call flush(6)
+    end if
+    groom_removed(:) = 0._8
+    groom_added(:) = 0._8
+  end subroutine marbldrv_report_groomed_tracers
 !-----------------------------------------------------------------------
 
   subroutine marbldrv_impose_constant_fe(istr,iend,jstr,jend,tracer_array,itime)
