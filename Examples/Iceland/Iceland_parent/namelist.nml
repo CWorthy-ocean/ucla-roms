@@ -53,6 +53,8 @@ MMm = 192                      ! Number of grid points in Y
 nz = 20                         ! Number of vertical levels
 nt_passive = 0                 ! Number of passive tracers
 nt_bgc = 32                  ! Number of BGC tracers
+salinity = .true.              ! Carry salinity (was the cpp key SALINITY)
+mpi_masking = .false.          ! Tiling from the land mask (was the cpp key MPI_MASKING; needs PARALLEL_IO)
 /
 
 

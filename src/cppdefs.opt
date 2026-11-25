@@ -7,10 +7,6 @@
 ! Usage notes:
 #define NONLIN_EOS
 
-! Use salinity as a thermodynamic variable
-! Usage notes:
-#define SALINITY
-
 ! Use an equation of state that ensures that monotonically increasing density is equivalent to stable stratification
 ! Usage notes:
 #define SPLIT_EOS
@@ -53,13 +49,6 @@
 ! Use a spherical geometry in the grid setup
 ! Usage notes: The model will look for coordinates based on latitude and longitude instead of distance
 #define SPHERICAL
-
-! Choose MPI tiling at runtime from the land mask (skip fully-masked tiles).
-! Usage notes: Requires MPI and PARALLEL_IO (joined grid file). Launch with at
-! least as many ranks as the selected tiling needs; extra ranks exit after
-! MPI_Comm_split. NP_XI and NP_ETA from the namelist are overwritten.
-! Neighbors / partition / subdompos are computed at runtime (no partit step).
-#undef MPI_MASKING
 
 !!!!!!!!!!!!!!!!!!!!!!!!! NUMERICAL ALGORITHMS !!!!!!!!!!!!!!!!!!!!!!!!!
 

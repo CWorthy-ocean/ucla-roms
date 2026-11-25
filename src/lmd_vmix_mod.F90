@@ -76,7 +76,7 @@ contains
     use roms_mpi, only: exchange_xxx
 # endif
     use param, only:&
-    &ieast, isalt, itemp, iwest, jnorth, jsouth, np_xi, np_eta
+    &ieast, isalt, itemp, iwest, jnorth, jsouth, np_xi, np_eta, salinity
     use ocean_vars, only: z_r, u, v, z_w
     use scalars, only: nz, akv_bak, pi, akt_bak
     use dimensions, only: inode, jnode
@@ -122,6 +122,8 @@ contains
     ! where turbulence is supressed
 
     real(kind=8) dist,mult
+    logical :: with_salt   ! salinity, as a local the compiler can hoist out of the loops
+    real(kind=8) :: akt_bak_s   ! Akt_bak(isalt), or 0 without salinity (Akt_bak then has one entry)
 
 # ifdef LMD_DDMIX
     real(kind=8) Rrho, ddDS, ddDT, nu_dds, nu_ddt, alfaobeta, Tt, Ts, Tp
@@ -366,6 +368,9 @@ enddo
 # endif /* LMD_DDMIX */
 enddo     ! <-- k
 
+with_salt = salinity
+akt_bak_s = 0._8
+if (with_salt) akt_bak_s = Akt_bak(isalt)
 ! Supress mixing away near the bottom.
 do k=1,nz-1
   do j=jstr,jend
@@ -375,9 +380,7 @@ do k=1,nz-1
         mult = sin(0.5_8*pi*(z_w(i,j,k) - z_w(i,j,0))/Lturb)
         Kv(i,j,k) = Kv(i,j,k)*mult
         Kt(i,j,k) = Kt(i,j,k)*mult
-#  ifdef SALINITY
-        Ks(i,j,k) = Ks(i,j,k)*mult
-#  endif
+        if (with_salt) Ks(i,j,k) = Ks(i,j,k)*mult
       endif
     enddo
   enddo
@@ -395,10 +398,10 @@ do j=jstr,jend
     Kt(i,j,nz)=Kt(i,j,nz-1)
     Kv(i,j,0)=Kv(i,j,  1)
     Kt(i,j,0)=Kt(i,j,  1)
-# ifdef SALINITY
-    Ks(i,j,nz)=Ks(i,j,nz-1)
-    Ks(i,j,0)=Ks(i,j,  1)
-# endif
+    if (with_salt) then
+      Ks(i,j,nz)=Ks(i,j,nz-1)
+      Ks(i,j,0)=Ks(i,j,  1)
+    endif
   enddo
 enddo
 
@@ -421,7 +424,7 @@ do j=jstr,jend
       tmp_s=Ks(i,j,k)
       Kv(i,j,k)=0.5_8*tmp_v+0.25_8*Kv_km1(i)+0.25_8*Kv(i,j,k+1) + Akv_bak
       Kt(i,j,k)=0.5_8*tmp_t+0.25_8*Kt_km1(i)+0.25_8*Kt(i,j,k+1) + Akt_bak(itemp)
-      Ks(i,j,k)=0.5_8*tmp_s+0.25_8*Ks_km1(i)+0.25_8*Ks(i,j,k+1) + Akt_bak(isalt)
+      Ks(i,j,k)=0.5_8*tmp_s+0.25_8*Ks_km1(i)+0.25_8*Ks(i,j,k+1) + akt_bak_s
       Kv_km1(i)=tmp_v
       Kt_km1(i)=tmp_t
       Ks_km1(i)=tmp_s
@@ -432,10 +435,10 @@ do j=jstr,jend
     Kt(i,j,nz)=Kt(i,j,nz) + Akt_bak(itemp)
     Kv(i,j,0)=Kv(i,j,0) + Akv_bak
     Kt(i,j,0)=Kt(i,j,0) + Akt_bak(itemp)
-#  ifdef SALINITY
-    Ks(i,j,nz)=Ks(i,j,nz) + Akt_bak(isalt)
-    Ks(i,j,0)=Ks(i,j,0) + Akt_bak(isalt)
-#  endif
+    if (with_salt) then
+      Ks(i,j,nz)=Ks(i,j,nz) + Akt_bak(isalt)
+      Ks(i,j,0)=Ks(i,j,0) + Akt_bak(isalt)
+    endif
   enddo
 enddo
 # else /* no kpp at all */
@@ -451,20 +454,18 @@ do k=1,nz-1
       AKv(i,j,k)=0.5_8*Kv(i,j,k)+0.25_8*Kv(i,j,k-1)+0.25_8*Kv(i,j,k+1) + Akv_bak
 !           Akt(i,j,k,itemp)=Kt(i,j,k)
       AKt(i,j,k,itemp)=0.5_8*Kt(i,j,k)+0.25_8*Kt(i,j,k-1)+0.25_8*Kt(i,j,k+1) + Akt_bak(itemp)
-#  ifdef SALINITY
 !           Akt(i,j,k,isalt)=Ks(i,j,k)
-      AKt(i,j,k,isalt)=0.5_8*Ks(i,j,k)+0.25_8*Ks(i,j,k-1)+0.25_8*Ks(i,j,k+1) + Akt_bak(isalt)
-#  endif
+      if (with_salt) AKt(i,j,k,isalt)=0.5_8*Ks(i,j,k)+0.25_8*Ks(i,j,k-1)+0.25_8*Ks(i,j,k+1) + Akt_bak(isalt)
     enddo
   enddo
 enddo
 
  !! Do we really need to exchange the mixing coefficients?
-#   ifdef SALINITY
-call exchange_xxx(Akv,Akt(:,:,:,itemp),Akt(:,:,:,isalt))
-#   else
-call exchange_xxx(Akv,Akt(:,:,:,itemp))
-#   endif
+if (with_salt) then
+  call exchange_xxx(Akv,Akt(:,:,:,itemp),Akt(:,:,:,isalt))
+else
+  call exchange_xxx(Akv,Akt(:,:,:,itemp))
+endif
 # endif /* LMD_KPP || LMD_BKPP */
 end subroutine lmd_vmix_tile
 #else

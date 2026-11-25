@@ -3,7 +3,7 @@
 Three builds: the open-boundary physics with flux forcing and the tidal potential
 (the hashed run, exact restarts, rejected settings, rivers and pipes), one with
 bulk forcing and PARALLEL_IO (exact restart, a CDR volume release), and
-the same with MPI_MASKING on a grid with an all-land tile (exact restart).
+the same run with mpi_masking on a grid with an all-land tile (exact restart).
 """
 import re
 from pathlib import Path
@@ -352,15 +352,15 @@ def test_bulk_pio_direct_read_verify(bulk_pio_configuration, tmp_path):
 
 @pytest.fixture(scope="module")
 def masked_pio_configuration(bulk_pio_configuration, tmp_path_factory) -> ROMSConfiguration:
-    """The bulk-forcing + PARALLEL_IO build with MPI_MASKING; ``conf.inputs`` holds the
+    """The bulk-forcing + PARALLEL_IO build, run with mpi_masking; ``conf.inputs`` holds the
     bulk build's inputs with land in the north-east quadrant and the northern rows.
 
-    Launched on 3 ranks, MPI_MASKING picks NP_XI = NP_ETA = 2 and drops the all-land
+    Launched on 3 ranks, mpi_masking picks NP_XI = NP_ETA = 2 and drops the all-land
     north-east tile, so the north-west and south-east tiles read their halos from
     cells no rank writes (the netCDF fill value in the restart file).
     """
     conf = ROMSConfiguration(
-        cpp_keys=BULK_PIO_CPP_KEYS + ["MPI_MASKING"],
+        cpp_keys=BULK_PIO_CPP_KEYS,
         location=tmp_path_factory.mktemp("implicit_fs_masked_pio_build"),
     )
     conf.compile()
@@ -381,7 +381,7 @@ def masked_pio_configuration(bulk_pio_configuration, tmp_path_factory) -> ROMSCo
 
 
 def test_implicit_fs_masked_exact_restart(masked_pio_configuration, tmp_path):
-    """With MPI_MASKING (an all-land tile without a rank) a restart reproduces the
+    """With mpi_masking (an all-land tile without a rank) a restart reproduces the
     continuous run bit for bit. The restart file holds the netCDF fill value in the
     dropped tile, which the neighbouring tiles' read halos reach: the generalized-alpha
     rates must still be read (not taken as missing), and the stored multigrid operator
@@ -389,7 +389,7 @@ def test_implicit_fs_masked_exact_restart(masked_pio_configuration, tmp_path):
     """
     conf = masked_pio_configuration
     nml = bulk_pio_namelist(conf, fs_mg_lag=3)
-    nml["PARAM_SETTINGS"].update({"NP_XI": 3, "NP_ETA": 1})  # 3 ranks; MPI_MASKING sets the tiling
+    nml["PARAM_SETTINGS"].update({"NP_XI": 3, "NP_ETA": 1, "mpi_masking": True})  # 3 ranks; mpi_masking sets the tiling
     nml["BASIC_OUTPUT_SETTINGS"].update({"nrpf_his": 1, "wrt_file_rst": True, "output_period_rst": 400})
     nml["SPONGE_TUNE_SETTINGS"].update({"output_period_sponge": 400, "nrpf_sponge": 1})
 

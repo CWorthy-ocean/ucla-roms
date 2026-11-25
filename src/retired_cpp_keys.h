@@ -249,3 +249,9 @@
 #ifdef LINEAR_DRAG_ONLY
 # error "CPP key LINEAR_DRAG_ONLY was removed: linear bottom drag only is now linear_drag = .true. in the namelist group BOTTOM_DRAG_SETTINGS; remove LINEAR_DRAG_ONLY from cppdefs.opt"
 #endif
+#ifdef SALINITY
+# error "CPP key SALINITY was removed: salinity is now salinity = .true. (the default) in the namelist group PARAM_SETTINGS, and a temperature-only case sets salinity = .false.; remove SALINITY from cppdefs.opt, and replace any #ifdef SALINITY in the case's ana_*.h files by if (salinity)"
+#endif
+#ifdef MPI_MASKING
+# error "CPP key MPI_MASKING was removed: the tiling from the land mask is now mpi_masking = .true. in the namelist group PARAM_SETTINGS (needs PARALLEL_IO); remove MPI_MASKING from cppdefs.opt"
+#endif

@@ -3061,7 +3061,7 @@ contains
     n_edge = NORTHERN_EDGE
 
     cx = 0._8 ; cy = 0._8 ; act = 0._8
-    ! With MASKING the metric ratio is formed only on open faces: with MPI_MASKING the faces
+    ! With MASKING the metric ratio is formed only on open faces: with mpi_masking the faces
     ! towards a dropped all-land tile (iend+1, jend+1) have halo metrics that are never filled
     ! (dm_v = dn_v = Inf there), and Inf/Inf*0 gave NaN in cy (PCG breakdown at the first solve).
     ! Same values otherwise (x*1 and x*0 = +0 for x > 0).
@@ -4978,9 +4978,7 @@ contains
     use scalars, only: nrhs, g, rho0, dt, iic
     use rho_eos_mod, only: rho_eos_point
     use param, only: nz, itemp
-#  ifdef SALINITY
-    use param, only: isalt
-#  endif
+    use param, only: isalt, salinity
     use ocean_vars, only: hz, z_r
     use boundary, only: u_west, t_west, u_east, t_east, v_south, t_south, v_north, t_north
     implicit none
@@ -5023,31 +5021,23 @@ contains
         call obm_cell(e, l, i, j, fi, fj, gi, gj)
         do k=1,nz
           ti = t(i,j,k,nrhs,itemp) ; si = 34.5_8 ; te = ti ; se = si ; ue(k) = 0._8
-#  ifdef SALINITY
-          si = t(i,j,k,nrhs,isalt) ; se = si
-#  endif
+          if (salinity) then
+            si = t(i,j,k,nrhs,isalt) ; se = si
+          end if
           if (use_m3_boundary_data .and. use_t_boundary_data) then   ! (ob_edge: an open side)
             select case (e)
             case (1)
               te = t_west(l,k,itemp) ; ue(k) = u_west(l,k)
-#    ifdef SALINITY
-              se = t_west(l,k,isalt)
-#    endif
+              if (salinity) se = t_west(l,k,isalt)
             case (2)
               te = t_east(l,k,itemp) ; ue(k) = u_east(l,k)
-#    ifdef SALINITY
-              se = t_east(l,k,isalt)
-#    endif
+              if (salinity) se = t_east(l,k,isalt)
             case (3)
               te = t_south(l,k,itemp) ; ue(k) = v_south(l,k)
-#    ifdef SALINITY
-              se = t_south(l,k,isalt)
-#    endif
+              if (salinity) se = t_south(l,k,isalt)
             case (4)
               te = t_north(l,k,itemp) ; ue(k) = v_north(l,k)
-#    ifdef SALINITY
-              se = t_north(l,k,isalt)
-#    endif
+              if (salinity) se = t_north(l,k,isalt)
             end select
           end if
           db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
@@ -5222,9 +5212,7 @@ contains
     use scalars, only: nrhs, g, rho0
     use rho_eos_mod, only: rho_eos_point
     use param, only: nz, itemp
-#  ifdef SALINITY
-    use param, only: isalt
-#  endif
+    use param, only: isalt, salinity
     use ocean_vars, only: hz, z_r
     use boundary, only: t_west, t_east, t_south, t_north
     implicit none
@@ -5235,31 +5223,23 @@ contains
     call obm_cell(e, l, i, j, fi, fj, gi, gj)
     do k=1,nz
       ti = t(i,j,k,nrhs,itemp) ; si = 34.5_8 ; te = ti ; se = si
-#  ifdef SALINITY
-      si = t(i,j,k,nrhs,isalt) ; se = si
-#  endif
+      if (salinity) then
+        si = t(i,j,k,nrhs,isalt) ; se = si
+      end if
       if (use_m3_boundary_data .and. use_t_boundary_data) then   ! (ob_edge: an open side)
         select case (e)
         case (1)
           te = t_west(l,k,itemp)
-#    ifdef SALINITY
-          se = t_west(l,k,isalt)
-#    endif
+          if (salinity) se = t_west(l,k,isalt)
         case (2)
           te = t_east(l,k,itemp)
-#    ifdef SALINITY
-          se = t_east(l,k,isalt)
-#    endif
+          if (salinity) se = t_east(l,k,isalt)
         case (3)
           te = t_south(l,k,itemp)
-#    ifdef SALINITY
-          se = t_south(l,k,isalt)
-#    endif
+          if (salinity) se = t_south(l,k,isalt)
         case (4)
           te = t_north(l,k,itemp)
-#    ifdef SALINITY
-          se = t_north(l,k,isalt)
-#    endif
+          if (salinity) se = t_north(l,k,isalt)
         end select
       end if
       db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
@@ -8294,7 +8274,7 @@ contains
   subroutine pcm_exchk(nx, ny, ld, o, x)
     ! 1-wide halo exchange of a level vector of the pcm_k modes with the four neighbours, one message per side
     ! for all modes (implicit_fs_mod's mg_exch for K fields): x(ld, *), mode m's (0:nx+1, 0:ny+1) array starting at
-    ! x(o, m); no neighbour (physical edge, MPI_MASKING): halo 0
+    ! x(o, m); no neighbour (physical edge, mpi_masking): halo 0
     use param, only: ocean_grid_comm
     use roms_mpi, only: p_w, p_e, p_s, p_n
     use mpi_f08, only: mpi_isend, mpi_irecv, mpi_waitall, mpi_request, mpi_double_precision, mpi_statuses_ignore,&

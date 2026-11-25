@@ -167,17 +167,13 @@ contains
     use eos_vars, only: rho
 #endif
 #ifndef NONLIN_EOS
-    use eos_vars, only:&
-#ifdef SALINITY
-    &S0, Scoef,&
-#endif
-    T0, Tcoef
+    use eos_vars, only: S0, Scoef, T0, Tcoef
 #else
     use eos_vars, only: K00
 #endif
 
     use grid, only: rmask
-    use param, only: ieast, isalt, itemp, iwest, jnorth, jsouth
+    use param, only: ieast, isalt, itemp, iwest, jnorth, jsouth, salinity
 
 # if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
     use mixing, only: bvf
@@ -190,6 +186,7 @@ contains
     integer(kind=4), intent(in) :: tidx
 
     integer(kind=4) istr,iend,jstr,jend, i,j,k
+    logical :: with_salt   ! salinity, as a local the compiler can hoist out of the loops
 # ifdef NONLIN_EOS
     real(kind=8) Ts,Tt,sqrtTs, dr00, K0
 #  ifndef SPLIT_EOS
@@ -205,7 +202,9 @@ contains
 
 # include "compute_extended_bounds.h"
 
+    with_salt = salinity
 # ifdef NONLIN_EOS
+    ! Without salinity, Ts keeps this reference value in the loops below
     Tt=3.8D0 ; Ts=34.5D0 ; sqrtTs=sqrt(Ts)
     K0_Duk= Tt*( K01+Tt*( K02+Tt*( K03+Tt*K04 )))&
     &+Ts*( K10+Tt*( K11+Tt*( K12+Tt*K13 ))&
@@ -219,9 +218,9 @@ contains
       do k=1,nz                                       ! NONLINEAR
         do i=istrR,iendR                             !  EQUATION
           Tt=t(i,j,k,tidx,itemp)                     !  OF STATE
-#  ifdef SALINITY
-          Ts=t(i,j,k,tidx,isalt) ; sqrtTs=sqrt(max(0._8,Ts))
-#  endif
+          if (with_salt) then
+            Ts=t(i,j,k,tidx,isalt) ; sqrtTs=sqrt(max(0._8,Ts))
+          endif
           rho1(i,j,k)=( dr00 +Tt*( r01+Tt*( r02+Tt*( r03+Tt*(&
           &r04+Tt*r05 ))))&
 
@@ -311,35 +310,47 @@ contains
 
 # else /* NONLIN_EOS */
 !-----------------> LINEAR EQUATION OF STATE
-#  ifdef SALINITY
-      cff=Tcoef*T0-Scoef*S0
-#  else
-      cff=Tcoef*T0
-#  endif
-      do k=1,nz
-        do i=istrR,iendR
+      if (with_salt) then
+        cff=Tcoef*T0-Scoef*S0
+        do k=1,nz
+          do i=istrR,iendR
 #  ifdef SPLIT_EOS
-          rho1(i,j,k)=cff -Tcoef*t(i,j,k,tidx,itemp)
-#   ifdef SALINITY
-          rho1(i,j,k)=rho1(i,j,k) + Scoef*t(i,j,k,tidx,isalt)
-#   endif
-          qp1(i,j,k)=0._8
+            rho1(i,j,k)=cff -Tcoef*t(i,j,k,tidx,itemp)
+            rho1(i,j,k)=rho1(i,j,k) + Scoef*t(i,j,k,tidx,isalt)
+            qp1(i,j,k)=0._8
 #  else
-          rho(i,j,k)=cff  -Tcoef*t(i,j,k,tidx,itemp)
-#   ifdef SALINITY
-          rho(i,j,k)=rho(i,j,k)+Scoef*t(i,j,k,tidx,isalt)
-#   endif
+            rho(i,j,k)=cff  -Tcoef*t(i,j,k,tidx,itemp)
+            rho(i,j,k)=rho(i,j,k)+Scoef*t(i,j,k,tidx,isalt)
 #  endif
-
 #  ifdef MASKING
 #   ifdef SPLIT_EOS
-          rho1(i,j,k)=rho1(i,j,k)*rmask(i,j)
+            rho1(i,j,k)=rho1(i,j,k)*rmask(i,j)
 #   else
-          rho(i,j,k)=rho(i,j,k)*rmask(i,j)
+            rho(i,j,k)=rho(i,j,k)*rmask(i,j)
 #   endif
 #  endif
+          enddo
         enddo
-      enddo
+      else
+        cff=Tcoef*T0
+        do k=1,nz
+          do i=istrR,iendR
+#  ifdef SPLIT_EOS
+            rho1(i,j,k)=cff -Tcoef*t(i,j,k,tidx,itemp)
+            qp1(i,j,k)=0._8
+#  else
+            rho(i,j,k)=cff  -Tcoef*t(i,j,k,tidx,itemp)
+#  endif
+#  ifdef MASKING
+#   ifdef SPLIT_EOS
+            rho1(i,j,k)=rho1(i,j,k)*rmask(i,j)
+#   else
+            rho(i,j,k)=rho(i,j,k)*rmask(i,j)
+#   endif
+#  endif
+          enddo
+        enddo
+      endif
 #  if defined LMD_MIXING || defined LMD_KPP
       cff=g/rho0
       do k=1,nz-1
@@ -404,7 +415,7 @@ contains
   !----------------------------------------------------------------------
   real(kind=8) function rho_eos_point(tt, ts, dpth) result(rh)
     ! The density of rho_eos_tile at one point, unmasked: potential temperature tt, salinity ts
-    ! (34.5 without SALINITY), depth dpth = -z [m]. SPLIT_EOS: rho1 + qp1 dpth (1 - qp2 dpth), the
+    ! (34.5 without salinity), depth dpth = -z [m]. SPLIT_EOS: rho1 + qp1 dpth (1 - qp2 dpth), the
     ! in-situ density prsgrd uses; otherwise rho; linear EOS: rho1 (rho). The same coefficients and
     ! branches as rho_eos_tile, so it equals the model's density to rounding.
 # ifdef NONLIN_EOS
@@ -413,10 +424,8 @@ contains
     use eos_vars, only: qp2
 #  endif
 # else
-    use eos_vars, only: Tcoef, T0
-#  ifdef SALINITY
-    use eos_vars, only: Scoef, S0
-#  endif
+    use eos_vars, only: Tcoef, T0, Scoef, S0
+    use param, only: salinity
 # endif
     use scalars, only: rho0
     implicit none
@@ -447,11 +456,11 @@ contains
     rh = ( r1*cff*(K00+cff1) - 0.1_8*dpth*rho0*cff1 )/(cff*(cff+cff1))
 #  endif
 # else
-#  ifdef SALINITY
-    rh = (Tcoef*T0 - Scoef*S0) - Tcoef*tt + Scoef*ts
-#  else
-    rh = Tcoef*T0 - Tcoef*tt + 0._8*(ts + dpth)
-#  endif
+    if (salinity) then
+      rh = (Tcoef*T0 - Scoef*S0) - Tcoef*tt + Scoef*ts
+    else
+      rh = Tcoef*T0 - Tcoef*tt + 0._8*(ts + dpth)
+    end if
 # endif
   end function rho_eos_point
 end module rho_eos_mod

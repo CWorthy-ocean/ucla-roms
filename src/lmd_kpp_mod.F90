@@ -30,10 +30,8 @@ contains
 !     flux_frc-> only: sustr, svstr, stflx, srflx
     use roms_mpi, only: exchange_xxx
     use dimensions, only: inode, jnode
-    use param, only: ieast, itemp, iwest, jnorth, jsouth, np_xi, np_eta
-#ifdef SALINITY
-    use param, only: isalt
-#endif
+    use param, only: ieast, itemp, iwest, jnorth, jsouth, np_xi, np_eta&
+    &, isalt, salinity
     use mixing, only: akt, akv
 # if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
     use mixing, only: bvf
@@ -94,10 +92,12 @@ contains
     &ssgm, z_bl, cff,cff1, cff_up,cff_dn
 
     real(kind=8) Kv0, Kt0, Ks0, wmb,wsb, sgmb,amp
+    logical :: with_salt   ! salinity, as a local the compiler can hoist out of the loops
     !! When smoothing hbl, we try to not
     !! smooth over the mask and the domain
     !! boundaries
     integer(kind=4) imin,imax,jmin,jmax
+    with_salt = salinity
     if (WESTERN_EDGE) then
       imin=istr
     else
@@ -150,11 +150,14 @@ contains
     do j=J_EXT_RANGE
     do i=I_EXT_RANGE
 # ifdef LMD_KPP
-    Bo(i,j)=g*( alpha(i,j)*(stflx(i,j,itemp)-srflx(i,j))&
-#  ifdef SALINITY
-    &-beta(i,j)*stflx(i,j,isalt)&
-#  endif
-    &)
+    if (with_salt) then
+      Bo(i,j)=g*( alpha(i,j)*(stflx(i,j,itemp)-srflx(i,j))&
+      &-beta(i,j)*stflx(i,j,isalt)&
+      &)
+    else
+      Bo(i,j)=g*( alpha(i,j)*(stflx(i,j,itemp)-srflx(i,j))&
+      &)
+    endif
     Bosol(i,j)=g*alpha(i,j)*srflx(i,j)
 #  undef beta
 #  undef alpha
@@ -435,10 +438,8 @@ do j=jstr,jend   !--> restart j-loop till the very end
         amp = ssgm**2
         Kv(i,j,k)=sqrt((amp*Kv(i,j,k))**2 + (wm*hbl(i,j)*cff)**2 )
         Kt(i,j,k)=sqrt((amp*Kt(i,j,k))**2 + (ws*hbl(i,j)*cff)**2 )
-#  ifdef SALINITY
         !Ks(i,j,k)=Ks(i,j,k) + ws*hbl(i,j)*cff
-        Ks(i,j,k)=sqrt((amp*Ks(i,j,k))**2 + (ws*hbl(i,j)*cff)**2 )
-#  endif
+        if (with_salt) Ks(i,j,k)=sqrt((amp*Ks(i,j,k))**2 + (ws*hbl(i,j)*cff)**2 )
 
 #  ifdef LMD_NONLOCAL
         if (Bfsfc < 0._8) then
@@ -496,9 +497,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
 
         Kv(i,j,k)=sqrt( Kv(i,j,k)**2 + (wmb*bbl(i,j)*cff1)**2 )
         Kt(i,j,k)=sqrt( Kt(i,j,k)**2 + (wsb*bbl(i,j)*cff1)**2 )
-#  ifdef SALINITY
-        Ks(i,j,k)=sqrt( Ks(i,j,k)**2 + (wsb*bbl(i,j)*cff1)**2 )
-#  endif
+        if (with_salt) Ks(i,j,k)=sqrt( Ks(i,j,k)**2 + (wsb*bbl(i,j)*cff1)**2 )
 
       endif
     enddo      !<-- k
@@ -514,9 +513,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
         do k=0,nz
           Akv(i,j,k)=Kv(i,j,k)
           Akt(i,j,k,itemp)=Kt(i,j,k)
-# ifdef SALINITY
-          Akt(i,j,k,isalt)=Ks(i,j,k)
-# endif
+          if (with_salt) Akt(i,j,k,isalt)=Ks(i,j,k)
         enddo
       else  !! Average 2 time steps of mixing coefficients
         do k=0,nz
@@ -524,10 +521,8 @@ do j=jstr,jend   !--> restart j-loop till the very end
 !               Akt(i,j,k,itemp) = 0.5_8*Akt(i,j,k,itemp) + 0.5_8*Kt(i,j,k)
           Akv(i,j,k)       = Kv(i,j,k)
           Akt(i,j,k,itemp) = Kt(i,j,k)
-# ifdef SALINITY
 !               Akt(i,j,k,isalt) = 0.5_8*Akt(i,j,k,isalt) + 0.5_8*Ks(i,j,k)
-          Akt(i,j,k,isalt) = Ks(i,j,k)
-# endif
+          if (with_salt) Akt(i,j,k,isalt) = Ks(i,j,k)
         enddo
 
       endif  !<-- FIRST_TIME_STEP
@@ -536,9 +531,7 @@ do j=jstr,jend   !--> restart j-loop till the very end
       do k=0,nz
         Akv(i,j,k)=0._8
         Akt(i,j,k,itemp)=0._8
-#  ifdef SALINITY
-        Akt(i,j,k,isalt)=0._8
-#  endif
+        if (with_salt) Akt(i,j,k,isalt)=0._8
       enddo
     endif
 # endif
@@ -625,11 +618,11 @@ endif
 # endif   /* LMD_BKPP */
 
 ! Pack the mixing coefficients into as few exchanges as possible.
-#  ifdef SALINITY
-call exchange_xxx(Akv, Akt(:,:,:,itemp), Akt(:,:,:,isalt))
-#  else
-call exchange_xxx(Akv, Akt(:,:,:,itemp))
-#  endif
+if (with_salt) then
+  call exchange_xxx(Akv, Akt(:,:,:,itemp), Akt(:,:,:,isalt))
+else
+  call exchange_xxx(Akv, Akt(:,:,:,itemp))
+endif
 #  if defined LMD_KPP && defined LMD_BKPP
 call exchange_xxx(hbls(:,:), hbbl(:,:))
 #  elif defined LMD_KPP

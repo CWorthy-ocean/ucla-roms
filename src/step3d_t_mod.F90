@@ -69,7 +69,7 @@ contains
   &is_marbl_step, marbldrv_impose_constant_fe
 #endif
   use grid, only: umask, vmask, pn, pm, rmask, nx, ny, nz, dn_u, dm_v
-  use param, only: mynode, np_eta, np_xi
+  use param, only: mynode, np_eta, np_xi, salinity
   use roms_mpi, only: exchange_xxx
   use timers, only: reg_tic, reg_toc, rg_marbl
   use mixing, only: &
@@ -100,7 +100,7 @@ contains
   integer(kind=4) icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k, iface!, td
   real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: WC,FC,CF,DC
   ! Factors of the implicit vertical solve for the current row, saved on the
-  ! salinity pass (or temperature without SALINITY) and reused for every
+  ! salinity pass (or temperature without salinity) and reused for every
   ! later tracer: they all use Akt(:,:,:,iTandS), Hz and Wi, so only the
   ! right-hand side differs.
   real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: td_piv,td_cf,td_a
@@ -880,8 +880,8 @@ enddo     !<-- itrc (horizontal advection and sources)
 !??           t(i,j,1,nnew,itemp)=t(i,j,1,nnew,itemp) -dt*cff
 !??         enddo
 
-#  if defined LMD_NONLOCAL && defined SALINITY
-    elseif (itrc == isalt) then
+#  ifdef LMD_NONLOCAL
+    elseif (itrc == isalt .and. salinity) then
       do k=nz-1,1,-1
         do i=istr,iend
           cff=-dt*ghat(i,j,k)*stflx(i,j,isalt)

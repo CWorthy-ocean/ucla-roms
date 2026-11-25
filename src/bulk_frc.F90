@@ -278,7 +278,7 @@ contains
     use mixing, only: ieast, isalt, itemp, iwest, jnorth, jsouth
     use ocean_vars, only: u, v
     use scalars, only: cp, g, nz, nrhs, pi, rho0, vonkar, cmday2ms
-    use param, only: nt
+    use param, only: nt, salinity
 
     implicit none
 
@@ -388,10 +388,12 @@ contains
     integer(kind=4) it1,it2, it3,it4, it5,it6, it7,it8, it9,it10
     real(kind=8) tmid, cff1,cff2, cff3,cff4, cff5,cff6, cff7,cff8,&
     &cff9,cff10, cff
+    logical :: with_salt   ! salinity, as a local the compiler can hoist out of the loops
 
 ! Extended bounds needed since u2rho and rho2u averaging occurs, and
 ! lmd_kpp has SMOOTH_HBL which requires extended loop ranges for smoothing.
 # include "compute_extended_bounds.h"
+    with_salt = salinity
 
 
     ! SET_SRFLUX.F PLACED HERE FOR MODULE VERSION
@@ -751,21 +753,19 @@ contains
 !
         stflx(i,j,itemp)=srflx(i,j)+hflw+hflat+hfsen
 !
-# ifdef SALINITY
 !  Total surface salt flux
 !
-        evap(i,j)=-cp*hflat/Hlv
+        if (with_salt) then
+          evap(i,j)=-cp*hflat/Hlv
 
-        ! Divide prate by 100.*3600._8*24. to convert from [cm/day] to [m/s]
-        swflx(i,j) = prate(i,j)*cmday2ms-evap(i,j)
-        ! This is the old way of adding salt flux
+          ! Divide prate by 100.*3600._8*24. to convert from [cm/day] to [m/s]
+          swflx(i,j) = prate(i,j)*cmday2ms-evap(i,j)
+          ! This is the old way of adding salt flux
 !          stflx(i,j,isalt)=(evap(i,j)- ( prate(i,j)/(100._8*3600._8*24._8) ) )*t(i,j,N,nrhs,isalt)
-#endif
+        endif
 # ifdef MASKING
         stflx(i,j,itemp)=stflx(i,j,itemp)*rmask(i,j)
-# ifdef SALINITY
-        stflx(i,j,isalt)=stflx(i,j,isalt)*rmask(i,j)
-# endif
+        if (with_salt) stflx(i,j,isalt)=stflx(i,j,isalt)*rmask(i,j)
 # endif
 !
 !  Save for the calculation of wind stress

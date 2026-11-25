@@ -8,7 +8,7 @@ module surf_flux
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
   use param, only: max_name_size
-  use param, only: mynode, lm, mm, ocean_grid_comm, nt, cdr_lite_on
+  use param, only: mynode, lm, mm, ocean_grid_comm, nt, cdr_lite_on, salinity
   use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u&
   &, ds_xr, ds_yr, ds_xu, ds_yv
   use roms_read_write, only:&
@@ -63,12 +63,6 @@ module surf_flux
   namelist /SST_CORRECTION/ dSSTdt
   namelist /SSS_CORRECTION/ dSSSdt
   namelist /DIC_ALK_CORRECTION/ dCdt
-
-#if defined SALINITY
-  logical,parameter :: salinity=.true.
-#else
-  logical,parameter :: salinity=.false.
-#endif
 
   logical :: init_done=.false.        ! flag to init surf_flux
   integer(kind=4) :: navg_sflx = 0            ! number of samples in average
@@ -259,9 +253,7 @@ subroutine check_restoring_switches ![
     if (qcorrection) call raise_switch('qcorrection', "surf_frc_type = 'bulk'")
     if (cflx_corr)   call raise_switch('cflx_corr',   "surf_frc_type = 'bulk'")
   endif
-#ifndef SALINITY
-  if (sflx_corr)   call raise_switch('sflx_corr',   'the cpp key SALINITY')
-#endif
+  if (sflx_corr .and. .not. salinity) call raise_switch('sflx_corr', 'salinity = .true. (PARAM_SETTINGS)')
 #ifndef MARBL
   if (cflx_corr)   call raise_switch('cflx_corr',   'the cpp key MARBL')
 #endif
@@ -527,11 +519,11 @@ subroutine calc_sflx_avg  ![
     svstr_avg = svstr_avg*(1-coef)+svstr(i0:i1, 1:j1)*coef
   endif
   if (wrt_stflx) then  ! surface tracer fluxes: only heat and salt are written
-# ifdef SALINITY
-    stflx_avg(:,:,1:2) = stflx_avg(:,:,1:2)*(1-coef)+stflx(i0:i1,j0:j1,1:2)*coef
-# else
-    stflx_avg(:,:,1:1) = stflx_avg(:,:,1:1)*(1-coef)+stflx(i0:i1,j0:j1,1:1)*coef
-# endif
+    if (salinity) then
+      stflx_avg(:,:,1:2) = stflx_avg(:,:,1:2)*(1-coef)+stflx(i0:i1,j0:j1,1:2)*coef
+    else
+      stflx_avg(:,:,1:1) = stflx_avg(:,:,1:1)*(1-coef)+stflx(i0:i1,j0:j1,1:1)*coef
+    endif
   endif
   if (wrt_swflx) then  ! surface water flux
     swflx_avg = swflx_avg*(1-coef)+swflx(i0:i1,j0:j1)*coef
