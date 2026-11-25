@@ -11,9 +11,7 @@
               Akv(i,j,k) = Akv_bak
 
               Akt(i,j,k,itemp)= Akt_bak(itemp)
-#  ifdef SALINITY
-              Akt(i,j,k,isalt)= Akt_bak(isalt)
-#  endif
+              if (salinity) Akt(i,j,k,isalt)= Akt_bak(isalt)
             enddo
           enddo
         enddo

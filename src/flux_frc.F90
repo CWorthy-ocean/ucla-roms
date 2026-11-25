@@ -14,7 +14,7 @@ module flux_frc
   use roms_read_write, only: ncforce, flux_frc_opt, set_frc_data,&
   &store_string_att
   use dimensions, only: i0, i1, j0, j1
-  use param, only: lm, mm, isalt, itemp
+  use param, only: lm, mm, isalt, itemp, salinity
   use grid, only: nz
   use error_handling_mod, only: error_log
   use instant_output, only: wrt_instant
@@ -37,13 +37,17 @@ module flux_frc
   type (ncforce) :: nc_shflx  = ncforce(&
   &vname='shflux',tname='shf_time' ) ! stflx(itemp) - surface heat flux (input data in W/m^2)
   type (ncforce) :: nc_swflux = ncforce(&
-  &vname='swflux',tname='swf_time' ) ! stflx(isalt) - surface freshwater flux (input data in cm/day). Might want
+  &vname='swflux',tname='swf_time' ) ! surface freshwater flux (input data in cm/day), read into swflux_in. Might want
   type (ncforce) :: nc_swrad  = ncforce(&
   &vname='swrad', tname='srf_time' ) ! swrad - surface short-wave radiation flux (input data in W/m^2)
 
   logical, public :: interp_flux_frc   ! read via SURF_FRC_SETTINGS in bulk_frc::read_nml_surf_frc
   public set_flux_frc
   public init_arrays_flux_frc
+  ! swflux as read (cm/day). Its own array, so a run without salinity, which
+  ! has no tracer isalt, still reads it.
+  real(kind=8), allocatable, dimension(:,:) :: swflux_in
+
 contains
 
 !     ----------------------------------------------------------------------
@@ -54,6 +58,7 @@ contains
     allocate( nc_svstr%vdata(GLOBAL_2D_ARRAY,2) ) ;nc_svstr%vdata = 0
     allocate( nc_shflx%vdata(GLOBAL_2D_ARRAY,2) ) ;nc_shflx%vdata = 0
     allocate( nc_swflux%vdata(GLOBAL_2D_ARRAY,2) );nc_swflux%vdata = 0
+    allocate( swflux_in(GLOBAL_2D_ARRAY) ) ;swflux_in = 0
     allocate( nc_swrad%vdata(GLOBAL_2D_ARRAY,2) ) ;nc_swrad%vdata = 0
 
     if (interp_flux_frc) then
@@ -113,10 +118,9 @@ contains
     enddo
 
     ! Surface salinity flux
-    call set_frc_data(nc_swflux,stflx(:,:,isalt),'r')
-!     stflx(:,:,isalt) = stflx(:,:,isalt)*t(:,:,nz,nrhs,isalt)*cmday2ms
-    swflx = -stflx(:,:,isalt)*cmday2ms
-    stflx(:,:,isalt) = 0
+    call set_frc_data(nc_swflux,swflux_in,'r')
+    swflx = -swflux_in*cmday2ms
+    if (salinity) stflx(:,:,isalt) = 0
 
     ! 2a) set bottom heat flux: stflx(itemp)
 !     call set_frc_data(nc_bhflx,btflx(i0:i1,j0:j1,itemp),'r')

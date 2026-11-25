@@ -25,9 +25,7 @@
               Akv(i,j,k) = cff*0.005/0.15
 
               Akt(i,j,k,itemp)=cff*0.005/0.15
-#  ifdef SALINITY
-              Akt(i,j,k,isalt)=Akt_bak(isalt)
-#  endif
+              if (salinity) Akt(i,j,k,isalt)=Akt_bak(isalt)
             enddo
           enddo
         enddo

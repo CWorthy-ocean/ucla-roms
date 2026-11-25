@@ -8,7 +8,7 @@ module frc_output
   use error_handling_mod, only: error_log
   use param, only: max_name_size
   use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x,&
-  &lm, mm, isalt, itemp, mynode, ocean_grid_comm
+  &lm, mm, isalt, itemp, mynode, ocean_grid_comm, salinity
   use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u,&
   &ds_xr, ds_yr, ds_zr, ds_xu, ds_yv
   use nc_read_write, only: nccreate, ncwrite, nc_set_record_nofill, nc_fill_record
@@ -180,7 +180,7 @@ contains
       evap_avg(:,:)  = evap_avg(:,:)*(1-coef)  + evap(:,:)*coef
       uwnd_avg(:,:)  = uwnd_avg(:,:)*(1-coef)  + uwnd(:,:)*coef
       vwnd_avg(:,:)  = vwnd_avg(:,:)*(1-coef)  + vwnd(:,:)*coef
-      ssflx_avg(:,:) = ssflx_avg(:,:)*(1-coef) + stflx(:,:,isalt)*coef
+      if (salinity) ssflx_avg(:,:) = ssflx_avg(:,:)*(1-coef) + stflx(:,:,isalt)*coef
       swflx_avg(:,:) = swflx_avg(:,:)*(1-coef) + swflx(:,:)*coef
 #if defined MARBL
       vflux_ALK_avg(:,:)  = vflux_ALK_avg(:,:)*(1-coef)  + stflx(:,:,iALK)*coef
@@ -189,7 +189,7 @@ contains
       vflux_DIC_ALT_CO2_avg(:,:)  = vflux_DIC_ALT_CO2_avg(:,:)*(1-coef)  + stflx(:,:,iDIC_alt)*coef
 #endif /* MARBL */
     else
-      swflx_avg(:,:) = swflx_avg(:,:)*(1-coef) + stflx(:,:,isalt)*coef
+      swflx_avg(:,:) = swflx_avg(:,:)*(1-coef) + swflx(:,:)*coef
     endif
     sustr_avg(:,:) = sustr_avg(:,:)*(1-coef) + sustr(:,:)*coef
     svstr_avg(:,:) = svstr_avg(:,:)*(1-coef) + svstr(:,:)*coef
@@ -258,7 +258,7 @@ contains
           uwnd_avg(:,:) = 0
           call ncwrite(ncid,'vwnd',vwnd_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
           vwnd_avg(:,:) = 0
-          call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
+          if (salinity) call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
           ssflx_avg(:,:) = 0
 #ifdef MARBL
           call ncwrite(ncid,'vflux_ALK',vflux_ALK_avg(i0:i1,j0:j1),(/1,1,record/),.true.)
@@ -294,11 +294,11 @@ contains
           call ncwrite(ncid,'evap',evap(i0:i1,j0:j1),(/1,1,record/),.true.)
           call ncwrite(ncid,'uwnd',uwnd(i0:i1,j0:j1),(/1,1,record/),.true.)
           call ncwrite(ncid,'vwnd',vwnd(i0:i1,j0:j1),(/1,1,record/),.true.)
-          call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/),.true.)
+          if (salinity) call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/),.true.)
           call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),(/1,1,record/),.true.)
         else
           pio_gtype = '2Drw'
-          call ncwrite(ncid,'swflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/),.true.)
+          call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),(/1,1,record/),.true.)
         endif
         pio_gtype = '2Duw'
         call ncwrite(ncid,'sustr',sustr(1:i1,j0:j1),(/1,1,record/),.true.)
@@ -331,7 +331,7 @@ contains
           uwnd_avg(:,:) = 0
           call ncwrite(ncid,'vwnd',vwnd_avg(i0:i1,j0:j1),(/1,1,record/))
           vwnd_avg(:,:) = 0
-          call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/))
+          if (salinity) call ncwrite(ncid,'ssflx',ssflx_avg(i0:i1,j0:j1),(/1,1,record/))
           ssflx_avg(:,:) = 0
 #ifdef MARBL
           call ncwrite(ncid,'vflux_ALK',vflux_ALK_avg(i0:i1,j0:j1),(/1,1,record/))
@@ -363,10 +363,10 @@ contains
           call ncwrite(ncid,'evap',evap(i0:i1,j0:j1),(/1,1,record/))
           call ncwrite(ncid,'uwnd',uwnd(i0:i1,j0:j1),(/1,1,record/))
           call ncwrite(ncid,'vwnd',vwnd(i0:i1,j0:j1),(/1,1,record/))
-          call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/))
+          if (salinity) call ncwrite(ncid,'ssflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/))
           call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),(/1,1,record/))
         else
-          call ncwrite(ncid,'swflx',stflx(i0:i1,j0:j1,isalt),(/1,1,record/))
+          call ncwrite(ncid,'swflx',swflx(i0:i1,j0:j1),(/1,1,record/))
         endif
         call ncwrite(ncid,'sustr',sustr(1:i1,j0:j1),(/1,1,record/))
         call ncwrite(ncid,'svstr',svstr(i0:i1,1:j1),(/1,1,record/))
@@ -519,10 +519,12 @@ contains
 
       ! Input comes in units of:         N/A (calculated)
       ! Output is written in units of:   psu m s-1
-      varid = nccreate(ncid,'ssflx',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
-      ierr=nf90_put_att(ncid, varid, 'long_name',&
-      &'surface salt flux')
-      ierr = nf90_put_att(ncid,varid,'units','psi m s-1')
+      if (salinity) then   ! without salinity there is no salt flux
+        varid = nccreate(ncid,'ssflx',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
+        ierr=nf90_put_att(ncid, varid, 'long_name',&
+        &'surface salt flux')
+        ierr = nf90_put_att(ncid,varid,'units','psi m s-1')
+      endif
 
       ! Input comes in units of:         N/A (calculated)
       ! Output is written in units of:   m s-1
@@ -592,11 +594,11 @@ contains
       ierr = nf90_put_att(ncid,varid,'units','degC m s-1')
 
       ! Input comes in units of:         cm day-1
-      ! Output is written in units of:   psu m s-1
+      ! Output is written in units of:   m s-1 (swflx, as with bulk forcing)
       varid = nccreate(ncid,'swflx',(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),prec)
       ierr=nf90_put_att(ncid, varid, 'long_name',&
       &'surface freshwater flux')
-      ierr = nf90_put_att(ncid,varid,'units','psu m s-1')
+      ierr = nf90_put_att(ncid,varid,'units','m s-1')
 
       ! Input comes in units of:         W m-2
       ! Output is written in units of:   degC m s-1

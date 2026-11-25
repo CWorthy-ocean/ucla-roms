@@ -12,7 +12,6 @@ These switches control fundamental aspects of the model setup, including the equ
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
 | `NONLIN_EOS` | Use Jackett and McDougall (1995) nonlinear equation of state | enabled | Without it, set the linear equation of state in `LIN_RHO_EOS_SETTINGS` |
-| `SALINITY` | Use salinity as a thermodynamic variable | enabled | |
 | `SPLIT_EOS` | Use an equation of state that ensures that monotonically increasing density is equivalent to stable stratification | enabled | |
 | `UV_ADV` | Use advection in horizontal momentum equations | enabled | |
 | `UV_COR` | Use Coriolis term in horizontal momentum equations | enabled | |
@@ -29,7 +28,6 @@ These switches control the configuration of the model grid, including geometry a
 | `CURVGRID` | Use an orthogonal curvilinear grid | enabled | Makes slight adjustments to the velocity tendencies due to spatial changes in dx and dy |
 | `MASKING` | Use land masks for tracer and velocity points to set values to zero | enabled | It is recommended that this flag is always enabled |
 | `SPHERICAL` | Use a spherical geometry in the grid setup | enabled | The model will look for coordinates based on latitude and longitude instead of distance |
-| `MPI_MASKING` | Choose the MPI tiling at runtime from the land mask, skipping tiles that are entirely land | disabled | Requires `PARALLEL_IO` (a joined grid file). `NP_XI` and `NP_ETA` from the namelist are overwritten. Launch with at least as many ranks as the selected tiling needs; extra ranks exit at startup. No `partit` step is needed. |
 
 ### `NUMERICAL ALGORITHMS`
 
@@ -137,5 +135,7 @@ These keys are no longer keys because the namelist now decides what they decided
 | `ANA_VMIX` | `ana_vmix` in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings) (default `.false.`): `Akv` and `Akt` from the case's `ana_vmix.h`; not with `LMD_MIXING` |
 | `PACIFIC` | `sponge_profile = 'cosine'` in [`V_SPONGE_SETTINGS`](runtime_settings.md#v_sponge_settings) (default `'linear'`) |
 | `LINEAR_DRAG_ONLY` | `linear_drag` in [`BOTTOM_DRAG_SETTINGS`](runtime_settings.md#bottom_drag_settings) (default `.false.`) |
+| `SALINITY` | `salinity` in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default `.true.`; `.false.` for a temperature-only case). In a case's own `ana_*.h`, write `if (salinity)` where it had `#ifdef SALINITY` |
+| `MPI_MASKING` | `mpi_masking` in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default `.false.`); still needs `PARALLEL_IO` |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

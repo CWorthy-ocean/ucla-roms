@@ -70,10 +70,10 @@ do k=1,nz
   do j=-1,ny+2
     do i=-1,nx+2
       t(i,j,k,2,itemp)=t(i,j,k,1,itemp)
-# ifdef SALINITY
-      t(i,j,k,1,isalt)=36._8
-      t(i,j,k,2,isalt)=t(i,j,k,1,isalt)
-# endif
+      if (salinity) then
+        t(i,j,k,1,isalt)=36._8
+        t(i,j,k,2,isalt)=t(i,j,k,1,isalt)
+      endif
     enddo
   enddo
   enddo

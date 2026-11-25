@@ -136,17 +136,14 @@ module pio_roms
     character(len=max_name_size) :: name = ''
     logical :: is_open = .false.
   end type pio_kept_file_t
-#ifdef MPI_MASKING
-  !> All-land tiles have no rank, so no rank writes their points of a
-  !> distributed output variable. They read _FillValue only because rank 0
-  !> adds each new record with serial netCDF in fill mode, so the writers
-  !> that could keep their files open between records reopen them instead.
-  logical,parameter,public :: pio_keep_output_open = .false.
-#else
   !> The z-slice and extraction writers keep their files open between
-  !> records and write the time value through PIO.
-  logical,parameter,public :: pio_keep_output_open = .true.
-#endif
+  !> records and write the time value through PIO. Not with mpi_masking
+  !> (set in pio_initialize): all-land tiles have no rank, so no rank writes
+  !> their points of a distributed output variable. They read _FillValue
+  !> only because rank 0 adds each new record with serial netCDF in fill
+  !> mode, so the writers that could keep their files open between records
+  !> reopen them instead.
+  logical,public,protected :: pio_keep_output_open = .true.
 
   !> @brief The length of the dimension of the netCDF variable.
   integer(kind=4), dimension(1) :: pio_dimLen_n1r_r
@@ -786,9 +783,12 @@ contains
 
   subroutine pio_initialize
 
+    use param, only: mpi_masking
     implicit none
 
     ! Set up PIO for this object
+
+    pio_keep_output_open = .not. mpi_masking
 
 !        call PIO_setdebuglevel(6)
     pio_numAggregator = 0

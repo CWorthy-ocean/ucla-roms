@@ -23,8 +23,14 @@ module param
   integer(kind=4), public :: nt_cdr_oae = 0, nt_cdr_dor = 0
   logical, public :: cdr_lite_on = .false.   ! the run has CDR_LITE tracers (read_nml_param)
   integer(kind=4), public :: nt_passive = 0, nt_bgc = 0
+  ! salinity: the run carries salinity (tracer isalt). Without it the only
+  ! active tracer is temperature, and the tracers that follow start at isalt.
+  logical, public :: salinity = .true.
+  ! mpi_masking: choose NP_XI x NP_ETA at start-up from the land mask and run
+  ! without the all-land tiles (mpi_masking_mod). Needs PARALLEL_IO.
+  logical, public :: mpi_masking = .false.
   namelist /PARAM_SETTINGS/ NP_XI, NP_ETA, LLm, MMm,&
-  &nz, nt_passive, nt_cdr_oae, nt_cdr_dor, nt_bgc
+  &nz, nt_passive, nt_cdr_oae, nt_cdr_dor, nt_bgc, salinity, mpi_masking
   ! Maximum number of child domains extract_data writes boundary data for
   ! (the length of its per-child EXTRACT_DATA_SETTINGS arrays).
   integer(kind=4), parameter, public :: max_extract_chd = 8
@@ -128,9 +134,7 @@ contains
 #endif
 
     nt = nt_passive + nt_bgc + 2*nt_cdr_oae + nt_cdr_dor + 1
-#ifdef SALINITY
-    nt = nt+ 1
-#endif
+    if (salinity) nt = nt+ 1
 
 
     cdr_lite_on = nt_cdr_oae > 0 .or. nt_cdr_dor > 0

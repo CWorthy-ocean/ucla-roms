@@ -30,8 +30,8 @@ Directories:
 Less relevant: (you're unlikely to use these)
 
    New-tools/     - Offline partitioning tools for land-masked MPI tilings,
-                    with their own Makefile (the MPI_MASKING CPP key chooses
-                    such a tiling at runtime instead).
+                    with their own Makefile (the namelist setting mpi_masking
+                    chooses such a tiling at runtime instead).
 
    NHMG/          - Non-hydrostatic modules (unmaintained).
 

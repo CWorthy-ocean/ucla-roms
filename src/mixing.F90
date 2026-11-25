@@ -4,7 +4,7 @@ module mixing
 
   use param, only:&
   &isalt, lm, mm, ieast, itemp, iwest,&
-  &jnorth, jsouth
+  &jnorth, jsouth, salinity
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
   implicit none
 
@@ -19,11 +19,7 @@ module mixing
 # endif
 
   real(kind=8),allocatable,dimension(:,:,:) :: Akv
-# ifdef SALINITY
-  real(kind=8),allocatable,dimension(:,:,:,:) :: Akt
-# else
-  real(kind=8),allocatable,dimension(:,:,:,:) :: Akt
-# endif
+  real(kind=8),allocatable,dimension(:,:,:,:) :: Akt   ! (:,:,:,itemp) and, with salinity, (:,:,:,isalt)
 # if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
   real(kind=8),allocatable,dimension(:,:,:) :: bvf
 # endif
@@ -70,11 +66,11 @@ contains
 # endif
 
     allocate( Akv(GLOBAL_2D_ARRAY,0:nz) ); Akv=init
-# ifdef SALINITY
-    allocate( Akt(GLOBAL_2D_ARRAY,0:nz,isalt) ); Akt=init
-# else
-    allocate( Akt(GLOBAL_2D_ARRAY,0:nz,itemp) ); Akt=init
-# endif
+    if (salinity) then
+      allocate( Akt(GLOBAL_2D_ARRAY,0:nz,isalt) ); Akt=init
+    else
+      allocate( Akt(GLOBAL_2D_ARRAY,0:nz,itemp) ); Akt=init
+    endif
 # if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
     allocate( bvf(GLOBAL_2D_ARRAY,0:nz) ); bvf=init
 # endif

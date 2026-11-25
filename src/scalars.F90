@@ -143,7 +143,7 @@ module scalars
 contains
 
   subroutine read_nml_scalars
-    use param, only: itemp
+    use param, only: itemp, salinity
     use error_handling_mod, only: error_log
     use namelist_open_mod, only: open_namelist_file
     use, intrinsic :: iso_fortran_env, only: iostat_end
@@ -254,6 +254,21 @@ contains
     if (ana_vmix_on) then
       mpi_master_only write(*,'(3x,A)') 'ana_vmix = T  vertical mixing from ana_vmix.h'
     end if
+#ifdef MARBL
+    ! MARBL, the CDR output and the CDR gas exchange output read salinity
+    if (.not. salinity) then
+      call error_log%raise_global( &
+      &   context = module_name//'/'//sr_name, &
+      &   info='MARBL (and its CDR outputs) needs salinity = .true. (PARAM_SETTINGS)')
+    end if
+#endif
+#ifdef LMD_DDMIX
+    if (.not. salinity) then
+      call error_log%raise_global( &
+      &   context = module_name//'/'//sr_name, &
+      &   info='the cpp key LMD_DDMIX (double diffusion) needs salinity = .true. (PARAM_SETTINGS)')
+    end if
+#endif
 #ifndef LMD_MIXING
     mixing_type = "background"
 #else

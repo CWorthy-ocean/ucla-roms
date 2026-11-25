@@ -74,15 +74,13 @@ module extract_data
   use scalars, only: dt, knew, nnew, time, tdays
   use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
   &nt_passive, mynode, lm, mm, nz, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
-  &max_extract_chd, max_name_size
+  &max_extract_chd, max_name_size, salinity
   use scoord, only: theta_s, theta_b, hc
   use calc_pflx_mod, only:  up, vp
   use basic_output, only: &
   &indxt, indxu, indxv, indxw,&
   &indxvb, indxub,indxz,&
-#ifdef SALINITY
   &indxs,&
-#endif
   &vn=>vname
   use vertical_remapping, only: remap_src_to_grid
   use roms_mpi, only: exchange_xxx
@@ -1080,8 +1078,7 @@ contains
           endif
           endif
 
-#ifdef SALINITY
-          if (obj(i)%salt) then
+          if (obj(i)%salt .and. salinity) then
 #ifdef PARALLEL_IO
             oname = 'salt' // trim(obj(i)%bnd)
             pio_gtype = pio_bnd // '2rc'
@@ -1104,7 +1101,6 @@ contains
             call ncwrite(ncid,oname,dummy2d,start2D,.true.)
           endif
           endif
-#endif
 
           ! The tracers after temp and salt: passive, CDR OAE, CDR DOR and
           ! BGC, each as its group's output_vars name requests
@@ -1537,9 +1533,7 @@ contains
         if (obj(i)%ubar) call create_var(ncid,obj(i),'ubar',dname,dsize,indxUb)
         if (obj(i)%vbar) call create_var(ncid,obj(i),'vbar',dname,dsize,indxVb)
         if (obj(i)%temp) call create_var(ncid,obj(i),'temp',dname3,dsize3,indxT)
-#ifdef SALINITY
-        if (obj(i)%salt) call create_var(ncid,obj(i),'salt',dname3,dsize3,indxS)
-#endif
+        if (obj(i)%salt .and. salinity) call create_var(ncid,obj(i),'salt',dname3,dsize3,indxS)
         if (obj(i)%u)    call create_var(ncid,obj(i),'u',dname3,dsize3,indxU)
         if (obj(i)%v)    call create_var(ncid,obj(i),'v',dname3,dsize3,indxV)
         if (obj(i)%w)    call create_var(ncid,obj(i),'w',dname3,dsize3,indxW)
@@ -1621,10 +1615,8 @@ contains
 
     if (indt == itemp) then
       tracer_requested = o%temp
-#ifdef SALINITY
-    else if (indt == isalt) then
+    else if (indt == isalt .and. salinity) then
       tracer_requested = o%salt
-#endif
     else if (indt <= iTandS+nt_passive) then
       tracer_requested = o%passive
     else if (indt <= iTandS+nt_passive+2*nt_cdr_oae) then
