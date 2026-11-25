@@ -85,8 +85,17 @@ module scalars
 
   real(kind=8) :: Akv_bak = 0._8
   real(kind=8), allocatable :: Akt_bak(:)
+  ! VERTICAL_MIXING_SETTINGS ana_vmix: Akv, Akt from the case's ana_vmix.h
+  ! (analytical ana_vmix, once at start-up)
+  logical :: ana_vmix_on = .false.
+
+  ! BOTTOM_DRAG_SETTINGS linear_drag: the linear drag rdrg only (no
+  ! quadratic or log-layer drag; compute_rd_bott_drag.h)
+  logical :: linear_drag = .false.
 
   logical :: use_boundary_sponge = .true.   ! sponge along the open boundaries (V_SPONGE_SETTINGS)
+  ! the sponge's profile across its width (set_nudgcof): 'linear' or 'cosine'
+  character(len=8) :: sponge_profile = 'linear'
   real(kind=8) :: v_sponge = 0._8, v_sponge_trc = -1._8
 
   ! Horizontal mixing is done only where the namelist asks for some (read_nml_scalars):
@@ -122,11 +131,11 @@ module scalars
   namelist /GAMMA2_SETTINGS/ gamma2
   namelist /BOTTOM_DRAG_SETTINGS/ &
   &     zob, &
-  & rdrg, rdrg2
+  & rdrg, rdrg2, linear_drag
   namelist /LATERAL_VISC_SETTINGS/ visc2
   namelist /TIME_STEPPING/ dt, ndtfast, ntimes, ninfo
   namelist /UBIND_SETTINGS/ ubind
-  namelist /V_SPONGE_SETTINGS/ use_boundary_sponge, v_sponge, v_sponge_trc
+  namelist /V_SPONGE_SETTINGS/ use_boundary_sponge, v_sponge, v_sponge_trc, sponge_profile
   namelist /RHO0_SETTINGS/ rho0
   ! tnu2 and akt_bak lists may hold values for this many tracers, as in the GPU code
   integer(kind=4), parameter :: max_nml_tracers = 512
@@ -216,12 +225,15 @@ contains
     mpi_master_only write(*,'(8x,A,ES10.3,2x,A)') &
     &    'Zob =', Zob, &
     &    'bottom roughness height [m]'
+    if (linear_drag) then
+      mpi_master_only write(*,'(3x,A)') 'linear_drag = T  linear bottom drag (rdrg) only'
+    end if
 
 
 !================================================================================
 !Akv_bak, Akt_bak
     allocate(Akt_bak(NT))
-    call read_vertical_mixing(namelist_unit, Akv_bak, Akt_bak, ios, msg)
+    call read_vertical_mixing(namelist_unit, Akv_bak, Akt_bak, ana_vmix_on, ios, msg)
 
     if (ios /= 0) then
       call error_log%raise_global( &
@@ -230,6 +242,17 @@ contains
       &        //' section of namelist file: ' &
       &        //trim(msg) &
       &      )
+    end if
+#ifdef LMD_MIXING
+    if (ana_vmix_on) then
+      call error_log%raise_global( &
+      &   context = module_name//'/'//sr_name, &
+      &   info='VERTICAL_MIXING_SETTINGS ana_vmix = .true. cannot be used with the cpp key'&
+      &        //' LMD_MIXING: choose one vertical mixing scheme')
+    end if
+#endif
+    if (ana_vmix_on) then
+      mpi_master_only write(*,'(3x,A)') 'ana_vmix = T  vertical mixing from ana_vmix.h'
     end if
 #ifndef LMD_MIXING
     mixing_type = "background"
@@ -330,6 +353,13 @@ contains
     &      'v_sponge =', v_sponge,&
     &      'maximum viscosity in sponge layer [m^2/s]'
 
+    if (sponge_profile /= 'linear' .and. sponge_profile /= 'cosine') then
+      call error_log%raise_global(&
+      &   context = module_name//'/'//sr_name,&
+      &   info="V_SPONGE_SETTINGS sponge_profile = '"//trim(sponge_profile)//"' is not a choice:"&
+      &        //" use 'linear' or 'cosine'"&
+      &      )
+    end if
     if (v_sponge_trc < 0._8) v_sponge_trc = v_sponge
     mpi_master_only write(*,'(3x,A,F10.2,2x,A)')&
     &      'v_sponge_trc =', v_sponge_trc,&
@@ -378,26 +408,31 @@ contains
     tnu2_nt = tnu2(1:size(tnu2_nt))
   end subroutine read_tracer_diff2
 
-  subroutine read_vertical_mixing(namelist_unit, akv, akt, ios, msg)
-!     Read akv_bak and akt_bak from VERTICAL_MIXING_SETTINGS. As for tnu2,
-!     akt_bak values beyond the run's number of tracers are ignored.
+  subroutine read_vertical_mixing(namelist_unit, akv, akt, ana_vmix_out, ios, msg)
+!     Read akv_bak, akt_bak and ana_vmix from VERTICAL_MIXING_SETTINGS. As for
+!     tnu2, akt_bak values beyond the run's number of tracers are ignored.
+!     (ana_vmix is a local: the module's subroutine of that name is in analytical.)
     implicit none
     integer(kind=4), intent(in) :: namelist_unit
     real(kind=8), intent(inout) :: akv
     real(kind=8), intent(out) :: akt(:)
+    logical, intent(out) :: ana_vmix_out
     integer(kind=4), intent(out) :: ios
     character(len=*), intent(inout) :: msg
     real(kind=8) :: akv_bak
     real(kind=8), allocatable :: akt_bak(:)
-    namelist /VERTICAL_MIXING_SETTINGS/ akv_bak, akt_bak
+    logical :: ana_vmix
+    namelist /VERTICAL_MIXING_SETTINGS/ akv_bak, akt_bak, ana_vmix
 
     akv_bak = akv
     allocate(akt_bak(max(max_nml_tracers, size(akt))))
     akt_bak = 0._8
+    ana_vmix = .false.
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=VERTICAL_MIXING_SETTINGS, iostat=ios, iomsg=msg)
     akv = akv_bak
     akt = akt_bak(1:size(akt))
+    ana_vmix_out = ana_vmix
   end subroutine read_vertical_mixing
 
 

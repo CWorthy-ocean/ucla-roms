@@ -120,7 +120,7 @@ contains
     implicit none
     character(len=16) :: sr_name = "check_switches2"
     character(len=1024) :: error_info
-    integer(kind=4) ncoupl, nAk, is,ie
+    integer(kind=4) ncoupl, is,ie
 
     ie=lenstr(cpps)
 
@@ -218,23 +218,7 @@ contains
 
     endif
 
-! Checking the number of selections vertical mixing schemes.
-
-    nAk=0
-#ifdef ANA_VMIX
-    nAk=nAk+1
-#endif
-#ifdef LMD_MIXING
-    nAk=nAk+1
-#endif
-    if (nAk>1) then
-      write(error_info, *) 'cppdefs.opt: more than '// &
-      &        'one vertical mixing scheme is chosen.'
-      call error_log%raise_global( &
-      &        context=sr_name, &
-      &        info=error_info)
-
-    endif
+! VERTICAL_MIXING_SETTINGS ana_vmix with LMD_MIXING stops the run (scalars).
 
     /*
 #ifdef SPLIT_EOS

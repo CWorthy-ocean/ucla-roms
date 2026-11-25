@@ -23,9 +23,7 @@ contains
 
     use error_handling_mod, only: error_log
     use param, only: read_nml_param
-#ifndef ANA_GRID
     use dimensions, only: read_nml_grid           !GRID_SETTINGS
-#endif
 #ifdef MARBL
     use bgc_shared_vars, only: read_nml_bgc       !BGC_SETTINGS
 #endif
@@ -82,9 +80,7 @@ contains
     call read_nml_param
     call read_nml_periodic
     call read_nml_open_boundary
-#ifndef ANA_GRID
     call read_nml_grid
-#endif
 #ifdef MARBL
     call read_nml_bgc
 #endif

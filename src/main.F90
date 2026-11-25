@@ -157,11 +157,7 @@ contains
     use cdr_gas_exch_output, only: init_cdr_gas_exch_output, do_cdr_gas_exch_output
 #endif
     use frc_output, only: init_frc_output, wrt_frc
-    use analytical, only: &
-#ifdef ANA_INITIAL
-    & ana_init,&
-#endif
-    ana_vmix
+    use analytical, only: ana_init, ana_vmix
     use get_init_mod, only: get_init
     use grid_stiffness_mod, only: grid_stiffness
     use diagnostics, only: init_diagnostics, diag_uv, diag_trc
@@ -173,7 +169,7 @@ contains
     use tracers, only: t
 #endif
     use grid, only: get_grid, dm_r, dn_r
-    use roms_read_write, only: nrrec, frc_time, inifile
+    use roms_read_write, only: nrrec, frc_time, inifile, ana_initial
     use param, only:&
     &mynode, nsub_e, nsub_x, lm, mm,&
     &nz, np_eta, np_xi, padd_e, padd_x
@@ -186,7 +182,7 @@ contains
     use set_depth_mod, only: set_depth, set_HUV, set_HUV1
     use set_scoord_mod, only: set_scoord
     use set_nudgcof_mod, only: set_nudgcof
-    use scalars, only: use_boundary_sponge
+    use scalars, only: use_boundary_sponge, ana_vmix_on
     use setup_grid_mod, only: setup_grid1, setup_grid2
 
     implicit none
@@ -277,14 +273,13 @@ contains
 !R      write(*,*) ' -6' MYID
 
 
-#ifdef ANA_INITIAL
-
-    frc_time='1/2 fwd'            ! Set initial conditions for
-    call set_forces               ! model prognostic variables,
-    call ana_init                 ! may require surface forcing
-    ! either analytically or read
-    if (len_trim(inifile) > 0) then   ! only read IC file if one was supplied
-#endif
+    if (ana_initial) then
+      frc_time='1/2 fwd'          ! Set initial conditions for
+      call set_forces             ! model prognostic variables,
+      call ana_init               ! may require surface forcing
+    end if
+    ! either analytically or read (with ana_initial, only if a file is given)
+    if (.not. ana_initial .or. len_trim(inifile) > 0) then
 
       call get_init(nrrec-1,2)
       call set_depth(0)
@@ -292,9 +287,7 @@ contains
 
       call init_restarts
 
-#ifdef ANA_INITIAL
-    endif    !<-- len_trim(inifile)>0
-#endif
+    endif    !<-- .not. ana_initial .or. len_trim(inifile)>0
 
 #ifdef MARBL
     ! use_constant_Fe (no-op otherwise): Fe at its constant value from the
@@ -302,9 +295,7 @@ contains
     call marbldrv_impose_constant_fe_all(t)
 #endif
 
-#ifdef ANA_VMIX
-    call ana_vmix
-#endif
+    if (ana_vmix_on) call ana_vmix
 
     ! Set initial model clock: at this
     time=start_time             ! moment "start_time" (global scalar)

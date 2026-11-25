@@ -20,7 +20,7 @@ module grid
   use nc_read_write, only: ncread
   use dimensions, only:&
   &i0, i1, j0, j1, gnx, gny, nx, ny, nz, ds_xr, ds_yr, grdname,&
-  &x0,x1,y0,y1
+  &x0,x1,y0,y1, analytical_grid
   use roms_read_write, only:&
   &dn_xr, dn_yr, dn_tm, particle_opt, nrrec, create_file, store_string_att
   use scalars, only: init
@@ -183,11 +183,10 @@ contains
 !----------------------------------------------------------------------
   subroutine ana_grid ![
 !     Provide analytical definition of coordinates, grid scale, coriolis, and depth
-#ifdef ANA_PIPES
+    ! for a case's ana_grid.h that places pipes (pipes_ana_grid.h) or rivers
+    ! (rivers_ana_grid.h)
     use pipe_frc, only: pipe_fraction, pipe_idx, pipe_source
-#elif defined(ANA_RIVER_USWC)
     use param, only: llm, mmm
-#endif
     implicit none
 
 #include "ana_grid.h"
@@ -498,29 +497,30 @@ contains
     character(len=8) :: sr_name = "get_grid"
     character(len=1024) :: error_info = ''
 
-#ifdef ANA_GRID
-    call ana_grid
-    ! ana_grid.h evaluates its formulas on the ghost points too. In a periodic
-    ! direction those values are not the periodic images, and at MPI interfaces
-    ! they can differ from the neighbour's interior values by rounding (or be
-    ! left unset). Exchange the same fields, in the same combinations, as the
-    ! file-based path below does. Spherical: f is not read there, it is computed
-    ! from latr on the extended range in setup_Corls_tile.
-    call exchange_xxx(h)
-    call exchange_xxx(pm,pn)
+    if (analytical_grid) then
+      call ana_grid
+      ! ana_grid.h evaluates its formulas on the ghost points too. In a periodic
+      ! direction those values are not the periodic images, and at MPI interfaces
+      ! they can differ from the neighbour's interior values by rounding (or be
+      ! left unset). Exchange the same fields, in the same combinations, as the
+      ! file-based path below does. Spherical: f is not read there, it is computed
+      ! from latr on the extended range in setup_Corls_tile.
+      call exchange_xxx(h)
+      call exchange_xxx(pm,pn)
 # ifdef SPHERICAL
-    call exchange_xxx(lonr,latr)
+      call exchange_xxx(lonr,latr)
 # else
-    call exchange_xxx(xr,yr,f)
+      call exchange_xxx(xr,yr,f)
 # endif
 # ifdef CURVGRID
-    call exchange_xxx(angler)
+      call exchange_xxx(angler)
 # endif
 # ifdef MASKING
-    call exchange_xxx(rmask)
+      call exchange_xxx(rmask)
 # endif
-    call wrt_ana_grid
-#else
+      call wrt_ana_grid
+      return
+    end if
 
 #ifndef PARALLEL_IO
     call precheck
@@ -596,8 +596,6 @@ contains
 #endif
     call error_log%abort_check()
     return                                     !--> NORMAL RETURN
-
-#endif /* ifdef ANA_GRID */
 
   end subroutine get_grid  !]
 
