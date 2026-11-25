@@ -86,13 +86,34 @@ module marbl_driver
 !     sources and sinks (see marbldrv_impose_constant_fe)
   logical, public :: use_constant_Fe = .false.
   real(kind=8), public :: constant_Fe_value = 3.0e-3_8
+!     Negative-tracer grooming: with groom_negative_tracers, the MARBL
+!     tracers named in groom_tracers (groom_tracers_default if it is empty)
+!     lose their negative values at the start of every MARBL step, keeping
+!     each column's inventory (see marbldrv_groom_column, tracer_groomer)
+  logical, public :: groom_negative_tracers = .false.
+  character(len=32), public :: groom_tracers(40) = ""
 
   namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
   &marbl_timestep, marbl_tracers_to_write,&
   &use_constant_Fe, constant_Fe_value&
 #ifdef MARBL_DIAGS
-  &, marbl_diagnostics_to_write
+  &, marbl_diagnostics_to_write&
 #endif
+  &, groom_negative_tracers, groom_tracers
+
+!     The tracers groomed by default: the chlorophylls with their
+!     autotrophs' biomass (so MARBL's Chl:C ratios stay consistent), the
+!     nutrients and O2. The carbonate system tracers are never groomed.
+  character(len=32), parameter :: groom_tracers_default(20) =&
+  &[character(len=32) :: 'spChl', 'spC', 'spP', 'spFe', 'spCaCO3',&
+  &'diatChl', 'diatC', 'diatP', 'diatFe', 'diatSi',&
+  &'diazChl', 'diazC', 'diazP', 'diazFe',&
+  &'NO3', 'NH4', 'PO4', 'SiO3', 'Fe', 'O2']
+  character(len=32), parameter :: groom_tracers_refused(4) =&
+  &[character(len=32) :: 'DIC', 'ALK', 'DIC_ALT_CO2', 'ALK_ALT_CO2']
+!     Groomed tracers, set by marbldrv_configure_groomer
+  integer(kind=4) :: n_groom = 0
+  integer(kind=4), allocatable :: groom_idx(:)        ! index in the ROMS tracer array
 
 !     Surface flux forcing variable indices (-1 means unused,default)
   integer(kind=4),public ::    u10_sqr_ind=-1,       sss_ind=-1,      sst_ind=-1,&
@@ -500,6 +521,8 @@ contains
       &context=module_name//"/"//sr_name,&
       &info='use_constant_Fe: MARBL has no tracer named Fe')
     end if
+!     ... and the groomed tracers', for groom_negative_tracers
+    call marbldrv_configure_groomer
 
 !     6. Set MARBL update frequency
 !     ---------------------------------------------------------
@@ -604,6 +627,82 @@ contains
 
 
   end subroutine marbldrv_read_tracer_output_list
+
+
+  subroutine marbldrv_configure_groomer
+!-----------------------------------------------------------------------
+!     SUBROUTINE: marbldrv_configure_groomer
+!     DESCRIPTION:
+!     With groom_negative_tracers, resolve the names in groom_tracers
+!     (groom_tracers_default if it is empty) to ROMS tracer indices
+!     through the MARBL tracer metadata, and allocate the groomer's work
+!     and diagnostic arrays. Does nothing otherwise.
+!
+!     NOTES:
+!     - Names of tracers this MARBL configuration lacks are skipped with
+!       a message, since the default set names tracers that some MARBL
+!       configurations do not carry. DIC, ALK and their ALT_CO2 twins are
+!       refused, as is a list that matches no tracer.
+!     - The list ends at its first empty entry, as marbl_tracers_to_write.
+!-----------------------------------------------------------------------
+    character(len=26) :: sr_name = "marbldrv_configure_groomer"
+    character(len=32) :: names(size(groom_tracers))
+    integer(kind=4) :: found(size(groom_tracers))
+    integer(kind=4) :: lidx, tidx, m
+
+    if (.not. groom_negative_tracers) return
+
+    names(:) = ""
+    if (len_trim(groom_tracers(1)) == 0) then
+      names(1:size(groom_tracers_default)) = groom_tracers_default
+    else
+      names(:) = groom_tracers
+    end if
+
+    n_groom = 0
+    do lidx=1,size(names)
+      if (len_trim(names(lidx)) == 0) exit
+      if (any(groom_tracers_refused == names(lidx))) then
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info='groom_tracers: '//trim(names(lidx))//&
+        &' is a carbonate system tracer and must not be groomed')
+        cycle
+      end if
+      m = 0
+      do tidx=1,nt_marbl
+        if (trim(MARBL_instance%tracer_metadata(tidx)%short_name)&
+        &== trim(names(lidx))) then
+          m = tidx+(NT-nt_marbl)
+          exit
+        end if
+      end do
+      if (m == 0) then
+        if (mynode==printnode) then
+          write(*,'(3A)') 'groom_tracers: MARBL has no tracer named ',&
+          &trim(names(lidx)),'; not groomed'
+        end if
+        cycle
+      end if
+      if (any(found(1:n_groom) == m)) cycle ! listed twice
+      n_groom = n_groom+1
+      found(n_groom) = m
+    end do
+    if (n_groom == 0) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info='groom_negative_tracers: groom_tracers names no MARBL tracer')
+    end if
+
+    allocate(groom_idx(n_groom))
+    groom_idx(:) = found(1:n_groom)
+
+    if (mynode==printnode) then
+      write(*,'(A)') 'groom_negative_tracers: grooming negative values of'
+      write(*,'(10(1x,A))') (trim(MARBL_instance%tracer_metadata(&
+      &groom_idx(lidx)-(NT-nt_marbl))%short_name), lidx=1,n_groom)
+    end if
+  end subroutine marbldrv_configure_groomer
 
 
   subroutine marbldrv_configure_saved_state
