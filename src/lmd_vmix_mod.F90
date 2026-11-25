@@ -97,8 +97,8 @@ contains
     real(kind=8), parameter ::&     ! Critical gradient Richardson number
     &Ri0=0.7_8,&         ! below which shear instabilty occurs.
 
-    &nu0m= 1.D-2,&     ! Maximum viscosity and diffusivity
-    &nu0s= 1.D-2,&     ! due to shear instability [m^2/s];
+    &nu0m= 5.D-3,&     ! Maximum viscosity and diffusivity (KPP sensitivity: the pre-2023-07 value, was 1.D-2)
+    &nu0s= 5.D-3,&     ! due to shear instability [m^2/s];
 
     &nuwm=1.0D-4,&     ! Interior viscosity and diffusivity
     &nuws=0.1D-4,&     ! due to wave breaking, [m^2/s]
@@ -446,9 +446,11 @@ do j=jstr,jend
       tmp_v=Kv(i,j,k)
       tmp_t=Kt(i,j,k)
       tmp_s=Ks(i,j,k)
-      Kv(i,j,k)=0.5_8*tmp_v+0.25_8*Kv_km1(i)+0.25_8*Kv(i,j,k+1) + Akv_bak
-      Kt(i,j,k)=0.5_8*tmp_t+0.25_8*Kt_km1(i)+0.25_8*Kt(i,j,k+1) + Akt_bak(itemp)
-      Ks(i,j,k)=0.5_8*tmp_s+0.25_8*Ks_km1(i)+0.25_8*Ks(i,j,k+1) + Akt_bak(isalt)
+      ! KPP sensitivity: no vertical 1-2-1 smoothing of the interior
+      ! coefficients (the 2024-01 change, 4d051bcc); background added as before
+      Kv(i,j,k)=tmp_v + Akv_bak
+      Kt(i,j,k)=tmp_t + Akt_bak(itemp)
+      Ks(i,j,k)=tmp_s + Akt_bak(isalt)
       Kv_km1(i)=tmp_v
       Kt_km1(i)=tmp_t
       Ks_km1(i)=tmp_s
