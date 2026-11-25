@@ -49,7 +49,9 @@ program main              ! Open MP version of ROMS driver
   call read_namelists
 
   call print_jobid
-  call print_switches
+  ! One rank prints the switch list: when every rank did, their copies could
+  ! land in the middle of rank 0's start-up report
+  mpi_master_only call print_switches
 
 #ifdef MPI
 !     Git hash
