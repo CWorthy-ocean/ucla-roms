@@ -41,6 +41,7 @@ module marbl_driver
   use scalars                     , only: nstp,nnew,dt,iic,ntstart,&
   &Cp, rho0
   use grid                        , only : rmask
+  use tracer_groomer              , only : groom_column
 #ifdef MPI
   use mpi_f08                     , only: MPI_CHARACTER, MPI_INTEGER, mpi_bcast
 !      use dimensions
@@ -100,6 +101,7 @@ module marbl_driver
 !     Groomed tracers, set by marbldrv_configure_groomer
   integer(kind=4) :: n_groom = 0
   integer(kind=4), allocatable :: groom_idx(:)        ! index in the ROMS tracer array
+  real(kind=8), allocatable :: groom_t(:), groom_hz(:) ! column work arrays (nz)
 
 !     Surface flux forcing variable indices (-1 means unused,default)
   integer(kind=4),public ::    u10_sqr_ind=-1,       sss_ind=-1,      sst_ind=-1,&
@@ -682,6 +684,7 @@ contains
 
     allocate(groom_idx(n_groom))
     groom_idx(:) = found(1:n_groom)
+    allocate(groom_t(nz), groom_hz(nz))
 
     if (mynode==printnode) then
       write(*,'(A)') 'groom_negative_tracers: grooming negative values of'
@@ -1430,6 +1433,11 @@ contains
       do i=istr,iend
         if (rmask(i,j)==0._8) cycle
 
+!     0. Remove negative values of the groomed tracers, keeping the column
+!        inventory, so that both ROMS' state and MARBL's input are repaired
+!     ----------------------------------------------------------------------
+        if (groom_negative_tracers) call marbldrv_groom_column(i,j,tracer_array)
+
         call marbldrv_set_marbl_surface_flux_forcing_values(&
         &i,j,tracer_array)
         call marbldrv_set_marbl_surface_tracer_values(&
@@ -1479,6 +1487,40 @@ contains
     end do                    ! i=istr,iend
     call error_log%abort_check()
   end subroutine marbldrv_column_physics
+!-----------------------------------------------------------------------
+
+  subroutine marbldrv_groom_column(i,j,tracer_array)
+!-----------------------------------------------------------------------
+!     SUBROUTINE: marbldrv_groom_column
+!     DESCRIPTION:
+!     With groom_negative_tracers, remove the negative values of each
+!     groomed tracer in column (i,j) of time level nnew, keeping the
+!     column inventory where the column holds enough positive mass (see
+!     groom_column in tracer_groomer).
+!
+!     NOTES:
+!     - Columns without negative values are skipped after one scan.
+!-----------------------------------------------------------------------
+    integer(kind=4), intent(in) :: i,j
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,&
+    &intent(inout)     :: tracer_array
+    real(kind=8)    :: removed, added
+    integer(kind=4) :: n, m
+    logical :: have_hz
+
+    have_hz = .false.
+    do n=1,n_groom
+      m = groom_idx(n)
+      if (minval(tracer_array(i,j,:,nnew,m)) >= 0._8) cycle
+      if (.not. have_hz) then
+        groom_hz(:) = Hz(i,j,:)
+        have_hz = .true.
+      end if
+      groom_t(:) = tracer_array(i,j,:,nnew,m)
+      call groom_column(nz, groom_t, groom_hz, removed, added)
+      tracer_array(i,j,:,nnew,m) = groom_t(:)
+    end do
+  end subroutine marbldrv_groom_column
 !-----------------------------------------------------------------------
 
   subroutine marbldrv_impose_constant_fe(istr,iend,jstr,jend,tracer_array,itime)
