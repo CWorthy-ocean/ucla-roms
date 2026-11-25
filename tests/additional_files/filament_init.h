@@ -16,6 +16,7 @@ real(kind=8) :: N0          = 3.0D-5   ! background
 real(kind=8) :: h0          = 60.0_8     ! m. boundary layer beyond filament
 real(kind=8) :: dh0         = 15._8      ! m
 real(kind=8) :: L           = 2000.0_8   ! m
+integer(kind=4), parameter :: hd = 1000   ! m. depth used by the formulas below (was FILAMENT_IDEAL's, in analytical.F90)
 
 
  ! necessary for FIRST_TIME_STEP flag to work, as per

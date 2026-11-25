@@ -35,6 +35,7 @@ reference_date = 2000, 1, 1 ! Model reference date. year, month, day
 ! Previously set in `roms.in`
 !---------------------------
 grdname = "input_data/example_input_grid.nc" ! grid filepath
+ana_grid = .false. ! T: the grid from the case's ana_grid.h (grdname not used)
 /
 
 &S_COORD                                                              !scoord.F90
@@ -77,10 +78,11 @@ pio_direct_read = 'on'
 &INITIAL_CONDITIONS                                          !roms_read_write.F90
 !---------------------------
 ! Previously set in `roms.in`
-! With ANA_INITIAL: empty (or no group) starts from the analytical
-! state; a file (e.g. a restart file) is read over it
+! With ana_initial = .true.: empty starts from the analytical state;
+! a file (e.g. a restart file) is read over it
 !---------------------------
 inifile = "my_initial_conditions.nc" ! Initial conditions (IC) file path
+ana_initial = .false. ! T: start from the case's ana_init.h; a file named by inifile is read over it
 /
 
 &FORCING_FILES                                               !roms_read_write.F90
@@ -497,12 +499,14 @@ tnu2=0.0 0.0 ! Horizontal Laplacian diffusion (m2/s) for each tracer; 0 for none
 rdrg = 0.e-4   ! Linear bottom drag co-efficient (m/s)
 rdrg2 = 1.0e-3 ! Quadratic bottom drag co-efficient (dimensionless)
 zob = 1.e-2    ! Bottom roughness height (m)
+linear_drag = .false. ! T: linear drag rdrg only (no quadratic or log-layer drag)
 /
 
 &VERTICAL_MIXING_SETTINGS                                            !scalars.F90
 !------------------------
 akv_bak = 0.0        ! Vertical viscosity (m2/s)
 akt_bak = 0.0 0.0    ! Vertical mixing (m2/s) for each tracer; values beyond the number of tracers are ignored
+ana_vmix = .false.   ! T: Akv and Akt from the case's ana_vmix.h (not with LMD_MIXING)
 /
 
 &LATERAL_VISC_SETTINGS                                               !scalars.F90
@@ -552,6 +556,7 @@ ubind = 0.1 ! Open boundary binding velocity (m/s)
 use_boundary_sponge = .true. ! Extra viscosity and diffusivity along the open boundaries if T (the default)
 v_sponge = 1.0 ! Maximum viscosity in sponge layer (m2/s)
 v_sponge_trc = -1.0 ! Maximum tracer diffusivity in sponge layer (m2/s); 0 for a sponge on currents only, negative for the same as v_sponge
+sponge_profile = 'linear' ! Profile of the sponge across its width: 'linear' or 'cosine'
 /
 
 !================================================================================

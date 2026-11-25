@@ -44,11 +44,10 @@ Optional: if the group is missing, the reference date is 2000-01-01. ROMS stops 
 ### `GRID_SETTINGS`
 (read by module `dimensions.F90`)
 
-Not read with `ANA_GRID`.
-
 | Setting | Description |
 |--------|-------------|
-| `grdname` | Grid file path (NetCDF) defining model domain |
+| `grdname` | Grid file path (NetCDF) defining model domain; not used with `ana_grid = .true.` |
+| `ana_grid` | `.true.`: an analytical grid, set by the case's `ana_grid.h` (default `.false.`). Not with `MPI_MASKING` |
 
 
 
@@ -94,11 +93,10 @@ Read only with `PARALLEL_IO`.
 ### `INITIAL_CONDITIONS`
 (read by module `roms_read_write.F90`)
 
-Not read with `ANA_INITIAL`.
-
 | Setting | Description |
 |--------|-------------|
-| `inifile` | Initial conditions NetCDF file path |
+| `inifile` | Initial conditions NetCDF file path. With `ana_initial = .true.` it may be empty; a file named here (for example a restart file) is read over the analytical state |
+| `ana_initial` | `.true.`: start from the analytical state set by the case's `ana_init.h` (default `.false.`) |
 
 
 ### `FORCING_FILES`
@@ -470,6 +468,7 @@ Optional: without the group `tnu2` is 0.
 | `rdrg` | Linear bottom drag co-efficient (m/s) |
 | `rdrg2` | Quadratic bottom drag co-efficient (dimensionless) |
 | `zob` | Bottom roughness height (m) |
+| `linear_drag` | `.true.`: the linear drag `rdrg` only, with no quadratic or log-layer drag (default `.false.`) |
 
 ### `VERTICAL_MIXING_SETTINGS`
 (read by module `scalars.F90`)
@@ -478,6 +477,7 @@ Optional: without the group `tnu2` is 0.
 |--------|-------------|
 | `akv_bak` | Vertical viscosity (m2/s) |
 | `akt_bak` | List of vertical mixing coefficients (m2/s) for each tracer. Values beyond the number of tracers are ignored |
+| `ana_vmix` | `.true.`: the vertical viscosity and diffusivities from the case's `ana_vmix.h`, set once at start-up (default `.false.`). Not with the cpp key `LMD_MIXING`: the run stops |
 
 ### `LATERAL_VISC_SETTINGS`
 (read by module `scalars.F90`)
@@ -538,6 +538,7 @@ Optional: without the group `v_sponge` is 0, so there is no sponge.
 | `use_boundary_sponge` | Increase the viscosity and diffusivity near the open boundaries if `.true.` (the default), by `v_sponge` and `v_sponge_trc` |
 | `v_sponge` | Maximum viscosity in sponge layer (m2/s), not negative; also the tracer diffusivity unless `v_sponge_trc` is set |
 | `v_sponge_trc` | Maximum tracer diffusivity in sponge layer (m2/s). `0` gives a sponge on currents only; negative (the template's `-1.0`) or absent means the same as `v_sponge` |
+| `sponge_profile` | How the sponge falls off from the boundary across its width: `'linear'` (the default) or `'cosine'` (half a cosine) |
 
 ### `SSS_CORRECTION`
 (read by module `surf_flux.F90`)

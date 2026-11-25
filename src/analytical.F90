@@ -33,9 +33,6 @@ module analytical
 !                         which are used during heat flux correction.
 ! ana_stflux_tile   Analytical kinematic surface flux of tracer type
 !   variables.
-#ifdef FILAMENT_IDEAL
-  integer(kind=4), parameter :: hd = 1000._8
-#endif
 
   public ana_init
   public ana_vmix

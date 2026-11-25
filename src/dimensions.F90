@@ -43,16 +43,15 @@ module dimensions
   integer(kind=4), public :: ds_zr
   integer(kind=4), public :: ds_zw
 
-# ifdef ANA_GRID
-  logical,parameter,public :: analytical_grid = .true.
-# else
-  logical,parameter,public :: analytical_grid = .false.
-# endif
+  ! GRID_SETTINGS ana_grid: the grid from the case's ana_grid.h (grid.F90
+  ! ana_grid) instead of grdname
+  logical, public :: analytical_grid = .false.
+  logical :: ana_grid = .false.
 
   public :: init_dimensions, read_nml_grid
   character(len=10) :: module_name = "dimensions"
   character(len=max_name_size), public :: grdname = "roms_grid.nc"
-  namelist /GRID_SETTINGS/ grdname
+  namelist /GRID_SETTINGS/ grdname, ana_grid
 contains
 
 !     ----------------------------------------------------------------------
@@ -81,6 +80,12 @@ contains
       &//' section of namelist file: '&
       &//trim(msg)&
       &)
+    end if
+    analytical_grid = ana_grid
+    if (analytical_grid) then   ! grdname is not used
+      mpi_master_only write(*,'(1x,A)') 'grid :: analytical (GRID_SETTINGS ana_grid = .true.)'
+      close(namelist_unit)
+      return
     end if
     call check_nml_string(grdname, 'GRID_SETTINGS grdname', module_name//'/'//sr_name, fits)
     if (.not. fits) return

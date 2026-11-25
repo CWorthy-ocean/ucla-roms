@@ -84,6 +84,12 @@ STOPS = {
                           ["V_SPONGE_SETTINGS v_sponge must not be negative"]),
     "v_sponge_misspelled": ("V_SPONGE_SETTINGS", {"use_boundary_spong": True},
                             ["could not read V_SPONGE_SETTINGS"]),
+    "bad_sponge_profile": ("V_SPONGE_SETTINGS", {"sponge_profile": "cosin"},
+                           ["V_SPONGE_SETTINGS sponge_profile = 'cosin' is not a choice",
+                            "use 'linear' or 'cosine'"]),
+    "ana_vmix_with_lmd_mixing": ("VERTICAL_MIXING_SETTINGS", {"ana_vmix": True},
+                                 ["VERTICAL_MIXING_SETTINGS ana_vmix = .true. cannot be used with the cpp key",
+                                  "LMD_MIXING: choose one vertical mixing scheme"]),
     "calc_pflx_without_timescale": ("CALC_PFLX_SETTINGS", {"calc_pflx": True, "pflx_timescale": 0},
                                     ["pflx_timescale must be > 0"]),
     # the group holds only the misspelled key

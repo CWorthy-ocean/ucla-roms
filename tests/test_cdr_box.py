@@ -1,7 +1,7 @@
 """CDR releases, analytical restarts and output in a small closed box.
 
-One analytical build (``ANA_GRID``, ``ANA_INITIAL``, ``SPHERICAL``,
-without ``PARALLEL_IO``) and a forcing
+One analytical build (``SPHERICAL``, without ``PARALLEL_IO``; the grid and
+initial state from ``ana_grid.h`` and ``ana_init.h``) and a forcing
 file with two parameterized volume releases: A in one cell, B spread over
 several cells around the corner of the 2x2 tiles. Each test says what it
 checks. The tests compare runs with each other or with values computed
@@ -16,7 +16,6 @@ import xarray as xr
 
 from ._helpers import (
     ADDITIONAL_FILES,
-    ANALYTICAL_CPP_KEYS,
     BOUNDS_CHECK_FFLAGS,
     CLOSED_BOX,
     OCEAN_PHYSICS_CPP_KEYS,
@@ -40,7 +39,7 @@ A_CELL = (8, 24)     # release A's global (i, j)
 A_VOLUME, A_DEPTH, A_VSC = 200.0, 60.0, 5.0
 B_CENTRE = (16.5, 16.5)   # release B's centre in global (i, j) index units
 CPP_KEYS = (
-    UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + ANALYTICAL_CPP_KEYS
+    UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
     + ["LMD_CONVEC", "SPHERICAL"]
 )
 
@@ -103,9 +102,9 @@ def box_namelist(input_dir, cdr_file, np_xi=2, np_eta=2) -> dict:
     nml = create_test_namelist_dict(input_dir)
     nml["TIME_STEPPING"].update({"dt": DT, "ndtfast": 12, "ntimes": NSTEPS})
     nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
-    nml["GRID_SETTINGS"] = {"grdname": ""}
+    nml["GRID_SETTINGS"] = {"grdname": "", "ana_grid": True}
     nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "none"
-    nml["INITIAL_CONDITIONS"] = {"inifile": ""}
+    nml["INITIAL_CONDITIONS"] = {"inifile": "", "ana_initial": True}
     nml["FORCING_FILES"] = {"frcfiles": [str(cdr_file)]}
     nml["S_COORD"].update({"theta_s": 0.0, "theta_b": 0.0, "hc": 1.0e4})
     nml["PARAM_SETTINGS"].update({"NP_XI": np_xi, "NP_ETA": np_eta, "LLm": 32, "MMm": 32, "nz": NZ})
@@ -143,7 +142,7 @@ def test_cdr_file_without_frcfiles(box_conf, box_cdr_file, input_dir, tmp_path):
 
 
 def test_ana_initial_restart(box_conf, box_cdr_file, input_dir, tmp_path):
-    """With ANA_INITIAL, inifile names a restart file that is read over the
+    """With ana_initial, inifile names a restart file that is read over the
     analytical state: the restarted half reproduces the continuous run (the
     INITIAL_CONDITIONS group was not read, so the restart started over)."""
     nml = box_namelist(input_dir, box_cdr_file)
@@ -173,12 +172,12 @@ def test_ana_initial_restart(box_conf, box_cdr_file, input_dir, tmp_path):
 
 
 def test_ana_initial_missing_inifile(box_conf, box_cdr_file, input_dir, tmp_path):
-    """With ANA_INITIAL, an inifile that does not exist stops the run."""
+    """With ana_initial, an inifile that does not exist stops the run."""
     nml = box_namelist(input_dir, box_cdr_file)
     nml["INITIAL_CONDITIONS"]["inifile"] = str(tmp_path / "no_such_file.nc")
     assert_run_rejected(box_conf, nml, tmp_path, [
         "Cannot find input file",
-        "with ANA_INITIAL, leave it empty to start from the analytical state",
+        "with ana_initial = .true., leave it empty to start from the analytical state",
     ], label="inifile")
 
 

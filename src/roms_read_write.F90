@@ -22,7 +22,7 @@ module roms_read_write
   &x_,x0,x1,y_,y0,y1
   use dimensions, only: ds_xr, ds_xu, ds_yr, ds_yv, ds_zr, ds_zw
   use param, only: mynode, nnodes, max_name_size
-  use dimensions, only: inode, jnode
+  use dimensions, only: inode, jnode, analytical_grid
   use roms_mpi, only: exchange_xxx, new_part
   use pio_roms, only: use_pio, pio_gtype
 #ifdef PARALLEL_IO
@@ -248,9 +248,12 @@ module roms_read_write
   character, public :: date_str*44
   character(len=80), public :: title = "my roms run"
   character(len=max_name_size), public :: inifile = ""
+  ! INITIAL_CONDITIONS ana_initial: start from the case's ana_init.h (analytical
+  ! ana_init); a file named by inifile is then read over the analytical state
+  logical, public :: ana_initial = .false.
   character(len=max_name_size), allocatable, public :: frcfiles(:)
   namelist /SIMULATION_NAME_SETTINGS/ output_root_name, title
-  namelist /INITIAL_CONDITIONS/ inifile
+  namelist /INITIAL_CONDITIONS/ inifile, ana_initial
   namelist /FORCING_FILES/ frcfiles
   namelist /REFERENCE_DATE_SETTINGS/ reference_date
 
@@ -350,16 +353,9 @@ contains
 !==========================================================================================
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=INITIAL_CONDITIONS, iostat=ios, iomsg=msg)
-#ifdef ANA_INITIAL
-    ! With ANA_INITIAL the group is optional. Without it, or with inifile
-    ! empty, the run starts from ana_init; a file named here is read over the
-    ! analytical state (main.F90), e.g. to restart an analytical case. The
-    ! group used to be skipped, so such a restart silently started again.
-    if (is_iostat_end(ios)) then
-      ios = 0
-      inifile = ''
-    endif
-#endif
+    ! With ana_initial = .true. and inifile empty the run starts from ana_init;
+    ! a file named here is read over the analytical state (main.F90), e.g. to
+    ! restart an analytical case.
 
     if (ios /= 0) then
       call error_log%raise_global(&
@@ -373,12 +369,10 @@ contains
     &module_name//'/'//sr_name, fits)
     if (.not. fits) return
 
-#ifdef ANA_INITIAL
-    if (len_trim(inifile) == 0) then
+    if (ana_initial .and. len_trim(inifile) == 0) then
       mpi_master_only write(*,'(1x,A)') 'initial condition :: analytical '//&
-      &'(ANA_INITIAL, INITIAL_CONDITIONS inifile empty)'
+      &'(INITIAL_CONDITIONS ana_initial = .true., inifile empty)'
     else
-#endif
 
     lstr = lenstr(inifile)
 
@@ -391,10 +385,8 @@ contains
     &iostat=ios)
     if (ios /= 0) then
       error_info = "Cannot find input file '" // trim(inifile) // "'"
-#ifdef ANA_INITIAL
-      error_info = trim(error_info) // " (INITIAL_CONDITIONS inifile; with "//&
-      &"ANA_INITIAL, leave it empty to start from the analytical state)"
-#endif
+      if (ana_initial) error_info = trim(error_info) // " (INITIAL_CONDITIONS inifile; with "//&
+      &"ana_initial = .true., leave it empty to start from the analytical state)"
       call error_log%raise_from_rank(&
       &info=trim(error_info),&
       &context=module_name)
@@ -406,11 +398,11 @@ contains
     &'initial condition :: rec =', nrrec,&
     &'file = ''', trim(inifile), ''''
 
-#ifdef ANA_INITIAL
-    mpi_master_only write(*,'(1x,A)') 'initial condition :: read over '//&
-    &'the analytical state (ANA_INITIAL)'
-    endif   ! inifile given
-#endif
+    if (ana_initial) then
+      mpi_master_only write(*,'(1x,A)') 'initial condition :: read over '//&
+      &'the analytical state (ana_initial = .true.)'
+    end if
+    endif   ! inifile given or no ana_initial
 !==========================================================================================
 !     Read the list into max_frc_files entries; only the files listed are kept (below).
     if (allocated(frcfiles)) deallocate(frcfiles)
@@ -2668,13 +2660,11 @@ contains
 
     ierr=nf90_put_att(ncid, nf90_global, 'title',title)         ! Title of the run
 
-#ifndef ANA_GRID
-    ierr=nf90_put_att(ncid, nf90_global, 'grid_file',grid_files)
-#endif
-#ifndef ANA_GRID
-    ierr=nf90_put_att (ncid, nf90_global, 'forcing_files', force_files)
-    ierr=nf90_put_att (ncid, nf90_global, 'forcing_info', adjustl(force_info))
-#endif
+    if (.not. analytical_grid) then
+      ierr=nf90_put_att(ncid, nf90_global, 'grid_file',grid_files)
+      ierr=nf90_put_att (ncid, nf90_global, 'forcing_files', force_files)
+      ierr=nf90_put_att (ncid, nf90_global, 'forcing_info', adjustl(force_info))
+    end if
     ierr=nf90_put_att(ncid, nf90_global, 'init_file',ini_files)
 
     ierr=nf90_put_att(ncid, nf90_global, 'ntimes', ntimes)         ! Time stepping parameters

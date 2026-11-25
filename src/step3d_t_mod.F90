@@ -12,7 +12,6 @@ contains
 # define UPSTREAM_TS
 #endif
 !--# define AKIMA
-!--# define CONST_TRACERS
 
 ! The isoneutral hyperdiffusion (ADV_ISONEUTRAL) always uses the
 ! switching-triad and stabilizing algorithms.
@@ -1065,14 +1064,6 @@ enddo     !<-- itrc (horizontal advection and sources)
       enddo
 
     endif
-
-#ifdef CONST_TRACERS
-    do k=1,nz
-      do i=istr,iend
-        t(i,j,k,nnew,itrc)=t(i,j,k,nstp,itrc)
-      enddo
-    enddo
-#endif
   enddo     !<-- itrc
   enddo      !<-- j
   if (sl_adv) call sl_t_finish        ! swept-volume advection: the carry becomes the state

@@ -26,9 +26,7 @@ contains
 #ifndef MARBL
     use param, only: nt_passive, nt_bgc, nt_cdr_oae, nt_cdr_dor
 #endif
-#ifndef ANA_GRID
     use dimensions, only: read_nml_grid           !GRID_SETTINGS
-#endif
     use bgc_shared_vars, only: read_nml_bgc       !BGC_SETTINGS
     ! CDR_OUTPUT and CDR_GAS_EXCH_OUTPUT settings are read whatever their cpp
     ! keys: with a key off, the reader only stops if the group switches the
@@ -85,9 +83,7 @@ contains
     call read_nml_param
     call read_nml_periodic
     call read_nml_open_boundary
-#ifndef ANA_GRID
     call read_nml_grid
-#endif
 #ifdef MARBL
     call read_nml_bgc
 #else
