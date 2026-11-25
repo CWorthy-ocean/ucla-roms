@@ -56,14 +56,10 @@
 #define DBLEPREC
 
 /* Define standard dimensions for the model arrays (vertical dimensions
- are inserted explicitly in the code, when needed).  Periodic and
- non-periodic versions may differ by the number of ghost points on each
- edge (2 or 1 respectively). This distinction is present only in the
- purely SHARED MEMORY code. In the case of message passing, when array
- dimensions correspond to a portion of the physical domain (as opposite
- to the whole domain), so two ghost zones are always provided on the
- each side. These data for these two ghost zones is then exchanged by
- message passing.  */
+ are inserted explicitly in the code, when needed).  Array dimensions
+ correspond to a portion of the physical domain, with two ghost zones on
+ each side, whatever the periodicity. The data for these two ghost zones
+ is exchanged by message passing.  */
 
 #ifdef MPI
 # define GLOBAL_2D_ARRAY -1:Lm+2,-1:Mm+2
@@ -74,23 +70,8 @@
 !# define END_1DX Lm+2
 !# define END_1DY Mm+2
 #else
-# ifdef EW_PERIODIC
-#  ifdef NS_PERIODIC
-#   define GLOBAL_2D_ARRAY -1:Lm+2,-1:Mm+2
-#   define START_2D_ARRAY -1,-1
-#  else
-#   define GLOBAL_2D_ARRAY -1:Lm+2,0:Mm+1
-#   define START_2D_ARRAY -1,0
-#  endif
-# else
-#  ifdef NS_PERIODIC
-#   define GLOBAL_2D_ARRAY 0:Lm+1,-1:Mm+2
-#   define START_2D_ARRAY 0,-1
-#  else
-#   define GLOBAL_2D_ARRAY 0:Lm+1,0:Mm+1
-#   define START_2D_ARRAY 0,0
-#  endif
-# endif
+# define GLOBAL_2D_ARRAY -1:Lm+2,-1:Mm+2
+# define START_2D_ARRAY -1,-1
 #endif
 
 #define PRIVATE_1D_SCRATCH_ARRAY istr-2:iend+2
@@ -101,73 +82,19 @@
  adjacent to WESTERN[EASTERN, SOUTHERN, NORTHERN] edge (i.e. physical
  boundary) of the model domain?''  Note that ghost points associated
  with periodicity are NOT considered as physical boundary points by
- these macros: in a periodic direction they are .false., so that code
- for an open side (obc_west, ... in open_boundary_mod.F90) compiles. */
-
-#ifndef EW_PERIODIC
-# ifdef MPI
-#  define WESTERN_EDGE inode==0
-#  define EASTERN_EDGE inode==np_xi-1
-# else
-#  define WESTERN_EDGE .true.
-#  define EASTERN_EDGE .true.
-# endif
-#else
-# define WESTERN_EDGE .false.
-# define EASTERN_EDGE .false.
-#endif
-
-#ifndef NS_PERIODIC
-# ifdef MPI
-#  define SOUTHERN_EDGE jnode==0
-#  define NORTHERN_EDGE jnode==np_eta-1
-# else
-#  define SOUTHERN_EDGE .true.
-#  define NORTHERN_EDGE .true.
-# endif
-#else
-# define SOUTHERN_EDGE .false.
-# define NORTHERN_EDGE .false.
-#endif
-
-/* The following macros are to signal the proximity of computational
- margins -- rows of ghost points points associated with either MPI
- exchange zones and/or periodicity in either direction.   Note that
- macros with _MS_ and logical variables with _ms_ are intended
- STRICTLY to control MPI message passing, while the ones _MS_(_ms_)
- are to signal proximity to EITHER ghost points to be exchanged by
- messages OR due to periodicity WITHOUT distinguishing between these
- two causes.  */
+ these macros: in a periodic direction (ew_periodic, ns_periodic in
+ open_boundary_mod.F90) they are .false. */
 
 #ifdef MPI
-# define WEST_MSG_EXCH  west_msg_exch.and.istr==iwest
-# define EAST_MSG_EXCH  east_msg_exch.and.iend==ieast
-# define SOUTH_MSG_EXCH south_msg_exch.and.jstr==jsouth
-# define NORTH_MSG_EXCH north_msg_exch.and.jend==jnorth
-
-# ifdef EW_PERIODIC
-#  define WEST_EXCHNG  istr==iwest
-#  define EAST_EXCHNG  iend==ieast
-# else
-#  define WEST_EXCHNG  west_exchng.and.istr==iwest
-#  define EAST_EXCHNG  east_exchng.and.iend==ieast
-# endif
-# ifdef NS_PERIODIC
-#  define SOUTH_EXCHNG jstr==jsouth
-#  define NORTH_EXCHNG jend==jnorth
-# else
-#  define SOUTH_EXCHNG south_exchng.and.jstr==jsouth
-#  define NORTH_EXCHNG north_exchng.and.jend==jnorth
-# endif
+# define WESTERN_EDGE (inode==0.and..not.ew_periodic)
+# define EASTERN_EDGE (inode==np_xi-1.and..not.ew_periodic)
+# define SOUTHERN_EDGE (jnode==0.and..not.ns_periodic)
+# define NORTHERN_EDGE (jnode==np_eta-1.and..not.ns_periodic)
 #else
-# ifdef EW_PERIODIC
-#  define WEST_EXCHNG istr==1
-#  define EAST_EXCHNG iend==Lm
-# endif
-# ifdef NS_PERIODIC
-#  define SOUTH_EXCHNG jstr==1
-#  define NORTH_EXCHNG jend==Mm
-# endif
+# define WESTERN_EDGE (.not.ew_periodic)
+# define EASTERN_EDGE (.not.ew_periodic)
+# define SOUTHERN_EDGE (.not.ns_periodic)
+# define NORTHERN_EDGE (.not.ns_periodic)
 #endif
 
 /* The following four macros identify position of an MPI-node

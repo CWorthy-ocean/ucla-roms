@@ -3,7 +3,7 @@ module scalars
 #include "cppdefs.opt"
 
   use param, only: nt, nz, mynode
-  use open_boundary_mod, only: ubind_used
+  use open_boundary_mod, only: ubind_used, ew_periodic, ns_periodic
   implicit none
   character(len=7) :: module_name = "scalars"
 ! This is include file "scalars"
@@ -119,9 +119,7 @@ module scalars
 #endif
 
   real(kind=8) :: init = 0. !=1.0D+33          ! initialize all arrays. set to huge number to check for bugs.
-#if !defined EW_PERIODIC || !defined NS_PERIODIC
   namelist /GAMMA2_SETTINGS/ gamma2
-#endif
   namelist /BOTTOM_DRAG_SETTINGS/ &
   &     zob, &
   & rdrg, rdrg2
@@ -151,22 +149,22 @@ contains
 
 !================================================================================
 ! set `gamma2`
-#if !defined EW_PERIODIC || !defined NS_PERIODIC
-    rewind(namelist_unit)
-    read (unit=namelist_unit, nml=GAMMA2_SETTINGS, iostat=ios, iomsg=msg)
-    if (ios /= 0) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name, &
-      &   info='could not read GAMMA2_SETTINGS' &
-      &        //' section of namelist file: ' &
-      &        //trim(msg) &
-      &      )
+    if (.not. (ew_periodic .and. ns_periodic)) then
+      rewind(namelist_unit)
+      read (unit=namelist_unit, nml=GAMMA2_SETTINGS, iostat=ios, iomsg=msg)
+      if (ios /= 0) then
+        call error_log%raise_global( &
+        &   context = module_name//'/'//sr_name, &
+        &   info='could not read GAMMA2_SETTINGS' &
+        &        //' section of namelist file: ' &
+        &        //trim(msg) &
+        &      )
+      end if
+      mpi_master_only write(*,'(5x,A,ES10.3,2x,2A)') &
+      &    'gamma2 =', gamma2, &
+      &    'slipperiness parameter: ',&
+      &    'free-slip = +1, or no-slip = -1.'
     end if
-    mpi_master_only write(*,'(5x,A,ES10.3,2x,2A)') &
-    &    'gamma2 =', gamma2, &
-    &    'slipperiness parameter: ',&
-    &    'free-slip = +1, or no-slip = -1.'
-#endif
 !================================================================================
 !     set `tnu2`
     allocate(tnu2(NT))

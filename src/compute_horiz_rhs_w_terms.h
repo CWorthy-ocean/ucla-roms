@@ -10,7 +10,6 @@
 #ifdef UV_ADV
 
 # define curv wrk1
-#ifndef EW_PERIODIC
 if (WESTERN_EDGE) then       ! Determine extended index
   imin=istr                  ! range for computation of
 else                         ! elementary differences: it
@@ -21,10 +20,6 @@ if (EASTERN_EDGE) then       ! physical boundary the extra
 else                         ! and extrapolation of slope
   imax=iend+1                ! is used instead.
 endif
-#else
-imin=istr-1
-imax=iend+1
-#endif
 do j=jstr,jend
   do i=imin,imax+1
     FX(i,j)=(w(i,j,k,nrhs)-w(i-1,j,k,nrhs))&
@@ -33,7 +28,6 @@ do j=jstr,jend
 #endif
   enddo
 enddo
-#ifndef EW_PERIODIC
 if (WESTERN_EDGE) then
   do j=jstr,jend
     FX(istr-1,j)=FX(istr,j)
@@ -44,7 +38,6 @@ if (EASTERN_EDGE) then
     FX(iend+2,j)=FX(iend+1,j)
   enddo
 endif
-#endif
 do j=jstr,jend
   do i=istr-1,iend+1
     curv(i,j)=FX(i+1,j)-FX(i,j)
@@ -68,7 +61,6 @@ do j=jstr,jend
   enddo           !--> discard curv,grad, keep FX
 enddo
 
-#ifndef NS_PERIODIC
 if (SOUTHERN_EDGE) then
   jmin=jstr
 else
@@ -79,10 +71,6 @@ if (NORTHERN_EDGE) then
 else
   jmax=jend+1
 endif
-#else
-jmin=jstr-1
-jmax=jend+1
-#endif
 do j=jmin,jmax+1
   do i=istr,iend
     FE(i,j)=(w(i,j,k,nrhs)-w(i,j-1,k,nrhs))&
@@ -91,7 +79,6 @@ do j=jmin,jmax+1
 #endif
   enddo
 enddo
-#ifndef NS_PERIODIC
 if (SOUTHERN_EDGE) then
   do i=istr,iend
     FE(i,jstr-1)=FE(i,jstr)
@@ -102,7 +89,6 @@ if (NORTHERN_EDGE) then
     FE(i,jend+2)=FE(i,jend+1)
   enddo
 endif
-#endif
 do j=jstr-1,jend+1
   do i=istr,iend
     curv(i,j)=FE(i,j+1)-FE(i,j)

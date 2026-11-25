@@ -1,5 +1,6 @@
 module wvlcty_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
   private
   public :: wvlcty, wvlcty_tile
@@ -54,20 +55,20 @@ contains
 
 # include "compute_extended_bounds.h"
 
-# ifdef EW_PERIODIC
-    imin=max(istrR, istr-1)        ! The logic here is somewhat
-    imax=min(iendR, iend+1)        ! opposite to the standard
-#else
-    imin=istr                      ! "auxiliary" bounds: extend
-    imax=iend                      ! the range of computation of
-# endif
-# ifdef NS_PERIODIC
-    jmin=max(jstrR, jstr-1)        ! "Wvlc", by one row of points
-    jmax=min(jendR, jend+1)        ! on the side, but only in the
-# else
-    jmin=jstr                      ! case of periodic direction.
-    jmax=jend
-# endif
+    if (ew_periodic) then
+      imin=max(istrR, istr-1)      ! The logic here is somewhat
+      imax=min(iendR, iend+1)      ! opposite to the standard
+    else
+      imin=istr                    ! "auxiliary" bounds: extend
+      imax=iend                    ! the range of computation of
+    endif
+    if (ns_periodic) then
+      jmin=max(jstrR, jstr-1)      ! "Wvlc", by one row of points
+      jmax=min(jendR, jend+1)      ! on the side, but only in the
+    else
+      jmin=jstr                    ! case of periodic direction.
+      jmax=jend
+    endif
 
 ! Compute "omega" vertical velocity by means of integration of mass
 ! divergence of mass fluxes from bottom up. In this computation,
@@ -167,7 +168,6 @@ contains
 
 !  Set lateral boundary conditions: gradient only.
 
-# ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do k=1,nz
         do j=jmin,jmax
@@ -182,8 +182,6 @@ contains
         enddo
       enddo
     endif
-# endif
-# ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do k=1,nz
         do i=imin,imax
@@ -198,7 +196,6 @@ contains
         enddo
       enddo
     endif
-#  ifndef EW_PERIODIC
     if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
       do k=1,nz
         Wvlc(imin-1,jmin-1,k)=Wvlc(imin,jmin,k)
@@ -219,7 +216,5 @@ contains
         Wvlc(imax+1,jmax+1,k)=Wvlc(imax,jmax,k)
       enddo
     endif
-#  endif
-# endif
   end subroutine wvlcty_tile
 end module wvlcty_mod

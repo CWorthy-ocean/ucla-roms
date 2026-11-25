@@ -499,10 +499,18 @@ akt_bak = 0.0 0.0    ! Vertical mixing (m2/s) for each tracer; values beyond the
 visc2 = 0. ! Horizontal Laplacian kinematic viscosity (m2/s); 0 for none
 /
 
+&PERIODIC_SETTINGS                                         !open_boundary_mod.F90
+!-----------------
+! Optional group; without it no direction is periodic
+!-----------------
+ew_periodic = .false. ! The domain is periodic in the west-east direction
+ns_periodic = .false. ! The domain is periodic in the south-north direction
+/
+
 &OPEN_BOUNDARY_SETTINGS                                    !open_boundary_mod.F90
 !----------------------
 ! Optional group. A side that is not open is closed (a wall). Sides in a periodic
-! direction are never open.
+! direction (PERIODIC_SETTINGS) are never open.
 !----------------------
 obc_west  = .true. ! The sides that are open
 obc_east  = .true.

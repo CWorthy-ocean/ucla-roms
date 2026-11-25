@@ -1,5 +1,6 @@
 module visc3d_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
   private
 

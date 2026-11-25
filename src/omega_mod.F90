@@ -1,5 +1,6 @@
 module omega_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
   private
 
@@ -176,7 +177,6 @@ contains
       enddo
     enddo
 
-# ifndef EW_PERIODIC
     if (WESTERN_EDGE) then                       ! Set lateral
       do k=0,nz                                   ! boundary
         do j=jstr,jend                           ! conditions
@@ -193,8 +193,6 @@ contains
         enddo
       enddo
     endif
-# endif
-# ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do k=0,nz
         do i=istr,iend
@@ -211,7 +209,6 @@ contains
         enddo
       enddo
     endif
-#  ifndef EW_PERIODIC
     if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
       do k=0,nz
         We(istr-1,jstr-1,k)=We(istr,jstr,k)
@@ -236,8 +233,6 @@ contains
         Wi(iend+1,jend+1,k)=Wi(iend,jend,k)
       enddo
     endif
-#  endif
-# endif
 
 !      call wrt_instant(We, 'We')
 !      call wrt_instant(Wi, 'Wi')

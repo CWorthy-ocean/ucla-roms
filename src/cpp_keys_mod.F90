@@ -8,16 +8,6 @@ module cpp_keys_mod
   private
 
   ! (a) Switches: each turns one feature on or off.
-#ifdef EW_PERIODIC
-  logical, parameter, public :: key_ew_periodic = .true.
-#else
-  logical, parameter, public :: key_ew_periodic = .false.
-#endif
-#ifdef NS_PERIODIC
-  logical, parameter, public :: key_ns_periodic = .true.
-#else
-  logical, parameter, public :: key_ns_periodic = .false.
-#endif
 #ifdef LMD_KPP
   logical, parameter, public :: key_lmd_kpp = .true.
 #else

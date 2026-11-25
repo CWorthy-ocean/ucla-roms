@@ -69,7 +69,8 @@ contains
     use pio_roms, only: read_nml_pio              !PIO_SETTINGS
 #endif
     use diag_mod, only: read_nml_stdout_diag
-    use open_boundary_mod, only: read_nml_open_boundary  !OPEN_BOUNDARY_SETTINGS (optional)
+    use open_boundary_mod, only: read_nml_periodic, read_nml_open_boundary  !PERIODIC_SETTINGS,
+                                                                  !OPEN_BOUNDARY_SETTINGS (optional)
     use implicit_fs_mod, only: read_nml_implicit_fs, fs_on !IMPLICIT_FS (optional)
     use nhmg_settings_mod, only: read_nml_nhmg, nhmg_on  !NHMG_SETTINGS (optional)
 #ifdef MARBL
@@ -79,6 +80,7 @@ contains
 #endif
     implicit none
     call read_nml_param
+    call read_nml_periodic
     call read_nml_open_boundary
 #ifndef ANA_GRID
     call read_nml_grid

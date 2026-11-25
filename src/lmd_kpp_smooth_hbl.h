@@ -29,7 +29,6 @@
 
 cff=1.D0/12.D0 ; cff1=3.D0/16.D0
 
-#  ifndef EW_PERIODIC
 if (WESTERN_EDGE) then
   do j=J_EXT_RANGE
   wrk(istr-1,j)=wrk(istr,j)
@@ -40,8 +39,6 @@ if (EASTERN_EDGE) then
   wrk(iend+1,j)=wrk(iend,j)
 enddo
 endif
-#  endif
-#  ifndef NS_PERIODIC
 if (SOUTHERN_EDGE) then
   do i=I_EXT_RANGE
   wrk(i,jstr-1)=wrk(i,jstr)
@@ -52,7 +49,6 @@ if (NORTHERN_EDGE) then
   wrk(i,jend+1)=wrk(i,jend)
 enddo
 endif
-#   ifndef EW_PERIODIC
 if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
   wrk(istr-1,jstr-1)=wrk(istr,jstr)
 endif
@@ -65,8 +61,6 @@ endif
 if (EASTERN_EDGE .and. NORTHERN_EDGE) then
   wrk(iend+1,jend+1)=wrk(iend,jend)
 endif
-#   endif
-#  endif
 
 do j=jstr-1,jend+1                 ! The smoothing isotropy is
   do i=istr,iend+1                 ! achieved by computing masked
