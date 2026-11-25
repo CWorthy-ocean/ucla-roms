@@ -10,6 +10,7 @@ add_git_hash_mod.o : add_git_hash_mod.F90 cppdefs.opt error_handling_mod.o param
 prsgrd_mod.o : prsgrd_mod.F90 cppdefs.opt param.o private_scratch.o grid.o tides.o ocean_vars.o eos_vars.o dimensions.o scalars.o diagnostics.o roms_mpi.o calc_pflx_mod.o
 private_scratch.o : private_scratch.F90 cppdefs.opt param.o scalars.o
 advection.o : advection.F90 cppdefs.opt dimensions.o ocean_vars.o tracers.o scalars.o param.o
+tracer_groomer.o : tracer_groomer.F90
 strings.o : strings.F90
 setup_grid_mod.o : setup_grid_mod.F90 cppdefs.opt param.o compute_tile_bounds.h grid.o scalars.o dimensions.o roms_mpi.o compute_auxiliary_bounds.h private_scratch.o comm_vars.o
 cppdefs.o : cppdefs.opt set_global_definitions.h
@@ -29,7 +30,7 @@ precheck.o : precheck.F90 cppdefs.opt error_handling_mod.o extract_data.o bgc_sh
 comm_vars.o : comm_vars.F90 cppdefs.opt param.o
 error_handling_mod.o : error_handling_mod.F90 cppdefs.opt param.o utils_mod.o
 mpi_masking_mod.o : mpi_masking_mod.F90 cppdefs.opt param.o dimensions.o error_handling_mod.o
-marbl_driver.o : marbl_driver.F90 cppdefs.opt param.o dimensions.o surf_flux.o bgc_forces.o scalars.o grid.o ocean_vars.o error_handling_mod.o namelist_open_mod.o utils_mod.o nc_read_write.o roms_mpi.o pio_roms.o instant_output.o roms_read_write.o
+marbl_driver.o : marbl_driver.F90 cppdefs.opt param.o dimensions.o surf_flux.o bgc_forces.o scalars.o grid.o ocean_vars.o error_handling_mod.o namelist_open_mod.o utils_mod.o nc_read_write.o roms_mpi.o pio_roms.o instant_output.o roms_read_write.o tracer_groomer.o
 sponge_tune.o : sponge_tune.F90 cppdefs.opt calc_pflx_mod.o namelist_open_mod.o nc_read_write.o scalars.o dimensions.o roms_read_write.o param.o error_handling_mod.o pio_roms.o grid.o
 lmd_swr_frac_mod.o : lmd_swr_frac_mod.F90 cppdefs.opt param.o dimensions.o private_scratch.o scalars.o ocean_vars.o mixing.o roms_mpi.o
 roms_read_write.o : roms_read_write.F90 cppdefs.opt add_git_hash_mod.o scalars.o nc_read_write.o dimensions.o param.o roms_mpi.o pio_roms.o error_handling_mod.o instant_output.o insert_node_mod.o namelist_open_mod.o utils_mod.o scoord.o eos_vars.o strings.o
