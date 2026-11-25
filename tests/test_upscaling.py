@@ -16,7 +16,6 @@ import pytest
 import xarray as xr
 
 from ._helpers import (
-    BGC_REALISTIC_CPP_KEYS,
     MARBL_CPP_KEYS,
     OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
@@ -36,7 +35,7 @@ def uscl_conf(tmp_path_factory) -> ROMSConfiguration:
     """Compile the MARBL binary once for the module."""
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
-        + REALISTIC_CPP_KEYS + BGC_REALISTIC_CPP_KEYS
+        + REALISTIC_CPP_KEYS
         + MARBL_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("uscl_build")
@@ -63,6 +62,7 @@ def _uscl_nml(input_dir) -> dict:
             str(input_dir / "example_input_bgc_boundary_forcing.nc"),
         ]
     }
+    nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "bulk"
     # The sponge diffusivity is v_sponge on the boundary row (tnu2 = 0)
     nml["V_SPONGE_SETTINGS"]["v_sponge"] = 400.0
     nml["UPSCALE_SETTINGS"].update({

@@ -94,7 +94,7 @@ contains
   use diagnostics, only: calc_diag, tdiag, tmixx, tadvx, tadvy, diag_trc,&
   &tmixy, tadvy, tadvz, td, vflxd, zflx, tmixz, diag_t_adv_vc4, diag_t_adv_hc4
   use bulk_frc, only: tair
-  use surf_flux, only: swflx
+  use surf_flux, only: swflx, bulk_frc_on
   implicit none
   integer(kind=4) icdr, cidx, istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k, iface!, td
   real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: WC,FC,CF,DC
@@ -815,17 +815,19 @@ enddo     !<-- itrc (horizontal advection and sources)
       enddo
     enddo
 
-    ! Add in the heat of rain water. If using BULK_FRC, use the 2m air temperature;
-    ! If using FLUX_FRC, just use the local water temperature
+    ! Add in the heat of rain water: with bulk forcing at the 2 m air temperature,
+    ! otherwise at the local water temperature
     if (itrc==itemp) then
       do i=istr,iend
-        t(i,j,nz,nnew,itrc)=t(i,j,nz,nnew,itrc) +dt&
-        &*swflx(i,j)&
-#ifdef BULK_FRC
-        &*tair(i,j)
-#else
-        &*t(i,j,nz,nnew,itrc)/Hz(i,j,nz)
-#endif
+        if (bulk_frc_on) then
+          t(i,j,nz,nnew,itrc)=t(i,j,nz,nnew,itrc) +dt&
+          &*swflx(i,j)&
+          &*tair(i,j)
+        else
+          t(i,j,nz,nnew,itrc)=t(i,j,nz,nnew,itrc) +dt&
+          &*swflx(i,j)&
+          &*t(i,j,nz,nnew,itrc)/Hz(i,j,nz)
+        endif
       enddo
     endif
 

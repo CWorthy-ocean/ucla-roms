@@ -100,10 +100,12 @@ frcfiles =
 !---------------------------------
 ! Previously set in `bulk_frc.opt and flux_frc.opt`
 !---------------------------------
-interp_bulk_frc = .true.       ! Interpolate forcing from coarser input grid if T
-check_bulk_frc_units = .false. ! Check units of input vars if T
-interp_flux_frc = .true.       ! Interpolate forcing from coarser input grid if T
-! Surface restoring (needs the BULK_FRC cppkey; each rate is in its own group
+surf_frc_type = 'bulk'         ! Surface fluxes: 'bulk' (bulk formulae, the default), 'flux' (read
+                               ! from the forcing files) or 'none' (all zero)
+interp_bulk_frc = .true.       ! Interpolate bulk forcing from coarser input grid if T
+check_bulk_frc_units = .false. ! Check units of input vars if T (bulk forcing)
+interp_flux_frc = .true.       ! Interpolate flux forcing from coarser input grid if T
+! Surface restoring (needs surf_frc_type = 'bulk'; each rate is in its own group
 ! under SURFACE RESTORING below, which must then be present):
 sflx_corr = .false.    ! Restore salinity toward sss if T (needs SALINITY)
 qcorrection = .false.  ! Restore temperature toward sst if T

@@ -34,6 +34,10 @@ module surf_flux
   ! Surface restoring switches, read with SURF_FRC_SETTINGS (bulk_frc.F90), which
   ! comes before SURF_FLX_OUTPUT_SETTINGS
   logical, public :: sflx_corr = .false., qcorrection = .false., cflx_corr = .false.
+  ! SURF_FRC_SETTINGS surf_frc_type (read by bulk_frc read_nml_surf_frc): 'bulk' (bulk formulae, the
+  ! default), 'flux' (the fluxes read from the forcing files) or 'none' (all surface fluxes zero)
+  character(len=8), public :: surf_frc_type = 'bulk'
+  logical, public :: bulk_frc_on = .true., flux_frc_on = .false.
 
   ! edit variable name and time name to match input netcdf file if necessary:
   type (ncforce) :: nc_sst  = ncforce(vname='sst',tname='sst_time' )       ! sea-surface temperature (SST) data
@@ -246,20 +250,17 @@ end subroutine read_nml_surf_flx
 subroutine check_restoring_switches ![
   ! Stop on a restoring switch this build would ignore: only bulk_frc computes
   ! the restoring terms, the salinity one needs a salinity tracer whose flux is
-  ! not analytical, and the DIC/ALK one needs MARBL's tracers.
+  ! read from the files, and the DIC/ALK one needs MARBL's tracers.
   implicit none
   character(len=*), parameter :: sr_name = "check_restoring_switches"
 
-#ifndef BULK_FRC
-  if (sflx_corr)   call raise_switch('sflx_corr',   'the cpp key BULK_FRC')
-  if (qcorrection) call raise_switch('qcorrection', 'the cpp key BULK_FRC')
-  if (cflx_corr)   call raise_switch('cflx_corr',   'the cpp key BULK_FRC')
-#endif
+  if (.not. bulk_frc_on) then
+    if (sflx_corr)   call raise_switch('sflx_corr',   "surf_frc_type = 'bulk'")
+    if (qcorrection) call raise_switch('qcorrection', "surf_frc_type = 'bulk'")
+    if (cflx_corr)   call raise_switch('cflx_corr',   "surf_frc_type = 'bulk'")
+  endif
 #ifndef SALINITY
   if (sflx_corr)   call raise_switch('sflx_corr',   'the cpp key SALINITY')
-#endif
-#ifdef ANA_SSFLUX
-  if (sflx_corr)   call raise_switch('sflx_corr',   'a build without the cpp key ANA_SSFLUX')
 #endif
 #ifndef MARBL
   if (cflx_corr)   call raise_switch('cflx_corr',   'the cpp key MARBL')
@@ -271,7 +272,7 @@ contains
     character(len=*), intent(in) :: switch, needs
     call error_log%raise_global(context=module_name//'/'//sr_name,&
     &info='SURF_FRC_SETTINGS '//switch//' = .true. needs '//needs//&
-    &'. Set '//switch//' = .false. or rebuild.')
+    &'. Set '//switch//' = .false., or change surf_frc_type or the build.')
   end subroutine raise_switch
 
 end subroutine check_restoring_switches  !]
@@ -317,10 +318,8 @@ subroutine init_arrays_surf_flx ![
     allocate( nc_ddic_dalk%vdata( GLOBAL_2D_ARRAY,2) )
     allocate( ddic_dalk(GLOBAL_2D_ARRAY)  )
     allocate( k_gas(GLOBAL_2D_ARRAY)      ); k_gas=0.
-#ifndef BULK_FRC
     ! the winds come with the bulk forcing only
-    if (mynode == 0) write(*,'(/1x,A)') 'cdr_lite: no bulk winds, k_gas = 0 (no air-sea CO2 exchange)'
-#endif
+    if (.not. bulk_frc_on .and. mynode == 0) write(*,'(/1x,A)') 'cdr_lite: no bulk winds, k_gas = 0 (no air-sea CO2 exchange)'
   endif
 
   if (cflx_corr) then

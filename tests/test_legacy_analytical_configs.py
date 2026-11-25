@@ -31,6 +31,7 @@ def test_pipes_ana(tmp_path, input_dir, reference_results):
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 1200
     nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
     nml["GRID_SETTINGS"] = {"grdname": ""}
+    nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "none"
     nml["INITIAL_CONDITIONS"] = {"inifile": ""}
     nml["FORCING_FILES"] = {"frcfiles": ""}
     nml["PARAM_SETTINGS"].update({"NP_XI": 2, "NP_ETA": 2, "LLm": 100, "MMm": 100, "nz": 10})
@@ -64,6 +65,7 @@ def test_rivers_ana(tmp_path, input_dir, reference_results):
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
     nml["GRID_SETTINGS"] = {"grdname": ""}
+    nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "none"
     nml["INITIAL_CONDITIONS"] = {"inifile": ""}
     nml["FORCING_FILES"] = {"frcfiles": ""}
     nml["PARAM_SETTINGS"].update({"NP_XI": 2, "NP_ETA": 2, "LLm": 100, "MMm": 100, "nz": 10})
@@ -96,6 +98,7 @@ def test_filament(tmp_path, input_dir, reference_results):
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 50
     nml["PERIODIC_SETTINGS"].update({"ew_periodic": True, "ns_periodic": True})
     nml["GRID_SETTINGS"] = {"grdname": ""}
+    nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "none"
     nml["INITIAL_CONDITIONS"] = {"inifile": ""}
     nml["FORCING_FILES"] = {"frcfiles": ""}
     nml["PARAM_SETTINGS"].update({"NP_XI": 2, "NP_ETA": 2, "LLm": 64, "MMm": 64, "nz": 32})

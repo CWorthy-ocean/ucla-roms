@@ -44,18 +44,9 @@ subroutine set_forces
   use boundary, only: frctype
   use scalars, only: nt
   use cdr_frc, only: set_cdr_frc, cdr_source
-# ifdef BULK_FRC
   use bulk_frc, only: set_bulk_frc
-#endif
-#ifdef ANA_SRFLUX
-  use analytical, only: ana_srflux_tile
-#endif
-#ifdef ANA_STFLUX
-  use analytical, only: ana_stflux_tile
-#endif
-#ifdef ANA_SMFLUX
-  use analytical, only: ana_smflux_tile
-#endif
+  use surf_flux, only: bulk_frc_on, flux_frc_on
+  use analytical, only: ana_smflux_tile, ana_srflux_tile, ana_stflux_tile
 
   implicit none
 
@@ -69,9 +60,9 @@ subroutine set_forces
 
   !--> Surface fluxes
 
-#ifdef ANA_SMFLUX
-  call ana_smflux_tile(istr,iend,jstr,jend)
-#endif
+  ! surf_frc_type = 'none': all surface fluxes zero (the former ANA_SMFLUX, ANA_STFLUX,
+  ! ANA_SSFLUX and ANA_SRFLUX)
+  if (.not. (bulk_frc_on .or. flux_frc_on)) call ana_smflux_tile(istr,iend,jstr,jend)
 
 ! Thermodynamic forcing: Note that BULK_FLUX requires computing the
 ! short-wave radiation flux first because bulk flux routine performs
@@ -86,34 +77,20 @@ subroutine set_forces
 
   if (qcorrection .or. sflx_corr .or. cflx_corr) call set_surf_field_corr
   if (cdr_lite_on) call set_carbonate_sensitivity
-# ifdef BULK_FRC
+  if (bulk_frc_on) then
+    call set_bulk_frc(istr,iend,jstr,jend)
+  else if (flux_frc_on) then
+    frctype = 'SURF:'
+    call set_flux_frc(istr,iend,jstr,jend)
+  else
+    call ana_stflux_tile(istr,iend,jstr,jend, itemp)
 #  ifdef LMD_KPP
-#   ifdef ANA_SRFLUX
-  call ana_srflux_tile(istr,iend,jstr,jend) ! Should move this to bulk module
-#   endif
-#  endif
-  call set_bulk_frc(istr,iend,jstr,jend)
-# else
-  ! DevinD not sure what flag to use here to avoid set_flux for purely analytical
-#  ifndef ANA_SMFLUX
-  frctype = 'SURF:'
-  call set_flux_frc(istr,iend,jstr,jend)
-#  endif
-
-#  ifdef ANA_STFLUX
-  call ana_stflux_tile(istr,iend,jstr,jend, itemp) ! DevinD Should move to module
-#  endif
-#  ifdef LMD_KPP
-#   ifdef ANA_SRFLUX
-  call ana_srflux_tile(istr,iend,jstr,jend) ! DevinD Should move to module
-#   endif
+    call ana_srflux_tile(istr,iend,jstr,jend)
 #  endif
 #  ifdef SALINITY
-#   ifdef ANA_SSFLUX
-  call ana_stflux_tile(istr,iend,jstr,jend, isalt) ! DevinD Should move to module
-#   endif
+    call ana_stflux_tile(istr,iend,jstr,jend, isalt)
 #  endif
-# endif
+  endif
   if(nt>iTandS) call set_surf_tracer_flx
   ! BGC surface flux:
 

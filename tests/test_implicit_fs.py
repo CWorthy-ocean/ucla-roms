@@ -2,7 +2,7 @@
 
 Two builds: the open-boundary physics with flux forcing and the tidal potential
 (the hashed run, exact restarts, rejected settings, rivers and pipes), and one
-with BULK_FRC and PARALLEL_IO (exact restart, a CDR volume release).
+with bulk forcing and PARALLEL_IO (exact restart, a CDR volume release).
 """
 import re
 import sys
@@ -31,9 +31,9 @@ CPP_KEYS = (
 )
 BULK_PIO_CPP_KEYS = (
     UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-    + ["LMD_CONVEC", "BULK_FRC", "PARALLEL_IO"]
+    + ["LMD_CONVEC", "PARALLEL_IO"]
 )
-# The inputs of the BULK_FRC build, copied to classic netCDF: PIO reads them joined, through PnetCDF.
+# The inputs of the bulk-forced build, copied to classic netCDF: PIO reads them joined, through PnetCDF.
 BULK_PIO_INPUTS = [
     "example_input_grid.nc",
     "example_input_bgc_initial_conditions.nc",
@@ -195,7 +195,7 @@ def test_implicit_fs_rivers_and_pipes(implicit_fs_configuration, input_dir, tmp_
 
 @pytest.fixture(scope="module")
 def bulk_pio_configuration(input_dir, tmp_path_factory) -> ROMSConfiguration:
-    """BULK_FRC and PARALLEL_IO (no MARBL), compiled once; ``conf.inputs``
+    """Bulk forcing and PARALLEL_IO (no MARBL), compiled once; ``conf.inputs``
     holds classic-format copies of its inputs."""
     conf = ROMSConfiguration(
         cpp_keys=BULK_PIO_CPP_KEYS, location=tmp_path_factory.mktemp("implicit_fs_bulk_pio_build")
@@ -217,12 +217,13 @@ def bulk_pio_namelist(conf: ROMSConfiguration, **implicit_fs) -> dict:
         str(conf.inputs / "example_input_boundary_forcing.nc"),
         str(conf.inputs / "example_input_surface_forcing.nc"),
     ]
+    nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "bulk"
     nml["IMPLICIT_FS"].update({"fs_mode": "implicit", "fs_verbose": 2, **implicit_fs})
     return nml
 
 
 def test_implicit_fs_bulk_pio_exact_restart(bulk_pio_configuration, tmp_path):
-    """With BULK_FRC and PARALLEL_IO a restart reproduces the continuous run bit
+    """With bulk forcing and PARALLEL_IO a restart reproduces the continuous run bit
     for bit, and the volume budget, with the bulk surface freshwater flux, closes.
 
     The restart after step 10 (20 solves) falls inside a period of the
