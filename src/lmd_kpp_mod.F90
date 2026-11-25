@@ -3,6 +3,7 @@ module lmd_kpp_mod
 
 #include "cppdefs.opt"
 
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
   private
 
@@ -97,10 +98,6 @@ contains
     !! smooth over the mask and the domain
     !! boundaries
     integer(kind=4) imin,imax,jmin,jmax
-#  ifdef EW_PERIODIC
-    imin=istr-1
-    imax=iend+1
-#  else
     if (WESTERN_EDGE) then
       imin=istr
     else
@@ -111,11 +108,6 @@ contains
     else
       imax=iend+1
     endif
-#  endif
-#  ifdef NS_PERIODIC
-    jmin=jstr-1
-    jmax=jend+1
-#  else
     if (SOUTHERN_EDGE) then
       jmin=jstr
     else
@@ -126,7 +118,6 @@ contains
     else
       jmax=jend+1
     endif
-#  endif
 #  define I_EXT_RANGE imin,imax
 #  define J_EXT_RANGE jmin,jmax
 # ifdef LMD_KPP
@@ -560,7 +551,6 @@ do j=jstr,jend                   ! Copy "hbl" into shared array
     hbls(i,j)=hbl(i,j)
   enddo
 enddo
-#  ifndef EW_PERIODIC
 if (WESTERN_EDGE) then
   do j=jstr,jend
     hbls(istr-1,j)=hbls(istr,j)
@@ -571,8 +561,6 @@ if (EASTERN_EDGE) then
     hbls(iend+1,j)=hbls(iend,j)
   enddo
 endif
-#  endif
-#  ifndef NS_PERIODIC
 if (SOUTHERN_EDGE) then
   do i=istr,iend
     hbls(i,jstr-1)=hbls(i,jstr)
@@ -583,7 +571,6 @@ if (NORTHERN_EDGE) then
     hbls(i,jend+1)=hbls(i,jend)
   enddo
 endif
-#   ifndef EW_PERIODIC
 if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
   hbls(istr-1,jstr-1)=hbls(istr,jstr)
 endif
@@ -596,8 +583,6 @@ endif
 if (EASTERN_EDGE .and. NORTHERN_EDGE) then
   hbls(iend+1,jend+1)=hbls(iend,jend)
 endif
-#   endif
-#  endif
 # endif   /* LMD_KPP */
 # ifdef LMD_BKPP
 do j=jstr,jend                   ! Copy "bbl" into shared array
@@ -605,7 +590,6 @@ do j=jstr,jend                   ! Copy "bbl" into shared array
     hbbl(i,j)=bbl(i,j)
   enddo
 enddo
-#  ifndef EW_PERIODIC
 if (WESTERN_EDGE) then
   do j=jstr,jend
     hbbl(istr-1,j)=hbbl(istr,j)
@@ -616,8 +600,6 @@ if (EASTERN_EDGE) then
     hbbl(iend+1,j)=hbbl(iend,j)
   enddo
 endif
-#  endif
-#  ifndef NS_PERIODIC
 if (SOUTHERN_EDGE) then
   do i=istr,iend
     hbbl(i,jstr-1)=hbbl(i,jstr)
@@ -628,7 +610,6 @@ if (NORTHERN_EDGE) then
     hbbl(i,jend+1)=hbbl(i,jend)
   enddo
 endif
-#   ifndef EW_PERIODIC
 if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
   hbbl(istr-1,jstr-1)=hbbl(istr,jstr)
 endif
@@ -641,8 +622,6 @@ endif
 if (EASTERN_EDGE .and. NORTHERN_EDGE) then
   hbbl(iend+1,jend+1)=hbbl(iend,jend)
 endif
-#   endif
-#  endif
 # endif   /* LMD_BKPP */
 
 ! Pack the mixing coefficients into as few exchanges as possible.

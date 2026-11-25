@@ -45,7 +45,6 @@ endif
 
 # define uxx wrk1
 # define Huxx wrk2
-# ifndef EW_PERIODIC
 if (WESTERN_EDGE) then        ! Sort out bounding indices for
   imin=istrU                  ! the extended ranges: note that
 else                          ! in the vicinity of physical
@@ -56,17 +55,12 @@ if (EASTERN_EDGE) then        ! are not available, so an
 else                          ! be applied.  Also note that
   imax=iend+1                 ! for this purpose periodic
 endif                         ! ghost points and MPI margins
-# else
-imin=istr-1                   ! are not considered as
-imax=iend+1                   ! physical boundaries.
-# endif
 do j=jstr,jend
   do i=imin,imax
     uxx(i,j)=u(i-1,j,k,nrhs)-2._8*u(i,j,k,nrhs)+u(i+1,j,k,nrhs)
     Huxx(i,j)=FlxU(i-1,j,k) -2._8*FlxU(i,j,k) +FlxU(i+1,j,k)
   enddo
 enddo
-# ifndef EW_PERIODIC
 if (WESTERN_EDGE) then
   do j=jstr,jend
     uxx(istrU-1,j) =uxx(istrU,j)
@@ -79,7 +73,6 @@ if (EASTERN_EDGE) then
     Huxx(iend+1,j)=Huxx(iend,j)
   enddo
 endif
-# endif
 do j=jstr,jend
   do i=istrU-1,iend
 # ifdef UPSTREAM_UV
@@ -102,7 +95,6 @@ enddo
 
 # define vee wrk1
 # define Hvee wrk2
-# ifndef NS_PERIODIC
 if (SOUTHERN_EDGE) then
   jmin=jstrV
 else
@@ -113,17 +105,12 @@ if (NORTHERN_EDGE) then
 else
   jmax=jend+1
 endif
-# else
-jmin=jstr-1
-jmax=jend+1
-# endif
 do j=jmin,jmax
   do i=istr,iend
     vee(i,j)=v(i,j-1,k,nrhs)-2._8*v(i,j,k,nrhs)+v(i,j+1,k,nrhs)
     Hvee(i,j)=FlxV(i,j-1,k) -2._8*FlxV(i,j,k)  +FlxV(i,j+1,k)
   enddo
 enddo
-# ifndef NS_PERIODIC
 if (SOUTHERN_EDGE) then
   do i=istr,iend
     vee(i,jstrV-1)=vee(i,jstrV)
@@ -136,7 +123,6 @@ if (NORTHERN_EDGE) then
     Hvee(i,jend+1)=Hvee(i,jend)
   enddo
 endif
-# endif
 do j=jstrV-1,jend
   do i=istr,iend
 # ifdef UPSTREAM_UV
@@ -159,7 +145,6 @@ enddo
 
 # define uee wrk1
 # define Hvxx wrk2
-# ifndef NS_PERIODIC
 if (SOUTHERN_EDGE) then
   jmin=jstr
 else
@@ -170,16 +155,11 @@ if (NORTHERN_EDGE) then
 else
   jmax=jend+1
 endif
-# else
-jmin=jstr-1
-jmax=jend+1
-# endif
 do j=jmin,jmax
   do i=istrU,iend
     uee(i,j)=u(i,j-1,k,nrhs)-2._8*u(i,j,k,nrhs)+u(i,j+1,k,nrhs)
   enddo
 enddo
-# ifndef NS_PERIODIC
 if (SOUTHERN_EDGE) then
   do i=istrU,iend
     uee(i,jstr-1)=uee(i,jstr)
@@ -190,7 +170,6 @@ if (NORTHERN_EDGE) then
     uee(i,jend+1)=uee(i,jend)
   enddo
 endif
-# endif
 do j=jstr,jend+1
   do i=istrU-1,iend
     Hvxx(i,j)=FlxV(i-1,j,k)-2._8*FlxV(i,j,k)+FlxV(i+1,j,k)
@@ -218,7 +197,6 @@ enddo
 
 # define vxx wrk1
 # define Huee wrk2
-# ifndef EW_PERIODIC
 if (WESTERN_EDGE) then
   imin=istr
 else
@@ -229,16 +207,11 @@ if (EASTERN_EDGE) then
 else
   imax=iend+1
 endif
-# else
-imin=istr-1
-imax=iend+1
-# endif
 do j=jstrV,jend
   do i=imin,imax
     vxx(i,j)=v(i-1,j,k,nrhs)-2._8*v(i,j,k,nrhs)+v(i+1,j,k,nrhs)
   enddo
 enddo
-# ifndef EW_PERIODIC
 if (WESTERN_EDGE) then
   do j=jstrV,jend
     vxx(istr-1,j)=vxx(istr,j)
@@ -249,7 +222,6 @@ if (EASTERN_EDGE) then
     vxx(iend+1,j)=vxx(iend,j)
   enddo
 endif
-# endif
 do j=jstrV-1,jend
   do i=istr,iend+1
     Huee(i,j)=FlxU(i,j-1,k)-2._8*FlxU(i,j,k)+FlxU(i,j+1,k)

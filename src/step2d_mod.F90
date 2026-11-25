@@ -1,6 +1,7 @@
 module step2d_mod
 #include "cppdefs.opt"
 
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
   private
   public :: step2d
@@ -435,7 +436,6 @@ contains
 
 ! Fast-time-averaged barotropic fluxes along physical boundaries.
 
-# ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do j=jstr-1,jendR
         Dnew(istr-1,j)=h(istr-1,j)+zeta_new(istr-1,j)
@@ -446,8 +446,6 @@ contains
         Dnew(iend+1,j)=h(iend+1,j)+zeta_new(iend+1,j)
       enddo
     endif
-# endif
-# ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do i=istr-1,iendR
         Dnew(i,jstr-1)=h(i,jstr-1)+zeta_new(i,jstr-1)
@@ -458,9 +456,7 @@ contains
         Dnew(i,jend+1)=h(i,jend+1)+zeta_new(i,jend+1)
       enddo
     endif
-# endif
     cff1=0.5_8*weight(1,iif)
-# ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do j=jstrR,jendR
         DU_avg1(istrU-1,j)=DU_avg1(istrU-1,j)+cff1*(Dnew(istrU-1,j)&
@@ -487,8 +483,6 @@ contains
         &)*dm_v(iend+1,j)
       enddo
     endif
-# endif
-# ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do i=istrU,iend
         DU_avg1(i,jstr-1)=DU_avg1(i,jstr-1) +cff1*( Dnew(i,jstr-1)&
@@ -513,7 +507,6 @@ contains
         &)*dm_v(i,jend+1)
       enddo
     endif
-# endif
 
     if (river_source) then
       do iface=1,nriv_u

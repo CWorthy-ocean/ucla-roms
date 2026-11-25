@@ -50,7 +50,8 @@ module sl_adv_mod
   ! face, land faces 0; weight w = smoothstep((c2d - sl_c_lo)/(sl_c_hi - sl_c_lo)).
 
 #include "cppdefs.opt"
-  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north,&
+  &  ew_periodic, ns_periodic
   implicit none
   private
 
@@ -623,22 +624,18 @@ contains
       ! (sl_diag) a hot face within 3 cells of an open edge
       integer(kind=4), intent(in) :: ii, jj
       near_edge = .false.
-#ifndef EW_PERIODIC
       if (obc_west) then
         if (WESTERN_EDGE .and. ii <= istr+2) near_edge = .true.
       endif
       if (obc_east) then
         if (EASTERN_EDGE .and. ii >= iend-1) near_edge = .true.
       endif
-#endif
-#ifndef NS_PERIODIC
       if (obc_south) then
         if (SOUTHERN_EDGE .and. jj <= jstr+2) near_edge = .true.
       endif
       if (obc_north) then
         if (NORTHERN_EDGE .and. jj >= jend-1) near_edge = .true.
       endif
-#endif
     end function near_edge
   end subroutine sl_weights_tile
 
@@ -789,14 +786,10 @@ contains
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     integer(kind=4), intent(out) :: ilo, ihi, jlo, jhi
     ilo = istr-2 ; ihi = iend+2 ; jlo = jstr-2 ; jhi = jend+2
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) ilo = istr-1
     if (EASTERN_EDGE) ihi = iend+1
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) jlo = jstr-1
     if (NORTHERN_EDGE) jhi = jend+1
-#endif
   end subroutine sl_ranges
 
 ! ----------------------------------------------------------------------
@@ -874,18 +867,14 @@ contains
     real(kind=8) :: dd(istr-2:iend+2), cv(istr-2:iend+2)
     integer(kind=4) :: i, j, imin, imax
     imin = istr-1 ; imax = iend+1
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) imin = istr
     if (EASTERN_EDGE) imax = iend
-#endif
     do j = jstr, jend
       do i = imin, imax+1
         dd(i) = (q(i,j)-q(i-1,j))*umask(i,j)
       end do
-#ifndef EW_PERIODIC
       if (WESTERN_EDGE) dd(istr-1) = dd(istr)
       if (EASTERN_EDGE) dd(iend+2) = dd(iend+1)
-#endif
       do i = istr-1, iend+1
         cv(i) = dd(i+1)-dd(i)
 #ifdef UPSTREAM_TS_LAND_CURV
@@ -895,14 +884,12 @@ contains
       do i = istr, iend+1
         fx(i,j) = 0.5_8*(q(i,j)+q(i-1,j))*f(i,j) - c6*(cv(i-1)*max(f(i,j),0._8) + cv(i)*min(f(i,j),0._8))
       end do
-#ifndef EW_PERIODIC
       if (obc_west) then
         if (WESTERN_EDGE) fx(istr,j) = fx(istr,j) + 0.5_8*(q(istr-1,j)-q(istr,j))*max(f(istr,j),0._8)
       endif
       if (obc_east) then
         if (EASTERN_EDGE) fx(iend+1,j) = fx(iend+1,j) + 0.5_8*(q(iend+1,j)-q(iend,j))*min(f(iend+1,j),0._8)
       endif
-#endif
     end do
   end subroutine up3_x
 
@@ -919,19 +906,15 @@ contains
     real(kind=8) :: dd(istr:iend,jstr-2:jend+2), cv(istr:iend,jstr-2:jend+2)
     integer(kind=4) :: i, j, jmin, jmax
     jmin = jstr-1 ; jmax = jend+1
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) jmin = jstr
     if (NORTHERN_EDGE) jmax = jend
-#endif
     do j = jmin, jmax+1
       do i = istr, iend
         dd(i,j) = (q(i,j)-q(i,j-1))*vmask(i,j)
       end do
     end do
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) dd(:,jstr-1) = dd(:,jstr)
     if (NORTHERN_EDGE) dd(:,jend+2) = dd(:,jend+1)
-#endif
     do j = jstr-1, jend+1
       do i = istr, iend
         cv(i,j) = dd(i,j+1)-dd(i,j)
@@ -945,7 +928,6 @@ contains
         fy(i,j) = 0.5_8*(q(i,j)+q(i,j-1))*f(i,j) - c6*(cv(i,j-1)*max(f(i,j),0._8) + cv(i,j)*min(f(i,j),0._8))
       end do
     end do
-#ifndef NS_PERIODIC
     if (obc_south) then
       if (SOUTHERN_EDGE) then
         do i = istr, iend
@@ -960,7 +942,6 @@ contains
         end do
       end if
     endif
-#endif
   end subroutine up3_y
 
 ! ----------------------------------------------------------------------
@@ -1460,14 +1441,10 @@ contains
     if (sl_anyhot) then
       ! b* and b~ on the owned cells and the ghost rows at physical edges, then the halos
       i0 = istr ; i1 = iend ; j0 = jstr ; j1 = jend
-#ifndef EW_PERIODIC
       if (WESTERN_EDGE) i0 = istr-1
       if (EASTERN_EDGE) i1 = iend+1
-#endif
-#ifndef NS_PERIODIC
       if (SOUTHERN_EDGE) j0 = jstr-1
       if (NORTHERN_EDGE) j1 = jend+1
-#endif
       ss = 34.5_8
       do k = 1, nz
         do j = j0, j1
@@ -1753,14 +1730,10 @@ contains
           a = a + abs(gx(ii+1,jj)) + abs(gy(ii,jj+1))
         end do
       end do
-#ifndef EW_PERIODIC
       if (WESTERN_EDGE) sm = sm + sum(gx(istr,jstr:jend))
       if (EASTERN_EDGE) sm = sm - sum(gx(iend+1,jstr:jend))
-#endif
-#ifndef NS_PERIODIC
       if (SOUTHERN_EDGE) sm = sm + sum(gy(istr:iend,jstr))
       if (NORTHERN_EDGE) sm = sm - sum(gy(istr:iend,jend+1))
-#endif
       dg_bud(1,itrc) = dg_bud(1,itrc) + sm
       dg_bud(2,itrc) = dg_bud(2,itrc) + a
     end subroutine budget
@@ -2002,7 +1975,6 @@ contains
     gv%ilo = istr-2 ; gv%ihi = iend+2 ; gv%jlo = jstrV-2 ; gv%jhi = jend+2
     gu%ow = .false. ; gu%oe = .false. ; gu%os = .false. ; gu%on = .false.
     gv%ow = .false. ; gv%oe = .false. ; gv%os = .false. ; gv%on = .false.
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       gu%ilo = istrU-1 ; gv%ilo = istr-1
     end if
@@ -2015,8 +1987,6 @@ contains
     if (obc_east) then
       gu%oe = EASTERN_EDGE ; gv%oe = EASTERN_EDGE
     endif
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       gu%jlo = jstr-1 ; gv%jlo = jstrV-1
     end if
@@ -2029,7 +1999,6 @@ contains
     if (obc_north) then
       gu%on = NORTHERN_EDGE ; gv%on = NORTHERN_EDGE
     endif
-#endif
   end subroutine sl_malloc
 
 ! ----------------------------------------------------------------------
@@ -2370,18 +2339,14 @@ contains
     tx_ = 0._8 ; ty_ = 0._8
     if (kind == 1) then
       imn = istrU-1 ; imx = iend+1
-#ifndef EW_PERIODIC
       if (WESTERN_EDGE) imn = istrU
       if (EASTERN_EDGE) imx = iend
-#endif
       do jj = jstr, jend
         do ii = imn, imx
           hh(ii,jj) = FlxU(ii-1,jj,kk) - 2._8*FlxU(ii,jj,kk) + FlxU(ii+1,jj,kk)
         end do
-#ifndef EW_PERIODIC
         if (WESTERN_EDGE) hh(istrU-1,jj) = hh(istrU,jj)
         if (EASTERN_EDGE) hh(iend+1,jj) = hh(iend,jj)
-#endif
         do ii = istrU-1, iend
           tx_(ii+1,jj) = 0.5_8*(FlxU(ii,jj,kk)+FlxU(ii+1,jj,kk) - delta*(hh(ii,jj)+hh(ii+1,jj)))
         end do
@@ -2406,19 +2371,15 @@ contains
         end do
       end do
       jmn = jstrV-1 ; jmx = jend+1
-#ifndef NS_PERIODIC
       if (SOUTHERN_EDGE) jmn = jstrV
       if (NORTHERN_EDGE) jmx = jend
-#endif
       do jj = jmn, jmx
         do ii = istr, iend
           hh(ii,jj) = FlxV(ii,jj-1,kk) - 2._8*FlxV(ii,jj,kk) + FlxV(ii,jj+1,kk)
         end do
       end do
-#ifndef NS_PERIODIC
       if (SOUTHERN_EDGE) hh(istr:iend,jstrV-1) = hh(istr:iend,jstrV)
       if (NORTHERN_EDGE) hh(istr:iend,jend+1) = hh(istr:iend,jend)
-#endif
       do jj = jstrV-1, jend
         do ii = istr, iend
           ty_(ii,jj+1) = 0.5_8*(FlxV(ii,jj,kk)+FlxV(ii,jj+1,kk) - delta*(hh(ii,jj)+hh(ii,jj+1)))
@@ -2504,14 +2465,10 @@ contains
     indx = 3 - nstp
     ! ---- u-points: valid on the 2-point halo, or from the boundary face (x) and row (y) at a physical edge
     ilo = istr-2 ; ihi = iend+2 ; jlo = jstr-2 ; jhi = jend+2
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) ilo = istr
     if (EASTERN_EDGE) ihi = iend+1
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) jlo = jstr-1
     if (NORTHERN_EDGE) jhi = jend+1
-#endif
     first = .true.
     do n = hu_off(k-1)+1, hu_off(k)
       i = hu_i(n) ; j = hu_j(n)
@@ -2541,14 +2498,10 @@ contains
     end do
     ! ---- v-points
     ilo = istr-2 ; ihi = iend+2 ; jlo = jstr-2 ; jhi = jend+2
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) ilo = istr-1
     if (EASTERN_EDGE) ihi = iend+1
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) jlo = jstr
     if (NORTHERN_EDGE) jhi = jend+1
-#endif
     first = .true.
     do n = hv_off(k-1)+1, hv_off(k)
       i = hv_i(n) ; j = hv_j(n)
@@ -2631,14 +2584,10 @@ contains
     call sl_rivmask
     indx = 3 - nstp
     ilo = istr-2 ; ihi = iend+2 ; jlo = jstr-2 ; jhi = jend+2
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) ilo = istr-1
     if (EASTERN_EDGE) ihi = iend+1
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) jlo = jstr-1
     if (NORTHERN_EDGE) jhi = jend+1
-#endif
     do j = jstr, jend
       do i = istr, iend
         if (rmask(i,j) < 0.5_8) cycle

@@ -1,6 +1,7 @@
 module get_init_mod
 
-  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north,&
+  &  ew_periodic, ns_periodic
   implicit none
   private
 
@@ -643,7 +644,6 @@ contains
     ! Here we catch an initial file that does not have the boundary values of u/v
     ! set to zero, even though we prescribed a closed boundary. This is necessary
     ! for conservation tests.
-#if !defined EW_PERIODIC
     if (.not.obc_west) then
       if(WESTERN_EDGE) then
         if(mynode==0) write (*,'(6x,A)')&        ! S&W bry always contained in start node (==0)
@@ -652,8 +652,6 @@ contains
         ubar(istr  ,:     ,1)      =0.0_8         ! ubar read into index 1 above
       endif
     endif
-#endif
-#if !defined EW_PERIODIC
     if (.not.obc_east) then
       if(EASTERN_EDGE) then
         if(mynode==NNODES-1) write (*,'(6x,A)')& ! N&E bry always contained in final node (==NNODES-1)
@@ -662,8 +660,6 @@ contains
         ubar(iend+1,:     ,1)      =0.0_8
       endif
     endif
-#endif
-#if !defined NS_PERIODIC
     if (.not.obc_south) then
       if(SOUTHERN_EDGE) then
         if(mynode==0) write (*,'(6x,A)')&
@@ -672,8 +668,6 @@ contains
         vbar(:     ,jstr  ,1)      =0.0_8
       endif
     endif
-#endif
-#if !defined NS_PERIODIC
     if (.not.obc_north) then
       if(NORTHERN_EDGE) then
         if(mynode==NNODES-1) write (*,'(6x,A)')&
@@ -682,7 +676,6 @@ contains
         vbar(:     ,jend+1,1)      =0.0_8
       endif
     endif
-#endif
 
 
 

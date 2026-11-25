@@ -38,7 +38,7 @@ module bgc_subcycle_mod
 
 #include "cppdefs.opt"
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, obc_t_orlanski,&
-  &  use_t_boundary_data
+  &  use_t_boundary_data, ew_periodic, ns_periodic
   implicit none
   private
 
@@ -467,14 +467,10 @@ contains
     ! Valid cell ranges for the swept fluxes: the 2-point halo, or the
     ! boundary row at a physical edge (cells beyond are extrapolated).
     ilo = istr-2 ; ihi = iend+2 ; jlo = jstr-2 ; jhi = jend+2
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) ilo = istr-1
     if (EASTERN_EDGE) ihi = iend+1
-#endif
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) jlo = jstr-1
     if (NORTHERN_EDGE) jhi = jend+1
-#endif
 
     ! ---- window Courant numbers, sub-passes, explicit diffusion number ------
     ! cface: |V| / volume of the upstream cell (the partial-cell sweep needs < 1)
@@ -1121,14 +1117,10 @@ contains
       case (1)
         call exchange_xxx(RRa(:,:,klo:khi,1))
       end select
-#ifndef EW_PERIODIC
       if (WESTERN_EDGE) RRa(istr-1,:,:,:) = 1._8
       if (EASTERN_EDGE) RRa(iend+1,:,:,:) = 1._8
-#endif
-#ifndef NS_PERIODIC
       if (SOUTHERN_EDGE) RRa(:,jstr-1,:,:) = 1._8
       if (NORTHERN_EDGE) RRa(:,jend+1,:,:) = 1._8
-#endif
       do k = 1, nz
         if (isub > mk(k)) cycle
         fm = fmk(k)
@@ -1173,14 +1165,10 @@ contains
       ! physical-edge rows (boundary cells, not updated by the pass) from src
       real(kind=8), intent(inout) :: dst(GLOBAL_2D_ARRAY,nz)
       real(kind=8), intent(in) :: src(GLOBAL_2D_ARRAY,nz)
-#ifndef EW_PERIODIC
       if (WESTERN_EDGE) dst(istr-1,:,:) = src(istr-1,:,:)
       if (EASTERN_EDGE) dst(iend+1,:,:) = src(iend+1,:,:)
-#endif
-#ifndef NS_PERIODIC
       if (SOUTHERN_EDGE) dst(:,jstr-1,:) = src(:,jstr-1,:)
       if (NORTHERN_EDGE) dst(:,jend+1,:) = src(:,jend+1,:)
-#endif
     end subroutine edge_copy
 
     subroutine donor(Gx, Gy)
@@ -1369,14 +1357,10 @@ contains
         end do
       end if
       if (diag) then
-#ifndef EW_PERIODIC
         if (WESTERN_EDGE) bud(5,ib) = bud(5,ib) + sum(Fu(istr,jstr:jend)*rmask(istr,jstr:jend))
         if (EASTERN_EDGE) bud(5,ib) = bud(5,ib) - sum(Fu(iend+1,jstr:jend)*rmask(iend,jstr:jend))
-#endif
-#ifndef NS_PERIODIC
         if (SOUTHERN_EDGE) bud(5,ib) = bud(5,ib) + sum(Fv(istr:iend,jstr)*rmask(istr:iend,jstr))
         if (NORTHERN_EDGE) bud(5,ib) = bud(5,ib) - sum(Fv(istr:iend,jend+1)*rmask(istr:iend,jend))
-#endif
         if (river_source) then        ! river inputs into wet interior cells
           do jf = 1, nhu
             ii = hu_i(jf) ; jj = hu_j(jf)
@@ -1423,7 +1407,6 @@ contains
     integer(kind=4) :: i, j, k
 # include "compute_auxiliary_bounds.h"
 
-#ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do k = 1, nz
         if (obc_west .and. obc_t_orlanski) then
@@ -1491,9 +1474,7 @@ contains
         endif
       end do
     end if
-#endif
 
-#ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do k = 1, nz
         if (obc_south .and. obc_t_orlanski) then
@@ -1561,15 +1542,12 @@ contains
         endif
       end do
     end if
-#endif
 
-#if !defined EW_PERIODIC && !defined NS_PERIODIC
     ! corners: mean of the two adjacent boundary points (as t3dbc_tile)
     call corner(SOUTHERN_EDGE .and. WESTERN_EDGE, istr-1, jstr-1, istr, jstr-1, istr-1, jstr)
     call corner(SOUTHERN_EDGE .and. EASTERN_EDGE, iend+1, jstr-1, iend, jstr-1, iend+1, jstr)
     call corner(NORTHERN_EDGE .and. WESTERN_EDGE, istr-1, jend+1, istr, jend+1, istr-1, jend)
     call corner(NORTHERN_EDGE .and. EASTERN_EDGE, iend+1, jend+1, iend, jend+1, iend+1, jend)
-#endif
   contains
     subroutine corner(on, ic, jc, i1, j1, i2, j2)
       logical, intent(in) :: on

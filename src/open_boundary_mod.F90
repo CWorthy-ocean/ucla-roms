@@ -1,5 +1,9 @@
 module open_boundary_mod
-  ! Which sides of the domain are open, and what is done there.
+  ! The periodic directions, which sides of the domain are open, and what is
+  ! done there.
+  !
+  ! Optional namelist group PERIODIC_SETTINGS: ew_periodic and ns_periodic
+  ! (default .false.).
   !
   ! Optional namelist group OPEN_BOUNDARY_SETTINGS (namelist.nml, "Open
   ! boundaries" in docs/model_settings/runtime_settings.md). With no group, all
@@ -11,6 +15,10 @@ module open_boundary_mod
 
   implicit none
   private
+
+  ! The periodic directions (namelist keys)
+  logical, public, protected :: ew_periodic = .false.   ! west-east
+  logical, public, protected :: ns_periodic = .false.   ! south-north
 
   ! The open sides (namelist keys; .false. in a periodic direction)
   logical, public, protected :: obc_west = .true., obc_east = .true.
@@ -34,19 +42,46 @@ module open_boundary_mod
   logical, public, protected :: use_m2_boundary_data = .true.   ! ubar and vbar (zeta: obc_m2_flather)
   logical, public, protected :: ubind_used = .true.             ! UBIND_SETTINGS is read
 
-  public :: read_nml_open_boundary
+  public :: read_nml_periodic, read_nml_open_boundary
 
   character(len=17) :: module_name = "open_boundary_mod"
 
 contains
 
   !----------------------------------------------------------------------
-  subroutine read_nml_open_boundary
-    ! Read the OPEN_BOUNDARY_SETTINGS group; an absent group keeps the defaults.
+  subroutine read_nml_periodic
+    ! Read the PERIODIC_SETTINGS group; an absent group: no periodic direction.
     use, intrinsic :: iso_fortran_env, only: iostat_end
     use namelist_open_mod, only: open_namelist_file
     use error_handling_mod, only: error_log
-    use param, only: mynode, ew_periodic, ns_periodic
+    use param, only: mynode
+    implicit none
+    integer(kind=4) :: namelist_unit, ios
+    character(len=17) :: sr_name = "read_nml_periodic"
+    character(len=256) :: msg
+    namelist /PERIODIC_SETTINGS/ ew_periodic, ns_periodic
+
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
+    msg = ''
+    read (unit=namelist_unit, nml=PERIODIC_SETTINGS, iostat=ios, iomsg=msg)
+    close(namelist_unit)
+    if (ios /= 0 .and. ios /= iostat_end) then
+      call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
+      &info="could not read the PERIODIC_SETTINGS section of the namelist file ("//trim(msg)//")")
+      return
+    end if
+    if (mynode == 0 .and. (ew_periodic .or. ns_periodic)) write(*,'(/1x,2(A,L1))')&
+    &  'PERIODIC_SETTINGS: ew_periodic = ', ew_periodic, ', ns_periodic = ', ns_periodic
+  end subroutine read_nml_periodic
+
+  !----------------------------------------------------------------------
+  subroutine read_nml_open_boundary
+    ! Read the OPEN_BOUNDARY_SETTINGS group (after read_nml_periodic); an absent group keeps the defaults.
+    use, intrinsic :: iso_fortran_env, only: iostat_end
+    use namelist_open_mod, only: open_namelist_file
+    use error_handling_mod, only: error_log
+    use param, only: mynode
     implicit none
     character(len=16) :: obc_m2, obc_m3, obc_t, obc_rad
     integer(kind=4) :: namelist_unit, ios

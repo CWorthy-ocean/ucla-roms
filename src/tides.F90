@@ -18,7 +18,7 @@ module tides
   use error_handling_mod, only: error_log
 
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north,&
-  &  obc_m2_flather, use_m2_boundary_data
+  &  obc_m2_flather, use_m2_boundary_data, ew_periodic, ns_periodic
   implicit none
 
   private                                              ! default variables private to module

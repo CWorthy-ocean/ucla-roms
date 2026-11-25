@@ -71,14 +71,6 @@
 ! Usage notes: Hardcoded in analytical.F
 #undef ANA_GRID
 
-! Make the domain periodic in the east-west direction
-! Usage notes: This has not been tested or used, so it is unclear whether it would induce conflicts with more recent code
-#undef EW_PERIODIC
-
-! Make the domain periodic in the north-south direction
-! Usage notes: This has not been tested or used, so it is unclear whether it would induce conflicts with more recent code
-#undef NS_PERIODIC
-
 
 !!!!!!!!!!!!!!!!!!!!!!!!! ATMOSPHERIC FORCING !!!!!!!!!!!!!!!!!!!!!!!!!
 

@@ -14,6 +14,7 @@ module bulk_frc
   use instant_output, only: wrt_instant
   use flux_frc, only: interp_flux_frc   ! merged into SURF_FRC_SETTINGS (owned by flux_frc)
   use surf_flux, only: sflx_corr, qcorrection, cflx_corr  ! in SURF_FRC_SETTINGS (owned by surf_flux)
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
 
   private  ! make all variable private to this module unless public specified
@@ -880,12 +881,6 @@ contains
 !---------------------------------------------------------------------
 !
 !
-!!!!!!!!!!!!! This exchange may probably not be necessary !!!!!
-!#if defined EW_PERIODIC || defined NS_PERIODIC || defined MPI
-!        call exchange_2_tile(istr,iend,jstr,jend,
-!     &                       u(START_2D_ARRAY,1,nnew), N,
-!     &                       v(START_2D_ARRAY,1,nnew), N)
-!# endif
     ! cfb_offset=  0.008_8
     ! cfb_slope = -0.0029_8
     ! This seems discontinuous.... should be Wspd_min = 3.7 m/s

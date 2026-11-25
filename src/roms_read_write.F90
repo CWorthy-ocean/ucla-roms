@@ -15,7 +15,7 @@ module roms_read_write
   &nf90_get_var, nf90_clobber, nf90_64bit_data, nf90_max_name, nf90_inquire
   use scalars, only: time, dt, sec2day, tdays, akt_bak, akv_bak
   use nc_read_write, only: nccreate, ncread
-  use open_boundary_mod, only: ubind_used
+  use open_boundary_mod, only: ubind_used, ew_periodic, ns_periodic
   use dimensions, only:&
   &bf, nx, ny, gnx, gny, i0, i1, j0, j1,&
   &eta_rho, xi_rho, xi_u, eta_v,&
@@ -2297,16 +2297,12 @@ contains
     implicit none
     real(kind=8),dimension(1-cbf:nxc+cbf,1-cbf:nyc+cbf),intent(inout) :: cdata
 
-#ifndef EW_PERIODIC
-    if ((inode == np_xi-1) .and. (mod(gnx,2) == 1)) then
+    if (EASTERN_EDGE .and. (mod(gnx,2) == 1)) then
       cdata(nxc+2,:) = cdata(nxc+1,:)
     endif
-#endif
-#ifndef NS_PERIODIC
-    if ((jnode == np_eta-1) .and. (mod(gny,2) == 1)) then
+    if (NORTHERN_EDGE .and. (mod(gny,2) == 1)) then
       cdata(:,nyc+2) = cdata(:,nyc+1)
     endif
-#endif
 
   end subroutine clamp_coarse_edges !]
 ! ----------------------------------------------------------------------

@@ -446,7 +446,7 @@ Linear equation of state parameters.
 ### `GAMMA2_SETTINGS`
 (read by module `scalars.F90`)
 
-Not read when the domain is periodic in both directions (`EW_PERIODIC` and `NS_PERIODIC`).
+Not read when the domain is periodic in both directions ([`PERIODIC_SETTINGS`](#periodic_settings)).
 
 | Setting | Description |
 |--------|-------------|
@@ -487,10 +487,20 @@ Optional: without the group `visc2` is 0.
 |--------|-------------|
 | `visc2` | Horizontal Laplacian kinematic viscosity (m2/s; `0` for none) |
 
+### `PERIODIC_SETTINGS`
+(read by module `open_boundary_mod.F90`)
+
+Optional: without the group no direction is periodic. Input and output files of a periodic domain have the same dimensions as those of any other (`LLm+2` by `MMm+2` rho points); the first and last points in a periodic direction are copies of the points at the other end.
+
+| Setting | Description |
+|--------|-------------|
+| `ew_periodic` | The domain is periodic in the west-east direction (default `.false.`) |
+| `ns_periodic` | The domain is periodic in the south-north direction (default `.false.`) |
+
 ### `OPEN_BOUNDARY_SETTINGS`
 (read by module `open_boundary_mod.F90`)
 
-Optional: without the group all four sides are open, with the defaults below. A side that is not open is closed (a wall), and its boundary data are not read. Sides in a periodic direction (`EW_PERIODIC`, `NS_PERIODIC`) are never open: `obc_west` and `obc_east`, or `obc_south` and `obc_north`, are then ignored, with a line at start-up.
+Optional: without the group all four sides are open, with the defaults below. A side that is not open is closed (a wall), and its boundary data are not read. Sides in a periodic direction ([`PERIODIC_SETTINGS`](#periodic_settings)) are never open: `obc_west` and `obc_east`, or `obc_south` and `obc_north`, are then ignored, with a line at start-up.
 
 | Setting | Description |
 |--------|-------------|

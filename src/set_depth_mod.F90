@@ -1,5 +1,6 @@
 module set_depth_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
   private
 
@@ -173,7 +174,6 @@ contains
       enddo
     enddo
     ! z_r is buffer filled in the interior halos but not in the outer halos
-# ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do k = 1, nz
         do j = 0,Mm+1
@@ -194,8 +194,6 @@ contains
         enddo
       enddo
     endif
-# endif
-# ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do k = 1, nz
         do i = 0,Lm+1
@@ -216,7 +214,6 @@ contains
         enddo
       enddo
     endif
-# endif
 
     endif  ! nhmg_on
 

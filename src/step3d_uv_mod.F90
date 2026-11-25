@@ -1,5 +1,6 @@
 module step3d_uv_mod
 #include "cppdefs.opt"
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
   private
 # define UPSTREAM_UV
@@ -300,7 +301,6 @@ contains
 
     if (nhmg_on) then  ! ---- NHMG: non-hydrostatic projection
 
-#  ifndef EW_PERIODIC
     if (WESTERN_EDGE) then
       do k=1,nz
         do j=jstr,jend
@@ -317,8 +317,6 @@ contains
         enddo
       enddo
     endif
-#  endif
-#  ifndef NS_PERIODIC
     if (SOUTHERN_EDGE) then
       do k=1,nz
         do i=istr,iend
@@ -335,7 +333,6 @@ contains
         enddo
       enddo
     endif
-#  endif
 
 
     ! Translate to fluxes, different than in pre_step, we have dz*u
@@ -760,19 +757,10 @@ contains
 ! boundaries the coupling is done over the extended range of indices
 ! (that is including boundary points).
 
-# ifdef EW_PERIODIC
-#  define IU_RANGE istr,iend
-#  define IV_RANGE istr,iend
-# else
 #  define IU_RANGE istr,iendR
 #  define IV_RANGE istrR,iendR
-# endif
 
-# ifdef NS_PERIODIC
-#  define J_RANGE jstr,jend
-# else
 #  define J_RANGE jstrR,jendR
-# endif
     ! DevinD & JM: seems un-necessary to 2D-3D couple the interior when only
     ! the boundary has been update since the first 2D-3D correction above.
     ! We only add the boundary changes to the diagnostics and our budget still closes,

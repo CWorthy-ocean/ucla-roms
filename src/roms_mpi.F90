@@ -22,7 +22,7 @@ module roms_mpi
   &ieast, iwest, jnorth, jsouth, llm,&
   &lm, mm, mmm, ocean_grid_comm,&
   &np_xi, np_eta, mynode, nnodes, nsize,&
-  &iSW_corn, jSW_corn, ew_periodic, ns_periodic, nz
+  &iSW_corn, jSW_corn, nz
   use mpi_f08, only: mpi_comm_world
   use dimensions, only: bf, i0, i1, j0, j1, nz, npx, npy,&
   &inode, jnode, eta_rho, eta_v, xi_rho, xi_u, grdname, nx, ny,&
@@ -40,6 +40,7 @@ module roms_mpi
   &pio_i0, pio_i1, pio_j0, pio_j1
 #endif
 
+  use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
 
   private

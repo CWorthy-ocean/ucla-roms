@@ -1,6 +1,7 @@
 module visc3d_mod
 #include "cppdefs.opt"
-  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north
+  use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north,&
+  &  ew_periodic, ns_periodic
   implicit none
   private
 
@@ -155,7 +156,6 @@ contains
 #  endif
           enddo
         enddo
-#  ifndef EW_PERIODIC
         if (WESTERN_EDGE) then
           do j=jstr-1,jend+1
             Uk(istr,j)=u(istr,j,k,nstp)
@@ -186,8 +186,6 @@ contains
             endif
           enddo
         endif
-#  endif
-#  ifndef NS_PERIODIC
         if (SOUTHERN_EDGE) then
           do i=istr-1,iend+1
             Vk(i,jstr)=v(i,jstr,k,nstp)
@@ -218,7 +216,6 @@ contains
             endif
           enddo
         endif
-#  endif
       else
         do j=jstr-1,jend+1
           do i=istrU-1,iend+1
