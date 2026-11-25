@@ -440,14 +440,15 @@ contains
     use extract_data, only:  do_extract_data, do_extract
     use scalars, only:&
     &dt, iic, iif, knew, kstp, nfast, nnew, nrhs,&
-    &nstp, ntstart, sec2day, start_time, tdays, time
+    &nstp, ntstart, sec2day, start_time, tdays, time, diag_sync
 
     use sponge_tune, only: adjust_orlanski, ub_tune
     use particles, only: do_particles, floats
     use surf_flux, only: wrt_sflux, do_sflx
     use random_output, only: wrt_random, do_random
 #ifdef MARBL
-    use marbl_driver, only: marbl_timestep_ratio, marbldrv_impose_constant_fe_all
+    use marbl_driver, only: marbl_timestep_ratio, marbldrv_impose_constant_fe_all,&
+    &marbldrv_report_groomed_tracers
     use tracers, only: t
 #endif
 #if defined MARBL && defined MARBL_DIAGS && defined CDR_FORCING
@@ -736,6 +737,11 @@ contains
 !     Done with stepping, time for outputs
 
     call diag  ! log file output of global norms
+#ifdef MARBL
+    ! groom_negative_tracers (no-op otherwise): mass moved by the groomer
+    ! since the last diagnostics line, printed at the same steps as it
+    if (diag_sync) call marbldrv_report_groomed_tracers
+#endif
     call reg_toc(rg_avg_diag)
 
     call reg_tic(rg_output)
