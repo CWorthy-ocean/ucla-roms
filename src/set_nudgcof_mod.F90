@@ -27,15 +27,18 @@ contains
     use dimensions, only: npx, npy
     use mixing, only:  sponge_size, visc2_r,&
     &visc2_p, diff2
-    use scalars, only: nt, pi, v_sponge, v_sponge_trc
+    use scalars, only: nt, pi, v_sponge, v_sponge_trc, sponge_profile
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend
     real(kind=8) wrk(PRIVATE_2D_SCRATCH_ARRAY)
     integer(kind=4) i,j, isp , I1,I0,I2,J1,J0,J2, ibnd,itrc
     real(kind=8) cff,cff1,cff2,cff3, frac, Tau
+    logical cosine
 
 # include "compute_extended_bounds.h"
+
+    cosine = sponge_profile == 'cosine'
 
 !
 ! The following code segment is rather a generic code go setup
@@ -79,11 +82,11 @@ contains
           ibnd=min(ibnd, Mm+1-j)
         endif
 #  endif
-#  ifdef PACIFIC
-        wrk(i,j)=0.5_8 + 0.5_8*cos(pi*float(ibnd)/float(isp))
-#  else
-        wrk(i,j)=float(isp-ibnd)/float(isp)  ! 1 on the boundary row, 0 from isp points in
-#  endif
+        if (cosine) then   ! V_SPONGE_SETTINGS sponge_profile = 'cosine'
+          wrk(i,j)=0.5_8 + 0.5_8*cos(pi*float(ibnd)/float(isp))
+        else
+          wrk(i,j)=float(isp-ibnd)/float(isp)  ! 1 on the boundary row, 0 from isp points in
+        endif
       enddo
     enddo
 

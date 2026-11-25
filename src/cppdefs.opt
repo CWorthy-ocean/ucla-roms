@@ -29,10 +29,6 @@
 ! Usage notes:
 #undef ADV_ISONEUTRAL
 
-! Keep tracer values constant in time and space
-! Usage notes: At each timestep the tracer tendencies will be calculated, but in the end it will just keep the value it had at the previous timestep
-#undef CONST_TRACERS
-
 ! Enable the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation
 ! Usage notes: needs nhmg = .true. in the namelist group NHMG_SETTINGS (the run stops otherwise).
 ! The non-hydrostatic solver (NHMG) itself is no longer a cpp key: it is always built and the
@@ -64,13 +60,6 @@
 ! MPI_Comm_split. NP_XI and NP_ETA from the namelist are overwritten.
 ! Neighbors / partition / subdompos are computed at runtime (no partit step).
 #undef MPI_MASKING
-
-!----------------------------------------------------------
-
-! Analytically prescribe the grid
-! Usage notes: Hardcoded in analytical.F
-#undef ANA_GRID
-
 
 !!!!!!!!!!!!!!!!!!!!!!!!! NUMERICAL ALGORITHMS !!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -120,10 +109,6 @@
 
 !----------------------------------------------------------
 
-! Analytically prescribe vertical mixing coefficient
-! Usage notes: Hardcoded in analytical.F
-#undef ANA_VMIX
-
 ! If surface and bottom boundary layers overlap, set them both to be the entire depth of the water column
 ! Usage notes: Unclear whether this is needed for physical or numerical reasons; disabled by default
 #undef MERGE_OVERLAP
@@ -134,18 +119,6 @@
 ! Use the MARBL biogeochemical library
 ! Usage notes: Set MARBL_ROOT to the MARBL installation when building
 #define MARBL
-
-!!!!!!!!!!!!!!!!!!!!!!!!! MISCELLANEOUS !!!!!!!!!!!!!!!!!!!!!!!!!
-
-! Analytically prescribe the initial conditions
-! Usage notes: Hardcoded in analytical.F
-#undef ANA_INITIAL
-
-! Analytically prescribe pipe forcing
-! Usage notes: Hardcoded in ana_grid.h
-#undef ANA_PIPES
-
-
 
 !---------- Do not delete anything below this line! --------
 

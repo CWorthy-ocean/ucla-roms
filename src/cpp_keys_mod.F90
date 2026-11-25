@@ -33,51 +33,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_mpi_masking = .false.
 #endif
-#ifdef ANA_GRID
-  logical, parameter, public :: key_ana_grid = .true.
-#else
-  logical, parameter, public :: key_ana_grid = .false.
-#endif
-#ifdef ANA_INITIAL
-  logical, parameter, public :: key_ana_initial = .true.
-#else
-  logical, parameter, public :: key_ana_initial = .false.
-#endif
-#ifdef ANA_VMIX
-  logical, parameter, public :: key_ana_vmix = .true.
-#else
-  logical, parameter, public :: key_ana_vmix = .false.
-#endif
-#ifdef ANA_PIPES
-  logical, parameter, public :: key_ana_pipes = .true.
-#else
-  logical, parameter, public :: key_ana_pipes = .false.
-#endif
-#ifdef ANA_RIVER_USWC
-  logical, parameter, public :: key_ana_river_uswc = .true.
-#else
-  logical, parameter, public :: key_ana_river_uswc = .false.
-#endif
-#ifdef FILAMENT_IDEAL
-  logical, parameter, public :: key_filament_ideal = .true.
-#else
-  logical, parameter, public :: key_filament_ideal = .false.
-#endif
-#ifdef CONST_TRACERS
-  logical, parameter, public :: key_const_tracers = .true.
-#else
-  logical, parameter, public :: key_const_tracers = .false.
-#endif
-#ifdef LINEAR_DRAG_ONLY
-  logical, parameter, public :: key_linear_drag_only = .true.
-#else
-  logical, parameter, public :: key_linear_drag_only = .false.
-#endif
-#ifdef PACIFIC
-  logical, parameter, public :: key_pacific = .true.
-#else
-  logical, parameter, public :: key_pacific = .false.
-#endif
 #ifdef LMD_DDMIX
   logical, parameter, public :: key_lmd_ddmix = .true.
 #else

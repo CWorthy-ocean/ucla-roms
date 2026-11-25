@@ -59,7 +59,7 @@ contains
     use ocean_vars, only: wi, we, flxv, flxu, hz, z_w, u, v
     use scalars, only:&
     &nz, dt, forw_start, iic, nnew, nrhs, nstp, nt,&
-    &rdrg, vonkar, zob, ntstart, AM3_crv
+    &rdrg, vonkar, zob, ntstart, AM3_crv, linear_drag
     use diagnostics, only: calc_diag, udiag, vdiag, icori,&
     &dxdyi_u, dxdyi_v
 #ifdef DIAGNOSTICS_NHMG
@@ -212,10 +212,6 @@ contains
           do i=istr,iend   !! t(..) is Hz*T
             t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)&
             &-dtau*pm(i,j)*pn(i,j)*(FC(i,k)-FC(i,k-1))
-
-# ifdef CONST_TRACERS
-            t(i,j,k,nnew,itrc)=t(i,j,k,nstp,itrc)
-# endif
           enddo
         enddo            !--> discard FC
 

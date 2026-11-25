@@ -2,7 +2,6 @@
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
     ADDITIONAL_FILES,
-    ANALYTICAL_CPP_KEYS,
     OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
