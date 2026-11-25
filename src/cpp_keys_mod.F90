@@ -28,11 +28,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_spherical = .false.
 #endif
-#ifdef MPI_MASKING
-  logical, parameter, public :: key_mpi_masking = .true.
-#else
-  logical, parameter, public :: key_mpi_masking = .false.
-#endif
 #ifdef LMD_DDMIX
   logical, parameter, public :: key_lmd_ddmix = .true.
 #else
@@ -84,13 +79,6 @@ module cpp_keys_mod
   logical, parameter, public :: key_akima = .true.
 #else
   logical, parameter, public :: key_akima = .false.
-#endif
-
-  ! (c) Structural: change the tracer set.
-#ifdef SALINITY
-  logical, parameter, public :: key_salinity = .true.
-#else
-  logical, parameter, public :: key_salinity = .false.
 #endif
 
   ! (d) Link and build: select libraries or fixed build properties.

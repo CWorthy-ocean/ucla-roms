@@ -12,7 +12,7 @@ module analytical
   use scalars, only:&
   &akv_bak, forw_start, iic, ntstart, akt_bak, g, rho0
   use dimensions, only: inode, jnode
-  use param, only: isalt, itemp
+  use param, only: isalt, itemp, salinity
 !     For Filament example case:
 #ifndef NONLIN_EOS
   use eos_vars, only: tcoef
@@ -99,9 +99,7 @@ contains
 
     call exchange_xxx(Akv,Akt(:,:,:,itemp))
 
-#  ifdef SALINITY
-    call exchange_xxx(Akt(:,:,:,isalt))
-#  endif
+    if (salinity) call exchange_xxx(Akt(:,:,:,isalt))
 
 
 
@@ -171,8 +169,7 @@ contains
         enddo
       enddo
 
-#  ifdef SALINITY
-    elseif (itrc == isalt) then
+    elseif (itrc == isalt .and. salinity) then
 
 ! Set kinematic surface freshwater flux (m/s) at horizontal
 ! RHO-points, scaling by surface salinity is done in STEP3D.
@@ -182,7 +179,6 @@ contains
           stflx(i,j,isalt)=0._8
         enddo
       enddo
-#  endif
     else
 
 !  Set kinematic surface flux of additional tracers, if any.

@@ -435,7 +435,7 @@ jobs:
     # - PARALLEL_IO: the pytest configs all use per-rank output. The key set
     #   mirrors the production cson roms-marbl configuration (test_bgc's keys)
     #   with PARALLEL_IO on top, so MARBL+CDR+PIO interactions are compiled
-    #   too. Built once without MPI_MASKING and once with it.
+    #   too, and so is mpi_masking (a run-time switch of PIO builds).
     # - NHMG diagnostics (DIAGNOSTICS_NHMG, NHMGDIAG), which no test defines.
     # - Without MARBL: the CDR and CDR_LITE code in a physics-only
     #   build, without PARALLEL_IO (compile_ifx covers the PARALLEL_IO variant).
@@ -464,24 +464,11 @@ jobs:
           micromamba run -n roms-ci bash -c '
           ci/compile_only.sh /tmp/pio_build \
             UV_ADV UV_COR MASKING \
-            SALINITY NONLIN_EOS SPLIT_EOS \
+            NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
             MARBL \
             PARALLEL_IO
-          '
-
-      - name: Compile PARALLEL_IO configuration with MPI_MASKING
-        shell: bash
-        run: |
-          micromamba run -n roms-ci bash -c '
-          ci/compile_only.sh /tmp/pio_masking_build \
-            UV_ADV UV_COR MASKING \
-            SALINITY NONLIN_EOS SPLIT_EOS \
-            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
-            CURVGRID SPHERICAL \
-            MARBL \
-            PARALLEL_IO MPI_MASKING
           '
 
       - name: Compile NHMG diagnostics configuration
@@ -490,7 +477,7 @@ jobs:
           micromamba run -n roms-ci bash -c '
           ci/compile_only.sh /tmp/nhmg_diag_build \
             UV_ADV UV_COR MASKING \
-            SALINITY NONLIN_EOS SPLIT_EOS \
+            NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
             DIAGNOSTICS_NHMG NHMGDIAG
@@ -502,7 +489,7 @@ jobs:
           micromamba run -n roms-ci bash -c '
           ci/compile_only.sh /tmp/cdr_nomarbl_build \
             UV_ADV UV_COR MASKING \
-            SALINITY NONLIN_EOS SPLIT_EOS \
+            NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL
           '
@@ -511,7 +498,7 @@ jobs:
     needs: [prepare, build_ifx]
     # ifx counterpart of compile_gnu's PARALLEL_IO checks: the same production
     # key set compiled with COMPILER=intel against the ifx image's from-source
-    # PnetCDF + ParallelIO fork, once without MPI_MASKING and once with it.
+    # PnetCDF + ParallelIO fork (mpi_masking is a run-time switch of it).
     # Also without MARBL, with PARALLEL_IO. Same build_ifx gating as
     # test_ifx.
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_ifx.result == 'success' || needs.build_ifx.result == 'skipped') }}
@@ -539,23 +526,11 @@ jobs:
           export COMPILER=intel
           ci/compile_only.sh /tmp/pio_build \
             UV_ADV UV_COR MASKING \
-            SALINITY NONLIN_EOS SPLIT_EOS \
+            NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
             MARBL \
             PARALLEL_IO
-
-      - name: Compile PARALLEL_IO configuration with MPI_MASKING
-        shell: bash
-        run: |
-          export COMPILER=intel
-          ci/compile_only.sh /tmp/pio_masking_build \
-            UV_ADV UV_COR MASKING \
-            SALINITY NONLIN_EOS SPLIT_EOS \
-            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
-            CURVGRID SPHERICAL \
-            MARBL \
-            PARALLEL_IO MPI_MASKING
 
       - name: Compile the configuration without MARBL
         shell: bash
@@ -563,7 +538,7 @@ jobs:
           export COMPILER=intel
           ci/compile_only.sh /tmp/cdr_nomarbl_build \
             UV_ADV UV_COR MASKING \
-            SALINITY NONLIN_EOS SPLIT_EOS \
+            NONLIN_EOS SPLIT_EOS \
             LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
             CURVGRID SPHERICAL \
             PARALLEL_IO

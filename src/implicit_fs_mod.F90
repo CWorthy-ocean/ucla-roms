@@ -544,7 +544,7 @@ contains
     ! a field fs_rst_get read with the PIO read halo (x0:x1, y0:y1 reach 2 cells into the
     ! neighbouring tiles): keep the cells this rank wrote (fs_rst_wrt: ia:i1, ja:j1) and zero the
     ! rest; exchange_xxx then fills the halo from the neighbours, as in the continuous run. With
-    ! MPI_MASKING the read halo can lie in a dropped all-land tile: no rank writes it (the file
+    ! mpi_masking the read halo can lie in a dropped all-land tile: no rank writes it (the file
     ! holds the netCDF fill value, 9.97e36, there) and no exchange reaches it, and the continuous
     ! run keeps zeros there (fs_alloc, mg_keep_fine).
     use dimensions, only: i1, j1
@@ -2627,7 +2627,7 @@ contains
     call mpi_allgather([inode, jnode, mg_nx(mg_ld), mg_ny(mg_ld)], 4, mpi_integer, info, 4, mpi_integer,&
     &                  ocean_grid_comm, ierr)
     ! The global grid is laid out from the tile-size rule of roms_mpi (mpi_setup) for all
-    ! npx x npy tiles, so that tiles dropped by MPI_MASKING (all land, no rank) are blocks
+    ! npx x npy tiles, so that tiles dropped by mpi_masking (all land, no rank) are blocks
     ! of inactive cells (e = 0: unit diagonal in mg_factor, zero in the gathers); with a
     ! full tile grid this is the layout of the ranks' own sizes.
     mg_npx = npx ; mg_npy = npy

@@ -456,20 +456,20 @@ contains
     ! no-fill mode. A record variable that a writer does not write on
     ! every record must then be filled explicitly (nc_fill_record).
     !
-    ! Under MPI_MASKING all-land tiles have no rank, so no rank writes
+    ! With mpi_masking all-land tiles have no rank, so no rank writes
     ! their points and the fill is what leaves them at _FillValue: keep it.
     use netcdf, only: nf90_set_fill, nf90_nofill
+    use param, only: mpi_masking
     implicit none
     integer(kind=4), intent(in) :: ncid
-#ifndef MPI_MASKING
     integer(kind=4) :: ierr, old_mode
 
+    if (mpi_masking) return
     ierr = nf90_set_fill(ncid, nf90_nofill, old_mode)
     if (ierr /= nf90_noerr) then
       call error_log%check_netcdf_status(netcdf_status=ierr,&
       &context=module_name//"/nc_set_record_nofill", info="nf90_set_fill")
     endif
-#endif
 
   end subroutine nc_set_record_nofill  !]
 !----------------------------------------------------------------------

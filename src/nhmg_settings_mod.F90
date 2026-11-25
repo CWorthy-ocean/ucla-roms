@@ -27,7 +27,7 @@ contains
     use, intrinsic :: iso_fortran_env, only: iostat_end
     use namelist_open_mod, only: open_namelist_file
     use error_handling_mod, only: error_log
-    use param, only: mynode
+    use param, only: mynode, mpi_masking
     implicit none
     logical :: nhmg
     integer(kind=4) :: namelist_unit, ios
@@ -58,11 +58,9 @@ contains
 #endif
     if (.not. nhmg_on) return
 
-#ifdef MPI_MASKING
     ! NHMG lays its ranks out on MPI_COMM_WORLD as a full NP_XI x NP_ETA grid
-    call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
-    &info="nhmg = .true. does not work with MPI_MASKING (NHMG needs a rank for every tile)")
-#endif
+    if (mpi_masking) call error_log%raise_global(context=trim(module_name)//"/"//sr_name,&
+    &info="nhmg = .true. does not work with mpi_masking = .true. (NHMG needs a rank for every tile)")
     if (mynode == 0) write(*,'(/1x,A)') 'NHMG_SETTINGS: nhmg = .true. (non-hydrostatic solver on; untested)'
 
   end subroutine read_nml_nhmg

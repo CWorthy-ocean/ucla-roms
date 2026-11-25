@@ -71,7 +71,7 @@ The free-surface increment `delta = zeta^{n+1} - zeta^n` satisfies a symmetric p
 
 Preconditioners (`fs_precond`):
 
-- `'mg'` (default): one geometric multigrid V-cycle. The distributed levels aggregate 2 x 2 cells inside each tile; at the first level whose global grid has at most `fs_mg_gather` cells the level is gathered into one global grid, which is coarsened further and solved directly (banded Cholesky) by the ranks chosen with `fs_mg_global_on` (one per node by default). Smoother: red-black Gauss-Seidel (`fs_mg_smoother = 'rbgs'`) or damped Jacobi, `fs_mg_nu` sweeps before and after each coarse-grid correction. The coarse operators are rebuilt every `fs_mg_lag` steps. With `MPI_MASKING`, the dropped all-land tiles are inactive blocks of the global levels.
+- `'mg'` (default): one geometric multigrid V-cycle. The distributed levels aggregate 2 x 2 cells inside each tile; at the first level whose global grid has at most `fs_mg_gather` cells the level is gathered into one global grid, which is coarsened further and solved directly (banded Cholesky) by the ranks chosen with `fs_mg_global_on` (one per node by default). Smoother: red-black Gauss-Seidel (`fs_mg_smoother = 'rbgs'`) or damped Jacobi, `fs_mg_nu` sweeps before and after each coarse-grid correction. The coarse operators are rebuilt every `fs_mg_lag` steps. With `mpi_masking`, the dropped all-land tiles are inactive blocks of the global levels.
 - `'jacobi'`: diagonal scaling (more iterations; for testing).
 
 `fs_mg_global_on` and `fs_exch_thin` change only how the work is distributed: results are bit-for-bit the same.
@@ -131,6 +131,6 @@ The output files record the barotropic scheme in the global attribute `fs_mode` 
 - `fs_rho_inf > 0` shortens the survival of a configuration that already has a `2 dt` computational mode of its 3-D step (section 2); the cure is a shorter `dt`. `fs_rho_inf = 1` is rejected.
 - Reflecting closed basins excited by an unbalanced start show more energy in their basin seiches than the split loop, growing with `fs_rho_inf`; use `fs_rho_inf = 0` there.
 - Not tested with `NHMG`.
-- Tested in CI (`tests/test_implicit_fs.py`, the suite's small open-boundary grid on 4 ranks): flux and bulk (`surf_frc_type = 'bulk'`) surface forcing, the tidal potential, `PARALLEL_IO`, exact restarts, and river, pipe and CDR volume sources. Not tested in CI: closed and periodic domains, and `MPI_MASKING`. Outside CI the implicit mode has run on a closed basin with a river, a pipe and a CDR volume release, and on a Bay of Bengal domain with `MPI_MASKING`; it has not been run on a periodic domain.
+- Tested in CI (`tests/test_implicit_fs.py`, the suite's small open-boundary grid on 4 ranks): flux and bulk (`surf_frc_type = 'bulk'`) surface forcing, the tidal potential, `PARALLEL_IO`, exact restarts, and river, pipe and CDR volume sources. Not tested in CI: closed and periodic domains, and `mpi_masking`. Outside CI the implicit mode has run on a closed basin with a river, a pipe and a CDR volume release, and on a Bay of Bengal domain with `mpi_masking`; it has not been run on a periodic domain.
 
 Settings: see [`IMPLICIT_FS`](runtime_settings.md#implicit_fs) in the runtime settings.

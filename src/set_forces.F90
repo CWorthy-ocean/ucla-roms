@@ -28,9 +28,7 @@ subroutine set_forces
 ! Bottom drag is computed using either Styles and Glenn(1996) bottom
 ! boundary layer formulation, or linear/quadratic friction law..
   use param, only:&
-#ifdef SALINITY
-  &isalt,&
-#endif
+  &isalt, salinity,&
   &ieast, iwest, jnorth, jsouth, nsub_e, nsub_x, itemp, cdr_lite_on
   use flux_frc, only: set_flux_frc
   use surf_flux, only: set_surf_field_corr, set_carbonate_sensitivity, sflx_corr, qcorrection, cflx_corr
@@ -87,9 +85,7 @@ subroutine set_forces
 #  ifdef LMD_KPP
     call ana_srflux_tile(istr,iend,jstr,jend)
 #  endif
-#  ifdef SALINITY
-    call ana_stflux_tile(istr,iend,jstr,jend, isalt)
-#  endif
+    if (salinity) call ana_stflux_tile(istr,iend,jstr,jend, isalt)
   endif
   if(nt>iTandS) call set_surf_tracer_flx
   ! BGC surface flux:

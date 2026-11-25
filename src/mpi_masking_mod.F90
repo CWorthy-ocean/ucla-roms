@@ -3,31 +3,26 @@ module mpi_masking_mod
 ! Runtime MPI-masking tiling, ported from New-tools/optimal_part.F
 ! and New-tools/roms_part.F (check_mask, partition_mask, neighbors).
 !
-! When MPI_MASKING is enabled, ROMS chooses NP_XI/NP_ETA at startup from
+! With mpi_masking = .true. (PARAM_SETTINGS), ROMS chooses NP_XI/NP_ETA at startup from
 ! the land mask, then MPI_Comm_split so ocean_grid_comm has nparts ranks.
 ! Extra launched ranks exit.  MPI_COMM_WORLD itself cannot be resized.
 
   implicit none
   private
 
-#ifdef MPI_MASKING
   public :: find_optimal_tiling
   public :: build_mpi_masking_map
   public :: get_mpi_masking_topology
-#endif
 
   character(len=15) :: module_name = "mpi_masking_mod"
 
-#ifdef MPI_MASKING
   integer(kind=4), allocatable :: node_map(:,:)
   integer(kind=4), allocatable :: npi_c(:), npj_c(:)
   integer(kind=4) :: nparts_saved = 0
   integer(kind=4), parameter :: invalid_coarse = 100000
-#endif
 
 contains
 
-#ifdef MPI_MASKING
 !----------------------------------------------------------------------
   subroutine find_optimal_tiling(coarse_frc)
     ! Search candidate (NP_XI, NP_ETA) pairs as in optimal_part, pick the
@@ -63,14 +58,15 @@ contains
 #ifndef PARALLEL_IO
     call error_log%raise_global(&
     &context=module_name//'/'//sr_name,&
-    &info='MPI_MASKING requires PARALLEL_IO (joined grid file).')
+    &info='PARAM_SETTINGS mpi_masking = .true. needs a build with the cpp key PARALLEL_IO'//&
+    &' (it reads the joined grid file); set mpi_masking = .false. or build with PARALLEL_IO.')
     call error_log%abort_check()
     return
 #endif
     if (analytical_grid) then
       call error_log%raise_global(&
       &context=module_name//'/'//sr_name,&
-      &info='MPI_MASKING cannot be used with an analytical grid (GRID_SETTINGS ana_grid = .true.).')
+      &info='PARAM_SETTINGS mpi_masking = .true. cannot be used with an analytical grid (GRID_SETTINGS ana_grid = .true.).')
       call error_log%abort_check()
       return
     endif
@@ -181,14 +177,14 @@ contains
       if (i > 0) then
         call error_log%raise_global(&
         &context=module_name//'/'//sr_name,&
-        &info='every candidate MPI_MASKING tiling is incompatible with'//&
+        &info='every candidate mpi_masking tiling is incompatible with'//&
         &' coarse-resolution forcing (interp_*_frc enabled); disable'//&
         &' forcing interpolation or relaunch with a different number'//&
         &' of ranks.')
       else
         call error_log%raise_global(&
         &context=module_name//'/'//sr_name,&
-        &info='no candidate MPI_MASKING tiling for the launched core'//&
+        &info='no candidate mpi_masking tiling for the launched core'//&
         &' count; relaunch with a different number of ranks.')
       endif
       call error_log%abort_check()
@@ -584,7 +580,5 @@ contains
     neighbors = loc_neigh - 1
     nnodes_out = nparts_saved
   end subroutine get_mpi_masking_topology
-
-#endif /* MPI_MASKING */
 
 end module mpi_masking_mod

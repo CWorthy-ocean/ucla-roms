@@ -26,12 +26,9 @@ contains
 
     use tracers, only: t
     use scalars, only: nstp, rho0
-    use param, only: nz, isalt, itemp
+    use param, only: nz, isalt, itemp, salinity
 #ifndef NONLIN_EOS
-    use eos_vars, only: tcoef
-#ifdef SALINITY
-    use eos_vars, only: scoef
-#endif
+    use eos_vars, only: tcoef, scoef
 #endif
 
     implicit none
@@ -42,50 +39,56 @@ contains
     real(kind=8) Tt, cff
     real(kind=8), parameter ::      r01=6.793952D-2,&
     &r02=-9.095290D-3,&
-    &r03=+1.001685D-4,  r04=-1.120083D-6, r05=+6.536332D-9
-#  ifdef SALINITY
-    real(kind=8), parameter :: r10=+0.824493_8,   r11=-4.08990D-3,  r12=+7.64380D-5,&
+    &r03=+1.001685D-4,  r04=-1.120083D-6, r05=+6.536332D-9,&
+    &r10=+0.824493_8,   r11=-4.08990D-3,  r12=+7.64380D-5,&
     &r13=-8.24670D-7,  r14=+5.38750D-9,&
     &rS0=-5.72466D-3, rS1=+1.02270D-4,  rS2=-1.65460D-6,&
     &r20=+4.8314D-4
     real(kind=8) Ts, sqrtTs
-#  endif
-# else
-!#  include "eos_vars"
 # endif
+! The salinity branch is outside the loops; without salinity beta is 0
+! (the surface buoyancy flux has no salt term then).
 # ifdef NONLIN_EOS
     cff=1._8/rho0
-# endif
+    if (salinity) then
+      do j=jmin,jmax
+        do i=imin,imax
+          Tt=t(i,j,nz,nstp,itemp)
+          Ts=t(i,j,nz,nstp,isalt) ; sqrtTs=sqrt(max(0._8,Ts))
+          alpha(i,j)=-cff*( r01+Tt*( 2._8*r02+Tt*( 3._8*r03+Tt*(&
+          &4._8*r04 +Tt*5._8*r05 )))&
+          &+Ts*( r11+Tt*( 2._8*r12+Tt*(&
+          &3._8*r13 +Tt*4._8*r14 ))&
+          &+sqrtTs*(rS1+Tt*2._8*rS2) )&
+          &)
+          beta(i,j)= cff*( r10+Tt*(r11+Tt*(r12+Tt*(r13+Tt*r14)))&
+          &+1.5_8*(rS0+Tt*(rS1+Tt*rS2))*sqrtTs&
+          &+2._8*r20*Ts )
+        enddo
+      enddo
+    else
+      do j=jmin,jmax
+        do i=imin,imax
+          Tt=t(i,j,nz,nstp,itemp)
+          alpha(i,j)=-cff*( r01+Tt*( 2._8*r02+Tt*( 3._8*r03+Tt*(&
+          &4._8*r04 +Tt*5._8*r05 )))&
+          &)
+          beta(i,j)=0._8
+        enddo
+      enddo
+    endif
+# else
     do j=jmin,jmax
       do i=imin,imax
-# ifdef NONLIN_EOS
-        Tt=t(i,j,nz,nstp,itemp)
-#  ifdef SALINITY
-        Ts=t(i,j,nz,nstp,isalt) ; sqrtTs=sqrt(max(0._8,Ts))
-#  endif
-        alpha(i,j)=-cff*( r01+Tt*( 2._8*r02+Tt*( 3._8*r03+Tt*(&
-        &4._8*r04 +Tt*5._8*r05 )))&
-#  ifdef SALINITY
-        &+Ts*( r11+Tt*( 2._8*r12+Tt*(&
-        &3._8*r13 +Tt*4._8*r14 ))&
-        &+sqrtTs*(rS1+Tt*2._8*rS2) )&
-#  endif
-        &)
-#  ifdef SALINITY
-        beta(i,j)= cff*( r10+Tt*(r11+Tt*(r12+Tt*(r13+Tt*r14)))&
-        &+1.5_8*(rS0+Tt*(rS1+Tt*rS2))*sqrtTs&
-        &+2._8*r20*Ts )
-#  endif
-# else
         alpha(i,j)=abs(Tcoef)  !--> for linear Equation of State
-#  ifdef SALINITY
-        beta(i,j)=abs(Scoef)
-#  else
-        beta(i,j)=0._8
-#  endif
-# endif /* NONLIN_EOS */
+        if (salinity) then
+          beta(i,j)=abs(Scoef)
+        else
+          beta(i,j)=0._8
+        endif
       enddo
     enddo
+# endif /* NONLIN_EOS */
   end subroutine alphabeta_tile
 end module alphabeta_mod
 #else
