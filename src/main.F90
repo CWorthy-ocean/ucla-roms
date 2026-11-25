@@ -1,7 +1,7 @@
 program main              ! Open MP version of ROMS driver
 #include "cppdefs.opt"
   use add_git_hash_mod, only: git_hash, print_jobid
-  use param, only: mynode, ocean_grid_comm, nsize, read_nml_param
+  use param, only: mynode, ocean_grid_comm, nsize, read_nml_param, mpi_masking
   use check_switches_mod, only: print_switches
   use nhmg, only: nhmg_clean
   use nhmg_settings_mod, only: nhmg_on
@@ -11,15 +11,13 @@ program main              ! Open MP version of ROMS driver
   use roms_mpi, only: mpi_setup
   use init_scalars_mod, only: init_scalars
   use namelist_read_mod, only: read_namelists
-#ifdef MPI_MASKING
   use mpi_masking_mod, only: find_optimal_tiling
 ! Coarse-resolution forcing flags: only the flag of surf_frc_type matters.
   use bulk_frc, only: interp_bulk_frc
   use flux_frc, only: interp_flux_frc
   use surf_flux, only: bulk_frc_on, flux_frc_on
-# ifdef MARBL
+#ifdef MARBL
   use bgc_shared_vars, only: interp_bgc_frc
-# endif
 #endif
 #ifdef PARALLEL_IO
   use pio_roms, only: pio_initialize, pio_myRank, pio_ntasks
@@ -27,9 +25,7 @@ program main              ! Open MP version of ROMS driver
 
   implicit none                                        ! with single parallel region using
   integer(kind=4) :: ierr                                      ! explicit barrier synchronization.
-#ifdef MPI_MASKING
   logical :: coarse_frc
-#endif
 # ifdef MPI
 !$ $$      real*8 tstart, tend
 !$ integer level,req_lev
@@ -54,13 +50,13 @@ program main              ! Open MP version of ROMS driver
 #ifdef MPI
 !     Git hash
   mpi_master_only write(*,'(/1x,2A)') "Git hash: ", git_hash
-#ifdef MPI_MASKING
-  coarse_frc = (bulk_frc_on .and. interp_bulk_frc) .or. (flux_frc_on .and. interp_flux_frc)
-# ifdef MARBL
-  coarse_frc = coarse_frc .or. interp_bgc_frc
-# endif
-  call find_optimal_tiling(coarse_frc)
+  if (mpi_masking) then
+    coarse_frc = (bulk_frc_on .and. interp_bulk_frc) .or. (flux_frc_on .and. interp_flux_frc)
+#ifdef MARBL
+    coarse_frc = coarse_frc .or. interp_bgc_frc
 #endif
+    call find_optimal_tiling(coarse_frc)
+  endif
   call mpi_setup
 
 #ifdef PARALLEL_IO

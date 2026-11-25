@@ -2577,15 +2577,11 @@ contains
     use scoord, only:&
     &cs_r, cs_w, hc, theta_b, theta_s
 #ifndef NONLIN_EOS
-    use eos_vars, only: &
-#ifdef SALINITY
-    &S0, Scoef,&
-#endif
-    T0, Tcoef
+    use eos_vars, only: S0, Scoef, T0, Tcoef
 #endif
     use strings, only: cpps, srcs
     use netcdf, only: nf90_def_dim
-    use param, only: np_eta, np_xi, isw_corn, iwest, jsouth, jsw_corn
+    use param, only: np_eta, np_xi, isw_corn, iwest, jsouth, jsw_corn, salinity
 
     implicit none
     character(len=15) :: sr_name = "put_global_atts"
@@ -2676,13 +2672,13 @@ contains
     ierr=nf90_put_att(ncid, nf90_global, 'T0', T0)
     ierr=nf90_put_att (ncid, nf90_global, 'T0_units', 'deg Celsius')
 
-#  ifdef SALINITY
-    ierr=nf90_put_att(ncid, nf90_global, 'Scoef', Scoef)
-    ierr=nf90_put_att (ncid, nf90_global, 'Scoef_units', 'PSU-1')
+    if (salinity) then
+      ierr=nf90_put_att(ncid, nf90_global, 'Scoef', Scoef)
+      ierr=nf90_put_att (ncid, nf90_global, 'Scoef_units', 'PSU-1')
 
-    ierr=nf90_put_att(ncid, nf90_global, 'S0', S0)
-    ierr=nf90_put_att (ncid, nf90_global, 'S0_units', 'PSU')
-#  endif
+      ierr=nf90_put_att(ncid, nf90_global, 'S0', S0)
+      ierr=nf90_put_att (ncid, nf90_global, 'S0_units', 'PSU')
+    endif
 # endif
 
     ierr=nf90_put_att(ncid,nf90_global, 'visc2', visc2)            ! Horizontal viscosity and mixing coefficients.

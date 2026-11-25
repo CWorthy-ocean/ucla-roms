@@ -28,7 +28,7 @@ module tracers
 #error "CDR_TRACER was renamed to CDR_LITE: replace it in cppdefs.opt"
 #endif
   use param, only: isalt, itemp, lm, mm, mynode, nt_passive, nt_cdr_oae, nt_cdr_dor&
-  &,ieast, iwest, jnorth, jsouth, nt_bgc, cdr_lite_on
+  &,ieast, iwest, jnorth, jsouth, nt_bgc, cdr_lite_on, salinity
   use dimensions, only: i0, i1, j0, j1, nx, ny, eta_rho, xi_rho&
   &, ds_xr, ds_yr, ds_zr
   use surf_flux, only: cflx_corr
@@ -551,14 +551,14 @@ contains
     if(wrt_avg_temp) wrt_t_avg(itemp) = .true.
     if(wrt_temp_dia) wrt_t_dia(itemp) = .true.
     iTandS = 1                ! if only temp, no salt.
-#ifdef SALINITY
-    t_vname(isalt)='salt';        t_units(isalt)='PSU'
-    t_lname(isalt)='salinity'
-    if(wrt_salt) wrt_t(isalt) = .true.
-    if(wrt_avg_salt) wrt_t_avg(isalt) = .true.
-    if(wrt_salt_dia) wrt_t_dia(isalt) = .true.
-    iTandS = 2         ! if both temp and salt.
-#endif
+    if (salinity) then
+      t_vname(isalt)='salt';        t_units(isalt)='PSU'
+      t_lname(isalt)='salinity'
+      if(wrt_salt) wrt_t(isalt) = .true.
+      if(wrt_avg_salt) wrt_t_avg(isalt) = .true.
+      if(wrt_salt_dia) wrt_t_dia(isalt) = .true.
+      iTandS = 2         ! if both temp and salt.
+    endif
     itot=iTandS        ! set up counting for additional tracers
     ! T/S, then passive, CDR OAE (2 each) and CDR DOR tracers; BGC tracers follow
     ibgc0 = iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor

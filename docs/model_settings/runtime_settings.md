@@ -8,7 +8,7 @@ Pass the namelist file to the ROMS executable as its first argument:
 mpirun -n 64 ./roms my_namelist.nml
 ```
 
-With the standard tiling (no tiles skipped over land, as `MPI_MASKING` does), the number of MPI processes must equal `NP_XI * NP_ETA` from `PARAM_SETTINGS`.
+With the standard tiling (no tiles skipped over land, as `mpi_masking` does), the number of MPI processes must equal `NP_XI * NP_ETA` from `PARAM_SETTINGS`.
 
 Start from `$ROMS_ROOT/src/namelist.nml`, which contains every group below with a default for each setting. ROMS reads a group only when the feature it belongs to is compiled in (noted below as "Read only with ..."), and ignores the others. A group that ROMS reads must be present, except where noted, and a misspelled or unknown setting in it stops ROMS at startup.
 
@@ -47,7 +47,7 @@ Optional: if the group is missing, the reference date is 2000-01-01. ROMS stops 
 | Setting | Description |
 |--------|-------------|
 | `grdname` | Grid file path (NetCDF) defining model domain; not used with `ana_grid = .true.` |
-| `ana_grid` | `.true.`: an analytical grid, set by the case's `ana_grid.h` (default `.false.`). Not with `MPI_MASKING` |
+| `ana_grid` | `.true.`: an analytical grid, set by the case's `ana_grid.h` (default `.false.`). Not with `mpi_masking` |
 
 
 
@@ -79,6 +79,8 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `nt_cdr_oae` | Number of OAE `CDR_LITE` tracer pairs. Each pair is an ALK-mimicking and a DIC-mimicking passive tracer (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`), so it adds two tracers. The `CDR_LITE` CPP key adds their air-sea CO2 exchange. |
 | `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`). The `CDR_LITE` tracers are in the history file unless `wrt_passive` is `.false.` |
 | `nt_bgc` | Number of biogeochemical tracers: 32 for default `MARBL`, 0 without `MARBL` |
+| `salinity` | `.true.` (default): the model carries salinity, the second tracer. `.false.`: temperature is the only active tracer (passive, CDR and BGC tracers then start at the second tracer), the linear equation of state has no salt term, the nonlinear one uses a salinity of 34.5, and no salt or `AKs` is written. Replaces the cpp key `SALINITY`. ROMS stops with `salinity = .false.` and `sflx_corr`, or with the cpp key `LMD_DDMIX` |
+| `mpi_masking` | `.true.`: choose the MPI tiling at start-up from the land mask, without the tiles that are entirely land (default `.false.`). `NP_XI` and `NP_ETA` are then overwritten; launch with at least as many ranks as the selected tiling needs, and extra ranks exit at start-up. No `partit` step is needed. Needs a `PARALLEL_IO` build and a joined grid file (ROMS stops otherwise), and not with `ana_grid`. Replaces the cpp key `MPI_MASKING` |
 
 ### `PIO_SETTINGS`
 (read by module `pio_roms.F90`)
@@ -115,7 +117,7 @@ Read only with `PARALLEL_IO`.
 | `interp_bulk_frc` | Interpolate bulk forcing from a 2x coarser input grid if .true. |
 | `check_bulk_frc_units` | Perform a check that bulk input files have expected units if .true.  |
 | `interp_flux_frc` | Interpolate flux forcing from a 2x coarser input grid if .true. |
-| `sflx_corr` | Restore surface salinity toward `sss` if `.true.` (default `.false.`; coefficient `dSSSdt` in `SSS_CORRECTION`). ROMS stops if it is `.true.` without `surf_frc_type = 'bulk'` and `SALINITY` |
+| `sflx_corr` | Restore surface salinity toward `sss` if `.true.` (default `.false.`; coefficient `dSSSdt` in `SSS_CORRECTION`). ROMS stops if it is `.true.` without `surf_frc_type = 'bulk'` and `salinity = .true.` |
 | `qcorrection` | Restore surface temperature toward `sst` if `.true.` (default `.false.`; coefficient `dSSTdt` in `SST_CORRECTION`). ROMS stops if it is `.true.` without `surf_frc_type = 'bulk'` |
 | `cflx_corr` | Restore surface DIC and ALK toward `sDIC` and `sALK` if `.true.` (default `.false.`; coefficient `dCdt` in `DIC_ALK_CORRECTION`). ROMS stops if it is `.true.` without `surf_frc_type = 'bulk'` and `MARBL`, or if a tracer it needs (`DIC`, `DIC_ALT_CO2`, `ALK`, `ALK_ALT_CO2`) is missing |
 
@@ -429,8 +431,8 @@ Linear equation of state parameters.
 |--------|-------------|
 | `Tcoef` | Thermal expansion coefficient    (kg/m2/K) |
 | `T0` | Reference temperature            (*C) |
-| `Scoef` | Saline contraction coefficient   (kg/m3/psu) |
-| `S0` | Reference salinity               (psu) |
+| `Scoef` | Saline contraction coefficient   (kg/m3/psu); used only with `salinity` |
+| `S0` | Reference salinity               (psu); used only with `salinity` |
 
 ### `RHO0_SETTINGS`
 (read by module `scalars.F90`)
@@ -677,7 +679,7 @@ Optional: if the group is absent, `nhmg = .false.`. Switches on the non-hydrosta
 |--------|---------|-------------|
 | `nhmg` | `.false.` | Non-hydrostatic solver on (`.true.`) or off (`.false.`) |
 
-With `nhmg = .true.`, the solver's own settings (tolerance, iterations, relaxation method, surface condition, periodicity, ...) are read from the optional file `nhmg_namelist` in the run directory (group `&nhparam`, see `NHMG/src/mg_namelist.f90`); without the file they keep their defaults. ROMS stops at startup if `nhmg = .true.` is combined with `fs_mode = 'implicit'` (`IMPLICIT_FS`) or with the cpp key `MPI_MASKING` (NHMG needs an MPI rank for every tile), and, whatever `nhmg` is, if the cpp key `DIAGNOSTICS_NHMG` or `NHMGDIAG` (not finished) is defined.
+With `nhmg = .true.`, the solver's own settings (tolerance, iterations, relaxation method, surface condition, periodicity, ...) are read from the optional file `nhmg_namelist` in the run directory (group `&nhparam`, see `NHMG/src/mg_namelist.f90`); without the file they keep their defaults. ROMS stops at startup if `nhmg = .true.` is combined with `fs_mode = 'implicit'` (`IMPLICIT_FS`) or with `mpi_masking = .true.` (NHMG needs an MPI rank for every tile), and, whatever `nhmg` is, if the cpp key `DIAGNOSTICS_NHMG` or `NHMGDIAG` (not finished) is defined.
 
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)

@@ -2600,7 +2600,7 @@ contains
     call mpi_allgather([inode, jnode, mg_nx(mg_ld), mg_ny(mg_ld)], 4, mpi_integer, info, 4, mpi_integer,&
     &                  ocean_grid_comm, ierr)
     ! The global grid is laid out from the tile-size rule of roms_mpi (mpi_setup) for all
-    ! npx x npy tiles, so that tiles dropped by MPI_MASKING (all land, no rank) are blocks
+    ! npx x npy tiles, so that tiles dropped by mpi_masking (all land, no rank) are blocks
     ! of inactive cells (e = 0: unit diagonal in mg_factor, zero in the gathers); with a
     ! full tile grid this is the layout of the ranks' own sizes.
     mg_npx = npx ; mg_npy = npy

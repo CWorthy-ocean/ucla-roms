@@ -113,6 +113,33 @@ def test_switch_stops(physics_conf, input_dir, tmp_path, case):
     )
 
 
+def test_mpi_masking_without_parallel_io(physics_conf, input_dir, tmp_path):
+    """mpi_masking = .true. stops a build without PARALLEL_IO, naming the setting.
+
+    The tiling is chosen after the namelists are read, so this run prints the
+    Git hash line first.
+    """
+    nml = _namelist(input_dir)
+    nml["PARAM_SETTINGS"]["mpi_masking"] = True
+    assert_run_rejected(
+        physics_conf, nml, tmp_path,
+        ["PARAM_SETTINGS mpi_masking = .true. needs a build with the cpp key PARALLEL_IO"],
+        label="mpi_masking", absent=[RUN_END],
+    )
+
+
+def test_sflx_corr_without_salinity(physics_conf, input_dir, tmp_path):
+    """Salinity restoring with salinity = .false. stops during the namelist read."""
+    nml = _namelist(input_dir)
+    nml["PARAM_SETTINGS"]["salinity"] = False
+    nml["SURF_FRC_SETTINGS"]["sflx_corr"] = True
+    assert_run_rejected(
+        physics_conf, nml, tmp_path,
+        ["SURF_FRC_SETTINGS sflx_corr = .true. needs salinity = .true. (PARAM_SETTINGS)"],
+        label="sflx_corr_without_salinity", absent=[AFTER_NAMELISTS],
+    )
+
+
 def _drop_optional_groups(nml):
     for group in OPTIONAL_GROUPS:
         del nml[group]

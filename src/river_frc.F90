@@ -19,7 +19,7 @@ module river_frc
   &x0,x1,y0,y1
   use pio_roms, only: use_pio, pio_gtype
   use param, only: lm, mm, mynode, ocean_grid_comm,&
-  &nt_passive, nt_cdr_oae, nt_cdr_dor
+  &nt_passive, nt_cdr_oae, nt_cdr_dor, salinity
   use tracers, only: iTandS
   use error_handling_mod, only: error_log
   use roms_mpi, only: exchange_xxx

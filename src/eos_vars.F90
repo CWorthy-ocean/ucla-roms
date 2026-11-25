@@ -12,14 +12,10 @@ module eos_vars
 !
 # ifndef NONLIN_EOS
   real(kind=8) Tcoef, T0
-#  ifdef SALINITY
-  real(kind=8) Scoef, S0
-#  endif
+  real(kind=8) Scoef, S0     ! used only with salinity (PARAM_SETTINGS)
 
   namelist /LIN_RHO_EOS_SETTINGS/ &
-#ifdef SALINITY
-  & Scoef, S0,
-#endif
+  & Scoef, S0,&
   &Tcoef, T0
 
 # else

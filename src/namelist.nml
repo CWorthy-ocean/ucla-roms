@@ -60,6 +60,9 @@ nt_passive = 0      ! Number of passive tracers; must be named passive_tracer1, 
 nt_cdr_oae = 0      ! Number of OAE (ALK-mimicking) passive CDR_LITE tracers
 nt_cdr_dor = 0      ! Number of DOR (DIC-mimicking) passive CDR_LITE tracers
 nt_bgc = 32          ! Number of BGC tracers
+salinity = .true.   ! Carry salinity; .false. for temperature-only cases (was the cpp key SALINITY)
+mpi_masking = .false. ! Choose NP_XI x NP_ETA at start-up from the land mask, without all-land tiles
+                      ! (was the cpp key MPI_MASKING); needs a PARALLEL_IO build and a joined grid file
 /
 
 &PIO_SETTINGS                                                       !pio_roms.F90
@@ -109,7 +112,7 @@ check_bulk_frc_units = .false. ! Check units of input vars if T (bulk forcing)
 interp_flux_frc = .true.       ! Interpolate flux forcing from coarser input grid if T
 ! Surface restoring (needs surf_frc_type = 'bulk'; each rate is in its own group
 ! under SURFACE RESTORING below, which must then be present):
-sflx_corr = .false.    ! Restore salinity toward sss if T (needs SALINITY)
+sflx_corr = .false.    ! Restore salinity toward sss if T (needs salinity = .true.)
 qcorrection = .false.  ! Restore temperature toward sst if T
 cflx_corr = .false.    ! Restore DIC and ALK toward sDIC and sALK if T (needs MARBL)
 /
@@ -682,7 +685,7 @@ fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost ta
 ! built; nhmg = .true. switches it on. WARNING: untested and unmaintained; may
 ! break features such as exact restarts. Its solver settings are read from the
 ! optional file nhmg_namelist (group &nhparam) in the run directory. Stops with
-! fs_mode = 'implicit' or MPI_MASKING. The cpp keys DIAGNOSTICS_NHMG and
+! fs_mode = 'implicit' or mpi_masking. The cpp keys DIAGNOSTICS_NHMG and
 ! NHMGDIAG always stop the run (not finished). See docs/model_settings/runtime_settings.md.
 !================================================================================
 &NHMG_SETTINGS                                              !nhmg_settings_mod.F90

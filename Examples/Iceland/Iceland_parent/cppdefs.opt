@@ -7,10 +7,6 @@
 ! Usage notes:
 #define NONLIN_EOS
 
-! Use salinity as a thermodynamic variable
-! Usage notes:
-#define SALINITY
-
 ! Use an equation of state that ensures that monotonically increasing density is equivalent to stable stratification
 ! Usage notes:
 #define SPLIT_EOS

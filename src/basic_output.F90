@@ -28,7 +28,7 @@ module basic_output
   &zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,&
   &w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
   use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
-  &max_name_size
+  &max_name_size, salinity
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
 #ifdef PARALLEL_IO
@@ -73,9 +73,7 @@ module basic_output
   character(len=12) :: module_name = "basic_output"
   real(kind=8),allocatable,dimension(:,:,:) :: akv_avg
   real(kind=8),allocatable,dimension(:,:,:) :: akt_avg
-#  ifdef SALINITY
   real(kind=8),allocatable,dimension(:,:,:) :: aks_avg
-#  endif
 #  ifdef LMD_KPP
   real(kind=8),allocatable,dimension(:,:) :: hbl_avg
 #  endif
@@ -88,28 +86,16 @@ module basic_output
   integer(kind=4), parameter, public :: &
   & indxU=5, indxV=6, indxO=7, indxW=8&
   &, indxR=9, indxT=10,&
-# ifdef SALINITY
-  &indxS=indxT+1, &
-# endif
+  &indxS=indxT+1, &          ! used only with salinity
   & indxTime=1, indxZ=2, indxUb=3, indxVb=4
 
   integer(kind=4), public :: &
-# ifdef SALINITY
-  & indxAks, &
-# endif
+  & indxAks = 0, &           ! set only with salinity
 # ifdef LMD_KPP
-#  ifdef SALINITY
   & indxHbls, &
-#  else
-  & indxHbls, &
-#  endif
+# endif
 # ifdef LMD_BKPP
   & indxHbbl, &
-# endif
-# else
-# ifdef LMD_BKPP
-  & indxHbbl, &
-# endif
 # endif
   & indxAkt, indxAkv
   !]
@@ -144,6 +130,7 @@ contains                  !]
 !     Read the "BASIC_OUTPUT_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=20) :: sr_name = "read_nml_basic_output"
+    integer(kind=4) :: ilast   ! the last index set so far
     character(len=512) :: msg = ""
 
     ! initialize indxAkv
@@ -151,22 +138,17 @@ contains                  !]
 
     indxAkv = indxT + NT
     indxAkt = indxAkv + 1
-# ifdef SALINITY
-    indxAks = indxAkt + 1
-# endif
+    ilast = indxAkt
+    if (salinity) then
+      indxAks = indxAkt + 1
+      ilast = indxAks
+    endif
 # ifdef LMD_KPP
-#  ifdef SALINITY
-    indxHbls = indxAks + 1
-#  else
-    indxHbls = indxAkt + 1
-#  endif
-# ifdef LMD_BKPP
-    indxHbbl = indxHbls + 1
+    indxHbls = ilast + 1
+    ilast = indxHbls
 # endif
-# else
 # ifdef LMD_BKPP
-    indxHbbl = indxAks + 1
-# endif
+    indxHbbl = ilast + 1
 # endif
 
     ! Read namelist
@@ -184,6 +166,12 @@ contains                  !]
       &)
     end if
     close(namelist_unit)
+
+    ! Without salinity there is no salt diffusivity to write
+    if (.not. salinity) then
+      wrt_Aks = .false.
+      wrt_avg_Aks = .false.
+    endif
 
   end subroutine read_nml_basic_output
 
@@ -276,11 +264,9 @@ contains                  !]
       if (wrt_avg_Akt) then
         allocate( akt_avg(GLOBAL_2D_ARRAY,0:nz) ); akt_avg=0._8
       endif
-# ifdef SALINITY
       if (wrt_avg_Aks) then
         allocate( aks_avg(GLOBAL_2D_ARRAY,0:nz) ); aks_avg=0._8
       endif
-# endif
 # ifdef LMD_KPP
       if (wrt_avg_Hbls) then
         allocate( hbl_avg(GLOBAL_2D_ARRAY) ); hbl_avg=0._8
@@ -337,11 +323,11 @@ contains                  !]
     vname(2,indxT)='potential temperature'
     vname(3,indxT)='Celsius'
 
-# ifdef SALINITY
-    vname(1,indxS)='salt'
-    vname(2,indxS)='salinity'
-    vname(3,indxS)='PSU'
-# endif
+    if (salinity) then
+      vname(1,indxS)='salt'
+      vname(2,indxS)='salinity'
+      vname(3,indxS)='PSU'
+    endif
 
     vname(1,indxAkv)='Akv'
     vname(2,indxAkv)='vertical viscosity coefficient'
@@ -350,11 +336,11 @@ contains                  !]
     vname(1,indxAkt)='Akt'
     vname(2,indxAkt)='vertical thermal conductivity coefficient'
     vname(3,indxAkt)='meter2 second-1'
-# ifdef SALINITY
-    vname(1,indxAks)='AKs'
-    vname(2,indxAks)='salinity vertical diffusion coefficient'
-    vname(3,indxAks)='meter2 second-1'
-# endif
+    if (salinity) then
+      vname(1,indxAks)='AKs'
+      vname(2,indxAks)='salinity vertical diffusion coefficient'
+      vname(3,indxAks)='meter2 second-1'
+    endif
 # ifdef LMD_KPP
     vname(1,indxHbls)='hbls'
     vname(2,indxHbls)='Thickness of KPP surface boundary layer'
@@ -529,10 +515,8 @@ contains                  !]
         if (wrt_Akv) call ncwrite(ncid,vname(1,indxAkv),Akv(i0:i1,j0:j1,:),start, .true.)
         pio_gtype = '3Dww'
         if (wrt_Akt) call ncwrite(ncid,vname(1,indxAkt),Akt(i0:i1,j0:j1,:,itemp),start, .true.)
-# ifdef SALINITY
         pio_gtype = '3Dww'
         if (wrt_Aks) call ncwrite(ncid,vname(1,indxAks),Akt(i0:i1,j0:j1,:,isalt),start, .true.)
-# endif
         start(3)=rec_his                                      ! back to 2D vars
 # ifdef LMD_KPP
         pio_gtype = '2Drw'
@@ -600,9 +584,7 @@ contains                  !]
         endif
         if (wrt_Akv) call ncwrite(ncid,vname(1,indxAkv),Akv(i0:i1,j0:j1,:),start)
         if (wrt_Akt) call ncwrite(ncid,vname(1,indxAkt),Akt(i0:i1,j0:j1,:,itemp),start)
-# ifdef SALINITY
         if (wrt_Aks) call ncwrite(ncid,vname(1,indxAks),Akt(i0:i1,j0:j1,:,isalt),start)
-# endif
         start(3)=rec_his                                      ! back to 2D vars
 # ifdef LMD_KPP
         if (wrt_Hbls) call ncwrite(ncid,vname(1,indxHbls),hbls(i0:i1,j0:j1),start)
@@ -723,10 +705,8 @@ contains                  !]
         if (wrt_avg_Akv) call ncwrite(ncid, vname(1,indxAkv), akv_avg(i0:i1,j0:j1,:), start,.true.)
         pio_gtype = '3Dww'
         if (wrt_avg_Akt) call ncwrite(ncid, vname(1,indxAkt), akt_avg(i0:i1,j0:j1,:), start,.true.)
-#  ifdef SALINITY
         pio_gtype = '3Dww'
         if (wrt_avg_Aks) call ncwrite(ncid, vname(1,indxAks), aks_avg(i0:i1,j0:j1,:), start,.true.)
-#  endif
         start(3)=rec_avg                                                ! back to 2D vars
 #  ifdef LMD_KPP
         pio_gtype = '2Drw'
@@ -782,9 +762,7 @@ contains                  !]
         if (wrt_avg_W)   call ncwrite(ncid, vname(1,indxW),   wvl_avg(i0:i1,j0:j1,1:nz), start)
         if (wrt_avg_Akv) call ncwrite(ncid, vname(1,indxAkv), akv_avg(i0:i1,j0:j1,:), start)
         if (wrt_avg_Akt) call ncwrite(ncid, vname(1,indxAkt), akt_avg(i0:i1,j0:j1,:), start)
-#  ifdef SALINITY
         if (wrt_avg_Aks) call ncwrite(ncid, vname(1,indxAks), aks_avg(i0:i1,j0:j1,:), start)
-#  endif
         start(3)=rec_avg                                                ! back to 2D vars
 #  ifdef LMD_KPP
         if (wrt_avg_Hbls) call ncwrite(ncid, vname(1,indxHbls),  hbl_avg(i0:i1,j0:j1), start)
@@ -1323,7 +1301,6 @@ contains                  !]
       ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
       ierr = nf90_put_att(ncid,varid,'units',vname(3,indxAkt))
     endif
-# ifdef SALINITY
     if ( (wrt_Aks .and. .not. avg) .or. (wrt_avg_Aks .and. avg) ) then! vertical diffusion coefficient for salinity.
       if (.not. avg) text_lname=vname(2,indxAks)
       if (      avg) text_lname='averaged '//vname(2,indxAks)
@@ -1332,7 +1309,6 @@ contains                  !]
       ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
       ierr = nf90_put_att(ncid,varid,'units',vname(3,indxAks))
     endif
-# endif /* SALINITY */
 # ifdef LMD_KPP
     if ( (wrt_Hbls .and. .not. avg) .or. (wrt_avg_Hbls .and. avg) ) then                                   ! depth of
       if (.not. avg) text_lname=vname(2,indxHbls)
@@ -1581,9 +1557,7 @@ contains                  !]
       endif
       if (wrt_avg_Akv) akv_avg(i0:i1,j0:j1,:) = akv_avg(i0:i1,j0:j1,:)*(1-coef) + akv(i0:i1,j0:j1,:)*coef
       if (wrt_avg_Akt) akt_avg(i0:i1,j0:j1,:) = akt_avg(i0:i1,j0:j1,:)*(1-coef) + akt(i0:i1,j0:j1,:,itemp)*coef
-#  ifdef SALINITY
       if (wrt_avg_Aks) aks_avg(i0:i1,j0:j1,:) = aks_avg(i0:i1,j0:j1,:)*(1-coef) + akt(i0:i1,j0:j1,:,isalt)*coef
-#  endif
 #  ifdef LMD_KPP
       if (wrt_avg_Hbls) hbl_avg(i0:i1,j0:j1)  =  hbl_avg(i0:i1,j0:j1)*(1-coef) + hbls(i0:i1,j0:j1)*coef
 #  endif
@@ -1661,17 +1635,16 @@ contains                  !]
       &, 'W',      wrt_W,    vname(2,indxW)&
 
       &, 'Akv',    wrt_Akv,  vname(2,indxAkv)&
-      &, 'Akt',    wrt_Akt,  vname(2,indxAkt)&
-# ifdef SALINITY
-      &, 'Aks',    wrt_Aks,  vname(2,indxAks)&
-# endif
+      &, 'Akt',    wrt_Akt,  vname(2,indxAkt)
+      ! one line per field from here on (Aks only with salinity)
+      if (salinity) write(*,'(11x,A,T30,L1,T36,A)') 'Aks', wrt_Aks, vname(2,indxAks)
 # ifdef LMD_KPP
-      &, 'hbls',   wrt_Hbls, vname(2,indxHbls)&
+      write(*,'(11x,A,T30,L1,T36,A)') 'hbls', wrt_Hbls, vname(2,indxHbls)
 # endif
 # ifdef LMD_BKPP
-      &, 'hbbl',   wrt_Hbbl, vname(2,indxHbbl)&
+      write(*,'(11x,A,T30,L1,T36,A)') 'hbbl', wrt_Hbbl, vname(2,indxHbbl)
 # endif
-      &, ''
+      write(*,'(11x,A)') ''
       do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
       write(*,'(11x,A,I2,A,T30,L1,T36,A)') 't(',&
       &itrc, ')', wrt_t(itrc), t_vname(itrc)
@@ -1713,17 +1686,16 @@ contains                  !]
         &, 'W',      wrt_avg_W,    vname(2,indxW)&
 
         &, 'Akv',    wrt_avg_Akv,  vname(2,indxAkv)&
-        &, 'Akt',    wrt_avg_Akt,  vname(2,indxAkt)&
-# ifdef SALINITY
-        &, 'Aks',    wrt_avg_Aks,  vname(2,indxAks)&
-# endif
+        &, 'Akt',    wrt_avg_Akt,  vname(2,indxAkt)
+        ! one line per field from here on (Aks only with salinity)
+        if (salinity) write(*,'(11x,A,T30,L1,T36,A)') 'Aks', wrt_avg_Aks, vname(2,indxAks)
 # ifdef LMD_KPP
-        &, 'hbls',   wrt_avg_Hbls, vname(2,indxHbls)&
+        write(*,'(11x,A,T30,L1,T36,A)') 'hbls', wrt_avg_Hbls, vname(2,indxHbls)
 # endif
 # ifdef LMD_BKPP
-        &, 'hbbl',   wrt_avg_Hbbl, vname(2,indxHbbl)&
+        write(*,'(11x,A,T30,L1,T36,A)') 'hbbl', wrt_avg_Hbbl, vname(2,indxHbbl)
 # endif
-        &,''
+        write(*,'(11x,A)') ''
         do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
         write(*,'(11x,A,I2,A,T30,L1,T36,A)') 't(',&
         &itrc, ')', wrt_t_avg(itrc), t_vname(itrc)

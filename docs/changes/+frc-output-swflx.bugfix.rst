@@ -1,0 +1,1 @@
+With flux forcing (``surf_frc_type = 'flux'``), the forcing output (``wrt_frc``) now writes the surface freshwater flux ``swflx`` in m/s, as with bulk forcing. Before, it was always zero, with units ``psu m s-1``. Temperature-only flux-forced runs no longer write past the end of the surface tracer flux array.
