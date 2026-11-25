@@ -2,7 +2,7 @@
 
 With MARBL, `marbl_timestep` makes the biogeochemical reactions run only every `k = marbl_timestep / dt` steps, but the 32 MARBL tracers are still advected, mixed and forced every step, and on the CPU that transport costs more than the rest of the step. Setting `bgc_physics_subcycle = .true.` in the namelist group `BGC_SETTINGS` transports every tracer beyond temperature and salinity **once per window of `bgc_physics_timestep = k dt`**, with the transports of the window accumulated every step, and runs MARBL at the end of the window as before. By default (`bgc_physics_timestep = 0`) the window is MARBL's interval `marbl_timestep`; a shorter window must divide it (for example `bgc_physics_timestep = 2 dt` with `marbl_timestep = 4 dt`), and MARBL still runs every `marbl_timestep`, at the end of every second window in that example. Temperature, salinity, momentum and the free surface are not affected and still step every `dt`.
 
-With `bgc_physics_subcycle = .false.` (the default, also when the key or, without MARBL, the whole group is absent from the namelist) the model is bit-for-bit the same as without this feature.
+With `bgc_physics_subcycle = .false.` (the default, also when the key or, without MARBL (`use_marbl = .false.`), the whole group is absent from the namelist) the model is bit-for-bit the same as without this feature.
 
 ## 1. When to use it
 
@@ -13,12 +13,12 @@ With `bgc_physics_subcycle = .false.` (the default, also when the key or, withou
 
 ## 2. Settings
 
-Both keys are in the namelist group `BGC_SETTINGS`. With MARBL that group is required; without it it is read only when there are tracers beyond temperature and salinity (passive or CDR_LITE tracers), and may be absent (subcycling off).
+Both keys are in the namelist group `BGC_SETTINGS`. With `use_marbl = .true.` that group is required; without it it is read only when there are tracers beyond temperature and salinity (passive or CDR_LITE tracers), and may be absent (subcycling off).
 
 | Setting | Default | Description |
 |--------|---------|-------------|
 | `bgc_physics_subcycle` | `.false.` | Subcycle the tracers beyond temperature and salinity |
-| `bgc_physics_timestep` | `0` | How often the tracers are transported and mixed (s), `k dt`: a whole multiple of `dt`; with MARBL also a divisor of `marbl_timestep` (as MARBL rounds it), so that every MARBL step ends a window. 0 means `marbl_timestep`; without MARBL a value > 0 is required |
+| `bgc_physics_timestep` | `0` | How often the tracers are transported and mixed (s), `k dt`: a whole multiple of `dt`; with MARBL also a divisor of `marbl_timestep` (as MARBL rounds it), so that every MARBL step ends a window. 0 means `marbl_timestep`; without MARBL (`use_marbl = .false.`) a value > 0 is required |
 
 `marbl_timestep` (`MARBL_BIOGEOCHEMISTRY_SETTINGS`) stays how often MARBL's reactions run, so `dt <= bgc_physics_timestep <= marbl_timestep`. ROMS never rounds `bgc_physics_timestep`: a value shorter than `dt`, not a whole multiple of `dt` (relative tolerance 1e-6), or, with MARBL, not dividing `marbl_timestep` stops ROMS at startup with a message that names the values and the nearest valid ones. For example, with `dt = 900 s` and `marbl_timestep = 3600 s` the valid values are 0, 900, 1800 and 3600 s.
 

@@ -5,6 +5,11 @@
  ------------------------------------------------------------------ */
 
 #include "retired_cpp_keys.h"
+/* MARBL: the build option make MARBL=yes passes ROMS_BUILD_MARBL; a
+   cppdefs.opt that defines MARBL itself was stopped by retired_cpp_keys.h */
+#ifdef ROMS_BUILD_MARBL
+# define MARBL
+#endif
 
 /* MASKING is required: the land masks are used outside "#ifdef MASKING"
  in much of the code, so a build without it would fail with unrelated

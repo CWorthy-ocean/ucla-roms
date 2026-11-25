@@ -72,7 +72,7 @@ module extract_data
   use tracers, only: t, t_vname, t_lname, t_units, iTandS  ! need to get names of tracers
   use ocean_vars, only: zeta, ubar, vbar, u, v, hz, hz_u
   use scalars, only: dt, knew, nnew, time, tdays
-  use param, only: isalt, nt, itemp, isw_corn, jsw_corn,&
+  use param, only: isalt, nt, itemp, isw_corn, jsw_corn, use_marbl,&
   &nt_passive, mynode, lm, mm, nz, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
   &max_extract_chd, max_name_size, salinity
   use scoord, only: theta_s, theta_b, hc
@@ -700,14 +700,12 @@ contains
           &context=module_name//"/"//sr_name,&
           &info="calc_pflx is not set for vp extraction")
         endif
-#ifndef MARBL
-        if (obj(iobj)%bgc) then
+        if (obj(iobj)%bgc .and. .not. use_marbl) then
           call error_log%raise_global(&
           &context=module_name//"/"//sr_name,&
-          &info="MARBL cpp key is not "//&
-          &"set for BGC extraction")
+          &info="BGC extraction needs MARBL: use_marbl = .true."//&
+          &" (MARBL_BIOGEOCHEMISTRY_SETTINGS), in a build made with make MARBL=yes")
         endif
-#endif
         if (obj(iobj)%up.or.obj(iobj)%vp) extend_up = .true.
 
 !      endif

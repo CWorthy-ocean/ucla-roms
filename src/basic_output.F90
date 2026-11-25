@@ -31,7 +31,7 @@ module basic_output
   use ocean_vars, only:&
   &zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,&
   &w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
-  use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor,&
+  use param, only: Lm, Mm, isalt, itemp, mynode, nt_passive, ocean_grid_comm, nt_cdr_oae, nt_cdr_dor, use_marbl,&
   &max_name_size, salinity
   use error_handling_mod, only: error_log
   use pio_roms, only: pio_gtype
@@ -980,7 +980,7 @@ contains                  !]
     call ncwrite(ncid,'riv_vmask',    riv_vmask(i0:i1, 1:j1),start,.true.)
 
 #ifdef MARBL
-    call marbldrv_write_ss_vars_to_rst(ncid,rec_rst)
+    if (use_marbl) call marbldrv_write_ss_vars_to_rst(ncid,rec_rst)
 #endif
 
     if (mynode == 0) then
@@ -1071,7 +1071,7 @@ contains                  !]
     call ncwrite(ncid,'riv_vmask',    riv_vmask(i0:i1, 1:j1),start)
 
 #ifdef MARBL
-    call marbldrv_write_ss_vars_to_rst(ncid,rec_rst)
+    if (use_marbl) call marbldrv_write_ss_vars_to_rst(ncid,rec_rst)
 #endif
 
     ierr=nf90_close(ncid)
@@ -1392,7 +1392,7 @@ contains                  !]
     ierr = nf90_put_att(ncid,varid,'long_name',vname(2,indxVb))
     ierr = nf90_put_att(ncid,varid,'units',vname(3,indxVb))
 #ifdef MARBL
-    call marbldrv_create_ss_vars_in_rst(ncid)
+    if (use_marbl) call marbldrv_create_ss_vars_in_rst(ncid)
 #endif
     varid = nccreate(ncid,vname(1,indxU),(/dn_xu,dn_yr,dn_zr,dn_tm/),&
     &(/ds_xu,ds_yr,nz,0/),nf90_double)

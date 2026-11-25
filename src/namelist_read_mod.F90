@@ -22,10 +22,8 @@ contains
   subroutine read_namelists
 
     use error_handling_mod, only: error_log
-    use param, only: read_nml_param
-#ifndef MARBL
+    use param, only: read_nml_param, use_marbl
     use param, only: nt_passive, nt_bgc, nt_cdr_oae, nt_cdr_dor
-#endif
     use dimensions, only: read_nml_grid           !GRID_SETTINGS
     use bgc_shared_vars, only: read_nml_bgc       !BGC_SETTINGS
     ! CDR_OUTPUT and CDR_GAS_EXCH_OUTPUT settings are read whatever their cpp
@@ -56,9 +54,7 @@ contains
 #endif
     use roms_read_write, only: read_nml_roms_read_write  ! SIMULATION_NAME_SETTINGS,
                                                          ! INITIAL_CONDITIONS
-#ifdef MARBL
-    use marbl_driver, only: read_nml_marbl         !MARBL_BIOGEOCHEMISTRY_SETTINGS
-#endif
+    use marbl_driver, only: read_nml_marbl         !MARBL_BIOGEOCHEMISTRY_SETTINGS (use_marbl)
     use scalars, only: read_nml_scalars !GAMMA2_SETTINGS, TRACER_DIFF2, BOTTOM_DRAG_SETTINGS,
     !                                    VERTICAL_MIXING_SETTINGS, LATERAL_VISC_SETTINGS,
     !                                    TIME_STEPPING, UBIND_SETTINGS, V_SPONGE_SETTINGS,
@@ -81,16 +77,17 @@ contains
 #endif
     implicit none
     call read_nml_param
+    call read_nml_marbl      ! use_marbl, which the readers and checks below use
     call read_nml_periodic
     call read_nml_open_boundary
     call read_nml_grid
-#ifdef MARBL
-    call read_nml_bgc
-#else
-    ! Without MARBL, only runs with tracers beyond T and S read it (BGC
-    ! subcycling of those tracers), and there it is optional
-    if (nt_passive + nt_bgc + nt_cdr_oae + nt_cdr_dor > 0) call read_nml_bgc
-#endif
+    if (use_marbl) then
+      call read_nml_bgc
+    else if (nt_passive + nt_bgc + nt_cdr_oae + nt_cdr_dor > 0) then
+      ! Without MARBL, only runs with tracers beyond T and S read it (BGC
+      ! subcycling of those tracers), and there it is optional
+      call read_nml_bgc
+    end if
     call read_nml_cdr_frc
     call read_nml_diagnostics
     call read_nml_basic_output
@@ -114,9 +111,6 @@ contains
     call read_nml_lin_rho_eos
 #endif
     call read_nml_roms_read_write
-#ifdef MARBL
-    call read_nml_marbl
-#endif
     call read_nml_scalars
    call read_nml_scoord
    call read_nml_tracers
@@ -137,7 +131,7 @@ contains
 
 #ifdef MARBL
    ! MARBL's diagnostics are kept only for an output that uses them
-   marbl_diag_on = wrt_bgc_dia_his .or. wrt_bgc_dia_avg .or. do_cdr_output
+   marbl_diag_on = use_marbl .and. (wrt_bgc_dia_his .or. wrt_bgc_dia_avg .or. do_cdr_output)
 #endif
 
    ! Stop on any namelist error before the values are used (a path cut off

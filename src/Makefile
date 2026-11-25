@@ -68,6 +68,8 @@ $(SBIN): $(OBJS) $(NHMG_LIB)
 # so each file is compiled from inside $(NHMG_BUILD). Every object waits for
 # that directory (it is on the include path); the NHMG users wait for the library.
 $(OBJS): | $(NHMG_BUILD)
+# Changing a build option (make MARBL=yes ...) recompiles everything
+$(OBJS): build_options.txt
 ifneq ($(strip $(NHMG_USERS)),)
 $(NHMG_USERS): | $(NHMG_LIB)
 endif
@@ -174,7 +176,7 @@ allclean: clean
 
 .PHONY: clobber
 clobber: clean
-	/bin/rm -f check_switches1$(UPF77_ext) check_srcs$(UPF77_ext)
+	/bin/rm -f check_switches1$(UPF77_ext) check_srcs$(UPF77_ext) build_options.txt
 	/bin/rm -f $(SBIN) $(TOOLS) nsub
 	/bin/rm -f core core.*
 	/bin/rm -f *_genmod.mod *_genmod$(PPF90_ext)
@@ -198,6 +200,9 @@ help:
 	@echo "   strict  : compile with -fp-model strict (intel only)"
 	@echo "   vtune   : compile with flags for profiling with vtune (intel only)"
 	@echo "   grof    : compile with flags for profiling with grof (intel only)"
+	@echo "MARBL (build option):"
+	@echo "    no     : default, build without the MARBL biogeochemistry library"
+	@echo "    yes    : compile and link MARBL (needs MARBL_ROOT); use_marbl switches it on"
 	@echo "KEEP_PPSRC:"
 	@echo "    true   : keep pre-processed source code after processing"
 	@echo "    false  : delete pre-processed source code after processing"

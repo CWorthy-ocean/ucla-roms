@@ -23,7 +23,7 @@ module cdr_frc
   use roms_mpi, only: exchange_xxx
   use dimensions, only: nx, ny, nz
   use ocean_vars, only: hz, z_r0, hz0
-  use param, only: mynode, lm, mm, ocean_grid_comm, itemp, max_name_size
+  use param, only: mynode, lm, mm, ocean_grid_comm, itemp, max_name_size, use_marbl
   use tracers, only: iTandS, t_vname
   use nc_read_write, only: ncread
   use pio_roms, only: pio_gtype
@@ -317,16 +317,14 @@ contains
     call error_log%abort_check()
 #endif
 
-#ifndef MARBL
-    if (cdr_forcing_3d) then
+    if (cdr_forcing_3d .and. .not. use_marbl) then
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
-      &info="cdr_forcing_3d forces MARBL's ALK and DIC and needs MARBL; "//&
+      &info="cdr_forcing_3d forces MARBL's ALK and DIC and needs MARBL (use_marbl = .true.); "//&
       &"without MARBL use cdr_forcing_parameterized or "//&
       &"cdr_forcing_depth_profiles")
     endif
     call error_log%abort_check()
-#endif
 
     if (cdr_forcing_3d) then
       call init_cdr_frc_3d
@@ -482,17 +480,19 @@ contains
         &info=error_info)
         return
       endif
+      if (use_marbl) then
 #ifdef MARBL
-      cdr_inds(1) = iALK
-      cdr_inds(2) = iDIC
-      if (mynode == 0) write(*,'(7x,A)') 'cdr_frc: no '//trim(cdr_trc_name)//&
-      &' in the depth-profile file; its two columns are applied to ALK and DIC'
-#else
-      call error_log%raise_global(&
-      &context=module_name//"/"//sr_name,&
-      &info="CDR forcing file has no "//trim(cdr_trc_name)//", so its two "//&
-      &"tracer columns are taken as MARBL's ALK and DIC, which need MARBL.")
+        cdr_inds(1) = iALK
+        cdr_inds(2) = iDIC
+        if (mynode == 0) write(*,'(7x,A)') 'cdr_frc: no '//trim(cdr_trc_name)//&
+        &' in the depth-profile file; its two columns are applied to ALK and DIC'
 #endif
+      else
+        call error_log%raise_global(&
+        &context=module_name//"/"//sr_name,&
+        &info="CDR forcing file has no "//trim(cdr_trc_name)//", so its two "//&
+        &"tracer columns are taken as MARBL's ALK and DIC, which need MARBL (use_marbl = .true.).")
+      endif
       return
     endif
 

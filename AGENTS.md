@@ -44,9 +44,10 @@ defined.
 - Never edit `src/` to set up a simulation. Per-case Makefiles rsync `src/`
   into a local `Compile/` and overlay the case's own `*.h`, `*.F`, `*.F90`,
   and `*.opt` files.
-- `Makedefs.inc` greps the case's `cppdefs.opt` for `MARBL` and
-  `PARALLEL_IO` to choose link dependencies, so the file must exist before
-  `make`.
+- MARBL is a build option, `make MARBL=yes` (default `no`), not a cpp key;
+  `use_marbl` in `MARBL_BIOGEOCHEMISTRY_SETTINGS` switches it on at run time.
+  `Makedefs.inc` greps the case's `cppdefs.opt` for `PARALLEL_IO` to choose
+  link dependencies, so the file must exist before `make`.
 - Every build compiles the NHMG library from `NHMG/src` into `Compile/nhmg/`
   (rules in `src/Makefile`) and links it; the namelist key `nhmg`
   (`NHMG_SETTINGS`) switches the solver on at run time.

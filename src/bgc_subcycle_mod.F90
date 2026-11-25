@@ -93,6 +93,7 @@ contains
 #ifdef MARBL
     use marbl_driver, only: marbl_timestep_ratio
 #endif
+    use param, only: use_marbl
     use diagnostics, only: diag_trc
     use upscale_output, only: do_upscale
     use sponge_tune, only: apply_sponge_tune
@@ -106,25 +107,25 @@ contains
     nb = nt - iTandS
     if (nb < 1) call error_log%raise_global(context=module_name//"/"//sr_name,&
     &info="bgc_physics_subcycle: there are no tracers beyond temperature/salinity")
+    if (use_marbl) then
 #ifdef MARBL
-    ! k = bgc_physics_timestep/dt (0: marbl_timestep as MARBL rounds it, i.e.
-    ! marbl_timestep_ratio). MARBL keeps its own interval and runs at the end
-    ! of a window (bgcsub_window_tile), so every MARBL step must end one: k
-    ! must divide marbl_timestep/dt.
-    if (bgc_physics_timestep == 0._8) then
-      bgcsub_k = marbl_timestep_ratio
-    else
-      call bgcsub_window_steps(marbl_timestep_ratio)
-    end if
-#else
-    if (bgc_physics_timestep == 0._8) then
+      ! k = bgc_physics_timestep/dt (0: marbl_timestep as MARBL rounds it, i.e.
+      ! marbl_timestep_ratio). MARBL keeps its own interval and runs at the end
+      ! of a window (bgcsub_window_tile), so every MARBL step must end one: k
+      ! must divide marbl_timestep/dt.
+      if (bgc_physics_timestep == 0._8) then
+        bgcsub_k = marbl_timestep_ratio
+      else
+        call bgcsub_window_steps(marbl_timestep_ratio)
+      end if
+#endif
+    else if (bgc_physics_timestep == 0._8) then
       call error_log%raise_global(context=module_name//"/"//sr_name,&
       &info="bgc_physics_subcycle without MARBL needs bgc_physics_timestep > 0"//&
       &" (the window length in s, a whole multiple of dt = "//secs(dt)//" s)")
     else
       call bgcsub_window_steps(0)
     end if
-#endif
     ! Restarts only on window boundaries (the window accumulators are not
     ! in the file). Windows end on steps iic with modulo(iic, k) == 0 (every
     ! MARBL step among them); restart records are written every output_period_rst
@@ -187,8 +188,8 @@ contains
       write(*,'(1x,A,I0,A,L1,A,I0)') '  k = ', bgcsub_k, ', positivity limiter ',&
       &bgc_subcycle_pos, ', diagnostics ', bgc_subcycle_diag
 #ifdef MARBL
-      write(*,'(1x,A,I0,A)') '  MARBL at the end of every ', marbl_timestep_ratio/bgcsub_k,&
-      &' window(s)'
+      if (use_marbl) write(*,'(1x,A,I0,A)') '  MARBL at the end of every ',&
+      &marbl_timestep_ratio/bgcsub_k, ' window(s)'
 #endif
       if (modulo(ntstart-1, bgcsub_k) /= 0) write(*,'(1x,A)')&
       &'  the run starts inside a window: the first window is shorter'
@@ -398,7 +399,7 @@ contains
 
 ! ----------------------------------------------------------------------
   subroutine bgcsub_window_tile(istr, iend, jstr, jend, tstep)
-    use param, only: nt, mynode, ocean_grid_comm, np_xi, np_eta, Lm, Mm
+    use param, only: nt, mynode, ocean_grid_comm, np_xi, np_eta, Lm, Mm, use_marbl
     use dimensions, only: nz, inode, jnode, nx, ny
     use scalars, only: dt, nnew, nstp, iic
     use tracers, only: t, t_vname
@@ -896,11 +897,13 @@ contains
     end do
     call reg_toc(rg_bgcsub_bc)
 #ifdef MARBL
-    if (is_marbl_step(tstep)) then
-      call marbldrv_impose_constant_fe(istrR,iendR,jstrR,jendR,t,nnew)
-      call reg_tic(rg_marbl)
-      call marbldrv_column_physics(istr,iend,jstr,jend,t)
-      call reg_toc(rg_marbl)
+    if (use_marbl) then
+      if (is_marbl_step(tstep)) then
+        call marbldrv_impose_constant_fe(istrR,iendR,jstrR,jendR,t,nnew)
+        call reg_tic(rg_marbl)
+        call marbldrv_column_physics(istr,iend,jstr,jend,t)
+        call reg_toc(rg_marbl)
+      end if
     end if
 #endif
     call reg_tic(rg_bgcsub_bc)

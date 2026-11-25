@@ -6,9 +6,9 @@ module cdr_gas_exch_output
 #include "cppdefs.opt"
 
 #ifdef MARBL
-  use namelist_open_mod, only: open_namelist_file
+  use namelist_open_mod, only: open_namelist_file, check_nml_needs_marbl
   use tracers, only: t_vname
-  use param, only: itemp, isalt, nt, max_name_size
+  use param, only: itemp, isalt, nt, max_name_size, use_marbl
   use marbl_driver, only: iALK_alt, iDIC_alt
   use bgc_shared_vars, only: t, mynode, lm, mm
   use dimensions, only: i0, i1, j0, j1, nz, eta_rho, xi_rho
@@ -89,6 +89,9 @@ contains
       &'could not read CDR_GAS_EXCH_OUTPUT_SETTINGS section of namelist file: '//trim(msg))
     end if
     close(namelist_unit)
+    call check_nml_needs_marbl('CDR_GAS_EXCH_OUTPUT_SETTINGS', 'do_cdr_gas_exch_output',&
+    &do_cdr_gas_exch_output, use_marbl, module_name//'/'//sr_name)
+    if (.not. use_marbl) do_cdr_gas_exch_output = .false.
   end subroutine read_cdr_gas_exch_output_nml
 
   subroutine add_cdr_gas_output_variable(list, name, dimnames, dims,&
@@ -516,7 +519,8 @@ contains
     ! Its keys and types are those of the group with the keys, read into
     ! local variables (the module's keep their defaults).
     use namelist_open_mod, only: open_namelist_file, gated_nml_found,&
-    &check_nml_cpp_switch
+    &check_nml_needs_marbl
+    use param, only: use_marbl
     implicit none
     real(kind=8)    :: output_period_cdr_gas
     integer(kind=4) :: nrpf_cdr_gas
@@ -526,12 +530,7 @@ contains
     integer(kind=4) :: namelist_unit, ios
     character(len=28) :: sr_name = "read_cdr_gas_exch_output_nml"
     character(len=512) :: msg
-    character(len=40) :: missing
 
-    missing = ''
-#ifndef MARBL
-    missing = trim(missing)//' MARBL'
-#endif
     do_cdr_gas_exch_output = .false.
     msg = ''
     call open_namelist_file(namelist_unit)
@@ -540,19 +539,17 @@ contains
     close(namelist_unit)
     if (gated_nml_found(ios, msg, 'CDR_GAS_EXCH_OUTPUT_SETTINGS',&
     &trim(module_name)//'/'//sr_name)) then
-      call check_nml_cpp_switch('CDR_GAS_EXCH_OUTPUT_SETTINGS',&
-      &'do_cdr_gas_exch_output', do_cdr_gas_exch_output, .false.,&
-      &'MARBL', trim(module_name)//'/'//sr_name, missing)
+      call check_nml_needs_marbl('CDR_GAS_EXCH_OUTPUT_SETTINGS',&
+      &'do_cdr_gas_exch_output', do_cdr_gas_exch_output, use_marbl,&
+      &trim(module_name)//'/'//sr_name)
     end if
   end subroutine read_cdr_gas_exch_output_nml
   subroutine init_cdr_gas_exch_output
     implicit none
     character(len=25) :: sr_name = "init_cdr_gas_exch_output"
-#ifndef MARBL
     call error_log%raise_global(&
    &  context=module_name//'/'//sr_name,&
    &  info='cdr_gas_exch_output must have MARBL enabled.')
-#endif
   end subroutine init_cdr_gas_exch_output
   subroutine wrt_cdr_gas
   end subroutine wrt_cdr_gas

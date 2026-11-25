@@ -8,7 +8,7 @@ module surf_flux
 #include "cppdefs.opt"
   use namelist_open_mod, only: open_namelist_file
   use param, only: max_name_size
-  use param, only: mynode, lm, mm, ocean_grid_comm, nt, cdr_lite_on, salinity
+  use param, only: mynode, lm, mm, ocean_grid_comm, nt, cdr_lite_on, salinity, use_marbl
   use dimensions, only: i0, i1, j0, j1, eta_rho, eta_v, xi_rho, xi_u&
   &, ds_xr, ds_yr, ds_xu, ds_yv
   use roms_read_write, only:&
@@ -254,9 +254,8 @@ subroutine check_restoring_switches ![
     if (cflx_corr)   call raise_switch('cflx_corr',   "surf_frc_type = 'bulk'")
   endif
   if (sflx_corr .and. .not. salinity) call raise_switch('sflx_corr', 'salinity = .true. (PARAM_SETTINGS)')
-#ifndef MARBL
-  if (cflx_corr)   call raise_switch('cflx_corr',   'the cpp key MARBL')
-#endif
+  if (cflx_corr .and. .not. use_marbl) call raise_switch('cflx_corr', &
+  &'MARBL (use_marbl = .true. in MARBL_BIOGEOCHEMISTRY_SETTINGS, in a build made with make MARBL=yes)')
 
 contains
 

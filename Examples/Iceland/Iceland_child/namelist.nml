@@ -251,7 +251,7 @@ trc2zsc = 1, 2        ! Indices of tracers to include
 !================================================================================
 !                              BIOGEOCHEMISTRY (BGC)
 !================================================================================
-! Requires the MARBL cpp key
+! For MARBL (use_marbl = .true., in a build made with make MARBL=yes)
 !================================================================================
 &BGC_SETTINGS                                                !bgc_shared_vars.opt
 !------------
@@ -277,6 +277,7 @@ nrpf_bgc_avg_dia = 10           ! Number of time records per BGC diagnostics fil
 /
 
 &MARBL_BIOGEOCHEMISTRY_SETTINGS                                  !marbl_driver.F
+use_marbl = .true.               ! Run MARBL (the build needs make MARBL=yes); nt_bgc must be its tracer count
 !------------------------------
 ! Previously set in `roms.in`
 !------------------------------
@@ -339,7 +340,7 @@ wrt_gas_exchange = .false.           ! Write FG_CDR_*_DIC: air-sea CO2 flux into
 &CDR_GAS_EXCH_OUTPUT_SETTINGS                       !cdr_gas_exch_output.F90
 !----------------------------
 ! Output for ddic_dco2 (beta) and ddic_dalk (eta)
-! Requires MARBL cppkey
+! Requires MARBL (use_marbl = .true.)
 ! The files carry ddic_dco2_time / ddic_dalk_time (days since the reference
 ! date; averaged records are stamped at the window midpoint), so they can be
 ! listed in `frcfiles` of a CDR_LITE run with cdr_online_carbonate_sensitivity

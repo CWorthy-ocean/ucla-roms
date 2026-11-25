@@ -36,5 +36,6 @@ ROMS has no central executable: each configuration is compiled in its own direct
 | `BUILD_MODE` | `regular` (optimized), `debug` (debugging symbols; with gfortran also runtime checks), `test` (`-O0`, as used by the test suite), `strict` (Intel only: strict floating point) | `regular` |
 | `TARGET_FLAGS` | CPU target flags. On x86-64 the default targets AVX2 (`-march=x86-64-v3` for gfortran, `-march=core-avx2` for Intel); set e.g. `TARGET_FLAGS=-march=native` to build for the machine you run on, or `TARGET_FLAGS=` for generic code. Not used with `BUILD_MODE=debug` or `test` | AVX2 on x86-64 |
 | `USER_FFLAGS`, `USER_LDFLAGS` | Extra compiler and linker flags, added to the defaults | empty |
+| `MARBL` | `yes` compiles and links the MARBL biogeochemistry library (needs `MARBL_ROOT`); a run then switches it on with `use_marbl = .true.` in `MARBL_BIOGEOCHEMISTRY_SETTINGS`. `no` builds without it. Changing it recompiles everything | `no` |
 
 Use the same `COMPILER` for the tools in `Tools-Roms` and for ROMS. If `make` stops with `make failed to auto-detect a suitable MPI wrapper for COMPILER=gnu`, your environment's MPI wrapper uses a different compiler: on systems with Intel compilers, use `make COMPILER=intel`. After changing any of these options, rebuild from scratch with `make compile_clean && make`.
