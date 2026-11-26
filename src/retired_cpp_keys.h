@@ -253,8 +253,11 @@
 # error "CPP key SALINITY was removed: salinity is now salinity = .true. (the default) in the namelist group PARAM_SETTINGS, and a temperature-only case sets salinity = .false.; remove SALINITY from cppdefs.opt, and replace any #ifdef SALINITY in the case's ana_*.h files by if (salinity)"
 #endif
 #ifdef MPI_MASKING
-# error "CPP key MPI_MASKING was removed: the tiling from the land mask is now mpi_masking = .true. in the namelist group PARAM_SETTINGS (needs PARALLEL_IO); remove MPI_MASKING from cppdefs.opt"
+# error "CPP key MPI_MASKING was removed: the tiling from the land mask is now mpi_masking = .true. in the namelist group PARAM_SETTINGS (needs parallel_io = .true., a make PIO=yes build); remove MPI_MASKING from cppdefs.opt"
 #endif
 #ifdef MARBL
 # error "CPP key MARBL was removed: build with make MARBL=yes, and set use_marbl = .true. in the namelist group MARBL_BIOGEOCHEMISTRY_SETTINGS; remove MARBL from cppdefs.opt"
+#endif
+#ifdef PARALLEL_IO
+# error "CPP key PARALLEL_IO was removed: build with make PIO=yes (the namelist key parallel_io in PIO_SETTINGS is then .true., its default); remove PARALLEL_IO from cppdefs.opt"
 #endif

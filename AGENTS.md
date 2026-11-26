@@ -24,8 +24,8 @@ ncjoin roms_his.*.nc                         # join per-rank output
 
 Builds fail without `mpc` on `PATH`. You also need `MPIHOME` and `NETCDFHOME`
 (plus `NETCDFFHOME` if netcdf-fortran has its own prefix), `MARBL_ROOT` when
-`MARBL` is defined, and `PIO_ROOT` and `PNETCDFHOME` when `PARALLEL_IO` is
-defined.
+building with `make MARBL=yes`, and `PIO_ROOT` and `PNETCDFHOME` when
+building with `make PIO=yes`.
 
 - Conda (Linux, containers, small machines): create and activate the
   environment described in `docs/installation/dependencies.md`, then
@@ -44,10 +44,11 @@ defined.
 - Never edit `src/` to set up a simulation. Per-case Makefiles rsync `src/`
   into a local `Compile/` and overlay the case's own `*.h`, `*.F`, `*.F90`,
   and `*.opt` files.
-- MARBL is a build option, `make MARBL=yes` (default `no`), not a cpp key;
-  `use_marbl` in `MARBL_BIOGEOCHEMISTRY_SETTINGS` switches it on at run time.
-  `Makedefs.inc` greps the case's `cppdefs.opt` for `PARALLEL_IO` to choose
-  link dependencies, so the file must exist before `make`.
+- MARBL and ParallelIO are build options, `make MARBL=yes` and `make PIO=yes`
+  (default `no`), not cpp keys; `use_marbl` in `MARBL_BIOGEOCHEMISTRY_SETTINGS`
+  switches MARBL on at run time, and `parallel_io` in `PIO_SETTINGS` (default
+  `.true.`) must match the PIO option (`.false.` without PIO). The case's
+  `cppdefs.opt` must exist before `make`.
 - Every build compiles the NHMG library from `NHMG/src` into `Compile/nhmg/`
   (rules in `src/Makefile`) and links it; the namelist key `nhmg`
   (`NHMG_SETTINGS`) switches the solver on at run time.
@@ -120,9 +121,9 @@ module, for example `&RIVER_FRC_SETTINGS !river_frc.F90`.
 
 - Never reference an optional argument in the same `.and.` expression as its
   `present()` test, as in `present(x) .and. x`. Fortran does not short-circuit
-  `.and.`, and `PARALLEL_IO` builds at `BUILD_MODE=test` crash at startup on
+  `.and.`, and `PIO=yes` builds at `BUILD_MODE=test` crash at startup on
   it. Nest the tests: `if (present(x)) then; if (x) ...`.
-- Under `PARALLEL_IO`, every rank runs the collective write path, including
+- With PIO (`PARALLEL_IO` in the code), every rank runs the collective write path, including
   ranks that hold none of an object's points. Per-rank work there needs a
   guard such as `np > 0`. ifx tolerates the unallocated arrays and gfortran
   segfaults. Without a gnu PIO stack, reproduce it with ifx and

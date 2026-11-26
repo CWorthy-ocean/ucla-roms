@@ -2,7 +2,7 @@
 
 Two builds: the open-boundary physics with flux forcing and the tidal potential
 (the hashed run, exact restarts, rejected settings, rivers and pipes), and one
-with bulk forcing and PARALLEL_IO (exact restart, a CDR volume release).
+with bulk forcing and parallel_io (exact restart, a CDR volume release).
 """
 import re
 import sys
@@ -31,8 +31,8 @@ CPP_KEYS = (
 )
 BULK_PIO_CPP_KEYS = (
     UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-    + ["LMD_CONVEC", "PARALLEL_IO"]
-)
+    + ["LMD_CONVEC"]
+)  # built with make PIO=yes
 # The inputs of the bulk-forced build, copied to classic netCDF: PIO reads them joined, through PnetCDF.
 BULK_PIO_INPUTS = [
     "example_input_grid.nc",
@@ -195,10 +195,11 @@ def test_implicit_fs_rivers_and_pipes(implicit_fs_configuration, input_dir, tmp_
 
 @pytest.fixture(scope="module")
 def bulk_pio_configuration(input_dir, tmp_path_factory) -> ROMSConfiguration:
-    """Bulk forcing and PARALLEL_IO (no MARBL), compiled once; ``conf.inputs``
+    """Bulk forcing and parallel_io (no MARBL), compiled once; ``conf.inputs``
     holds classic-format copies of its inputs."""
     conf = ROMSConfiguration(
-        cpp_keys=BULK_PIO_CPP_KEYS, location=tmp_path_factory.mktemp("implicit_fs_bulk_pio_build")
+        cpp_keys=BULK_PIO_CPP_KEYS, location=tmp_path_factory.mktemp("implicit_fs_bulk_pio_build"),
+        pio=True,
     )
     conf.compile()
     conf.inputs = tmp_path_factory.mktemp("implicit_fs_pio_inputs")
@@ -211,6 +212,7 @@ def bulk_pio_configuration(input_dir, tmp_path_factory) -> ROMSConfiguration:
 def bulk_pio_namelist(conf: ROMSConfiguration, **implicit_fs) -> dict:
     """The test namelist with bulk surface forcing and the implicit free surface."""
     nml = create_test_namelist_dict(conf.inputs)
+    nml["PIO_SETTINGS"]["parallel_io"] = True
     nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["FORCING_FILES"]["frcfiles"] = [
@@ -223,7 +225,7 @@ def bulk_pio_namelist(conf: ROMSConfiguration, **implicit_fs) -> dict:
 
 
 def test_implicit_fs_bulk_pio_exact_restart(bulk_pio_configuration, tmp_path):
-    """With bulk forcing and PARALLEL_IO a restart reproduces the continuous run bit
+    """With bulk forcing and parallel_io a restart reproduces the continuous run bit
     for bit, and the volume budget, with the bulk surface freshwater flux, closes.
 
     The restart after step 10 (20 solves) falls inside a period of the

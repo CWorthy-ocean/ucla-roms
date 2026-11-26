@@ -3,7 +3,7 @@ Most ROMS settings are read at runtime from a namelist file (see [runtime settin
 
 Put your `cppdefs.opt` in the directory where you compile the case, next to its `Makefile`. Start from a copy of `$ROMS_ROOT/src/cppdefs.opt`: the build copies `src/` into the case's `Compile/` directory and then overlays the files in the case directory, so your copy is the one used. Don't edit the file in `src/`, which every case shares.
 
-This page describes every switch in `src/cppdefs.opt`, one section per section of the file, plus `PARALLEL_IO`, which the template leaves out. The Default column says whether the switch is enabled or disabled in `src/cppdefs.opt`.
+This page describes every switch in `src/cppdefs.opt`, one section per section of the file. The Default column says whether the switch is enabled or disabled in `src/cppdefs.opt`.
 
 ### `MODEL SETUP OPTIONS`
 
@@ -59,11 +59,7 @@ The biogeochemical (BGC) model, MARBL, is not a key: build with `make MARBL=yes`
 
 ### Parallel I/O
 
-`PARALLEL_IO` is not in `src/cppdefs.opt`; add `#define PARALLEL_IO` to your case's `cppdefs.opt` to use it.
-
-| Switch | Description | Default | Usage notes |
-|--------|-------------|---------|-------------|
-| `PARALLEL_IO` | Read and write NetCDF files with the ParallelIO (PIO) library | not defined | Input files are read whole, so skip `partit`, and output is written to joined files, so skip `ncjoin` (particle output is the exception: it stays one file per rank). Write input files in a classic NetCDF format (for example `NETCDF3_64BIT_OFFSET`): PIO reads input through PnetCDF, which cannot read NetCDF-4 files. Building needs `PIO_ROOT` and `PNETCDFHOME` (see [Installing ParallelIO](../installation/dependencies.md#installing-parallelio)). Settings are in the `PIO_SETTINGS` namelist group |
+Parallel I/O is not a key: build with `make PIO=yes` (the default is `PIO=no`) and keep `parallel_io = .true.`, its default, in [`PIO_SETTINGS`](runtime_settings.md#pio_settings); a build without PIO needs `parallel_io = .false.`. With PIO, ROMS reads and writes NetCDF files with the ParallelIO library: input files are read whole, so skip `partit`, and output is written to joined files, so skip `ncjoin` (particle output is the exception: it stays one file per rank). Write input files in a classic NetCDF format (for example `NETCDF3_64BIT_OFFSET`): PIO reads input through PnetCDF, which cannot read NetCDF-4 files. Building needs `PIO_ROOT` and `PNETCDFHOME` (see [Installing ParallelIO](../installation/dependencies.md#installing-parallelio)).
 
 ### Retired keys
 
@@ -132,7 +128,8 @@ These keys are no longer keys because the namelist now decides what they decided
 | `PACIFIC` | `sponge_profile = 'cosine'` in [`V_SPONGE_SETTINGS`](runtime_settings.md#v_sponge_settings) (default `'linear'`) |
 | `LINEAR_DRAG_ONLY` | `linear_drag` in [`BOTTOM_DRAG_SETTINGS`](runtime_settings.md#bottom_drag_settings) (default `.false.`) |
 | `SALINITY` | `salinity` in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default `.true.`; `.false.` for a temperature-only case). In a case's own `ana_*.h`, write `if (salinity)` where it had `#ifdef SALINITY` |
-| `MPI_MASKING` | `mpi_masking` in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default `.false.`); still needs `PARALLEL_IO` |
+| `MPI_MASKING` | `mpi_masking` in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default `.false.`); needs `parallel_io = .true.` |
 | `MARBL` | The build option `make MARBL=yes`, and `use_marbl` in [`MARBL_BIOGEOCHEMISTRY_SETTINGS`](runtime_settings.md#marbl_biogeochemistry_settings) (default `.false.`) |
+| `PARALLEL_IO` | The build option `make PIO=yes`, and `parallel_io` in [`PIO_SETTINGS`](runtime_settings.md#pio_settings) (default `.true.`; `.false.` in a build without PIO) |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

@@ -5,7 +5,8 @@
 #
 #   ROMS_ROOT=/path/to/ucla-roms ci/compile_only.sh /tmp/build KEY [KEY...]
 #
-# MARBL among the keys is not a cpp key: it builds with make MARBL=yes.
+# MARBL and PARALLEL_IO among the keys are not cpp keys: they build with make
+# MARBL=yes and make PIO=yes.
 #
 # Requires the usual build environment: mpc on PATH (via Tools-Roms), MPIHOME,
 # NETCDFHOME; MARBL_ROOT when MARBL is among the keys; PIO_ROOT and
@@ -23,10 +24,13 @@ build_dir="$1"; shift
 mkdir -p "$build_dir"
 ln -sf "$ROMS_ROOT/Work/Makefile" "$build_dir/Makefile"
 marbl=no
+pio=no
 {
     for key in "$@"; do
         if [ "$key" = MARBL ]; then
             marbl=yes
+        elif [ "$key" = PARALLEL_IO ]; then
+            pio=yes
         else
             echo "#define $key"
         fi
@@ -36,6 +40,6 @@ marbl=no
 
 # An exported COMPILER (gnu|intel) is passed through; otherwise Makedefs.inc's
 # default (gnu) applies.
-make -C "$build_dir" BUILD_MODE=test MARBL="$marbl" ${COMPILER:+COMPILER="$COMPILER"}
+make -C "$build_dir" BUILD_MODE=test MARBL="$marbl" PIO="$pio" ${COMPILER:+COMPILER="$COMPILER"}
 test -x "$build_dir/roms"
 echo "OK: compiled roms with: $*"
