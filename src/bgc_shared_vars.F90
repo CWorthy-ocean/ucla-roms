@@ -205,8 +205,9 @@ contains
   subroutine read_nml_bgc
 
 !     Read the "BGC_SETTINGS" section of the namelist file: required with
-!     MARBL, optional otherwise (absent: BGC subcycling off)
+!     use_marbl, optional otherwise (absent: BGC subcycling off)
     use, intrinsic :: iso_fortran_env, only: iostat_end
+    use param, only: use_marbl
     integer(kind=4) ::  namelist_unit, ios
     character(len=13) :: sr_name = "read_nml_bgc"
     character(len=512) :: msg = ""
@@ -216,11 +217,7 @@ contains
 
     read (unit=namelist_unit, nml=BGC_SETTINGS, iostat=ios, iomsg=msg)
 
-#ifdef MARBL
-    if (ios /= 0) then
-#else
-    if (ios /= 0 .and. ios /= iostat_end) then
-#endif
+    if (ios /= 0 .and. (use_marbl .or. ios /= iostat_end)) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
       &info='could not read BGC_SETTINGS section of namelist file: '&

@@ -255,3 +255,6 @@
 #ifdef MPI_MASKING
 # error "CPP key MPI_MASKING was removed: the tiling from the land mask is now mpi_masking = .true. in the namelist group PARAM_SETTINGS (needs PARALLEL_IO); remove MPI_MASKING from cppdefs.opt"
 #endif
+#ifdef MARBL
+# error "CPP key MARBL was removed: build with make MARBL=yes, and set use_marbl = .true. in the namelist group MARBL_BIOGEOCHEMISTRY_SETTINGS; remove MARBL from cppdefs.opt"
+#endif

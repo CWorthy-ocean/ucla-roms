@@ -18,7 +18,6 @@ import xarray as xr
 
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
-    MARBL_CPP_KEYS,
     OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
@@ -49,6 +48,7 @@ def _cdr_base_nml(input_dir) -> dict:
     }
     nml["SURF_FRC_SETTINGS"]["surf_frc_type"] = "bulk"
     nml["PARAM_SETTINGS"]["nt_bgc"] = 32
+    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["use_marbl"] = True
     return nml
 
 
@@ -70,10 +70,9 @@ def cdr_conf(tmp_path_factory) -> ROMSConfiguration:
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS
-        + MARBL_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("cdr_build")
-    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
+    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir, marbl=True)
     conf.compile()
     return conf
 

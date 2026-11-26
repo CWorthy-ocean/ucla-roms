@@ -1,0 +1,1 @@
+Running ``make`` again in a configuration directory that was already built now recompiles what changed. Before, it stopped with ``m2c: No such file or directory``: make applied its built-in Modula-2 rule to any object whose Fortran ``.mod`` file existed, so a rebuild needed ``make compile_clean`` first.

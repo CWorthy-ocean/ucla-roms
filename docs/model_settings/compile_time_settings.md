@@ -56,11 +56,7 @@ These switches control the model's mixing parameterizations, including vertical 
 
 ### `BIOGEOCHEMICAL OPTIONS`
 
-These switches control the biogeochemical (BGC) model, MARBL. (The BEC2 model was retired; see [Retired keys](#retired-keys).)
-
-| Switch | Description | Default | Usage notes |
-|--------|-------------|---------|-------------|
-| `MARBL` | Use the MARBL biogeochemical library | enabled | Building needs `MARBL_ROOT` |
+The biogeochemical (BGC) model, MARBL, is not a key: build with `make MARBL=yes` (needs `MARBL_ROOT`; the default is `MARBL=no`) and set `use_marbl = .true.` in [`MARBL_BIOGEOCHEMISTRY_SETTINGS`](runtime_settings.md#marbl_biogeochemistry_settings). (The BEC2 model was retired; see [Retired keys](#retired-keys).)
 
 ### Parallel I/O
 
@@ -138,5 +134,6 @@ These keys are no longer keys because the namelist now decides what they decided
 | `LINEAR_DRAG_ONLY` | `linear_drag` in [`BOTTOM_DRAG_SETTINGS`](runtime_settings.md#bottom_drag_settings) (default `.false.`) |
 | `SALINITY` | `salinity` in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default `.true.`; `.false.` for a temperature-only case). In a case's own `ana_*.h`, write `if (salinity)` where it had `#ifdef SALINITY` |
 | `MPI_MASKING` | `mpi_masking` in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default `.false.`); still needs `PARALLEL_IO` |
+| `MARBL` | The build option `make MARBL=yes`, and `use_marbl` in [`MARBL_BIOGEOCHEMISTRY_SETTINGS`](runtime_settings.md#marbl_biogeochemistry_settings) (default `.false.`) |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

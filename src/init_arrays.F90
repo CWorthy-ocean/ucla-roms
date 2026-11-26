@@ -54,6 +54,7 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
   use flux_frc, only: init_arrays_flux_frc
   use pipe_frc, only: init_arrays_pipes, pipe_source
 #ifdef MARBL
+  use param, only: use_marbl
   use bgc_shared_vars, only: init_arrays_bgc_shared_vars
   use bgc_forces, only: init_arrays_bgc_forces
   use bgc_io, only: init_arrays_bgc_frc
@@ -130,9 +131,11 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
 #endif
 
 #ifdef MARBL
-  call init_arrays_bgc_shared_vars
-  call init_arrays_bgc_forces
-  call init_arrays_bgc_frc
+  if (use_marbl) then
+    call init_arrays_bgc_shared_vars
+    call init_arrays_bgc_forces
+    call init_arrays_bgc_frc
+  endif
 #endif
 
 end subroutine init_arrays_tile

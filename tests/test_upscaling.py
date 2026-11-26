@@ -16,7 +16,6 @@ import pytest
 import xarray as xr
 
 from ._helpers import (
-    MARBL_CPP_KEYS,
     OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
@@ -36,10 +35,9 @@ def uscl_conf(tmp_path_factory) -> ROMSConfiguration:
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS
-        + MARBL_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("uscl_build")
-    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
+    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir, marbl=True)
     conf.compile()
     return conf
 
@@ -53,6 +51,7 @@ def _uscl_nml(input_dir) -> dict:
     nml["TIME_STEPPING"]["dt"] = DT
     nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["marbl_timestep"] = DT
     nml["PARAM_SETTINGS"]["nt_bgc"] = 32
+    nml["MARBL_BIOGEOCHEMISTRY_SETTINGS"]["use_marbl"] = True
     nml["FORCING_FILES"] = {
         "frcfiles": [
             str(input_dir / "example_input_boundary_forcing.nc"),

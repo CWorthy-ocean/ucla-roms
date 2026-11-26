@@ -9,7 +9,7 @@ ROMS runs on Unix-like systems. It requires:
 
 Two optional libraries add features:
 
-- MARBL v0.45, for MARBL biogeochemistry (the `MARBL` CPP key, which the default `cppdefs.opt` enables). See [Installing MARBL](#installing-marbl).
+- MARBL v0.45, for MARBL biogeochemistry (the build option `make MARBL=yes`; `use_marbl` in the namelist switches it on). See [Installing MARBL](#installing-marbl).
 - PnetCDF and [C]Worthy's fork of ParallelIO, for parallel netCDF i/o (the `PARALLEL_IO` CPP key). See [Installing ParallelIO](#installing-parallelio).
 
 This page details different methods for obtaining these dependencies:
@@ -117,7 +117,7 @@ make <compiler> USEMPI=TRUE
 4. Where `<compiler>` is either `intel` (if your compiler is `ifx` or `ifort`) or `gnu` (if your compiler is `gfortran`).
 If you are unsure, your compiler information should be returned by `mpifort --version`
 
-To compile ROMS without MARBL, change `#define MARBL` to `#undef` in your case's `cppdefs.opt`. The build decides whether to link MARBL by looking for a `#define` line starting with `MARBL`.
+To compile ROMS with MARBL, run `make MARBL=yes` (the default is `make MARBL=no`, without MARBL), and set `use_marbl = .true.` in the namelist group `MARBL_BIOGEOCHEMISTRY_SETTINGS`. Changing `MARBL` recompiles everything. A `cppdefs.opt` that still has `#define MARBL` stops the build; delete the line.
 
 ## Installing ParallelIO
 
