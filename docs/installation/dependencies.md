@@ -10,7 +10,7 @@ ROMS runs on Unix-like systems. It requires:
 Two optional libraries add features:
 
 - MARBL v0.45, for MARBL biogeochemistry (the build option `make MARBL=yes`; `use_marbl` in the namelist switches it on). See [Installing MARBL](#installing-marbl).
-- PnetCDF and [C]Worthy's fork of ParallelIO, for parallel netCDF i/o (the `PARALLEL_IO` CPP key). See [Installing ParallelIO](#installing-parallelio).
+- PnetCDF and [C]Worthy's fork of ParallelIO, for parallel netCDF i/o (the build option `make PIO=yes`). See [Installing ParallelIO](#installing-parallelio).
 
 This page details different methods for obtaining these dependencies:
 
@@ -121,7 +121,7 @@ To compile ROMS with MARBL, run `make MARBL=yes` (the default is `make MARBL=no`
 
 ## Installing ParallelIO
 
-ParallelIO (PIO) is needed only to compile ROMS with the `PARALLEL_IO` CPP key. ROMS needs [C]Worthy's fork of PIO: stock ParallelIO lacks an option ROMS uses. PIO in turn needs PnetCDF, which the conda environment above includes (conda-forge package `libpnetcdf`).
+ParallelIO (PIO) is needed only to compile ROMS with `make PIO=yes`. ROMS needs [C]Worthy's fork of PIO: stock ParallelIO lacks an option ROMS uses. PIO in turn needs PnetCDF, which the conda environment above includes (conda-forge package `libpnetcdf`).
 
 1. Clone the fork and build it in a directory named `build` inside the clone, using the MPI compiler wrappers you use for ROMS. Don't install it elsewhere: ROMS links the libraries in `build/` directly.
 
@@ -152,4 +152,4 @@ export PIO_ROOT=$(pwd)
 export PNETCDFHOME=<PnetCDF prefix, e.g. $CONDA_PREFIX>
 ```
 
-As with `MARBL_ROOT`, set these every time you compile ROMS with `PARALLEL_IO`.
+As with `MARBL_ROOT`, set these every time you compile ROMS with `make PIO=yes`.

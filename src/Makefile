@@ -68,7 +68,7 @@ $(SBIN): $(OBJS) $(NHMG_LIB)
 # so each file is compiled from inside $(NHMG_BUILD). Every object waits for
 # that directory (it is on the include path); the NHMG users wait for the library.
 $(OBJS): | $(NHMG_BUILD)
-# Changing a build option (make MARBL=yes ...) recompiles everything
+# Changing a build option (make MARBL=yes, PIO=yes ...) recompiles everything
 $(OBJS): build_options.txt
 ifneq ($(strip $(NHMG_USERS)),)
 $(NHMG_USERS): | $(NHMG_LIB)
@@ -203,6 +203,9 @@ help:
 	@echo "MARBL (build option):"
 	@echo "    no     : default, build without the MARBL biogeochemistry library"
 	@echo "    yes    : compile and link MARBL (needs MARBL_ROOT); use_marbl switches it on"
+	@echo "PIO (build option):"
+	@echo "    no     : default, files with one piece per rank (namelist: parallel_io = .false.)"
+	@echo "    yes    : compile and link ParallelIO (needs PIO_ROOT, PNETCDFHOME); joined files"
 	@echo "KEEP_PPSRC:"
 	@echo "    true   : keep pre-processed source code after processing"
 	@echo "    false  : delete pre-processed source code after processing"

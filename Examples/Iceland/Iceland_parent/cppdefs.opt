@@ -98,7 +98,8 @@
 
 !!!!!!!!!!!!!!!!!!!!!!!!! MISCELLANEOUS !!!!!!!!!!!!!!!!!!!!!!!!!
 
-#undef PARALLEL_IO
+! PARALLEL_IO is not a key here: joined files need a build made with
+! make PIO=yes and parallel_io = .true. in the namelist group PIO_SETTINGS.
 
 !---------- Do not delete anything below this line! --------
 

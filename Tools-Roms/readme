@@ -34,7 +34,7 @@ To compile tools:
  		       partit NP_XI NP_ETA files.nc
 
  		Use the NP_XI and NP_ETA of the namelist's PARAM_SETTINGS.
- 		Not needed with PARALLEL_IO, which reads whole input files.
+ 		Not needed with parallel_io (make PIO=yes), which reads whole input files.
 
  ncjoin_mpi -	Generic netCDF assembly tool that reads ROMS partial netCDF files (.nc)
 		and assembles them into a file for the whole physical grid.
@@ -96,7 +96,7 @@ zslice -        Produces slice across constant depth from your result files.
  extract_data_join -
 		Joins the per-rank files written by ROMS' data extraction
 		(EXTRACT_DATA_SETTINGS, e.g. child boundary conditions) into one
-		file per nesting-file prefix. Not needed with PARALLEL_IO, which
+		file per nesting-file prefix. Not needed with parallel_io (make PIO=yes), which
 		writes one file per child.
 
  uscl_to_cdr.py -

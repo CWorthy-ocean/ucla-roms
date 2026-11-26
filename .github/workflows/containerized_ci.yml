@@ -432,10 +432,12 @@ jobs:
     # 132-column free-form limit, enforced as an error since GCC 10) surfaces
     # only in production runs. Same build_gnu gating as test_gnu.
     #
-    # - PARALLEL_IO: the pytest configs all use per-rank output. The key set
-    #   mirrors the production cson roms-marbl configuration (test_bgc's keys)
-    #   with PARALLEL_IO on top, so MARBL+CDR+PIO interactions are compiled
-    #   too, and so is mpi_masking (a run-time switch of PIO builds).
+    # - PARALLEL_IO (make PIO=yes; compile_only.sh takes it, and MARBL, as
+    #   build options among the keys): the pytest configs mostly use per-rank
+    #   output. The key set mirrors the production cson roms-marbl
+    #   configuration (test_bgc's keys) with PIO on top, so MARBL+CDR+PIO
+    #   interactions are compiled too, and so is mpi_masking (a run-time switch
+    #   of PIO builds).
     # - NHMG diagnostics (DIAGNOSTICS_NHMG, NHMGDIAG), which no test defines.
     # - Without MARBL: the CDR and CDR_LITE code in a physics-only
     #   build, without PARALLEL_IO (compile_ifx covers the PARALLEL_IO variant).

@@ -44,7 +44,12 @@ module pio_roms
   ! PIO's values).
   character(len=8), public :: pio_direct_read = 'on'
 
-  namelist /PIO_SETTINGS/ pio_stride, pio_direct_read
+  ! parallel_io must be .true. (the default) in a make PIO=yes build and
+  ! .false. without PIO: it says which files the run reads and writes (joined
+  ! or one per rank) and does not choose the I/O path, which the build fixes.
+  logical, public :: parallel_io = .true.
+
+  namelist /PIO_SETTINGS/ parallel_io, pio_stride, pio_direct_read
 
   logical, parameter, public  :: use_pio = .true.
   ! When PARALLEL_IO is on, skip PIO's needsfill coverage check (force needsfill=false).
@@ -757,12 +762,20 @@ contains
     call open_namelist_file(namelist_unit)
     rewind(namelist_unit)
     read (unit=namelist_unit, nml=PIO_SETTINGS, iostat=ios, iomsg=msg)
-    if (ios /= 0) then
+    if (ios > 0) then
       call error_log%raise_global(&
       &context=module_name//'/'//sr_name,&
       &info='could not read PIO_SETTINGS section of namelist file: '//trim(msg))
     end if
-    close(namelist_unit)
+    close(namelist_unit)   ! a missing group keeps the defaults
+
+    if (.not. parallel_io) then
+      call error_log%raise_global(&
+      &context=module_name//'/'//sr_name,&
+      &info='PIO_SETTINGS parallel_io = .false. in a build made with make PIO=yes, which reads and'//&
+      &' writes joined files: set parallel_io = .true. (the default), or build without PIO'//&
+      &' (make PIO=no) for files with one piece per rank')
+    end if
 
     if (pio_stride < 1) then
       call error_log%raise_global(&
@@ -3059,15 +3072,59 @@ contains
 
 #else
 
+  use namelist_open_mod, only: open_namelist_file
+  use error_handling_mod, only: error_log
+  use param, only: mpi_masking
   implicit none
   private
 
+  character(len=8) :: module_name = "pio_roms"
+
   logical, parameter, public  :: use_pio = .false.
+
+  ! Read in every build: without PIO, parallel_io must be .false. (its default
+  ! is .true., for make PIO=yes builds); pio_stride and pio_direct_read are
+  ! parsed and not used.
+  logical, public :: parallel_io = .true.
+  integer(kind=4) :: pio_stride = 1
+  character(len=8) :: pio_direct_read = 'on'
+  namelist /PIO_SETTINGS/ parallel_io, pio_stride, pio_direct_read
+  public :: read_nml_pio
   !> Grid type
   character(len=3),public      :: pio_gtype
 !      !> An array of zero size
 !      real, dimension(:), allocatable :: pio_zero
 
+contains
+
+  subroutine read_nml_pio
+    integer(kind=4) :: namelist_unit, ios
+    character(len=20) :: sr_name = "read_nml_pio"
+    character(len=512) :: msg = ""
+
+    call open_namelist_file(namelist_unit)
+    rewind(namelist_unit)
+    read (unit=namelist_unit, nml=PIO_SETTINGS, iostat=ios, iomsg=msg)
+    if (ios > 0) then
+      call error_log%raise_global(&
+      &context=module_name//'/'//sr_name,&
+      &info='could not read PIO_SETTINGS section of namelist file: '//trim(msg))
+    end if
+    close(namelist_unit)   ! a missing group keeps the default, .true.
+
+    if (parallel_io) then
+      call error_log%raise_global(&
+      &context=module_name//'/'//sr_name,&
+      &info='PIO_SETTINGS parallel_io = .true. (the default) needs a build made with make PIO=yes;'//&
+      &' set parallel_io = .false. for files with one piece per rank')
+    else if (mpi_masking) then   ! here, before ROMS looks for the per-rank grid file
+      call error_log%raise_global(&
+      &context=module_name//'/'//sr_name,&
+      &info='PARAM_SETTINGS mpi_masking = .true. needs PIO_SETTINGS parallel_io = .true. (a build'//&
+      &' made with make PIO=yes; it reads the joined grid file); set mpi_masking = .false.')
+    end if
+    call error_log%abort_check()
+  end subroutine read_nml_pio
 
 #endif ! PARALLEL_IO
 
