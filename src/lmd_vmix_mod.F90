@@ -103,21 +103,6 @@ contains
 
     &nu0c=0.1_8,&        ! Convective adjustment [m^2/s];
 
-    &lmd_nu=1.5D-6,&   ! Molecular viscosity [m^2/s];
-
-    ! Value of double-diffusive density
-    &lmd_Rrho0=1.9_8,&   ! ratio where diffusivity goes to zero
-    !                     in salt fingering.
-    &lmd_nuf=10.0D-4,& ! Scaling factors for double diffusion
-    &lmd_fdd=0.7_8,&     ! coefficient in salt fingering.
-
-    &lmd_tdd1=0.909_8,&
-    &lmd_tdd2=4.6_8,&    ! Double diffusion constants for
-    &lmd_tdd3=0.54_8,&   ! temperature (Marmorino and Caldwell,
-    &lmd_sdd1=0.15_8,&   ! 1976) and salinity (Fedorov, 1988)
-    &lmd_sdd2=1.85_8,&
-    &lmd_sdd3=0.85_8,&
-    &eps=1.D-14,&
     &Lturb = 10._8      ! Length scale of bottom boundary layer
     ! where turbulence is supressed
 
@@ -125,15 +110,6 @@ contains
     logical :: with_salt   ! salinity, as a local the compiler can hoist out of the loops
     real(kind=8) :: akt_bak_s   ! Akt_bak(isalt), or 0 without salinity (Akt_bak then has one entry)
 
-# ifdef LMD_DDMIX
-    real(kind=8) Rrho, ddDS, ddDT, nu_dds, nu_ddt, alfaobeta, Tt, Ts, Tp
-    real(kind=8), parameter ::   A0=+0.665157D-01,    A1=+0.170907D-01,&
-    &A2=-0.203814D-03,  A3=+0.298357D-05,  A4=-0.255019D-07,&
-    &B0=+0.378110D-02,  B1=-0.846960D-04,  C0=-0.678662D-05,&
-    &D0=+0.380374D-04,  D1=-0.933746D-06,  D2=+0.791325D-08,&
-    &E0=-0.164759D-06,  F0=-0.251520D-11,  G0=+0.512857D-12,&
-    &H0=-0.302285D-13,  Smean=35.0_8
-# endif
 
 # ifdef LMD_RIMIX
 !----#  define tind nstp
@@ -284,88 +260,6 @@ do j=jstr,jend
   enddo
 enddo
 
-# ifdef LMD_DDMIX
-
-! Compute double-diffusive mixing.
-!-----------------------------------------
-! It can occur when vertical gradient of density is stable but the
-! vertical gradient of salinity (salt figering) or temperature
-! (diffusive convection) is unstable.
-!
-! Compute the ratio of thermal expansion and saline contraction
-! coefficients at horizontal and vertical W-points.
-!
-! Compute double-diffusive density ratio, Rrho.
-
-do j=jstr,jend
-  do i=istr,iend
-    Tt=0.5_8*(t(i,j,k,tind,itemp)+t(i,j,k+1,tind,itemp))
-    Ts=0.5_8*(t(i,j,k,tind,isalt)+t(i,j,k+1,tind,isalt))&
-    &-Smean
-    Tp=-z_w(i,j,k)
-
-    alfaobeta=A0+Tt*(A1+Tt*(A2+Tt*(A3+Tt*A4)))&
-    &+Ts*(B0+Tt*B1+Ts*C0)&
-    &+Tp*(D0+Tt*(D1+Tt*D2)+Ts*E0&
-    &+Tp*(Ts*F0+Tt*Tt*G0+Tp*H0))
-
-    ddDT=t(i,j,k+1,tind,itemp)-t(i,j,k,tind,itemp)
-    ddDS=t(i,j,k+1,tind,isalt)-t(i,j,k,tind,isalt)
-    ddDS=sign(1._8,ddDS)*max(abs(ddDS),eps)
-    Rrho=alfaobeta*ddDT/ddDS
-
-
-! Salt fingering case.
-!--------------------------
-
-    if (Rrho>1._8 .and. ddDS>0._8) then
-
-! Compute interior diffusivity for double diffusive mixing of salinity.
-! Upper bound "Rrho" by "Rrho0"; (lmd_Rrho0=1.9_8, lmd_nuf=0.001_8).
-
-      Rrho=min(Rrho,lmd_Rrho0)
-      nu_dds=1._8-((Rrho-1._8)/(lmd_Rrho0-1._8))**2
-      nu_dds=lmd_nuf*nu_dds*nu_dds*nu_dds
-
-! Compute interior diffusivity for double diffusive mixing
-! of temperature (lmd_fdd=0.7_8).
-
-      nu_ddt=lmd_fdd*nu_dds
-
-! Diffusive convection case.
-!-------------------------------
-
-    elseif (Rrho<1._8 .and. Rrho>0._8 .and.&
-    &ddDS<0._8) then
-
-! Compute interior diffusivity for double diffusive mixing of
-! temperature (Marmorino and Caldwell, 1976); (lmd_nu=1.5D-6,
-! lmd_tdd1=0.909_8, lmd_tdd2=4.6_8, lmd_tdd3=0.54_8).
-
-      nu_ddt=lmd_nu*lmd_tdd1*&
-      &exp(lmd_tdd2*exp(-lmd_tdd3*((1._8/Rrho)-1._8)))
-
-! Compute interior diffusivity for double diffusive mixing
-! of salinity (lmd_sdd1=0.15_8, lmd_sdd2=1.85_8, lmd_sdd3=0.85_8).
-
-      if (Rrho<0.5_8) then
-        nu_dds=nu_ddt*lmd_sdd1*Rrho
-      else
-        nu_dds=nu_ddt*(lmd_sdd2*Rrho-lmd_sdd3)
-      endif
-    else
-      nu_ddt=0._8
-      nu_dds=0._8
-    endif
-
-! Add double diffusion contribution to temperature and salinity
-! mixing coefficients.
-
-    Kt(i,j,k)=Kt(i,j,k)+nu_ddt
-    Ks(i,j,k)=Ks(i,j,k)+nu_dds
-  enddo
-enddo
-# endif /* LMD_DDMIX */
 enddo     ! <-- k
 
 with_salt = salinity

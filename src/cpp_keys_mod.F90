@@ -28,26 +28,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_spherical = .false.
 #endif
-#ifdef LMD_DDMIX
-  logical, parameter, public :: key_lmd_ddmix = .true.
-#else
-  logical, parameter, public :: key_lmd_ddmix = .false.
-#endif
-#ifdef MERGE_OVERLAP
-  logical, parameter, public :: key_merge_overlap = .true.
-#else
-  logical, parameter, public :: key_merge_overlap = .false.
-#endif
-#ifdef DIAGNOSTICS_NHMG
-  logical, parameter, public :: key_diagnostics_nhmg = .true.
-#else
-  logical, parameter, public :: key_diagnostics_nhmg = .false.
-#endif
-#ifdef NHMGDIAG
-  logical, parameter, public :: key_nhmgdiag = .true.
-#else
-  logical, parameter, public :: key_nhmgdiag = .false.
-#endif
 
   ! (b) Choices: each selects one of several alternative schemes.
 #ifdef NONLIN_EOS
@@ -64,16 +44,6 @@ module cpp_keys_mod
   logical, parameter, public :: key_lmd_mixing = .true.
 #else
   logical, parameter, public :: key_lmd_mixing = .false.
-#endif
-#ifdef PARABOLIC_SPLINES
-  logical, parameter, public :: key_parabolic_splines = .true.
-#else
-  logical, parameter, public :: key_parabolic_splines = .false.
-#endif
-#ifdef AKIMA
-  logical, parameter, public :: key_akima = .true.
-#else
-  logical, parameter, public :: key_akima = .false.
 #endif
 
   ! (d) Link and build: select libraries or fixed build properties.
@@ -114,11 +84,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_uv_cor = .false.
 #endif
-#ifdef ADV_ISONEUTRAL
-  logical, parameter, public :: key_adv_isoneutral = .true.
-#else
-  logical, parameter, public :: key_adv_isoneutral = .false.
-#endif
 #ifdef LMD_NONLOCAL
   logical, parameter, public :: key_lmd_nonlocal = .true.
 #else
@@ -148,11 +113,6 @@ module cpp_keys_mod
   logical, parameter, public :: key_limit_unstable_only = .true.
 #else
   logical, parameter, public :: key_limit_unstable_only = .false.
-#endif
-#ifdef UPSTREAM_TS_LAND_CURV
-  logical, parameter, public :: key_upstream_ts_land_curv = .true.
-#else
-  logical, parameter, public :: key_upstream_ts_land_curv = .false.
 #endif
 
 end module cpp_keys_mod

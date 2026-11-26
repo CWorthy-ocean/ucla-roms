@@ -541,6 +541,18 @@ use_m3_boundary_data = .true. ! Relax u and v toward boundary data (with obc_m3 
 use_t_boundary_data  = .true. ! Relax the tracers toward boundary data (with obc_t = 'orlanski')
 /
 
+&NUMERICS_SETTINGS                                     !numerics_settings_mod.F90
+!-----------------
+! Optional group; without it every key below keeps its default
+!-----------------
+adv_isoneutral = .false.        ! T: isoneutral biharmonic tracer hyperdiffusion, with 4th-order centred
+                                ! (not upstream) horizontal tracer advection in the corrector step
+upstream_ts_land_curv = .false. ! T: drop the curvature term of upstream tracer advection at faces whose
+                                ! stencil touches land (2nd-order centred there; ignored with adv_isoneutral)
+parabolic_splines = .false.     ! T: vertical tracer advection with parabolic splines instead of
+                                ! thickness-aware C4 (predictor) and U3 (corrector)
+/
+
 &UBIND_SETTINGS                                                      !scalars.F90
 !--------------
 ! Read only with an open side, obc_m3 = 'orlanski' and use_m3_boundary_data = T
@@ -693,8 +705,7 @@ fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost ta
 ! built; nhmg = .true. switches it on. WARNING: untested and unmaintained; may
 ! break features such as exact restarts. Its solver settings are read from the
 ! optional file nhmg_namelist (group &nhparam) in the run directory. Stops with
-! fs_mode = 'implicit' or mpi_masking. The cpp keys DIAGNOSTICS_NHMG and
-! NHMGDIAG always stop the run (not finished). See docs/model_settings/runtime_settings.md.
+! fs_mode = 'implicit' or mpi_masking. See docs/model_settings/runtime_settings.md.
 !================================================================================
 &NHMG_SETTINGS                                              !nhmg_settings_mod.F90
 nhmg = .false.          ! Non-hydrostatic solver on (T) or off (F)

@@ -57,7 +57,7 @@ def test_pipes_real(tmp_path, input_dir, reference_results):
 def test_flux_frc(tmp_path, input_dir, reference_results):
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-        + ["LMD_CONVEC", "ADV_ISONEUTRAL"]
+        + ["LMD_CONVEC"]
     )
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path / "build")
     conf.compile()
@@ -65,6 +65,7 @@ def test_flux_frc(tmp_path, input_dir, reference_results):
     nml = create_test_namelist_dict(input_dir)
     nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
+    nml["NUMERICS_SETTINGS"] = {"adv_isoneutral": True}
     conf.run(nml)
 
     pv = get_summary_value(conf.location, prefix="roms_his.20100101000000")

@@ -62,9 +62,6 @@ contains
     &rdrg, vonkar, zob, ntstart, AM3_crv, linear_drag
     use diagnostics, only: calc_diag, udiag, vdiag, icori,&
     &dxdyi_u, dxdyi_v
-#ifdef DIAGNOSTICS_NHMG
-    use diagnostics, only: Wdiag, iwprsgr, iwhoriadv
-#endif
     use ext_copy_prv2shr_mod, only: ext_copy_prv2shr_2d_tile
     use t3dbc_mod, only: t3dbc_tile
     use u3dbc_mod, only: u3dbc_tile

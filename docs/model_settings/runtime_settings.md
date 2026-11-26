@@ -79,7 +79,7 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `nt_cdr_oae` | Number of OAE `CDR_LITE` tracer pairs. Each pair is an ALK-mimicking and a DIC-mimicking passive tracer (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`), so it adds two tracers. The `CDR_LITE` CPP key adds their air-sea CO2 exchange. |
 | `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`). The `CDR_LITE` tracers are in the history file unless `wrt_passive` is `.false.` |
 | `nt_bgc` | Number of biogeochemical tracers: MARBL's tracer count (32 with its defaults) with `use_marbl = .true.`, else 0. ROMS stops on any other value |
-| `salinity` | `.true.` (default): the model carries salinity, the second tracer. `.false.`: temperature is the only active tracer (passive and CDR_LITE tracers then start at the second tracer), the linear equation of state has no salt term, the nonlinear one uses a salinity of 34.5, and no salt, `AKs` or forcing-output `ssflx` is written. Replaces the cpp key `SALINITY`. ROMS stops with `salinity = .false.` and `sflx_corr`, with the cpp key `LMD_DDMIX`, or with `use_marbl = .true.` (MARBL and its CDR outputs read salinity) |
+| `salinity` | `.true.` (default): the model carries salinity, the second tracer. `.false.`: temperature is the only active tracer (passive and CDR_LITE tracers then start at the second tracer), the linear equation of state has no salt term, the nonlinear one uses a salinity of 34.5, and no salt, `AKs` or forcing-output `ssflx` is written. Replaces the cpp key `SALINITY`. ROMS stops with `salinity = .false.` and `sflx_corr`, or with `use_marbl = .true.` (MARBL and its CDR outputs read salinity) |
 | `mpi_masking` | `.true.`: choose the MPI tiling at start-up from the land mask, without the tiles that are entirely land (default `.false.`). `NP_XI` and `NP_ETA` are then overwritten; launch with at least as many ranks as the selected tiling needs, and extra ranks exit at start-up. No `partit` step is needed. Needs `parallel_io = .true.` (a `make PIO=yes` build) and a joined grid file (ROMS stops otherwise), and not with `ana_grid`. Replaces the cpp key `MPI_MASKING` |
 
 ### `PIO_SETTINGS`
@@ -518,6 +518,17 @@ Boundary data that are read must be in the forcing files for every open side (th
 
 Tracer advection through an open-boundary face is upwind on inflow: the corrector step uses the ghost-cell value, which the tracer boundary condition relaxes toward the boundary data while water flows in. Outflow faces use the interior advection scheme. This needs no setting and applies to every tracer on every open side.
 
+### `NUMERICS_SETTINGS`
+(read by module `numerics_settings_mod.F90`)
+
+Optional: without the group (or a key) every scheme keeps its default. By default, horizontal tracer advection is fourth-order centred (C4) in the predictor step and third-order upstream (U3) in the corrector step, and vertical tracer advection is thickness-aware C4 in the predictor and thickness-aware U3 in the corrector. ROMS prints the three settings at start-up.
+
+| Setting | Description |
+|--------|-------------|
+| `adv_isoneutral` | Isoneutral (rotated) biharmonic tracer hyperdiffusion, with C4 instead of U3 horizontal tracer advection in the corrector step (default `.false.`). Replaces the cpp key `ADV_ISONEUTRAL` |
+| `upstream_ts_land_curv` | Drop the curvature (third-order) term of U3 horizontal tracer advection at faces whose stencil touches land, so those faces are second-order centred (default `.false.`). Masked differences are zero, which otherwise inflates the curvature at the first wet point and can produce large overshoots. Acts only with `MASKING`, and is ignored (with a line at start-up) with `adv_isoneutral`. Replaces the cpp key `UPSTREAM_TS_LAND_CURV` |
+| `parabolic_splines` | Vertical tracer advection with parabolic splines in both steps, the scheme before thickness-aware U3 (default `.false.`). Replaces the cpp key `PARABOLIC_SPLINES` |
+
 ### `UBIND_SETTINGS`
 (read by module `scalars.F90`)
 
@@ -681,7 +692,7 @@ Optional: if the group is absent, `nhmg = .false.`. Switches on the non-hydrosta
 |--------|---------|-------------|
 | `nhmg` | `.false.` | Non-hydrostatic solver on (`.true.`) or off (`.false.`) |
 
-With `nhmg = .true.`, the solver's own settings (tolerance, iterations, relaxation method, surface condition, periodicity, ...) are read from the optional file `nhmg_namelist` in the run directory (group `&nhparam`, see `NHMG/src/mg_namelist.f90`); without the file they keep their defaults. ROMS stops at startup if `nhmg = .true.` is combined with `fs_mode = 'implicit'` (`IMPLICIT_FS`) or with `mpi_masking = .true.` (NHMG needs an MPI rank for every tile), and, whatever `nhmg` is, if the cpp key `DIAGNOSTICS_NHMG` or `NHMGDIAG` (not finished) is defined.
+With `nhmg = .true.`, the solver's own settings (tolerance, iterations, relaxation method, surface condition, periodicity, ...) are read from the optional file `nhmg_namelist` in the run directory (group `&nhparam`, see `NHMG/src/mg_namelist.f90`); without the file they keep their defaults. ROMS stops at startup if `nhmg = .true.` is combined with `fs_mode = 'implicit'` (`IMPLICIT_FS`) or with `mpi_masking = .true.` (NHMG needs an MPI rank for every tile).
 
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)

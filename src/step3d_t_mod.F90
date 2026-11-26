@@ -8,13 +8,11 @@ module step3d_t_mod
 
   public :: step3d_t, check_step_t_switches
 contains
-#ifndef ADV_ISONEUTRAL
-# define UPSTREAM_TS
-#endif
-!--# define AKIMA
-
-! The isoneutral hyperdiffusion (ADV_ISONEUTRAL) always uses the
-! switching-triad and stabilizing algorithms.
+! The corrector's horizontal tracer advection is third-order upstream
+! (UPSTREAM_TS in compute_horiz_tracer_fluxes.h), or, with adv_isoneutral
+! (NUMERICS_SETTINGS), fourth-order centred plus the isoneutral
+! hyperdiffusion, which always uses the switching-triad and stabilizing
+! algorithms.
 
   ! Note that arrays A2d(1,1:4) within
   subroutine step3d_t(tile,tstep)   ! the list of agruments in call below
@@ -32,22 +30,18 @@ contains
     call step3d_t_iso_tile( istr,iend,jstr,jend,&
     &A2d(1,1), A2d(1,2), A2d(1,3), A2d(1,4),&
     &A2d(1,1), A2d(1,2), A2d(1,3)&
-# ifdef ADV_ISONEUTRAL
     &, A2d(1,4), A2d(1,6), A2d(1,8), A2d(1,10)&
     &, A3d(1,1)&
     &, A3d(1,2)&
-# endif
     &,   tstep&
     &)
   end subroutine step3d_t
 
   subroutine step3d_t_iso_tile( istr,iend,jstr,jend, WC,FC,CF,DC&
   &,  FX,FE, wrk1&
-# ifdef ADV_ISONEUTRAL
   &, FSC,dTdz,dTdx,dTde&
   &, LapT&
   &,  Akz&
-# endif
   &, tstep&
   &)
   use pipe_frc, only: pidx, pipe_idx, pipe_trc,&
@@ -78,18 +72,15 @@ contains
 #ifdef LMD_KPP
        &swr_frac, &
 #endif
-#ifdef ADV_ISONEUTRAL
-       &diff3u, diff3v, &
-#endif
+       &diff3u, diff3v, &   ! adv_isoneutral only
        & ieast, isalt, itemp, iwest, jnorth, jsouth
   use t3dbc_mod, only : t3dbc_tile
   use ocean_vars, only: flxu, flxv, z_w, hz, we, wi, z_r
   use scalars, only: nz, dt, nnew, nrhs, nt, nstp, diff_on
   use upscale_output, only:&
   &calc_forcing_rates, add_mixing_rates, do_upscale
-#ifdef ADV_ISONEUTRAL
-  use eos_vars, only: drdx, drde, idrz
-#endif
+  use eos_vars, only: drdx, drde, idrz   ! adv_isoneutral only
+  use numerics_settings_mod, only: adv_isoneutral, upstream_ts_land_curv
   use diagnostics, only: calc_diag, tdiag, tmixx, tadvx, tadvy, diag_trc,&
   &tmixy, tadvy, tadvz, td, vflxd, zflx, tmixz, diag_t_adv_vc4, diag_t_adv_hc4
   use bulk_frc, only: tair
@@ -104,16 +95,14 @@ contains
   real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: td_piv,td_cf,td_a
   real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY)      :: td_top
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY)     :: FX,FE, wrk1
-# ifdef ADV_ISONEUTRAL
+  ! adv_isoneutral only:
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,2) :: FSC,  dTdz,&
   &dTdx, dTde
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,nz) :: LapT
   real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: Akz
-# endif
   real(kind=8) cff
-  real(kind=8), parameter :: epsil=1.D-33
   integer(kind=4) itrc, iAkt
-# ifdef ADV_ISONEUTRAL
+  ! adv_isoneutral only:
   integer(kind=4) k1,k2
   real(kind=8) sumX,sumE
   integer(kind=4) idx,ide
@@ -121,7 +110,6 @@ contains
   &0.3333333333333333_8, 0.25_8 /)
   real(kind=8) cff2, cffX, s2_XLU,s2_XRU, s2_ELU,s2_ERU,&
   &cffE, s2_XLL,s2_XRL, s2_ELL,s2_ERL
-# endif
   integer(kind=4), intent(in) :: tstep
 
 # include "compute_auxiliary_bounds.h"
@@ -149,8 +137,8 @@ contains
 #  define ntdf nstp
 !--#  define ntdf nrhs
 
-! Note that k-loop is recursive in the case of ADV_ISONEUTRAL switch
-! active, while and "k1" and "k2" are alternating indices, 1-2-1-2-...
+! Note that k-loop is recursive with adv_isoneutral, and "k1" and "k2"
+! are alternating indices, 1-2-1-2-...
 ! etc, designed to mimic full 3D arrays, while using only two vertical
 ! slices. This applies to arrays  dTdx,dTde (both are at vertical RHO-
 ! points) and  FSC,dTdz (at vertical W-points). The index mapping
@@ -165,72 +153,14 @@ contains
 
   do itrc=1,nt
 
-# ifdef ADV_ISONEUTRAL
+    if (adv_isoneutral) then
     k2=1
     do k=0,nz,+1       !--> recursive
       k1=k2
       k2=3-k1
       if (k > 0) then
-# else
-    do k=1,nz
-# endif
-
-! Compute and add in contribution due to horizontal advection fluxes.
-! Note that at this moment the content of array t(:,:,:,nnew,itrc) is
-! concentration of tracer "itrc" taken at time corresponding to "nstp"
-! and already MULTIPLIED by Hz(:,:,:) at "nstp" in "pre_step3d_tile".
-
-# include "compute_horiz_tracer_fluxes.h"
-
-#  ifndef ADV_ISONEUTRAL
-      if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
-        call diag_t_adv_hc4(k,itrc)
-      endif
-#  endif
-
-      do j=jstr,jend
-        do i=istr,iend
-          t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc) -dt*pm(i,j)&
-          &*pn(i,j)*( FX(i+1,j)-FX(i,j)&
-          &+FE(i,j+1)-FE(i,j)&
-          &)
-        enddo
-      enddo                 !-->  discard FX,FE
-      if (do_upscale) then
-        call calc_forcing_rates(itrc,k,FX,FE,istr,iend,jstr,jend)
-      endif
-
-#  ifdef ADV_ISONEUTRAL
-      if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
-        do j= 1,ny
-          do i=1,nx+1
-            Tdiag(i,j,k,tadvx,td(itrc)) = FX(i,j)
-          enddo
-        enddo
-        do j= 1,ny+1
-          do i=1,nx
-            Tdiag(i,j,k,tadvy,td(itrc)) = FE(i,j)
-          enddo
-        enddo
-      endif
-#  else
-      if (diag_trc .and. wrt_t_dia(itrc) .and. calc_diag) then
-        do j= 1,ny
-          do i=1,nx+1
-            Tdiag(i,j,k,tmixx,td(itrc)) = FX(i,j)&
-            &- Tdiag(i,j,k,tadvx,td(itrc))
-          enddo
-        enddo
-        do j= 1,ny+1
-          do i=1,nx
-            Tdiag(i,j,k,tmixy,td(itrc)) = FE(i,j)&
-            &- Tdiag(i,j,k,tadvy,td(itrc))
-          enddo
-        enddo
-      endif
-#  endif
-
-# ifdef ADV_ISONEUTRAL
+# undef UPSTREAM_TS
+# include "step3d_t_horiz_adv.h"
     endif !<-- k > 0
 
 ! Computation of the rotated (isoneutral) biharmonic operator expects
@@ -716,8 +646,15 @@ contains
       endif
 
     endif   !<-- k > 0
-# endif /* ADV_ISONEUTRAL */
   enddo      !<-- k
+
+    else   ! third-order upstream horizontal advection
+    do k=1,nz
+# define UPSTREAM_TS
+# include "step3d_t_horiz_adv.h"
+# undef UPSTREAM_TS
+    enddo
+    endif   !<-- adv_isoneutral
 
 
 
@@ -928,53 +865,13 @@ enddo     !<-- itrc (horizontal advection and sources)
     if (itrc <= iTandS) then
     ! Factor the tridiagonal system (depends on Akt, Hz, Wi only) and solve.
     ! On the iTandS pass, save this row's factors for the tracers that follow.
-    do i=istr,iend
-      DC(i,0)=dt*pm(i,j)*pn(i,j) !<--horizontal metric
-
-# ifdef ADV_ISONEUTRAL
-      FC(i,1)=2._8*dt*(Akt(i,j,1,iAkt)+Akz(i,j,1))&
-# else
-      FC(i,1)=2._8*dt* Akt(i,j,1,iAkt)&
-# endif
-      &/(Hz(i,j,1)+Hz(i,j,2))
-      WC(i,1)=DC(i,0)*Wi(i,j,1)
-
-      cff=1._8/(Hz(i,j,1) +FC(i,1)+max(WC(i,1),0._8))
-      CF(i,1)=cff*(      FC(i,1)-min(WC(i,1),0._8))
-      DC(i,1)=cff*t(i,j,1,nnew,itrc)
-      if (itrc == iTandS) then
-        td_piv(i,1)=cff
-        td_cf (i,1)=CF(i,1)
-        td_a  (i,1)=FC(i,1)+max(WC(i,1),0._8)
-      endif
-    enddo
-    do k=2,nz-1,+1
-      do i=istr,iend
-# ifdef ADV_ISONEUTRAL
-        FC(i,k)=2._8*dt*(Akt(i,j,k,iAkt)+Akz(i,j,k))&
-# else
-        FC(i,k)=2._8*dt* Akt(i,j,k,iAkt)&
-# endif
-        &/(Hz(i,j,k)+Hz(i,j,k+1))
-
-        WC(i,k)=Wi(i,j,k)*DC(i,0)
-
-        cff=1._8/( Hz(i,j,k) +FC(i,k)+max(WC(i,k),0._8)&
-        &+FC(i,k-1)-min(WC(i,k-1),0._8)&
-        &-CF(i,k-1)*(FC(i,k-1)+max(WC(i,k-1),0._8))&
-        &)
-
-        CF(i,k)=cff*(       FC(i,k)-min(WC(i,k),0._8) )
-
-        DC(i,k)=cff*( t(i,j,k,nnew,itrc) +DC(i,k-1)*(&
-        &FC(i,k-1)+max(WC(i,k-1),0._8) ))
-        if (itrc == iTandS) then
-          td_piv(i,k)=cff
-          td_cf (i,k)=CF(i,k)
-          td_a  (i,k)=FC(i,k)+max(WC(i,k),0._8)
-        endif
-      enddo
-    enddo          !--> discard DC(:,0)
+    if (adv_isoneutral) then
+# define ISO_AKZ
+# include "step3d_t_factor.h"
+# undef ISO_AKZ
+    else
+# include "step3d_t_factor.h"
+    endif
     do i=istr,iend
       cff=Hz(i,j,nz) +FC(i,nz-1)-min(WC(i,nz-1),0._8)&
       &-CF(i,nz-1)*(FC(i,nz-1)+max(WC(i,nz-1),0._8))
@@ -1038,22 +935,21 @@ enddo     !<-- itrc (horizontal advection and sources)
       if (j==20.and.mynode==0) then
 !              print *,maxval(Tdiag(1:nx,j,:,tmixz,td(itrc)))
       endif
-      do i=istr,iend
-        do k=1,nz
-!               Tdiag(i,j,k,vmixd,td(itrc)) =
-!    &               ZFlx(i,k) - Tdiag(i,j,k,tadvz,td(itrc))
-!               Tdiag(i,j,k,tmixz,td(itrc)) =
-!    &               ZFlx(i,k) - Tdiag(i,j,k,tadvz,td(itrc))
-
-#  ifdef ADV_ISONEUTRAL
-          Tdiag(i,j,k,tmixz,td(itrc)) = Tdiag(i,j,k,tmixz,td(itrc)) +&
-          &ZFlx(i,k) - Tdiag(i,j,k,tadvz,td(itrc))
-#  else
-          Tdiag(i,j,k,tmixz,td(itrc)) =&
-          &ZFlx(i,k) - Tdiag(i,j,k,tadvz,td(itrc))
-#  endif
+      if (adv_isoneutral) then   ! add to the isoneutral part set above
+        do i=istr,iend
+          do k=1,nz
+            Tdiag(i,j,k,tmixz,td(itrc)) = Tdiag(i,j,k,tmixz,td(itrc)) +&
+            &ZFlx(i,k) - Tdiag(i,j,k,tadvz,td(itrc))
+          enddo
         enddo
-      enddo
+      else
+        do i=istr,iend
+          do k=1,nz
+            Tdiag(i,j,k,tmixz,td(itrc)) =&
+            &ZFlx(i,k) - Tdiag(i,j,k,tadvz,td(itrc))
+          enddo
+        enddo
+      endif
 
     endif
   enddo     !<-- itrc

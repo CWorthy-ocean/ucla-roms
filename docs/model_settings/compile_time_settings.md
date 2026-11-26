@@ -15,9 +15,6 @@ These switches control fundamental aspects of the model setup, including the equ
 | `SPLIT_EOS` | Use an equation of state that ensures that monotonically increasing density is equivalent to stable stratification | enabled | |
 | `UV_ADV` | Use advection in horizontal momentum equations | enabled | |
 | `UV_COR` | Use Coriolis term in horizontal momentum equations | enabled | |
-| `ADV_ISONEUTRAL` | Rotate the advection and diffusion operators so they are oriented in the isoneutral direction | disabled | |
-| `DIAGNOSTICS_NHMG` | Enable the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation | disabled | Not finished: compiles, but ROMS stops at startup, whether `nhmg` (`NHMG_SETTINGS`) is on or off, because its arrays are never allocated |
-| `NHMGDIAG` | Write momentum equation diagnostics for non-hydrostatic mode | disabled | As `DIAGNOSTICS_NHMG` |
 
 ### `GRID OPTIONS`
 
@@ -31,13 +28,7 @@ These switches control the configuration of the model grid, including geometry a
 
 ### `NUMERICAL ALGORITHMS`
 
-These switches control the numerical schemes used by the model for tracer advection. By default, horizontal tracer advection is fourth-order centered (C4) in the predictor step and third-order upstream (U3) in the corrector step. Vertical tracer advection is a thickness-aware U3 scheme, again with a C4 predictor and a U3 corrector.
-
-| Switch | Description | Default | Usage notes |
-|--------|-------------|---------|-------------|
-| `AKIMA` | Use the fourth-order Akima scheme for horizontal tracer advection in the predictor step | disabled | Replaces the C4 interpolation of the predictor step; the corrector step stays third-order upstream |
-| `UPSTREAM_TS_LAND_CURV` | Drop the curvature (third-order) correction of upstream horizontal tracer advection at faces whose stencil touches land, falling back to second-order centered there | disabled | Masked differences are zero, which otherwise inflates the curvature at the first wet point and produces large overshoots. Affects the corrector step, and only with `MASKING` |
-| `PARABOLIC_SPLINES` | Use parabolic splines for vertical tracer advection | disabled | Restores the spline reconstruction that was the default before the thickness-aware U3 scheme |
+This section has no keys now: the tracer advection schemes (isoneutral advection, the land curvature of upstream advection, parabolic splines) are set at run time in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings).
 
 ### `MIXING OPTIONS`
 
@@ -50,8 +41,6 @@ These switches control the model's mixing parameterizations, including vertical 
 | `LMD_MIXING` | Enable and compute various parameterizations from Large et al., 1994 (KPP, etc.) | enabled | This is the overarching CPP key for all other `LMD` keys. This needs to be defined in order for KPP and others to be used. |
 | `LMD_NONLOCAL` | Compute the non-local term in the KPP parameterization | enabled | Can be used with either/both `LMD_KPP` and `LMD_BKPP` |
 | `LMD_RIMIX` | Compute mixing due to breaking internal waves | enabled | Designed only to have an effect where local gradient Richardson number is small |
-| `LMD_DDMIX` | Compute double-diffusive mixing (Large et al., 1994) | disabled | |
-| `MERGE_OVERLAP` | If surface and bottom boundary layers overlap, set them both to be the entire depth of the water column | disabled | Unclear whether this is needed for physical or numerical reasons; disabled by default |
 
 ### `BIOGEOCHEMICAL OPTIONS`
 
@@ -63,7 +52,7 @@ Parallel I/O is not a key: build with `make PIO=yes` (the default is `PIO=no`) a
 
 ### Retired keys
 
-These keys were removed together with their code: most of them no longer compiled, `AKIMA_V` and `BBL` had no effect, `BULK_DIFFERENCE` and `INT_AT_W_POINTS` were broken, `TR` and `ISWAKE_XXX` were experiments that changed the results, and the BEC2 biogeochemical model was retired in favour of `MARBL`. The build stops with an error that names the key if your `cppdefs.opt` still defines one of them (`#undef` lines are harmless); delete it from the file.
+These keys were removed together with their code: most of them no longer compiled, `AKIMA_V` and `BBL` had no effect, `BULK_DIFFERENCE` and `INT_AT_W_POINTS` were broken, `TR` and `ISWAKE_XXX` were experiments that changed the results, the BEC2 biogeochemical model was retired in favour of `MARBL`, and `AKIMA`, `LMD_DDMIX`, `MERGE_OVERLAP`, `DIAGNOSTICS_NHMG` and `NHMGDIAG` were unused (the two NHMG diagnostics were unfinished: their arrays were never allocated, so ROMS stopped at start-up). The build stops with an error that names the key if your `cppdefs.opt` still defines one of them (`#undef` lines are harmless); delete it from the file.
 
 | Switch | What it was |
 |--------|-------------|
@@ -98,6 +87,10 @@ These keys were removed together with their code: most of them no longer compile
 | `CONST_TRACERS` | Hold the tracers constant in time |
 | `FILAMENT_IDEAL` | Declared the filament case's depth `hd = 1000` in `analytical.F90`; such a case's `ana_init.h` now declares it |
 | `ANA_PIPES`, `ANA_RIVER_USWC` | Let an analytical grid (`ana_grid.h`) place pipes, or use `LLm` and `MMm`; a case's `ana_grid.h` can now always do both |
+| `AKIMA` | Fourth-order Akima interpolation (harmonic averaging of the differences) for horizontal tracer advection in the predictor step |
+| `LMD_DDMIX` | Double-diffusive mixing (Large et al., 1994) |
+| `MERGE_OVERLAP` | Set the KPP surface and bottom boundary layers both to the whole water column where they overlap |
+| `DIAGNOSTICS_NHMG`, `NHMGDIAG` | Diagnostics of the non-hydrostatic vertical momentum equation (NHMG); not finished. NHMG itself is the namelist key `nhmg` |
 
 These keys are no longer keys because the namelist now decides what they decided. Defining one stops the build with an error that names the setting (`#undef` lines are harmless).
 
@@ -131,5 +124,8 @@ These keys are no longer keys because the namelist now decides what they decided
 | `MPI_MASKING` | `mpi_masking` in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default `.false.`); needs `parallel_io = .true.` |
 | `MARBL` | The build option `make MARBL=yes`, and `use_marbl` in [`MARBL_BIOGEOCHEMISTRY_SETTINGS`](runtime_settings.md#marbl_biogeochemistry_settings) (default `.false.`) |
 | `PARALLEL_IO` | The build option `make PIO=yes`, and `parallel_io` in [`PIO_SETTINGS`](runtime_settings.md#pio_settings) (default `.true.`; `.false.` in a build without PIO) |
+| `ADV_ISONEUTRAL` | `adv_isoneutral` in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings) (default `.false.`) |
+| `UPSTREAM_TS_LAND_CURV` | `upstream_ts_land_curv` in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings) (default `.false.`) |
+| `PARABOLIC_SPLINES` | `parabolic_splines` in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings) (default `.false.`) |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

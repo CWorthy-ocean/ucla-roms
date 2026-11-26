@@ -65,6 +65,7 @@ contains
     use diag_mod, only: read_nml_stdout_diag
     use open_boundary_mod, only: read_nml_periodic, read_nml_open_boundary  !PERIODIC_SETTINGS,
                                                                   !OPEN_BOUNDARY_SETTINGS (optional)
+    use numerics_settings_mod, only: read_nml_numerics  !NUMERICS_SETTINGS (optional)
     use implicit_fs_mod, only: read_nml_implicit_fs, fs_on !IMPLICIT_FS (optional)
     use nhmg_settings_mod, only: read_nml_nhmg, nhmg_on  !NHMG_SETTINGS (optional)
 #ifdef MARBL
@@ -78,6 +79,7 @@ contains
     call read_nml_marbl      ! use_marbl, which the readers and checks below use
     call read_nml_periodic
     call read_nml_open_boundary
+    call read_nml_numerics
     call read_nml_grid
 #ifdef MARBL
     if (use_marbl) call read_nml_bgc
