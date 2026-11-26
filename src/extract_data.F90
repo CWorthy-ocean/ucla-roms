@@ -105,7 +105,7 @@ module extract_data
   ! Per child domain, in the same order in every array. A namelist entry
   ! without an index (extract_file = '...') sets child 1, as before.
   character(len=max_name_size) :: extract_file(max_extract_chd) = ' '      ! nesting file
-  character(len=max_name_size) :: extract_root_name(max_extract_chd) = ' ' ! PARALLEL_IO output root
+  character(len=max_name_size) :: extract_root_name(max_extract_chd) = ' ' ! output root (parallel_io)
 
   ! S-coordinate parameters for child grid. Only child 1 has defaults for
   ! theta_s_chd/theta_b_chd/hc_chd (set in read_nml_extract); every other
@@ -320,7 +320,7 @@ contains
       ! All children share the per-rank _ext files, which have one s_rho
       if (N_chd(ic) /= N_chd(1)) then
         call error_log%raise_global(context=module_name//'/'//sr_name,&
-        &info='without PARALLEL_IO all child domains must have the same N_chd')
+        &info='with parallel_io = .false. all child domains must have the same N_chd')
       endif
 #endif
     enddo
@@ -686,7 +686,7 @@ contains
           call error_log%raise_global(&
           &context=module_name//"/"//sr_name,&
           &info="w extraction ("//trim(objname)//") is not supported "//&
-          &"with PARALLEL_IO")
+          &"with parallel_io = .true.")
         endif
 #endif
 
@@ -728,7 +728,7 @@ contains
           call error_log%raise_global(context=module_name//"/"//sr_name,&
           &info=trim(extract_file(obj(jobj)%ichd))//' and '//&
           &trim(extract_file(obj(iobj)%ichd))//' share the prefix '//&
-          &trim(obj(iobj)%set)//'; without PARALLEL_IO each child domain '//&
+          &trim(obj(iobj)%set)//'; with parallel_io = .false. each child domain '//&
           &'needs its own (roms-tools make_nesting_info prefix=...)')
         endif
       enddo

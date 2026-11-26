@@ -95,11 +95,17 @@ STOPS = {
                                   "LMD_MIXING: choose one vertical mixing scheme"]),
     "calc_pflx_without_timescale": ("CALC_PFLX_SETTINGS", {"calc_pflx": True, "pflx_timescale": 0},
                                     ["pflx_timescale must be > 0"]),
+    "parallel_io_without_pio_build": ("PIO_SETTINGS", {"parallel_io": True},
+                                      ["PIO_SETTINGS parallel_io = .true. (the default) needs a build made with make PIO=yes",
+                                       "set parallel_io = .false. for files with one piece per rank"]),
+    # the group without parallel_io: its default, .true., needs a PIO build
+    "parallel_io_left_out": ("PIO_SETTINGS", {"pio_stride": 1},
+                             ["PIO_SETTINGS parallel_io = .true. (the default) needs a build made with make PIO=yes"]),
     # the group holds only the misspelled key
     "reference_date_misspelled": ("REFERENCE_DATE_SETTINGS", {"referenc_date": [2000, 1, 1]},
                                   ["could not read REFERENCE_DATE_SETTINGS"]),
 }
-REPLACED_GROUPS = {"reference_date_misspelled"}
+REPLACED_GROUPS = {"reference_date_misspelled", "parallel_io_left_out"}
 
 
 @pytest.mark.parametrize("case", STOPS)
@@ -117,17 +123,15 @@ def test_switch_stops(physics_conf, input_dir, tmp_path, case):
 
 
 def test_mpi_masking_without_parallel_io(physics_conf, input_dir, tmp_path):
-    """mpi_masking = .true. stops a build without PARALLEL_IO, naming the setting.
-
-    The tiling is chosen after the namelists are read, so this run prints the
-    Git hash line first.
-    """
+    """mpi_masking = .true. stops a run with parallel_io = .false. (a build without PIO)
+    while the namelists are read, naming the setting, before ROMS looks for the
+    per-rank grid file."""
     nml = _namelist(input_dir)
     nml["PARAM_SETTINGS"]["mpi_masking"] = True
     assert_run_rejected(
         physics_conf, nml, tmp_path,
-        ["PARAM_SETTINGS mpi_masking = .true. needs a build with the cpp key PARALLEL_IO"],
-        label="mpi_masking", absent=[RUN_END],
+        ["PARAM_SETTINGS mpi_masking = .true. needs PIO_SETTINGS parallel_io = .true."],
+        label="mpi_masking", absent=[AFTER_NAMELISTS],
     )
 
 

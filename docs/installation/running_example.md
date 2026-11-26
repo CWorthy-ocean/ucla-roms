@@ -38,4 +38,4 @@ cd output
 ncjoin iceland_parent_his.<date>.?.nc
 ```
 
-after which there will be an additional netCDF file `iceland_parent_his.<date>.nc` containing the whole domain, ready for analysis. Add `-d` to delete the per-processor files once they are joined. A configuration compiled with `PARALLEL_IO` reads whole input files and writes joined output, so it needs neither `partit` nor `ncjoin` (except for particle output, which stays one file per processor).
+after which there will be an additional netCDF file `iceland_parent_his.<date>.nc` containing the whole domain, ready for analysis. Add `-d` to delete the per-processor files once they are joined. A configuration built with `make PIO=yes` (and `parallel_io = .true.`) reads whole input files and writes joined output, so it needs neither `partit` nor `ncjoin` (except for particle output, which stays one file per processor).

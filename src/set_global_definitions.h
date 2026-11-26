@@ -10,6 +10,10 @@
 #ifdef ROMS_BUILD_MARBL
 # define MARBL
 #endif
+/* PARALLEL_IO: likewise from make PIO=yes (ROMS_BUILD_PIO) */
+#ifdef ROMS_BUILD_PIO
+# define PARALLEL_IO
+#endif
 
 /* MASKING is required: the land masks are used outside "#ifdef MASKING"
  in much of the code, so a build without it would fail with unrelated

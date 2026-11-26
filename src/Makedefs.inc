@@ -18,7 +18,11 @@ USER_LDFLAGS ?=
 # Build options, each yes or no (e.g. make MARBL=yes):
 #   MARBL : compile and link the MARBL biogeochemistry library (MARBL_ROOT);
 #           the namelist key use_marbl then switches it on at run time
+#   PIO   : read and write joined NetCDF files with the ParallelIO library
+#           (PIO_ROOT, PNETCDFHOME); the namelist key parallel_io must then be
+#           .true. (its default), and .false. without PIO
 MARBL ?= no
+PIO ?= no
 ##############################
 #       FILE EXTENSIONS      #
 
@@ -111,19 +115,15 @@ endif
 # message otherwise and gives true or false.
 yes_no_option = $(if $(filter yes no,$($(1))),$(if $(filter yes,$($(1))),true,false),$(error $(1)=$($(1)): use $(1)=yes or $(1)=no))
 USEMARBL := $(call yes_no_option,MARBL)
+USEPIO := $(call yes_no_option,PIO)
 # The build options are kept in build_options.txt, rewritten only when they
 # change; every object depends on it (see Makefile), so changing an option
 # recompiles everything, as editing cppdefs.opt does.
 # (Only in a ROMS build directory, which has a cppdefs.opt: Tools-Roms includes
 # this file too.)
-BUILD_OPTIONS := MARBL=$(MARBL)
+BUILD_OPTIONS := MARBL=$(MARBL) PIO=$(PIO)
 ifeq ($(wildcard cppdefs.opt),cppdefs.opt)
 $(shell [ "$$(cat build_options.txt 2>/dev/null)" = "$(BUILD_OPTIONS)" ] || echo "$(BUILD_OPTIONS)" > build_options.txt)
-endif
-
-#Check whether we're compiling with PARALLEL_IO (NHMG is always built, see Makefile):
-ifeq ($(wildcard cppdefs.opt),cppdefs.opt)
-        USEPIO := $(shell grep -q '^[^!]*\#[[:space:]]*define[[:space:]]*PARALLEL_IO' cppdefs.opt && echo true || echo false )
 endif
 
 # C-preprocessor (cpp):
@@ -143,6 +143,11 @@ endif
 # retired_cpp_keys.h, which stops a cppdefs.opt that still defines MARBL)
 ifeq ($(USEMARBL),true)
 	CPPFLAGS += -DROMS_BUILD_MARBL
+endif
+# PIO=yes: set_global_definitions.h defines PARALLEL_IO from ROMS_BUILD_PIO, in
+# the same way
+ifeq ($(USEPIO),true)
+	CPPFLAGS += -DROMS_BUILD_PIO
 endif
 
 #   Since we no longer keep preprocessed files after compilation, if you want to still

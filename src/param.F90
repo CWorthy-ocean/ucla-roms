@@ -32,7 +32,7 @@ module param
   ! active tracer is temperature, and the tracers that follow start at isalt.
   logical, public :: salinity = .true.
   ! mpi_masking: choose NP_XI x NP_ETA at start-up from the land mask and run
-  ! without the all-land tiles (mpi_masking_mod). Needs PARALLEL_IO.
+  ! without the all-land tiles (mpi_masking_mod). Needs parallel_io = .true.
   logical, public :: mpi_masking = .false.
   namelist /PARAM_SETTINGS/ NP_XI, NP_ETA, LLm, MMm,&
   &nz, nt_passive, nt_cdr_oae, nt_cdr_dor, nt_bgc, salinity, mpi_masking

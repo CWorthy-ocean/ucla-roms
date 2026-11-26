@@ -6,7 +6,7 @@ matching the parent's baroclinic pressure flux, read from the boundary file
 from ``calc_pflx``. The test parent has no parent, so its
 boundary file gets synthetic fluxes: smooth along each edge, varying in time.
 
-Each build, with and without PARALLEL_IO, runs the case on 2x2 ranks with
+Each build, with and without parallel_io, runs the case on 2x2 ranks with
 restarts and the sponge-tuning output (``wrt_sponge``), on one rank, and again
 on 2x2 ranks restarted from the first restart; and three times more on 2x2 ranks
 without restarts, with averaged output (``sponge_avg``), with output every
@@ -16,10 +16,10 @@ The checks:
 - the corner points of the boundary data line up with the tiles: one rank gives
   the same coefficients and state as 2x2 (both builds read the boundary data
   with the corner point on the first and last tile of each edge, and used to
-  read the parent flux shifted by a point there, or, with PARALLEL_IO, into
+  read the parent flux shifted by a point there, or, with parallel_io, into
   arrays one point short; writing ``ub_*`` to a restart then aborted);
 - the restart is exact: the restart is written after that step's tuning;
-- the ``_spn`` file is written (PARALLEL_IO used to stop at its creation) and,
+- the ``_spn`` file is written (parallel_io used to stop at its creation) and,
   without ``sponge_avg``, holds the coefficients of the restart at the same
   time, the parent flux of the boundary file at the right points, and the child
   flux, for every side;
@@ -72,7 +72,7 @@ def _pflx_values(nt: int, n: int, side: int) -> np.ndarray:
 @pytest.fixture(scope="module")
 def sponge_inputs(input_dir, tmp_path_factory) -> dict[str, Path]:
     """Classic-format inputs with the parent fluxes in the boundary file: joined
-    ("joined", for PARALLEL_IO) and partitioned for 2x2 ("2x2") and one rank ("1x1")."""
+    ("joined", for parallel_io) and partitioned for 2x2 ("2x2") and one rank ("1x1")."""
     joined = tmp_path_factory.mktemp("sponge_inputs")
     for name in INPUTS:
         with xr.open_dataset(input_dir / name, decode_cf=False) as ds:
@@ -113,15 +113,15 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
     def _build_and_run(build: str) -> dict[str, Path]:
         pio = build == "parallel_io"
         cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-        if pio:
-            cpp_keys = cpp_keys + ["PARALLEL_IO"]
-        conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path_factory.mktemp(f"sponge_build_{build}"))
+        conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path_factory.mktemp(f"sponge_build_{build}"),
+                                 pio=pio)
         conf.compile()
 
         dirs = {}
         for run, tiles in (("tiled", "2x2"), ("one_rank", "1x1"), ("restart", "2x2"),
                            ("averaged", "2x2"), ("every_step", "2x2"), ("default_avg", "2x2")):
             nml = create_test_namelist_dict(sponge_inputs["joined" if pio else tiles])
+            nml["PIO_SETTINGS"]["parallel_io"] = pio
             nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False
             nml["TIME_STEPPING"].update(dt=DT, ntimes=NTIMES)
             nml["PARAM_SETTINGS"].update(NP_XI=int(tiles[0]), NP_ETA=int(tiles[2]))
@@ -153,7 +153,7 @@ def sponge_runs(tmp_path_factory, sponge_inputs):
 
 def _joined(run_dir: Path, root: str, pio: bool, join: bool = True) -> list[Path]:
     """The ``<root>.<date>.nc`` files of a run, in time order: joined from the
-    per-rank files without PARALLEL_IO (``join``), or the name ROMS takes as
+    per-rank files without parallel_io (``join``), or the name ROMS takes as
     the initial file (it adds the rank)."""
     if pio:
         return sorted(run_dir.glob(f"{root}.[0-9]*[0-9].nc"))

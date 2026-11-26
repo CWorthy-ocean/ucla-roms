@@ -7,22 +7,22 @@ vertical remapping); child B is rotated against the parent and on its own
 vertical grid (remapped). They lie on different ranks of the 2x2 tiling and
 each crosses a tile boundary.
 
-Each build, with and without PARALLEL_IO, runs the children alone and then
+Each build, with and without parallel_io (make PIO=yes), runs the children alone and then
 together, and each child's boundary data from the two-child run must equal
-its run alone bit for bit: with PARALLEL_IO each child's joined
+its run alone bit for bit: with parallel_io each child's joined
 ``<extract_root_name>_bry`` file, without it every variable of the per-rank
 ``_ext`` files (which extract_data_join would split by prefix). The
-PARALLEL_IO two-child output is also checked against the reference hashes;
+parallel_io two-child output is also checked against the reference hashes;
 the interpolation and remapping are the same code in both builds. Neither
 run switches on the budget diagnostics: calc_pflx computes the pressure fluxes without them;
 the runs that do not ask for them leave calc_pflx off. Child A is also run
 with the pressure fluxes up and vp, which must be written, non-zero, equal
-to the reference hashes in both builds, and with PARALLEL_IO independent of
+to the reference hashes in both builds, and with parallel_io independent of
 the tiling. The settings extract_data rejects for several children stop
 ROMS at startup with a message. Every variable of the boundary files must
-hold data: with PARALLEL_IO the joined file used to define every tracer on
+hold data: with parallel_io the joined file used to define every tracer on
 every boundary and leave the ones output_vars does not request (passive,
-CDR_LITE, bgc) at the netCDF fill value. With PARALLEL_IO, child A's
+CDR_LITE, bgc) at the netCDF fill value. With parallel_io, child A's
 boundary records must equal the parent history at their bry_time,
 interpolated with extract_data's weights; the 3D fields used to be one
 parent step older.
@@ -52,7 +52,7 @@ from ._roms_input_file_generation import create_roms_grid
 NC_FILL_DOUBLE = 9.969209968386869e36
 
 # The inputs of create_test_namelist_dict, copied to classic netCDF for the
-# PARALLEL_IO build: PIO reads them joined, through PnetCDF.
+# parallel_io build: PIO reads them joined, through PnetCDF.
 PIO_INPUTS = [
     "example_input_grid.nc",
     "example_input_bgc_initial_conditions.nc",
@@ -112,7 +112,7 @@ def nesting_files(tmp_path_factory) -> dict[str, Path]:
 
 @pytest.fixture(scope="module")
 def pio_input_dir(input_dir, tmp_path_factory) -> Path:
-    """Classic-format copies of the joined inputs, for the PARALLEL_IO build."""
+    """Classic-format copies of the joined inputs, for the parallel_io build."""
     out = tmp_path_factory.mktemp("pio_inputs")
     for name in PIO_INPUTS:
         with xr.open_dataset(input_dir / name, decode_cf=False) as ds:
@@ -122,17 +122,14 @@ def pio_input_dir(input_dir, tmp_path_factory) -> Path:
 
 @pytest.fixture(scope="module", params=[False, True], ids=["per_rank", "parallel_io"])
 def extract_conf(request, tmp_path_factory) -> ROMSConfiguration:
-    """Physics-only realistic build, without and with PARALLEL_IO, and without
+    """Physics-only realistic build, without and with parallel_io, and without
     budget diagnostics: calc_pflx computes up and vp without them (test_pressure_fluxes),
     as in the C-Star Forge builds."""
     pio = request.param
     cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-    if pio:
-        cpp_keys = cpp_keys + ["PARALLEL_IO"]
     build_dir = tmp_path_factory.mktemp("extract_build_pio" if pio else "extract_build")
-    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
+    conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir, pio=pio)
     conf.compile()
-    conf.pio = pio
     return conf
 
 
@@ -141,6 +138,7 @@ def _nml(conf, input_dir, pio_input_dir, children: list[dict], scalars=()) -> di
     plus ``file`` and ``root``). One child is written as scalars, as before;
     so are the settings named in ``scalars`` (child 1's value only)."""
     nml = create_test_namelist_dict(pio_input_dir if conf.pio else input_dir)
+    nml["PIO_SETTINGS"]["parallel_io"] = conf.pio
     nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     settings = {
         "extract_file": [str(c["file"]) for c in children],
@@ -160,7 +158,7 @@ def _nml(conf, input_dir, pio_input_dir, children: list[dict], scalars=()) -> di
 
 
 def _child(conf, nesting_files, name: str) -> dict:
-    """Child ``name`` for this build: without PARALLEL_IO all children share
+    """Child ``name`` for this build: without parallel_io all children share
     one s_rho, so child B keeps its stretching but takes child A's N."""
     c = dict(CHILDREN[name], file=nesting_files[name], root=f"child{name}")
     if not conf.pio and name == "B":
@@ -186,7 +184,7 @@ def _per_rank_hashes(run_dir: Path) -> dict[str, str]:
 
 def _boundary_values(conf, run_dir: Path, root: str = "childA") -> dict[str, np.ndarray]:
     """``{"<var>_<bnd>": values}`` of every data variable in the boundary
-    output of ``run_dir``: the joined ``<root>_bry`` file with PARALLEL_IO,
+    output of ``run_dir``: the joined ``<root>_bry`` file with parallel_io,
     else the per-rank ``_ext`` files (``<prefix>_<var>_<bnd>``, each rank's
     points in rank order). The time variables are left out."""
     if conf.pio:
@@ -295,10 +293,10 @@ def test_boundary_data_at_record_time(tmp_path, extract_conf, input_dir, pio_inp
     record and its 2D fields. temp, u and v change over one step, so that lag
     fails here. The other tracers, which the history file does not hold, are
     read the same way. Both builds share these lines of do_extract_data; the
-    joined PARALLEL_IO files are compared."""
+    joined parallel_io files are compared."""
     conf = extract_conf
     if not conf.pio:
-        pytest.skip("only PARALLEL_IO writes joined history and boundary files")
+        pytest.skip("only parallel_io writes joined history and boundary files")
     nml = _nml(conf, input_dir, pio_input_dir, [_child(conf, nesting_files, "A")])
     steps, dt = nml["TIME_STEPPING"]["ntimes"], nml["TIME_STEPPING"]["dt"]
     nml["BASIC_OUTPUT_SETTINGS"].update(output_period_his=dt, nrpf_his=steps + 1)
@@ -360,10 +358,10 @@ def _pflx_values(conf, run_dir: Path) -> dict[str, np.ndarray]:
 def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files,
                          reference_results):
     """The pressure fluxes up and vp (roms-tools include_pressure_fluxes) are
-    written for every boundary, in both builds (PARALLEL_IO used to abort on
+    written for every boundary, in both builds (parallel_io used to abort on
     up), and are non-zero at every point of child A, which lies in open water
     (they are all zero when calc_pressure_flux does not run). With
-    PARALLEL_IO, which reads the joined inputs, the 2x2
+    parallel_io, which reads the joined inputs, the 2x2
     run gives the same values as a run on one rank. The values are checked
     against the reference hashes in both builds, so that a change to
     calc_pressure_flux or to how extract_data copies up and vp into its buffer
@@ -401,7 +399,7 @@ def test_pressure_fluxes(tmp_path, extract_conf, input_dir, pio_input_dir, nesti
 
 def _passive_ini(conf, input_dir, pio_input_dir, out: Path) -> Path:
     """The test initial conditions with passive_tracer1 = temp, joined (for
-    PARALLEL_IO) or as the four per-rank pieces; returns the namelist name."""
+    parallel_io) or as the four per-rank pieces; returns the namelist name."""
     name = "example_input_bgc_initial_conditions"
     if conf.pio:
         pieces = [(pio_input_dir / f"{name}.nc", out / "ini_passive.nc")]
@@ -421,7 +419,7 @@ def test_all_variables_written(tmp_path, extract_conf, input_dir, pio_input_dir,
     the variables output_vars requests, every one written (finite, never the
     fill value): the roms-tools default (zeta, temp, salt; ubar, u; vbar, v)
     without the tracer, and with it once the rho points request 'passive'.
-    PARALLEL_IO used to define every tracer on every boundary, so without
+    parallel_io used to define every tracer on every boundary, so without
     the request passive_tracer1_<bnd> held the fill value (with CDR_LITE the
     same happened to CDR_OAE_*/CDR_DOR_*, and to every bgc tracer without
     'bgc'). The request must not change the other variables (the substring
@@ -476,7 +474,7 @@ def test_children_request_different_variables(tmp_path, extract_conf, input_dir,
     with bgc and one without.)"""
     conf = extract_conf
     if not conf.pio:
-        pytest.skip("only PARALLEL_IO writes one boundary file per child")
+        pytest.skip("only parallel_io writes one boundary file per child")
     ini = _passive_ini(conf, input_dir, pio_input_dir, tmp_path)
     a = dict(_child(conf, nesting_files, "A"), file=nesting_files["A_passive"])
     b = _child(conf, nesting_files, "B")
@@ -493,7 +491,7 @@ def test_children_request_different_variables(tmp_path, extract_conf, input_dir,
 
 
 def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nesting_files):
-    """Settings that cannot work (for several children, or with PARALLEL_IO)
+    """Settings that cannot work (for several children, or with parallel_io)
     stop ROMS at startup."""
     conf = extract_conf
     a, b = _child(conf, nesting_files, "A"), _child(conf, nesting_files, "B")
@@ -510,8 +508,8 @@ def test_rejected_settings(tmp_path, extract_conf, input_dir, pio_input_dir, nes
     if conf.pio:
         # each child's file is named from its extract_root_name
         cases["shared_root"] = ([a, dict(b, root=a["root"])], (), "share extract_root_name")
-        # do_extract_data has no PARALLEL_IO write for w
-        cases["w"] = ([dict(a, file=nesting_files["A_w"])], (), "is not supported with PARALLEL_IO")
+        # do_extract_data has no parallel_io write for w
+        cases["w"] = ([dict(a, file=nesting_files["A_w"])], (), "is not supported with parallel_io = .true.")
     else:
         # all children share the per-rank files: one prefix and one N_chd each
         cases["shared_prefix"] = ([a, dict(a, root="childA2")], (), "share the prefix child")

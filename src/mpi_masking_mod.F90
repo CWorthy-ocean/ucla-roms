@@ -58,8 +58,8 @@ contains
 #ifndef PARALLEL_IO
     call error_log%raise_global(&
     &context=module_name//'/'//sr_name,&
-    &info='PARAM_SETTINGS mpi_masking = .true. needs a build with the cpp key PARALLEL_IO'//&
-    &' (it reads the joined grid file); set mpi_masking = .false. or build with PARALLEL_IO.')
+    &info='PARAM_SETTINGS mpi_masking = .true. needs PIO_SETTINGS parallel_io = .true. (a build'//&
+    &' made with make PIO=yes; it reads the joined grid file); set mpi_masking = .false.')
     call error_log%abort_check()
     return
 #endif
