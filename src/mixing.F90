@@ -13,10 +13,9 @@ module mixing
   real(kind=8),allocatable,dimension(:,:) :: visc2_r
   real(kind=8),allocatable,dimension(:,:) :: visc2_p
   real(kind=8),allocatable,dimension(:,:,:) :: diff2
-# ifdef ADV_ISONEUTRAL
+  ! adv_isoneutral only (NUMERICS_SETTINGS)
   real(kind=8),allocatable,dimension(:,:,:) :: diff3u
   real(kind=8),allocatable,dimension(:,:,:) :: diff3v
-# endif
 
   real(kind=8),allocatable,dimension(:,:,:) :: Akv
   real(kind=8),allocatable,dimension(:,:,:,:) :: Akt   ! (:,:,:,itemp) and, with salinity, (:,:,:,isalt)
@@ -52,6 +51,7 @@ contains
   !----------------------------------------------------------------
   subroutine init_arrays_mixing  ![
     use scalars, only: init, nz, nt, visc2, tnu2, akv_bak, akt_bak
+    use numerics_settings_mod, only: adv_isoneutral
     use tracers, only: itands
     implicit none
 
@@ -60,10 +60,10 @@ contains
     allocate( visc2_r(GLOBAL_2D_ARRAY) ); visc2_r=init
     allocate( visc2_p(GLOBAL_2D_ARRAY) ); visc2_p=init
     allocate( diff2(GLOBAL_2D_ARRAY,NT) ); diff2=init
-# ifdef ADV_ISONEUTRAL
-    allocate( diff3u(GLOBAL_2D_ARRAY,nz) ); diff3u=init
-    allocate( diff3v(GLOBAL_2D_ARRAY,nz) ); diff3v=init
-# endif
+    if (adv_isoneutral) then
+      allocate( diff3u(GLOBAL_2D_ARRAY,nz) ); diff3u=init
+      allocate( diff3v(GLOBAL_2D_ARRAY,nz) ); diff3v=init
+    endif
 
     allocate( Akv(GLOBAL_2D_ARRAY,0:nz) ); Akv=init
     if (salinity) then

@@ -260,13 +260,6 @@ contains
       &   context = module_name//'/'//sr_name, &
       &   info='use_marbl = .true. (MARBL and its CDR outputs) needs salinity = .true. (PARAM_SETTINGS)')
     end if
-#ifdef LMD_DDMIX
-    if (.not. salinity) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name, &
-      &   info='the cpp key LMD_DDMIX (double diffusion) needs salinity = .true. (PARAM_SETTINGS)')
-    end if
-#endif
 #ifndef LMD_MIXING
     mixing_type = "background"
 #else

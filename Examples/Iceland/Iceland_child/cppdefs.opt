@@ -21,20 +21,6 @@
 
 !----------------------------------------------------------
 
-! Rotate the advection and diffusion operators so they are oriented in the isoneutral direction
-! Usage notes:
-#undef ADV_ISONEUTRAL
-
-! Enable the calculation and writing of "diagnostics" for the nonhydrostatic vertical velocity equation
-! Usage notes: needs nhmg = .true. in the namelist group NHMG_SETTINGS (the run stops otherwise).
-! The non-hydrostatic solver (NHMG) itself is no longer a cpp key: it is always built and the
-! namelist key nhmg switches it on.
-#undef DIAGNOSTICS_NHMG
-
-! Write momentum equation diagnostics for non-hydrostatic mode
-! Usage notes: needs nhmg = .true. in the namelist group NHMG_SETTINGS (the run stops otherwise).
-#undef NHMGDIAG
-
 
 !!!!!!!!!!!!!!!!!!!!!!!!! GRID OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -52,20 +38,12 @@
 
 !!!!!!!!!!!!!!!!!!!!!!!!! NUMERICAL ALGORITHMS !!!!!!!!!!!!!!!!!!!!!!!!!
 
-! Use the fourth-order Akima scheme for horizontal advection
-! Usage notes: Overrides the default 3rd-order upstream advection
-#undef AKIMA
-
 
 !!!!!!!!!!!!!!!!!!!!!!!!! MIXING OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! Use the KPP parameterization (Large et al., 1994) in the bottom boundary layer
 ! Usage notes:
 #define LMD_BKPP
-
-! Compute double-diffusive mixing (Large et al., 1994)
-! Usage notes:
-#undef LMD_DDMIX
 
 ! Use the KPP parameterization (Large et al., 1994) in the surface boundary layer
 ! Usage notes:
@@ -84,10 +62,6 @@
 #define LMD_RIMIX
 
 !----------------------------------------------------------
-
-! If surface and bottom boundary layers overlap, set them both to be the entire depth of the water column
-! Usage notes: Unclear whether this is needed for physical or numerical reasons; disabled by default
-#undef MERGE_OVERLAP
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!! BIOGEOCHEMICAL OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!

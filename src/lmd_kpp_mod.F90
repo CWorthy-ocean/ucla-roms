@@ -358,15 +358,6 @@ do j=jstr,jend   !--> restart j-loop till the very end
   endif
 # endif
 
-# if defined MERGE_OVERLAP && defined LMD_KPP && defined LMD_BKPP
-  do i=istr,iend
-    cff=z_w(i,j,nz)-z_w(i,j,0)          ! if surface and bottom
-    if (hbl(i,j)+bbl(i,j) > cff) then  ! boundary layers overlap
-      hbl(i,j) = cff                   ! set both of them to the
-      bbl(i,j) = cff                   ! total depth of water
-    endif                              ! column.
-  enddo
-# endif
 
 # ifdef LMD_KPP
   do i=istr,iend
@@ -677,15 +668,6 @@ subroutine check_kpp_switches
     &context=sr_name)
   end if
   cpps(is:ie)='SMOOTH_HBL'
-# ifdef MERGE_OVERLAP
-  is=ie+2 ; ie=is+13
-  if (ie > max_opt_size) then
-    call error_log%raise_global(&
-    &info=error_info,&
-    &context=sr_name)
-  end if
-  cpps(is:ie)='MERGE_OVERLAP'
-# endif
   call error_log%abort_check()
 end subroutine check_kpp_switches
 #else

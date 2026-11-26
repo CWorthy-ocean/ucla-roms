@@ -40,10 +40,6 @@ module diagnostics
   use pio, only: PIO_closefile, PIO_write
 #endif
   use mpi_f08, only: MPI_CHARACTER, mpi_bcast, MPI_Barrier
-#if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
-  use ocean_vars, only: w
-  use param, only: np_xi, np_eta
-#endif
 
   use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
@@ -133,48 +129,6 @@ module diagnostics
   integer(kind=4) :: ncid=-1, prev_fill_mode
 
   real(kind=8), public,allocatable, dimension(:,:) :: dxdyi_u, dxdyi_v,dxdyi ! 1/ surface of cells
-
-  ! W MOMENTUM: (CURRENTLY NOT WORKING)
-  ! -----------
-
-  ! NOTE: u & v are 1:N in z, but w is 0:N hence different variables needed
-  ! (NHMGDIAG and DIAGNOSTICS_NHMG; these arrays are never allocated yet)
-# if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
-  real(kind=8),allocatable,dimension(:,:,:) :: w_prev, wdz_old, w_dif
-  integer(kind=4), public, parameter                         :: nwd = 5    ! number of 'w' momentum diag terms (for
-  real(kind=8),allocatable,dimension(:,:,:,:),public :: Wdiag
-
-  integer(kind=4), parameter, public ::&
-  &iwprsgr   = 1,&
-  &iwhoriadv = 2,&
-  &iwvertadv = 3,&
-  &iwuv2     = 4,&
-  &iwbc      = 5
-
-  character (len=20), dimension(nwd) :: wvname = (/character(len=20) ::&
-  &'w_prsgrd',&
-  &'w_horiz_flx',&
-  &'w_vert_adv',&
-  &'w_2D_3D_coupling',&
-  &'w_3dbc'&
-  &/)
-
-  character (len=60), dimension(nwd) :: wlname = (/character(len=60) ::&
-  &'prsgrd.F',&
-  &'compute_horiz_rhs_w_terms.h',&
-  &'compute_vert_rhs_w_terms.h',&
-  &'step3d_uv2.F',&
-  &'w3dbc_im.F'&
-  &/)
-
-  character (len=20) :: wunits = 'm^2/s (dz*w)'  ! not sure on units here.
-
-  ! Public subroutines:
-  public set_diags_w_at_uv1
-  public set_diags_w_at_uv2
-  public set_diags_w_at_uv2_end
-  public set_diags_w_at_bc
-# endif /* NHMGDIAG || DIAGNOSTICS_NHMG */
 
   public init_diagnostics
   public do_diagnostics
@@ -481,148 +435,6 @@ contains
 
   end subroutine set_diags_v_4th_adv  !]
 ! ----------------------------------------------------------------------
-# if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
-  subroutine set_diags_w_at_uv1( istr, iend, jstr, jend, DC, rw )  ![
-    ! Set the diagnostic terms for prsgrd, horiz & vert advection.
-    ! Prsgrd and horiz adv still need to also be convert to dz * w
-
-    implicit none
-
-    ! inputs
-    integer(kind=4),                                       intent(in) :: istr, iend, jstr, jend
-    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz), intent(in) :: DC
-    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz), intent(in) :: rw
-
-    ! local
-    integer(kind=4) :: i, j, k
-
-    do k=1,nz
-      do j=jstr,jend
-        do i=istr,iend
-          Wdiag(i,j,k,iwprsgr)   = Wdiag(i,j,k,iwprsgr)   * DC(i,0)  ! need to convert to dz*w now that we have DC
-          Wdiag(i,j,k,iwhoriadv) = Wdiag(i,j,k,iwhoriadv) * DC(i,0)
-          Wdiag(i,j,k,iwvertadv) = DC(i,0)*rw(i,j,k)&
-          &- ( Wdiag(i,j,k,iwprsgr) + Wdiag(i,j,k,iwhoriadv) ) ! subtract previous 2 terms incl
-          w_prev(i,j,k)          = w(i,j,k,nnew)                     ! store for next change
-        enddo
-      enddo
-    enddo
-
-  end subroutine set_diags_w_at_uv1  !]
-! ----------------------------------------------------------------------
-  subroutine set_diags_w_at_uv2( istr, iend, jstr, jend )  ![
-    implicit none
-
-    ! inputs
-    integer(kind=4), intent(in) :: istr, iend, jstr, jend
-
-    ! local
-    integer(kind=4) :: i, j, k
-
-    ! This could well be wrong. Need to confirm with Jeroen.
-    do k=1,nz-1
-      do j=jstr,jend  ! I changed istr to jstr...
-        do i=Istr,Iend
-          Wdiag(i,j,k,iwuv2) = w(i,j,k,nnew) * 0.5_8*( Hz(i,j,k+1)+Hz(i,j,k) ) - w_prev(i,j,k)
-        enddo
-      enddo
-    enddo
-
-    ! Need to do N seperately since can't do 0.5 * Hz(i,j,k+1)
-    ! Do seperate loop rather than having if statement in loop? Not sure what is more efficient
-    ! ifort compiler report could tell me if it fuses these loops...
-    do j=jstr,jend  ! I changed istr to jstr...
-      do i=Istr,Iend
-        Wdiag(i,j,nz,iwuv2) = w(i,j,nz,nnew) * Hz(i,j,nz) - w_prev(i,j,nz)
-      enddo
-    enddo
-
-  end subroutine set_diags_w_at_uv2  !]
-! ----------------------------------------------------------------------
-  subroutine set_diags_w_at_bc( istr, iend, jstr, jend )  ![
-    ! set the diagnostics terms for boundary changes in w
-    ! called from step3d_uv2.F right after call to w3dbc_im.F
-
-    implicit none
-
-    ! inputs/outputs
-    integer(kind=4), intent(in) :: istr, iend, jstr, jend
-
-    ! local
-    integer(kind=4) :: i, j, k
-
-    if (WESTERN_EDGE) then
-      i=istr-1
-      do k=1,nz-1            ! N-1 because of k+1
-        do j=jstr-1,jend+1
-          Wdiag(i,j,k,iwbc) = w(i,j,k,nnew) * 0.5_8*(Hz(i,j,k+1)+Hz(i,j,k)) - wdz_old(i,j,k) ! w_prev is already u_cur
-        enddo
-      enddo
-      Wdiag(i,j,nz,iwbc) = w(i,j,nz,nnew) * Hz(i,j,nz) - wdz_old(i,j,nz)
-    endif
-
-    if (EASTERN_EDGE) then
-      i=iend+1
-      do k=1,nz-1
-        do j=jstr-1,jend+1
-          Wdiag(i,j,k,iwbc) = w(i,j,k,nnew) * 0.5_8*(Hz(i,j,k+1)+Hz(i,j,k)) - wdz_old(i,j,k) ! w_prev is already u_cur
-        enddo
-      enddo
-      Wdiag(i,j,nz,iwbc) = w(i,j,nz,nnew) * Hz(i,j,nz) - wdz_old(i,j,nz)
-    endif
-
-    if (SOUTHERN_EDGE) then
-      j=jstr-1
-      do k=1,nz-1
-        do i=istr-1,iend+1
-          Wdiag(i,j,k,iwbc) = w(i,j,k,nnew) * 0.5_8*(Hz(i,j,k+1)+Hz(i,j,k)) - wdz_old(i,j,k) ! w_prev is already u_cur
-        enddo
-      enddo
-      Wdiag(i,j,nz,iwbc) = w(i,j,nz,nnew) * Hz(i,j,nz) - wdz_old(i,j,nz)
-    endif
-
-    if (NORTHERN_EDGE) then
-      j=jend+1
-      do k=1,nz-1
-        do i=istr-1,iend+1
-          Wdiag(i,j,k,iwbc) = w(i,j,k,nnew) * 0.5_8*(Hz(i,j,k+1)+Hz(i,j,k)) - wdz_old(i,j,k) ! w_prev is already u_cur
-        enddo
-      enddo
-      Wdiag(i,j,nz,iwbc) = w(i,j,nz,nnew) * Hz(i,j,nz) - wdz_old(i,j,nz)
-    endif
-
-  end subroutine set_diags_w_at_bc  !]
-! ----------------------------------------------------------------------
-  subroutine set_diags_w_at_uv2_end( istrR, iendR, jstrR, jendR)  ![
-    implicit none
-
-    ! inputs
-    integer(kind=4), intent(in) :: istrR, iendR, jstrR, jendR ! changed the name to use for u or v
-
-    ! local
-    integer(kind=4) :: i, j, k, tmp
-
-    do k=1,nz-1
-      do j=jstrR,jendR
-        do i=istrR,iendR
-          ! Full loop ranges since u-change over every point including bry.
-          tmp = w(i,j,k,nnew) * 0.5_8 * ( Hz(i,j,k+1)+Hz(i,j,k) )
-          w_dif(i,j,k)   = tmp - wdz_old(i,j,k)
-          wdz_old(i,j,k) = tmp
-        enddo
-      enddo
-    enddo
-
-    do j=jstrR,jendR
-      do i=istrR,iendR
-        tmp = w(i,j,nz,nnew) * Hz(i,j,nz)
-        w_dif(i,j,nz)   = tmp - wdz_old(i,j,nz)
-        wdz_old(i,j,nz) = tmp
-      enddo
-    enddo
-
-  end subroutine set_diags_w_at_uv2_end  !]
-# endif /* NHMGDIAG || DIAGNOSTICS_NHMG */
 
 ! ----------------------------------------------------------------------
   subroutine set_diags_t_h_mix(itrc)  ![

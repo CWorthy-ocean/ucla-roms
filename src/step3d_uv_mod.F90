@@ -38,9 +38,6 @@ contains
     use diagnostics, only: u_prev, v_prev, calc_diag, udiag,&
     &vdiag, icori, dxdyi_u, dxdyi_v, idiss, ipgr, iadv, ivmix,&
     &set_diags_u_4th_adv, set_diags_v_4th_adv, diag_uv
-#if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
-    use diagnostics, only: Wdiag, iwprsgr, iwhoriadv, set_diags_w_at_uv1
-#endif
     use surf_flux, only: sustr, svstr
     use coupling, only: r_d, rufrc, rvfrc
     use grid, only:&
@@ -56,9 +53,8 @@ contains
     use ocean_vars, only: u, v, hz, flxu, flxv, we, wi, z_w
     use scalars, only: nz, dt, nnew, nrhs, ntstart
     use roms_mpi, only: exchange_xxx
-# ifdef ADV_ISONEUTRAL
-    use eos_vars, only: drde, drdx
-#endif
+    use eos_vars, only: drde, drdx   ! adv_isoneutral only
+    use numerics_settings_mod, only: adv_isoneutral
     use instant_output, only: wrt_instant
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
@@ -77,11 +73,6 @@ contains
 
 # include "compute_auxiliary_bounds.h"
 
-#  ifdef NHMGDIAG
-    if (diag_uv.and.calc_diag) then
-      Wdiag(istr:iend,jstr:jend,:,iwprsgr) =rw(istr:iend,jstr:jend,:)
-    endif
-#  endif
 
     if (nhmg_on) then
 
@@ -108,9 +99,6 @@ contains
         enddo
 
       enddo
-# ifdef DIAGNOSTICS_NHMG
-      if (calc_diag) call set_diags_w_at_uv1( istr, iend, jstr, jend, DC, rw )
-# endif
     endif  ! nhmg_on
 
     do k=1,nz
@@ -442,10 +430,8 @@ contains
 
     !!!! JM not clear what this does either
 # undef r_D
-# ifdef ADV_ISONEUTRAL
     !!!! JM not clear what this does !!!
-    call exchange_xxx(dRdx,dRde)
-# endif
+    if (adv_isoneutral) call exchange_xxx(dRdx,dRde)
 
   end subroutine step3d_uv1_tile
 
@@ -504,9 +490,8 @@ contains
     use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
     use dimensions, only: inode, jnode
 
-#ifdef ADV_ISONEUTRAL
-    use eos_vars, only: drdx, drde, idrz
-#endif
+    use eos_vars, only: drdx, drde, idrz   ! adv_isoneutral only
+    use numerics_settings_mod, only: adv_isoneutral
 
 #ifdef SPLIT_EOS
     use eos_vars, only: qp2, qp1, rho1
@@ -520,9 +505,7 @@ contains
     &dm_r, pn, pm
     use ocean_vars, only: w, z_r, wi   ! w: NHMG only
     use mixing, only: &
-#ifdef ADV_ISONEUTRAL
-    &diff3u, diff3v,&
-#endif
+    &diff3u, diff3v,&   ! adv_isoneutral only
 #ifdef LMD_KPP
     &hbls,&
 #endif
@@ -531,10 +514,6 @@ contains
 #endif
     akv
     use diagnostics, only: diag_uv, calc_diag, udiag, vdiag, icoup
-#if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
-    use diagnostics, only: diag_uv, calc_diag, set_diags_w_at_uv2, set_diags_w_at_bc,&
-    &set_diags_w_at_uv2_end
-#endif
     use ocean_vars, only: u, ubar, v, vbar, hz, flxu, flxv, z_w
     use scalars, only: nz, knew, nnew, nstp, g, rho0, dt
     use roms_mpi, only: exchange_xxx
@@ -551,14 +530,13 @@ contains
     real(kind=8) :: uint,vint
     real(kind=8) :: huint,hvint
 
-# ifdef ADV_ISONEUTRAL
+    ! adv_isoneutral only:
     real(kind=8) dRz,dRx_max, dpth, r0g, cfs,cfb
     real(kind=8), parameter :: epsil=1.D-33
     !  Alphamax = 4 leads to mixing that is worse than
     ! up3 over steep slopes
 #  define  ALPHA_MAX 2._8
 #  define GAMMA 0.0833333333333_8
-# endif
 
 # include "compute_auxiliary_bounds.h"
 
@@ -792,13 +770,16 @@ enddo
 do k=1,nz,+1
   do i=IU_RANGE
   FlxU(i,j,k)=CF(i,k)-DC(i,k)*CF(i,0)   !<-- correction
-
-# ifdef ADV_ISONEUTRAL
-  diff3u(i,j,k)=sqrt(GAMMA*abs(u(i,j,k,nnew))*dm_u(i,j))&
-  &*dm_u(i,j)
-# endif
 enddo
 enddo
+if (adv_isoneutral) then
+  do k=1,nz,+1
+    do i=IU_RANGE
+    diff3u(i,j,k)=sqrt(GAMMA*abs(u(i,j,k,nnew))*dm_u(i,j))&
+    &*dm_u(i,j)
+  enddo
+enddo
+endif
 
 if (j >= jstr) then         !--> ETA-component
   do i=IV_RANGE
@@ -840,14 +821,17 @@ enddo
 do k=1,nz,+1
   do i=IV_RANGE
   FlxV(i,j,k)=CF(i,k)-DC(i,k)*CF(i,0)
-# ifdef ADV_ISONEUTRAL
-  diff3v(i,j,k)=sqrt(GAMMA*abs(v(i,j,k,nnew))*dn_v(i,j))&
-  &*dn_v(i,j)
-# endif
 enddo
 enddo
-# ifdef ADV_ISONEUTRAL
-if (j <= jend) then
+if (adv_isoneutral) then
+  do k=1,nz,+1
+    do i=IV_RANGE
+    diff3v(i,j,k)=sqrt(GAMMA*abs(v(i,j,k,nnew))*dn_v(i,j))&
+    &*dn_v(i,j)
+  enddo
+enddo
+endif
+if (adv_isoneutral .and. j <= jend) then
   r0g=rho0/g
   do k=1,nz-1
     do i=istr,iend
@@ -903,8 +887,7 @@ if (j <= jend) then
 
     enddo
   enddo
-endif      !<-- j <= jend
-# endif
+endif      !<-- adv_isoneutral .and. j <= jend
 endif    !<-- j >= jstr
 enddo    ! <-- j
 
@@ -945,9 +928,7 @@ call exchange_xxx(FlxU,u(:,:,:,nnew),ubar(:,:,knew) )
 
 call exchange_xxx(FlxV,v(:,:,:,nnew),vbar(:,:,knew) )
 
-#  ifdef ADV_ISONEUTRAL
-call exchange_xxx(idRz,diff3u,diff3v)
-#  endif
+if (adv_isoneutral) call exchange_xxx(idRz,diff3u,diff3v)
 
 
 if (nhmg_on) then  ! ---- NHMG
@@ -972,9 +953,6 @@ do j=jstr,jend  ! BUG HERE
     enddo
   enddo
 enddo
-# ifdef DIAGNOSTICS_NHMG
-if (calc_diag) call set_diags_w_at_uv2( istr, iend, jstr, jend )
-# endif
 !
 
 !--------------------------------------------------------------------
@@ -982,9 +960,6 @@ if (calc_diag) call set_diags_w_at_uv2( istr, iend, jstr, jend )
 !--------------------------------------------------------------------
 call w3dbc_tile (Istr,Iend,Jstr,Jend, DC)
 
-#  ifdef DIAGNOSTICS_NHMG
-if (calc_diag) call set_diags_w_at_bc( istr, iend, jstr, jend )
-#  endif
 !--------------------------------------------------------------------
 ! Exchange periodic boundaries and computational margins.
 !--------------------------------------------------------------------
@@ -992,9 +967,6 @@ call exchange_xxx(w(:,:,:,nnew))
 
 endif  ! ---- nhmg_on
 
-#  ifdef NHMGDIAG
-if (calc_diag.and.diag_uv)  call set_diags_w_at_uv2_end(istrR, iendR, jstrR, jendR)
-#  endif
 
 end subroutine step3d_uv2_tile
 

@@ -261,3 +261,27 @@
 #ifdef PARALLEL_IO
 # error "CPP key PARALLEL_IO was removed: build with make PIO=yes (the namelist key parallel_io in PIO_SETTINGS is then .true., its default); remove PARALLEL_IO from cppdefs.opt"
 #endif
+#ifdef ADV_ISONEUTRAL
+# error "CPP key ADV_ISONEUTRAL was removed: isoneutral advection is now adv_isoneutral = .true. in the namelist group NUMERICS_SETTINGS; remove ADV_ISONEUTRAL from cppdefs.opt"
+#endif
+#ifdef UPSTREAM_TS_LAND_CURV
+# error "CPP key UPSTREAM_TS_LAND_CURV was removed: it is now upstream_ts_land_curv = .true. in the namelist group NUMERICS_SETTINGS; remove UPSTREAM_TS_LAND_CURV from cppdefs.opt"
+#endif
+#ifdef PARABOLIC_SPLINES
+# error "CPP key PARABOLIC_SPLINES was removed: vertical tracer advection with parabolic splines is now parabolic_splines = .true. in the namelist group NUMERICS_SETTINGS; remove PARABOLIC_SPLINES from cppdefs.opt"
+#endif
+#ifdef AKIMA
+# error "CPP key AKIMA was retired (Akima horizontal tracer advection in the predictor step): remove it from cppdefs.opt"
+#endif
+#ifdef MERGE_OVERLAP
+# error "CPP key MERGE_OVERLAP was retired (merging overlapping KPP surface and bottom boundary layers): remove it from cppdefs.opt"
+#endif
+#ifdef LMD_DDMIX
+# error "CPP key LMD_DDMIX was retired (double-diffusive mixing): remove it from cppdefs.opt"
+#endif
+#ifdef DIAGNOSTICS_NHMG
+# error "CPP key DIAGNOSTICS_NHMG was retired (unfinished NHMG diagnostics; NHMG itself is the namelist key nhmg): remove it from cppdefs.opt"
+#endif
+#ifdef NHMGDIAG
+# error "CPP key NHMGDIAG was retired (unfinished NHMG diagnostics; NHMG itself is the namelist key nhmg): remove it from cppdefs.opt"
+#endif

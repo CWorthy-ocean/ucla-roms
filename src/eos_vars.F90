@@ -33,11 +33,10 @@ module eos_vars
 # else
   real(kind=8),allocatable,dimension(:,:,:) :: rho
 # endif
-# ifdef ADV_ISONEUTRAL
+  ! adv_isoneutral only (NUMERICS_SETTINGS)
   real(kind=8),allocatable,dimension(:,:,:) :: dRdx
   real(kind=8),allocatable,dimension(:,:,:) :: dRde
   real(kind=8),allocatable,dimension(:,:,:) :: idRz
-# endif
   character(len=8) :: module_name = "eos_vars"
 
   public :: read_nml_lin_rho_eos
@@ -73,6 +72,7 @@ contains
 
   subroutine init_arrays_eos_vars  ![
     use scalars, only: nz, init
+    use numerics_settings_mod, only: adv_isoneutral
     implicit none
 
 # ifdef SPLIT_EOS
@@ -81,11 +81,11 @@ contains
 # else
     allocate( rho(GLOBAL_2D_ARRAY,nz) ); rho=0._8
 # endif
-# ifdef ADV_ISONEUTRAL
-    allocate( dRdx(GLOBAL_2D_ARRAY,nz) ); dRdx=init
-    allocate( dRde(GLOBAL_2D_ARRAY,nz) ); dRde=init
-    allocate( idRz(GLOBAL_2D_ARRAY,0:nz) ); idRz=0._8       ! -> loop ranges need fixing before init will work
-# endif
+    if (adv_isoneutral) then
+      allocate( dRdx(GLOBAL_2D_ARRAY,nz) ); dRdx=init
+      allocate( dRde(GLOBAL_2D_ARRAY,nz) ); dRde=init
+      allocate( idRz(GLOBAL_2D_ARRAY,0:nz) ); idRz=0._8       ! -> loop ranges need fixing before init will work
+    endif
 
   ! averaging variables allocated in ocean_vars to prevent circular reference from wrt_* logicals
 
