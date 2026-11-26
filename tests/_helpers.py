@@ -112,12 +112,15 @@ class ROMSConfiguration:
     share one compiled binary while keeping their outputs separate.
     """
 
-    def __init__(self, cpp_keys: list[str], location: Path, marbl: bool = False):
+    def __init__(self, cpp_keys: list[str], location: Path, marbl: bool = False, pio: bool = False):
         """``marbl`` builds with MARBL (``make MARBL=yes``); runs switch it on with
-        ``use_marbl`` in ``MARBL_BIOGEOCHEMISTRY_SETTINGS``."""
+        ``use_marbl`` in ``MARBL_BIOGEOCHEMISTRY_SETTINGS``. ``pio`` builds with
+        ParallelIO (``make PIO=yes``); runs then set ``parallel_io = .true.`` in
+        ``PIO_SETTINGS`` (the template has ``.false.``)."""
         self.location = location
         self.cpp_keys = cpp_keys
         self.marbl = marbl
+        self.pio = pio
 
         self.location.mkdir(parents=True, exist_ok=True)
         (self.location / "Makefile").symlink_to(ROMS_ROOT / "Work/Makefile")
@@ -130,7 +133,8 @@ class ROMSConfiguration:
     def compile(self, make_args: str = ""):
         """Compile with the suite's make command; ``make_args`` are appended (e.g. USER_FFLAGS)."""
         subprocess.run(
-            f"cd {self.location} && {MAKE_CMD}{' MARBL=yes' if self.marbl else ''} {make_args}",
+            f"cd {self.location} && {MAKE_CMD}{' MARBL=yes' if self.marbl else ''}"
+            f"{' PIO=yes' if self.pio else ''} {make_args}",
             shell=True, text=True, check=True,
         )
 
@@ -180,7 +184,7 @@ class ROMSConfiguration:
 # By default each rank prints its own errors and calls MPI_Abort (error_handling_mod,
 # gather_errors_on_main_rank = .false.), so one rank's abort can take another's
 # message with it: on gnu/MPICH, a rejected run has stopped with no message at
-# all (PARALLEL_IO extract settings, and the averaging-period precheck). A
+# all (parallel_io extract settings, and the averaging-period precheck). A
 # rejected setting must stop ROMS on every attempt and name itself on at least one.
 ABORT_ATTEMPTS = 5
 
@@ -261,7 +265,7 @@ def get_summary_value(test_dir: Path, prefix: str, vars_to_exclude: list = []) -
 def summarize_output(path: Path, vars_to_exclude: list = []) -> OutputSummary:
     """Summarize the data variables of a joined output file.
 
-    For files that need no joining, such as PARALLEL_IO output. Each variable
+    For files that need no joining, such as parallel_io output. Each variable
     gets its SHA-256, so a hash mismatch names the variable that changed, and
     the statistics of :func:`_statistics` where it has any. The statistics are
     documentation, so a mismatch says by how much a variable moved; the

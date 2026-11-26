@@ -54,7 +54,11 @@ nz = 20                         ! Number of vertical levels
 nt_passive = 0                 ! Number of passive tracers
 nt_bgc = 32                  ! Number of BGC tracers
 salinity = .true.              ! Carry salinity (was the cpp key SALINITY)
-mpi_masking = .false.          ! Tiling from the land mask (was the cpp key MPI_MASKING; needs PARALLEL_IO)
+mpi_masking = .false.          ! Tiling from the land mask (was the cpp key MPI_MASKING; needs parallel_io)
+/
+
+&PIO_SETTINGS
+parallel_io = .false.          ! One file piece per rank; .true. needs make PIO=yes (was the cpp key PARALLEL_IO)
 /
 
 

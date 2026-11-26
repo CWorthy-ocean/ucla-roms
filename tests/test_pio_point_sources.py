@@ -1,7 +1,7 @@
-"""River and pipe sources with PARALLEL_IO
+"""River and pipe sources with parallel_io
 
 The flux-forcing physics of ``test_pipes_real`` as a closed basin, with one
-river and one pipe, built with and without PARALLEL_IO and run on 2x2 ranks
+river and one pipe, built with and without parallel I/O (make PIO=yes) and run on 2x2 ranks
 for 40 steps of 20 s (``dt`` of ``test_pipes_real``). The surface flux file
 gets an extra record 400 s after the start, so a new surface record is read
 mid-run (step 21) right after the river and pipe readers, with no output in
@@ -15,7 +15,7 @@ The checks:
 - the mid-run surface record is read: under PIO the surface reader opened its
   file only if the previous reader had left a gridded ``pio_gtype``, and after
   the serial river and pipe reads it read from a closed file;
-- the PARALLEL_IO run equals the per-rank run bit for bit; its history file is
+- the parallel_io run equals the per-rank run bit for bit; its history file is
   hashed as ``rivers_pipes_pio``.
 """
 import re
@@ -39,7 +39,7 @@ from ._helpers import (
 
 # a realistic grid; all sides are closed (CLOSED_BOX)
 CPP_KEYS = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + ["CURVGRID", "SPHERICAL", "LMD_CONVEC"]
-# Joined inputs, copied to classic netCDF for the PARALLEL_IO build: PIO reads them through PnetCDF.
+# Joined inputs, copied to classic netCDF for the parallel_io build: PIO reads them through PnetCDF.
 PIO_INPUTS = [
     "example_input_grid.nc",
     "example_input_bgc_initial_conditions.nc",
@@ -100,14 +100,16 @@ def _run(build: str, sources_inputs, input_dir, tmp_path_factory) -> tuple[Path,
     """Compile and run one build; return the run directory and its log."""
     pio = build == "parallel_io"
     conf = ROMSConfiguration(
-        cpp_keys=CPP_KEYS + (["PARALLEL_IO"] if pio else []),
+        cpp_keys=CPP_KEYS,
         location=tmp_path_factory.mktemp(f"sources_build_{build}"),
+        pio=pio,
     )
     conf.compile()
     if pio:
         nml = _namelist(sources_inputs["joined"], sources_inputs["joined"])
     else:
         nml = _namelist(input_dir, sources_inputs["2x2"])
+    nml["PIO_SETTINGS"]["parallel_io"] = pio
     run_dir = tmp_path_factory.mktemp(f"sources_run_{build}")
     log = conf.run(nml, cwd=run_dir, capture_output=True)
     return run_dir, log
@@ -119,7 +121,7 @@ def _surface_reads(log: str) -> list[int]:
 
 
 def test_rivers_pipes_pio(sources_inputs, input_dir, tmp_path_factory, reference_results):
-    """PARALLEL_IO with a river, a pipe and a mid-run surface record equals the per-rank run."""
+    """parallel_io with a river, a pipe and a mid-run surface record equals the per-rank run."""
     runs = {b: _run(b, sources_inputs, input_dir, tmp_path_factory) for b in ("per_rank", "parallel_io")}
 
     for build, (_, log) in runs.items():
@@ -141,7 +143,7 @@ def test_rivers_pipes_pio(sources_inputs, input_dir, tmp_path_factory, reference
             if not np.array_equal(joined[n].values, tiled[n].values,
                                   equal_nan=joined[n].dtype.kind == "f")
         ]
-        assert differing == [], f"{pio_file.name}: PARALLEL_IO differs from per-rank in {differing}"
+        assert differing == [], f"{pio_file.name}: parallel_io differs from per-rank in {differing}"
 
     pv = summarize_output(pio_files[0])
     assert_output_matches_reference(reference_results, "rivers_pipes_pio", {"physics": pv})

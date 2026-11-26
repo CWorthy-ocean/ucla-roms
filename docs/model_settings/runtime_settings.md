@@ -80,16 +80,17 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`). The `CDR_LITE` tracers are in the history file unless `wrt_passive` is `.false.` |
 | `nt_bgc` | Number of biogeochemical tracers: MARBL's tracer count (32 with its defaults) with `use_marbl = .true.`, else 0. ROMS stops on any other value |
 | `salinity` | `.true.` (default): the model carries salinity, the second tracer. `.false.`: temperature is the only active tracer (passive and CDR_LITE tracers then start at the second tracer), the linear equation of state has no salt term, the nonlinear one uses a salinity of 34.5, and no salt, `AKs` or forcing-output `ssflx` is written. Replaces the cpp key `SALINITY`. ROMS stops with `salinity = .false.` and `sflx_corr`, with the cpp key `LMD_DDMIX`, or with `use_marbl = .true.` (MARBL and its CDR outputs read salinity) |
-| `mpi_masking` | `.true.`: choose the MPI tiling at start-up from the land mask, without the tiles that are entirely land (default `.false.`). `NP_XI` and `NP_ETA` are then overwritten; launch with at least as many ranks as the selected tiling needs, and extra ranks exit at start-up. No `partit` step is needed. Needs a `PARALLEL_IO` build and a joined grid file (ROMS stops otherwise), and not with `ana_grid`. Replaces the cpp key `MPI_MASKING` |
+| `mpi_masking` | `.true.`: choose the MPI tiling at start-up from the land mask, without the tiles that are entirely land (default `.false.`). `NP_XI` and `NP_ETA` are then overwritten; launch with at least as many ranks as the selected tiling needs, and extra ranks exit at start-up. No `partit` step is needed. Needs `parallel_io = .true.` (a `make PIO=yes` build) and a joined grid file (ROMS stops otherwise), and not with `ana_grid`. Replaces the cpp key `MPI_MASKING` |
 
 ### `PIO_SETTINGS`
 (read by module `pio_roms.F90`)
 
-Read only with `PARALLEL_IO`.
+Read in every build.
 
 | Setting | Description |
 |--------|-------------|
-| `pio_stride` | Stride between the MPI ranks that do parallel I/O: ROMS uses `max(1, ranks / pio_stride)` I/O tasks. The default, `1`, makes every rank an I/O task. |
+| `parallel_io` | `.true.` (default): read and write joined NetCDF files with the ParallelIO library; needs a build made with `make PIO=yes`. `.false.`: files with one piece per rank (`partit` the inputs, `ncjoin` the output), in a build without PIO. ROMS stops when it does not match the build, so every case built without PIO sets `parallel_io = .false.` (as the template does). A missing group or key means `.true.`. Replaces the cpp key `PARALLEL_IO` |
+| `pio_stride` | With `parallel_io` only. Stride between the MPI ranks that do parallel I/O: ROMS uses `max(1, ranks / pio_stride)` I/O tasks. The default, `1`, makes every rank an I/O task. |
 | `pio_direct_read` | How the grid file and the initial or restart file are read at start-up. `'on'` (default): ROMS reads them itself with O_DIRECT, instead of through PIO, when they are classic netCDF (CDF-1, CDF-2 or CDF-5). The results are the same bit for bit, and start-up is much faster on Lustre: on 2 Derecho CPU nodes (Pacific MARBL case, measured on `main`), the grid and a 118-GB restart are read in 32 s instead of 75-78 s. A netCDF-4 file, or a variable that cannot be read this way, is read through PIO as before, and rank 0 says why. `'off'`: read through PIO, as before. Use it on a file system that rejects or slows down O_DIRECT reads (the direct reads were tuned on Lustre), or to rule them out while debugging. `'verify'`: read every variable both ways, report how many values differ (there should be none), and run on PIO's values; for checking a new system. Forcing files and all output always go through PIO. |
 
 ### `INITIAL_CONDITIONS`
@@ -220,7 +221,7 @@ With `MARBL`, naming `temp` or `salt` in `marbl_tracers_to_write` also adds it t
 
 These settings control "data extraction", typically used for generating boundary conditions for child domains nested within the current simulation.
 
-Boundary data can be extracted for up to 8 child domains in one run. `extract_file`, `N_chd`, `theta_s_chd`, `theta_b_chd`, `hc_chd` and `extract_root_name` are arrays with one entry per child, in the same order (e.g. `extract_file = "a.nc", "b.nc"`, `N_chd = 90, 50`); a single value sets child 1 only, so existing namelists are unchanged. Only child 1 has defaults for `theta_s_chd`, `theta_b_chd` and `hc_chd`; ROMS stops at startup if any other child lacks its own entry. All children share `output_period_extract` and `nrpf_extract`. Each child's grid size is read from its nesting file's `<prefix>_xi_rho` and `<prefix>_eta_rho` dimensions, `<prefix>` being the variable prefix given to roms-tools' `make_nesting_info`; ROMS takes it as the text before the first `_` of the variable names, so the prefix must not contain `_`. With `PARALLEL_IO`, each child is written to its own file, `<extract_root_name>_bry.<date>.nc`, so with several children each needs its own `extract_root_name`. Without `PARALLEL_IO`, all children share the per-rank `_ext` files that `extract_data_join` splits by prefix, so each nesting file needs its own prefix and all children the same `N_chd`.
+Boundary data can be extracted for up to 8 child domains in one run. `extract_file`, `N_chd`, `theta_s_chd`, `theta_b_chd`, `hc_chd` and `extract_root_name` are arrays with one entry per child, in the same order (e.g. `extract_file = "a.nc", "b.nc"`, `N_chd = 90, 50`); a single value sets child 1 only, so existing namelists are unchanged. Only child 1 has defaults for `theta_s_chd`, `theta_b_chd` and `hc_chd`; ROMS stops at startup if any other child lacks its own entry. All children share `output_period_extract` and `nrpf_extract`. Each child's grid size is read from its nesting file's `<prefix>_xi_rho` and `<prefix>_eta_rho` dimensions, `<prefix>` being the variable prefix given to roms-tools' `make_nesting_info`; ROMS takes it as the text before the first `_` of the variable names, so the prefix must not contain `_`. With `parallel_io`, each child is written to its own file, `<extract_root_name>_bry.<date>.nc`, so with several children each needs its own `extract_root_name`. Without `parallel_io`, all children share the per-rank `_ext` files that `extract_data_join` splits by prefix, so each nesting file needs its own prefix and all children the same `N_chd`.
 
 | Setting | Description |
 |--------|-------------|
@@ -232,7 +233,7 @@ Boundary data can be extracted for up to 8 child domains in one run. `extract_fi
 | `theta_s_chd` | Child grid surface stretching parameter, one per child |
 | `theta_b_chd` | Child grid bottom stretching parameter, one per child |
 | `hc_chd` | Child grid critical depth, one per child |
-| `extract_root_name` | Output file root (`PARALLEL_IO`), one per child |
+| `extract_root_name` | Output file root (with `parallel_io`), one per child |
 
 
 ### `SPONGE_TUNE_SETTINGS`

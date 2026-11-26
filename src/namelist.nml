@@ -62,12 +62,19 @@ nt_cdr_dor = 0      ! Number of DOR (DIC-mimicking) passive CDR_LITE tracers
 nt_bgc = 32          ! Number of BGC tracers
 salinity = .true.   ! Carry salinity; .false. for temperature-only cases (was the cpp key SALINITY)
 mpi_masking = .false. ! Choose NP_XI x NP_ETA at start-up from the land mask, without all-land tiles
-                      ! (was the cpp key MPI_MASKING); needs a PARALLEL_IO build and a joined grid file
+                      ! (was the cpp key MPI_MASKING); needs parallel_io = .true. and a joined grid file
 /
 
 &PIO_SETTINGS                                                       !pio_roms.F90
 !---------------------------
-! Stride between MPI ranks assigned as PIO I/O tasks (requires PARALLEL_IO)
+! Files: .true. (the default) reads and writes joined files with the ParallelIO
+! library and needs a build made with make PIO=yes (was the cpp key
+! PARALLEL_IO); .false. uses files with one piece per rank, in a build without
+! PIO. ROMS stops when it does not match the build.
+!---------------------------
+parallel_io = .false.
+!---------------------------
+! Stride between MPI ranks assigned as PIO I/O tasks (parallel_io = .true. only)
 !---------------------------
 pio_stride = 1
 !---------------------------
@@ -231,9 +238,9 @@ nrpf_frc = 4                    ! Number of time records in forcing files
 ! single value sets child 1 only, as before; only child 1 has defaults for
 ! theta_s_chd, theta_b_chd and hc_chd, so every other child needs its own
 ! entry. All children share output_period_extract and nrpf_extract. With
-! PARALLEL_IO each child is written to <extract_root_name>_bry.<date>.nc,
+! parallel_io each child is written to <extract_root_name>_bry.<date>.nc,
 ! so with several children each needs its own extract_root_name. Without
-! PARALLEL_IO the children share the per-rank _ext files, so each nesting
+! parallel_io the children share the per-rank _ext files, so each nesting
 ! file needs its own variable prefix and all children the same N_chd.
 ! A nesting file's variable prefix (roms-tools make_nesting_info prefix)
 ! must not contain "_".
@@ -246,7 +253,7 @@ N_chd = 90                        ! Number of vertical levels in nested domain(s
 theta_s_chd = 5.0                 ! `theta_s` of nested domain(s)
 theta_b_chd = 2.0                 ! `theta_b` of nested domain(s)
 hc_chd = 250.0                    ! `hc` of nested domain(s)
-extract_root_name = "child"       ! Output file root(s) (PARALLEL_IO)
+extract_root_name = "child"       ! Output file root(s) (parallel_io)
 /
 
 &SPONGE_TUNE_SETTINGS                                            !sponge_tune.F90

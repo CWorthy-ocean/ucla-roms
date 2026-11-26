@@ -60,9 +60,7 @@ contains
     !                                    TIME_STEPPING, UBIND_SETTINGS, V_SPONGE_SETTINGS,
     !                                    RHO0_SETTINGS
     use scoord, only: read_nml_scoord !SCOORD_SETTINGS
-#ifdef PARALLEL_IO
-    use pio_roms, only: read_nml_pio              !PIO_SETTINGS
-#endif
+    use pio_roms, only: read_nml_pio              !PIO_SETTINGS (parallel_io)
     use diag_mod, only: read_nml_stdout_diag
     use imex_igw, only: read_nml_imex_igw          !IMEX_IGW_SETTINGS (required in every build)
     use open_boundary_mod, only: read_nml_periodic, read_nml_open_boundary  !PERIODIC_SETTINGS,
@@ -77,6 +75,7 @@ contains
 #endif
     implicit none
     call read_nml_param
+    call read_nml_pio        ! parallel_io, checked against the build before any file is looked for
     call read_nml_marbl      ! use_marbl, which the readers and checks below use
     call read_nml_periodic
     call read_nml_open_boundary
@@ -114,9 +113,6 @@ contains
     call read_nml_scalars
    call read_nml_scoord
    call read_nml_tracers
-#ifdef PARALLEL_IO
-   call read_nml_pio
-#endif
    call read_nml_stdout_diag
    call read_nml_imex_igw
    call read_nml_implicit_fs
