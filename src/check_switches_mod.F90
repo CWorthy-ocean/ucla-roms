@@ -220,20 +220,6 @@ contains
 
 ! VERTICAL_MIXING_SETTINGS ana_vmix with LMD_MIXING stops the run (scalars).
 
-    /*
-#ifdef SPLIT_EOS
-# ifndef NONLIN_EOS
-    write(*,'(A') 'cppdefs.opt: '// &
-    &        'illegal combination of CPP-switches: '// &
-    &'SPLIT_EOS is defined, but NONLIN_EOS is not.'
-    call error_log%raise_global( &
-    &        context=sr_name, &
-    &        info=error_info)
-
-# endif
-#endif
-    */
-
 ! Signal to quit if explicit time-step splitting on shallow water
 ! set-up.
 

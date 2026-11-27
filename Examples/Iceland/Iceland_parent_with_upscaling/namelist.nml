@@ -379,7 +379,7 @@ output_period_uscl = 100       ! Output frequency
 !================================================================================
 &LIN_RHO_EOS_SETTINGS                                                  !scalars.F
 !-----------------------------------
-! Unused if NONLIN_EOS cppkey active
+! Read only with eos = 'linear' (NUMERICS_SETTINGS)
 !-----------------------------------
 Tcoef = 0.2      ! Thermal expansion coefficient    (kg/m2/K)
 T0 = 1.0         ! Reference temperature            (*C)

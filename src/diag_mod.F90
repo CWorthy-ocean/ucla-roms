@@ -84,11 +84,9 @@ contains
     use diag_vars, only:&
     &avke, avke2b, avke3bc, avkesrf, avpe,&
     &avzeta, cu_adv, cu_w, i_cx_max, j_cx_max, k_cx_max, v2d_max
-#ifdef SPLIT_EOS
-    use eos_vars, only: qp1, rho1
-#else
-    use eos_vars, only: rho
-#endif
+    use eos_vars, only: qp1, rho1   ! eos = 'nonlinear'
+    use eos_vars, only: rho         ! eos = 'linear'
+    use numerics_settings_mod, only: nonlin_eos
     use grid, only: pn, pm, rmask
     use ocean_vars, only: u, hz, v, z_w, wi, we, flxv, flxu, z_r
     use param, only:&
@@ -202,13 +200,16 @@ contains
           endif
           ke(i,j)=ke(i,j) + 0.5_8*v2*Hz(i,j,k)
 
-          pe(i,j)=pe(i,j) + cff*Hz(i,j,k)&
-# ifdef SPLIT_EOS
-          &*(rho1(i,j,k)+qp1(i,j,k)*(z_w(i,j,nz)-z_r(i,j,k)))&
-# else
-          &*rho(i,j,k)&
-# endif
-          &*(z_r(i,j,k)-z_w(i,j,0))
+          ! a test per point: diag_tile runs only on the steps that print diagnostics
+          if (nonlin_eos) then
+            pe(i,j)=pe(i,j) + cff*Hz(i,j,k)&
+            &*(rho1(i,j,k)+qp1(i,j,k)*(z_w(i,j,nz)-z_r(i,j,k)))&
+            &*(z_r(i,j,k)-z_w(i,j,0))
+          else
+            pe(i,j)=pe(i,j) + cff*Hz(i,j,k)&
+            &*rho(i,j,k)&
+            &*(z_r(i,j,k)-z_w(i,j,0))
+          endif
 
           ke3bc(i,j)=ke3bc(i,j) + 0.5_8*v2bc*Hz(i,j,k)
         enddo

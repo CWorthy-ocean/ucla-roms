@@ -373,11 +373,9 @@ contains                  !]
     & hbbl, &
 #endif
     & Akv, Akt
-#ifdef SPLIT_EOS
-    use eos_vars, only: rho1
-#else
-    use eos_vars, only: rho
-#endif
+    use eos_vars, only: rho1   ! eos = 'nonlinear'
+    use eos_vars, only: rho    ! eos = 'linear'
+    use numerics_settings_mod, only: nonlin_eos
     use work_mod, only: work
     use grid, only: pn, pm
     use dimensions, only: i0,i1,j0,j1
@@ -482,13 +480,12 @@ contains                  !]
         call wrt_his_trc(ncid,start)                              ! tracer variables
 
         if (wrt_R) then
-# ifdef SPLIT_EOS
           pio_gtype = '3Drw'
-          call ncwrite(ncid,vname(1,indxR),rho1(i0:i1,j0:j1,:),start, .true.)
-# else
-          pio_gtype = '3Drw'
-          call ncwrite(ncid,vname(1,indxR), rho(i0:i1,j0:j1,:),start, .true.)
-# endif
+          if (nonlin_eos) then
+            call ncwrite(ncid,vname(1,indxR),rho1(i0:i1,j0:j1,:),start, .true.)
+          else
+            call ncwrite(ncid,vname(1,indxR), rho(i0:i1,j0:j1,:),start, .true.)
+          endif
         endif
         if (wrt_O) then                              ! s-coordinate omega vertical velocity (m/s).
           do k=0,nz
@@ -560,11 +557,11 @@ contains                  !]
         call wrt_his_trc(ncid,start)                              ! tracer variables
 
         if (wrt_R) then
-# ifdef SPLIT_EOS
-          call ncwrite(ncid,vname(1,indxR),rho1(i0:i1,j0:j1,:),start)
-# else
-          call ncwrite(ncid,vname(1,indxR), rho(i0:i1,j0:j1,:),start)
-# endif
+          if (nonlin_eos) then
+            call ncwrite(ncid,vname(1,indxR),rho1(i0:i1,j0:j1,:),start)
+          else
+            call ncwrite(ncid,vname(1,indxR), rho(i0:i1,j0:j1,:),start)
+          endif
         endif
         if (wrt_O) then                              ! s-coordinate omega vertical velocity (m/s).
           do k=0,nz
@@ -1488,11 +1485,9 @@ contains                  !]
 ! ----------------------------------------------------------------------
   subroutine calc_avg_ocean_vars  ![
 ! set averaged variables
-#ifdef SPLIT_EOS
-    use eos_vars, only: rho1, qp1
-#else
-    use eos_vars, only: rho
-#endif
+    use eos_vars, only: rho1, qp1   ! eos = 'nonlinear'
+    use eos_vars, only: rho         ! eos = 'linear'
+    use numerics_settings_mod, only: nonlin_eos
     use work_mod, only: work
     use mixing, only: akv, akt
 #ifdef LMD_KPP
@@ -1539,12 +1534,12 @@ contains                  !]
       call set_avg_trc(coef)                                        ! tracer variables
 
       if (wrt_avg_R) then
-#  ifdef SPLIT_EOS
-        rho_avg(i0:i1,j0:j1,:) = rho_avg(i0:i1,j0:j1,:)*(1-coef) +&
-        &( rho1(i0:i1,j0:j1,:) - qp1(i0:i1,j0:j1,:) * z_r(i0:i1,j0:j1,:) )*coef
-#  else
-        rho_avg(i0:i1,j0:j1,:) = rho_avg(i0:i1,j0:j1,:)*(1-coef) + rho(i0:i1,j0:j1,:)*coef
-#  endif
+        if (nonlin_eos) then
+          rho_avg(i0:i1,j0:j1,:) = rho_avg(i0:i1,j0:j1,:)*(1-coef) +&
+          &( rho1(i0:i1,j0:j1,:) - qp1(i0:i1,j0:j1,:) * z_r(i0:i1,j0:j1,:) )*coef
+        else
+          rho_avg(i0:i1,j0:j1,:) = rho_avg(i0:i1,j0:j1,:)*(1-coef) + rho(i0:i1,j0:j1,:)*coef
+        endif
       endif
       if (wrt_avg_O) w_avg(i0:i1,j0:j1,:) = w_avg(i0:i1,j0:j1,:)*(1-coef)&
       &+ ( We(i0:i1,j0:j1,:)+Wi(i0:i1,j0:j1,:) ) *coef
