@@ -93,6 +93,13 @@ module marbl_driver
 !     each column's inventory (see marbldrv_groom_column, tracer_groomer)
   logical, public :: groom_negative_tracers = .true.   ! TEST ONLY: default on, so C-Star (strict namelist) can run it without a namelist tier
   character(len=32), public :: groom_tracers(40) = ""
+!     Only the part of the column shallower than groom_depth (m) is
+!     groomed and pays for it (0: the whole column); deeper negatives are
+!     left alone. One call takes at most groom_max_debit of the groomed
+!     part's positive mass, so a legacy backlog of negatives is paid off
+!     over many calls instead of zeroing the surface biomass at once.
+  real(kind=8), public :: groom_depth = 250._8
+  real(kind=8), public :: groom_max_debit = 0.1_8
 
   namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
   &marbl_timestep, marbl_tracers_to_write,&
@@ -100,7 +107,7 @@ module marbl_driver
 #ifdef MARBL_DIAGS
   &, marbl_diagnostics_to_write&
 #endif
-  &, groom_negative_tracers, groom_tracers
+  &, groom_negative_tracers, groom_tracers, groom_depth, groom_max_debit
 
 !     The tracers groomed by default: the chlorophylls with their
 !     autotrophs' biomass (so MARBL's Chl:C ratios stay consistent), the
@@ -691,6 +698,16 @@ contains
       &context=module_name//"/"//sr_name,&
       &info='groom_negative_tracers: groom_tracers names no MARBL tracer')
     end if
+    if (groom_max_debit <= 0._8 .or. groom_max_debit > 1._8) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info='groom_max_debit must be in (0, 1]')
+    end if
+    if (groom_depth < 0._8) then
+      call error_log%raise_global(&
+      &context=module_name//"/"//sr_name,&
+      &info='groom_depth must be >= 0 (0 grooms the whole column)')
+    end if
 
     allocate(groom_idx(n_groom))
     groom_idx(:) = found(1:n_groom)
@@ -704,6 +721,8 @@ contains
       write(*,'(A)') 'groom_negative_tracers: grooming negative values of'
       write(*,'(10(1x,A))') (trim(MARBL_instance%tracer_metadata(&
       &groom_idx(lidx)-(NT-nt_marbl))%short_name), lidx=1,n_groom)
+      write(*,'(A,F8.1,A,F6.3)') '  groom_depth (m, 0 = whole column) =',&
+      &groom_depth, ', groom_max_debit =', groom_max_debit
     end if
   end subroutine marbldrv_configure_groomer
 
@@ -1529,20 +1548,32 @@ contains
     real(kind=8), dimension(GLOBAL_2D_ARRAY,nz,3,nt) ,&
     &intent(inout)     :: tracer_array
     real(kind=8)    :: removed, added, area
-    integer(kind=4) :: n, m
+    integer(kind=4) :: n, m, k, kmin, ng
     logical :: have_hz
 
+!     The groomed part of the column: the levels whose lower interface
+!     lies above groom_depth (all levels when groom_depth is 0)
+    kmin = 1
+    if (groom_depth > 0._8) then
+      kmin = nz
+      do k=nz,1,-1
+        if (z_w(i,j,k-1) < -groom_depth) exit
+        kmin = k
+      end do
+    end if
+    ng = nz-kmin+1
     have_hz = .false.
     do n=1,n_groom
       m = groom_idx(n)
-      if (minval(tracer_array(i,j,:,nnew,m)) >= 0._8) cycle
+      if (minval(tracer_array(i,j,kmin:nz,nnew,m)) >= 0._8) cycle
       if (.not. have_hz) then
-        groom_hz(:) = Hz(i,j,:)
+        groom_hz(1:ng) = Hz(i,j,kmin:nz)
         have_hz = .true.
       end if
-      groom_t(:) = tracer_array(i,j,:,nnew,m)
-      call groom_column(nz, groom_t, groom_hz, removed, added)
-      tracer_array(i,j,:,nnew,m) = groom_t(:)
+      groom_t(1:ng) = tracer_array(i,j,kmin:nz,nnew,m)
+      call groom_column(ng, groom_t(1:ng), groom_hz(1:ng), groom_max_debit,&
+      &removed, added)
+      tracer_array(i,j,kmin:nz,nnew,m) = groom_t(1:ng)
       area = 1._8/(pm(i,j)*pn(i,j))
       groom_removed(n) = groom_removed(n) + removed*area
       groom_added(n) = groom_added(n) + added*area
