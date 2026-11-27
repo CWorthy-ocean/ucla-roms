@@ -1769,15 +1769,24 @@ contains
 
   !----------------------------------------------------------------------
   subroutine imex_advb_save
-    ! imex_corr_adv = 1, predictor solve: advb_rn := rho_b at level n (rho1 under SPLIT_EOS, else rho; main.F90
-    ! overwrites it with rho(nrhs = 3) after set_HUV1), for b* - b^n in imex_advb_rhs. Interior only.
-#  ifdef SPLIT_EOS
-    use eos_vars, only: rhob => rho1
-#  else
-    use eos_vars, only: rhob => rho
-#  endif
+    ! eos = 'nonlinear': rho_b is rho1; eos = 'linear': rho (imex_advb_save_b)
+    use eos_vars, only: rho1, rho
+    use numerics_settings_mod, only: nonlin_eos
+    implicit none
+    if (nonlin_eos) then
+      call imex_advb_save_b(rho1)
+    else
+      call imex_advb_save_b(rho)
+    endif
+  end subroutine imex_advb_save
+
+  subroutine imex_advb_save_b(rhob)
+    ! imex_corr_adv = 1, predictor solve: advb_rn := rho_b at level n (rho1 for eos = 'nonlinear', rho
+    ! for 'linear'; main.F90 overwrites it with rho(nrhs = 3) after set_HUV1), for b* - b^n in
+    ! imex_advb_rhs. Interior only.
     use param, only: lm, mm, nz
     implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: rhob   ! rho1 or rho (imex_advb_save)
     integer(kind=4) :: i, j, k
     if (.not. allocated(advb_rn)) then
       allocate( advb_rn(GLOBAL_2D_ARRAY,nz), advb_bs(GLOBAL_2D_ARRAY,nz), advb_mem(GLOBAL_2D_ARRAY,nz) )
@@ -1790,10 +1799,23 @@ contains
         enddo
       enddo
     enddo
-  end subroutine imex_advb_save
+  end subroutine imex_advb_save_b
 
   !----------------------------------------------------------------------
   subroutine imex_advb_rhs(dts)
+    ! eos = 'nonlinear': rho_b is rho1; eos = 'linear': rho (imex_advb_rhs_b)
+    use eos_vars, only: rho1, rho
+    use numerics_settings_mod, only: nonlin_eos
+    implicit none
+    real(kind=8), intent(in) :: dts
+    if (nonlin_eos) then
+      call imex_advb_rhs_b(dts, rho1)
+    else
+      call imex_advb_rhs_b(dts, rho)
+    endif
+  end subroutine imex_advb_rhs
+
+  subroutine imex_advb_rhs_b(dts, rhob)
     ! imex_corr_adv = 1, corrector solve (before its rhs): advb_mem := dps - X, the memory term that replaces
     ! dps in the corrector rhs (r0 = dt R(F_corr_expl) - advb_mem), with (eta units, eta = db/N2)
     !   X  = sqrt(s) act [ n2c dts (A(b*; F, W) - A(b_ref; PF, W_PF)) - NW ],   NW = n2c (b* - b^n) - dps.
@@ -1825,12 +1847,7 @@ contains
     ! imex_verbose >= 2: one IMEX_ADVB line per step (rank 0): rms of NW, of X and of dps, max |X|; and where
     ! (global i, j, k; from the rank that holds it); with imex_corr_adv_vimp = 1 also an IMEX_VIMP line, the
     ! number of active cells that took X from vimp_col.
-    !DIR$ ATTRIBUTES NOINLINE :: imex_advb_rhs
-#  ifdef SPLIT_EOS
-    use eos_vars, only: rhob => rho1
-#  else
-    use eos_vars, only: rhob => rho
-#  endif
+    !DIR$ ATTRIBUTES NOINLINE :: imex_advb_rhs_b
     use param, only: lm, mm, nz, mynode, ocean_grid_comm, isw_corn, jsw_corn
     use scalars, only: g, rho0, iic
     use ocean_vars, only: hz, flxu, flxv, we, wi
@@ -1841,6 +1858,7 @@ contains
     use roms_mpi, only: exchange_xxx
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_sum, mpi_max
     implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: rhob   ! rho1 or rho (imex_advb_rhs)
     real(kind=8), intent(in) :: dts
     real(kind=8), allocatable, save :: fxs(:,:), fus(:,:), fxr(:,:), fur(:,:), fes(:,:,:), fvs(:,:,:),&
     &                                  fer(:,:,:), fvr(:,:,:), dd(:), cv(:)
@@ -2154,7 +2172,7 @@ contains
         fz(kk) = tpl*max(w(kk),0._8) + tmn*min(w(kk),0._8)
       enddo
     end subroutine u3col
-  end subroutine imex_advb_rhs
+  end subroutine imex_advb_rhs_b
 
   !----------------------------------------------------------------------
   subroutine imex_correct_fused(stage, tdt)
@@ -4966,7 +4984,8 @@ contains
     ! that holds it (first-build NOTE on visc2 dt/dx^2).
     use tracers, only: t
     use scalars, only: nrhs, g, rho0, dt, iic
-    use rho_eos_mod, only: rho_eos_point
+    use rho_eos_mod, only: rho_eos_point, rho_eos_point_lin   ! eos = 'nonlinear', 'linear'
+    use numerics_settings_mod, only: nonlin_eos
     use param, only: nz, itemp
     use param, only: isalt, salinity
     use ocean_vars, only: hz, z_r
@@ -5030,7 +5049,11 @@ contains
               if (salinity) se = t_north(l,k,isalt)
             end select
           end if
-          db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
+          if (nonlin_eos) then
+            db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
+          else
+            db(k) = -g/rho0*( rho_eos_point_lin(ti, si) - rho_eos_point_lin(te, se) )
+          end if
         enddo
         acc = 0._8                               ! p = -int_z^0 db, on the cell column
         do k=nz,1,-1
@@ -5200,7 +5223,8 @@ contains
     ! diagnostic copy of obm_explicit's column pressure: p = P(b_cur - b_ext) on the cell column of face (e, l)
     use tracers, only: t
     use scalars, only: nrhs, g, rho0
-    use rho_eos_mod, only: rho_eos_point
+    use rho_eos_mod, only: rho_eos_point, rho_eos_point_lin   ! eos = 'nonlinear', 'linear'
+    use numerics_settings_mod, only: nonlin_eos
     use param, only: nz, itemp
     use param, only: isalt, salinity
     use ocean_vars, only: hz, z_r
@@ -5232,7 +5256,11 @@ contains
           if (salinity) se = t_north(l,k,isalt)
         end select
       end if
-      db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
+      if (nonlin_eos) then
+        db(k) = -g/rho0*( rho_eos_point(ti, si, -z_r(i,j,k)) - rho_eos_point(te, se, -z_r(i,j,k)) )
+      else
+        db(k) = -g/rho0*( rho_eos_point_lin(ti, si) - rho_eos_point_lin(te, se) )
+      end if
     enddo
     acc = 0._8
     do k=nz,1,-1
@@ -5869,6 +5897,18 @@ contains
 
   !----------------------------------------------------------------------
   subroutine imex_bref_exposure
+    ! eos = 'nonlinear': rho_b is rho1; eos = 'linear': rho (imex_bref_exposure_b)
+    use eos_vars, only: rho1, rho
+    use numerics_settings_mod, only: nonlin_eos
+    implicit none
+    if (nonlin_eos) then
+      call imex_bref_exposure_b(rho1)
+    else
+      call imex_bref_exposure_b(rho)
+    endif
+  end subroutine imex_bref_exposure
+
+  subroutine imex_bref_exposure_b(rhob)
     ! Corrector (imex_solve_stage, after imex_step_setup), every step and every setting: the exposure of each
     ! active column (not within two cells of an open edge, bre_weights) to the stale b_ref (imex_bref_trigger),
     !   E = max_m sum_k a(k, m) [N2(b*) - N2(b_ref)](k)   (a and its folded form: bre_weights),
@@ -5880,17 +5920,13 @@ contains
     ! so that the next step rebuilds it (imex_bref_due): the age is in the restart file, so an exact restart
     ! repeats the rebuild. Rank 0 prints an IMEX_BREF_DEMAND line. Cost: one pass over rho_b and the three
     ! weights per step.
-    !DIR$ ATTRIBUTES NOINLINE :: imex_bref_exposure
-#  ifdef SPLIT_EOS
-    use eos_vars, only: rhob => rho1
-#  else
-    use eos_vars, only: rhob => rho
-#  endif
+    !DIR$ ATTRIBUTES NOINLINE :: imex_bref_exposure_b
     use ocean_vars, only: hz
     use scalars, only: iic, dt
     use param, only: lm, mm, nz, mynode, ocean_grid_comm, isw_corn, jsw_corn
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max
     implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: rhob   ! rho1 or rho (imex_bref_exposure)
     real(kind=8) :: dr, f, e, el(1), eg(1), lc(4), es(ib0:ib1,3)
     integer(kind=4) :: i, j, k, kp, km, m, ierr, nb, age
     el(1) = -huge(1._8) ; lc = -huge(1._8)
@@ -5937,7 +5973,7 @@ contains
       &' > imex_bref_trigger', imex_bref_trigger, ' at b_ref age', dble(age)*dt/3600._8,&
       &' h: b_ref rebuilt at the next step; demands', bre_ndem
     end if
-  end subroutine imex_bref_exposure
+  end subroutine imex_bref_exposure_b
 
   !----------------------------------------------------------------------
   subroutine bre_rebuild_line
@@ -6001,17 +6037,24 @@ contains
 
   !----------------------------------------------------------------------
   subroutine imex_adj_setup
+    ! eos = 'nonlinear': rho_b is rho1; eos = 'linear': rho (imex_adj_setup_b)
+    use eos_vars, only: rho1, rho
+    use numerics_settings_mod, only: nonlin_eos
+    implicit none
+    if (nonlin_eos) then
+      call imex_adj_setup_b(rho1)
+    else
+      call imex_adj_setup_b(rho)
+    endif
+  end subroutine imex_adj_setup
+
+  subroutine imex_adj_setup_b(rhob)
     ! Per-step coefficients of D (after the rest of imex_step_setup):
-    ! bb = -g rho/rho0 (rho1 under SPLIT_EOS) with halos; n2c = max(dza
+    ! bb = -g rho_b/rho0 (rho1 or rho, by eos) with halos; n2c = max(dza
     ! (bb(k+1)-bb(k-1)), imex_n2_min); en2 = act pm pn/(Hz n2c); cz, cu,
     ! cv the interface and face values of bb; dd = diag(D D^T), exact, from
     ! the column structure of D (each face column contributes an nz x nz
     ! block that is a rank-1 update of a triangular pattern).
-#  ifdef SPLIT_EOS
-    use eos_vars, only: rhob => rho1
-#  else
-    use eos_vars, only: rhob => rho
-#  endif
     use scalars, only: g, rho0, iic
     use ocean_vars, only: hz
     use grid, only: pm, pn
@@ -6022,6 +6065,7 @@ contains
     use param, only: lm, mm, nz, ocean_grid_comm
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_sum
     implicit none
+    real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: rhob   ! rho1 or rho (imex_adj_setup)
     real(kind=8), dimension(GLOBAL_2D_ARRAY) :: fd, gr
     real(kind=8), dimension(0:nz) :: dlt
     real(kind=8) :: hk, hkp, hkm, hkp2, rh, tlin, tp, tm, loc(2), glob(2), bref
@@ -6197,7 +6241,7 @@ contains
         enddo
       enddo
     end subroutine adj_diag
-  end subroutine imex_adj_setup
+  end subroutine imex_adj_setup_b
 
   !----------------------------------------------------------------------
   subroutine imex_clip_line

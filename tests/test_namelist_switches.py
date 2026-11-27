@@ -103,6 +103,9 @@ STOPS = {
                              ["PIO_SETTINGS parallel_io = .true. (the default) needs a build made with make PIO=yes"]),
     "numerics_misspelled": ("NUMERICS_SETTINGS", {"adv_isoneutal": True},
                             ["could not read the NUMERICS_SETTINGS section"]),
+    "bad_eos": ("NUMERICS_SETTINGS", {"eos": "nonlinaer"},
+                ["NUMERICS_SETTINGS eos = 'nonlinaer' is not a choice",
+                 "use 'nonlinear' or 'linear'"]),
     # the group holds only the misspelled key
     "reference_date_misspelled": ("REFERENCE_DATE_SETTINGS", {"referenc_date": [2000, 1, 1]},
                                   ["could not read REFERENCE_DATE_SETTINGS"]),
@@ -146,6 +149,18 @@ def test_sflx_corr_without_salinity(physics_conf, input_dir, tmp_path):
         physics_conf, nml, tmp_path,
         ["SURF_FRC_SETTINGS sflx_corr = .true. needs salinity = .true. (PARAM_SETTINGS)"],
         label="sflx_corr_without_salinity", absent=[AFTER_NAMELISTS],
+    )
+
+
+def test_linear_eos_without_coefficients(physics_conf, input_dir, tmp_path):
+    """eos = 'linear' without LIN_RHO_EOS_SETTINGS stops during the namelist read."""
+    nml = _namelist(input_dir)
+    nml["NUMERICS_SETTINGS"]["eos"] = "linear"
+    del nml["LIN_RHO_EOS_SETTINGS"]
+    assert_run_rejected(
+        physics_conf, nml, tmp_path,
+        ["eos = 'linear' (NUMERICS_SETTINGS) needs the LIN_RHO_EOS_SETTINGS section"],
+        label="linear_eos_without_coefficients", absent=[AFTER_NAMELISTS],
     )
 
 
@@ -234,6 +249,7 @@ def test_numerics_all_on(physics_conf, input_dir, tmp_path):
     log = squeezed(physics_conf.run(nml, cwd=tmp_path, capture_output=True))  # raises on a non-zero exit
     for line in [
         "NUMERICS_SETTINGS: adv_isoneutral = T, upstream_ts_land_curv = T, parabolic_splines = T",
+        "NUMERICS_SETTINGS: eos = 'nonlinear'",
         "NUMERICS_SETTINGS: upstream_ts_land_curv ignored (adv_isoneutral uses no upstream tracer advection)",
         "Vertical tracer advection: parabolic splines (parabolic_splines)",
         "Horizontal tracer advection: C4, with isoneutral hyperdiffusion (adv_isoneutral)",

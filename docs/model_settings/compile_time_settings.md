@@ -7,12 +7,10 @@ This page describes every switch in `src/cppdefs.opt`, one section per section o
 
 ### `MODEL SETUP OPTIONS`
 
-These switches control fundamental aspects of the model setup, including the equation of state and core physical processes. The model is always three-dimensional, and tidal forcing is set at run time in the `TIDAL_FRC_SETTINGS` namelist group: the former keys `SOLVE3D` and `TIDES` are no longer needed (defining them does nothing).
+These switches control core physical processes. The model is always three-dimensional, and tidal forcing is set at run time in the `TIDAL_FRC_SETTINGS` namelist group: the former keys `SOLVE3D` and `TIDES` are no longer needed (defining them does nothing). The equation of state is set at run time with `eos` in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings).
 
 | Switch | Description | Default | Usage notes |
 |--------|-------------|---------|-------------|
-| `NONLIN_EOS` | Use Jackett and McDougall (1995) nonlinear equation of state | enabled | Without it, set the linear equation of state in `LIN_RHO_EOS_SETTINGS` |
-| `SPLIT_EOS` | Use an equation of state that ensures that monotonically increasing density is equivalent to stable stratification | enabled | |
 | `UV_ADV` | Use advection in horizontal momentum equations | enabled | |
 | `UV_COR` | Use Coriolis term in horizontal momentum equations | enabled | |
 
@@ -28,7 +26,7 @@ These switches control the configuration of the model grid, including geometry a
 
 ### `NUMERICAL ALGORITHMS`
 
-This section has no keys now: the tracer advection schemes (isoneutral advection, the land curvature of upstream advection, parabolic splines) are set at run time in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings), and the implicit internal-wave step by `imex_igw` in [`IMEX_IGW_SETTINGS`](runtime_settings.md#imex_igw_settings).
+This section has no keys now: the tracer advection schemes (isoneutral advection, the land curvature of upstream advection, parabolic splines) and the equation of state are set at run time in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings), and the implicit internal-wave step by `imex_igw` in [`IMEX_IGW_SETTINGS`](runtime_settings.md#imex_igw_settings).
 
 ### `MIXING OPTIONS`
 
@@ -128,5 +126,7 @@ These keys are no longer keys because the namelist now decides what they decided
 | `UPSTREAM_TS_LAND_CURV` | `upstream_ts_land_curv` in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings) (default `.false.`) |
 | `PARABOLIC_SPLINES` | `parabolic_splines` in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings) (default `.false.`) |
 | `IMEX_IGW` | `imex_igw` in [`IMEX_IGW_SETTINGS`](runtime_settings.md#imex_igw_settings) (required; see [Implicit internal waves](implicit_internal_waves.md)) |
+| `NONLIN_EOS` | `eos = 'nonlinear'` (the default) in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings); without the key: `eos = 'linear'`, which a case built without it must now set |
+| `SPLIT_EOS` | None: `eos = 'nonlinear'` always uses the split form, as every build with `NONLIN_EOS` did |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

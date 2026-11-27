@@ -1402,19 +1402,16 @@ contains
     ! vertical flux at the half-stepped pseudo-density level; the arrival
     ! term rho Gd_b of the carried T, S increments (EOS difference). The
     ! horizontal and vertical parts in flux form, divided by Hz^n.
-#  ifdef SPLIT_EOS
-    use eos_vars, only: rhob => rho1
-#  else
-    use eos_vars, only: rhob => rho
-#  endif
+    use eos_vars, only: rho1, rho             ! rho_b: rho1 (eos = 'nonlinear') or rho ('linear')
+    use numerics_settings_mod, only: nonlin_eos
     use dimensions, only: nz, inode, jnode
     use param, only: np_xi, np_eta
     use scalars, only: dt, g, rho0, nstp
-    use ocean_vars, only: hz, flxu, flxv, we, wi, z_r
+    use ocean_vars, only: hz, flxu, flxv, we, wi
     use grid, only: pm, pn, rmask, umask, vmask
     use tracers, only: t, iTandS
     use param, only: itemp, isalt, lm, mm
-    use rho_eos_mod, only: rho_eos_point
+    use rho_eos_mod, only: rho_eos_point, rho_eos_point_lin   ! eos = 'nonlinear', 'linear'
     use roms_mpi, only: exchange_xxx
     use imex_igw, only: advb_slrt, advb_sl
     use timers, only: reg_tic, reg_toc, rg_sl_sweep
@@ -1443,24 +1440,38 @@ contains
       if (SOUTHERN_EDGE) j0 = jstr-1
       if (NORTHERN_EDGE) j1 = jend+1
       ss = 34.5_8
-      do k = 1, nz
-        do j = j0, j1
-          do i = i0, i1
-            dp = 0._8
-#  ifndef SPLIT_EOS
-            dp = -z_r(i,j,k)
-#  endif
-            bs(i,j,k) = ga*rhob(i,j,k)
-            if (.not. sl_lact(k)) cycle          ! (O2) b~ only where the sweeps need it
-            tt = t(i,j,k,nstp,itemp) + sl_nu*sl_en(i,j,k,1) + sl_rho*sl_et(i,j,k,1)
-            if (iTandS > 1) ss = t(i,j,k,nstp,isalt) + sl_nu*sl_en(i,j,k,iTandS) + sl_rho*sl_et(i,j,k,iTandS)
-            bt(i,j,k) = rho_eos_point(tt, ss, dp)
-            tt = t(i,j,k,3,itemp)
-            if (iTandS > 1) ss = t(i,j,k,3,isalt)
-            bt(i,j,k) = bs(i,j,k) + ga*(bt(i,j,k) - rho_eos_point(tt, ss, dp))*rmask(i,j)
+      if (nonlin_eos) then                       ! rho_b = rho1, rho_eos_point at dpth = 0
+        do k = 1, nz
+          do j = j0, j1
+            do i = i0, i1
+              dp = 0._8
+              bs(i,j,k) = ga*rho1(i,j,k)
+              if (.not. sl_lact(k)) cycle          ! (O2) b~ only where the sweeps need it
+              tt = t(i,j,k,nstp,itemp) + sl_nu*sl_en(i,j,k,1) + sl_rho*sl_et(i,j,k,1)
+              if (iTandS > 1) ss = t(i,j,k,nstp,isalt) + sl_nu*sl_en(i,j,k,iTandS) + sl_rho*sl_et(i,j,k,iTandS)
+              bt(i,j,k) = rho_eos_point(tt, ss, dp)
+              tt = t(i,j,k,3,itemp)
+              if (iTandS > 1) ss = t(i,j,k,3,isalt)
+              bt(i,j,k) = bs(i,j,k) + ga*(bt(i,j,k) - rho_eos_point(tt, ss, dp))*rmask(i,j)
+            end do
           end do
         end do
-      end do
+      else                                       ! eos = 'linear': rho_b = rho
+        do k = 1, nz
+          do j = j0, j1
+            do i = i0, i1
+              bs(i,j,k) = ga*rho(i,j,k)
+              if (.not. sl_lact(k)) cycle          ! (O2) b~ only where the sweeps need it
+              tt = t(i,j,k,nstp,itemp) + sl_nu*sl_en(i,j,k,1) + sl_rho*sl_et(i,j,k,1)
+              if (iTandS > 1) ss = t(i,j,k,nstp,isalt) + sl_nu*sl_en(i,j,k,iTandS) + sl_rho*sl_et(i,j,k,iTandS)
+              bt(i,j,k) = rho_eos_point_lin(tt, ss)
+              tt = t(i,j,k,3,itemp)
+              if (iTandS > 1) ss = t(i,j,k,3,isalt)
+              bt(i,j,k) = bs(i,j,k) + ga*(bt(i,j,k) - rho_eos_point_lin(tt, ss))*rmask(i,j)
+            end do
+          end do
+        end do
+      endif
       call exchange_xxx(bs, bt)
       call sl_subpasses(msub, 1, istr, iend, jstr, jend)
       ! per level: content numerator Hz^n b~ - dt pm pn div(F_UP3(b*) + dF), and the horizontal change
@@ -1556,24 +1567,38 @@ contains
     end if
     if (sl_hotprev) then              ! the arrival term rho Gd of the carried increments, as b
       ss = 34.5_8
-      do k = 1, nz
-        do j = jstr, jend
-          do i = istr, iend
-            if (sl_gd(i,j,k,1) == 0._8 .and. sl_gd(i,j,k,iTandS) == 0._8) cycle
-            dp = 0._8
-#  ifndef SPLIT_EOS
-            dp = -z_r(i,j,k)
-#  endif
-            tt = t(i,j,k,nstp,itemp) + sl_gd(i,j,k,1)/sl_hz0(i,j,k)
-            if (iTandS > 1) ss = t(i,j,k,nstp,isalt) + sl_gd(i,j,k,iTandS)/sl_hz0(i,j,k)
-            gd = rho_eos_point(tt, ss, dp)
-            tt = t(i,j,k,nstp,itemp)
-            if (iTandS > 1) ss = t(i,j,k,nstp,isalt)
-            gd = ga*(gd - rho_eos_point(tt, ss, dp))*rmask(i,j)
-            advb_slrt(i,j,k) = advb_slrt(i,j,k) + sl_rho*gd/dt
+      if (nonlin_eos) then                       ! rho_eos_point at dpth = 0
+        do k = 1, nz
+          do j = jstr, jend
+            do i = istr, iend
+              if (sl_gd(i,j,k,1) == 0._8 .and. sl_gd(i,j,k,iTandS) == 0._8) cycle
+              dp = 0._8
+              tt = t(i,j,k,nstp,itemp) + sl_gd(i,j,k,1)/sl_hz0(i,j,k)
+              if (iTandS > 1) ss = t(i,j,k,nstp,isalt) + sl_gd(i,j,k,iTandS)/sl_hz0(i,j,k)
+              gd = rho_eos_point(tt, ss, dp)
+              tt = t(i,j,k,nstp,itemp)
+              if (iTandS > 1) ss = t(i,j,k,nstp,isalt)
+              gd = ga*(gd - rho_eos_point(tt, ss, dp))*rmask(i,j)
+              advb_slrt(i,j,k) = advb_slrt(i,j,k) + sl_rho*gd/dt
+            end do
           end do
         end do
-      end do
+      else                                       ! eos = 'linear'
+        do k = 1, nz
+          do j = jstr, jend
+            do i = istr, iend
+              if (sl_gd(i,j,k,1) == 0._8 .and. sl_gd(i,j,k,iTandS) == 0._8) cycle
+              tt = t(i,j,k,nstp,itemp) + sl_gd(i,j,k,1)/sl_hz0(i,j,k)
+              if (iTandS > 1) ss = t(i,j,k,nstp,isalt) + sl_gd(i,j,k,iTandS)/sl_hz0(i,j,k)
+              gd = rho_eos_point_lin(tt, ss)
+              tt = t(i,j,k,nstp,itemp)
+              if (iTandS > 1) ss = t(i,j,k,nstp,isalt)
+              gd = ga*(gd - rho_eos_point_lin(tt, ss))*rmask(i,j)
+              advb_slrt(i,j,k) = advb_slrt(i,j,k) + sl_rho*gd/dt
+            end do
+          end do
+        end do
+      endif
     end if
     advb_sl = .true.
   end subroutine sl_x_prep
@@ -2670,6 +2695,8 @@ contains
     use param, only: ocean_grid_comm, np_xi, np_eta, lm, mm
     use scalars, only: dt, nstp, iic
     use ocean_vars, only: u, v, hz, flxu, flxv
+    use eos_vars, only: rho1, rho             ! spikes: rho1 (eos = 'nonlinear') or rho ('linear')
+    use numerics_settings_mod, only: nonlin_eos
     use grid, only: pm, pn, umask, vmask
     use roms_mpi, only: exchange_xxx
     use imex_igw, only: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v
@@ -2891,7 +2918,13 @@ contains
       dm_hot(1) = max(dm_hot(1), gsm(1)) ; dm_hot(2) = max(dm_hot(2), gsm(2)) ; dm_fb = max(dm_fb, gsm(3))
       dm_hot(3) = max(dm_hot(3), dble(maxval(sl_msubm)))
     end if
-    if (sl_diag > 0) call spikes
+    if (sl_diag > 0) then
+      if (nonlin_eos) then
+        call spikes(rho1)
+      else
+        call spikes(rho)
+      endif
+    endif
     sl_eun = 0._8 ; sl_evn = 0._8 ; sl_dfu = 0._8 ; sl_dfv = 0._8
     if (.not. sl_mon) return
     ! departure fields
@@ -2946,19 +2979,16 @@ contains
       if (kk < nz) czr = max(czr, dt*pm(ii,jj)*pn(ii,jj)*abs(We(ii,jj,kk)+Wi(ii,jj,kk))&
       &                          /min(Hz(ii,jj,kk),Hz(ii,jj,kk+1)))
     end function czr
-    subroutine spikes
-      ! rho* (rho1 with SPLIT_EOS) and hbls at n+1/2 (after rho_eos(nrhs), lmd_vmix(nrhs)): the largest
-      ! |q - mean of the 4 neighbours| over wet cells with 4 wet neighbours, cells with a hot face (1, 3) or not
-      ! (2, 4); hbls per column (a column with a hot face on any level counts as hot)
-#ifdef SPLIT_EOS
-      use eos_vars, only: rq => rho1
-#else
-      use eos_vars, only: rq => rho
-#endif
+    subroutine spikes(rq)
+      ! rho* (rq: rho1 for eos = 'nonlinear', rho for 'linear') and hbls at n+1/2 (after rho_eos(nrhs),
+      ! lmd_vmix(nrhs)): the largest |q - mean of the 4 neighbours| over wet cells with 4 wet neighbours,
+      ! cells with a hot face (1, 3) or not (2, 4); hbls per column (a column with a hot face on any level
+      ! counts as hot)
 #ifdef LMD_KPP
       use mixing, only: hbls
 #endif
       use grid, only: rmask
+      real(kind=8), dimension(GLOBAL_2D_ARRAY,nz), intent(in) :: rq
       real(kind=8) :: wxc, cwc, dd
       logical :: hcol
       integer(kind=4) :: ii, jj, kk

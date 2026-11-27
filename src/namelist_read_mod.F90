@@ -49,9 +49,7 @@ contains
     use tracers, only: read_nml_tracers           !TS_SETTINGS
     use upscale_output, only: read_nml_upscale    !UPSCALE_SETTINGS
     use zslice_output, only: read_nml_zslice      !ZSLICE_SETTINGS
-#ifndef NONLIN_EOS
-    use eos_vars, only: read_nml_lin_rho_eos      !LIN_RHO_EOS_SETTINGS
-#endif
+    use eos_vars, only: read_nml_lin_rho_eos      !LIN_RHO_EOS_SETTINGS (eos = 'linear')
     use roms_read_write, only: read_nml_roms_read_write  ! SIMULATION_NAME_SETTINGS,
                                                          ! INITIAL_CONDITIONS
     use marbl_driver, only: read_nml_marbl         !MARBL_BIOGEOCHEMISTRY_SETTINGS (use_marbl)
@@ -65,7 +63,7 @@ contains
     use imex_igw, only: read_nml_imex_igw, imex_on          !IMEX_IGW_SETTINGS (required in every build)
     use open_boundary_mod, only: read_nml_periodic, read_nml_open_boundary  !PERIODIC_SETTINGS,
                                                                   !OPEN_BOUNDARY_SETTINGS (optional)
-    use numerics_settings_mod, only: read_nml_numerics  !NUMERICS_SETTINGS (optional)
+    use numerics_settings_mod, only: read_nml_numerics, nonlin_eos  !NUMERICS_SETTINGS (optional)
     use implicit_fs_mod, only: read_nml_implicit_fs, fs_on !IMPLICIT_FS (optional)
     use sl_adv_mod, only: read_nml_sl_adv          !SL_ADV_SETTINGS (optional)
     use nhmg_settings_mod, only: read_nml_nhmg, nhmg_on  !NHMG_SETTINGS (optional)
@@ -108,9 +106,7 @@ contains
     call read_nml_tides
     call read_nml_upscale
     call read_nml_zslice
-#ifndef NONLIN_EOS
-    call read_nml_lin_rho_eos
-#endif
+    if (.not. nonlin_eos) call read_nml_lin_rho_eos
     call read_nml_roms_read_write
     call read_nml_scalars
    call read_nml_scoord

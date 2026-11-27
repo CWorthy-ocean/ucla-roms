@@ -508,11 +508,9 @@ contains
     use eos_vars, only: drdx, drde, idrz   ! adv_isoneutral only
     use numerics_settings_mod, only: adv_isoneutral
 
-#ifdef SPLIT_EOS
-    use eos_vars, only: qp2, qp1, rho1
-#else
-    use eos_vars, only: rho
-#endif
+    use eos_vars, only: qp2, qp1, rho1   ! eos = 'nonlinear'
+    use eos_vars, only: rho              ! eos = 'linear'
+    use numerics_settings_mod, only: nonlin_eos
 
     use coupling, only: du_avg1, dv_avg1, du_avg2, dv_avg2
     use grid, only:&
@@ -881,13 +879,13 @@ if (adv_isoneutral .and. j <= jend) then
   r0g=rho0/g
   do k=1,nz-1
     do i=istr,iend
-#    ifdef SPLIT_EOS
-      dpth=-0.5_8*(z_r(i,j,k+1)+z_r(i,j,k))
-      dRz=rho1(i,j,k)-rho1(i,j,k+1)+(qp1(i,j,k)-qp1(i,j,k+1))&
-      &*dpth*(1._8-2._8*qp2*dpth)
-#    else
-      dRz=rho(i,j,k)-rho(i,j,k+1)
-#    endif
+      if (nonlin_eos) then   ! a test per point: adv_isoneutral only
+        dpth=-0.5_8*(z_r(i,j,k+1)+z_r(i,j,k))
+        dRz=rho1(i,j,k)-rho1(i,j,k+1)+(qp1(i,j,k)-qp1(i,j,k+1))&
+        &*dpth*(1._8-2._8*qp2*dpth)
+      else
+        dRz=rho(i,j,k)-rho(i,j,k+1)
+      endif
       dRz=max(dRz,0._8) +r0g*f(i,j)**2&
       &*(z_r(i,j,k+1)-z_r(i,j,k))
 
