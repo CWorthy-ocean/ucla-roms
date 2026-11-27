@@ -91,7 +91,7 @@ module marbl_driver
 !     tracers named in groom_tracers (groom_tracers_default if it is empty)
 !     lose their negative values at the start of every MARBL step, keeping
 !     each column's inventory (see marbldrv_groom_column, tracer_groomer)
-  logical, public :: groom_negative_tracers = .false.
+  logical, public :: groom_negative_tracers = .true.   ! TEST ONLY: default on, so C-Star (strict namelist) can run it without a namelist tier
   character(len=32), public :: groom_tracers(40) = ""
 
   namelist /MARBL_BIOGEOCHEMISTRY_SETTINGS/ marbl_config_file,&
