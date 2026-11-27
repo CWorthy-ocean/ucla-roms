@@ -319,10 +319,17 @@ use_constant_Fe = .false.         ! Hold MARBL's dissolved iron (Fe) at constant
 constant_Fe_value = 3.0e-3        ! Fe imposed when use_constant_Fe (mmol/m^3, Fe's units; 1 nM = 1e-3)
 ! Negative-tracer groomer: at every MARBL step, before MARBL runs, the negative values of the
 ! tracers in groom_tracers are set to 0 and the same mass is taken from the positive values of
-! the same column, in proportion to their mass, so column inventories are kept. A column with
-! less positive mass than negative is zeroed, gaining mass. The mass removed and added per
-! tracer is printed (GROOM lines) with the step diagnostics. DIC, ALK, DIC_ALT_CO2 and
-! ALK_ALT_CO2 cannot be groomed. groom_tracers = "" grooms spChl, spC, spP, spFe, spCaCO3,
+! the same column, in proportion to their mass, so column inventories are kept. Only the part of
+! the column shallower than groom_depth is groomed and pays (deeper negatives are left alone), and
+! one call takes at most groom_max_debit of that part's positive mass; the rest of the deficit is
+! added and counted. The mass removed and added per tracer is printed (GROOM lines) with the step
+! diagnostics. DIC, ALK, DIC_ALT_CO2 and ALK_ALT_CO2 cannot be groomed. groom_tracers = "" grooms
+! spChl, spC, spP, spFe, spCaCO3, diatChl, diatC, diatP, diatFe, diatSi, diazChl, diazC, diazP,
+! diazFe, NO3, NH4, PO4, SiO3, Fe and O2 (names this MARBL configuration lacks are skipped).
+groom_negative_tracers = .false.  ! Remove negative MARBL tracer values, column-conservatively
+groom_tracers = ""                ! MARBL tracers to groom ("" for the default set above; up to 40)
+groom_depth = 250.0               ! Groom (and pay from) only the part of the column shallower than this (m); 0 = whole column
+groom_max_debit = 0.1             ! Largest share of the groomed part's positive mass one call may take; the rest is added and counted
 ! diatChl, diatC, diatP, diatFe, diatSi, diazChl, diazC, diazP, diazFe, NO3, NH4, PO4, SiO3,
 ! Fe and O2 (names this MARBL configuration lacks are skipped).
 groom_negative_tracers = .false.  ! Remove negative MARBL tracer values, column-conservatively

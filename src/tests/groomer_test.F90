@@ -37,7 +37,7 @@ program groomer_test
   t = t0
   deficit = -sum(Hz*min(t0,0._8))
   before = sum(Hz*t0)
-  call groom_column(nz, t, Hz, removed, added)
+  call groom_column(nz, t, Hz, 1._8, removed, added)
   after = sum(Hz*t)
   write(*,'(A)') '(a) negatives with ample positive mass'
   write(*,'(A,ES24.16)') '    inventory before        ', before
@@ -58,7 +58,7 @@ program groomer_test
   t = t0
   deficit = -sum(Hz*min(t0,0._8))
   positive = sum(Hz*max(t0,0._8))
-  call groom_column(nz, t, Hz, removed, added)
+  call groom_column(nz, t, Hz, 1._8, removed, added)
   write(*,'(A)') '(b) positive mass smaller than the deficit'
   write(*,'(A,2ES24.16)') '    deficit, positive mass  ', deficit, positive
   write(*,'(A,2ES24.16)') '    removed, added          ', removed, added
@@ -72,12 +72,30 @@ program groomer_test
   ! (c) no negatives (zeros and a negative zero included)
   t0 = [0._8, 1.e-30_8, 0.2_8, 3.3_8, 7.25_8, -0._8, 1.e-12_8, 4._8, 0.6_8, 0._8]
   t = t0
-  call groom_column(nz, t, Hz, removed, added)
+  call groom_column(nz, t, Hz, 1._8, removed, added)
   write(*,'(A)') '(c) no negatives'
   write(*,'(A,2ES24.16)') '    removed, added          ', removed, added
   call check('(c) column unchanged bit-for-bit',&
   &all(transfer(t, 1_8, nz) == transfer(t0, 1_8, nz)))
   call check('(c) nothing removed or added', removed == 0._8 .and. added == 0._8)
+
+  ! (d) capped debit: the same column as (a) with max_debit 0.1 may take at most a tenth of the
+  !     positive mass; the rest of the deficit is added, and no positive cell loses more than 10%
+  t0 = [-0.02_8, -0.005_8, 0.01_8, 0.3_8, 1.2_8, 2.5_8, 1.7_8, 0.4_8, -0.03_8, -0.11_8]
+  t = t0
+  deficit = -sum(Hz*min(t0,0._8))
+  positive = sum(Hz*max(t0,0._8))
+  call groom_column(nz, t, Hz, 0.1_8, removed, added)
+  write(*,'(A)') '(d) capped debit (max_debit = 0.1)'
+  write(*,'(A,2ES24.16)') '    deficit, positive mass  ', deficit, positive
+  write(*,'(A,2ES24.16)') '    removed, added          ', removed, added
+  call check('(d) all values >= 0', all(t >= 0._8))
+  call check('(d) debit is min(deficit, 0.1*positive)',&
+  &abs((removed-added)-min(deficit,0.1_8*positive)) <= 4._8*epsilon(1._8)*positive)
+  call check('(d) no positive cell lost more than 10%',&
+  &all(t >= 0.9_8*max(t0,0._8)*(1._8-4._8*epsilon(1._8))))
+  call check('(d) inventory change equals the added mass',&
+  &abs((sum(Hz*t)-sum(Hz*t0))-added) <= 4._8*epsilon(1._8)*sum(Hz*abs(t0)))
 
   if (nfail > 0) then
     write(*,'(I0,A)') nfail, ' check(s) FAILED'
