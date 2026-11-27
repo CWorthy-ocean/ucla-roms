@@ -428,9 +428,9 @@ Each record of the `_uscl` files is the average of the boundary fluxes over one 
 ### `LIN_RHO_EOS_SETTINGS`
 (read by module `eos_vars.F90`)
 
-Read only when `NONLIN_EOS` is not defined.
+Read only with `eos = 'linear'` in [`NUMERICS_SETTINGS`](#numerics_settings), which needs it.
 
-Linear equation of state parameters.
+Linear equation of state parameters: rho = Tcoef (T0 - T) + Scoef (S - S0), the density minus `rho0`.
 
 | Setting | Description |
 |--------|-------------|
@@ -526,13 +526,14 @@ The Orlanski radiation updates (of `u`, `v`, the tracers and the tangential baro
 ### `NUMERICS_SETTINGS`
 (read by module `numerics_settings_mod.F90`)
 
-Optional: without the group (or a key) every scheme keeps its default. By default, horizontal tracer advection is fourth-order centred (C4) in the predictor step and third-order upstream (U3) in the corrector step, and vertical tracer advection is thickness-aware C4 in the predictor and thickness-aware U3 in the corrector. ROMS prints the three settings at start-up.
+Optional: without the group (or a key) every setting keeps its default. By default, horizontal tracer advection is fourth-order centred (C4) in the predictor step and third-order upstream (U3) in the corrector step, vertical tracer advection is thickness-aware C4 in the predictor and thickness-aware U3 in the corrector, and the equation of state is nonlinear. ROMS prints the settings at start-up.
 
 | Setting | Description |
 |--------|-------------|
 | `adv_isoneutral` | Isoneutral (rotated) biharmonic tracer hyperdiffusion, with C4 instead of U3 horizontal tracer advection in the corrector step (default `.false.`). Replaces the cpp key `ADV_ISONEUTRAL` |
 | `upstream_ts_land_curv` | Drop the curvature (third-order) term of U3 horizontal tracer advection at faces whose stencil touches land, so those faces are second-order centred (default `.false.`). Masked differences are zero, which otherwise inflates the curvature at the first wet point and can produce large overshoots. Acts only with `MASKING`, and is ignored (with a line at start-up) with `adv_isoneutral`. Replaces the cpp key `UPSTREAM_TS_LAND_CURV` |
 | `parabolic_splines` | Vertical tracer advection with parabolic splines in both steps, the scheme before thickness-aware U3 (default `.false.`). Replaces the cpp key `PARABOLIC_SPLINES` |
+| `eos` | Equation of state: `'nonlinear'` (the default), Jackett and McDougall (1995) in the split form rho1(T,S) + qp1(T,S) \|z\|, so that increasing density with depth is stable stratification in the pressure gradient; or `'linear'`, with the coefficients of [`LIN_RHO_EOS_SETTINGS`](#lin_rho_eos_settings). Any other value stops the run. Replaces the cpp keys `NONLIN_EOS` and `SPLIT_EOS`: a case built without `NONLIN_EOS` must set `eos = 'linear'` |
 
 ### `UBIND_SETTINGS`
 (read by module `scalars.F90`)

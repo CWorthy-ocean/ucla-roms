@@ -7,10 +7,9 @@ module eos_vars
   use param, only: lm, mm
   implicit none
 
-! Tcoef, T0   Coefficients for linear Equation of State
+! Tcoef, T0   Coefficients for linear Equation of State (eos = 'linear')
 ! Scoef, S0     rho = Tcoef*(T-T0) + Scoef*(S-S0)
 !
-# ifndef NONLIN_EOS
   real(kind=8) Tcoef, T0
   real(kind=8) Scoef, S0     ! used only with salinity (PARAM_SETTINGS)
 
@@ -18,21 +17,17 @@ module eos_vars
   & Scoef, S0,&
   &Tcoef, T0
 
-# else
   ! Secant bulk modulus of pure water at 0 C and the surface [bar] (K00 in
-  ! rho_eos). rho_eos stores density minus the depth-only profile
-  ! rho0/(1 - 0.1|z|/K00), so code that moves a density in depth needs it.
+  ! rho_eos). With eos = 'nonlinear', rho_eos stores density minus the depth-only
+  ! profile rho0/(1 - 0.1|z|/K00), so code that moves a density in depth needs it.
   real(kind=8), parameter :: K00=19092.56_8
-# endif
 
-
-# ifdef SPLIT_EOS
+  ! eos = 'nonlinear': rho(T,S,z) = rho1(T,S) + qp1(T,S)*|z|*(1 - qp2*|z|) (rho_eos)
   real(kind=8),allocatable,dimension(:,:,:) :: rho1
   real(kind=8),allocatable,dimension(:,:,:) :: qp1
   real(kind=8), parameter :: qp2=0.0000172_8
-# else
+  ! eos = 'linear': the density anomaly
   real(kind=8),allocatable,dimension(:,:,:) :: rho
-# endif
   ! adv_isoneutral only (NUMERICS_SETTINGS)
   real(kind=8),allocatable,dimension(:,:,:) :: dRdx
   real(kind=8),allocatable,dimension(:,:,:) :: dRde
@@ -45,10 +40,11 @@ contains
 
 !----------------------------------------------------------------------
   subroutine read_nml_lin_rho_eos
-#ifndef NONLIN_EOS
+    ! Read the LIN_RHO_EOS_SETTINGS section of the namelist file; called only with
+    ! eos = 'linear' (NUMERICS_SETTINGS), which needs it.
+    use, intrinsic :: iso_fortran_env, only: iostat_end
     use error_handling_mod, only: error_log
     use namelist_open_mod, only: open_namelist_file
-!     Read the "LIN_RHO_EOS_SETTINGS" section of the namelist file
     integer(kind=4) ::  namelist_unit, ios
     character(len=21) :: sr_name = "read_nml_lin_rho_eos"
     character(len=512) :: msg = ""
@@ -58,7 +54,13 @@ contains
 
     read (unit=namelist_unit, nml=LIN_RHO_EOS_SETTINGS, iostat=ios, iomsg=msg)
 
-    if (ios /= 0) then
+    if (ios == iostat_end) then
+      call error_log%raise_global(&
+      &context = module_name//'/'//sr_name,&
+      &info="eos = 'linear' (NUMERICS_SETTINGS) needs the LIN_RHO_EOS_SETTINGS"&
+      &//" section of the namelist file, which is missing"&
+      &)
+    else if (ios /= 0) then
       call error_log%raise_global(&
       &context = module_name//'/'//sr_name,&
       &info='could not read LIN_RHO_EOS_SETTINGS'&
@@ -67,20 +69,19 @@ contains
       &)
     end if
     close(namelist_unit)
-#endif
   end subroutine read_nml_lin_rho_eos
 
   subroutine init_arrays_eos_vars  ![
     use scalars, only: nz, init
-    use numerics_settings_mod, only: adv_isoneutral
+    use numerics_settings_mod, only: adv_isoneutral, nonlin_eos
     implicit none
 
-# ifdef SPLIT_EOS
-    allocate(  rho1(GLOBAL_2D_ARRAY,nz) ); rho1=0._8
-    allocate( qp1(GLOBAL_2D_ARRAY,nz) ); qp1=0._8
-# else
-    allocate( rho(GLOBAL_2D_ARRAY,nz) ); rho=0._8
-# endif
+    if (nonlin_eos) then
+      allocate(  rho1(GLOBAL_2D_ARRAY,nz) ); rho1=0._8
+      allocate( qp1(GLOBAL_2D_ARRAY,nz) ); qp1=0._8
+    else
+      allocate( rho(GLOBAL_2D_ARRAY,nz) ); rho=0._8
+    endif
     if (adv_isoneutral) then
       allocate( dRdx(GLOBAL_2D_ARRAY,nz) ); dRdx=init
       allocate( dRde(GLOBAL_2D_ARRAY,nz) ); dRde=init

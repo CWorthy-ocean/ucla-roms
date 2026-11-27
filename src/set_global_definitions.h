@@ -47,23 +47,6 @@
 
 !#define KEEP_CORIOLIS
 
-/* Normally, whenever nonlinear EOS is selected, use stiffened and
- split form,
-                rho(S,T,z) = rho1(S,T) + qp1(S,T)*[z+qp2*z^2]
-
- where all pressure dependency is explicit via "z", while "rho1","qp1"
- do not depend on pressure (i.e., "z");  "qp2" is just a constant.
- The above form facilitates computation of adiabatic differences in
- pressure-gradient scheme, prsgrd32AC1.F, which is critical for its
- accuracy and robustness.  Overall this follows Shchepetkin and
- McWilliams (2003, 2011), which in its turn is an adaptation of
- Dukowicz (2001) and earlier work of Sun, Bleck, Rooth, Dukowicz,
- Chassignet, and Killworth (1999) with respect to this matter.   */
-
-#ifdef NONLIN_EOS
-# define SPLIT_EOS
-#endif
-
 /* Switch ON/OFF double precision for real type variables (since this
  is mostly controlled by mpc and/or compiler options, this CPP-switch
  affects only on the correct choice of netCDF functions, see below)

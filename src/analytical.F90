@@ -13,10 +13,8 @@ module analytical
   &akv_bak, forw_start, iic, ntstart, akt_bak, g, rho0
   use dimensions, only: inode, jnode
   use param, only: isalt, itemp, salinity
-!     For Filament example case:
-#ifndef NONLIN_EOS
+!     For Filament example case (eos = 'linear'):
   use eos_vars, only: tcoef
-#endif
 
   use open_boundary_mod, only: ew_periodic, ns_periodic
   implicit none
