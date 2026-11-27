@@ -101,6 +101,8 @@ STOPS = {
     # the group without parallel_io: its default, .true., needs a PIO build
     "parallel_io_left_out": ("PIO_SETTINGS", {"pio_stride": 1},
                              ["PIO_SETTINGS parallel_io = .true. (the default) needs a build made with make PIO=yes"]),
+    "numerics_misspelled": ("NUMERICS_SETTINGS", {"adv_isoneutal": True},
+                            ["could not read the NUMERICS_SETTINGS section"]),
     # the group holds only the misspelled key
     "reference_date_misspelled": ("REFERENCE_DATE_SETTINGS", {"referenc_date": [2000, 1, 1]},
                                   ["could not read REFERENCE_DATE_SETTINGS"]),
@@ -169,6 +171,11 @@ def _add_error_handling(nml):
     nml["ERROR_HANDLING_SETTINGS"] = {"gather_errors_on_main_rank": False}
 
 
+def _drop_numerics(nml):
+    # every scheme keeps its default
+    del nml["NUMERICS_SETTINGS"]
+
+
 def _drop_mixing_groups(nml):
     for group in ("TRACER_DIFF2", "LATERAL_VISC_SETTINGS", "V_SPONGE_SETTINGS"):
         del nml[group]
@@ -187,6 +194,7 @@ NO_STOPS = {
     "unused_spn_period": _unused_spn_period,
     "reference_date_missing": _drop_reference_date,
     "error_handling_leftover": _add_error_handling,
+    "numerics_missing": _drop_numerics,
 }
 
 
@@ -214,3 +222,21 @@ def test_nt_bgc_without_use_marbl(physics_conf, input_dir, tmp_path):
          "set nt_bgc = 0, or use_marbl = .true. in a build made with make MARBL=yes"],
         label="nt_bgc_without_use_marbl", absent=[RUN_END],
     )
+
+
+def test_numerics_all_on(physics_conf, input_dir, tmp_path):
+    """Every NUMERICS_SETTINGS scheme on runs to the end and is reported at start-up;
+    upstream_ts_land_curv is then ignored (no upstream tracer advection)."""
+    nml = _namelist(input_dir)
+    nml["NUMERICS_SETTINGS"] = {
+        "adv_isoneutral": True, "upstream_ts_land_curv": True, "parabolic_splines": True,
+    }
+    log = squeezed(physics_conf.run(nml, cwd=tmp_path, capture_output=True))  # raises on a non-zero exit
+    for line in [
+        "NUMERICS_SETTINGS: adv_isoneutral = T, upstream_ts_land_curv = T, parabolic_splines = T",
+        "NUMERICS_SETTINGS: upstream_ts_land_curv ignored (adv_isoneutral uses no upstream tracer advection)",
+        "Vertical tracer advection: parabolic splines (parabolic_splines)",
+        "Horizontal tracer advection: C4, with isoneutral hyperdiffusion (adv_isoneutral)",
+        RUN_END,
+    ]:
+        assert squeezed(line) in log

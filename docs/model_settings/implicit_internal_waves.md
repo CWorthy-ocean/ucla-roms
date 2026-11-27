@@ -1,8 +1,8 @@
 # Implicit internal waves (IMEX)
 
-In the standard baroclinic step every term is explicit, so on most realistic domains the time step `dt` is limited by the fastest internal gravity waves (mode 1, a few m/s in deep stratified water). The CPP key `IMEX_IGW` makes the **internal-wave terms implicit**: the baroclinic pressure gradient and the buoyancy response to the transport divergence get implicit weights in both stages of the LF-AM3 step (an implicit-explicit, IMEX, step). After each explicit stage one elliptic problem is solved for the implicit correction, by a preconditioned conjugate-gradient method (by default the mode-split preconditioner, which is a Jacobi preconditioner where it would not pay; `imex_pc`), and the momentum and the tracer transport of the stage are corrected. Advection, Coriolis, mixing and forcing stay explicit.
+In the standard baroclinic step every term is explicit, so on most realistic domains the time step `dt` is limited by the fastest internal gravity waves (mode 1, a few m/s in deep stratified water). The setting `imex_igw = .true.` (namelist group `IMEX_IGW_SETTINGS`) makes the **internal-wave terms implicit**: the baroclinic pressure gradient and the buoyancy response to the transport divergence get implicit weights in both stages of the LF-AM3 step (an implicit-explicit, IMEX, step). After each explicit stage one elliptic problem is solved for the implicit correction, by a preconditioned conjugate-gradient method (by default the mode-split preconditioner, which is a Jacobi preconditioner where it would not pay; `imex_pc`), and the momentum and the tracer transport of the stage are corrected. Advection, Coriolis, mixing and forcing stay explicit.
 
-The step is then stable for internal-wave Courant numbers well above 1, and **`dt` is limited by horizontal advection** instead (section 3). Without `IMEX_IGW` the code is unchanged (the namelist then sets `imex_igw = .false.`).
+The step is then stable for internal-wave Courant numbers well above 1, and **`dt` is limited by horizontal advection** instead (section 3). With `imex_igw = .false.` the step is unchanged.
 
 ## 1. When to use it
 
@@ -14,14 +14,13 @@ The IMEX step gives different answers from the explicit step: it damps and slows
 
 ## 2. How to turn it on
 
-1. Add `#define IMEX_IGW` to the case's `cppdefs.opt` (it is not compatible with the non-hydrostatic solver, `nhmg = .true.` in `NHMG_SETTINGS`).
-2. Copy the namelist group `IMEX_IGW_SETTINGS` from `$ROMS_ROOT/src/namelist.nml` and set `imex_igw = .true.`. Every namelist has this group: `imex_igw` is required and must match the build (`.true.` with `IMEX_IGW`, `.false.` without), and a run without the group or the key, or with a value that does not match the build, stops at startup. The template's other values are the defaults and the recommended settings.
-3. Use the implicit free surface (`fs_mode = 'implicit'` in `IMPLICIT_FS`, with its default settings). IMEX also runs with the split-explicit fast loop, but that loop's cost grows with `ndtfast`, which must grow with `dt`. The implicit free surface's defaults are the tested combination with IMEX (Pacific basin at 1440-2400 s, the nests); no IMEX-specific free-surface setting is needed. See [Implicit free surface](implicit_free_surface.md).
-4. Choose `dt` (section 3).
+1. Copy the namelist group `IMEX_IGW_SETTINGS` from `$ROMS_ROOT/src/namelist.nml` and set `imex_igw = .true.` (it is not compatible with the non-hydrostatic solver, `nhmg = .true.` in `NHMG_SETTINGS`). Every namelist has this group: `imex_igw` is required, and a run without the group or the key stops at startup. The template's other values are the defaults and the recommended settings. No build option is needed.
+2. Use the implicit free surface (`fs_mode = 'implicit'` in `IMPLICIT_FS`, with its default settings). IMEX also runs with the split-explicit fast loop, but that loop's cost grows with `ndtfast`, which must grow with `dt`. The implicit free surface's defaults are the tested combination with IMEX (Pacific basin at 1440-2400 s, the nests); no IMEX-specific free-surface setting is needed. See [Implicit free surface](implicit_free_surface.md).
+3. Choose `dt` (section 3).
 
 The startup log prints the settings and the derived weights (`IMEX_IGW: on (imex_igw = .true.), implicit internal-wave terms`). A run without IMEX prints `IMEX_IGW: off (imex_igw = .false.)`.
 
-To switch IMEX off again, set `imex_igw = .false.` and rebuild without `IMEX_IGW`; the group's other keys can stay (they are ignored, with a startup note).
+To switch IMEX off again, set `imex_igw = .false.`; the group's other keys can stay (they are ignored, with a startup note).
 
 ## 3. Choosing the time step
 
@@ -49,7 +48,7 @@ The barotropic tide error grows with `dt` (about as `dt^2` in amplitude): on the
 
 Settings in the template (see [`IMEX_IGW_SETTINGS`](runtime_settings.md#imex_igw_settings) for the full list):
 
-- **`imex_igw`** (required, no default). `.true.` takes the IMEX step and needs `IMEX_IGW`; `.false.` the stock step, in a build without `IMEX_IGW`.
+- **`imex_igw`** (required, no default). `.true.` takes the IMEX step; `.false.` the stock step.
 
 - **`imex_verbose`** (0). 1 prints an `IMEX` line every `ninfo` steps (mean and largest iterations of each stage's solve, largest velocity correction, unconverged solves), an `IMEX_SOLVE` line per solve, and `IMEX_BREF` and `IMEX_TAPER` lines at the rebuilds. 2 adds the true FP64 residual of every solve (`IMEX_PCHK`), an `IMEX_RH` line per solve (step, stage, iterations, then the start residual and the residual after each iteration, relative to the right-hand side in the norm of the stopping test) and the largest pressure correction. All levels give the same results; 1 and 2 add global reductions, so leave production runs at 0. The `IMEX_COST` tables at the end of the run are printed at every level.
 - **`imex_bref_hours`** (24). The reference stratification `b_ref` from which the operator is built (a column sort of the density to a stable profile, smoothed along geopotentials, with a floor on N²), the operator coefficients and the preconditioner are rebuilt every `imex_bref_hours` model hours and held in between; the actual density stays in the explicit terms. 6, 12 and 24 h gave the same stability, solver counts and tides on the Pacific basin, two nests and the Sargasso Sea; 24 h saved about 3 % per model day on the Pacific basin at 1800 s. Use 12 where the stratification changes strongly within a day (the 24-h rebuild always falls at the same time of day). It is the longest age of `b_ref`: where `b_ref` goes stale earlier, `imex_bref_trigger` rebuilds it on demand (see [stale reference](#stale-reference-and-imex_bref_trigger)).
@@ -136,7 +135,7 @@ Known limits of `'modal'`: waves that the boundary data do not contain and that 
 
 ## 6. Restarts
 
-With `imex_rst_state = 1` the restart file holds the stored pressure gradient, the memory term, the last solutions of both stages (the warm start), the last reference stratification and the layer thicknesses of the last rebuild, and a record of scalars (`imex_rst_scal`). With `'modal'` it also holds the boundary reference `m` (`imex_obcm`). A restarted run reproduces the continuous run bit for bit, also when the restart falls between two rebuilds. This needs reproducible global sums: where `MPI_Allreduce` is not reproducible across runs (for example conda-forge MPICH with its device collectives), set `imex_redu = 1`. Without it the model fields are unaffected, but the IMEX solver state in the restart file can differ in the last bit, so the restarted run may not match the continuous one bit for bit. A run can start from a file without the IMEX state (an initial file, a restart written without `IMEX_IGW` or with `imex_rst_state = 0`); a change of the solver settings, of `imex_bref_hours` or of the open-boundary settings across a restart is allowed. In those cases the IMEX stores start as on a first step (and the `'modal'` reference from the present mismatch) and the log says that the restart is not exact.
+With `imex_rst_state = 1` the restart file holds the stored pressure gradient, the memory term, the last solutions of both stages (the warm start), the last reference stratification and the layer thicknesses of the last rebuild, and a record of scalars (`imex_rst_scal`). With `'modal'` it also holds the boundary reference `m` (`imex_obcm`). A restarted run reproduces the continuous run bit for bit, also when the restart falls between two rebuilds. This needs reproducible global sums: where `MPI_Allreduce` is not reproducible across runs (for example conda-forge MPICH with its device collectives), set `imex_redu = 1`. Without it the model fields are unaffected, but the IMEX solver state in the restart file can differ in the last bit, so the restarted run may not match the continuous one bit for bit. A run can start from a file without the IMEX state (an initial file, a restart written with `imex_igw = .false.` or `imex_rst_state = 0`); a change of the solver settings, of `imex_bref_hours` or of the open-boundary settings across a restart is allowed. In those cases the IMEX stores start as on a first step (and the `'modal'` reference from the present mismatch) and the log says that the restart is not exact.
 
 ## 7. Limitations
 

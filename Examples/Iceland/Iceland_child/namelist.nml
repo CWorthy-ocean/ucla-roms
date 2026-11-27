@@ -536,8 +536,8 @@ pmin = 200               ! Minimum of allocated space for particle array
 /
 
 &IMEX_IGW_SETTINGS                                                  !imex_igw.F90
-imex_igw = .false.       ! REQUIRED: .true. the IMEX internal-wave step (build with IMEX_IGW),
-                         ! .false. the stock step (build without IMEX_IGW)
+imex_igw = .false.       ! REQUIRED: .true. the IMEX internal-wave step,
+                         ! .false. the stock step
 /
 
 

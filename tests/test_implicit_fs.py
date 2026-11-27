@@ -154,30 +154,26 @@ def test_implicit_fs_stops(implicit_fs_configuration, input_dir, tmp_path, case)
     )
 
 
-# The switch imex_igw in IMEX_IGW_SETTINGS (required in every namelist, no default) in a build
-# without IMEX_IGW: the run stops, naming the key, without the group, without the key, or with
-# imex_igw = .true. (the build with IMEX_IGW: test_imex_igw.py, test_imex_igw_key_stops)
+# The switch imex_igw in IMEX_IGW_SETTINGS (required in every namelist, no default) with the
+# stock step: the run stops, naming the key, without the group or without the key; a removed
+# IMEX key stops it too (the IMEX namelist: test_imex_igw.py, test_imex_igw_key_stops)
 IMEX_KEY_STOPS = {
     "no_group": ["has no IMEX_IGW_SETTINGS section", "imex_igw = .false.", "imex_igw = .true."],
     "no_key": ["has no imex_igw, which is required", "imex_igw = .true.", "imex_igw = .false."],
-    "true": ["imex_igw = .true. in IMEX_IGW_SETTINGS needs a build with IMEX_IGW",
-             "or set imex_igw = .false."],
     "removed_key": ["It sets keys that were removed", "imex_win"],
 }
 
 
 @pytest.mark.parametrize("case", IMEX_KEY_STOPS)
 def test_imex_igw_key_stops_without_imex(implicit_fs_configuration, input_dir, tmp_path, case):
-    """A build without IMEX_IGW stops at startup unless the namelist sets imex_igw = .false.;
-    a removed IMEX key stops it too (as in a build with IMEX_IGW)."""
+    """A stock namelist stops at startup without the group or without imex_igw; a removed
+    IMEX key stops it too (also with imex_igw = .false.)."""
     nml = implicit_fs_namelist(input_dir)
     nml["TIME_STEPPING"]["ntimes"] = 2
     if case == "no_group":
         del nml["IMEX_IGW_SETTINGS"]
     elif case == "no_key":
         del nml["IMEX_IGW_SETTINGS"]["imex_igw"]
-    elif case == "true":
-        nml["IMEX_IGW_SETTINGS"]["imex_igw"] = True
     else:
         nml["IMEX_IGW_SETTINGS"]["imex_win"] = 3
     assert_run_rejected(
@@ -187,7 +183,7 @@ def test_imex_igw_key_stops_without_imex(implicit_fs_configuration, input_dir, t
 
 @pytest.mark.parametrize("group", ["template", "minimal"])
 def test_imex_igw_key_off(implicit_fs_configuration, input_dir, tmp_path, group):
-    """A build without IMEX_IGW runs with imex_igw = .false. and says so at startup: with the
+    """A run with imex_igw = .false. says so at startup: with the
     template's group (its other keys are ignored, and a note lists them) and with the minimal
     group that holds only the key (no note)."""
     nml = implicit_fs_namelist(input_dir)

@@ -1,19 +1,19 @@
-"""Implicit internal-wave (IMEX) baroclinic step (CPP key IMEX_IGW, namelist group IMEX_IGW_SETTINGS)
+"""Implicit internal-wave (IMEX) baroclinic step (imex_igw = .true. in the namelist group IMEX_IGW_SETTINGS)
 
-One build: the open-boundary physics of test_implicit_fs.py with IMEX_IGW, run
+One build: the open-boundary physics of test_implicit_fs.py, run with imex_igw and
 with the implicit free surface's defaults: the hashed runs with the 'fixed' and
 the 'modal' open boundary, exact restarts with both, the mode-split preconditioner
 (imex_pc = 'modes', the default: convergence and an exact restart, both boundaries; the
 stop on a diagnostic setting it does not support), imex_corr_adv_vimp = 1 (read and
 reported; equal to 0 where no cell exceeds vertical Courant number 1, as on this grid),
 the stop on removed keys with the template's sed line, and the stops on a group or an
-imex_igw key that is missing or .false. (the build without IMEX_IGW: test_implicit_fs.py, test_imex_igw_key_*);
+imex_igw key that is missing (imex_igw = .false.: test_implicit_fs.py, test_imex_igw_key_*);
 with swept-volume advection (sl_adv) the same output below the thresholds, constancy and
 budgets of the swept fluxes (tracers and momentum), exact restarts with and without hot
 faces, and the stop without imex_corr_adv_vimp = 1 when imex_corr_adv = 1 (none with
 imex_corr_adv = 0).
 
-A second build: the realistic MARBL case of test_bgc.py with IMEX_IGW, run with
+A second build: the realistic MARBL case of test_bgc.py, run with imex_igw,
 BGC tracer subcycling and the 'fixed' and the 'modal' open boundary
 (TestImexBgcSubcycling: equalities only, no reference).
 """
@@ -40,7 +40,7 @@ from .test_bgc import _bgcsub_lines, _subcycle_nml, _with_restarts
 
 CPP_KEYS = (
     UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-    + ["LMD_CONVEC", "IMEX_IGW"]
+    + ["LMD_CONVEC"]
 )
 
 IMEX_LINE = re.compile(r"IMEX it pred.*unconverged\s+(\d+)")
@@ -48,7 +48,7 @@ IMEX_LINE = re.compile(r"IMEX it pred.*unconverged\s+(\d+)")
 
 @pytest.fixture(scope="module")
 def imex_configuration(tmp_path_factory) -> ROMSConfiguration:
-    """Open-boundary physics with the tidal potential and IMEX_IGW, compiled once for this module."""
+    """Open-boundary physics with the tidal potential (run with imex_igw), compiled once for this module."""
     conf = ROMSConfiguration(cpp_keys=CPP_KEYS, location=tmp_path_factory.mktemp("imex_igw_build"))
     conf.compile()
     return conf
@@ -413,27 +413,23 @@ def test_imex_igw_removed_keys(imex_configuration, input_dir, tmp_path):
     assert_imex_converged(log)
 
 
-# The switch imex_igw (required, no default) in a build with IMEX_IGW: the run stops, naming
-# the key, without the group, without the key, or with imex_igw = .false.
+# The switch imex_igw (required, no default): the run stops, naming the key, without the group
+# or without the key, also when the rest of the group asks for IMEX
 IMEX_KEY_STOPS = {
     "no_group": ["has no IMEX_IGW_SETTINGS section", "imex_igw = .false.", "imex_igw = .true."],
     "no_key": ["has no imex_igw, which is required", "imex_igw = .true.", "imex_igw = .false."],
-    "false": ["imex_igw = .false. in IMEX_IGW_SETTINGS, but IMEX_IGW is compiled in",
-              "set imex_igw = .true. or rebuild without IMEX_IGW"],
 }
 
 
 @pytest.mark.parametrize("case", IMEX_KEY_STOPS)
 def test_imex_igw_key_stops(imex_configuration, input_dir, tmp_path, case):
-    """A build with IMEX_IGW stops at startup unless the namelist sets imex_igw = .true."""
+    """An IMEX namelist stops at startup without the group or without imex_igw."""
     nml = imex_namelist(input_dir)
     nml["TIME_STEPPING"]["ntimes"] = 2
     if case == "no_group":
         del nml["IMEX_IGW_SETTINGS"]
-    elif case == "no_key":
-        del nml["IMEX_IGW_SETTINGS"]["imex_igw"]
     else:
-        nml["IMEX_IGW_SETTINGS"]["imex_igw"] = False
+        del nml["IMEX_IGW_SETTINGS"]["imex_igw"]
     assert_run_rejected(
         imex_configuration, nml, tmp_path, IMEX_KEY_STOPS[case], label=case, absent=["IMEX it pred"]
     )
@@ -441,11 +437,10 @@ def test_imex_igw_key_stops(imex_configuration, input_dir, tmp_path, case):
 
 @pytest.fixture(scope="module")
 def imex_marbl_configuration(tmp_path_factory) -> ROMSConfiguration:
-    """The realistic MARBL case of test_bgc.py with IMEX_IGW, compiled once for this module."""
+    """The realistic MARBL case of test_bgc.py (run with imex_igw), compiled once for this module."""
     cpp_keys = (
         UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
         + REALISTIC_CPP_KEYS
-        + ["IMEX_IGW"]
     )
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path_factory.mktemp("imex_marbl_build"), marbl=True)
     conf.compile()
@@ -483,7 +478,7 @@ def imex_subcycle_run(imex_marbl_configuration, input_dir, tmp_path_factory, req
 
 
 class TestImexBgcSubcycling:
-    """IMEX_IGW with BGC tracer subcycling (bgc_physics_subcycle) on the realistic
+    """IMEX (imex_igw) with BGC tracer subcycling (bgc_physics_subcycle) on the realistic
     MARBL case: the equalities that test_bgc.py's subcycling tests check, with IMEX."""
 
     def test_windows_conserve(self, imex_subcycle_run):

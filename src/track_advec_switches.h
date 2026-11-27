@@ -37,38 +37,3 @@ end if
 
 cpps(is:ie)='NEUMANN_UV'
 # endif
-
-! Switches controlling tracer advection and the associated vertical
-! top/bottom boundary conditions inside "compute_horiz_tracer_fluxes.h"
-! and "compute_vert_tracer_fluxes.h"
-
-# ifdef AKIMA
-is=ie+2 ; ie=is+4
-if (ie>max_opt_size) then
-  call error_log%raise_global(&
-  &info=error_info,&
-  &context=sr_name)
-end if
-
-cpps(is:ie)='AKIMA'
-# endif
-# ifdef UPSTREAM_TS
-is=ie+2 ; ie=is+10
-if (ie>max_opt_size) then
-  call error_log%raise_global(&
-  &info=error_info,&
-  &context=sr_name)
-end if
-
-cpps(is:ie)='UPSTREAM_TS'
-# endif
-# ifdef PARABOLIC_SPLINES
-is=ie+2 ; ie=is+16
-if (ie>max_opt_size) then
-  call error_log%raise_global(&
-  &info=error_info,&
-  &context=sr_name)
-end if
-
-cpps(is:ie)='PARABOLIC_SPLINES'
-# endif

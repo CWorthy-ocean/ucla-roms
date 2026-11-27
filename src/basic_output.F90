@@ -21,10 +21,8 @@ module basic_output
   use sponge_tune, only:  wrt_rst_ub, apply_sponge_tune
   use calc_pflx_mod, only: wrt_rst_diag_slow, calc_pflx
   use implicit_fs_mod, only: fs_rst_def, fs_rst_wrt, fs_rst_wrt_scal
-#ifdef IMEX_IGW
-  use imex_igw, only: imex_rst_def, imex_rst_wrt, imex_rst_wrt_scal
+  use imex_igw, only: imex_on, imex_rst_def, imex_rst_wrt, imex_rst_wrt_scal
   use sl_adv_mod, only: sl_rst_def, sl_rst_wrt
-#endif
   use scalars, only:&
   &NT, iic, knew, nstp, time,&
   &nz, dt, start_time, nnew, tdays
@@ -891,9 +889,7 @@ contains                  !]
 
       call write_time_step( ncid, rec_rst, total_rec_rst)
       call fs_rst_wrt_scal(ncid, rec_rst)      ! fs_mode = 'implicit': restart scalars
-#ifdef IMEX_IGW
-      call imex_rst_wrt_scal(ncid, rec_rst)    ! IMEX_IGW: restart scalars
-#endif
+      if (imex_on) call imex_rst_wrt_scal(ncid, rec_rst)    ! imex_igw: restart scalars
       if (apply_sponge_tune) then                        ! wrt_rst_ub writes the open sides only
         if (.not. obc_west)  call nc_fill_record(ncid,'ub_west',rec_rst)
         if (.not. obc_east)  call nc_fill_record(ncid,'ub_east',rec_rst)
@@ -949,10 +945,10 @@ contains                  !]
     call ncwrite(ncid,'DV_avg_bak', DV_avg_bak(i0:i1, 1:j1),start,.true.)
     call fs_rst_wrt(ncid, start)   ! fs_mode = 'implicit': generalized-alpha rates, delta
 
-# ifdef IMEX_IGW
-    call imex_rst_wrt(ncid, rec_rst)   ! IMEX_IGW: the state carried across steps (exact restart)
-    call sl_rst_wrt(ncid, rec_rst)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
-# endif
+    if (imex_on) then
+      call imex_rst_wrt(ncid, rec_rst)   ! imex_igw: the state carried across steps (exact restart)
+      call sl_rst_wrt(ncid, rec_rst)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
+    end if
 
 
 # ifdef LMD_KPP
@@ -1009,9 +1005,7 @@ contains                  !]
 
     call write_time_step( ncid, rec_rst, total_rec_rst )
     call fs_rst_wrt_scal(ncid, rec_rst)      ! fs_mode = 'implicit': restart scalars
-#ifdef IMEX_IGW
-    call imex_rst_wrt_scal(ncid, rec_rst)    ! IMEX_IGW: restart scalars
-#endif
+    if (imex_on) call imex_rst_wrt_scal(ncid, rec_rst)    ! imex_igw: restart scalars
 
     start=1; start(3)=rec_rst                                    ! back to 2D vars
     call ncwrite(ncid,vname(1,indxZ), zeta(i0:i1,j0:j1,knew),start)
@@ -1044,10 +1038,10 @@ contains                  !]
     call ncwrite(ncid,'DV_avg_bak', DV_avg_bak(i0:i1, 1:j1),start)
     call fs_rst_wrt(ncid, start)   ! fs_mode = 'implicit': generalized-alpha rates, delta
 
-# ifdef IMEX_IGW
-    call imex_rst_wrt(ncid, rec_rst)   ! IMEX_IGW: the state carried across steps (exact restart)
-    call sl_rst_wrt(ncid, rec_rst)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
-# endif
+    if (imex_on) then
+      call imex_rst_wrt(ncid, rec_rst)   ! imex_igw: the state carried across steps (exact restart)
+      call sl_rst_wrt(ncid, rec_rst)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
+    end if
 
 
 # ifdef LMD_KPP
@@ -1435,10 +1429,10 @@ contains                  !]
     ierr=nf90_put_att(ncid, varid, 'long_name',&
     &'<back-step mixed fast-time-averaged vbar(:,:,n-1)>')
     call fs_rst_def(ncid)   ! fs_mode = 'implicit': generalized-alpha rates, delta
-# ifdef IMEX_IGW
-    call imex_rst_def(ncid)   ! IMEX_IGW: the state carried across steps (exact restart)
-    call sl_rst_def(ncid)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
-# endif
+    if (imex_on) then
+      call imex_rst_def(ncid)   ! imex_igw: the state carried across steps (exact restart)
+      call sl_rst_def(ncid)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
+    end if
 
 # ifdef LMD_KPP
     varid = nccreate(ncid,vname(1,indxHbls),&

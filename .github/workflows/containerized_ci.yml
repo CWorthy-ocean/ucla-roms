@@ -438,7 +438,6 @@ jobs:
     #   configuration (test_bgc's keys) with PIO on top, so MARBL+CDR+PIO
     #   interactions are compiled too, and so is mpi_masking (a run-time switch
     #   of PIO builds).
-    # - NHMG diagnostics (DIAGNOSTICS_NHMG, NHMGDIAG), which no test defines.
     # - Without MARBL: the CDR and CDR_LITE code in a physics-only
     #   build, without PARALLEL_IO (compile_ifx covers the PARALLEL_IO variant).
     if: ${{ always() && needs.prepare.result == 'success' && (needs.build_gnu.result == 'success' || needs.build_gnu.result == 'skipped') }}
@@ -471,18 +470,6 @@ jobs:
             CURVGRID SPHERICAL \
             MARBL \
             PARALLEL_IO
-          '
-
-      - name: Compile NHMG diagnostics configuration
-        shell: bash
-        run: |
-          micromamba run -n roms-ci bash -c '
-          ci/compile_only.sh /tmp/nhmg_diag_build \
-            UV_ADV UV_COR MASKING \
-            NONLIN_EOS SPLIT_EOS \
-            LMD_MIXING LMD_KPP LMD_BKPP LMD_RIMIX LMD_NONLOCAL \
-            CURVGRID SPHERICAL \
-            DIAGNOSTICS_NHMG NHMGDIAG
           '
 
       - name: Compile the configuration without MARBL

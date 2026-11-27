@@ -440,15 +440,11 @@ contains
     &  rg_set_forces, rg_set_bry, rg_rho_eos, rg_huv_omega, rg_lmd_vmix,&
     &  rg_prsgrd, rg_pre_step3d, rg_huv1_omega, rg_uv1_visc, rg_step2d,&
     &  rg_uv2_omega, rg_step3d_t, rg_t3dmix, rg_avg_diag, rg_output
-#ifdef IMEX_IGW
-    use imex_igw, only: imex_begin_step, imex_shift_levels, imex_solver_enabled,&
+    use imex_igw, only: imex_on, imex_begin_step, imex_shift_levels, imex_solver_enabled,&
     &  imex_mix_split, imex_solve_stage, imex_stage_corr
     use tracers, only: exchange_tracers, nt_step
-#endif
     implicit none
-#ifdef IMEX_IGW
     integer(kind=4) :: nrhs_sv
-#endif
 
 
 ! Increment time-step index and set model clock. Note that "time" set
@@ -468,9 +464,7 @@ contains
 
     nstp=1+mod(iic-ntstart,2)
     nrhs=nstp ; nnew=3
-#ifdef IMEX_IGW
-    call imex_begin_step          ! IMEX weights of this step; n-1 stores on the first
-#endif
+    if (imex_on) call imex_begin_step   ! IMEX weights of this step; n-1 stores on the first
 
     ! Interpolate forcing data to model time n+1/2
     ! get_frc (both versions work with tdays, adding 0.5*dt)
@@ -600,13 +594,13 @@ contains
     call step3d_uv1(0)  ! update u/v(nnew) with dt*ru/rv
 
     if (visc_on) call visc3d
-#ifdef IMEX_IGW
     ! imex_mix_split = 2: the corrector's elliptic correction after visc3d, so
     ! that the implicit pressure and the corrector transport answer to the
     ! viscous increment (visc3d's split Laplacian of the explicit state);
     ! otherwise step3d_uv1 has made it (no-op when the solver is off)
-    if (imex_mix_split == 2) call imex_solve_stage(imex_stage_corr)
-#endif
+    if (imex_on) then
+      if (imex_mix_split == 2) call imex_solve_stage(imex_stage_corr)
+    end if
     call reg_toc(rg_uv1_visc)
 
 
@@ -651,9 +645,8 @@ contains
 !GOOD
     if (diff_on) then
       call reg_tic(rg_t3dmix)
-#  ifdef IMEX_IGW
       nrhs_sv = nrhs
-      if (imex_solver_enabled) then
+      if (imex_on .and. imex_solver_enabled) then
         if (imex_mix_split == 2) then
           ! mix t^n+1 (the state step3d_t left, open-boundary and wall ghost
           ! cells by t3dbc); with diff_on step3d_t leaves its MPI halo stale
@@ -663,11 +656,8 @@ contains
           nrhs = nstp                           ! mix t^n, not t^n+1/2
         end if
       end if
-#  endif
       call t3dmix
-#  ifdef IMEX_IGW
       nrhs = nrhs_sv
-#  endif
       call reg_toc(rg_t3dmix)
     endif
     ! After t3dmix, so the boundary rates hold this step's advective flux
@@ -739,9 +729,7 @@ contains
     if (use_marbl) call wrt_bgc
 #endif
     call reg_toc(rg_output)
-#ifdef IMEX_IGW
-    call imex_shift_levels   ! IMEX stores: level n becomes n-1
-#endif
+    if (imex_on) call imex_shift_levels   ! IMEX stores: level n becomes n-1
 
   end subroutine roms_step
 

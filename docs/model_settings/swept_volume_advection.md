@@ -1,12 +1,12 @@
 # Swept-volume advection (experimental, in development)
 
-With `IMEX_IGW` the internal waves no longer limit the baroclinic time step; horizontal advection does (keep the horizontal Courant number below about 0.8, see [Implicit internal waves](implicit_internal_waves.md)). Swept-volume advection is meant to lift that limit where it binds: on faces where the 2-D Courant number is large, u, v, T and S take the flux of the volume swept through the face over the step (a flux-form semi-Lagrangian flux, the Lin-Rood scheme that [BGC tracer subcycling](bgc_subcycling.md) uses for its window transport) instead of the stock third-order flux, blended smoothly between the two.
+With the IMEX step (`imex_igw = .true.`) the internal waves no longer limit the baroclinic time step; horizontal advection does (keep the horizontal Courant number below about 0.8, see [Implicit internal waves](implicit_internal_waves.md)). Swept-volume advection is meant to lift that limit where it binds: on faces where the 2-D Courant number is large, u, v, T and S take the flux of the volume swept through the face over the step (a flux-form semi-Lagrangian flux, the Lin-Rood scheme that [BGC tracer subcycling](bgc_subcycling.md) uses for its window transport) instead of the stock third-order flux, blended smoothly between the two.
 
 **Status: tracers and momentum (stage 3 of the plan), experimental.** T, S, the passive tracers stepped with the dynamics, u and v take the swept flux on hot faces. Not yet validated for longer steps. With `sl_adv = .false.` (the default, also when the group is absent) the model is bit-for-bit the same as without this feature, and a run with `sl_adv = .true.` in which no face is hot (the largest `c2d` below `sl_c_lo` on every step) is bit-for-bit the same as `sl_adv = .false.` with the same `IMEX_IGW_SETTINGS` (with `imex_corr_adv = 1`, the default, `imex_corr_adv_vimp = 1`, which `sl_adv` then requires).
 
 ## 1. Settings
 
-Namelist group `SL_ADV_SETTINGS` (optional; requires `IMEX_IGW`, and in `IMEX_IGW_SETTINGS` `imex_igw = .true.` and, with `imex_corr_adv = 1` (the default), `imex_corr_adv_vimp = 1`):
+Namelist group `SL_ADV_SETTINGS` (optional; requires, in `IMEX_IGW_SETTINGS`, `imex_igw = .true.` and, with `imex_corr_adv = 1` (the default), `imex_corr_adv_vimp = 1`):
 
 | Setting | Default | Description |
 |--------|---------|-------------|

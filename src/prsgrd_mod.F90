@@ -45,21 +45,15 @@ contains
 #else
     use eos_vars, only: rho
 #endif
-#ifdef ADV_ISONEUTRAL
-    use eos_vars, only: drdx,drde
-#endif
+    use eos_vars, only: drdx,drde   ! adv_isoneutral only
+    use numerics_settings_mod, only: adv_isoneutral
     use dimensions, only:  nx, ny, nz, inode, jnode,i0,i1,j0,j1
     use scalars, only: nz, g, rho0, nrhs
     use diagnostics, only: calc_diag, udiag,&
     &vdiag, ipgr, dxdyi_u, dxdyi_v, diag_uv
     use roms_mpi, only: exchange_xxx
     use calc_pflx_mod, only: calc_pressure_flux, calc_pflx
-#ifdef IMEX_IGW
-    use imex_igw, only: imex_pg_store_combine, imex_stage_pred, imex_stage_corr
-#endif
-#ifdef DIAGNOSTICS_NHMG
-    use diagnostics, only: calc_diag, diag_uv, dxdyi, Wdiag, iwprsgr
-#endif
+    use imex_igw, only: imex_on, imex_pg_store_combine, imex_stage_pred, imex_stage_corr
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k, imin,imax,jmin,jmax
@@ -79,9 +73,7 @@ contains
     real(kind=8) grho, HalfGRho, cff, cfr
     real(kind=8), parameter :: OneFifth=0.2_8, OneTwelfth=1._8/12._8, epsil=0._8
 
-# ifdef ADV_ISONEUTRAL
-    real(kind=8) r0g
-# endif
+    real(kind=8) r0g   ! adv_isoneutral only
 
 ! A non-conservative Density-Jacobian scheme using cubic polynomial
 ! fits for rho and z_r as functions of nondimensional coordinates xi,
@@ -301,8 +293,7 @@ contains
         enddo
       enddo
 
-# ifdef ADV_ISONEUTRAL
-      if (CORR_STAGE) then   !<-- corrector stage only
+      if (adv_isoneutral .and. CORR_STAGE) then   !<-- corrector stage only
         r0g=rho0/g
         do j=jstr,jend
           do i=istr,iendR
@@ -322,11 +313,13 @@ contains
 
 !    &        -0.75_8*rx(i,j)-0.125_8*(rx(i-1,j)+rx(i+1,j))
 
-            &)*umask(i,j)
+            &)&
+#  ifdef MASKING
+            &*umask(i,j)
+#  endif
           enddo
         enddo
       endif
-# endif
 
     enddo
 
@@ -410,8 +403,7 @@ contains
         endif
       enddo   ! <-- j
 
-# ifdef ADV_ISONEUTRAL
-      if (CORR_STAGE) then   !<-- corrector stage only
+      if (adv_isoneutral .and. CORR_STAGE) then   !<-- corrector stage only
         r0g=rho0/g
         do j=jstr,jendR
           do i=istr,iend
@@ -431,29 +423,29 @@ contains
 
 !    &            -0.75_8*rx(i,j)-0.125_8*(rx(i,j-1)+rx(i,j+1))
 
-            &)*vmask(i,j)
+            &)&
+#  ifdef MASKING
+            &*vmask(i,j)
+#  endif
           enddo
         enddo
       endif
-# endif
 
 
     enddo   !<-- k
 
-# ifdef ADV_ISONEUTRAL
-    call exchange_xxx(dRdx,dRde)
-# endif
+    if (adv_isoneutral) call exchange_xxx(dRdx,dRde)
 
-# ifdef IMEX_IGW
-    ! Store this PG as the stage's level (n or *) and replace ru, rv by the
-    ! weighted explicit PG of the IMEX scheme, before the diagnostics and
-    ! before the rhs terms are added (compute_*_rhs_uv_terms.h).
-    if (CORR_STAGE) then
-      call imex_pg_store_combine(imex_stage_corr, istr,iend,jstr,jend, ru,rv)
-    else
-      call imex_pg_store_combine(imex_stage_pred, istr,iend,jstr,jend, ru,rv)
+    ! imex_igw: store this PG as the stage's level (n or *) and replace ru, rv
+    ! by the weighted explicit PG of the IMEX scheme, before the diagnostics
+    ! and before the rhs terms are added (compute_*_rhs_uv_terms.h).
+    if (imex_on) then
+      if (CORR_STAGE) then
+        call imex_pg_store_combine(imex_stage_corr, istr,iend,jstr,jend, ru,rv)
+      else
+        call imex_pg_store_combine(imex_stage_pred, istr,iend,jstr,jend, ru,rv)
+      endif
     endif
-# endif
 
     if (CORR_STAGE) then
       if ((calc_diag.and.diag_uv)) then
@@ -497,13 +489,6 @@ contains
         rw(i,j,nz) = -0.5_8*dR(i,nz)*Hz(i,j,nz)
       enddo
     enddo
-#  ifdef DIAGNOSTICS_NHMG
-    if (diag_uv.and.calc_diag) then
-      do k=1,nz
-        Wdiag(:,:,k,iwprsgr) =rw(1:nx,1:ny,k)*dxdyi
-      enddo
-    endif
-#  endif
     endif  ! nhmg_on
 
   end subroutine prsgrd_tile
