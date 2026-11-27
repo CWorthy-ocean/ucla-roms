@@ -79,7 +79,7 @@ These settings specify the grid size, MPI decomposition, and number of tracers.
 | `nt_cdr_oae` | Number of OAE `CDR_LITE` tracer pairs. Each pair is an ALK-mimicking and a DIC-mimicking passive tracer (`CDR_OAE_ALK<n>`, `CDR_OAE_DIC<n>`), so it adds two tracers. The `CDR_LITE` CPP key adds their air-sea CO2 exchange. |
 | `nt_cdr_dor` | Number of DOR (DIC-mimicking) `CDR_LITE` tracers (`CDR_DOR_DIC<n>`). The `CDR_LITE` tracers are in the history file unless `wrt_passive` is `.false.` |
 | `nt_bgc` | Number of biogeochemical tracers: MARBL's tracer count (32 with its defaults) with `use_marbl = .true.`, else 0. ROMS stops on any other value |
-| `salinity` | `.true.` (default): the model carries salinity, the second tracer. `.false.`: temperature is the only active tracer (passive and CDR_LITE tracers then start at the second tracer), the linear equation of state has no salt term, the nonlinear one uses a salinity of 34.5, and no salt, `AKs` or forcing-output `ssflx` is written. Replaces the cpp key `SALINITY`. ROMS stops with `salinity = .false.` and `sflx_corr`, with the cpp key `LMD_DDMIX`, or with `use_marbl = .true.` (MARBL and its CDR outputs read salinity) |
+| `salinity` | `.true.` (default): the model carries salinity, the second tracer. `.false.`: temperature is the only active tracer (passive and CDR_LITE tracers then start at the second tracer), the linear equation of state has no salt term, the nonlinear one uses a salinity of 34.5, and no salt, `AKs` or forcing-output `ssflx` is written. Replaces the cpp key `SALINITY`. ROMS stops with `salinity = .false.` and `sflx_corr`, or with `use_marbl = .true.` (MARBL and its CDR outputs read salinity) |
 | `mpi_masking` | `.true.`: choose the MPI tiling at start-up from the land mask, without the tiles that are entirely land (default `.false.`). `NP_XI` and `NP_ETA` are then overwritten; launch with at least as many ranks as the selected tiling needs, and extra ranks exit at start-up. No `partit` step is needed. Needs `parallel_io = .true.` (a `make PIO=yes` build) and a joined grid file (ROMS stops otherwise), and not with `ana_grid`. Replaces the cpp key `MPI_MASKING` |
 
 ### `PIO_SETTINGS`
@@ -523,6 +523,17 @@ Tracer advection through an open-boundary face is upwind on inflow: the correcto
 
 The Orlanski radiation updates (of `u`, `v`, the tracers and the tangential barotropic velocity) form the new boundary value as a weighted average of the old boundary value, its neighbour along the edge, the first interior value and the boundary data, with weights from Courant numbers of the flow across the edge, along it, and of the inflow nudging. Each of these Courant numbers is capped at 1, so the weights stay between 0 and 1 and the update cannot overshoot when a long time step or a fast flow along the edge would otherwise take it above 1.
 
+### `NUMERICS_SETTINGS`
+(read by module `numerics_settings_mod.F90`)
+
+Optional: without the group (or a key) every scheme keeps its default. By default, horizontal tracer advection is fourth-order centred (C4) in the predictor step and third-order upstream (U3) in the corrector step, and vertical tracer advection is thickness-aware C4 in the predictor and thickness-aware U3 in the corrector. ROMS prints the three settings at start-up.
+
+| Setting | Description |
+|--------|-------------|
+| `adv_isoneutral` | Isoneutral (rotated) biharmonic tracer hyperdiffusion, with C4 instead of U3 horizontal tracer advection in the corrector step (default `.false.`). Replaces the cpp key `ADV_ISONEUTRAL` |
+| `upstream_ts_land_curv` | Drop the curvature (third-order) term of U3 horizontal tracer advection at faces whose stencil touches land, so those faces are second-order centred (default `.false.`). Masked differences are zero, which otherwise inflates the curvature at the first wet point and can produce large overshoots. Acts only with `MASKING`, and is ignored (with a line at start-up) with `adv_isoneutral`. Replaces the cpp key `UPSTREAM_TS_LAND_CURV` |
+| `parabolic_splines` | Vertical tracer advection with parabolic splines in both steps, the scheme before thickness-aware U3 (default `.false.`). Replaces the cpp key `PARABOLIC_SPLINES` |
+
 ### `UBIND_SETTINGS`
 (read by module `scalars.F90`)
 
@@ -680,21 +691,21 @@ Multigrid settings (`fs_precond = 'mg'`; solver settings as above):
 ### `IMEX_IGW_SETTINGS`
 (read by module `imex_igw.F90`)
 
-Required in every namelist, with or without `IMEX_IGW`. Settings of the implicit internal-wave (IMEX) baroclinic step: the baroclinic pressure gradient and the buoyancy response to the transport divergence are implicit in both stages, so the time step is limited by horizontal advection instead of internal waves. The scheme, the choice of `dt`, restarts and limitations are described in [Implicit internal waves (IMEX)](implicit_internal_waves.md).
+Required in every namelist. Settings of the implicit internal-wave (IMEX) baroclinic step: the baroclinic pressure gradient and the buoyancy response to the transport divergence are implicit in both stages, so the time step is limited by horizontal advection instead of internal waves. The scheme, the choice of `dt`, restarts and limitations are described in [Implicit internal waves (IMEX)](implicit_internal_waves.md).
 
-The switch `imex_igw` is required and has no default. It must match the build: `.true.` needs `IMEX_IGW` in `cppdefs.opt`, `.false.` a build without it. A namelist without the group or without `imex_igw`, or with a value that does not match the build, stops ROMS at startup with a message that names the key. The startup log states the setting (`IMEX_IGW: on (imex_igw = .true.)` or `IMEX_IGW: off (imex_igw = .false.)`). A run without IMEX needs only
+The switch `imex_igw` is required and has no default. `.true.` takes the IMEX step, `.false.` the stock step; it replaces the former cpp key `IMEX_IGW`, which stops the build now. A namelist without the group or without `imex_igw` stops ROMS at startup with a message that names the key. The startup log states the setting (`IMEX_IGW: on (imex_igw = .true.)` or `IMEX_IGW: off (imex_igw = .false.)`). A run without IMEX needs only
 
 ```
 &IMEX_IGW_SETTINGS imex_igw = .false. /
 ```
 
-Without `IMEX_IGW` the group's other keys are read (an unknown or removed key still stops ROMS) and ignored, and a startup note lists them, so the template's group runs unchanged in either build once `imex_igw` matches it.
+With `imex_igw = .false.` the group's other keys are read (an unknown or removed key still stops ROMS) and ignored, and a startup note lists them, so the template's group runs either way.
 
 Settings (the keys of the namelist template):
 
 | Setting | Default | Description |
 |--------|---------|-------------|
-| `imex_igw` | none (required) | `.true.`: the IMEX internal-wave step (build with `IMEX_IGW`); `.false.`: the stock baroclinic step (build without `IMEX_IGW`) |
+| `imex_igw` | none (required) | `.true.`: the IMEX internal-wave step; `.false.`: the stock baroclinic step |
 | `imex_verbose` | `0` | 1: an `IMEX` line every `ninfo` steps (iterations of each stage's solve, largest velocity correction, unconverged solves), an `IMEX_SOLVE` line per solve, `IMEX_BREF` and `IMEX_TAPER` lines at the rebuilds; 2: also the true FP64 residual of every solve (`IMEX_PCHK`), the residual history of every solve (`IMEX_RH`) and the largest pressure correction. 0, 1 and 2 give the same results |
 | `imex_bref_hours` | `24.0` | Rebuild interval (model hours) of the reference stratification `b_ref`, the operator and its preconditioner, which are held in between. 12 is the cautious value where the stratification changes strongly within a day. It is the longest age of `b_ref`: `imex_bref_trigger` rebuilds it earlier where it goes stale |
 | `imex_obc_mode` | `'auto'` | Normal velocity at the open-boundary faces: `'modal'` the characteristic (per-mode Flather) condition on the internal modes, implicit in the stage solves; `'fixed'` the explicit value of the boundary conditions, as without IMEX; `'auto'` `'modal'` where supported (an open edge, `use_m3_boundary_data` and `use_t_boundary_data`), else `'fixed'`. A run that does not start from the state its boundary data come from should take its first ~10 days with `'fixed'` (see [open boundaries](implicit_internal_waves.md#5-open-boundaries)) |
@@ -740,7 +751,7 @@ Keys removed on 2026-11-13 stop ROMS at the read with a message that names them;
 ### `SL_ADV_SETTINGS`
 (read by module `sl_adv_mod.F90`)
 
-Optional: if the group is absent, `sl_adv = .false.`. Experimental and in development: swept-volume (flux-form semi-Lagrangian) advection on the faces where the 2-D Courant number is large, for the `IMEX_IGW` step (requires `IMEX_IGW`, `imex_igw = .true.` and, with `imex_corr_adv = 1` (the default), `imex_corr_adv_vimp = 1`; it stops at start-up otherwise). T, S, the passive tracers stepped with the dynamics, u and v take it. A run in which no face is hot is the same as with `sl_adv = .false.` and the same `IMEX_IGW_SETTINGS`. See [Swept-volume advection](swept_volume_advection.md).
+Optional: if the group is absent, `sl_adv = .false.`. Experimental and in development: swept-volume (flux-form semi-Lagrangian) advection on the faces where the 2-D Courant number is large, for the IMEX step (requires `imex_igw = .true.` and, with `imex_corr_adv = 1` (the default), `imex_corr_adv_vimp = 1`; it stops at start-up otherwise). T, S, the passive tracers stepped with the dynamics, u and v take it. A run in which no face is hot is the same as with `sl_adv = .false.` and the same `IMEX_IGW_SETTINGS`. See [Swept-volume advection](swept_volume_advection.md).
 
 | Setting | Default | Description |
 |--------|---------|-------------|
@@ -763,7 +774,7 @@ Optional: if the group is absent, `nhmg = .false.`. Switches on the non-hydrosta
 |--------|---------|-------------|
 | `nhmg` | `.false.` | Non-hydrostatic solver on (`.true.`) or off (`.false.`) |
 
-With `nhmg = .true.`, the solver's own settings (tolerance, iterations, relaxation method, surface condition, periodicity, ...) are read from the optional file `nhmg_namelist` in the run directory (group `&nhparam`, see `NHMG/src/mg_namelist.f90`); without the file they keep their defaults. ROMS stops at startup if `nhmg = .true.` is combined with `fs_mode = 'implicit'` (`IMPLICIT_FS`), with the cpp key `IMEX_IGW`, or with `mpi_masking = .true.` (NHMG needs an MPI rank for every tile), and, whatever `nhmg` is, if the cpp key `DIAGNOSTICS_NHMG` or `NHMGDIAG` (not finished) is defined.
+With `nhmg = .true.`, the solver's own settings (tolerance, iterations, relaxation method, surface condition, periodicity, ...) are read from the optional file `nhmg_namelist` in the run directory (group `&nhparam`, see `NHMG/src/mg_namelist.f90`); without the file they keep their defaults. ROMS stops at startup if `nhmg = .true.` is combined with `fs_mode = 'implicit'` (`IMPLICIT_FS`), with `imex_igw = .true.` (`IMEX_IGW_SETTINGS`), or with `mpi_masking = .true.` (NHMG needs an MPI rank for every tile).
 
 ### `PARTICLES_SETTINGS`
 (read by module `particles.F90`)

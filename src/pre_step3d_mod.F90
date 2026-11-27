@@ -62,18 +62,13 @@ contains
     &rdrg, vonkar, zob, ntstart, AM3_crv, linear_drag
     use diagnostics, only: calc_diag, udiag, vdiag, icori,&
     &dxdyi_u, dxdyi_v
-#ifdef DIAGNOSTICS_NHMG
-    use diagnostics, only: Wdiag, iwprsgr, iwhoriadv
-#endif
     use ext_copy_prv2shr_mod, only: ext_copy_prv2shr_2d_tile
     use sl_adv_mod, only: sl_adv, sl_uv_pred, sl_t_pred, sl_t_pred_add
     use t3dbc_mod, only: t3dbc_tile
     use u3dbc_mod, only: u3dbc_tile
     use v3dbc_mod, only: v3dbc_tile
-#ifdef IMEX_IGW
-    use imex_igw, only: imex_solve_stage, imex_stage_pred,&
+    use imex_igw, only: imex_on, imex_solve_stage, imex_stage_pred,&
     &imex_predictor_transport, imex_obc_modal, imex_obc_faces
-#endif
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k, iface
@@ -99,9 +94,8 @@ contains
     real(kind=8), parameter :: gamma=0.3333333333333333_8 !! gamma=0.25_8
 # endif
     integer(kind=4) indx, itrc, iAkt
-#ifdef IMEX_IGW
-    integer(kind=4) ipass
-#endif
+    integer(kind=4) ipass, npass
+    logical do_t, do_uv   ! this pass advances the tracers, the momentum
 
 # include "compute_auxiliary_bounds.h"
 
@@ -148,14 +142,17 @@ contains
       cf_stp=0.5_8 +AM3_crv
       cf_bak=0.5_8 -AM3_crv
     endif                           ! Construct artificial slow-time
-#ifdef IMEX_IGW
-! IMEX_IGW: the code below runs twice. Pass 1 is the momentum predictor
-! from the level-n transport; between the passes the predictor's elliptic
-! correction is applied (imex_solve_stage) and the tracer transport
-! Flx_pred replaces FlxU, FlxV, We, Wi (imex_predictor_transport);
+! imex_igw (IMEX_IGW_SETTINGS): the code below runs twice. Pass 1 is the
+! momentum predictor from the level-n transport; between the passes the
+! predictor's elliptic correction is applied (imex_solve_stage) and the tracer
+! transport Flx_pred replaces FlxU, FlxV, We, Wi (imex_predictor_transport);
 ! pass 2 is the tracer predictor, with Hz_bak, Hz_fwd rebuilt from it.
-    do ipass=1,2
-#endif
+! Without it the code runs once and advances both.
+    npass = 1
+    if (imex_on) npass = 2
+    do ipass=1,npass
+    do_t = (.not. imex_on) .or. ipass == 2
+    do_uv = (.not. imex_on) .or. ipass == 1
     ! continuity equation for pseudo-
     do k=1,nz                        ! compressible predictor substep,
       cff=0.5_8*dtau                  ! Eq. (4.7_8) from SM2005.
@@ -170,9 +167,7 @@ contains
         enddo
       enddo
 
-#ifdef IMEX_IGW
-      if (ipass == 2) then
-#endif
+      if (do_t) then
 # define FX UFx
 # define FE VFe
       ! Advance tracer fields
@@ -204,17 +199,14 @@ contains
 
 # undef FE                                /* ! barotropic mode. */
 # undef FX
-#ifdef IMEX_IGW
-      else
-#endif
+      endif  !<-- do_t
 
+      if (do_uv) then
 # include "compute_horiz_rhs_uv_terms.h"
       ! swept-volume advection: the predictor's momentum advection on the fully swept faces
       if (sl_adv) call sl_uv_pred(k, ru, rv, UFx, UFe, VFx, VFe, Hz_bak, dtau, cf_stp, cf_bak,&
       &                           istr, iend, jstr, jend)
-#ifdef IMEX_IGW
-      endif
-#endif
+      endif  !<-- do_uv
 
     enddo !<-- k
 
@@ -224,13 +216,9 @@ contains
 ! of the vertical arrays used below.
 
 # define rd wrk1
-#ifdef IMEX_IGW
-    if (ipass == 1) then
-#endif
+    if (do_uv) then
 # include "compute_rd_bott_drag.h"
-#ifdef IMEX_IGW
     endif
-#endif
 
 ! ...continue computation of the auxiliary tracer field: compute its
 ! change due to vertical advection.  Vertical advective fluxes require
@@ -241,9 +229,7 @@ contains
 ! but the code is retained for reference].
 
     do j=jstr,jend  !! Start of the giant j-loop
-#ifdef IMEX_IGW
-      if (ipass == 2) then
-#endif
+      if (do_t) then
 
       do itrc=1,nt_step
 # include "compute_vert_tracer_fluxes.h"
@@ -340,9 +326,9 @@ contains
         enddo
         endif  ! itrc <= iTandS
       enddo   !<-- itrc  !--> discard DC,CF,FC
-#ifdef IMEX_IGW
-      else
-#endif
+      endif  !<-- do_t
+
+      if (do_uv) then
 
 
 
@@ -563,17 +549,13 @@ contains
           enddo
         enddo
       endif  !<-- j>=jstrV
-#ifdef IMEX_IGW
-      endif  !<-- ipass
-#endif
+      endif  !<-- do_uv
     enddo     !<-- j
 # undef rd
     !! velocities are now in m/s
 
-#ifdef IMEX_IGW
-    if (ipass == 1) then
-    call imex_solve_stage(imex_stage_pred, dtau, cf_bak)   ! elliptic correction of u*, v*
-#endif
+    if (do_uv) then
+    if (imex_on) call imex_solve_stage(imex_stage_pred, dtau, cf_bak)   ! elliptic correction of u*, v*
     if (river_source) then
       do iface=1,nriv_u
         i = riv_u_i(iface); j = riv_u_j(iface)
@@ -603,12 +585,12 @@ contains
 
     call u3dbc_tile (istr,iend,jstr,jend, wrk1)
     call v3dbc_tile (istr,iend,jstr,jend, wrk1)
-#ifdef IMEX_IGW
-    if (imex_obc_modal) call imex_obc_faces(add_mean=.true.)   ! imex_obc_mode 'modal': normal open faces
-    call imex_predictor_transport   ! Flx_pred -> FlxU, FlxV; We, Wi
-    endif  !<-- ipass == 1
+    if (imex_on) then
+      if (imex_obc_modal) call imex_obc_faces(add_mean=.true.)   ! imex_obc_mode 'modal': normal open faces
+      call imex_predictor_transport   ! Flx_pred -> FlxU, FlxV; We, Wi
+    endif
+    endif  !<-- do_uv
     enddo  !<-- ipass
-#endif
 
 ! WARNING: Preliminary time step for 3D momentum equitions is not
 ! complete after this moment: the computed fields u,v(i,j,k,nnew)

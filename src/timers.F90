@@ -16,7 +16,7 @@ module timers
   ! summarized at the end (max and mean over ranks). Regions 1-15 partition
   ! roms_step; 16-17 are nested inside them and reported separately; 18-22
   ! belong to BGC subcycling (nested in step3d_t; 20-22 nested in 19) and
-  ! 23-25 to IMEX_IGW (stage solves nested in pre_step3d and step3d_uv1,
+  ! 23-25 to imex_igw (stage solves nested in pre_step3d and step3d_uv1,
   ! the startup self-test outside the step); 26-28 are the swept-volume
   ! advection's (sl_adv_mod): the weights (nested in set_HUV+omega), the
   ! tracer work (nested in step3d_uv1+visc3d and step3d_t) and the momentum
@@ -121,7 +121,7 @@ contains
       write(*,'(/1x,A)') 'Region timers (wall seconds over the run):'
       write(*,'(1x,A22,2x,A10,2x,A10,2x,A7,2x,A10)') 'region', 'max rank', 'mean rank', '% step', 'min rank'
       do ir = 1, nreg
-        if (ir >= rg_bgcsub_acc .and. tmax(ir) <= 0._8) cycle  ! BGC subcycle, IMEX_IGW, SL rows only when used
+        if (ir >= rg_bgcsub_acc .and. tmax(ir) <= 0._8) cycle  ! BGC subcycle, imex_igw, SL rows only when used
         write(*,'(1x,A22,2x,F10.2,2x,F10.2,2x,F6.1,A,2x,F10.2)') reg_name(ir), tmax(ir),&
         &  tsum(ir)/dble(nnodes), 100._8*tmax(ir)/max(stepsum,1.d-30), '%', tmin(ir)
       enddo

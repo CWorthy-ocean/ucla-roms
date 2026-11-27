@@ -1,6 +1,6 @@
 module sl_adv_mod
   ! Swept-volume (flux-form semi-Lagrangian) advection of u, v, T and S on
-  ! the IMEX_IGW step: faces whose 2-D Courant number c2d exceeds sl_c_lo
+  ! the IMEX step (imex_igw): faces whose 2-D Courant number c2d exceeds sl_c_lo
   ! blend the stock flux with the swept flux of swept_flux_mod, fully swept
   ! from sl_c_hi on. Namelist group SL_ADV_SETTINGS (absent: off).
   ! Documentation: docs/model_settings/swept_volume_advection.md.
@@ -52,11 +52,12 @@ module sl_adv_mod
 #include "cppdefs.opt"
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north,&
   &  ew_periodic, ns_periodic
+  use numerics_settings_mod, only: adv_isoneutral, parabolic_splines, upstream_ts_land_curv
   implicit none
   private
 
   ! Namelist keys (group SL_ADV_SETTINGS)
-  logical, public, protected :: sl_adv = .false.     ! swept-volume advection (needs IMEX_IGW)
+  logical, public, protected :: sl_adv = .false.     ! swept-volume advection (needs imex_igw)
   real(kind=8), public, protected :: sl_c_lo = 0.6_8   ! c2d where the blend starts (weight 0)
   real(kind=8), public, protected :: sl_c_hi = 0.9_8   ! c2d from which faces are fully swept
   real(kind=8), public, protected :: sl_cmax = 5._8    ! stop when the largest c2d exceeds it
@@ -227,9 +228,7 @@ contains
     use namelist_open_mod, only: open_namelist_file
     use error_handling_mod, only: error_log
     use param, only: mynode
-#ifdef IMEX_IGW
-    use imex_igw, only: imex_corr_adv, imex_corr_adv_vimp
-#endif
+    use imex_igw, only: imex_on, imex_corr_adv, imex_corr_adv_vimp
     implicit none
     integer(kind=4) :: namelist_unit, ios
     character(len=15) :: sr_name = "read_nml_sl_adv"
@@ -249,17 +248,16 @@ contains
       return
     end if
     if (.not. sl_adv) return
-#ifndef IMEX_IGW
-    call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="sl_adv requires the IMEX_IGW cppkey")
-    return
-#else
+    if (.not. imex_on) then
+      call error_log%raise_global(context=module_name//"/"//sr_name,&
+      &info="sl_adv requires imex_igw = .true. (IMEX_IGW_SETTINGS)")
+      return
+    end if
     ! With imex_corr_adv = 0 there is no X and IMEX ignores imex_corr_adv_vimp
     if (imex_corr_adv == 1 .and. imex_corr_adv_vimp /= 1) call error_log%raise_global(&
     &context=module_name//"/"//sr_name, info="sl_adv with imex_corr_adv = 1 requires imex_corr_adv_vimp = 1"&
     &//" in IMEX_IGW_SETTINGS (the corrector's X in cells above vertical Courant number 1 from the tracer"&
     &//" step's estimate; see docs/model_settings/implicit_internal_waves.md)")
-#endif
     if (sl_c_lo < 0._8 .or. sl_c_hi <= sl_c_lo) call error_log%raise_global(&
     &context=module_name//"/"//sr_name, info="sl_adv: need 0 <= sl_c_lo < sl_c_hi")
     if (sl_cmax <= sl_c_hi) call error_log%raise_global(&
@@ -270,10 +268,9 @@ contains
     &context=module_name//"/"//sr_name, info="sl_adv: sl_mvol must be 1 or 2")
     if (sl_pred < 0 .or. sl_pred > 2) call error_log%raise_global(&
     &context=module_name//"/"//sr_name, info="sl_adv: sl_pred must be 0, 1 or 2")
-#if defined ADV_ISONEUTRAL || defined PARABOLIC_SPLINES
-    call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="sl_adv needs the UP3 / U3 tracer corrector (no ADV_ISONEUTRAL, PARABOLIC_SPLINES)")
-#endif
+    if (adv_isoneutral .or. parabolic_splines) call error_log%raise_global(context=module_name//"/"//sr_name,&
+    &info="sl_adv needs the UP3 / U3 tracer corrector (adv_isoneutral and parabolic_splines .false.,"&
+    &//" NUMERICS_SETTINGS)")
     if (mynode == 0) write(*,'(/1x,A,3(A,ES10.3),A,I2)') 'SL_ADV: swept-volume advection on'&
     &//' (tracers and momentum):', ' sl_c_lo =', sl_c_lo, ', sl_c_hi =', sl_c_hi,&
     &', sl_cmax =', sl_cmax, ', sl_diag =', sl_diag
@@ -319,15 +316,11 @@ contains
     use dimensions, only: inode, jnode
     use timers, only: reg_set_node
     use error_handling_mod, only: error_log
-#ifdef IMEX_IGW
     use imex_igw, only: imex_solver_enabled
-#endif
     implicit none
     if (.not. sl_adv) return
-#ifdef IMEX_IGW
     if (.not. imex_solver_enabled) call error_log%raise_global(context=module_name//"/sl_adv_init",&
     &info="sl_adv requires the IMEX solves (imex_solver_enabled)")
-#endif
     call error_log%abort_check()
     call reg_set_node(inode, jnode)        ! the per-rank SL timer table names the ranks
     call sl_alloc
@@ -378,9 +371,7 @@ contains
     use scalars, only: dt, nstp, iic, ninfo, time
     use ocean_vars, only: u, v, hz, flxu, flxv
     use tracers, only: t, iTandS
-#ifdef IMEX_IGW
     use imex_igw, only: imex_nbref
-#endif
     use omega_mod, only: omega_sl, omega_wu, omega_wv
     use grid, only: pm, pn, umask, vmask, rmask
     use roms_mpi, only: exchange_xxx
@@ -581,11 +572,8 @@ contains
     sl_hz0 = Hz                              ! level n (the swept volumes of the step)
     ! the reference T, S of the wave increment: at the first step (unless
     ! read from an exact restart) and every imex_nbref steps of model time
-#ifdef IMEX_IGW
+    ! (sl_adv runs only with imex_igw: read_nml_sl_adv stops without it)
     if (.not. tref_set .or. mod(nint(time/dt, kind=8), int(imex_nbref(), kind=8)) == 0_8) then
-#else
-    if (.not. tref_set) then
-#endif
       sl_tref(:,:,:,1:iTandS) = t(:,:,:,nstp,1:iTandS)
       tref_set = .true.
     end if
@@ -855,7 +843,7 @@ contains
   subroutine up3_x(q, f, fx, istr, iend, jstr, jend)
     ! UP3 flux (UPSTREAM_TS, compute_horiz_tracer_fluxes.h) of q through the
     ! x-faces istr..iend+1 of rows jstr..jend with the transports f: masked
-    ! differences, edge extrapolation, UPSTREAM_TS_LAND_CURV, the inflow
+    ! differences, edge extrapolation, upstream_ts_land_curv, the inflow
     ! correction at open edges
     use param, only: np_xi
     use dimensions, only: inode
@@ -875,12 +863,16 @@ contains
       end do
       if (WESTERN_EDGE) dd(istr-1) = dd(istr)
       if (EASTERN_EDGE) dd(iend+2) = dd(iend+1)
-      do i = istr-1, iend+1
-        cv(i) = dd(i+1)-dd(i)
-#ifdef UPSTREAM_TS_LAND_CURV
-        cv(i) = cv(i)*umask(i,j)*umask(i+1,j)
-#endif
-      end do
+      if (upstream_ts_land_curv) then   ! two copies of the loop: no test inside
+        do i = istr-1, iend+1
+          cv(i) = dd(i+1)-dd(i)
+          cv(i) = cv(i)*umask(i,j)*umask(i+1,j)
+        end do
+      else
+        do i = istr-1, iend+1
+          cv(i) = dd(i+1)-dd(i)
+        end do
+      end if
       do i = istr, iend+1
         fx(i,j) = 0.5_8*(q(i,j)+q(i-1,j))*f(i,j) - c6*(cv(i-1)*max(f(i,j),0._8) + cv(i)*min(f(i,j),0._8))
       end do
@@ -915,14 +907,20 @@ contains
     end do
     if (SOUTHERN_EDGE) dd(:,jstr-1) = dd(:,jstr)
     if (NORTHERN_EDGE) dd(:,jend+2) = dd(:,jend+1)
-    do j = jstr-1, jend+1
-      do i = istr, iend
-        cv(i,j) = dd(i,j+1)-dd(i,j)
-#ifdef UPSTREAM_TS_LAND_CURV
-        cv(i,j) = cv(i,j)*vmask(i,j)*vmask(i,j+1)
-#endif
+    if (upstream_ts_land_curv) then   ! two copies of the loop: no test inside
+      do j = jstr-1, jend+1
+        do i = istr, iend
+          cv(i,j) = dd(i,j+1)-dd(i,j)
+          cv(i,j) = cv(i,j)*vmask(i,j)*vmask(i,j+1)
+        end do
       end do
-    end do
+    else
+      do j = jstr-1, jend+1
+        do i = istr, iend
+          cv(i,j) = dd(i,j+1)-dd(i,j)
+        end do
+      end do
+    end if
     do j = jstr, jend+1
       do i = istr, iend
         fy(i,j) = 0.5_8*(q(i,j)+q(i,j-1))*f(i,j) - c6*(cv(i,j-1)*max(f(i,j),0._8) + cv(i,j)*min(f(i,j),0._8))
@@ -1338,7 +1336,6 @@ contains
   end subroutine sl_wave_incr
 
 ! ----------------------------------------------------------------------
-#ifdef IMEX_IGW
   subroutine sl_ts_prep
     ! Every step with sl_adv, after set_HUV1, omega and rho_eos(nrhs), before
     ! step3d_uv1: the IMEX corrector weights of the step, the T, S wave
@@ -1580,11 +1577,6 @@ contains
     end if
     advb_sl = .true.
   end subroutine sl_x_prep
-#else
-  subroutine sl_ts_prep
-    ! (sl_adv requires IMEX_IGW: read_nml_sl_adv stops without it)
-  end subroutine sl_ts_prep
-#endif
 
 ! ----------------------------------------------------------------------
   subroutine sl_t_prep(istr, iend, jstr, jend)
@@ -2024,9 +2016,9 @@ contains
           c = cxf(ii,jj) ; dn = dx2(ii,jj)
           if (ii-1 > g%ilo) then
             df = dx2(ii-1,jj)
-#ifdef UPSTREAM_TS_LAND_CURV
-            if (mx(ii-1,jj) < 0.5_8) df = dn
-#endif
+            if (upstream_ts_land_curv) then
+              if (mx(ii-1,jj) < 0.5_8) df = dn
+            end if
           else
             df = dn
           end if
@@ -2035,9 +2027,9 @@ contains
           c = cxf(ii,jj) ; dn = dx2(ii,jj)
           if (ii+1 <= g%ihi) then
             df = dx2(ii+1,jj)
-#ifdef UPSTREAM_TS_LAND_CURV
-            if (mx(ii+1,jj) < 0.5_8) df = dn
-#endif
+            if (upstream_ts_land_curv) then
+              if (mx(ii+1,jj) < 0.5_8) df = dn
+            end if
           else
             df = dn
           end if
@@ -2078,9 +2070,9 @@ contains
           c = cyf(ii,jj) ; dn = dy2(ii,jj)
           if (jj-1 > g%jlo) then
             df = dy2(ii,jj-1)
-#ifdef UPSTREAM_TS_LAND_CURV
-            if (my(ii,jj-1) < 0.5_8) df = dn
-#endif
+            if (upstream_ts_land_curv) then
+              if (my(ii,jj-1) < 0.5_8) df = dn
+            end if
           else
             df = dn
           end if
@@ -2089,9 +2081,9 @@ contains
           c = cyf(ii,jj) ; dn = dy2(ii,jj)
           if (jj+1 <= g%jhi) then
             df = dy2(ii,jj+1)
-#ifdef UPSTREAM_TS_LAND_CURV
-            if (my(ii,jj+1) < 0.5_8) df = dn
-#endif
+            if (upstream_ts_land_curv) then
+              if (my(ii,jj+1) < 0.5_8) df = dn
+            end if
           else
             df = dn
           end if
@@ -2642,14 +2634,10 @@ contains
     ! main, before the corrector's prsgrd: the carried n-1 momentum
     ! increment's swept part (sl_eu, sl_ev) joins IMEX's pg_nm1, so the
     ! corrector's rho pg_nm1 is rho E
-#ifdef IMEX_IGW
     use imex_igw, only: imex_pg_nm1_add
-#endif
     implicit none
     if (.not. sl_adv .or. .not. sl_hotprev) return
-#ifdef IMEX_IGW
     call imex_pg_nm1_add(sl_eu, sl_ev)
-#endif
   end subroutine sl_uv_carry_in
 
 ! ----------------------------------------------------------------------
@@ -2684,9 +2672,7 @@ contains
     use ocean_vars, only: u, v, hz, flxu, flxv
     use grid, only: pm, pn, umask, vmask
     use roms_mpi, only: exchange_xxx
-#ifdef IMEX_IGW
     use imex_igw, only: pg_n_u, pg_n_v, pg_nm1_u, pg_nm1_v
-#endif
     use swept_flux_mod, only: subpass_crit, subpass_count
     use mpi_f08, only: mpi_allreduce, mpi_double_precision, mpi_max, mpi_sum
     use error_handling_mod, only: error_log
@@ -2911,7 +2897,6 @@ contains
     ! departure fields
     sl_uw = u(:,:,:,nstp) ; sl_vw = v(:,:,:,nstp)
     sl_ur = 0._8 ; sl_vr = 0._8 ; sl_ue = 0._8 ; sl_ve = 0._8
-#ifdef IMEX_IGW
     do k = 1, nz
       do j = gu%j0, gu%j1
         do i = gu%i0, gu%i1
@@ -2930,7 +2915,6 @@ contains
         end do
       end do
     end do
-#endif
     call exchange_xxx(sl_uw, sl_vw, sl_ur, sl_vr)
     sl_ut = u(:,:,:,nstp) ; sl_vt = v(:,:,:,nstp)
     do k = 1, nz
@@ -3465,9 +3449,7 @@ contains
     use roms_mpi, only: exchange_xxx
     use timers, only: reg_tic, reg_toc, rg_sl_mom, rg_sl_mcor
     use grid, only: umask, vmask
-#ifdef IMEX_IGW
     use imex_igw, only: pg_star_u, pg_star_v
-#endif
     implicit none
     integer(kind=4), intent(in) :: istr, iend, jstr, jend
     real(kind=8), allocatable, dimension(:,:,:), save :: tu, tv, pu, pv
@@ -3483,7 +3465,6 @@ contains
     ! p = (theta_c + mu) dt pm pn pg_*/Hz, the implicit-level PG's explicit part that u(nnew) holds: the
     ! arrival half acts on z - p (the implicit-level PG is applied after the sweeps, as in the frozen scheme)
     pu = 0._8 ; pv = 0._8
-#ifdef IMEX_IGW
     do k = 1, nz
       if (.not. sl_lact(k)) cycle            ! (O2) read only at the hot points of the level
       do j = gu%j0, gu%j1
@@ -3500,7 +3481,6 @@ contains
       end do
     end do
     call exchange_xxx(pu, pv)
-#endif
     sl_zu = u(:,:,:,nstp) ; sl_zv = v(:,:,:,nstp)
     do k = 1, nz
       if (.not. sl_lact(k)) cycle            ! (O2) no point with wc > 0 on this level of the rank

@@ -63,9 +63,7 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
   use surf_flux, only: bulk_frc_on, flux_frc_on
   use dimensions, only: npx, npy
   use advection, only: init_advection
-#ifdef IMEX_IGW
-  use imex_igw, only: init_arrays_imex_igw
-#endif
+  use imex_igw, only: imex_on, init_arrays_imex_igw
   implicit none
   integer(kind=4), intent(in) :: istr, iend, jstr, jend
   integer(kind=4)             :: i, j, k, itrc, itavg
@@ -126,9 +124,7 @@ subroutine init_arrays_tile (istr,iend,jstr,jend)
   if (flux_frc_on) call init_arrays_flux_frc
 
   if (pipe_source) call init_arrays_pipes
-#ifdef IMEX_IGW
-  call init_arrays_imex_igw
-#endif
+  if (imex_on) call init_arrays_imex_igw
 
 #ifdef MARBL
   if (use_marbl) then

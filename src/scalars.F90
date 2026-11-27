@@ -80,7 +80,7 @@ module scalars
 ! AM3_crv  Curvature of the LF-AM3 predictor: pre_step3d advances the
 !          predictor by (1-AM3_crv)*dt, and omega sizes the predictor's
 !          explicit/implicit split of W for that step. 1/6 unless
-!          IMEX_IGW sets it from imex_am3_crv at start-up.
+!          imex_igw sets it from imex_am3_crv at start-up.
   real(kind=8) :: AM3_crv = 1._8/6._8
 
   real(kind=8) :: Akv_bak = 0._8
@@ -260,13 +260,6 @@ contains
       &   context = module_name//'/'//sr_name, &
       &   info='use_marbl = .true. (MARBL and its CDR outputs) needs salinity = .true. (PARAM_SETTINGS)')
     end if
-#ifdef LMD_DDMIX
-    if (.not. salinity) then
-      call error_log%raise_global( &
-      &   context = module_name//'/'//sr_name, &
-      &   info='the cpp key LMD_DDMIX (double diffusion) needs salinity = .true. (PARAM_SETTINGS)')
-    end if
-#endif
 #ifndef LMD_MIXING
     mixing_type = "background"
 #else

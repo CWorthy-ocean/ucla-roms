@@ -4,7 +4,7 @@ module imex_igw
   !
   !     DESCRIPTION:
   !     Implicit-explicit (IMEX) treatment of the internal-wave terms in
-  !     the LF-AM3 baroclinic step (CPP key IMEX_IGW): the baroclinic
+  !     the LF-AM3 baroclinic step (imex_igw = .true. in IMEX_IGW_SETTINGS): the baroclinic
   !     pressure gradient (PG) and the buoyancy response to the transport
   !     divergence get implicit weights in both stages, through one
   !     elliptic solve after each explicit stage.
@@ -18,8 +18,8 @@ module imex_igw
   !     - the explicit PG combination (called at the end of prsgrd_tile),
   !       the predictor tracer transport (called by pre_step3d), and the
   !       end-of-step level shift (called by roms_step).
-  !     With IMEX_IGW undefined the module only reads the namelist group
-  !     (required in every build) and checks that imex_igw = .false.
+  !     With imex_igw = .false. the module only reads the namelist group
+  !     (required in every namelist); nothing is allocated.
   !
   !     Time levels: n current, * predicted (u,v slot 3 after
   !     pre_step3d), n+1 new. Weights:
@@ -92,14 +92,18 @@ module imex_igw
 
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north, any_open_side,&
   &  use_m3_boundary_data, use_t_boundary_data, ew_periodic, ns_periodic
+  use numerics_settings_mod, only: upstream_ts_land_curv
   implicit none
   private
 
-  public :: read_nml_imex_igw     ! in every build: the group and its key imex_igw are required
+  public :: read_nml_imex_igw     ! in every run: the group and its key imex_igw are required
+
+  ! The switch imex_igw of IMEX_IGW_SETTINGS (a module variable cannot share the module's name):
+  ! .true. the IMEX step, .false. the stock baroclinic step
+  logical, public, protected :: imex_on = .false.
 
   character(len=8) :: module_name = "imex_igw"
 
-#ifdef IMEX_IGW
   public :: init_arrays_imex_igw
   public :: imex_begin_step
   public :: imex_pg_store_combine
@@ -121,14 +125,12 @@ module imex_igw
   ! Stage identifiers passed by the consumers
   integer(kind=4), parameter, public :: imex_stage_pred = 1  ! prsgrd at n, pre_step3d
   integer(kind=4), parameter, public :: imex_stage_corr = 2  ! prsgrd at *, step3d_uv1
-#endif /* IMEX_IGW */
 
   ! Namelist IMEX_IGW_SETTINGS, required in every namelist. Its logical key imex_igw (required, no
-  ! default) says whether the run takes the IMEX step; it must agree with the build (.true. with
-  ! IMEX_IGW, .false. without). It is a local of read_nml_imex_igw, which also holds the namelist
-  ! statement, since a module variable cannot share the module's name. The keys below are declared
-  ! and read in every build, so that a build without IMEX_IGW reads (and ignores) a full group with
-  ! imex_igw = .false. src/namelist.nml lists the keys a user sets (imex_verbose,
+  ! default) says whether the run takes the IMEX step (imex_on). It is a local of read_nml_imex_igw,
+  ! which also holds the namelist statement, since a module variable cannot share the module's name.
+  ! With imex_igw = .false. the other keys are read (and ignored, with a note), so that a full group
+  ! runs either way. src/namelist.nml lists the keys a user sets (imex_verbose,
   ! imex_bref_hours, imex_rst_state, imex_obc_mode, imex_obc_tref); the others are solver and
   ! development settings. Defaults: weight set B, the tested solver configuration
   real(kind=8)    :: imex_theta_p = 0.5_8        ! implicit PG weight, predictor
@@ -405,7 +407,6 @@ module imex_igw
   &  'imex_sponge_eq', 'imex_trim3d', 'imex_obc_eig', 'imex_obc_dcols', 'imex_obc_scrit', 'imex_obc_sband',&
   &  'imex_obc_fref', 'imex_obc_trelax', 'imex_obc_cslow', 'imex_obc_supercrit']
 
-#ifdef IMEX_IGW
   ! Derived quantities read by the consumers (and scalars' AM3_crv, set from
   ! imex_am3_crv for pre_step3d and omega)
   real(kind=8), public, protected :: wflx_corr(4)  ! corrector transport weights on
@@ -669,16 +670,15 @@ module imex_igw
   integer(kind=4), parameter :: pcm_ntm = 11
   real(kind=8) :: pcm_tm(pcm_ntm) = 0._8
   logical :: pcm_vfirst = .false.                  ! the next pcm_exchk is the V-cycle's first
-#endif /* IMEX_IGW */
 
 contains
 
   !----------------------------------------------------------------------
   subroutine read_nml_imex_igw
-    ! Read the IMEX_IGW_SETTINGS section of the namelist file (required in every build) and its
-    ! required switch imex_igw, which must agree with the build. With IMEX_IGW: check the
-    ! weights and derive the per-stage weights from them. Without: the other keys are read
-    ! (unknown or removed keys stop the run, as with IMEX_IGW) and ignored, with a note.
+    ! Read the IMEX_IGW_SETTINGS section of the namelist file (required in every run) and its
+    ! required switch imex_igw. With imex_igw = .true.: check the weights and derive the per-stage
+    ! weights from them. With .false.: the other keys are read (unknown or removed keys stop the
+    ! run, as with .true.) and ignored, with a note.
     use, intrinsic :: iso_fortran_env, only: iostat_end
     use namelist_open_mod, only: open_namelist_file
     use error_handling_mod, only: error_log
@@ -688,7 +688,7 @@ contains
     character(len=17) :: sr_name = "read_nml_imex_igw"
     character(len=200) :: msg
     character(len=1024) :: found
-    logical :: imex_igw    ! the switch: .true. the IMEX step (needs IMEX_IGW), .false. the stock step
+    logical :: imex_igw    ! the switch: .true. the IMEX step, .false. the stock step (imex_on)
     logical :: first, has_key
     namelist /IMEX_IGW_SETTINGS/ imex_igw,&
     &  imex_theta_p, imex_phi, imex_theta_c, imex_mu, imex_nu, imex_rho,&
@@ -718,16 +718,14 @@ contains
       has_key = imex_igw .eqv. first
     end if
     if (ios /= 0 .and. ios /= iostat_end) call removed_keys_set(namelist_unit, found)
-#ifndef IMEX_IGW
     if (ios == 0 .and. has_key .and. .not. imex_igw) call other_keys_set(namelist_unit, found)
-#endif
     close(namelist_unit)
     if (ios == iostat_end) then
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info="the namelist file has no IMEX_IGW_SETTINGS section, which every namelist needs: add"&
       &//" &IMEX_IGW_SETTINGS imex_igw = .false. / (stock baroclinic step), or the group with"&
-      &//" imex_igw = .true. (IMEX internal-wave step, needs a build with IMEX_IGW); see src/namelist.nml")
+      &//" imex_igw = .true. (IMEX internal-wave step); see src/namelist.nml")
       return
     else if (ios /= 0 .and. len_trim(found) > 0) then
       call error_log%raise_global(&
@@ -746,35 +744,20 @@ contains
       call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
       &info="the IMEX_IGW_SETTINGS section of the namelist file has no imex_igw, which is required:"&
-      &//" set imex_igw = .true. (IMEX internal-wave step, needs a build with IMEX_IGW) or"&
+      &//" set imex_igw = .true. (IMEX internal-wave step) or"&
       &//" imex_igw = .false. (stock baroclinic step)")
       return
     end if
 
-#ifdef IMEX_IGW
-    if (.not. imex_igw) then
-      call error_log%raise_global(&
-      &context=module_name//"/"//sr_name,&
-      &info="imex_igw = .false. in IMEX_IGW_SETTINGS, but IMEX_IGW is compiled in:"&
-      &//" set imex_igw = .true. or rebuild without IMEX_IGW")
-      return
-    end if
-    call check_settings(module_name//"/"//sr_name)
-    call set_derived_weights
-    if (mynode == 0) call print_settings
-#else
-    if (imex_igw) then
-      call error_log%raise_global(&
-      &context=module_name//"/"//sr_name,&
-      &info="imex_igw = .true. in IMEX_IGW_SETTINGS needs a build with IMEX_IGW:"&
-      &//" add IMEX_IGW to cppdefs.opt and rebuild, or set imex_igw = .false.")
-      return
-    end if
-    if (mynode == 0) then
+    imex_on = imex_igw
+    if (imex_on) then
+      call check_settings(module_name//"/"//sr_name)
+      call set_derived_weights
+      if (mynode == 0) call print_settings
+    else if (mynode == 0) then
       write(*,'(/1x,A)') 'IMEX_IGW: off (imex_igw = .false.)'
       if (len_trim(found) > 0) write(*,'(3x,A)') 'the other keys of IMEX_IGW_SETTINGS are ignored: '//trim(found)
     end if
-#endif
   end subroutine read_nml_imex_igw
 
   !----------------------------------------------------------------------
@@ -835,11 +818,10 @@ contains
     enddo
   end subroutine removed_keys_set
 
-#ifndef IMEX_IGW
   !----------------------------------------------------------------------
   subroutine other_keys_set(unit, found)
     ! The keys other than imex_igw that the namelist file's IMEX_IGW_SETTINGS group sets, as a
-    ! comma-separated list (empty if none; for the note that a build without IMEX_IGW ignores
+    ! comma-separated list (empty if none; for the note that a run with imex_igw = .false. ignores
     ! them). A key is the name before an '=' (and its subscript, if any) outside quoted strings;
     ! comments after '!' are skipped
     implicit none
@@ -926,9 +908,7 @@ contains
       if (last) exit
     enddo
   end subroutine other_keys_set
-#endif
 
-#ifdef IMEX_IGW
   !----------------------------------------------------------------------
   subroutine check_settings(context)
     ! Constraints on the weights and the allowed values of the keys. A violation is raised globally;
@@ -2072,12 +2052,20 @@ contains
       enddo
       if (w_edge) dd(ib0-1) = dd(ib0)
       if (e_edge) dd(ib1+2) = dd(ib1+1)
+#  ifdef MASKING
+      if (upstream_ts_land_curv) then       ! two copies of the loop: no test inside
+        do ii=ib0-1,ib1+1                   ! curvature at the cells
+          cv(ii) = dd(ii+1) - dd(ii)
+          cv(ii) = cv(ii)*umask(ii,jj)*umask(ii+1,jj)
+        enddo
+      else
+#  endif
       do ii=ib0-1,ib1+1                     ! curvature at the cells
         cv(ii) = dd(ii+1) - dd(ii)
-#  if defined MASKING && defined UPSTREAM_TS_LAND_CURV
-        cv(ii) = cv(ii)*umask(ii,jj)*umask(ii+1,jj)
-#  endif
       enddo
+#  ifdef MASKING
+      end if
+#  endif
       do ii=ib0,ib1+1
         fx(ii) = 0.5_8*(q(ii,jj,kk)+q(ii-1,jj,kk))*f(ii) - c6*( cv(ii-1)*max(f(ii),0._8) + cv(ii)*min(f(ii),0._8) )
       enddo
@@ -2135,8 +2123,10 @@ contains
       dp = (q(ii,jp,kk) - q(ii,jp-1,kk))*mmp
       cl = d0 - dm                          ! curvature at cell jf-1
       cr = dp - d0                          ! curvature at cell jf
-#  if defined MASKING && defined UPSTREAM_TS_LAND_CURV
-      cl = cl*vmask(ii,jf-1)*m0 ; cr = cr*m0*vmask(ii,jf+1)
+#  ifdef MASKING
+      if (upstream_ts_land_curv) then
+        cl = cl*vmask(ii,jf-1)*m0 ; cr = cr*m0*vmask(ii,jf+1)
+      end if
 #  endif
       fe = 0.5_8*(q(ii,jf,kk)+q(ii,jf-1,kk))*ff - c6*( cl*max(ff,0._8) + cr*min(ff,0._8) )
       if (obc_south) then
@@ -11345,5 +11335,4 @@ contains
     s = sin(12.9898_8*ig + 78.233_8*jg + 37.719_8*k + 4.581_8*seed)*43758.5453_8
     h = s - floor(s) - 0.5_8
   end function imex_hash01
-#endif /* IMEX_IGW */
 end module imex_igw

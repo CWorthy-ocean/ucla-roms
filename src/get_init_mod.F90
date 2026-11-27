@@ -59,10 +59,8 @@ contains
     use error_handling_mod, only: error_log
     use calc_pflx_mod, only : get_init_slow, calc_pflx
     use implicit_fs_mod, only: fs_rst_get
-#ifdef IMEX_IGW
-    use imex_igw, only: imex_rst_get
+    use imex_igw, only: imex_on, imex_rst_get
     use sl_adv_mod, only: sl_rst_get
-#endif
     use sponge_tune, only: get_init_ub, apply_sponge_tune
     use pio_roms, only: use_pio, pio_gtype
 #ifdef PARALLEL_IO
@@ -606,10 +604,10 @@ contains
 
     if (calc_pflx) call get_init_slow(ncid,record,tindx)
     if (apply_sponge_tune)   call get_init_ub(ncid,record)
-#ifdef IMEX_IGW
-    call imex_rst_get(ncid, record, tindx)   ! IMEX_IGW: the state carried across steps (exact restart)
-    call sl_rst_get(ncid, record, tindx)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
-#endif
+    if (imex_on) then
+      call imex_rst_get(ncid, record, tindx)   ! imex_igw: the state carried across steps (exact restart)
+      call sl_rst_get(ncid, record, tindx)     ! SL_ADV: the swept-volume advection's state (sl_adv on)
+    end if
 
 ! Close input NetCDF file and  write greeting message depending
 ! on the the type of initial/restart procedure performed above.

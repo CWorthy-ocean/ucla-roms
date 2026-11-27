@@ -79,14 +79,12 @@ module roms_mpi
 
   public :: exchange_xxx
   public :: mpi_setup
-#ifdef IMEX_IGW
   public :: exchange_3_start, exchange_3_finish
 
   ! split-phase exchange of one 3D variable (exchange_3_start, exchange_3_finish; used by
-  ! IMEX_IGW): the posted requests; nothing else may use the buffers in between
+  ! imex_igw): the posted requests; nothing else may use the buffers in between
   integer(kind=4) :: sp_nreq = 0, sp_req(16)
   logical :: sp_active = .false.
-#endif
 
 contains
 
@@ -666,7 +664,6 @@ contains
 
   end subroutine exchange_3 !]
 !--------------------------------------------------------
-#ifdef IMEX_IGW
   subroutine exchange_3_start(A, exch_bf, do_corn) ![
     ! Split-phase exchange_3: pack A and post the receives and sends; the
     ! caller may compute on data that does not need the halo, then call
@@ -774,7 +771,6 @@ contains
     call unpack_3dvar(A)
     sp_active = .false.
   end subroutine exchange_3_finish !]
-#endif
 
   subroutine exchange_33(A,B,exch_bf,do_corn,skip) ![
     ! 3D variable, 1 at the time

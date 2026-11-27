@@ -12,24 +12,22 @@ contains
 
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
     use private_scratch, only: a2d
-#ifdef IMEX_IGW
-    use imex_igw, only: imex_mix_split, imex_solver_enabled
+    use imex_igw, only: imex_on, imex_mix_split, imex_solver_enabled
     use ocean_vars, only: u, v
     use scalars, only: nstp
     use roms_mpi, only: exchange_xxx
-#endif
 
     implicit none
     integer(kind=4),parameter :: tile=0
 
 # include "compute_tile_bounds.h"
-#ifdef IMEX_IGW
-    ! imex_mix_split 1, 2: the Laplacian from this step's momentum u,v(3-nstp) (1: after the
-    ! corrector's implicit correction; 2: the explicit state, before it), whose halo faces
-    ! (iend+1, jend+1, istr-1, jstr-1 of interior tiles) need the neighbours' values
-    if (imex_mix_split >= 1 .and. imex_solver_enabled)&
-    &  call exchange_xxx(u(:,:,:,3-nstp), v(:,:,:,3-nstp))
-#endif
+    ! imex_igw with imex_mix_split 1, 2: the Laplacian from this step's momentum u,v(3-nstp)
+    ! (1: after the corrector's implicit correction; 2: the explicit state, before it), whose
+    ! halo faces (iend+1, jend+1, istr-1, jstr-1 of interior tiles) need the neighbours' values
+    if (imex_on) then
+      if (imex_mix_split >= 1 .and. imex_solver_enabled)&
+      &  call exchange_xxx(u(:,:,:,3-nstp), v(:,:,:,3-nstp))
+    end if
     call visc3d_s_tile (istr,iend,jstr,jend, A2d(1,1), A2d(1,2),&
     &A2d(1,3), A2d(1,4), A2d(1,5), A2d(1,6), A2d(1,7), A2d(1,8))
   end subroutine visc3d_s
@@ -53,12 +51,10 @@ contains
     use mixing, only: visc2_r, visc2_p
     use ocean_vars, only: v, u, hz
     use scalars, only: dt, nz, nstp
-#ifdef IMEX_IGW
-    use imex_igw, only: imex_mix_split, imex_solver_enabled
+    use imex_igw, only: imex_on, imex_mix_split, imex_solver_enabled
     use scalars, only: gamma2
-#  ifdef MASKING
+#ifdef MASKING
     use grid, only: umask, vmask
-#  endif
 #endif
     use diagnostics, only: calc_diag, udiag, vdiag,&
     &dxdyi_u, dxdyi_v, ihmix, diag_uv
@@ -66,14 +62,13 @@ contains
     integer(kind=4) istr,iend,jstr,jend, i,j,k, indx
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: UFx,UFe,VFx,VFe, Uk,Vk, dUb,dVb
     real(kind=8) cff
-    logical spl   ! IMEX_IGW imex_mix_split 1, 2: the Laplacian from this step's momentum
+    logical spl   ! imex_igw, imex_mix_split 1, 2: the Laplacian from this step's momentum
 
 # include "compute_auxiliary_bounds.h"
 
     indx=3-nstp    !--> time index for target arrays;
     spl = .false.
-#ifdef IMEX_IGW
-    spl = imex_mix_split >= 1 .and. imex_solver_enabled
+    if (imex_on) spl = imex_mix_split >= 1 .and. imex_solver_enabled
     if (spl) then
       ! Column mean of the step's velocity increment (explicit, plus the implicit
       ! correction with imex_mix_split = 1; explicit only with 2, where visc3d runs
@@ -118,7 +113,6 @@ contains
         enddo
       enddo
     end if
-#endif
 
 !  Compute horizontal harmonic viscosity along constant S-surfaces.
 !
@@ -126,16 +120,13 @@ contains
 !  tensor (m5/s2) in XI- and ETA-directions.
 
     do k=1,nz
-      ! Velocity the Laplacian acts on: u, v(nstp) = u^n (stock), or (IMEX_IGW,
+      ! Velocity the Laplacian acts on: u, v(nstp) = u^n (stock), or (imex_igw,
       ! imex_mix_split 1, 2) this step's momentum u, v(indx)/Hz_u (1: corrected, 2: explicit)
       ! less the depth mean of its increment (dUb, dVb: the depth mean stays at u^n)
       ! on the interior faces (split step), with the physical edges as the stock
       ! field would have them: normal faces u^n (0 at walls, the OBC's value at
       ! open faces), tangential ghost rows the wall rule gamma2 x interior
       ! (u3dbc) at closed edges and u^n at open ones.
-#ifdef IMEX_IGW
-#  define UU(i,j) Uk(i,j)
-#  define VV(i,j) Vk(i,j)
       if (spl) then
         do j=jstr-1,jend+1
           do i=istrU-1,iend+1
@@ -216,58 +207,18 @@ contains
             endif
           enddo
         endif
+#  define UU(i,j) Uk(i,j)
+#  define VV(i,j) Vk(i,j)
+#  include "visc3d_stress.h"
+#  undef UU
+#  undef VV
       else
-        do j=jstr-1,jend+1
-          do i=istrU-1,iend+1
-            Uk(i,j)=u(i,j,k,nstp)
-          enddo
-        enddo
-        do j=jstrV-1,jend+1
-          do i=istr-1,iend+1
-            Vk(i,j)=v(i,j,k,nstp)
-          enddo
-        enddo
-      end if
-#else
 #  define UU(i,j) u(i,j,k,nstp)
 #  define VV(i,j) v(i,j,k,nstp)
-#endif
-      do j=jstrV-1,jend
-        do i=istrU-1,iend
-          cff=0.5_8*Hz(i,j,k)*visc2_r(i,j)*(&
-
-          &dn_r(i,j)*pm(i,j)*( (pn(i  ,j)+pn(i+1,j))*UU(i+1,j)&
-          &-(pn(i-1,j)+pn(i  ,j))*UU(i  ,j)&
-          &)&
-
-          &-dm_r(i,j)*pn(i,j)*( (pm(i,j  )+pm(i,j+1))*VV(i,j+1)&
-          &-(pm(i,j-1)+pm(i,j  ))*VV(i,j  )&
-          &))
-          UFx(i,j)=  cff*dn_r(i,j)*dn_r(i,j)
-          VFe(i,j)= -cff*dm_r(i,j)*dm_r(i,j)
-        enddo
-      enddo
-      do j=jstr,jend+1
-        do i=istr,iend+1
-          cff=0.125_8*(Hz(i-1,j,k)+Hz(i,j,k)+Hz(i-1,j-1,k)&
-          &+Hz(i,j-1,k))*visc2_p(i,j)*(&
-
-          &0.25_8*(pm(i-1,j)+pm(i,j)+pm(i-1,j-1)+pm(i,j-1))*dn_p(i,j)&
-          &*( (pn(i  ,j-1)+pn(i  ,j))*VV(i  ,j)&
-          &-(pn(i-1,j-1)+pn(i-1,j))*VV(i-1,j)&
-          &)&
-
-          &+0.25_8*(pn(i-1,j)+pn(i,j)+pn(i-1,j-1)+pn(i,j-1))*dm_p(i,j)&
-          &*( (pm(i-1,j  )+pm(i,j  ))*UU(i,j  )&
-          &-(pm(i-1,j-1)+pm(i,j-1))*UU(i,j-1)&
-          &))&
-# ifdef MASKING
-          &*pmask(i,j)
-# endif
-          UFe(i,j)= cff*dm_p(i,j)*dm_p(i,j)
-          VFx(i,j)= cff*dn_p(i,j)*dn_p(i,j)
-        enddo
-      enddo
+#  include "visc3d_stress.h"
+#  undef UU
+#  undef VV
+      end if
 
 ! Apply viscous terms. Note that at this stage arrays u,v(...,3-nstp)
 ! contain Hz*U and Hz*V with units of [m2/s].   Also compute vertical

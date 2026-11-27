@@ -17,6 +17,7 @@ module swept_flux_mod
 #include "cppdefs.opt"
   use open_boundary_mod, only: obc_west, obc_east, obc_south, obc_north,&
   &  ew_periodic, ns_periodic
+  use numerics_settings_mod, only: upstream_ts_land_curv
   implicit none
   private
 
@@ -61,9 +62,9 @@ contains
           dn = dx2(ii,jj)
           if (ii-1 > ilo) then
             df = dx2(ii-1,jj)
-#ifdef UPSTREAM_TS_LAND_CURV
-            if (umask(ii-1,jj) < 0.5_8) df = dn
-#endif
+            if (upstream_ts_land_curv) then
+              if (umask(ii-1,jj) < 0.5_8) df = dn
+            end if
           else
             df = dn
           end if
@@ -73,9 +74,9 @@ contains
           dn = dx2(ii,jj)
           if (ii+1 <= ihi) then
             df = dx2(ii+1,jj)
-#ifdef UPSTREAM_TS_LAND_CURV
-            if (umask(ii+1,jj) < 0.5_8) df = dn
-#endif
+            if (upstream_ts_land_curv) then
+              if (umask(ii+1,jj) < 0.5_8) df = dn
+            end if
           else
             df = dn
           end if
@@ -136,9 +137,9 @@ contains
           dn = dy2(ii,jj)
           if (jj-1 > jlo) then
             df = dy2(ii,jj-1)
-#ifdef UPSTREAM_TS_LAND_CURV
-            if (vmask(ii,jj-1) < 0.5_8) df = dn
-#endif
+            if (upstream_ts_land_curv) then
+              if (vmask(ii,jj-1) < 0.5_8) df = dn
+            end if
           else
             df = dn
           end if
@@ -148,9 +149,9 @@ contains
           dn = dy2(ii,jj)
           if (jj+1 <= jhi) then
             df = dy2(ii,jj+1)
-#ifdef UPSTREAM_TS_LAND_CURV
-            if (vmask(ii,jj+1) < 0.5_8) df = dn
-#endif
+            if (upstream_ts_land_curv) then
+              if (vmask(ii,jj+1) < 0.5_8) df = dn
+            end if
           else
             df = dn
           end if

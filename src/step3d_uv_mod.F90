@@ -38,9 +38,6 @@ contains
     use diagnostics, only: u_prev, v_prev, calc_diag, udiag,&
     &vdiag, icori, dxdyi_u, dxdyi_v, idiss, ipgr, iadv, ivmix,&
     &set_diags_u_4th_adv, set_diags_v_4th_adv, diag_uv
-#if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
-    use diagnostics, only: Wdiag, iwprsgr, iwhoriadv, set_diags_w_at_uv1
-#endif
     use surf_flux, only: sustr, svstr
     use coupling, only: r_d, rufrc, rvfrc
     use grid, only:&
@@ -56,13 +53,10 @@ contains
     use ocean_vars, only: u, v, hz, flxu, flxv, we, wi, z_w
     use scalars, only: nz, dt, nnew, nrhs, ntstart
     use roms_mpi, only: exchange_xxx
-# ifdef ADV_ISONEUTRAL
-    use eos_vars, only: drde, drdx
-#endif
+    use eos_vars, only: drde, drdx   ! adv_isoneutral only
+    use numerics_settings_mod, only: adv_isoneutral
     use instant_output, only: wrt_instant
-#ifdef IMEX_IGW
-    use imex_igw, only: imex_solve_stage, imex_stage_corr, imex_mix_split
-#endif
+    use imex_igw, only: imex_on, imex_solve_stage, imex_stage_corr, imex_mix_split
     use sl_adv_mod, only: sl_adv, sl_uv_hflux, sl_uv_vcol, sl_uv_cor
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j,k
@@ -81,11 +75,6 @@ contains
 
 # include "compute_auxiliary_bounds.h"
 
-#  ifdef NHMGDIAG
-    if (diag_uv.and.calc_diag) then
-      Wdiag(istr:iend,jstr:jend,:,iwprsgr) =rw(istr:iend,jstr:jend,:)
-    endif
-#  endif
 
     if (nhmg_on) then
 
@@ -112,9 +101,6 @@ contains
         enddo
 
       enddo
-# ifdef DIAGNOSTICS_NHMG
-      if (calc_diag) call set_diags_w_at_uv1( istr, iend, jstr, jend, DC, rw )
-# endif
     endif  ! nhmg_on
 
     do k=1,nz
@@ -291,13 +277,13 @@ contains
     !! velocities are in the form:  u*dz, v*dz, w*dz
     ! swept-volume advection: the arrival half of the trajectory Coriolis
     if (sl_adv) call sl_uv_cor(istr, iend, jstr, jend)
-#ifdef IMEX_IGW
-    ! Elliptic correction of u, v(nnew) (Hz-weighted here); rufrc keeps
-    ! the vertical integral of the explicit rhs. visc3d runs after this,
+    ! imex_igw: elliptic correction of u, v(nnew) (Hz-weighted here); rufrc
+    ! keeps the vertical integral of the explicit rhs. visc3d runs after this,
     ! except with imex_mix_split = 2, where roms_step calls the correction
     ! after visc3d (lateral mixing ahead of the implicit solve).
-    if (imex_mix_split /= 2) call imex_solve_stage(imex_stage_corr)
-#endif
+    if (imex_on) then
+      if (imex_mix_split /= 2) call imex_solve_stage(imex_stage_corr)
+    end if
 
     if (nhmg_on) then  ! ---- NHMG: non-hydrostatic projection
 
@@ -459,10 +445,8 @@ contains
 
     !!!! JM not clear what this does either
 # undef r_D
-# ifdef ADV_ISONEUTRAL
     !!!! JM not clear what this does !!!
-    call exchange_xxx(dRdx,dRde)
-# endif
+    if (adv_isoneutral) call exchange_xxx(dRdx,dRde)
 
   end subroutine step3d_uv1_tile
 
@@ -521,9 +505,8 @@ contains
     use param, only: ieast, iwest, jnorth, jsouth, np_xi, np_eta
     use dimensions, only: inode, jnode
 
-#ifdef ADV_ISONEUTRAL
-    use eos_vars, only: drdx, drde, idrz
-#endif
+    use eos_vars, only: drdx, drde, idrz   ! adv_isoneutral only
+    use numerics_settings_mod, only: adv_isoneutral
 
 #ifdef SPLIT_EOS
     use eos_vars, only: qp2, qp1, rho1
@@ -537,9 +520,7 @@ contains
     &dm_r, pn, pm
     use ocean_vars, only: w, z_r, wi   ! w: NHMG only
     use mixing, only: &
-#ifdef ADV_ISONEUTRAL
-    &diff3u, diff3v,&
-#endif
+    &diff3u, diff3v,&   ! adv_isoneutral only
 #ifdef LMD_KPP
     &hbls,&
 #endif
@@ -548,10 +529,6 @@ contains
 #endif
     akv
     use diagnostics, only: diag_uv, calc_diag, udiag, vdiag, icoup
-#if defined NHMGDIAG || defined DIAGNOSTICS_NHMG
-    use diagnostics, only: diag_uv, calc_diag, set_diags_w_at_uv2, set_diags_w_at_bc,&
-    &set_diags_w_at_uv2_end
-#endif
     use ocean_vars, only: u, ubar, v, vbar, hz, flxu, flxv, z_w
     use scalars, only: nz, knew, nnew, nstp, g, rho0, dt
     use roms_mpi, only: exchange_xxx
@@ -559,9 +536,7 @@ contains
     use v3dbc_mod, only: v3dbc_tile
     use w3dbc_mod, only: w3dbc_tile
     use nhmg_settings_mod, only: nhmg_on
-#ifdef IMEX_IGW
-    use imex_igw, only: wflx_corr, u_nm1, v_nm1, imex_obc_modal, imex_obc_faces
-#endif
+    use imex_igw, only: imex_on, wflx_corr, u_nm1, v_nm1, imex_obc_modal, imex_obc_faces
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, i,j,k, iface
@@ -571,14 +546,13 @@ contains
     real(kind=8) :: uint,vint
     real(kind=8) :: huint,hvint
 
-# ifdef ADV_ISONEUTRAL
+    ! adv_isoneutral only:
     real(kind=8) dRz,dRx_max, dpth, r0g, cfs,cfb
     real(kind=8), parameter :: epsil=1.D-33
     !  Alphamax = 4 leads to mixing that is worse than
     ! up3 over steep slopes
 #  define  ALPHA_MAX 2._8
 #  define GAMMA 0.0833333333333_8
-# endif
 
 # include "compute_auxiliary_bounds.h"
 
@@ -723,9 +697,9 @@ contains
 
     call u3dbc_tile (istr,iend,jstr,jend, DC)
     call v3dbc_tile (istr,iend,jstr,jend, DC)
-#ifdef IMEX_IGW
-    if (imex_obc_modal) call imex_obc_faces   ! imex_obc_mode 'modal': normal open faces
-#endif
+    if (imex_on) then
+      if (imex_obc_modal) call imex_obc_faces   ! imex_obc_mode 'modal': normal open faces
+    end if
 
 
 ! Coupling 2D and 3D momentum equations:
@@ -788,18 +762,6 @@ FC(i,0)=DC(i,0)*(FC(i,0)-DU_avg1(i,j)) !! FC(0) is now correction velocity
 CF(i,0)=0._8   !<-- initialize vertical integral
 enddo          !--> keep DC(:,0) for later
 
-do k=nz,1,-1
-  do i=IU_RANGE
-  u(i,j,k,nnew)=(u(i,j,k,nnew)-FC(i,0))
-# ifdef MASKING
-  u(i,j,k,nnew)=u(i,j,k,nnew)*umask(i,j)
-# endif
-#ifdef IMEX_IGW
-  ! Flx_corr = mu Flx* + DC (theta_c u^n+1 + nu u^n + rho u^n-1); the
-  ! weights on (u^n+1, Flx*, u^n, u^n-1) come from imex_igw.
-  CF(i,k)=wflx_corr(2)*FlxU(i,j,k) + DC(i,k)*( wflx_corr(1)*u(i,j,k,nnew)&
-  &+wflx_corr(3)*u(i,j,k,nstp) + wflx_corr(4)*u_nm1(i,j,k) )
-#else
 !--#define EPSIL 0.125
 !--#define DELTA 0.75
 
@@ -809,12 +771,33 @@ do k=nz,1,-1
 !>># define EPSIL 0.2105
 !>># define DELTA 0.5790
 
-  CF(i,k)=DELTA*FlxU(i,j,k) + EPSIL*DC(i,k)&
-  &*(u(i,j,k,nstp)+u(i,j,k,nnew))
-#endif /* IMEX_IGW */
+if (imex_on) then   ! two copies of the loop: no test inside
+do k=nz,1,-1
+  do i=IU_RANGE
+  u(i,j,k,nnew)=(u(i,j,k,nnew)-FC(i,0))
+# ifdef MASKING
+  u(i,j,k,nnew)=u(i,j,k,nnew)*umask(i,j)
+# endif
+  ! Flx_corr = mu Flx* + DC (theta_c u^n+1 + nu u^n + rho u^n-1); the
+  ! weights on (u^n+1, Flx*, u^n, u^n-1) come from imex_igw.
+  CF(i,k)=wflx_corr(2)*FlxU(i,j,k) + DC(i,k)*( wflx_corr(1)*u(i,j,k,nnew)&
+  &+wflx_corr(3)*u(i,j,k,nstp) + wflx_corr(4)*u_nm1(i,j,k) )
   CF(i,0)=CF(i,0)+CF(i,k)    !<-- vertical integration
 enddo
 enddo
+else
+do k=nz,1,-1
+  do i=IU_RANGE
+  u(i,j,k,nnew)=(u(i,j,k,nnew)-FC(i,0))
+# ifdef MASKING
+  u(i,j,k,nnew)=u(i,j,k,nnew)*umask(i,j)
+# endif
+  CF(i,k)=DELTA*FlxU(i,j,k) + EPSIL*DC(i,k)&
+  &*(u(i,j,k,nstp)+u(i,j,k,nnew))
+  CF(i,0)=CF(i,0)+CF(i,k)    !<-- vertical integration
+enddo
+enddo
+endif
 do i=IU_RANGE
 CF(i,0)=DC(i,0)*(CF(i,0)-DU_avg2(i,j))  !<-- mismatch
 enddo
@@ -822,13 +805,16 @@ enddo
 do k=1,nz,+1
   do i=IU_RANGE
   FlxU(i,j,k)=CF(i,k)-DC(i,k)*CF(i,0)   !<-- correction
-
-# ifdef ADV_ISONEUTRAL
-  diff3u(i,j,k)=sqrt(GAMMA*abs(u(i,j,k,nnew))*dm_u(i,j))&
-  &*dm_u(i,j)
-# endif
 enddo
 enddo
+if (adv_isoneutral) then
+  do k=1,nz,+1
+    do i=IU_RANGE
+    diff3u(i,j,k)=sqrt(GAMMA*abs(u(i,j,k,nnew))*dm_u(i,j))&
+    &*dm_u(i,j)
+  enddo
+enddo
+endif
 
 if (j >= jstr) then         !--> ETA-component
   do i=IV_RANGE
@@ -850,39 +836,48 @@ vbar(i,j,knew)=DC(i,0)*DV_avg1(i,j)
 FC(i,0)=DC(i,0)*(FC(i,0)-DV_avg1(i,j))
 CF(i,0)=0._8
 enddo        !--> keep DC(:,0) for later
+if (imex_on) then   ! two copies of the loop: no test inside
 do k=nz,1,-1
   do i=IV_RANGE
   v(i,j,k,nnew)=(v(i,j,k,nnew)-FC(i,0))
 # ifdef MASKING
   v(i,j,k,nnew)=v(i,j,k,nnew)*vmask(i,j)
 #endif
-
-! Daniel add, mask-1  again, remember to check with Yusuke
-!# endif
-#ifdef IMEX_IGW
   CF(i,k)=wflx_corr(2)*FlxV(i,j,k) + DC(i,k)*( wflx_corr(1)*v(i,j,k,nnew)&
   &+wflx_corr(3)*v(i,j,k,nstp) + wflx_corr(4)*v_nm1(i,j,k) )
-#else
-  CF(i,k)=DELTA*FlxV(i,j,k) + EPSIL*DC(i,k)&
-  &*(v(i,j,k,nstp)+v(i,j,k,nnew))
-#endif /* IMEX_IGW */
   CF(i,0)=CF(i,0)+CF(i,k)
 enddo
 enddo
+else
+do k=nz,1,-1
+  do i=IV_RANGE
+  v(i,j,k,nnew)=(v(i,j,k,nnew)-FC(i,0))
+# ifdef MASKING
+  v(i,j,k,nnew)=v(i,j,k,nnew)*vmask(i,j)
+#endif
+  CF(i,k)=DELTA*FlxV(i,j,k) + EPSIL*DC(i,k)&
+  &*(v(i,j,k,nstp)+v(i,j,k,nnew))
+  CF(i,0)=CF(i,0)+CF(i,k)
+enddo
+enddo
+endif
 do i=IV_RANGE
 CF(i,0)=DC(i,0)*(CF(i,0)-DV_avg2(i,j))
 enddo
 do k=1,nz,+1
   do i=IV_RANGE
   FlxV(i,j,k)=CF(i,k)-DC(i,k)*CF(i,0)
-# ifdef ADV_ISONEUTRAL
-  diff3v(i,j,k)=sqrt(GAMMA*abs(v(i,j,k,nnew))*dn_v(i,j))&
-  &*dn_v(i,j)
-# endif
 enddo
 enddo
-# ifdef ADV_ISONEUTRAL
-if (j <= jend) then
+if (adv_isoneutral) then
+  do k=1,nz,+1
+    do i=IV_RANGE
+    diff3v(i,j,k)=sqrt(GAMMA*abs(v(i,j,k,nnew))*dn_v(i,j))&
+    &*dn_v(i,j)
+  enddo
+enddo
+endif
+if (adv_isoneutral .and. j <= jend) then
   r0g=rho0/g
   do k=1,nz-1
     do i=istr,iend
@@ -938,8 +933,7 @@ if (j <= jend) then
 
     enddo
   enddo
-endif      !<-- j <= jend
-# endif
+endif      !<-- adv_isoneutral .and. j <= jend
 endif    !<-- j >= jstr
 enddo    ! <-- j
 
@@ -980,9 +974,7 @@ call exchange_xxx(FlxU,u(:,:,:,nnew),ubar(:,:,knew) )
 
 call exchange_xxx(FlxV,v(:,:,:,nnew),vbar(:,:,knew) )
 
-#  ifdef ADV_ISONEUTRAL
-call exchange_xxx(idRz,diff3u,diff3v)
-#  endif
+if (adv_isoneutral) call exchange_xxx(idRz,diff3u,diff3v)
 
 
 if (nhmg_on) then  ! ---- NHMG
@@ -1007,9 +999,6 @@ do j=jstr,jend  ! BUG HERE
     enddo
   enddo
 enddo
-# ifdef DIAGNOSTICS_NHMG
-if (calc_diag) call set_diags_w_at_uv2( istr, iend, jstr, jend )
-# endif
 !
 
 !--------------------------------------------------------------------
@@ -1017,9 +1006,6 @@ if (calc_diag) call set_diags_w_at_uv2( istr, iend, jstr, jend )
 !--------------------------------------------------------------------
 call w3dbc_tile (Istr,Iend,Jstr,Jend, DC)
 
-#  ifdef DIAGNOSTICS_NHMG
-if (calc_diag) call set_diags_w_at_bc( istr, iend, jstr, jend )
-#  endif
 !--------------------------------------------------------------------
 ! Exchange periodic boundaries and computational margins.
 !--------------------------------------------------------------------
@@ -1027,9 +1013,6 @@ call exchange_xxx(w(:,:,:,nnew))
 
 endif  ! ---- nhmg_on
 
-#  ifdef NHMGDIAG
-if (calc_diag.and.diag_uv)  call set_diags_w_at_uv2_end(istrR, iendR, jstrR, jendR)
-#  endif
 
 end subroutine step3d_uv2_tile
 

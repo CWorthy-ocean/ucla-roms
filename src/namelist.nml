@@ -552,6 +552,18 @@ use_m3_boundary_data = .true. ! Relax u and v toward boundary data (with obc_m3 
 use_t_boundary_data  = .true. ! Relax the tracers toward boundary data (with obc_t = 'orlanski')
 /
 
+&NUMERICS_SETTINGS                                     !numerics_settings_mod.F90
+!-----------------
+! Optional group; without it every key below keeps its default
+!-----------------
+adv_isoneutral = .false.        ! T: isoneutral biharmonic tracer hyperdiffusion, with 4th-order centred
+                                ! (not upstream) horizontal tracer advection in the corrector step
+upstream_ts_land_curv = .false. ! T: drop the curvature term of upstream tracer advection at faces whose
+                                ! stencil touches land (2nd-order centred there; ignored with adv_isoneutral)
+parabolic_splines = .false.     ! T: vertical tracer advection with parabolic splines instead of
+                                ! thickness-aware C4 (predictor) and U3 (corrector)
+/
+
 &UBIND_SETTINGS                                                      !scalars.F90
 !--------------
 ! Read only with an open side, obc_m3 = 'orlanski' and use_m3_boundary_data = T
@@ -701,11 +713,10 @@ fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost ta
 !                IMPLICIT INTERNAL-WAVE (IMEX) BAROCLINIC STEP
 !================================================================================
 ! The group and its key imex_igw are REQUIRED in every namelist: imex_igw = .true.
-! takes the IMEX step and needs a build with the IMEX_IGW cppkey (experimental);
-! imex_igw = .false. takes the stock step and needs a build without it. A run
-! without the group or the key, or with a value that does not match the build,
-! stops at start-up. Without IMEX_IGW the group's other keys are ignored (a
-! start-up note lists them); the minimal group is
+! takes the IMEX step (experimental); imex_igw = .false. takes the stock step.
+! A run without the group or the key stops at start-up. With imex_igw = .false.
+! the group's other keys are ignored (a start-up note lists them); the minimal
+! group is
 !   &IMEX_IGW_SETTINGS imex_igw = .false. /
 ! Each baroclinic stage solves an elliptic problem for the implicit
 ! internal-wave correction (preconditioned CG).
@@ -720,8 +731,8 @@ fs_verbose = 0                       ! 1 FS_SOLVE line per step, FS_COST cost ta
 ! sed -E -i '/^[[:space:]]*(imex_force_mode|imex_n2_min|imex_bt_mode|imex_bt_passes|imex_s2d_check|imex_rhs_full|imex_probe_steps|imex_pcols|imex_win|imex_precond|imex_pcg_variant|imex_pcg_overlap|imex_adj_fused|imex_bref|imex_bref_floor|imex_bref_every|imex_bref_smooth|imex_n2_reg|imex_obc_rhs|imex_obc_op|imex_obc_zero|imex_obc_diag|imex_pred_btfix|imex_tsmix_n|imex_sponge_eq|imex_trim3d|imex_obc_eig|imex_obc_dcols|imex_obc_scrit|imex_obc_sband|imex_obc_fref|imex_obc_trelax|imex_obc_cslow|imex_obc_supercrit)[[:space:]]*[=(]/I{:a;$!{N;/\n([[:blank:]]*([A-Za-z_][A-Za-z0-9_%]*[[:blank:]]*[=(]|[\/&$])[^\n]*|[[:blank:]]*|![^\n]*)$/!ba};/\n([[:blank:]]*([A-Za-z_][A-Za-z0-9_%]*[[:blank:]]*[=(]|[\/&$])[^\n]*|[[:blank:]]*|![^\n]*)$/!d;s/^.*\n/\n/;D}' namelist.nml
 !================================================================================
 &IMEX_IGW_SETTINGS                                                  !imex_igw.F90
-imex_igw = .false.                   ! REQUIRED, no default: .true. the IMEX internal-wave step (build
-                                     ! with IMEX_IGW); .false. the stock step (build without IMEX_IGW)
+imex_igw = .false.                   ! REQUIRED, no default: .true. the IMEX internal-wave step;
+                                     ! .false. the stock step
 imex_verbose = 0                     ! 0: quiet; 1: solver statistics (IMEX line: iterations,
                                      ! max |du|; IMEX_SOLVE, IMEX_TAPER lines); 2: 1 + the true
                                      ! FP64 residual of every solve (IMEX_PCHK), its residual history
@@ -757,7 +768,7 @@ imex_obc_tref = 259200.0             ! 'modal': time scale (s) of the reference 
 !================================================================================
 !                SWEPT-VOLUME ADVECTION (EXPERIMENTAL, IN DEVELOPMENT)
 !================================================================================
-! Requires IMEX_IGW, and in IMEX_IGW_SETTINGS imex_igw = .true. and, with
+! Requires, in IMEX_IGW_SETTINGS, imex_igw = .true. and, with
 ! imex_corr_adv = 1 (the default), imex_corr_adv_vimp = 1 (sl_adv stops at
 ! start-up otherwise). Optional group:
 ! absent means sl_adv = .false. With sl_adv on, u, v, T, S and the passive
@@ -787,8 +798,7 @@ sl_pred = 2                          ! Predictor on fully swept faces: 0 = the s
 ! built; nhmg = .true. switches it on. WARNING: untested and unmaintained; may
 ! break features such as exact restarts. Its solver settings are read from the
 ! optional file nhmg_namelist (group &nhparam) in the run directory. Stops with
-! fs_mode = 'implicit', IMEX_IGW or mpi_masking. The cpp keys DIAGNOSTICS_NHMG and
-! NHMGDIAG always stop the run (not finished). See docs/model_settings/runtime_settings.md.
+! fs_mode = 'implicit', imex_igw or mpi_masking. See docs/model_settings/runtime_settings.md.
 !================================================================================
 &NHMG_SETTINGS                                              !nhmg_settings_mod.F90
 nhmg = .false.          ! Non-hydrostatic solver on (T) or off (F)

@@ -2,13 +2,13 @@ module advection
 
   ! Tracer vertical advection adapted from CESR-lab/ucla-roms branch
   ! adv_module (src/advection.F).  Horizontal tracer fluxes stay in
-  ! compute_horiz_tracer_fluxes.h (including UPSTREAM_TS_LAND_CURV).
+  ! compute_horiz_tracer_fluxes.h (including upstream_ts_land_curv).
   ! Momentum advection is unchanged.
   !
   ! Default vertical scheme is thickness-aware U3: the LF-AM3 predictor
   ! uses thickness-aware C4 (centered, no dissipation), and the corrector
-  ! uses thickness-aware U3.  Define PARABOLIC_SPLINES in cppdefs.opt to
-  ! restore the old spline reconstruction instead.
+  ! uses thickness-aware U3.  parabolic_splines = .true. in the namelist
+  ! group NUMERICS_SETTINGS restores the old spline reconstruction instead.
   !
   ! Thickness-aware faces use a local parabola that matches the cell
   ! averages of three adjacent layers in physical z (layer thickness Hz),
@@ -46,6 +46,7 @@ module advection
   use tracers, only: t
   use scalars, only: nrhs
   use param, only: mynode
+  use numerics_settings_mod, only: parabolic_splines, adv_isoneutral
 
   implicit none
 
@@ -69,12 +70,15 @@ contains
   subroutine init_advection
 
     if (mynode == 0) then
-#ifdef PARABOLIC_SPLINES
-      write(*,*) 'Vertical tracer advection: parabolic splines (PARABOLIC_SPLINES)'
-#else
-      write(*,*) 'Vertical tracer advection: thickness-aware U3 (default)'
-      write(*,*) '  predictor: thickness-aware C4; corrector: thickness-aware U3'
-#endif
+      if (parabolic_splines) then
+        write(*,*) 'Vertical tracer advection: parabolic splines (parabolic_splines)'
+      else
+        write(*,*) 'Vertical tracer advection: thickness-aware U3 (default)'
+        write(*,*) '  predictor: thickness-aware C4; corrector: thickness-aware U3'
+      endif
+      if (adv_isoneutral) then
+        write(*,*) 'Horizontal tracer advection: C4, with isoneutral hyperdiffusion (adv_isoneutral)'
+      endif
     endif
 
   end subroutine init_advection
@@ -85,12 +89,12 @@ contains
     integer(kind=4), intent(in)  :: istr, iend, j, itrc
     real(kind=8),    intent(out) :: Fz(istr-2:iend+2, 0:nz)
 
-#ifdef PARABOLIC_SPLINES
-    call t_vadv_spline(Fz, istr, iend, j, itrc)
-#else
-    ! Leave the dissipative part of U3 for the corrector step
-    call t_vadv_c4(Fz, istr, iend, j, itrc)
-#endif
+    if (parabolic_splines) then
+      call t_vadv_spline(Fz, istr, iend, j, itrc)
+    else
+      ! Leave the dissipative part of U3 for the corrector step
+      call t_vadv_c4(Fz, istr, iend, j, itrc)
+    endif
 
   end subroutine t_vadv_pre
 
@@ -100,11 +104,11 @@ contains
     integer(kind=4), intent(in)  :: istr, iend, j, itrc
     real(kind=8),    intent(out) :: Fz(istr-2:iend+2, 0:nz)
 
-#ifdef PARABOLIC_SPLINES
-    call t_vadv_spline(Fz, istr, iend, j, itrc)
-#else
-    call t_vadv_up3(Fz, istr, iend, j, itrc)
-#endif
+    if (parabolic_splines) then
+      call t_vadv_spline(Fz, istr, iend, j, itrc)
+    else
+      call t_vadv_up3(Fz, istr, iend, j, itrc)
+    endif
 
   end subroutine t_vadv_cor
 

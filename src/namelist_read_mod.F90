@@ -62,9 +62,10 @@ contains
     use scoord, only: read_nml_scoord !SCOORD_SETTINGS
     use pio_roms, only: read_nml_pio              !PIO_SETTINGS (parallel_io)
     use diag_mod, only: read_nml_stdout_diag
-    use imex_igw, only: read_nml_imex_igw          !IMEX_IGW_SETTINGS (required in every build)
+    use imex_igw, only: read_nml_imex_igw, imex_on          !IMEX_IGW_SETTINGS (required in every build)
     use open_boundary_mod, only: read_nml_periodic, read_nml_open_boundary  !PERIODIC_SETTINGS,
                                                                   !OPEN_BOUNDARY_SETTINGS (optional)
+    use numerics_settings_mod, only: read_nml_numerics  !NUMERICS_SETTINGS (optional)
     use implicit_fs_mod, only: read_nml_implicit_fs, fs_on !IMPLICIT_FS (optional)
     use sl_adv_mod, only: read_nml_sl_adv          !SL_ADV_SETTINGS (optional)
     use nhmg_settings_mod, only: read_nml_nhmg, nhmg_on  !NHMG_SETTINGS (optional)
@@ -79,6 +80,7 @@ contains
     call read_nml_marbl      ! use_marbl, which the readers and checks below use
     call read_nml_periodic
     call read_nml_open_boundary
+    call read_nml_numerics
     call read_nml_grid
     if (use_marbl) then
       call read_nml_bgc
@@ -120,10 +122,8 @@ contains
    call read_nml_nhmg
    if (nhmg_on .and. fs_on) call error_log%raise_global(context=trim(module_name)//"/read_namelists",&
    &info="nhmg = .true. (NHMG_SETTINGS) does not work with fs_mode = 'implicit' (IMPLICIT_FS)")
-#ifdef IMEX_IGW
-   if (nhmg_on) call error_log%raise_global(context=trim(module_name)//"/read_namelists",&
-   &info="nhmg = .true. (NHMG_SETTINGS) does not work with IMEX_IGW (IMEX_IGW_SETTINGS imex_igw = .true.)")
-#endif
+   if (nhmg_on .and. imex_on) call error_log%raise_global(context=trim(module_name)//"/read_namelists",&
+   &info="nhmg = .true. (NHMG_SETTINGS) does not work with imex_igw = .true. (IMEX_IGW_SETTINGS)")
 
 #ifdef MARBL
    ! MARBL's diagnostics are kept only for an output that uses them

@@ -97,6 +97,7 @@ contains
     use diagnostics, only: diag_trc
     use upscale_output, only: do_upscale
     use sponge_tune, only: apply_sponge_tune
+    use numerics_settings_mod, only: adv_isoneutral
     implicit none
     character(len=11) :: sr_name = "bgcsub_init"
     character(len=512) :: info
@@ -143,10 +144,8 @@ contains
         call error_log%raise_global(context=module_name//"/"//sr_name, info=info)
       end if
     end if
-#ifdef ADV_ISONEUTRAL
-    call error_log%raise_global(context=module_name//"/"//sr_name,&
-    &info="bgc_physics_subcycle does not support ADV_ISONEUTRAL")
-#endif
+    if (adv_isoneutral) call error_log%raise_global(context=module_name//"/"//sr_name,&
+    &info="bgc_physics_subcycle does not support adv_isoneutral = .true. (NUMERICS_SETTINGS)")
     if (diag_trc) then
       if (any(wrt_t_dia(it0+1:nt))) call error_log%raise_global(&
       &context=module_name//"/"//sr_name,&
