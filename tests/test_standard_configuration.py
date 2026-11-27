@@ -37,7 +37,7 @@ def test_default_cppkeys(read_cppdefs):
     Force the user to manually update a list in this test if the change was expected.
     """
     expected_cpp_keys=[
-        'NONLIN_EOS', 'SPLIT_EOS', 'UV_ADV', 'UV_COR',
+        'UV_ADV', 'UV_COR',
         'CURVGRID', 'MASKING', 'SPHERICAL', 'LMD_BKPP', 'LMD_KPP', 'LMD_MIXING', 'LMD_NONLOCAL', 'LMD_RIMIX']
     default_cpp_keys = read_cppdefs(ROMS_ROOT/"src/cppdefs.opt")
     assert (expected_cpp_keys == default_cpp_keys)

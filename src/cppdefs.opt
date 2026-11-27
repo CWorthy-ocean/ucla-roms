@@ -3,14 +3,6 @@
 
 !!!!!!!!!!!!!!!!!!!!!!!!! MODEL SETUP OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!
 
-! Use Jackett and McDougall (1995) nonlinear equation of state
-! Usage notes:
-#define NONLIN_EOS
-
-! Use an equation of state that ensures that monotonically increasing density is equivalent to stable stratification
-! Usage notes:
-#define SPLIT_EOS
-
 ! Use advection in horizontal momentum equations
 ! Usage notes:
 #define UV_ADV
@@ -37,9 +29,9 @@
 
 !!!!!!!!!!!!!!!!!!!!!!!!! NUMERICAL ALGORITHMS !!!!!!!!!!!!!!!!!!!!!!!!!
 
-! Not keys here: isoneutral advection, the land curvature of upstream tracer
-! advection and parabolic splines are set in the namelist group
-! NUMERICS_SETTINGS.
+! Not keys here: the equation of state, isoneutral advection, the land
+! curvature of upstream tracer advection and parabolic splines are set in the
+! namelist group NUMERICS_SETTINGS.
 
 !!!!!!!!!!!!!!!!!!!!!!!!! MIXING OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!
 

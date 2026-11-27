@@ -20,19 +20,11 @@ contains
     integer(kind=4),save :: tile=0
 
 # include "compute_tile_bounds.h"
-# if defined NONLIN_EOS && !defined SPLIT_EOS
-    call rho_eos_tile (istr,iend,jstr,jend, A2d(1,1), A2d(1,2),tidx)
-# else
     call rho_eos_tile (istr,iend,jstr,jend,tidx)
-# endif
   end subroutine rho_eos
 
 
-# if defined NONLIN_EOS && !defined SPLIT_EOS
-  subroutine rho_eos_tile (istr,iend,jstr,jend, K_up,K_dw,tidx)
-# else
   subroutine rho_eos_tile (istr,iend,jstr,jend,tidx)
-# endif
 
 ! Compute density anomaly from T,S via Equation Of State (EOS) for
 !-------- ------- ------- ----  for seawater. Following Jackett and
@@ -67,7 +59,7 @@ contains
 ! which is suitable for pressure-gradient calculation.
 
 !
-! Optionally, if CPP-switch SPLIT_EOS is defined, term proportional
+! With eos = 'nonlinear' (NUMERICS_SETTINGS), the term proportional
 ! to |z| is linearized using smallness 0.1|z|/[K00 + K01] << 1 and
 ! the resultant EOS has form
 !
@@ -107,11 +99,14 @@ contains
 ! rising/lowering the water parcel from RHO point above/below to
 ! the W-point depth at "z_w".
 !
-! WARNING: Shared target arrays in the code below: "rho1",
-!          "bvf" (if needed), and
+! WARNING: Shared target arrays in the code below: "bvf" (if needed),
+!          and
 !
-!          SPLIT_EOS is defined: "qp1"  ["rho" does not exist]
-!                   not defined  "rho"  ["qp1" does not exist]
+!          eos = 'nonlinear': "rho1", "qp1"  ["rho" is not allocated]
+!          eos = 'linear':    "rho"  ["rho1", "qp1" are not allocated]
+!
+! With eos = 'linear', rho = Tcoef*(T0-T) + Scoef*(S-S0) with the
+! coefficients of LIN_RHO_EOS_SETTINGS.
 !
 !
 ! Reference:  Jackett, D. R. and T. J. McDougall, 1995, Minimal
@@ -130,16 +125,9 @@ contains
     use tracers, only: t
     use coupling, only: rhos, rhoa
     use dimensions, only: npx, npy
-#ifdef SPLIT_EOS
-    use eos_vars, only: qp2, rho1, qp1
-#else
-    use eos_vars, only: rho
-#endif
-#ifndef NONLIN_EOS
-    use eos_vars, only: S0, Scoef, T0, Tcoef
-#else
-    use eos_vars, only: K00
-#endif
+    use eos_vars, only: qp2, rho1, qp1, K00   ! eos = 'nonlinear'
+    use eos_vars, only: rho, S0, Scoef, T0, Tcoef   ! eos = 'linear'
+    use numerics_settings_mod, only: nonlin_eos
 
     use grid, only: rmask
     use param, only: ieast, isalt, itemp, iwest, jnorth, jsouth, salinity
@@ -156,12 +144,7 @@ contains
 
     integer(kind=4) istr,iend,jstr,jend, i,j,k
     logical :: with_salt   ! salinity, as a local the compiler can hoist out of the loops
-# ifdef NONLIN_EOS
     real(kind=8) Ts,Tt,sqrtTs, dr00, K0
-#  ifndef SPLIT_EOS
-    real(kind=8) K1, K2
-    real(kind=8) dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: K_up,K_dw
-#  endif
 
 ! EOS coefficient notation: first index is for salinity, second for
 ! temperature powers, "S" for 3/2 power of salinity.
@@ -180,37 +163,25 @@ contains
     &K13=2.326469D-4,&
     &KS0=-5.587545_8,      KS1=+0.7390729_8,     KS2=-1.909078D-2
 
-#  ifndef SPLIT_EOS
-    real(kind=8), parameter ::   B00=0.4721788_8,&
-    &B01=0.01028859_8,     B02=-2.512549D-4,   B03=-5.939910D-7,&
-    &B10=-0.01571896_8,    B11=-2.598241D-4,   B12=7.267926D-6,&
-    &BS1=2.042967D-3,&
-
-    &E00=+1.045941D-5,   E01=-5.782165D-10,  E02=+1.296821D-7,&
-    &E10=-2.595994D-7,   E11=-1.248266D-9,   E12=-3.508914D-9
-#  endif
     real(kind=8) K0_Duk  !, rho1_0
-# endif /* NONLIN_EOS */
     real(kind=8) cff,cff1
-# ifdef SPLIT_EOS
     real(kind=8) dpth
-# endif
 
 # include "compute_extended_bounds.h"
 
     with_salt = salinity
-# ifdef NONLIN_EOS
-    ! Without salinity, Ts keeps this reference value in the loops below
-    Tt=3.8D0 ; Ts=34.5D0 ; sqrtTs=sqrt(Ts)
-    K0_Duk= Tt*( K01+Tt*( K02+Tt*( K03+Tt*K04 )))&
-    &+Ts*( K10+Tt*( K11+Tt*( K12+Tt*K13 ))&
-    &+sqrtTs*( KS0+Tt*( KS1+Tt*KS2 )))
+    if (nonlin_eos) then
+      ! Without salinity, Ts keeps this reference value in the loops below
+      Tt=3.8D0 ; Ts=34.5D0 ; sqrtTs=sqrt(Ts)
+      K0_Duk= Tt*( K01+Tt*( K02+Tt*( K03+Tt*K04 )))&
+      &+Ts*( K10+Tt*( K11+Tt*( K12+Tt*K13 ))&
+      &+sqrtTs*( KS0+Tt*( KS1+Tt*KS2 )))
 
-    dr00=r00-rho0
-# endif
+      dr00=r00-rho0
+    endif
 
     do j=jstrR,jendR
-# ifdef NONLIN_EOS
+      if (nonlin_eos) then
       do k=1,nz                                       ! NONLINEAR
         do i=istrR,iendR                             !  EQUATION
           Tt=t(i,j,k,tidx,itemp)                     !  OF STATE
@@ -231,36 +202,12 @@ contains
           &+Ts*( K10+Tt*( K11+Tt*( K12+Tt*K13 ))&
           &+sqrtTs*( KS0+Tt*( KS1+Tt*KS2 )))
 
-#  ifdef SPLIT_EOS
           qp1(i,j,k)= 0.1D0*(rho0+rho1(i,j,k))*(K0_Duk-K0)&
           &/((K00+K0)*(K00+K0_Duk))
-#   ifdef MASKING
+#  ifdef MASKING
           qp1(i,j,k)=qp1(i,j,k)*rmask(i,j)
-#   endif
-#  else
-          K1=B00+Tt*(B01+Tt*(B02+Tt*B03)) +Ts*( B10+Tt*( B11&
-          &+Tt*B12 )+sqrtTs*BS1 )
-
-          K2=E00+Tt*(E01+Tt*E02) +Ts*(E10+Tt*(E11+Tt*E12))
-
-          dpth=-z_r(i,j,k)
-          cff=K00-0.1_8*dpth
-          cff1=K0+dpth*(K1+K2*dpth)
-          rho(i,j,k)=( rho1(i,j,k)*cff*(K00+cff1)&
-          &-0.1_8*dpth*rho0*cff1&
-          &)/(cff*(cff+cff1))
-#   ifdef MASKING
-          rho(i,j,k)=rho(i,j,k)*rmask(i,j)
-#   endif
 #  endif
 #  if defined LMD_MIXING || defined LMD_KPP
-#   ifndef SPLIT_EOS
-          dpth=-z_w(i,j,k)
-          K_up(i,k)=K0+dpth*(K1+K2*dpth)
-
-          dpth=-z_w(i,j,k-1)
-          K_dw(i,k)=K0+dpth*(K1+K2*dpth)
-#   endif
         enddo
       enddo
 
@@ -268,7 +215,6 @@ contains
       do k=1,nz-1
         do i=istrR,iendR
 
-#   ifdef SPLIT_EOS
 !**         dpth=z_w(i,j,N)-0.5_8*(z_r(i,j,k+1)+z_r(i,j,k))
           dpth=          -0.5_8*(z_r(i,j,k+1)+z_r(i,j,k))
 
@@ -276,21 +222,6 @@ contains
           &+(qp1(i,j,k+1)-qp1(i,j,k))& ! adiabatic
           &*dpth*(1._8- qp2*dpth)&   ! difference
           &)/(z_r(i,j,k+1)-z_r(i,j,k))
-#   else
-          cff1=0.1_8*(z_w(i,j,nz)-z_w(i,j,k))
-          bvf(i,j,k)=-cff*(   (rho1(i,j,k+1)-rho1(i,j,k))&
-          &*(K00+K_dw(i,k+1))*(K00+K_up(i,k))&
-
-          &-cff1*( rho0*(K_dw(i,k+1)-K_up(i,k))&
-          &+K00*(rho1(i,j,k+1)-rho1(i,j,k))&
-          &+rho1(i,j,k+1)*K_dw(i,k+1)&
-          &-rho1(i,j,k)*K_up(i,k)&
-
-          &) )/(  (K00+K_dw(i,k+1)-cff1)*(K00+K_up(i,k)-cff1)&
-          &*(z_r(i,j,k+1)-z_r(i,j,k))&
-          &)
-
-#   endif
 #   ifdef MASKING
           bvf(i,j,k)=bvf(i,j,k)*rmask(i,j)
 #   endif
@@ -304,26 +235,16 @@ contains
       enddo
 #  endif
 
-# else /* NONLIN_EOS */
+      else
 !-----------------> LINEAR EQUATION OF STATE
       if (with_salt) then
         cff=Tcoef*T0-Scoef*S0
         do k=1,nz
           do i=istrR,iendR
-#  ifdef SPLIT_EOS
-            rho1(i,j,k)=cff -Tcoef*t(i,j,k,tidx,itemp)
-            rho1(i,j,k)=rho1(i,j,k) + Scoef*t(i,j,k,tidx,isalt)
-            qp1(i,j,k)=0._8
-#  else
             rho(i,j,k)=cff  -Tcoef*t(i,j,k,tidx,itemp)
             rho(i,j,k)=rho(i,j,k)+Scoef*t(i,j,k,tidx,isalt)
-#  endif
 #  ifdef MASKING
-#   ifdef SPLIT_EOS
-            rho1(i,j,k)=rho1(i,j,k)*rmask(i,j)
-#   else
             rho(i,j,k)=rho(i,j,k)*rmask(i,j)
-#   endif
 #  endif
           enddo
         enddo
@@ -331,18 +252,9 @@ contains
         cff=Tcoef*T0
         do k=1,nz
           do i=istrR,iendR
-#  ifdef SPLIT_EOS
-            rho1(i,j,k)=cff -Tcoef*t(i,j,k,tidx,itemp)
-            qp1(i,j,k)=0._8
-#  else
             rho(i,j,k)=cff  -Tcoef*t(i,j,k,tidx,itemp)
-#  endif
 #  ifdef MASKING
-#   ifdef SPLIT_EOS
-            rho1(i,j,k)=rho1(i,j,k)*rmask(i,j)
-#   else
             rho(i,j,k)=rho(i,j,k)*rmask(i,j)
-#   endif
 #  endif
           enddo
         enddo
@@ -360,7 +272,7 @@ contains
         bvf(i,j,0)=bvf(i,j,  1)
       enddo
 #  endif
-# endif /* NONLIN_EOS */
+      endif   ! <-- nonlin_eos
 
 ! Computation of 2-way averaged densities for barotropic mode.
 ! In the code segment below "rhoA" is vertically averaged density
@@ -370,30 +282,37 @@ contains
 ! column with uniform density rho0.  Hence both "rhoA" and "rhoS"
 ! are nondimensional quantities of comparable value.
 
-      do i=istrR,iendR
-#  ifdef SPLIT_EOS
-!**       dpth=z_w(i,j,N)-z_r(i,j,N)
-        dpth=-z_r(i,j,nz)
-
-        cff=Hz(i,j,nz)*(rho1(i,j,nz)+qp1(i,j,nz)*dpth*(1._8-qp2*dpth))
-#  else
-        cff=Hz(i,j,nz)*rho(i,j,nz)
-#  endif
-        rhoS(i,j)=0.5_8*cff*Hz(i,j,nz)
-        rhoA(i,j)=cff
-      enddo
-      do k=nz-1,1,-1
+      if (nonlin_eos) then
         do i=istrR,iendR
-#  ifdef SPLIT_EOS
-          dpth=-z_r(i,j,k)
-          cff=Hz(i,j,k)*(rho1(i,j,k)+qp1(i,j,k)*dpth*(1._8-qp2*dpth))
-#  else
-          cff=Hz(i,j,k)*rho(i,j,k)
-#  endif
-          rhoS(i,j)=rhoS(i,j)+Hz(i,j,k)*(rhoA(i,j)+0.5_8*cff)
-          rhoA(i,j)=rhoA(i,j)+cff
+!**       dpth=z_w(i,j,N)-z_r(i,j,N)
+          dpth=-z_r(i,j,nz)
+
+          cff=Hz(i,j,nz)*(rho1(i,j,nz)+qp1(i,j,nz)*dpth*(1._8-qp2*dpth))
+          rhoS(i,j)=0.5_8*cff*Hz(i,j,nz)
+          rhoA(i,j)=cff
         enddo
-      enddo
+        do k=nz-1,1,-1
+          do i=istrR,iendR
+            dpth=-z_r(i,j,k)
+            cff=Hz(i,j,k)*(rho1(i,j,k)+qp1(i,j,k)*dpth*(1._8-qp2*dpth))
+            rhoS(i,j)=rhoS(i,j)+Hz(i,j,k)*(rhoA(i,j)+0.5_8*cff)
+            rhoA(i,j)=rhoA(i,j)+cff
+          enddo
+        enddo
+      else
+        do i=istrR,iendR
+          cff=Hz(i,j,nz)*rho(i,j,nz)
+          rhoS(i,j)=0.5_8*cff*Hz(i,j,nz)
+          rhoA(i,j)=cff
+        enddo
+        do k=nz-1,1,-1
+          do i=istrR,iendR
+            cff=Hz(i,j,k)*rho(i,j,k)
+            rhoS(i,j)=rhoS(i,j)+Hz(i,j,k)*(rhoA(i,j)+0.5_8*cff)
+            rhoA(i,j)=rhoA(i,j)+cff
+          enddo
+        enddo
+      endif
       cff1=1._8/rho0
       do i=istrR,iendR
         cff=1._8/(z_w(i,j,nz)-z_w(i,j,0))

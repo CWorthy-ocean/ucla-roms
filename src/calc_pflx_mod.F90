@@ -9,13 +9,9 @@ module calc_pflx_mod
   use param, only: lm, mm, mynode
   use grid, only: pn, pm, umask, vmask, rmask
   use ocean_vars, only: flxu, flxv, u, v, z_r, z_w, hz
-#ifdef SPLIT_EOS
-  use eos_vars, only: rho1, qp1, qp2
-#elif defined NONLIN_EOS
-  use eos_vars, only: rho, K00
-#else
-  use eos_vars, only: rho
-#endif
+  use eos_vars, only: rho1, qp1, qp2   ! eos = 'nonlinear'
+  use eos_vars, only: rho              ! eos = 'linear'
+  use numerics_settings_mod, only: nonlin_eos
   use nc_read_write, only: ncwrite, ncread
   use roms_mpi, only: exchange_xxx
   use pio_roms, only: pio_gtype
@@ -39,13 +35,9 @@ module calc_pflx_mod
   real(kind=8),allocatable,dimension(:,:) :: zscl      ! h/(h+zeta)
   real(kind=8),allocatable,dimension(:,:) :: p_lev     ! pressure at the current level
   real(kind=8),allocatable,dimension(:,:) :: r_lev     ! density at the level above
+  real(kind=8),allocatable,dimension(:,:) :: rho_lev   ! density at the level, at its depth at rest
   real(kind=8),allocatable,dimension(:,:) :: p_int     ! int p' dz, then its depth mean
   real(kind=8),allocatable,dimension(:,:) :: u_int,v_int ! int u' dz, int v' dz
-#if defined NONLIN_EOS && !defined SPLIT_EOS
-  ! A typical sound speed of sea water [m/s]; the local one differs by a few
-  ! percent, which sets the error of drho_ddepth in calc_pressure_flux
-  real(kind=8),parameter :: c_sound = 1490._8
-#endif
 
   real(kind=8) :: alpha, beta       ! filtering constants (needed for child bry)
 
@@ -139,6 +131,7 @@ contains
       allocate(zscl(GLOBAL_2D_ARRAY)); zscl = 0
       allocate(p_lev(GLOBAL_2D_ARRAY)); p_lev = 0
       allocate(r_lev(GLOBAL_2D_ARRAY)); r_lev = 0
+      allocate(rho_lev(GLOBAL_2D_ARRAY)); rho_lev = 0
       allocate(p_int(GLOBAL_2D_ARRAY)); p_int = 0
       allocate(u_int(GLOBAL_2D_ARRAY)); u_int = 0
       allocate(v_int(GLOBAL_2D_ARRAY)); v_int = 0
@@ -178,9 +171,6 @@ contains
     !local
     integer(kind=4) :: i,j,k
     real(kind=8)  :: grho, z0, rho_z0, hzu, hzv
-# if defined NONLIN_EOS && !defined SPLIT_EOS
-    real(kind=8)  :: drho_ddepth
-# endif
 
 # ifdef KEEP_CORIOLIS
     integer(kind=4) :: kbak
@@ -222,21 +212,25 @@ contains
       u_int = 0
       v_int = 0
       do k=nz,1,-1                 ! top down: p is integrated from the surface
+        ! density at the level, at its depth z0 in the column at rest
+        if (nonlin_eos) then
+          do j=0,ny
+            do i=0,nx
+              z0 = (z_r(i,j,k)-z_w(i,j,nz))*zscl(i,j)
+              rho_lev(i,j) = rho1(i,j,k) - qp1(i,j,k)*z0*(1._8+qp2*z0)
+            enddo
+          enddo
+        else
+          do j=0,ny
+            do i=0,nx
+              rho_lev(i,j) = rho(i,j,k)
+            enddo
+          enddo
+        endif
         do j=0,ny
           do i=0,nx
             z0 = (z_r(i,j,k)-z_w(i,j,nz))*zscl(i,j)
-# ifdef SPLIT_EOS
-            rho_z0 = rho1(i,j,k) - qp1(i,j,k)*z0*(1._8+qp2*z0)
-# elif defined NONLIN_EOS
-            ! d(rho)/d(depth) at fixed T, S [kg/m^4]: the compressibility of
-            ! sea water, (rho0+rho) g/c^2, minus that of the depth-only
-            ! profile rho0/(1 - 0.1|z|/K00), which rho_eos removes from rho
-            drho_ddepth = (rho0+rho(i,j,k))*g/c_sound**2&
-            &- 0.1_8*rho0*K00/(K00+0.1_8*z_r(i,j,k))**2
-            rho_z0 = rho(i,j,k) + drho_ddepth*(z_r(i,j,k)-z0)
-# else
-            rho_z0 = rho(i,j,k)
-# endif
+            rho_z0 = rho_lev(i,j)
             if (k == nz) then
               p_lev(i,j) = -grho*rho_z0*z0
             else

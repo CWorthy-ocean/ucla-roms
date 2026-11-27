@@ -1,0 +1,5 @@
+The equation of state is now ``eos`` in the namelist group ``NUMERICS_SETTINGS``, in place of the CPP keys ``NONLIN_EOS`` and ``SPLIT_EOS``: ``eos = 'nonlinear'`` (the default) is the nonlinear equation of state of a build with ``NONLIN_EOS``, always in its split form as before, and ``eos = 'linear'`` is the linear one of a build without it, with the coefficients of ``LIN_RHO_EOS_SETTINGS``. Any other value stops the run.
+- **A case built without** ``NONLIN_EOS`` **(linear equation of state) must now set** ``eos = 'linear'``: with the default it runs with the nonlinear equation of state, and nothing stops it.
+- A ``cppdefs.opt`` that defines ``NONLIN_EOS`` or ``SPLIT_EOS`` stops the build with an error that names the setting; delete the lines (an ``#undef`` line is harmless).
+- ``LIN_RHO_EOS_SETTINGS`` is read only with ``eos = 'linear'``, which stops the run when the group is missing.
+- ROMS prints ``eos`` at start-up. The ``CPPS`` attribute of output files no longer lists ``NONLIN_EOS`` or ``SPLIT_EOS``.

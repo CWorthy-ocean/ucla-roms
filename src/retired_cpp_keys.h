@@ -285,3 +285,9 @@
 #ifdef NHMGDIAG
 # error "CPP key NHMGDIAG was retired (unfinished NHMG diagnostics; NHMG itself is the namelist key nhmg): remove it from cppdefs.opt"
 #endif
+#ifdef NONLIN_EOS
+# error "CPP key NONLIN_EOS was removed: the nonlinear equation of state is now eos = 'nonlinear' (the default) in the namelist group NUMERICS_SETTINGS; remove NONLIN_EOS from cppdefs.opt. A case built without it (linear equation of state) must set eos = 'linear'"
+#endif
+#ifdef SPLIT_EOS
+# error "CPP key SPLIT_EOS was removed: eos = 'nonlinear' (the default) in the namelist group NUMERICS_SETTINGS always uses the split form; remove SPLIT_EOS from cppdefs.opt"
+#endif

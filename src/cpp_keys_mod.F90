@@ -30,16 +30,6 @@ module cpp_keys_mod
 #endif
 
   ! (b) Choices: each selects one of several alternative schemes.
-#ifdef NONLIN_EOS
-  logical, parameter, public :: key_nonlin_eos = .true.
-#else
-  logical, parameter, public :: key_nonlin_eos = .false.
-#endif
-#ifdef SPLIT_EOS
-  logical, parameter, public :: key_split_eos = .true.
-#else
-  logical, parameter, public :: key_split_eos = .false.
-#endif
 #ifdef LMD_MIXING
   logical, parameter, public :: key_lmd_mixing = .true.
 #else

@@ -103,6 +103,7 @@ def test_filament(tmp_path, input_dir, reference_results):
     )
     nml["VERTICAL_MIXING_SETTINGS"] = {"akv_bak": 0., "akt_bak": 0., "ana_vmix": True}
     nml["TRACER_DIFF2"] = {"tnu2": 0.}  # one tracer (no salinity), like akt_bak
+    nml["NUMERICS_SETTINGS"]["eos"] = "linear"
     nml["LIN_RHO_EOS_SETTINGS"] = {"Tcoef": 0.2, "T0": 1.0}
     nml["RHO0_SETTINGS"]["rho0"] = 1000
     nml["S_COORD"]["theta_b"] = 2.0

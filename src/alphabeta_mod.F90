@@ -27,15 +27,13 @@ contains
     use tracers, only: t
     use scalars, only: nstp, rho0
     use param, only: nz, isalt, itemp, salinity
-#ifndef NONLIN_EOS
-    use eos_vars, only: tcoef, scoef
-#endif
+    use eos_vars, only: tcoef, scoef   ! eos = 'linear'
+    use numerics_settings_mod, only: nonlin_eos
 
     implicit none
     integer(kind=4) istr,iend,jstr,jend, imin,imax,jmin,jmax, i,j
     real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: alpha,beta
 
-# ifdef NONLIN_EOS
     real(kind=8) Tt, cff
     real(kind=8), parameter ::      r01=6.793952D-2,&
     &r02=-9.095290D-3,&
@@ -45,10 +43,9 @@ contains
     &rS0=-5.72466D-3, rS1=+1.02270D-4,  rS2=-1.65460D-6,&
     &r20=+4.8314D-4
     real(kind=8) Ts, sqrtTs
-# endif
 ! The salinity branch is outside the loops; without salinity beta is 0
 ! (the surface buoyancy flux has no salt term then).
-# ifdef NONLIN_EOS
+    if (nonlin_eos) then
     cff=1._8/rho0
     if (salinity) then
       do j=jmin,jmax
@@ -77,7 +74,7 @@ contains
         enddo
       enddo
     endif
-# else
+    else
     do j=jmin,jmax
       do i=imin,imax
         alpha(i,j)=abs(Tcoef)  !--> for linear Equation of State
@@ -88,7 +85,7 @@ contains
         endif
       enddo
     enddo
-# endif /* NONLIN_EOS */
+    endif   ! <-- nonlin_eos
   end subroutine alphabeta_tile
 end module alphabeta_mod
 #else

@@ -2576,9 +2576,8 @@ contains
     &rho0, tnu2, visc2, zob
     use scoord, only:&
     &cs_r, cs_w, hc, theta_b, theta_s
-#ifndef NONLIN_EOS
     use eos_vars, only: S0, Scoef, T0, Tcoef
-#endif
+    use numerics_settings_mod, only: nonlin_eos
     use strings, only: cpps, srcs
     use netcdf, only: nf90_def_dim
     use param, only: np_eta, np_xi, isw_corn, iwest, jsouth, jsw_corn, salinity
@@ -2665,21 +2664,21 @@ contains
 
     ierr=nf90_put_att(ncid, nf90_global, 'rho0', rho0)
     ierr=nf90_put_att (ncid, nf90_global, 'rho0_units', 'kg/m^3')
-# ifndef NONLIN_EOS
-    ierr=nf90_put_att(ncid,nf90_global,'Tcoef', Tcoef)
-    ierr=nf90_put_att(ncid,nf90_global,'Tcoef_units','deg Celsius-1')
+    if (.not. nonlin_eos) then
+      ierr=nf90_put_att(ncid,nf90_global,'Tcoef', Tcoef)
+      ierr=nf90_put_att(ncid,nf90_global,'Tcoef_units','deg Celsius-1')
 
-    ierr=nf90_put_att(ncid, nf90_global, 'T0', T0)
-    ierr=nf90_put_att (ncid, nf90_global, 'T0_units', 'deg Celsius')
+      ierr=nf90_put_att(ncid, nf90_global, 'T0', T0)
+      ierr=nf90_put_att (ncid, nf90_global, 'T0_units', 'deg Celsius')
 
-    if (salinity) then
-      ierr=nf90_put_att(ncid, nf90_global, 'Scoef', Scoef)
-      ierr=nf90_put_att (ncid, nf90_global, 'Scoef_units', 'PSU-1')
+      if (salinity) then
+        ierr=nf90_put_att(ncid, nf90_global, 'Scoef', Scoef)
+        ierr=nf90_put_att (ncid, nf90_global, 'Scoef_units', 'PSU-1')
 
-      ierr=nf90_put_att(ncid, nf90_global, 'S0', S0)
-      ierr=nf90_put_att (ncid, nf90_global, 'S0_units', 'PSU')
+        ierr=nf90_put_att(ncid, nf90_global, 'S0', S0)
+        ierr=nf90_put_att (ncid, nf90_global, 'S0_units', 'PSU')
+      endif
     endif
-# endif
 
     ierr=nf90_put_att(ncid,nf90_global, 'visc2', visc2)            ! Horizontal viscosity and mixing coefficients.
     ierr=nf90_put_att (ncid,nf90_global, 'visc2_units', 'm^2/s')
