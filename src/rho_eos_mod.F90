@@ -132,11 +132,9 @@ contains
     use grid, only: rmask
     use param, only: ieast, isalt, itemp, iwest, jnorth, jsouth, salinity
 
-# if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
-    use mixing, only: bvf
-#endif
+    use mixing, only: bvf   ! lmd_mixing only (VERTICAL_MIXING_SETTINGS)
     use ocean_vars, only: z_r, hz, z_w
-    use scalars, only: g, nz, rho0
+    use scalars, only: g, nz, rho0, lmd_mixing
 
     implicit none
 
@@ -207,10 +205,10 @@ contains
 #  ifdef MASKING
           qp1(i,j,k)=qp1(i,j,k)*rmask(i,j)
 #  endif
-#  if defined LMD_MIXING || defined LMD_KPP
         enddo
       enddo
 
+      if (lmd_mixing) then
       cff=g/rho0
       do k=1,nz-1
         do i=istrR,iendR
@@ -225,15 +223,13 @@ contains
 #   ifdef MASKING
           bvf(i,j,k)=bvf(i,j,k)*rmask(i,j)
 #   endif
-#  endif
         enddo
       enddo
-#  if defined LMD_MIXING || defined LMD_KPP
       do i=istrR,iendR
         bvf(i,j,nz)=bvf(i,j,nz-1)
         bvf(i,j,0)=bvf(i,j,  1)
       enddo
-#  endif
+      endif   ! <-- lmd_mixing
 
       else
 !-----------------> LINEAR EQUATION OF STATE
@@ -259,7 +255,7 @@ contains
           enddo
         enddo
       endif
-#  if defined LMD_MIXING || defined LMD_KPP
+      if (lmd_mixing) then
       cff=g/rho0
       do k=1,nz-1
         do i=istrR,iendR
@@ -271,7 +267,7 @@ contains
         bvf(i,j,nz)=bvf(i,j,nz-1)
         bvf(i,j,0)=bvf(i,j,  1)
       enddo
-#  endif
+      endif   ! <-- lmd_mixing
       endif   ! <-- nonlin_eos
 
 ! Computation of 2-way averaged densities for barotropic mode.

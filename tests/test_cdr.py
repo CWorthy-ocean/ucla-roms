@@ -17,7 +17,6 @@ import xarray as xr
 
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
-    OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -67,7 +66,7 @@ def _cdr_parm_nml(input_dir) -> dict:
 def cdr_conf(tmp_path_factory) -> ROMSConfiguration:
     """Compile the MARBL binary once for the whole module."""
     cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
+        UNIVERSAL_CPP_KEYS
         + REALISTIC_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("cdr_build")
@@ -628,7 +627,7 @@ class TestCdrLite:
         winds ``k_gas`` uses.
         """
         cpp_keys = (
-            UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
+            UNIVERSAL_CPP_KEYS + REALISTIC_CPP_KEYS
         )
         build_dir = tmp_path_factory.mktemp("cdr_lite_build")
         conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)

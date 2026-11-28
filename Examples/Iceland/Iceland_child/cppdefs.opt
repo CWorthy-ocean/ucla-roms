@@ -33,26 +33,6 @@
 
 !!!!!!!!!!!!!!!!!!!!!!!!! MIXING OPTIONS !!!!!!!!!!!!!!!!!!!!!!!!!
 
-! Use the KPP parameterization (Large et al., 1994) in the bottom boundary layer
-! Usage notes:
-#define LMD_BKPP
-
-! Use the KPP parameterization (Large et al., 1994) in the surface boundary layer
-! Usage notes:
-#define LMD_KPP
-
-! Enable and compute various parameterizations from Large et al., 1994 (KPP, etc.)
-! Usage notes: This is the overarching CPP key for all other LMD keys. This needs to be defined in order for KPP and others to be used.
-#define LMD_MIXING
-
-! Compute the non-local term in the KPP parameterization
-! Usage notes: Can be used with either/both LMD_KPP and LMD_BKPP
-#define LMD_NONLOCAL
-
-! Compute mixing due to breaking internal waves
-! Usage notes: Designed only to have an effect where local gradient Richardson number is small
-#define LMD_RIMIX
-
 !----------------------------------------------------------
 
 

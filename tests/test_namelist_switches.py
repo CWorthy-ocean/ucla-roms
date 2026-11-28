@@ -17,7 +17,6 @@ no hashed output and need no reference results.
 import pytest
 
 from ._helpers import (
-    OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -42,7 +41,7 @@ OPTIONAL_GROUPS = [
 def physics_conf(tmp_path_factory) -> ROMSConfiguration:
     """The realistic physics keys only, compiled once for this module."""
     conf = ROMSConfiguration(
-        cpp_keys=UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS,
+        cpp_keys=UNIVERSAL_CPP_KEYS + REALISTIC_CPP_KEYS,
         location=tmp_path_factory.mktemp("namelist_switch_build"),
     )
     conf.compile()
@@ -90,9 +89,17 @@ STOPS = {
     "bad_sponge_profile": ("V_SPONGE_SETTINGS", {"sponge_profile": "cosin"},
                            ["V_SPONGE_SETTINGS sponge_profile = 'cosin' is not a choice",
                             "use 'linear' or 'cosine'"]),
+    # lmd_mixing left at its default, .true.
     "ana_vmix_with_lmd_mixing": ("VERTICAL_MIXING_SETTINGS", {"ana_vmix": True},
-                                 ["VERTICAL_MIXING_SETTINGS ana_vmix = .true. cannot be used with the cpp key",
-                                  "LMD_MIXING: choose one vertical mixing scheme"]),
+                                 ["VERTICAL_MIXING_SETTINGS ana_vmix = .true. cannot be used with lmd_mixing = .true.",
+                                  "with ana_vmix.h set lmd_mixing = .false."]),
+    "lmd_convec_without_rimix": ("VERTICAL_MIXING_SETTINGS", {"lmd_convec": True, "lmd_rimix": False},
+                                 ["VERTICAL_MIXING_SETTINGS lmd_convec = .true. needs lmd_mixing = .true. and",
+                                  "lmd_rimix = .true."]),
+    "lmd_convec_without_lmd_mixing": ("VERTICAL_MIXING_SETTINGS", {"lmd_convec": True, "lmd_mixing": False},
+                                      ["VERTICAL_MIXING_SETTINGS lmd_convec = .true. needs lmd_mixing = .true."]),
+    "vertical_mixing_misspelled": ("VERTICAL_MIXING_SETTINGS", {"lmd_kp": False},
+                                   ["could not read VERTICAL_MIXING_SETTINGS"]),
     "calc_pflx_without_timescale": ("CALC_PFLX_SETTINGS", {"calc_pflx": True, "pflx_timescale": 0},
                                     ["pflx_timescale must be > 0"]),
     "parallel_io_without_pio_build": ("PIO_SETTINGS", {"parallel_io": True},

@@ -2,8 +2,7 @@ module lmd_swr_frac_mod
 #include "cppdefs.opt"
   implicit none
   private
-#ifdef LMD_KPP
-  public :: swr_frac
+  public :: swr_frac   ! lmd_kpp only (VERTICAL_MIXING_SETTINGS; lmd_vmix)
 contains
 
   subroutine swr_frac (tile)
@@ -95,11 +94,5 @@ contains
     enddo
     call exchange_xxx(swr_frac)
   end subroutine swr_frac_tile
-#else
-contains
-  subroutine swr_frac_empty
-  end subroutine swr_frac_empty
-
-#endif /* LMD_KPP */
 end module lmd_swr_frac_mod
 

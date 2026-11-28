@@ -291,3 +291,21 @@
 #ifdef SPLIT_EOS
 # error "CPP key SPLIT_EOS was removed: eos = 'nonlinear' (the default) in the namelist group NUMERICS_SETTINGS always uses the split form; remove SPLIT_EOS from cppdefs.opt"
 #endif
+#ifdef LMD_MIXING
+# error "CPP key LMD_MIXING was removed: the vertical mixing of Large et al. (1994) is now lmd_mixing = .true. (the default) in the namelist group VERTICAL_MIXING_SETTINGS; remove LMD_MIXING from cppdefs.opt. A case built without it must set lmd_mixing = .false."
+#endif
+#ifdef LMD_KPP
+# error "CPP key LMD_KPP was removed: the KPP surface boundary layer is now lmd_kpp = .true. (the default) in the namelist group VERTICAL_MIXING_SETTINGS; remove LMD_KPP from cppdefs.opt. A case built without it must set lmd_kpp = .false."
+#endif
+#ifdef LMD_BKPP
+# error "CPP key LMD_BKPP was removed: the KPP bottom boundary layer is now lmd_bkpp = .true. (the default) in the namelist group VERTICAL_MIXING_SETTINGS; remove LMD_BKPP from cppdefs.opt. A case built without it must set lmd_bkpp = .false."
+#endif
+#ifdef LMD_NONLOCAL
+# error "CPP key LMD_NONLOCAL was removed: the nonlocal KPP flux is now lmd_nonlocal = .true. (the default) in the namelist group VERTICAL_MIXING_SETTINGS; remove LMD_NONLOCAL from cppdefs.opt. A case built without it must set lmd_nonlocal = .false."
+#endif
+#ifdef LMD_RIMIX
+# error "CPP key LMD_RIMIX was removed: mixing by shear instability is now lmd_rimix = .true. (the default) in the namelist group VERTICAL_MIXING_SETTINGS; remove LMD_RIMIX from cppdefs.opt. A case built without it must set lmd_rimix = .false."
+#endif
+#ifdef LMD_CONVEC
+# error "CPP key LMD_CONVEC was removed: the convective adjustment is now lmd_convec = .true. in the namelist group VERTICAL_MIXING_SETTINGS (default .false.); remove LMD_CONVEC from cppdefs.opt"
+#endif

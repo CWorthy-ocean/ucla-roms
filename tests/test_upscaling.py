@@ -16,7 +16,6 @@ import pytest
 import xarray as xr
 
 from ._helpers import (
-    OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -33,7 +32,7 @@ ALK_PERTURBATION = 100.0  # meq/m^3, added to the initial ALK at every point
 def uscl_conf(tmp_path_factory) -> ROMSConfiguration:
     """Compile the MARBL binary once for the module."""
     cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
+        UNIVERSAL_CPP_KEYS
         + REALISTIC_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("uscl_build")

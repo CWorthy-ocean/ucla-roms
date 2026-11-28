@@ -478,7 +478,15 @@ Optional: without the group `tnu2` is 0.
 |--------|-------------|
 | `akv_bak` | Vertical viscosity (m2/s) |
 | `akt_bak` | List of vertical mixing coefficients (m2/s) for each tracer. Values beyond the number of tracers are ignored |
-| `ana_vmix` | `.true.`: the vertical viscosity and diffusivities from the case's `ana_vmix.h`, set once at start-up (default `.false.`). Not with the cpp key `LMD_MIXING`: the run stops |
+| `ana_vmix` | `.true.`: the vertical viscosity and diffusivities from the case's `ana_vmix.h`, set once at start-up (default `.false.`). Needs `lmd_mixing = .false.`: the run stops otherwise |
+| `lmd_mixing` | The vertical mixing of Large, McWilliams and Doney (1994) (default `.true.`): interior mixing by internal waves, plus the parts below. With `.false.`, `Akv` and `Akt` are `akv_bak` and `akt_bak` (or from `ana_vmix.h`), and the other `lmd_*` settings are not used. Replaces the cpp key `LMD_MIXING`: a case built without it must set `lmd_mixing = .false.` |
+| `lmd_kpp` | With `lmd_mixing`, the KPP surface boundary layer, with shortwave radiation absorbed below the surface (default `.true.`). Replaces the cpp key `LMD_KPP` |
+| `lmd_bkpp` | With `lmd_mixing`, the KPP bottom boundary layer (default `.true.`). Replaces the cpp key `LMD_BKPP` |
+| `lmd_nonlocal` | With `lmd_kpp`, the nonlocal flux of heat and salt in the surface boundary layer (default `.true.`; not used without `lmd_kpp`). Replaces the cpp key `LMD_NONLOCAL` |
+| `lmd_rimix` | With `lmd_mixing`, interior mixing by shear instability, from the gradient Richardson number (default `.true.`). Replaces the cpp key `LMD_RIMIX` |
+| `lmd_convec` | Convective adjustment where the Richardson number is negative (default `.false.`). Needs `lmd_mixing` and `lmd_rimix`: the run stops otherwise. Replaces the cpp key `LMD_CONVEC` |
+
+ROMS prints the settings at start-up, with a line naming those not used. A case built without one of the former cpp keys `LMD_MIXING`, `LMD_KPP`, `LMD_BKPP`, `LMD_NONLOCAL` or `LMD_RIMIX` must set the matching setting to `.false.`, since they default to `.true.`; the `hbls` and `hbbl` output and restart variables exist only with `lmd_kpp` and `lmd_bkpp`.
 
 ### `LATERAL_VISC_SETTINGS`
 (read by module `scalars.F90`)

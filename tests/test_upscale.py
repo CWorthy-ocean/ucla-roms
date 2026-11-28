@@ -23,7 +23,6 @@ import pytest
 import xarray as xr
 
 from ._helpers import (
-    OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     ROMS_ROOT,
     UNIVERSAL_CPP_KEYS,
@@ -53,7 +52,7 @@ uscl_to_cdr = _load_uscl_to_cdr()
 def uscl_conf(tmp_path_factory) -> ROMSConfiguration:
     """Compile the child (MARBL) binary once."""
     cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
+        UNIVERSAL_CPP_KEYS
         + REALISTIC_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("uscl_build")
@@ -318,7 +317,7 @@ class TestUsclCdrLite:
     @pytest.fixture(scope="class")
     def cdr_lite_run(self, tmp_path_factory, input_dir, cdrgas_run):
         conf = ROMSConfiguration(
-            cpp_keys=UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS,
+            cpp_keys=UNIVERSAL_CPP_KEYS + REALISTIC_CPP_KEYS,
             location=tmp_path_factory.mktemp("uscl_cdr_lite_build"),
         )
         conf.compile()

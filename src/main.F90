@@ -415,9 +415,8 @@ contains
     use implicit_fs_mod, only: fs_on, fs_step, fs_srcdiag, fs_src_diag, fs_bry_phase, fs_pot_phase
     use diagnostics, only: do_diagnostics, diag_uv, diag_trc
     use roms_read_write, only: frc_time
-#ifdef LMD_MIXING
     use lmd_vmix_mod, only: lmd_vmix
-#endif
+    use scalars, only: lmd_mixing
     use step2d_mod, only: step2d
     use step3d_t_mod, only: step3d_t
     use step3d_uv_mod, only: step3d_uv1, step3d_uv2
@@ -488,11 +487,11 @@ contains
     call omega
     call reg_toc(rg_huv_omega)
 
-# if defined LMD_MIXING
-    call reg_tic(rg_lmd_vmix)
-    call lmd_vmix(nstp)
-    call reg_toc(rg_lmd_vmix)
-# endif
+    if (lmd_mixing) then
+      call reg_tic(rg_lmd_vmix)
+      call lmd_vmix(nstp)
+      call reg_toc(rg_lmd_vmix)
+    endif
 
     ! nrhs points to u/v at time level n
     call reg_tic(rg_prsgrd)
@@ -525,11 +524,11 @@ contains
     call reg_tic(rg_set_forces)
     call set_forces   ! get for time n+1/2
     call reg_toc(rg_set_forces)
-# if defined LMD_MIXING
-    call reg_tic(rg_lmd_vmix)
-    call lmd_vmix(nrhs)
-    call reg_toc(rg_lmd_vmix)
-# endif
+    if (lmd_mixing) then
+      call reg_tic(rg_lmd_vmix)
+      call lmd_vmix(nrhs)
+      call reg_toc(rg_lmd_vmix)
+    endif
 
     ! Boundary data for time n+1 (used by step2d and the 3D corrector).
     ! tdays is n+1/2 here, so '1/2 fwd' reads at n+1; 'forward' read at

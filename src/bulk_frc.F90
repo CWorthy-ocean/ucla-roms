@@ -277,7 +277,7 @@ contains
     use grid, only: rmask, umask, vmask
     use mixing, only: ieast, isalt, itemp, iwest, jnorth, jsouth
     use ocean_vars, only: u, v
-    use scalars, only: cp, g, nz, nrhs, pi, rho0, vonkar, cmday2ms
+    use scalars, only: cp, g, nz, nrhs, pi, rho0, vonkar, cmday2ms, lmd_kpp
     use param, only: nt, salinity
 
     implicit none
@@ -867,9 +867,7 @@ contains
         if( t(i,j,nz,nrhs,itemp) .le. -1.8_8 ) then
           stflx(i,j,itemp)=0._8
           if (qcorrection .and. wrt_rstflx) shflx_rst(i,j)=0._8  ! the correction actually applied
-#   if defined LMD_KPP
-          srflx(i,j)=0._8
-#    endif
+          if (lmd_kpp) srflx(i,j)=0._8   ! the shortwave KPP spreads below the surface
         endif
 
       enddo

@@ -37,7 +37,6 @@ import xarray as xr
 
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
-    OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -126,7 +125,7 @@ def extract_conf(request, tmp_path_factory) -> ROMSConfiguration:
     budget diagnostics: calc_pflx computes up and vp without them (test_pressure_fluxes),
     as in the C-Star Forge builds."""
     pio = request.param
-    cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
+    cpp_keys = UNIVERSAL_CPP_KEYS + REALISTIC_CPP_KEYS
     build_dir = tmp_path_factory.mktemp("extract_build_pio" if pio else "extract_build")
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir, pio=pio)
     conf.compile()

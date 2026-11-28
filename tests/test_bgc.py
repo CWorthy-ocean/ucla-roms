@@ -22,7 +22,6 @@ import xarray as xr
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
     ADDITIONAL_FILES,
-    OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -73,7 +72,7 @@ def _marbl_nml(input_dir) -> dict:
 def marbl_conf(tmp_path_factory) -> ROMSConfiguration:
     """Compile the realistic MARBL binary once for the whole module."""
     cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
+        UNIVERSAL_CPP_KEYS
         + REALISTIC_CPP_KEYS
     )
     build_dir = tmp_path_factory.mktemp("marbl_build")
