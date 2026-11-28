@@ -3,7 +3,6 @@ from ._assertions import assert_output_matches_reference
 from ._helpers import (
     ADDITIONAL_FILES,
     CLOSED_BOX,
-    OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -12,10 +11,7 @@ from ._helpers import (
 )
 
 def test_pipes_ana(tmp_path, input_dir, reference_results):
-    cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
-        + ["LMD_CONVEC"]
-    )
+    cpp_keys = UNIVERSAL_CPP_KEYS
     build_dir = tmp_path / "build"
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
 
@@ -26,6 +22,7 @@ def test_pipes_ana(tmp_path, input_dir, reference_results):
     conf.compile()
 
     nml = create_test_namelist_dict(input_dir)
+    nml["VERTICAL_MIXING_SETTINGS"]["lmd_convec"] = True
     nml["TIME_STEPPING"]["dt"] = 60
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 1200
     nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
@@ -45,10 +42,7 @@ def test_pipes_ana(tmp_path, input_dir, reference_results):
     assert_output_matches_reference(reference_results, "pipes_ana", {"physics": pv})
 
 def test_rivers_ana(tmp_path, input_dir, reference_results):
-    cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
-        + ["LMD_CONVEC"]
-    )
+    cpp_keys = UNIVERSAL_CPP_KEYS
     build_dir = tmp_path / "build"
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=build_dir)
 
@@ -60,6 +54,7 @@ def test_rivers_ana(tmp_path, input_dir, reference_results):
     conf.compile()
 
     nml = create_test_namelist_dict(input_dir)
+    nml["VERTICAL_MIXING_SETTINGS"]["lmd_convec"] = True
     nml["TIME_STEPPING"]["dt"] = 20
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
@@ -101,7 +96,8 @@ def test_filament(tmp_path, input_dir, reference_results):
     nml["PARAM_SETTINGS"].update(
         {"NP_XI": 2, "NP_ETA": 2, "LLm": 64, "MMm": 64, "nz": 32, "salinity": False}
     )
-    nml["VERTICAL_MIXING_SETTINGS"] = {"akv_bak": 0., "akt_bak": 0., "ana_vmix": True}
+    # no LMD mixing: Akv and Akt from ana_vmix.h
+    nml["VERTICAL_MIXING_SETTINGS"] = {"akv_bak": 0., "akt_bak": 0., "ana_vmix": True, "lmd_mixing": False}
     nml["TRACER_DIFF2"] = {"tnu2": 0.}  # one tracer (no salinity), like akt_bak
     nml["NUMERICS_SETTINGS"]["eos"] = "linear"
     nml["LIN_RHO_EOS_SETTINGS"] = {"Tcoef": 0.2, "T0": 1.0}

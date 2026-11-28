@@ -38,7 +38,7 @@ def test_default_cppkeys(read_cppdefs):
     """
     expected_cpp_keys=[
         'UV_ADV', 'UV_COR',
-        'CURVGRID', 'MASKING', 'SPHERICAL', 'LMD_BKPP', 'LMD_KPP', 'LMD_MIXING', 'LMD_NONLOCAL', 'LMD_RIMIX']
+        'CURVGRID', 'MASKING', 'SPHERICAL']
     default_cpp_keys = read_cppdefs(ROMS_ROOT/"src/cppdefs.opt")
     assert (expected_cpp_keys == default_cpp_keys)
 

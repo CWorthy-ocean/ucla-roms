@@ -88,6 +88,18 @@ module scalars
   ! VERTICAL_MIXING_SETTINGS ana_vmix: Akv, Akt from the case's ana_vmix.h
   ! (analytical ana_vmix, once at start-up)
   logical :: ana_vmix_on = .false.
+  ! VERTICAL_MIXING_SETTINGS: the vertical mixing of Large, McWilliams and Doney
+  ! (1994) (were the cpp keys LMD_MIXING, LMD_KPP, LMD_BKPP, LMD_NONLOCAL, LMD_RIMIX
+  ! and LMD_CONVEC). lmd_mixing switches the scheme on (lmd_vmix); within it, lmd_kpp
+  ! and lmd_bkpp add the KPP surface and bottom boundary layers, lmd_nonlocal the
+  ! nonlocal flux of the surface layer, lmd_rimix the interior mixing by shear
+  ! instability (gradient Richardson number) and lmd_convec a convective adjustment
+  ! (needs lmd_rimix). Without lmd_mixing, Akv and Akt are Akv_bak and Akt_bak, or
+  ! come from ana_vmix.h. After read_nml_scalars these hold the settings in effect:
+  ! the other five are .false. without lmd_mixing, and lmd_nonlocal is .false.
+  ! without lmd_kpp.
+  logical :: lmd_mixing = .true., lmd_kpp = .true., lmd_bkpp = .true.
+  logical :: lmd_nonlocal = .true., lmd_rimix = .true., lmd_convec = .false.
 
   ! BOTTOM_DRAG_SETTINGS linear_drag: the linear drag rdrg only (no
   ! quadratic or log-layer drag; compute_rd_bott_drag.h)
@@ -243,14 +255,31 @@ contains
       &        //trim(msg) &
       &      )
     end if
-#ifdef LMD_MIXING
-    if (ana_vmix_on) then
+    if (ana_vmix_on .and. lmd_mixing) then
       call error_log%raise_global( &
       &   context = module_name//'/'//sr_name, &
-      &   info='VERTICAL_MIXING_SETTINGS ana_vmix = .true. cannot be used with the cpp key'&
-      &        //' LMD_MIXING: choose one vertical mixing scheme')
+      &   info='VERTICAL_MIXING_SETTINGS ana_vmix = .true. cannot be used with lmd_mixing = .true.'&
+      &        //' (the default): choose one vertical mixing scheme; with ana_vmix.h set lmd_mixing = .false.')
     end if
-#endif
+    if (lmd_convec .and. .not. (lmd_mixing .and. lmd_rimix)) then
+      call error_log%raise_global( &
+      &   context = module_name//'/'//sr_name, &
+      &   info='VERTICAL_MIXING_SETTINGS lmd_convec = .true. needs lmd_mixing = .true. and'&
+      &        //' lmd_rimix = .true.: the convective adjustment acts where the gradient Richardson'&
+      &        //' number of lmd_rimix is negative')
+    end if
+    mpi_master_only write(*,'(1x,A,6(A,L1))') 'VERTICAL_MIXING_SETTINGS:', &
+    &    ' lmd_mixing = ', lmd_mixing, ', lmd_kpp = ', lmd_kpp, ', lmd_bkpp = ', lmd_bkpp, &
+    &    ', lmd_nonlocal = ', lmd_nonlocal, ', lmd_rimix = ', lmd_rimix, ', lmd_convec = ', lmd_convec
+    if (.not. lmd_mixing) then
+      if (lmd_kpp .or. lmd_bkpp .or. lmd_nonlocal .or. lmd_rimix) then
+        mpi_master_only write(*,'(3x,A)') 'lmd_mixing = F: lmd_kpp, lmd_bkpp, lmd_nonlocal and lmd_rimix are not used'
+      end if
+      lmd_kpp = .false.; lmd_bkpp = .false.; lmd_nonlocal = .false.; lmd_rimix = .false.
+    else if (lmd_nonlocal .and. .not. lmd_kpp) then
+      mpi_master_only write(*,'(3x,A)') 'lmd_kpp = F: lmd_nonlocal (the nonlocal flux of the KPP surface layer) is not used'
+      lmd_nonlocal = .false.
+    end if
     if (ana_vmix_on) then
       mpi_master_only write(*,'(3x,A)') 'ana_vmix = T  vertical mixing from ana_vmix.h'
     end if
@@ -260,11 +289,11 @@ contains
       &   context = module_name//'/'//sr_name, &
       &   info='use_marbl = .true. (MARBL and its CDR outputs) needs salinity = .true. (PARAM_SETTINGS)')
     end if
-#ifndef LMD_MIXING
-    mixing_type = "background"
-#else
-    mixing_type = "additional"
-#endif
+    if (lmd_mixing) then
+      mixing_type = "additional"
+    else
+      mixing_type = "background"
+    end if
 
     mpi_master_only write(*,'(4x,A,ES10.3,2x,2A)') &
     &    'Akv_bak =', Akv_bak, &
@@ -415,9 +444,10 @@ contains
   end subroutine read_tracer_diff2
 
   subroutine read_vertical_mixing(namelist_unit, akv, akt, ana_vmix_out, ios, msg)
-!     Read akv_bak, akt_bak and ana_vmix from VERTICAL_MIXING_SETTINGS. As for
-!     tnu2, akt_bak values beyond the run's number of tracers are ignored.
-!     (ana_vmix is a local: the module's subroutine of that name is in analytical.)
+!     Read akv_bak, akt_bak, ana_vmix and the module's lmd_* settings from
+!     VERTICAL_MIXING_SETTINGS. As for tnu2, akt_bak values beyond the run's number
+!     of tracers are ignored. (ana_vmix is a local: the module's subroutine of that
+!     name is in analytical.)
     implicit none
     integer(kind=4), intent(in) :: namelist_unit
     real(kind=8), intent(inout) :: akv
@@ -428,7 +458,8 @@ contains
     real(kind=8) :: akv_bak
     real(kind=8), allocatable :: akt_bak(:)
     logical :: ana_vmix
-    namelist /VERTICAL_MIXING_SETTINGS/ akv_bak, akt_bak, ana_vmix
+    namelist /VERTICAL_MIXING_SETTINGS/ akv_bak, akt_bak, ana_vmix,&
+    &  lmd_mixing, lmd_kpp, lmd_bkpp, lmd_nonlocal, lmd_rimix, lmd_convec
 
     akv_bak = akv
     allocate(akt_bak(max(max_nml_tracers, size(akt))))

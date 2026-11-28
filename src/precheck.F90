@@ -50,9 +50,8 @@ module precheck
   &do_upscale, output_period_uscl, nrpf_uscl
   use param, only: use_marbl
   use check_switches_mod, only: check_switches2, print_switches
-#if defined LMD_KPP || defined LMD_BKPP
   use lmd_kpp_mod, only: check_kpp_switches
-#endif
+  use scalars, only: lmd_kpp, lmd_bkpp
   use pre_step3d_mod, only: check_pre_step_switches
   use set_depth_mod, only: check_set_huv1_switches
   use step3d_t_mod, only: check_step_t_switches
@@ -77,9 +76,7 @@ contains
     call check_step_uv2_switches()
     call check_step_t_switches()
     call check_set_HUV1_switches()
-# if defined LMD_KPP || defined LMD_BKPP
-    call check_kpp_switches()
-# endif
+    if (lmd_kpp .or. lmd_bkpp) call check_kpp_switches()
     call check_switches2()
 
     ! File-rollover frequency (nrpf * output_period) must evenly divide

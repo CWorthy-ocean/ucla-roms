@@ -23,7 +23,8 @@ module basic_output
   use implicit_fs_mod, only: fs_rst_def, fs_rst_wrt, fs_rst_wrt_scal
   use scalars, only:&
   &NT, iic, knew, nstp, time,&
-  &nz, dt, start_time, nnew, tdays
+  &nz, dt, start_time, nnew, tdays,&
+  &lmd_kpp, lmd_bkpp   ! hbls and hbbl: in the output only with these (VERTICAL_MIXING_SETTINGS)
   use ocean_vars, only:&
   &zeta_avg, ubar_avg, vbar_avg, u_avg, v_avg,&
   &w_avg, wvl_avg, zeta, ubar, vbar, u, v, z_r, We, Wi
@@ -74,12 +75,8 @@ module basic_output
   real(kind=8),allocatable,dimension(:,:,:) :: akv_avg
   real(kind=8),allocatable,dimension(:,:,:) :: akt_avg
   real(kind=8),allocatable,dimension(:,:,:) :: aks_avg
-#  ifdef LMD_KPP
   real(kind=8),allocatable,dimension(:,:) :: hbl_avg
-#  endif
-#  ifdef LMD_BKPP
   real(kind=8),allocatable,dimension(:,:) :: hbbl_avg
-#  endif
   real(kind=8),allocatable,dimension(:,:,:) :: rho_avg
 
   ![   Taken from old ncvars (should be improved eventually):
@@ -91,12 +88,8 @@ module basic_output
 
   integer(kind=4), public :: &
   & indxAks = 0, &           ! set only with salinity
-# ifdef LMD_KPP
   & indxHbls, &
-# endif
-# ifdef LMD_BKPP
   & indxHbbl, &
-# endif
   & indxAkt, indxAkv
   !]
 
@@ -143,13 +136,9 @@ contains                  !]
       indxAks = indxAkt + 1
       ilast = indxAks
     endif
-# ifdef LMD_KPP
     indxHbls = ilast + 1
     ilast = indxHbls
-# endif
-# ifdef LMD_BKPP
     indxHbbl = ilast + 1
-# endif
 
     ! Read namelist
     call open_namelist_file(namelist_unit)
@@ -267,16 +256,16 @@ contains                  !]
       if (wrt_avg_Aks) then
         allocate( aks_avg(GLOBAL_2D_ARRAY,0:nz) ); aks_avg=0._8
       endif
-# ifdef LMD_KPP
-      if (wrt_avg_Hbls) then
-        allocate( hbl_avg(GLOBAL_2D_ARRAY) ); hbl_avg=0._8
+      if (lmd_kpp) then
+        if (wrt_avg_Hbls) then
+          allocate( hbl_avg(GLOBAL_2D_ARRAY) ); hbl_avg=0._8
+        endif
       endif
-# endif
-# ifdef LMD_BKPP
-      if (wrt_avg_Hbbl) then
-        allocate( hbbl_avg(GLOBAL_2D_ARRAY) ); hbbl_avg=0._8
+      if (lmd_bkpp) then
+        if (wrt_avg_Hbbl) then
+          allocate( hbbl_avg(GLOBAL_2D_ARRAY) ); hbbl_avg=0._8
+        endif
       endif
-# endif
 
     endif  ! <-- wrt_file_avg
 
@@ -341,16 +330,12 @@ contains                  !]
       vname(2,indxAks)='salinity vertical diffusion coefficient'
       vname(3,indxAks)='meter2 second-1'
     endif
-# ifdef LMD_KPP
     vname(1,indxHbls)='hbls'
     vname(2,indxHbls)='Thickness of KPP surface boundary layer'
     vname(3,indxHbls)='meter'
-# endif
-# ifdef LMD_BKPP
     vname(1,indxHbbl)='hbbl'
     vname(2,indxHbbl)='Thickness of KPP bottom boundary layer'
     vname(3,indxHbbl)='meter'
-# endif
 
     ! NOTE: call this here to prevent output in between timesteps which would break code
 ! checking script.
@@ -366,12 +351,8 @@ contains                  !]
     ! (unlike u/v/etc which are calculated for t=n+1 in timestep t=n)
 
     use mixing, only:&
-#ifdef LMD_KPP
     &hbls,&
-#endif
-#ifdef LMD_BKPP
     & hbbl, &
-#endif
     & Akv, Akt
     use eos_vars, only: rho1   ! eos = 'nonlinear'
     use eos_vars, only: rho    ! eos = 'linear'
@@ -515,14 +496,14 @@ contains                  !]
         pio_gtype = '3Dww'
         if (wrt_Aks) call ncwrite(ncid,vname(1,indxAks),Akt(i0:i1,j0:j1,:,isalt),start, .true.)
         start(3)=rec_his                                      ! back to 2D vars
-# ifdef LMD_KPP
-        pio_gtype = '2Drw'
-        if (wrt_Hbls) call ncwrite(ncid,vname(1,indxHbls),hbls(i0:i1,j0:j1),start, .true.)
-# endif
-# ifdef LMD_BKPP
-        pio_gtype = '2Drw'
-        if (wrt_Hbbl) call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start, .true.)
-# endif
+        if (lmd_kpp) then
+          pio_gtype = '2Drw'
+          if (wrt_Hbls) call ncwrite(ncid,vname(1,indxHbls),hbls(i0:i1,j0:j1),start, .true.)
+        endif
+        if (lmd_bkpp) then
+          pio_gtype = '2Drw'
+          if (wrt_Hbbl) call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start, .true.)
+        endif
         output_time_his=0
         call PIO_closefile(pio_FileDesc)
       endif
@@ -583,12 +564,12 @@ contains                  !]
         if (wrt_Akt) call ncwrite(ncid,vname(1,indxAkt),Akt(i0:i1,j0:j1,:,itemp),start)
         if (wrt_Aks) call ncwrite(ncid,vname(1,indxAks),Akt(i0:i1,j0:j1,:,isalt),start)
         start(3)=rec_his                                      ! back to 2D vars
-# ifdef LMD_KPP
-        if (wrt_Hbls) call ncwrite(ncid,vname(1,indxHbls),hbls(i0:i1,j0:j1),start)
-# endif
-# ifdef LMD_BKPP
-        if (wrt_Hbbl) call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start)
-# endif
+        if (lmd_kpp) then
+          if (wrt_Hbls) call ncwrite(ncid,vname(1,indxHbls),hbls(i0:i1,j0:j1),start)
+        endif
+        if (lmd_bkpp) then
+          if (wrt_Hbbl) call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start)
+        endif
         ierr=nf90_close(ncid)
         if (mynode == 0) then
           write(*,'(7x,A,1x,F11.4,2x,A,I7,1x,A,I4,A,I4,1x,A,I3)')&
@@ -705,14 +686,14 @@ contains                  !]
         pio_gtype = '3Dww'
         if (wrt_avg_Aks) call ncwrite(ncid, vname(1,indxAks), aks_avg(i0:i1,j0:j1,:), start,.true.)
         start(3)=rec_avg                                                ! back to 2D vars
-#  ifdef LMD_KPP
-        pio_gtype = '2Drw'
-        if (wrt_avg_Hbls) call ncwrite(ncid, vname(1,indxHbls),  hbl_avg(i0:i1,j0:j1), start,.true.)
-#  endif
-#  ifdef LMD_BKPP
-        pio_gtype = '2Drw'
-        if (wrt_avg_Hbbl) call ncwrite(ncid, vname(1,indxHbbl), hbbl_avg(i0:i1,j0:j1), start,.true.)
-#  endif
+        if (lmd_kpp) then
+          pio_gtype = '2Drw'
+          if (wrt_avg_Hbls) call ncwrite(ncid, vname(1,indxHbls),  hbl_avg(i0:i1,j0:j1), start,.true.)
+        endif
+        if (lmd_bkpp) then
+          pio_gtype = '2Drw'
+          if (wrt_avg_Hbbl) call ncwrite(ncid, vname(1,indxHbbl), hbbl_avg(i0:i1,j0:j1), start,.true.)
+        endif
 
         navg_ovars=0
         output_time_avg=0
@@ -761,12 +742,12 @@ contains                  !]
         if (wrt_avg_Akt) call ncwrite(ncid, vname(1,indxAkt), akt_avg(i0:i1,j0:j1,:), start)
         if (wrt_avg_Aks) call ncwrite(ncid, vname(1,indxAks), aks_avg(i0:i1,j0:j1,:), start)
         start(3)=rec_avg                                                ! back to 2D vars
-#  ifdef LMD_KPP
-        if (wrt_avg_Hbls) call ncwrite(ncid, vname(1,indxHbls),  hbl_avg(i0:i1,j0:j1), start)
-#  endif
-#  ifdef LMD_BKPP
-        if (wrt_avg_Hbbl) call ncwrite(ncid, vname(1,indxHbbl), hbbl_avg(i0:i1,j0:j1), start)
-#  endif
+        if (lmd_kpp) then
+          if (wrt_avg_Hbls) call ncwrite(ncid, vname(1,indxHbls),  hbl_avg(i0:i1,j0:j1), start)
+        endif
+        if (lmd_bkpp) then
+          if (wrt_avg_Hbbl) call ncwrite(ncid, vname(1,indxHbbl), hbbl_avg(i0:i1,j0:j1), start)
+        endif
 
         navg_ovars=0
         output_time_avg=0
@@ -840,12 +821,8 @@ contains                  !]
     ! write ocean_vars variables to output netcdf restart file
     ! ocean_vars variables are calculated for t=n in timestep t=n
     ! (unlike u/v/etc which are calculated for t=n+1 in timestep t=n)
-#if defined LMD_KPP
     use mixing, only: hbls
-#endif
-#if defined LMD_BKPP
     use mixing, only: hbbl
-#endif
     use dimensions, only: i0, i1, j0,j1
     use tracers, only: wrt_rst_trc
     use coupling, only:&
@@ -941,14 +918,14 @@ contains                  !]
 
 
 
-# ifdef LMD_KPP
-    pio_gtype = '2Drw'
-    call ncwrite(ncid,vname(1,indxHbls),hbls(i0:i1,j0:j1),start,.true.)
-# endif
-# ifdef LMD_BKPP
-    pio_gtype = '2Drw'
-    call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start,.true.)
-# endif
+    if (lmd_kpp) then
+      pio_gtype = '2Drw'
+      call ncwrite(ncid,vname(1,indxHbls),hbls(i0:i1,j0:j1),start,.true.)
+    endif
+    if (lmd_bkpp) then
+      pio_gtype = '2Drw'
+      call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start,.true.)
+    endif
     ! Added for perfect restart reasons
 !       start(3)=1; start(4)=rec_rst
 !       call ncwrite(ncid,'Akv',Akv(i0:i1,j0:j1,:),start)
@@ -1029,12 +1006,12 @@ contains                  !]
 
 
 
-# ifdef LMD_KPP
-    call ncwrite(ncid,vname(1,indxHbls),hbls(i0:i1,j0:j1),start)
-# endif
-# ifdef LMD_BKPP
-    call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start)
-# endif
+    if (lmd_kpp) then
+      call ncwrite(ncid,vname(1,indxHbls),hbls(i0:i1,j0:j1),start)
+    endif
+    if (lmd_bkpp) then
+      call ncwrite(ncid,vname(1,indxHbbl),hbbl(i0:i1,j0:j1),start)
+    endif
     ! Added for perfect restart reasons
 !       start(3)=1; start(4)=rec_rst
 !       call ncwrite(ncid,'Akv',Akv(i0:i1,j0:j1,:),start)
@@ -1306,25 +1283,25 @@ contains                  !]
       ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
       ierr = nf90_put_att(ncid,varid,'units',vname(3,indxAks))
     endif
-# ifdef LMD_KPP
-    if ( (wrt_Hbls .and. .not. avg) .or. (wrt_avg_Hbls .and. avg) ) then                                   ! depth of
-      if (.not. avg) text_lname=vname(2,indxHbls)
-      if (      avg) text_lname='averaged '//vname(2,indxHbls)
-      varid = nccreate(ncid,vname(1,indxHbls),(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),nf90_double)
-      ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
-      ierr = nf90_put_att(ncid,varid,'units',vname(3,indxHbls))
+    if (lmd_kpp) then
+      if ( (wrt_Hbls .and. .not. avg) .or. (wrt_avg_Hbls .and. avg) ) then                                   ! depth of
+        if (.not. avg) text_lname=vname(2,indxHbls)
+        if (      avg) text_lname='averaged '//vname(2,indxHbls)
+        varid = nccreate(ncid,vname(1,indxHbls),(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),nf90_double)
+        ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
+        ierr = nf90_put_att(ncid,varid,'units',vname(3,indxHbls))
+      endif
     endif
-# endif
-# ifdef LMD_BKPP
-    if ( (wrt_Hbbl .and. .not. avg) .or. (wrt_avg_Hbbl .and. avg) ) then       ! thickness of bottom boundary layer.
-      if (.not. avg) text_lname=vname(2,indxHbbl)
-      if (      avg) text_lname='averaged '//vname(2,indxHbbl)
-      varid = nccreate(ncid,vname(1,indxHbbl),&
-      &(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),nf90_double)
-      ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
-      ierr = nf90_put_att(ncid,varid,'units',vname(3,indxHbbl))
+    if (lmd_bkpp) then
+      if ( (wrt_Hbbl .and. .not. avg) .or. (wrt_avg_Hbbl .and. avg) ) then       ! thickness of bottom boundary layer.
+        if (.not. avg) text_lname=vname(2,indxHbbl)
+        if (      avg) text_lname='averaged '//vname(2,indxHbbl)
+        varid = nccreate(ncid,vname(1,indxHbbl),&
+        &(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),nf90_double)
+        ierr = nf90_put_att(ncid,varid,'long_name',text_lname)
+        ierr = nf90_put_att(ncid,varid,'units',vname(3,indxHbbl))
+      endif
     endif
-# endif
 
   end subroutine def_vars_ocean_vars  !]
 ! ----------------------------------------------------------------------
@@ -1415,17 +1392,17 @@ contains                  !]
     &'<back-step mixed fast-time-averaged vbar(:,:,n-1)>')
     call fs_rst_def(ncid)   ! fs_mode = 'implicit': generalized-alpha rates, delta
 
-# ifdef LMD_KPP
-    varid = nccreate(ncid,vname(1,indxHbls),&
-    &(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),nf90_double)
-    ierr = nf90_put_att(ncid,varid,'long_name',vname(2,indxHbls))
-    ierr = nf90_put_att(ncid,varid,'units',vname(3,indxHbls))
-# endif
-# ifdef LMD_BKPP
-    varid = nccreate(ncid,vname(1,indxHbbl),(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),nf90_double)
-    ierr = nf90_put_att(ncid,varid,'long_name',vname(2,indxHbbl))
-    ierr = nf90_put_att(ncid,varid,'units',vname(3,indxHbbl))
-# endif
+    if (lmd_kpp) then
+      varid = nccreate(ncid,vname(1,indxHbls),&
+      &(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),nf90_double)
+      ierr = nf90_put_att(ncid,varid,'long_name',vname(2,indxHbls))
+      ierr = nf90_put_att(ncid,varid,'units',vname(3,indxHbls))
+    endif
+    if (lmd_bkpp) then
+      varid = nccreate(ncid,vname(1,indxHbbl),(/dn_xr,dn_yr,dn_tm/),(/ds_xr,ds_yr,0/),nf90_double)
+      ierr = nf90_put_att(ncid,varid,'long_name',vname(2,indxHbbl))
+      ierr = nf90_put_att(ncid,varid,'units',vname(3,indxHbbl))
+    endif
 
     if (calc_pflx) then
       varid = nccreate(ncid,'u_slow',(/dn_xu,dn_yr,dn_zr,dn_tm/),&
@@ -1490,12 +1467,8 @@ contains                  !]
     use numerics_settings_mod, only: nonlin_eos
     use work_mod, only: work
     use mixing, only: akv, akt
-#ifdef LMD_KPP
     use mixing, only: hbls
-#endif
-#ifdef LMD_BKPP
     use mixing, only: hbbl
-#endif
     use private_scratch, only: a2d
     use dimensions, only: i0, i1, j0, j1, nx, ny
     use tracers, only: set_avg_trc
@@ -1553,12 +1526,12 @@ contains                  !]
       if (wrt_avg_Akv) akv_avg(i0:i1,j0:j1,:) = akv_avg(i0:i1,j0:j1,:)*(1-coef) + akv(i0:i1,j0:j1,:)*coef
       if (wrt_avg_Akt) akt_avg(i0:i1,j0:j1,:) = akt_avg(i0:i1,j0:j1,:)*(1-coef) + akt(i0:i1,j0:j1,:,itemp)*coef
       if (wrt_avg_Aks) aks_avg(i0:i1,j0:j1,:) = aks_avg(i0:i1,j0:j1,:)*(1-coef) + akt(i0:i1,j0:j1,:,isalt)*coef
-#  ifdef LMD_KPP
-      if (wrt_avg_Hbls) hbl_avg(i0:i1,j0:j1)  =  hbl_avg(i0:i1,j0:j1)*(1-coef) + hbls(i0:i1,j0:j1)*coef
-#  endif
-#  ifdef LMD_BKPP
-      if (wrt_avg_Hbbl) hbbl_avg(i0:i1,j0:j1) = hbbl_avg(i0:i1,j0:j1)*(1-coef) + hbbl(i0:i1,j0:j1)*coef
-#  endif
+      if (lmd_kpp) then
+        if (wrt_avg_Hbls) hbl_avg(i0:i1,j0:j1)  =  hbl_avg(i0:i1,j0:j1)*(1-coef) + hbls(i0:i1,j0:j1)*coef
+      endif
+      if (lmd_bkpp) then
+        if (wrt_avg_Hbbl) hbbl_avg(i0:i1,j0:j1) = hbbl_avg(i0:i1,j0:j1)*(1-coef) + hbbl(i0:i1,j0:j1)*coef
+      endif
 
 !     endif  ! <-- .not. first_step
 
@@ -1633,12 +1606,12 @@ contains                  !]
       &, 'Akt',    wrt_Akt,  vname(2,indxAkt)
       ! one line per field from here on (Aks only with salinity)
       if (salinity) write(*,'(11x,A,T30,L1,T36,A)') 'Aks', wrt_Aks, vname(2,indxAks)
-# ifdef LMD_KPP
-      write(*,'(11x,A,T30,L1,T36,A)') 'hbls', wrt_Hbls, vname(2,indxHbls)
-# endif
-# ifdef LMD_BKPP
-      write(*,'(11x,A,T30,L1,T36,A)') 'hbbl', wrt_Hbbl, vname(2,indxHbbl)
-# endif
+      if (lmd_kpp) then
+        write(*,'(11x,A,T30,L1,T36,A)') 'hbls', wrt_Hbls, vname(2,indxHbls)
+      endif
+      if (lmd_bkpp) then
+        write(*,'(11x,A,T30,L1,T36,A)') 'hbbl', wrt_Hbbl, vname(2,indxHbbl)
+      endif
       write(*,'(11x,A)') ''
       do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
       write(*,'(11x,A,I2,A,T30,L1,T36,A)') 't(',&
@@ -1684,12 +1657,12 @@ contains                  !]
         &, 'Akt',    wrt_avg_Akt,  vname(2,indxAkt)
         ! one line per field from here on (Aks only with salinity)
         if (salinity) write(*,'(11x,A,T30,L1,T36,A)') 'Aks', wrt_avg_Aks, vname(2,indxAks)
-# ifdef LMD_KPP
-        write(*,'(11x,A,T30,L1,T36,A)') 'hbls', wrt_avg_Hbls, vname(2,indxHbls)
-# endif
-# ifdef LMD_BKPP
-        write(*,'(11x,A,T30,L1,T36,A)') 'hbbl', wrt_avg_Hbbl, vname(2,indxHbbl)
-# endif
+        if (lmd_kpp) then
+          write(*,'(11x,A,T30,L1,T36,A)') 'hbls', wrt_avg_Hbls, vname(2,indxHbls)
+        endif
+        if (lmd_bkpp) then
+          write(*,'(11x,A,T30,L1,T36,A)') 'hbbl', wrt_avg_Hbbl, vname(2,indxHbbl)
+        endif
         write(*,'(11x,A)') ''
         do itrc=1,iTandS+nt_passive+2*nt_cdr_oae+nt_cdr_dor
         write(*,'(11x,A,I2,A,T30,L1,T36,A)') 't(',&

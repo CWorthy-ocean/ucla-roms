@@ -14,7 +14,6 @@ import xarray as xr
 
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
-    OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -25,14 +24,8 @@ from ._helpers import (
     summarize_output,
 )
 
-CPP_KEYS = (
-    UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-    + ["LMD_CONVEC"]
-)
-BULK_PIO_CPP_KEYS = (
-    UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-    + ["LMD_CONVEC"]
-)  # built with make PIO=yes
+CPP_KEYS = UNIVERSAL_CPP_KEYS + REALISTIC_CPP_KEYS
+BULK_PIO_CPP_KEYS = CPP_KEYS  # built with make PIO=yes
 # The inputs of the bulk-forced build, copied to classic netCDF: PIO reads them joined, through PnetCDF.
 BULK_PIO_INPUTS = [
     "example_input_grid.nc",
@@ -60,6 +53,7 @@ def implicit_fs_configuration(tmp_path_factory) -> ROMSConfiguration:
 def implicit_fs_namelist(input_dir, **implicit_fs):
     """The test namelist with the tidal potential and the implicit free surface."""
     nml = create_test_namelist_dict(input_dir)
+    nml["VERTICAL_MIXING_SETTINGS"]["lmd_convec"] = True
     nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["TIDAL_FRC_SETTINGS"].update({"pot_tides": True, "ntides": 2})
@@ -212,6 +206,7 @@ def bulk_pio_configuration(input_dir, tmp_path_factory) -> ROMSConfiguration:
 def bulk_pio_namelist(conf: ROMSConfiguration, **implicit_fs) -> dict:
     """The test namelist with bulk surface forcing and the implicit free surface."""
     nml = create_test_namelist_dict(conf.inputs)
+    nml["VERTICAL_MIXING_SETTINGS"]["lmd_convec"] = True
     nml["PIO_SETTINGS"]["parallel_io"] = True
     nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400

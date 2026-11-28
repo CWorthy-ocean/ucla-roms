@@ -504,16 +504,12 @@ contains
     use ocean_vars, only: w, z_r, wi   ! w: NHMG only
     use mixing, only: &
     &diff3u, diff3v,&   ! adv_isoneutral only
-#ifdef LMD_KPP
-    &hbls,&
-#endif
-#ifdef LMD_BKPP
-    &hbbl,&
-#endif
+    &hbls,&             ! lmd_kpp only
+    &hbbl,&             ! lmd_bkpp only
     akv
     use diagnostics, only: diag_uv, calc_diag, udiag, vdiag, icoup
     use ocean_vars, only: u, ubar, v, vbar, hz, flxu, flxv, z_w
-    use scalars, only: nz, knew, nnew, nstp, g, rho0, dt
+    use scalars, only: nz, knew, nnew, nstp, g, rho0, dt, lmd_kpp, lmd_bkpp
     use roms_mpi, only: exchange_xxx
     use u3dbc_mod, only: u3dbc_tile
     use v3dbc_mod, only: v3dbc_tile
@@ -861,18 +857,18 @@ if (adv_isoneutral .and. j <= jend) then
       &dn_v(i,j+1)*max(abs(dRde(i,j+1,k)), abs(dRde(i,j+1,k+1)))&
       &)
 
-# ifdef LMD_KPP
-      cfs=min(1._8, (z_w(i,j,nz)-z_w(i,j,k))/max( 50._8,&
-      &hbls(i,j) ))
-# else
-      cfs=min(1._8, (z_w(i,j,nz)-z_w(i,j,k))/50._8)
-# endif
-# ifdef LMD_BKPP
-      cfb=min(1._8, (z_w(i,j,k)-z_w(i,j,0))/max( 50._8,&
-      &hbbl(i,j) ))
-# else
-      cfb=min(1._8, (z_w(i,j,k)-z_w(i,j,0))/50._8)
-# endif
+      if (lmd_kpp) then   ! tests per point: adv_isoneutral only
+        cfs=min(1._8, (z_w(i,j,nz)-z_w(i,j,k))/max( 50._8,&
+        &hbls(i,j) ))
+      else
+        cfs=min(1._8, (z_w(i,j,nz)-z_w(i,j,k))/50._8)
+      endif
+      if (lmd_bkpp) then
+        cfb=min(1._8, (z_w(i,j,k)-z_w(i,j,0))/max( 50._8,&
+        &hbbl(i,j) ))
+      else
+        cfb=min(1._8, (z_w(i,j,k)-z_w(i,j,0))/50._8)
+      endif
 
       cff=ALPHA_MAX*cfs*(2._8-cfs) * cfb*(2._8-cfb)
 

@@ -18,7 +18,6 @@ from ._helpers import (
     ADDITIONAL_FILES,
     BOUNDS_CHECK_FFLAGS,
     CLOSED_BOX,
-    OCEAN_PHYSICS_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
     assert_run_rejected,
@@ -38,10 +37,7 @@ MAX_RANKS = 6        # largest tiling of these tests (3x2)
 A_CELL = (8, 24)     # release A's global (i, j)
 A_VOLUME, A_DEPTH, A_VSC = 200.0, 60.0, 5.0
 B_CENTRE = (16.5, 16.5)   # release B's centre in global (i, j) index units
-CPP_KEYS = (
-    UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS
-    + ["LMD_CONVEC", "SPHERICAL"]
-)
+CPP_KEYS = UNIVERSAL_CPP_KEYS + ["SPHERICAL"]
 
 
 def _box_configuration(tmp_path_factory, name, extra_keys=(), make_args="") -> ROMSConfiguration:
@@ -100,6 +96,7 @@ def box_namelist(input_dir, cdr_file, np_xi=2, np_eta=2) -> dict:
     """The box's namelist. The CDR file is also listed in frcfiles, so that only
     test_cdr_file_without_frcfiles depends on finding it without that."""
     nml = create_test_namelist_dict(input_dir)
+    nml["VERTICAL_MIXING_SETTINGS"]["lmd_convec"] = True
     nml["TIME_STEPPING"].update({"dt": DT, "ndtfast": 12, "ntimes": NSTEPS})
     nml["OPEN_BOUNDARY_SETTINGS"].update(CLOSED_BOX)
     nml["GRID_SETTINGS"] = {"grdname": "", "ana_grid": True}

@@ -10,7 +10,7 @@ module flux_frc
 ! Modules needed:
   use tracers, only: t
   use surf_flux, only: sustr, svstr, stflx, srflx, sss, sst, swflx
-  use scalars, only: cp, rho0, day2sec, nz, nrhs, cmday2ms
+  use scalars, only: cp, rho0, day2sec, nz, nrhs, cmday2ms, lmd_kpp
   use roms_read_write, only: ncforce, flux_frc_opt, set_frc_data,&
   &store_string_att
   use dimensions, only: i0, i1, j0, j1
@@ -110,9 +110,7 @@ contains
       do i=i0,i1
         if( t(i,j,nz,nrhs,itemp) .le. -1.8_8 ) then
           stflx(i,j,itemp)=0._8
-#   if defined LMD_KPP
-          srflx(i,j)=0._8
-#    endif
+          if (lmd_kpp) srflx(i,j)=0._8   ! the shortwave KPP spreads below the surface
         endif
       enddo
     enddo

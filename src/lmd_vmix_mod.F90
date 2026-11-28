@@ -4,8 +4,7 @@ module lmd_vmix_mod
   implicit none
   private
 
-#ifdef LMD_MIXING
-
+  ! Called only with lmd_mixing (VERTICAL_MIXING_SETTINGS; main).
   public :: lmd_vmix
 
 contains
@@ -14,42 +13,38 @@ contains
   subroutine lmd_vmix(tind)
     use param, only: ieast, iwest, jnorth, jsouth, nsub_e, nsub_x
     use private_scratch, only: a3d, a2d, ia2d
-# if defined LMD_KPP || defined LMD_BKPP
     use lmd_kpp_mod, only: lmd_kpp_tile
-#endif
-# ifdef LMD_KPP
     use lmd_swr_frac_mod, only: swr_frac
-# endif
-    use scalars, only: iic
+    use scalars, only: iic, lmd_kpp, lmd_bkpp
     implicit none
     integer(kind=4),save :: tile=0
     integer(kind=4),save :: swr_frac_step=-1
     integer(kind=4)      :: tind
 
 # include "compute_tile_bounds.h"
-# ifdef LMD_KPP
-    ! Hz changes with zeta once per step (set_depth, inside step2d), but
-    ! lmd_vmix is called twice per step; compute swr_frac on the first call.
-    if (iic /= swr_frac_step) then
-      call swr_frac(tile)
-      swr_frac_step = iic
+    if (lmd_kpp) then
+      ! Hz changes with zeta once per step (set_depth, inside step2d), but
+      ! lmd_vmix is called twice per step; compute swr_frac on the first call.
+      if (iic /= swr_frac_step) then
+        call swr_frac(tile)
+        swr_frac_step = iic
+      endif
     endif
-# endif
     call lmd_vmix_tile (istr,iend,jstr,jend,  A3d(1,1), A3d(1,2),&
     &A3d(1,3), A3d(1,4),&
     &A2d(1,1), A2d(1,2), A2d(1,3),&
     &tind)
-# if defined LMD_KPP || defined LMD_BKPP
-    call lmd_kpp_tile  (istr,iend,jstr,jend,  A3d(1,1),  A3d(1, 2),&
-    &A3d(1, 3),&
+    if (lmd_kpp .or. lmd_bkpp) then
+      call lmd_kpp_tile  (istr,iend,jstr,jend,  A3d(1,1),  A3d(1, 2),&
+      &A3d(1, 3),&
 
-    &A2d(1, 1), A2d(1, 2), A2d(1, 3), A2d(1, 4),&
-    &A2d(1, 5), A2d(1, 6), A2d(1, 7), A2d(1, 8),&
-    &A2d(1, 9), A2d(1,10), A2d(1,11), A2d(1,12),&
-    &A2d(1,13), A2d(1,14), A2d(1,15), A2d(1,16),&
-    &A2d(1,17), A2d(1,18), iA2d(1,1), iA2d(1,2),&
-    &tind)
-# endif
+      &A2d(1, 1), A2d(1, 2), A2d(1, 3), A2d(1, 4),&
+      &A2d(1, 5), A2d(1, 6), A2d(1, 7), A2d(1, 8),&
+      &A2d(1, 9), A2d(1,10), A2d(1,11), A2d(1,12),&
+      &A2d(1,13), A2d(1,14), A2d(1,15), A2d(1,16),&
+      &A2d(1,17), A2d(1,18), iA2d(1,1), iA2d(1,2),&
+      &tind)
+    endif
   end subroutine lmd_vmix
 
   subroutine lmd_vmix_tile (istr,iend,jstr,jend, Kv,Kt,Ks, Rig,&
@@ -71,14 +66,12 @@ contains
     use tracers, only: t
     use grid, only: umask, vmask
     use mixing, only: bvf
-# if !defined LMD_KPP && !defined LMD_BKPP
-    use mixing, only: akv, akt
-    use roms_mpi, only: exchange_xxx
-# endif
+    use mixing, only: akv, akt          ! without lmd_kpp and lmd_bkpp
+    use roms_mpi, only: exchange_xxx    ! without lmd_kpp and lmd_bkpp
     use param, only:&
     &ieast, isalt, itemp, iwest, jnorth, jsouth, np_xi, np_eta, salinity
     use ocean_vars, only: z_r, u, v, z_w
-    use scalars, only: nz, akv_bak, pi, akt_bak
+    use scalars, only: nz, akv_bak, pi, akt_bak, lmd_kpp, lmd_bkpp, lmd_rimix, lmd_convec
     use dimensions, only: inode, jnode
 
     implicit none
@@ -111,12 +104,12 @@ contains
     real(kind=8) :: akt_bak_s   ! Akt_bak(isalt), or 0 without salinity (Akt_bak then has one entry)
 
 
-# ifdef LMD_RIMIX
 !----#  define tind nstp
 #    define I_EXT_RANGE imin,imax
     integer(kind=4) imin,imax
 #    define J_EXT_RANGE jmin,jmax
     integer(kind=4) jmin,jmax
+    ! lmd_rimix: the extended ranges of Rig
     if (WESTERN_EDGE) then
       imin=istr
     else
@@ -137,15 +130,14 @@ contains
     else
       jmax=jend+1
     endif
-# endif  /* LMD_RIMIX */
 
 !                                    ! Compute horizontal velocity
 ! Compute local Richardson number:   ! shear  (du/dz)^2+(dv/dz)^2  at
 !-------- ----- ---------- -------   ! horizontal RHO- and vertical
 !                                    ! W-points. Then compute gradient
     do k=1,nz-1                     ! Richardson number (already
-# ifdef LMD_RIMIX
-      do j=J_EXT_RANGE             ! divided by its critical value.
+      if (lmd_rimix) then          ! divided by its critical value.
+      do j=J_EXT_RANGE
       do i=I_EXT_RANGE
       cff=0.5_8/(z_r(i,j,k+1)-z_r(i,j,k))
       dudz=cff*( u(i  ,j,k+1,tind)-u(i  ,j,k,tind)&
@@ -224,41 +216,54 @@ do j=jstr,jend
     &+FE(i,j+1)-FE(i,j))
   enddo
 enddo              !--> discard FX,FE,FE1
-
-#  undef I_EXT_RANGE
-#  undef J_EXT_RANGE
-# endif /* LMD_RIMIX */
+      endif  ! <-- lmd_rimix
 
 ! Compute "interior" viscosities and diffusivities everywhere as
 ! superposition of three processes: local Richardson number instability
 ! due to resolved vertical shear, internal wave breaking,
 ! and double diffusion.
 
+! lmd_convec (with lmd_rimix), lmd_rimix, neither: one loop each
+if (lmd_convec) then
 do j=jstr,jend
   do i=istr,iend
-# ifdef LMD_RIMIX
     cff=min(1._8, max(0._8, Rig(i,j,k)))  ! Compute mixing due
     nu_sx=1._8 - cff*cff                ! to shear instability
     nu_sx=nu_sx*nu_sx*nu_sx           ! and internal wave
     ! breaking.
     Kv(i,j,k)=nuwm + nu0m*nu_sx
     Kt(i,j,k)=nuws + nu0s*nu_sx
-# else
-    Kv(i,j,k)=nuwm                    ! internal waves
-    Kt(i,j,k)=nuws                    ! only
-# endif
     ! Convective adjustment will now be added everywhere
     ! but 'tailed' near the bottom
     ! It is not generally recommended to use...
-# if defined LMD_CONVEC
     if (Rig(i,j,k) < 0._8) then
       Kv(i,j,k)=Kv(i,j,k) + nu0c
       Kt(i,j,k)=Kt(i,j,k) + nu0c
     endif
-# endif
     Ks(i,j,k)=Kt(i,j,k)
   enddo
 enddo
+elseif (lmd_rimix) then
+do j=jstr,jend
+  do i=istr,iend
+    cff=min(1._8, max(0._8, Rig(i,j,k)))  ! Compute mixing due
+    nu_sx=1._8 - cff*cff                ! to shear instability
+    nu_sx=nu_sx*nu_sx*nu_sx           ! and internal wave
+    ! breaking.
+    Kv(i,j,k)=nuwm + nu0m*nu_sx
+    Kt(i,j,k)=nuws + nu0s*nu_sx
+    Ks(i,j,k)=Kt(i,j,k)
+  enddo
+enddo
+else
+do j=jstr,jend
+  do i=istr,iend
+    Kv(i,j,k)=nuwm                    ! internal waves
+    Kt(i,j,k)=nuws                    ! only
+    Ks(i,j,k)=Kt(i,j,k)
+  enddo
+enddo
+endif
 
 enddo     ! <-- k
 
@@ -299,7 +304,7 @@ do j=jstr,jend
   enddo
 enddo
 
-# if defined LMD_KPP || defined LMD_BKPP
+if (lmd_kpp .or. lmd_bkpp) then
  ! Vertical 1-2-1 smoothing of interior mixing, in place. Kv_km1 etc. hold
  ! the unsmoothed value at k-1, so every level is filtered from unsmoothed
  ! neighbours and the background is added exactly once. Upstream UCLA ROMS
@@ -335,7 +340,7 @@ do j=jstr,jend
     endif
   enddo
 enddo
-# else /* no kpp at all */
+else  ! no kpp at all
 
 ! Finalize: Copy everything into shared arrays. The pads at k=0 and nz
 ! exclude the background, so it is added once at every level, k=1 and
@@ -360,11 +365,8 @@ if (with_salt) then
 else
   call exchange_xxx(Akv,Akt(:,:,:,itemp))
 endif
-# endif /* LMD_KPP || LMD_BKPP */
+endif  ! <-- lmd_kpp .or. lmd_bkpp
 end subroutine lmd_vmix_tile
-#else
-contains
-  subroutine lmd_vmix_empty
-  end subroutine lmd_vmix_empty
-#endif /* LMD_MIXING */
+#  undef I_EXT_RANGE
+#  undef J_EXT_RANGE
 end module lmd_vmix_mod

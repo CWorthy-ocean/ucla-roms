@@ -1,5 +1,4 @@
 #include "cppdefs.opt"
-#ifdef LMD_KPP
 
 module alphabeta_mod
 
@@ -88,10 +87,3 @@ contains
     endif   ! <-- nonlin_eos
   end subroutine alphabeta_tile
 end module alphabeta_mod
-#else
-module alphabeta_mod
-contains
-  subroutine alphabeta_empty
-  end subroutine alphabeta_empty
-end module alphabeta_mod
-#endif /* LMD_KPP */

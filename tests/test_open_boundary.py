@@ -10,7 +10,6 @@ import pytest
 import xarray as xr
 
 from ._helpers import (
-    OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -33,7 +32,7 @@ BRY_FILE = "example_input_boundary_forcing"
 def obc_conf(tmp_path_factory) -> ROMSConfiguration:
     """The realistic physics keys only, compiled once for this module."""
     conf = ROMSConfiguration(
-        cpp_keys=UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS,
+        cpp_keys=UNIVERSAL_CPP_KEYS + REALISTIC_CPP_KEYS,
         location=tmp_path_factory.mktemp("open_boundary_build"),
     )
     conf.compile()

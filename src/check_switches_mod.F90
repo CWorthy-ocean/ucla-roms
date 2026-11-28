@@ -218,7 +218,7 @@ contains
 
     endif
 
-! VERTICAL_MIXING_SETTINGS ana_vmix with LMD_MIXING stops the run (scalars).
+! VERTICAL_MIXING_SETTINGS ana_vmix with lmd_mixing stops the run (scalars).
 
 ! Signal to quit if explicit time-step splitting on shallow water
 ! set-up.

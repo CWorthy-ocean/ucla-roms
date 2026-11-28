@@ -25,20 +25,13 @@ contains
     use coupling, only:&
     &du_avg1, dv_avg1, du_avg2, dv_avg2,&
     &du_avg_bak, dv_avg_bak
-#ifdef LMD_BKPP
-    use mixing, only: hbbl
-#endif
-#ifdef LMD_KPP
-    use mixing, only: hbls
-#endif
+    use mixing, only: hbbl   ! lmd_bkpp only
+    use mixing, only: hbls   ! lmd_kpp only
+    use scalars, only: lmd_kpp, lmd_bkpp
     use ocean_vars, only: zeta, ubar, vbar, u, v
     use basic_output, only:&
-#ifdef LMD_BKPP
     & indxhbbl,&
-#endif
-#ifdef LMD_KPP
     &indxhbls,&
-#endif
     &vname, iaux, indxtime,&
     &indxu, indxv
     use netcdf, only:&
@@ -565,34 +558,34 @@ contains
 
     call error_log%abort_check()
     start=1; start(3)=record                                       ! 2D vars
-# ifdef LMD_KPP
-    ierr=nf90_inq_varid(ncid, vname(1,indxHbls), varid)
-    if (ierr == nf90_noerr) then
-      pio_gtype = '2Drr'
-      call ncread(ncid,vname(1,indxHbls),hbls(x0:x1,y0:y1),start=start)!,fname=inifile)
-      hbls(x0:x1,y0:y1)=hbls(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
-      call exchange_xxx(hbls(:,:))
-    else
-      mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',&
-      &'variable ''', trim(vname(1,indxHbls)), ''' not found in ''',&
-      &trim(inifile), ''' ==> initialized to zero state.'
+    if (lmd_kpp) then
+      ierr=nf90_inq_varid(ncid, vname(1,indxHbls), varid)
+      if (ierr == nf90_noerr) then
+        pio_gtype = '2Drr'
+        call ncread(ncid,vname(1,indxHbls),hbls(x0:x1,y0:y1),start=start)!,fname=inifile)
+        hbls(x0:x1,y0:y1)=hbls(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
+        call exchange_xxx(hbls(:,:))
+      else
+        mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',&
+        &'variable ''', trim(vname(1,indxHbls)), ''' not found in ''',&
+        &trim(inifile), ''' ==> initialized to zero state.'
 
+      endif
     endif
-# endif
-# ifdef LMD_BKPP
-    ierr=nf90_inq_varid(ncid, vname(1,indxHbbl), varid)
-    if (ierr == nf90_noerr) then
-      pio_gtype = '2Drr'
-      call ncread(ncid,vname(1,indxHbbl),hbbl(x0:x1,y0:y1),start=start)!,fname=inifile)
-      hbbl(x0:x1,y0:y1)=hbbl(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
-      call exchange_xxx(hbbl(:,:))                               ! confirmed needs an exchange, not sure why
-    else
-      mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',&
-      &'variable ''', trim(vname(1,indxHbbl)), ''' not found in ''',&
-      &trim(inifile), ''' ==> initialized to zero state.'
+    if (lmd_bkpp) then
+      ierr=nf90_inq_varid(ncid, vname(1,indxHbbl), varid)
+      if (ierr == nf90_noerr) then
+        pio_gtype = '2Drr'
+        call ncread(ncid,vname(1,indxHbbl),hbbl(x0:x1,y0:y1),start=start)!,fname=inifile)
+        hbbl(x0:x1,y0:y1)=hbbl(x0:x1,y0:y1)*rmask(x0:x1,y0:y1)     ! output mask 0, rather than random numbers
+        call exchange_xxx(hbbl(:,:))                               ! confirmed needs an exchange, not sure why
+      else
+        mpi_nonexit_warn write(*,'(1x,6A)')        'WARNING: netCDF ',&
+        &'variable ''', trim(vname(1,indxHbbl)), ''' not found in ''',&
+        &trim(inifile), ''' ==> initialized to zero state.'
 
+      endif
     endif
-# endif
 
 #ifdef MARBL
 !     Read in MARBL saved_state variables here

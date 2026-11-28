@@ -41,7 +41,7 @@ subroutine set_forces
 #endif
   use dimensions, only: jnode, inode
   use boundary, only: frctype
-  use scalars, only: nt
+  use scalars, only: nt, lmd_kpp
   use cdr_frc, only: set_cdr_frc, cdr_source
   use bulk_frc, only: set_bulk_frc
   use surf_flux, only: bulk_frc_on, flux_frc_on
@@ -83,9 +83,7 @@ subroutine set_forces
     call set_flux_frc(istr,iend,jstr,jend)
   else
     call ana_stflux_tile(istr,iend,jstr,jend, itemp)
-#  ifdef LMD_KPP
-    call ana_srflux_tile(istr,iend,jstr,jend)
-#  endif
+    if (lmd_kpp) call ana_srflux_tile(istr,iend,jstr,jend)
     if (salinity) call ana_stflux_tile(istr,iend,jstr,jend, isalt)
   endif
   if(nt>iTandS) call set_surf_tracer_flx

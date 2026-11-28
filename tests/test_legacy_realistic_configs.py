@@ -2,7 +2,6 @@
 from ._assertions import assert_output_matches_reference
 from ._helpers import (
     ADDITIONAL_FILES,
-    OCEAN_PHYSICS_CPP_KEYS,
     REALISTIC_CPP_KEYS,
     UNIVERSAL_CPP_KEYS,
     ROMSConfiguration,
@@ -11,7 +10,7 @@ from ._helpers import (
 )
 
 def test_rivers_real(tmp_path, input_dir, reference_results):
-    cpp_keys = UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
+    cpp_keys = UNIVERSAL_CPP_KEYS + REALISTIC_CPP_KEYS
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path / "build")
     conf.compile()
 
@@ -30,14 +29,12 @@ def test_rivers_real(tmp_path, input_dir, reference_results):
     assert_output_matches_reference(reference_results, "rivers_real", {"physics": pv})
 
 def test_pipes_real(tmp_path, input_dir, reference_results):
-    cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-        + ["LMD_CONVEC"]
-    )
+    cpp_keys = UNIVERSAL_CPP_KEYS + REALISTIC_CPP_KEYS
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path / "build")
     conf.compile()
 
     nml = create_test_namelist_dict(input_dir)
+    nml["VERTICAL_MIXING_SETTINGS"]["lmd_convec"] = True
     nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["TIME_STEPPING"]["dt"] = 20
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
@@ -55,14 +52,12 @@ def test_pipes_real(tmp_path, input_dir, reference_results):
     assert_output_matches_reference(reference_results, "pipes_real", {"physics": pv})
 
 def test_flux_frc(tmp_path, input_dir, reference_results):
-    cpp_keys = (
-        UNIVERSAL_CPP_KEYS + OCEAN_PHYSICS_CPP_KEYS + REALISTIC_CPP_KEYS
-        + ["LMD_CONVEC"]
-    )
+    cpp_keys = UNIVERSAL_CPP_KEYS + REALISTIC_CPP_KEYS
     conf = ROMSConfiguration(cpp_keys=cpp_keys, location=tmp_path / "build")
     conf.compile()
 
     nml = create_test_namelist_dict(input_dir)
+    nml["VERTICAL_MIXING_SETTINGS"]["lmd_convec"] = True
     nml["V_SPONGE_SETTINGS"]["use_boundary_sponge"] = False  # the references have no sponge
     nml["BASIC_OUTPUT_SETTINGS"]["output_period_his"] = 400
     nml["NUMERICS_SETTINGS"] = {"adv_isoneutral": True}

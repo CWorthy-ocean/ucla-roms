@@ -65,18 +65,14 @@ contains
   use roms_mpi, only: exchange_xxx
   use timers, only: reg_tic, reg_toc, rg_marbl
   use mixing, only: &
-#if defined LMD_KPP && defined LMD_NONLOCAL
-       &ghat,&
-#endif
+       &ghat,&       ! lmd_nonlocal only
        &akt, &
-#ifdef LMD_KPP
-       &swr_frac, &
-#endif
+       &swr_frac, &  ! lmd_kpp only
        &diff3u, diff3v, &   ! adv_isoneutral only
        & ieast, isalt, itemp, iwest, jnorth, jsouth
   use t3dbc_mod, only : t3dbc_tile
   use ocean_vars, only: flxu, flxv, z_w, hz, we, wi, z_r
-  use scalars, only: nz, dt, nnew, nrhs, nt, nstp, diff_on
+  use scalars, only: nz, dt, nnew, nrhs, nt, nstp, diff_on, lmd_kpp, lmd_nonlocal
   use upscale_output, only:&
   &calc_forcing_rates, add_mixing_rates, do_upscale
   use eos_vars, only: drdx, drde, idrz   ! adv_isoneutral only
@@ -775,25 +771,30 @@ enddo     !<-- itrc (horizontal advection and sources)
 !           t(i,j,1,nnew,itrc)=t(i,j,1,nnew,itrc)+dt*btflx(i,j,itrc)
     enddo
 
-# ifdef LMD_KPP
-! Add the solar radiation flux in temperature equation. Also compute
-! the nonlocal transport flux for unstable (convective) forcing
+! lmd_kpp: add the solar radiation flux in temperature equation. Also
+! compute the nonlocal transport flux for unstable (convective) forcing
 ! conditions into matrix DC when using the Large et al. 1994 KPP
-! scheme.
+! scheme (lmd_nonlocal).
 
-    if (itrc == itemp) then
+    if (lmd_kpp .and. itrc == itemp) then
+      if (lmd_nonlocal) then
       do k=nz-1,1,-1
         do i=istr,iend
-#  ifdef LMD_NONLOCAL
           cff=srflx(i,j)*swr_frac(i,j,k)&
           &-ghat(i,j,k)*(stflx(i,j,itemp)-srflx(i,j))
-#  else
-          cff=srflx(i,j)*swr_frac(i,j,k)
-#  endif
           t(i,j,k+1,nnew,itemp)=t(i,j,k+1,nnew,itemp) -dt*cff
           t(i,j,k  ,nnew,itemp)=t(i,j,k  ,nnew,itemp) +dt*cff
         enddo
       enddo
+      else
+      do k=nz-1,1,-1
+        do i=istr,iend
+          cff=srflx(i,j)*swr_frac(i,j,k)
+          t(i,j,k+1,nnew,itemp)=t(i,j,k+1,nnew,itemp) -dt*cff
+          t(i,j,k  ,nnew,itemp)=t(i,j,k  ,nnew,itemp) +dt*cff
+        enddo
+      enddo
+      endif
 
 
 !?? WARNING: the above implies that light (if any) reaching all the
@@ -803,14 +804,11 @@ enddo     !<-- itrc (horizontal advection and sources)
 !??
 !??         do i=istr,iend
 !??           cff=srflx(i,j)*swr_frac(i,j,0)
-!??#  ifdef LMD_NONLOCAL
-!??  &               -ghat(i,j,0)*(stflx(i,j,itemp)-srflx(i,j))
-!??#  endif
+!??  &               -ghat(i,j,0)*(stflx(i,j,itemp)-srflx(i,j))   ! lmd_nonlocal
 !??           t(i,j,1,nnew,itemp)=t(i,j,1,nnew,itemp) -dt*cff
 !??         enddo
 
-#  ifdef LMD_NONLOCAL
-    elseif (itrc == isalt .and. salinity) then
+    elseif (lmd_nonlocal .and. itrc == isalt .and. salinity) then
       do k=nz-1,1,-1
         do i=istr,iend
           cff=-dt*ghat(i,j,k)*stflx(i,j,isalt)
@@ -818,10 +816,7 @@ enddo     !<-- itrc (horizontal advection and sources)
           t(i,j,k  ,nnew,isalt)=t(i,j,k  ,nnew,isalt) +cff
         enddo
       enddo
-#  endif
     endif
-
-# endif
 
 ! Perform an implicit time step for vertical diffusion
 !

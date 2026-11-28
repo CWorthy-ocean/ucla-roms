@@ -8,16 +8,6 @@ module cpp_keys_mod
   private
 
   ! (a) Switches: each turns one feature on or off.
-#ifdef LMD_KPP
-  logical, parameter, public :: key_lmd_kpp = .true.
-#else
-  logical, parameter, public :: key_lmd_kpp = .false.
-#endif
-#ifdef LMD_BKPP
-  logical, parameter, public :: key_lmd_bkpp = .true.
-#else
-  logical, parameter, public :: key_lmd_bkpp = .false.
-#endif
 #ifdef UV_ADV
   logical, parameter, public :: key_uv_adv = .true.
 #else
@@ -27,13 +17,6 @@ module cpp_keys_mod
   logical, parameter, public :: key_spherical = .true.
 #else
   logical, parameter, public :: key_spherical = .false.
-#endif
-
-  ! (b) Choices: each selects one of several alternative schemes.
-#ifdef LMD_MIXING
-  logical, parameter, public :: key_lmd_mixing = .true.
-#else
-  logical, parameter, public :: key_lmd_mixing = .false.
 #endif
 
   ! (d) Link and build: select libraries or fixed build properties.
@@ -74,21 +57,6 @@ module cpp_keys_mod
 #else
   logical, parameter, public :: key_uv_cor = .false.
 #endif
-#ifdef LMD_NONLOCAL
-  logical, parameter, public :: key_lmd_nonlocal = .true.
-#else
-  logical, parameter, public :: key_lmd_nonlocal = .false.
-#endif
-#ifdef LMD_RIMIX
-  logical, parameter, public :: key_lmd_rimix = .true.
-#else
-  logical, parameter, public :: key_lmd_rimix = .false.
-#endif
-#ifdef LMD_CONVEC
-  logical, parameter, public :: key_lmd_convec = .true.
-#else
-  logical, parameter, public :: key_lmd_convec = .false.
-#endif
 #ifdef KEEP_CORIOLIS
   logical, parameter, public :: key_keep_coriolis = .true.
 #else
@@ -98,11 +66,6 @@ module cpp_keys_mod
   logical, parameter, public :: key_neumann_uv = .true.
 #else
   logical, parameter, public :: key_neumann_uv = .false.
-#endif
-#ifdef LIMIT_UNSTABLE_ONLY
-  logical, parameter, public :: key_limit_unstable_only = .true.
-#else
-  logical, parameter, public :: key_limit_unstable_only = .false.
 #endif
 
 end module cpp_keys_mod

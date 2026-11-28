@@ -19,9 +19,7 @@ module mixing
 
   real(kind=8),allocatable,dimension(:,:,:) :: Akv
   real(kind=8),allocatable,dimension(:,:,:,:) :: Akt   ! (:,:,:,itemp) and, with salinity, (:,:,:,isalt)
-# if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
-  real(kind=8),allocatable,dimension(:,:,:) :: bvf
-# endif
+  real(kind=8),allocatable,dimension(:,:,:) :: bvf   ! lmd_mixing only (VERTICAL_MIXING_SETTINGS)
 
 
 
@@ -31,18 +29,14 @@ module mixing
 !                  [s^2/m -- dimension of inverse diffusion];
 ! swr_frac  fraction of solar short-wave radiation penetrating
 !                                depth z_w [non-dimensional]
+! hbbl  thickness of the bottom boundary layer [m, positive].
+! hbls and swr_frac with lmd_kpp only, ghat with lmd_nonlocal, hbbl with lmd_bkpp
+! (VERTICAL_MIXING_SETTINGS).
 
-# ifdef LMD_KPP
   real(kind=8),allocatable,dimension(:,:) :: hbls
-
   real(kind=8),allocatable,dimension(:,:,:) :: swr_frac
-#  ifdef LMD_NONLOCAL
   real(kind=8),allocatable,dimension(:,:,:) :: ghat
-#  endif
-# endif /* LMD_KPP */
-# ifdef LMD_BKPP
   real(kind=8),allocatable,dimension(:,:) :: hbbl
-# endif /* LMD_BKPP */
 
   integer(kind=4) :: sponge_size  ! number of grid point of sponge layer
 
@@ -50,7 +44,8 @@ contains
 
   !----------------------------------------------------------------
   subroutine init_arrays_mixing  ![
-    use scalars, only: init, nz, nt, visc2, tnu2, akv_bak, akt_bak
+    use scalars, only: init, nz, nt, visc2, tnu2, akv_bak, akt_bak,&
+    &  lmd_mixing, lmd_kpp, lmd_bkpp, lmd_nonlocal
     use numerics_settings_mod, only: adv_isoneutral
     use tracers, only: itands
     implicit none
@@ -71,30 +66,23 @@ contains
     else
       allocate( Akt(GLOBAL_2D_ARRAY,0:nz,itemp) ); Akt=init
     endif
-# if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
-    allocate( bvf(GLOBAL_2D_ARRAY,0:nz) ); bvf=init
-# endif
+    if (lmd_mixing) then
+      allocate( bvf(GLOBAL_2D_ARRAY,0:nz) ); bvf=init
+    endif
 
+! Large/McWilliams/Doney oceanic planetary boundary layer variables (see above)
 
+    if (lmd_kpp) then
+      allocate( hbls(GLOBAL_2D_ARRAY) ); hbls=0._8
 
-! Large/McWilliams/Doney oceanic planetary boundary layer variables
-! hbls  thickness of oceanic planetary boundary layer [m, positive].
-! ghat  nonlocal transport proportionality coefficient
-!                  [s^2/m -- dimension of inverse diffusion];
-! swr_frac  fraction of solar short-wave radiation penetrating
-!                                depth z_w [non-dimensional]
-
-# ifdef LMD_KPP
-    allocate( hbls(GLOBAL_2D_ARRAY) ); hbls=0._8
-
-    allocate( swr_frac(GLOBAL_2D_ARRAY,0:nz) ); swr_frac=init
-#  ifdef LMD_NONLOCAL
-    allocate( ghat(GLOBAL_2D_ARRAY,0:nz) ); ghat=0._8
-#  endif
-# endif /* LMD_KPP */
-# ifdef LMD_BKPP
-    allocate( hbbl(GLOBAL_2D_ARRAY) ); hbbl=0._8
-# endif /* LMD_BKPP */
+      allocate( swr_frac(GLOBAL_2D_ARRAY,0:nz) ); swr_frac=init
+      if (lmd_nonlocal) then
+        allocate( ghat(GLOBAL_2D_ARRAY,0:nz) ); ghat=0._8
+      endif
+    endif
+    if (lmd_bkpp) then
+      allocate( hbbl(GLOBAL_2D_ARRAY) ); hbbl=0._8
+    endif
 
     visc2_r=visc2
     visc2_p=visc2
@@ -107,22 +95,18 @@ contains
 ! vertical mixing coefficients are those specified by the background
 ! values.
 
-# ifndef LMD_MIXING
-    Akv=Akv_bak
-# else
-    Akv=0._8
-# endif
-# if defined LMD_MIXING || defined LMD_KPP || defined LMD_BKPP
-    bvf=0._8
-# endif
-
-    do itrc=1,iTandS
-# ifndef LMD_MIXING
-      Akt(:,:,:,itrc)=Akt_bak(itrc)
-# else
-      Akt(:,:,:,itrc)=0._8
-# endif
-    enddo
+    if (lmd_mixing) then
+      Akv=0._8
+      bvf=0._8
+      do itrc=1,iTandS
+        Akt(:,:,:,itrc)=0._8
+      enddo
+    else
+      Akv=Akv_bak
+      do itrc=1,iTandS
+        Akt(:,:,:,itrc)=Akt_bak(itrc)
+      enddo
+    endif
 
     ! averaging variables allocated in ocean_vars to prevent circular reference from wrt_* logicals
 

@@ -1,0 +1,593 @@
+! The tile routine of lmd_kpp_mod, the KPP surface and bottom boundary layers of
+! Large, McWilliams and Doney (1994). lmd_kpp_mod includes it once per combination
+! of the settings lmd_kpp, lmd_bkpp and lmd_nonlocal (VERTICAL_MIXING_SETTINGS), with
+! LMD_KPP_TILE the name of the routine and these cpp macros set as the settings are:
+!   KPP_SURF    lmd_kpp       the surface boundary layer
+!   KPP_BOT     lmd_bkpp      the bottom boundary layer
+!   KPP_NONLOC  lmd_nonlocal  the nonlocal flux of the surface layer (with KPP_SURF)
+! so each copy is the code a build with the former cpp keys compiled. The modules
+! it uses are used at the scope of lmd_kpp_mod.
+
+  subroutine LMD_KPP_TILE (istr,iend,jstr,jend,       Kv,Kt,Ks,&
+  &ustar, Bo,Bosol, hbl,bbl, FX,FE,FE1,&
+  &Cr,FC, wrk1,wrk2,&
+  &Gm1,dGm1dS,  Gt1,dGt1dS,  Gs1,dGs1dS,&
+  &kbls, kmo,&
+  &tind)
+
+    implicit none
+    integer(kind=4) istr,iend,jstr,jend, i,j,k
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY,0:nz) :: Kv, Kt, Ks
+    real(kind=8), dimension(PRIVATE_2D_SCRATCH_ARRAY) :: ustar, Bo, Bosol&
+    &, hbl, bbl&
+    &, FX, FE, FE1
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY,0:nz) :: Cr,FC, wrk1,wrk2
+    real(kind=8), dimension(PRIVATE_1D_SCRATCH_ARRAY) ::  Bfsfc_bl,&
+    &Gm1,dGm1dS, Gt1,dGt1dS, Gs1,dGs1dS
+    integer(kind=4), dimension(PRIVATE_1D_SCRATCH_ARRAY) :: kbls, kmo&
+    &, kbbl
+    integer(kind=4) :: tind
+
+    real(kind=8), parameter ::&
+    ! Ricr - chosen as 0.15 by JM & PD 2020-09
+    &Ricr=0.15_8,&     ! Critical bulk Richardson number (0.3_8)
+    &Ri_inv=1._8/Ricr,&
+    &epssfc=0.1_8,&    ! nondimensional extent of the surface layer
+    &betaT=-0.2_8,&    ! ratio of entrainment flux to surface buoyancy
+    !      forcing flux (the "20% convectin rule")
+    &nubl=0.01_8,&     ! maximum allowed boundary layer
+    &nu0c=0.1_8,&      ! convective adjustment for viscosity and
+    !                      diffusivity [m^2/s]
+    &Cv=1.8_8,&        ! ratio of interior Brunt-Vaisala frequency
+    ! "N" to that at the entrainment depth "he".
+    &C_MO=1._8,&       ! constant for computaion Monin-Obukhov depth.
+    &C_Ek=258._8,&     ! constant for computating stabilization term
+    !    due to Coriolis force (Ekman depth limit)
+    &Cstar=10._8,&     ! proportionality coefficient parameterizing
+    !                         nonlocal transport
+    &zeta_m=-0.2_8,&   ! Maximum stability parameters "zeta"
+    &a_m=1.257_8,&     ! value of the 1/3 power law regime of
+    &c_m=8.360_8,&     ! flux profile for momentum and tracers
+    &zeta_s=-1.0_8,&   ! and coefficients of flux profile for
+    &a_s=-28.86_8,&    ! momentum and tracers in their 1/3-power
+    &c_s=98.96_8      ! law regime;
+
+    real(kind=8), parameter :: r2=0.5_8, r3=1._8/3._8, r4=0.25_8, EPS=1.D-20
+
+
+    real(kind=8) Cg, ustar3, Bfsfc, zscale, zetahat, ws,wm, Kern, Vtc,Vtsq,&
+    &ssgm, z_bl, cff,cff1, cff_up,cff_dn
+
+    real(kind=8) Kv0, Kt0, Ks0, wmb,wsb, sgmb,amp
+    logical :: with_salt   ! salinity, as a local the compiler can hoist out of the loops
+    !! When smoothing hbl, we try to not
+    !! smooth over the mask and the domain
+    !! boundaries
+    integer(kind=4) imin,imax,jmin,jmax
+    with_salt = salinity
+    if (WESTERN_EDGE) then
+      imin=istr
+    else
+      imin=istr-1
+    endif
+    if (EASTERN_EDGE) then
+      imax=iend
+    else
+      imax=iend+1
+    endif
+    if (SOUTHERN_EDGE) then
+      jmin=jstr
+    else
+      jmin=jstr-1
+    endif
+    if (NORTHERN_EDGE) then
+      jmax=jend
+    else
+      jmax=jend+1
+    endif
+#  define I_EXT_RANGE imin,imax
+#  define J_EXT_RANGE jmin,jmax
+# ifdef KPP_SURF
+! Nondimensional constants for computing non-local flux and convective
+! deepening of surface boundary layer. The only reason why they are not
+! parameters and computed here is because of power function involved.
+
+    Cg=Cstar * vonKar * (c_s*vonKar*epssfc)**(1._8/3._8)
+    Vtc=Cv * sqrt(-betaT/(c_s*epssfc)) / (Ricr*vonKar**2)
+# endif
+
+! Compute thermal expansion, "alpha" [kg/m^3/degC], and saline
+! contraction, "beta" [kg/m^3/PSU], coefficients at surface; then
+! compute surface turbulent buoyancy forcing "Bo" [m^2/s^3] (in doing
+! so remove incoming solar shortwave radiation component and save it
+! separately as "Bosol"). Also get an approximation for the surface
+! layer depth using "epssfc" and boundary layer depth from previous
+! time step (this is needed to estimate turbulent velocity scale in
+! computation of "Vterm" in "Cr", before new hbl is found).  Also
+! compute turbulent  friction velocity "ustar" from wind stress at
+! RHO-points. Initialize boundary layer depth "hbl" and index "kbls"
+! to the maximum (bottomed out) values.
+
+# ifdef KPP_SURF
+#  define alpha Bosol
+#  define beta  Bo
+    call alphabeta_tile (istr,iend,jstr,jend, I_EXT_RANGE,&
+    &J_EXT_RANGE, alpha,beta)
+# endif
+    do j=J_EXT_RANGE
+    do i=I_EXT_RANGE
+# ifdef KPP_SURF
+    if (with_salt) then
+      Bo(i,j)=g*( alpha(i,j)*(stflx(i,j,itemp)-srflx(i,j))&
+      &-beta(i,j)*stflx(i,j,isalt)&
+      &)
+    else
+      Bo(i,j)=g*( alpha(i,j)*(stflx(i,j,itemp)-srflx(i,j))&
+      &)
+    endif
+    Bosol(i,j)=g*alpha(i,j)*srflx(i,j)
+#  undef beta
+#  undef alpha
+# endif
+
+! DevinD & JM: better to use rho variables for sustr & svstr since we
+! currently calculated both u/v and rho versions. If we converted u/v back to rho
+! it would be a double average and dilute the answer further.
+    if (bulk_frc_on) then
+      ustar(i,j)=sqrt( sqrt( sustr_r(i,j)**2 +svstr_r(i,j)**2 ))
+    else
+      ! flux forcing or none
+      ustar(i,j)=sqrt( sqrt( 0.333333333333_8*(&
+      &sustr(i,j)**2 + sustr(i+1,j)**2 + sustr(i,j)*sustr(i+1,j)&
+      &+svstr(i,j)**2 + svstr(i,j+1)**2 + svstr(i,j)*svstr(i,j+1)&
+      &)))
+    endif
+
+# ifdef KPP_SURF
+    hbl(i,j)=hbls(i,j)     ! use old-time-step values
+# endif
+# ifdef KPP_BOT
+    bbl(i,j)=hbbl(i,j)     ! as the initial guess
+# endif
+
+    kbls(i)=0
+    Cr(i,nz)=0._8
+    Cr(i,0)=0._8
+    FC(i,nz)=0._8
+  enddo  !--> discard alpha,beta; keep Bo,Bosol to the very end.
+
+
+
+
+!/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
+
+  do k=nz-1,1,-1
+    do i=I_EXT_RANGE
+#  if defined KPP_SURF && defined KPP_BOT
+    cff_up=(z_w(i,j,nz)-z_w(i,j,k))**2
+    cff_dn=(z_w(i,j,k)-z_w(i,j,0))**2
+    Kern=cff_up*cff_dn/( (cff_up +(epssfc*hbl(i,j))**2)&
+    &*(cff_dn +(epssfc*bbl(i,j))**2) )
+#  elif defined KPP_SURF
+    cff_up=(z_w(i,j,nz)-z_w(i,j,k))**2
+    Kern=cff_up/(cff_up +(epssfc*hbl(i,j))**2)
+#  else
+    cff_dn=(z_w(i,j,k)-z_w(i,j,0))**2
+    Kern=cff_dn/(cff_dn +(epssfc*bbl(i,j))**2)
+#  endif
+    FC(i,k)=FC(i,k+1) + Kern*(&
+    &0.5_8*( ( u(i,j,k+1,tind)+u(i+1,j,k+1,tind)&
+    &-u(i,j,k  ,tind)-u(i+1,j,k  ,tind) )**2&
+    &+( v(i,j,k+1,tind)+v(i,j+1,k+1,tind)&
+    &-v(i,j,k  ,tind)-v(i,j+1,k  ,tind) )**2&
+    &)/(Hz(i,j,k)+Hz(i,j,k+1))&
+
+    &-0.5_8*(Hz(i,j,k)+Hz(i,j,k+1))*( Ri_inv*bvf(i,j,k)&
+
+    &+C_Ek*f(i,j)*f(i,j)&
+    &))
+  enddo
+enddo
+
+
+do i=I_EXT_RANGE
+z_bl=z_w(i,j,0)+0.25_8*Hz(i,j,1)
+#  if defined KPP_SURF && defined KPP_BOT
+cff_up=(z_w(i,j,nz)-z_bl)**2
+cff_dn=(z_bl-z_w(i,j,0))**2
+Kern=cff_up*cff_dn/( (cff_up +(epssfc*hbl(i,j))**2)&
+&*(cff_dn +(epssfc*bbl(i,j))**2) )
+#  elif defined KPP_SURF
+cff_up=(z_w(i,j,nz)-z_bl)**2
+Kern=cff_up/(cff_up +(epssfc*hbl(i,j))**2)
+#  else
+cff_dn=(z_bl-z_w(i,j,0))**2
+Kern=cff_dn/(cff_dn +(epssfc*bbl(i,j))**2)
+#  endif
+FC(i,0)=FC(i,1) + Kern*(&
+&0.5_8*( (u(i,j,1,tind)+u(i+1,j,1,tind))**2&
+&+(v(i,j,1,tind)+v(i,j+1,1,tind))**2&
+&)/Hz(i,j,1)&
+&-0.5_8*Hz(i,j,1)*( Ri_inv*bvf(i,j,1)&
+&+C_Ek*f(i,j)*f(i,j)&
+&))
+enddo
+
+#  ifdef KPP_SURF
+#   define swdk_r wrk1
+do k=nz,1,-1
+  do i=I_EXT_RANGE
+  swdk_r(i,k)=sqrt(swr_frac(i,j,k)*swr_frac(i,j,k-1))
+
+  zscale=z_w(i,j,nz)-z_r(i,j,k)
+  Bfsfc=Bo(i,j)+Bosol(i,j)*(1._8-swdk_r(i,k))
+
+#   include "lmd_wscale_ws_only.h"
+
+!--         Vtsq=Vtc*ws*sqrt(max(0._8, 0.5_8*(bvf(i,j,k)+bvf(i,j,k-1)) ))
+
+  Vtsq=1.8_8*Vtc*ws*sqrt(max(1.D-5, bvf(i,j,k-1) ))  !<-- fix by Jeroen
+
+  Cr(i,k)=FC(i,k)+Vtsq
+
+  if (kbls(i) == 0 .and. Cr(i,k) < 0._8) kbls(i)=k
+enddo
+enddo
+
+do i=I_EXT_RANGE
+if (kbls(i) > 0) then
+  k=kbls(i)
+  if (k == nz) then
+    hbl(i,j)=z_w(i,j,nz)-z_r(i,j,nz)
+  else
+    hbl(i,j)=z_w(i,j,nz)-( z_r(i,j,k)*Cr(i,k+1)&
+    &-z_r(i,j,k+1)*Cr(i,k)&
+    &)/(Cr(i,k+1)-Cr(i,k))
+  endif
+else
+  hbl(i,j)=z_w(i,j,nz)-z_w(i,j,0)
+endif
+#   ifdef MASKING
+hbl(i,j)=hbl(i,j)*rmask(i,j)
+#   endif
+enddo
+#   undef swdk_r
+#  endif   /* KPP_SURF */
+#  ifdef KPP_BOT
+
+do i=I_EXT_RANGE
+kbbl(i)=0       ! reset Cr at bottom and kbls for BKPP
+Cr(i,0)=0.D0
+enddo
+do k=1,nz,+1
+  do i=I_EXT_RANGE
+  Cr(i,k)=FC(i,k)-FC(i,0)
+  if (kbbl(i) == 0 .and. Cr(i,k) > 0._8) kbbl(i)=k
+enddo
+enddo
+do i=I_EXT_RANGE
+if (kbbl(i) > 0) then
+  k=kbbl(i)
+  if (k == 1) then
+    bbl(i,j)=z_r(i,j,1)-z_w(i,j,0)   ! no BBL
+  else
+    bbl(i,j)=( z_r(i,j,k-1)*Cr(i,k)-z_r(i,j,k)*Cr(i,k-1)&
+    &)/(Cr(i,k)-Cr(i,k-1)) -z_w(i,j,0)
+  endif
+else
+  bbl(i,j)=z_w(i,j,nz)-z_w(i,j,0) ! total depth
+endif
+#   ifdef MASKING
+bbl(i,j)=bbl(i,j)*rmask(i,j)
+#   endif
+enddo     !--> discard FC, Cr and kbbl
+#  endif   /* KPP_BOT */
+
+!/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
+!\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+!/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
+!\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+
+enddo  !<-- break j-loop if smoothing of hbl or bbl takes place
+
+#  ifdef KPP_SURF
+#   define wrk hbl
+#   include "lmd_kpp_smooth_hbl.h"
+#   undef wrk
+#  endif
+#  ifdef KPP_BOT
+#   define wrk bbl
+#   include "lmd_kpp_smooth_hbl.h"
+#   undef wrk
+#  endif
+
+do j=jstr,jend   !--> restart j-loop till the very end
+# undef I_EXT_RANGE
+# undef J_EXT_RANGE
+# define imin illegal
+# define imax illegal
+# define jmin illegal
+# define jmax illegal
+
+
+  if (.not. FIRST_TIME_STEP) then
+    do i=istr,iend
+# ifdef KPP_SURF
+      hbl(i,j)=0.5_8*(hbl(i,j) + hbls(i,j))
+# endif
+# ifdef KPP_BOT
+      bbl(i,j)=0.5_8*(bbl(i,j) + hbbl(i,j))
+# endif
+    enddo
+  endif
+
+
+# ifdef KPP_SURF
+  do i=istr,iend
+    kbls(i)=nz          ! initialize search, then find
+  enddo                ! new boundary layer index "kbls"
+  do k=nz-1,1,-1
+    do i=istr,iend
+      if (z_w(i,j,k) > z_w(i,j,nz)-hbl(i,j)) kbls(i)=k
+    enddo
+  enddo
+
+! Compare "hbl" with physically limiting cases (Ekman depth and
+! Monin-Obukhov depth) and correct.
+
+
+! Find buoyancy forcing for final "hbl" values, and compute tubulent
+! velocity scales (wm,ws) at "hbl".  Then compute nondimensional shape
+! function coefficients Gx( ) by matching values and vertical
+! derivatives of  interior mixing coefficients at hbl (ssgm=1).
+
+  do i=istr,iend
+    k=kbls(i)
+    z_bl=z_w(i,j,nz)-hbl(i,j)
+    zscale=hbl(i,j)
+
+    if (swr_frac(i,j,k-1) > 0._8) then
+      Bfsfc=Bo(i,j) +Bosol(i,j)*( 1._8 -swr_frac(i,j,k-1)&
+      &*swr_frac(i,j,k)*(z_w(i,j,k)-z_w(i,j,k-1))&
+      &/( swr_frac(i,j,k  )*(z_w(i,j,k)   -z_bl)&
+      &+swr_frac(i,j,k-1)*(z_bl -z_w(i,j,k-1))&
+      &) )
+    else
+      Bfsfc=Bo(i,j)+Bosol(i,j)
+    endif
+
+#  include "lmd_wscale_wm_and_ws.h"
+
+    Bfsfc_bl(i)=Bfsfc
+  enddo
+
+! Compute boundary layer mixing coefficients.
+!--------- -------- ----- ------ -------------
+! Compute turbulent velocity scales at vertical W-points.
+
+  do i=istr,iend
+    do k=nz,0,-1
+      Bfsfc=Bfsfc_bl(i)
+      zscale=z_w(i,j,nz)-z_w(i,j,k)
+
+#  include "lmd_wscale_wm_and_ws.h"
+
+! Compute vertical mixing coefficients
+
+      ssgm=(z_w(i,j,nz)-z_w(i,j,k))/max(hbl(i,j),EPS)
+
+      if (ssgm < 1._8) then
+        if (ssgm<0.07D0) then
+          cff=0.5_8*(ssgm-0.07D0)**2/0.07D0
+        else
+          cff=0.D0
+        endif
+        cff=cff + ssgm*(1._8-ssgm)**2
+        ! JM
+        ! not entirely sure where this amp factor came from
+        ! and whether we need it or not
+        ! Check in with Jon on this
+        !Kv(i,j,k)=Kv(i,j,k) + wm*hbl(i,j)*cff
+        !Kt(i,j,k)=Kt(i,j,k) + ws*hbl(i,j)*cff
+        amp = ssgm**2
+        Kv(i,j,k)=sqrt((amp*Kv(i,j,k))**2 + (wm*hbl(i,j)*cff)**2 )
+        Kt(i,j,k)=sqrt((amp*Kt(i,j,k))**2 + (ws*hbl(i,j)*cff)**2 )
+        !Ks(i,j,k)=Ks(i,j,k) + ws*hbl(i,j)*cff
+        if (with_salt) Ks(i,j,k)=sqrt((amp*Ks(i,j,k))**2 + (ws*hbl(i,j)*cff)**2 )
+
+#  ifdef KPP_NONLOC
+        if (Bfsfc < 0._8) then
+          ghat(i,j,k)=-Cg * ssgm*(1._8-ssgm)**2
+        else
+          ghat(i,j,k)=0._8
+        endif
+#  endif
+      else
+#  ifdef KPP_NONLOC
+        ghat(i,j,k)=0._8
+#  endif
+      endif
+    enddo
+  enddo
+# endif   /* KPP_SURF */
+
+# ifdef KPP_BOT
+  do i=istr,iend
+    kbbl(i)=nz          !<-- initialize search
+  enddo
+  do k=nz-1,1,-1       ! find new boundary layer index "kbls"
+    do i=istr,iend
+      if (z_w(i,j,k) > z_w(i,j,0)+bbl(i,j)) kbbl(i)=k
+    enddo
+  enddo
+
+! Compute nondimensional shape function coefficients Gx( ) by matching
+! values and vertical derivatives of interior mixing coefficients at
+! bbl (sgmb=1).  Below wm,ws are turbulent velocity scales associated
+! with bottom drag, assuming no buoyancy forcing effects.
+
+
+  do i=istr,iend
+    ! wmb = vonKar*ustar_bottom (rd*u)
+    wmb=vonKar*vonKar*sqrt( 0.333333333333_8*(&
+    &u(i,j,1,nstp)**2 +u(i+1,j,1,nstp)**2&
+    &+u(i,j,1,nstp)*u(i+1,j,1,nstp)&
+    &+v(i,j,1,nstp)**2 +v(i,j+1,1,nstp)**2&
+    &+v(i,j,1,nstp)*v(i,j+1,1,nstp)&
+    &) )&
+    &/ log(1._8+0.5_8*Hz(i,j,1)/Zob)
+
+    wsb=wmb
+
+! Compute boundary layer mixing coefficients.
+!--------- -------- ----- ------ -------------
+! Compute turbulent velocity scales at vertical W-points.
+
+    do k=0,nz
+      sgmb=(z_w(i,j,k)-z_w(i,j,0)+Zob)/(bbl(i,j)+Zob)
+      if (sgmb < 1._8) then
+
+        cff1=sgmb*(1._8-sgmb)**2
+
+        Kv(i,j,k)=sqrt( Kv(i,j,k)**2 + (wmb*bbl(i,j)*cff1)**2 )
+        Kt(i,j,k)=sqrt( Kt(i,j,k)**2 + (wsb*bbl(i,j)*cff1)**2 )
+        if (with_salt) Ks(i,j,k)=sqrt( Ks(i,j,k)**2 + (wsb*bbl(i,j)*cff1)**2 )
+
+      endif
+    enddo      !<-- k
+  enddo      !<-- i
+# endif   /* KPP_BOT */
+
+
+  do i=istr,iend
+# ifdef MASKING
+    if (rmask(i,j) > 0.5_8) then
+# endif
+      if (FIRST_TIME_STEP) then
+        do k=0,nz
+          Akv(i,j,k)=Kv(i,j,k)
+          Akt(i,j,k,itemp)=Kt(i,j,k)
+          if (with_salt) Akt(i,j,k,isalt)=Ks(i,j,k)
+        enddo
+      else  !! Average 2 time steps of mixing coefficients
+        do k=0,nz
+!               Akv(i,j,k)       = 0.5_8*Akv(i,j,k)       + 0.5_8*Kv(i,j,k)
+!               Akt(i,j,k,itemp) = 0.5_8*Akt(i,j,k,itemp) + 0.5_8*Kt(i,j,k)
+          Akv(i,j,k)       = Kv(i,j,k)
+          Akt(i,j,k,itemp) = Kt(i,j,k)
+!               Akt(i,j,k,isalt) = 0.5_8*Akt(i,j,k,isalt) + 0.5_8*Ks(i,j,k)
+          if (with_salt) Akt(i,j,k,isalt) = Ks(i,j,k)
+        enddo
+
+      endif  !<-- FIRST_TIME_STEP
+# ifdef MASKING
+    else
+      do k=0,nz
+        Akv(i,j,k)=0._8
+        Akt(i,j,k,itemp)=0._8
+        if (with_salt) Akt(i,j,k,isalt)=0._8
+      enddo
+    endif
+# endif
+  enddo
+enddo
+
+# ifdef KPP_SURF
+do j=jstr,jend                   ! Copy "hbl" into shared array
+  do i=istr,iend                 ! and padd lateral ghost points
+    hbls(i,j)=hbl(i,j)
+  enddo
+enddo
+if (WESTERN_EDGE) then
+  do j=jstr,jend
+    hbls(istr-1,j)=hbls(istr,j)
+  enddo
+endif
+if (EASTERN_EDGE) then
+  do j=jstr,jend
+    hbls(iend+1,j)=hbls(iend,j)
+  enddo
+endif
+if (SOUTHERN_EDGE) then
+  do i=istr,iend
+    hbls(i,jstr-1)=hbls(i,jstr)
+  enddo
+endif
+if (NORTHERN_EDGE) then
+  do i=istr,iend
+    hbls(i,jend+1)=hbls(i,jend)
+  enddo
+endif
+if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
+  hbls(istr-1,jstr-1)=hbls(istr,jstr)
+endif
+if (WESTERN_EDGE .and. NORTHERN_EDGE) then
+  hbls(istr-1,jend+1)=hbls(istr,jend)
+endif
+if (EASTERN_EDGE .and. SOUTHERN_EDGE) then
+  hbls(iend+1,jstr-1)=hbls(iend,jstr)
+endif
+if (EASTERN_EDGE .and. NORTHERN_EDGE) then
+  hbls(iend+1,jend+1)=hbls(iend,jend)
+endif
+# endif   /* KPP_SURF */
+# ifdef KPP_BOT
+do j=jstr,jend                   ! Copy "bbl" into shared array
+  do i=istr,iend                 ! and padd lateral ghost points
+    hbbl(i,j)=bbl(i,j)
+  enddo
+enddo
+if (WESTERN_EDGE) then
+  do j=jstr,jend
+    hbbl(istr-1,j)=hbbl(istr,j)
+  enddo
+endif
+if (EASTERN_EDGE) then
+  do j=jstr,jend
+    hbbl(iend+1,j)=hbbl(iend,j)
+  enddo
+endif
+if (SOUTHERN_EDGE) then
+  do i=istr,iend
+    hbbl(i,jstr-1)=hbbl(i,jstr)
+  enddo
+endif
+if (NORTHERN_EDGE) then
+  do i=istr,iend
+    hbbl(i,jend+1)=hbbl(i,jend)
+  enddo
+endif
+if (WESTERN_EDGE .and. SOUTHERN_EDGE) then
+  hbbl(istr-1,jstr-1)=hbbl(istr,jstr)
+endif
+if (WESTERN_EDGE .and. NORTHERN_EDGE) then
+  hbbl(istr-1,jend+1)=hbbl(istr,jend)
+endif
+if (EASTERN_EDGE .and. SOUTHERN_EDGE) then
+  hbbl(iend+1,jstr-1)=hbbl(iend,jstr)
+endif
+if (EASTERN_EDGE .and. NORTHERN_EDGE) then
+  hbbl(iend+1,jend+1)=hbbl(iend,jend)
+endif
+# endif   /* KPP_BOT */
+
+! Pack the mixing coefficients into as few exchanges as possible.
+if (with_salt) then
+  call exchange_xxx(Akv, Akt(:,:,:,itemp), Akt(:,:,:,isalt))
+else
+  call exchange_xxx(Akv, Akt(:,:,:,itemp))
+endif
+#  if defined KPP_SURF && defined KPP_BOT
+call exchange_xxx(hbls(:,:), hbbl(:,:))
+#  elif defined KPP_SURF
+call exchange_xxx(hbls(:,:))
+#  else
+call exchange_xxx(hbbl(:,:))
+#  endif
+end subroutine LMD_KPP_TILE
+
+! Clear the aliases of this copy before the next one.
+# undef imin
+# undef imax
+# undef jmin
+# undef jmax

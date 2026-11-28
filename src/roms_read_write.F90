@@ -2573,7 +2573,7 @@ contains
     &ubind,&
     &use_boundary_sponge, v_sponge, v_sponge_trc,&
     &dtfast, gamma2, ndtfast, ntimes, rdrg, rdrg2,&
-    &rho0, tnu2, visc2, zob
+    &rho0, tnu2, visc2, zob, lmd_mixing
     use scoord, only:&
     &cs_r, cs_w, hc, theta_b, theta_s
     use eos_vars, only: S0, Scoef, T0, Tcoef
@@ -2686,14 +2686,14 @@ contains
     ierr=nf90_put_att(ncid, nf90_global, 'gamma2', gamma2)         ! Lateral slipperiness parameter
     ierr=nf90_put_att(ncid,nf90_global, 'tnu2', tnu2)
     ierr=nf90_put_att (ncid,nf90_global, 'tnu2_units', 'm^2/s')
-# ifndef LMD_MIXING
+    if (.not. lmd_mixing) then
 
-    ierr=nf90_put_att(ncid, nf90_global, 'Akv_bak', Akv_bak)       ! Background vertical viscosity tracer mixing
-    ierr=nf90_put_att (ncid, nf90_global, 'Akv_bak_units', 'm^2/s')
+      ierr=nf90_put_att(ncid, nf90_global, 'Akv_bak', Akv_bak)       ! Background vertical viscosity tracer mixing
+      ierr=nf90_put_att (ncid, nf90_global, 'Akv_bak_units', 'm^2/s')
 
-    ierr=nf90_put_att(ncid, nf90_global, 'Akt_bak', Akt_bak)
-    ierr=nf90_put_att (ncid, nf90_global, 'Akt_bak_units', 'm^2/s')
-# endif
+      ierr=nf90_put_att(ncid, nf90_global, 'Akt_bak', Akt_bak)
+      ierr=nf90_put_att (ncid, nf90_global, 'Akt_bak_units', 'm^2/s')
+    endif
 
     if (ubind_used) then
       ierr=nf90_put_att(ncid, nf90_global, 'ubind', ubind) ! Binding velocity for external data forcing at open boundari

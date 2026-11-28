@@ -30,15 +30,7 @@ This section has no keys now: the tracer advection schemes (isoneutral advection
 
 ### `MIXING OPTIONS`
 
-These switches control the model's mixing parameterizations, including vertical mixing schemes (KPP and others) and lateral diffusion/viscosity.
-
-| Switch | Description | Default | Usage notes |
-|--------|-------------|---------|-------------|
-| `LMD_BKPP` | Use the KPP parameterization (Large et al., 1994) in the bottom boundary layer | enabled | |
-| `LMD_KPP` | Use the KPP parameterization (Large et al., 1994) in the surface boundary layer | enabled | |
-| `LMD_MIXING` | Enable and compute various parameterizations from Large et al., 1994 (KPP, etc.) | enabled | This is the overarching CPP key for all other `LMD` keys. This needs to be defined in order for KPP and others to be used. |
-| `LMD_NONLOCAL` | Compute the non-local term in the KPP parameterization | enabled | Can be used with either/both `LMD_KPP` and `LMD_BKPP` |
-| `LMD_RIMIX` | Compute mixing due to breaking internal waves | enabled | Designed only to have an effect where local gradient Richardson number is small |
+This section has no keys now: the vertical mixing of Large et al. (1994) and its parts (the KPP surface and bottom boundary layers, the nonlocal flux, shear-instability mixing, convective adjustment) are set at run time in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings).
 
 ### `BIOGEOCHEMICAL OPTIONS`
 
@@ -115,7 +107,7 @@ These keys are no longer keys because the namelist now decides what they decided
 | `ANA_SMFLUX`, `ANA_STFLUX`, `ANA_SSFLUX`, `ANA_SRFLUX` | `surf_frc_type = 'none'` in [`SURF_FRC_SETTINGS`](runtime_settings.md#surf_frc_settings) (all surface fluxes zero) |
 | `ANA_GRID` | `ana_grid` in [`GRID_SETTINGS`](runtime_settings.md#grid_settings) (default `.false.`): the grid from the case's `ana_grid.h` |
 | `ANA_INITIAL` | `ana_initial` in [`INITIAL_CONDITIONS`](runtime_settings.md#initial_conditions) (default `.false.`): the initial state from the case's `ana_init.h` |
-| `ANA_VMIX` | `ana_vmix` in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings) (default `.false.`): `Akv` and `Akt` from the case's `ana_vmix.h`; not with `LMD_MIXING` |
+| `ANA_VMIX` | `ana_vmix` in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings) (default `.false.`): `Akv` and `Akt` from the case's `ana_vmix.h`; needs `lmd_mixing = .false.` |
 | `PACIFIC` | `sponge_profile = 'cosine'` in [`V_SPONGE_SETTINGS`](runtime_settings.md#v_sponge_settings) (default `'linear'`) |
 | `LINEAR_DRAG_ONLY` | `linear_drag` in [`BOTTOM_DRAG_SETTINGS`](runtime_settings.md#bottom_drag_settings) (default `.false.`) |
 | `SALINITY` | `salinity` in [`PARAM_SETTINGS`](runtime_settings.md#param_settings) (default `.true.`; `.false.` for a temperature-only case). In a case's own `ana_*.h`, write `if (salinity)` where it had `#ifdef SALINITY` |
@@ -127,5 +119,11 @@ These keys are no longer keys because the namelist now decides what they decided
 | `PARABOLIC_SPLINES` | `parabolic_splines` in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings) (default `.false.`) |
 | `NONLIN_EOS` | `eos = 'nonlinear'` (the default) in [`NUMERICS_SETTINGS`](runtime_settings.md#numerics_settings); without the key: `eos = 'linear'`, which a case built without it must now set |
 | `SPLIT_EOS` | None: `eos = 'nonlinear'` always uses the split form, as every build with `NONLIN_EOS` did |
+| `LMD_MIXING` | `lmd_mixing` in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings) (default `.true.`); a case built without the key must now set `lmd_mixing = .false.` |
+| `LMD_KPP` | `lmd_kpp` in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings) (default `.true.`); a case built without the key must now set `lmd_kpp = .false.` |
+| `LMD_BKPP` | `lmd_bkpp` in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings) (default `.true.`); a case built without the key must now set `lmd_bkpp = .false.` |
+| `LMD_NONLOCAL` | `lmd_nonlocal` in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings) (default `.true.`); a case built without the key must now set `lmd_nonlocal = .false.` |
+| `LMD_RIMIX` | `lmd_rimix` in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings) (default `.true.`); a case built without the key must now set `lmd_rimix = .false.` |
+| `LMD_CONVEC` | `lmd_convec` in [`VERTICAL_MIXING_SETTINGS`](runtime_settings.md#vertical_mixing_settings) (default `.false.`) |
 
 `NHMG` is no longer a key either, but its code stays: the non-hydrostatic solver (the NHMG library in `NHMG/src`) is now compiled and linked into every build, and the namelist key `nhmg` in the optional group [`NHMG_SETTINGS`](runtime_settings.md#nhmg_settings) switches it on at run time. A `cppdefs.opt` that defines `NHMG` stops the build with an error saying so; delete the line (`#undef NHMG` is harmless). The library is no longer built separately with `make nhmg`.

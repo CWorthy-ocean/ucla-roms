@@ -98,7 +98,7 @@ surf_flux.o : surf_flux.F90 cppdefs.opt namelist_open_mod.o param.o dimensions.o
 rho_eos_mod.o : rho_eos_mod.F90 cppdefs.opt open_boundary_mod.o param.o private_scratch.o dimensions.o tracers.o coupling.o eos_vars.o numerics_settings_mod.o grid.o mixing.o ocean_vars.o scalars.o
 checkdims_mod.o : checkdims_mod.F90 cppdefs.opt utils_mod.o param.o dimensions.o error_handling_mod.o scoord.o
 ocean_vars.o : ocean_vars.F90 cppdefs.opt param.o scalars.o nhmg_settings_mod.o
-lmd_kpp_mod.o : lmd_kpp_mod.F90 cppdefs.opt open_boundary_mod.o alphabeta_mod.o surf_flux.o grid.o roms_mpi.o dimensions.o param.o mixing.o ocean_vars.o scalars.o strings.o error_handling_mod.o utils_mod.o
+lmd_kpp_mod.o : lmd_kpp_mod.F90 cppdefs.opt open_boundary_mod.o alphabeta_mod.o surf_flux.o grid.o roms_mpi.o dimensions.o param.o mixing.o ocean_vars.o scalars.o lmd_kpp_tile.h strings.o error_handling_mod.o utils_mod.o
 grid.o : grid.F90 cppdefs.opt param.o nc_read_write.o dimensions.o roms_read_write.o scalars.o roms_mpi.o pio_roms.o instant_output.o open_boundary_mod.o pipe_frc.o ana_grid.h error_handling_mod.o checkdims_mod.o
 cpp_keys_mod.o : cpp_keys_mod.F90 cppdefs.opt
 nhmg_settings_mod.o : nhmg_settings_mod.F90 cppdefs.opt namelist_open_mod.o error_handling_mod.o param.o

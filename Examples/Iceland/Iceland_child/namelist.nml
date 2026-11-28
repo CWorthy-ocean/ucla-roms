@@ -415,7 +415,13 @@ linear_drag = .false. ! T: linear drag rdrg only (no quadratic or log-layer drag
 !------------------------
 akv_bak = 0.0        ! Vertical viscosity (m2/s)
 akt_bak = 0.0        ! Vertical mixing (m2/s) for each tracer
-ana_vmix = .false.   ! T: Akv and Akt from the case's ana_vmix.h (not with LMD_MIXING)
+ana_vmix = .false.   ! T: Akv and Akt from the case's ana_vmix.h (needs lmd_mixing = .false.)
+lmd_mixing = .true.    ! T: vertical mixing of Large et al. (1994); F: Akv, Akt = akv_bak, akt_bak (or ana_vmix)
+lmd_kpp = .true.       ! T: with lmd_mixing, the KPP surface boundary layer
+lmd_bkpp = .true.      ! T: with lmd_mixing, the KPP bottom boundary layer
+lmd_nonlocal = .true.  ! T: with lmd_kpp, the nonlocal flux of the surface boundary layer
+lmd_rimix = .true.     ! T: with lmd_mixing, interior mixing by shear instability (gradient Richardson number)
+lmd_convec = .false.   ! T: with lmd_rimix, convective adjustment where the Richardson number is negative
 /
 
 &LATERAL_VISC_SETTINGS                                                 !scalars.F
